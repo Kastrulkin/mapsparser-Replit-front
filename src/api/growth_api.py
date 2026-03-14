@@ -8,15 +8,6 @@ growth_bp = Blueprint('growth_api', __name__)
 def get_business_stages(business_id):
     """Получить этапы роста для конкретного бизнеса (для ProgressTracker)"""
     try:
-        def row_get(row, key, idx=0, default=None):
-            if row is None:
-                return default
-            if isinstance(row, dict):
-                return row.get(key, default)
-            if isinstance(row, (list, tuple)):
-                return row[idx] if 0 <= idx < len(row) else default
-            return default
-
         # Проверка авторизации
         auth_header = request.headers.get('Authorization')
         if not auth_header or not auth_header.startswith('Bearer '):
@@ -31,15 +22,15 @@ def get_business_stages(business_id):
         cursor = db.conn.cursor()
         
         # Проверка доступа
-        cursor.execute("SELECT owner_id, business_type FROM Businesses WHERE id = %s", (business_id,))
+        cursor.execute("SELECT owner_id, business_type FROM Businesses WHERE id = ?", (business_id,))
         business = cursor.fetchone()
         
         if not business:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
             
-        owner_id = row_get(business, 'owner_id', 0)
-        business_type_key = row_get(business, 'business_type', 1)
+        owner_id = business[0]
+        business_type_key = business[1]
         
         if hasattr(owner_id, 'keys'): # sqlite3.Row support assumption check
              # If logic assumes tuple
@@ -53,23 +44,23 @@ def get_business_stages(business_id):
             return jsonify({"error": "Нет доступа"}), 403
             
         # Находим ID типа бизнеса
-        cursor.execute("SELECT id FROM BusinessTypes WHERE type_key = %s OR id = %s", (business_type_key, business_type_key))
+        cursor.execute("SELECT id FROM BusinessTypes WHERE type_key = ? OR id = ?", (business_type_key, business_type_key))
         bt_row = cursor.fetchone()
         
         if not bt_row:
             cursor.execute("SELECT id FROM BusinessTypes WHERE type_key = 'other'")
             bt_row = cursor.fetchone()
              
-        business_type_id = row_get(bt_row, 'id', 0)
+        business_type_id = bt_row[0] if bt_row else None
         
         if not business_type_id:
             db.close()
             return jsonify({"success": True, "stages": []})
             
         # Получаем текущий шаг визарда
-        cursor.execute("SELECT step FROM BusinessOptimizationWizard WHERE business_id = %s", (business_id,))
+        cursor.execute("SELECT step FROM BusinessOptimizationWizard WHERE business_id = ?", (business_id,))
         wiz_row = cursor.fetchone()
-        current_step = row_get(wiz_row, 'step', 0, 1)
+        current_step = wiz_row[0] if wiz_row else 1
         
         # --- Фетчим метрики для проверки условий ---
         metrics = {
@@ -83,44 +74,35 @@ def get_business_stages(business_id):
             "yandex_url": None
         }
         
-        # 1. MapParseResults (Rating, Reviews, Photos) - optional table in some envs
-        try:
-            cursor.execute("""
-                SELECT rating, reviews_count, photos_count 
-                FROM MapParseResults 
-                WHERE business_id = %s 
-                ORDER BY created_at DESC LIMIT 1
-            """, (business_id,))
-            map_row = cursor.fetchone()
-            if map_row:
-                try:
-                    rating_val = row_get(map_row, 'rating', 0)
-                    reviews_val = row_get(map_row, 'reviews_count', 1)
-                    photos_val = row_get(map_row, 'photos_count', 2)
-                    metrics["rating"] = float(rating_val) if rating_val else 0.0
-                    metrics["reviews_count"] = int(reviews_val) if reviews_val else 0
-                    metrics["photos_count"] = int(photos_val) if photos_val else 0
-                except Exception:
-                    pass
-        except Exception:
+        # 1. MapParseResults (Rating, Reviews, Photos)
+        cursor.execute("""
+            SELECT rating, reviews_count, photos_count 
+            FROM MapParseResults 
+            WHERE business_id = ? 
+            ORDER BY created_at DESC LIMIT 1
+        """, (business_id,))
+        map_row = cursor.fetchone()
+        if map_row:
             try:
-                db.conn.rollback()
-            except Exception:
+                metrics["rating"] = float(map_row[0]) if map_row[0] else 0.0
+                metrics["reviews_count"] = int(map_row[1]) if map_row[1] else 0
+                metrics["photos_count"] = int(map_row[2]) if map_row[2] else 0
+            except:
                 pass
 
         # 2. UserServices (Services Added)
-        cursor.execute("SELECT COUNT(*) FROM UserServices WHERE business_id = %s", (business_id,))
+        cursor.execute("SELECT COUNT(*) FROM UserServices WHERE business_id = ?", (business_id,))
         svc_row = cursor.fetchone()
-        metrics["services_count"] = int(row_get(svc_row, 'count', 0, 0) or 0)
+        metrics["services_count"] = svc_row[0] if svc_row else 0
         
         # 3. Business Profile (Contacts)
-        cursor.execute("SELECT phone, address, website, yandex_url FROM Businesses WHERE id = %s", (business_id,))
+        cursor.execute("SELECT phone, address, website, yandex_url FROM Businesses WHERE id = ?", (business_id,))
         biz_info = cursor.fetchone()
         if biz_info:
-            metrics["has_phone"] = bool(row_get(biz_info, 'phone', 0))
-            metrics["has_address"] = bool(row_get(biz_info, 'address', 1))
-            metrics["has_website"] = bool(row_get(biz_info, 'website', 2))
-            metrics["yandex_url"] = row_get(biz_info, 'yandex_url', 3)
+            metrics["has_phone"] = bool(biz_info[0])
+            metrics["has_address"] = bool(biz_info[1])
+            metrics["has_website"] = bool(biz_info[2])
+            metrics["yandex_url"] = biz_info[3]
 
         def check_task_status(logic_code, metrics):
             """Проверяет выполнение задачи на основе метрик"""
@@ -152,21 +134,21 @@ def get_business_stages(business_id):
         cursor.execute("""
             SELECT id, stage_number, title, description, goal, expected_result, duration
             FROM GrowthStages
-            WHERE business_type_id = %s
+            WHERE business_type_id = ?
             ORDER BY stage_number
         """, (business_type_id,))
         stages_rows = cursor.fetchall()
         
         stages = []
         for stage_row in stages_rows:
-            stage_id = row_get(stage_row, 'id', 0)
-            stage_number = row_get(stage_row, 'stage_number', 1)
+            stage_id = stage_row[0]
+            stage_number = stage_row[1]
             
             # Получаем задачи для этапа
             cursor.execute("""
                 SELECT id, task_number, task_text, check_logic, reward_value, reward_type, tooltip, link_url, link_text, is_auto_verifiable
                 FROM GrowthTasks
-                WHERE stage_id = %s
+                WHERE stage_id = ?
                 ORDER BY task_number
             """, (stage_id,))
             tasks_rows = cursor.fetchall()
@@ -175,23 +157,23 @@ def get_business_stages(business_id):
             completed_tasks_count = 0
             
             for tr in tasks_rows:
-                check_logic = row_get(tr, 'check_logic', 3)
+                check_logic = tr[3]
                 is_completed = check_task_status(check_logic, metrics)
                 
                 if is_completed:
                     completed_tasks_count += 1
 
                 tasks.append({
-                    'id': row_get(tr, 'id', 0),
-                    'task_number': row_get(tr, 'task_number', 1),
-                    'text': row_get(tr, 'task_text', 2),
+                    'id': tr[0],
+                    'task_number': tr[1],
+                    'text': tr[2],
                     'check_logic': check_logic,
-                    'reward_value': row_get(tr, 'reward_value', 4),
-                    'reward_type': row_get(tr, 'reward_type', 5),
-                    'tooltip': row_get(tr, 'tooltip', 6),
-                    'link_url': row_get(tr, 'link_url', 7),
-                    'link_text': row_get(tr, 'link_text', 8),
-                    'is_auto_verifiable': bool(row_get(tr, 'is_auto_verifiable', 9)),
+                    'reward_value': tr[4],
+                    'reward_type': tr[5],
+                    'tooltip': tr[6],
+                    'link_url': tr[7],
+                    'link_text': tr[8],
+                    'is_auto_verifiable': bool(tr[9]),
                     'is_completed': is_completed  # NEW FIELD
                 })
 
@@ -211,15 +193,15 @@ def get_business_stages(business_id):
                 progress_percentage = 0
 
             stages.append({
-                'id': stage_id,
+                'id': stage_row[0],
                 'stage_number': stage_number,
-                'title': row_get(stage_row, 'title', 2),
-                'stage_description': row_get(stage_row, 'description', 3),
+                'title': stage_row[2],
+                'stage_description': stage_row[3],
                 'status': status,
                 'progress_percentage': progress_percentage,
-                'duration': row_get(stage_row, 'duration', 6),
-                'goal': row_get(stage_row, 'goal', 4),
-                'expected_result': row_get(stage_row, 'expected_result', 5),
+                'duration': stage_row[6],
+                'goal': stage_row[4],
+                'expected_result': stage_row[5],
                 'tasks': tasks
             })
             

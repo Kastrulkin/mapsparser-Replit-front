@@ -164,6 +164,63 @@ def _ensure_custom_table(cursor):
         """
     )
 
+
+def _ensure_negative_table(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS seonegativekeywords (
+            id TEXT PRIMARY KEY,
+            business_id TEXT NOT NULL,
+            phrase TEXT NOT NULL,
+            scope TEXT NOT NULL DEFAULT 'global',
+            category TEXT DEFAULT '',
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (business_id, phrase, scope, category)
+        )
+        """
+    )
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_seo_negative_business ON seonegativekeywords(business_id)"
+    )
+
+
+def _load_negative_rows(cursor, business_id: str):
+    _ensure_negative_table(cursor)
+    cursor.execute(
+        """
+        SELECT id, phrase, scope, category, created_at
+        FROM seonegativekeywords
+        WHERE business_id = %s
+          AND is_active IS TRUE
+        ORDER BY created_at DESC
+        """,
+        (business_id,),
+    )
+    return cursor.fetchall() or []
+
+
+def _negative_reason_for(keyword: str, category: str, negative_rows):
+    keyword_l = (keyword or "").strip().lower()
+    category_l = (category or "").strip().lower()
+    if not keyword_l:
+        return ""
+    for row in negative_rows:
+        phrase = str(_row_get(row, 'phrase', 1, '') or '').strip().lower()
+        scope = str(_row_get(row, 'scope', 2, 'global') or 'global').strip().lower()
+        row_category = str(_row_get(row, 'category', 3, '') or '').strip().lower()
+        if not phrase:
+            continue
+        if scope == 'category':
+            if row_category and row_category == category_l and phrase in keyword_l:
+                return f"category:{row_category}:{phrase}"
+            continue
+        if phrase in keyword_l:
+            return f"global:{phrase}"
+    return ""
+
+
 @wordstat_bp.route('/keywords', methods=['GET'])
 def get_keywords():
     """Get popular keywords filtered by business context (services/type/city)."""
@@ -173,6 +230,7 @@ def get_keywords():
 
     business_id = (request.args.get('business_id') or '').strip()
     use_city = (request.args.get('use_city') or '').strip().lower() in ('1', 'true', 'yes')
+    include_blocked = (request.args.get('include_blocked') or '').strip().lower() in ('1', 'true', 'yes')
 
     conn = get_db_connection()
     conn.row_factory = sqlite3.Row
@@ -207,6 +265,7 @@ def get_keywords():
             fallback_global_when_empty_terms=False,
             long_weight=2,
             short_weight=1,
+            include_negative_blocked=include_blocked,
         )
         keywords = keywords_payload.get('items', [])
         by_category = keywords_payload.get('grouped', {})
@@ -238,6 +297,7 @@ def search_keywords():
     except Exception:
         limit = 10
     limit = min(max(limit, 1), 50)
+    include_blocked = (request.args.get('include_blocked') or '').strip().lower() in ('1', 'true', 'yes')
 
     if not business_id:
         return jsonify({'success': False, 'error': 'Не указан business_id'}), 400
@@ -254,6 +314,7 @@ def search_keywords():
 
         _ensure_excluded_table(cursor)
         _ensure_custom_table(cursor)
+        negative_rows = _load_negative_rows(cursor, business_id)
 
         cursor.execute(
             "SELECT keyword FROM wordstatkeywordsexcluded WHERE business_id = %s",
@@ -297,6 +358,15 @@ def search_keywords():
                 continue
             if kw in excluded or kw in custom_existing:
                 continue
+            reason = _negative_reason_for(item.get('keyword') or '', item.get('category') or '', negative_rows)
+            if reason:
+                if include_blocked:
+                    item['negative_blocked'] = True
+                    item['negative_reason'] = reason
+                    items.append(item)
+                continue
+            item['negative_blocked'] = False
+            item['negative_reason'] = ''
             items.append(item)
             if len(items) >= limit:
                 break
@@ -490,3 +560,205 @@ def get_metadata():
             
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@wordstat_bp.route('/negative-keywords', methods=['GET'])
+def list_negative_keywords():
+    user_data, auth_error = _require_auth()
+    if auth_error:
+        return auth_error
+
+    business_id = (request.args.get('business_id') or '').strip()
+    if not business_id:
+        return jsonify({'success': False, 'error': 'Не указан business_id'}), 400
+
+    conn = get_db_connection()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    try:
+        access_error = _ensure_business_access(cursor, user_data, business_id)
+        if access_error:
+            return access_error
+        rows = _load_negative_rows(cursor, business_id)
+        items = []
+        for row in rows:
+            items.append({
+                'id': _row_get(row, 'id', 0, ''),
+                'phrase': _row_get(row, 'phrase', 1, ''),
+                'scope': _row_get(row, 'scope', 2, 'global') or 'global',
+                'category': _row_get(row, 'category', 3, '') or '',
+                'created_at': _row_get(row, 'created_at', 4, None),
+            })
+        return jsonify({'success': True, 'count': len(items), 'items': items})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@wordstat_bp.route('/negative-keywords', methods=['POST'])
+def add_negative_keyword():
+    user_data, auth_error = _require_auth()
+    if auth_error:
+        return auth_error
+
+    payload = request.get_json(silent=True) or {}
+    business_id = (payload.get('business_id') or '').strip()
+    phrase = (payload.get('phrase') or '').strip().lower()
+    scope = (payload.get('scope') or 'global').strip().lower()
+    category = (payload.get('category') or '').strip().lower()
+
+    if not business_id:
+        return jsonify({'success': False, 'error': 'Не указан business_id'}), 400
+    if not phrase:
+        return jsonify({'success': False, 'error': 'Не указано минус-слово'}), 400
+    if scope not in ('global', 'category'):
+        return jsonify({'success': False, 'error': 'Неверный scope'}), 400
+    if scope == 'category' and not category:
+        return jsonify({'success': False, 'error': 'Для category scope укажите category'}), 400
+    if scope == 'global':
+        category = ''
+
+    conn = get_db_connection()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    try:
+        access_error = _ensure_business_access(cursor, user_data, business_id)
+        if access_error:
+            return access_error
+        _ensure_negative_table(cursor)
+        cursor.execute(
+            """
+            INSERT INTO seonegativekeywords (id, business_id, phrase, scope, category, is_active, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ON CONFLICT (business_id, phrase, scope, category)
+            DO UPDATE SET
+                is_active = TRUE,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (str(uuid.uuid4()), business_id, phrase, scope, category),
+        )
+        conn.commit()
+        return jsonify({'success': True, 'message': 'Минус-слово добавлено'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@wordstat_bp.route('/negative-keywords/bulk', methods=['POST'])
+def add_negative_keywords_bulk():
+    user_data, auth_error = _require_auth()
+    if auth_error:
+        return auth_error
+
+    payload = request.get_json(silent=True) or {}
+    business_id = (payload.get('business_id') or '').strip()
+    scope = (payload.get('scope') or 'global').strip().lower()
+    category = (payload.get('category') or '').strip().lower()
+    raw_text = payload.get('raw_text') or ''
+    items = payload.get('items') or []
+
+    if not business_id:
+        return jsonify({'success': False, 'error': 'Не указан business_id'}), 400
+    if scope not in ('global', 'category'):
+        return jsonify({'success': False, 'error': 'Неверный scope'}), 400
+    if scope == 'category' and not category:
+        return jsonify({'success': False, 'error': 'Для category scope укажите category'}), 400
+    if scope == 'global':
+        category = ''
+
+    phrases: list[str] = []
+    if isinstance(raw_text, str) and raw_text.strip():
+        phrases.extend([line.strip().lower() for line in raw_text.splitlines() if line.strip()])
+    if isinstance(items, list):
+        for item in items:
+            if isinstance(item, str) and item.strip():
+                phrases.append(item.strip().lower())
+            elif isinstance(item, dict):
+                phrase = str(item.get('phrase') or '').strip().lower()
+                if phrase:
+                    phrases.append(phrase)
+    phrases = list(dict.fromkeys(phrases))
+    if not phrases:
+        return jsonify({'success': False, 'error': 'Нет минус-слов для добавления'}), 400
+
+    conn = get_db_connection()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    try:
+        access_error = _ensure_business_access(cursor, user_data, business_id)
+        if access_error:
+            return access_error
+        _ensure_negative_table(cursor)
+        for phrase in phrases:
+            cursor.execute(
+                """
+                INSERT INTO seonegativekeywords (id, business_id, phrase, scope, category, is_active, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ON CONFLICT (business_id, phrase, scope, category)
+                DO UPDATE SET
+                    is_active = TRUE,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (str(uuid.uuid4()), business_id, phrase, scope, category),
+            )
+        conn.commit()
+        return jsonify({'success': True, 'count': len(phrases), 'message': f'Добавлено минус-слов: {len(phrases)}'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@wordstat_bp.route('/negative-keywords', methods=['DELETE'])
+def delete_negative_keyword():
+    user_data, auth_error = _require_auth()
+    if auth_error:
+        return auth_error
+
+    payload = request.get_json(silent=True) or {}
+    business_id = (payload.get('business_id') or '').strip()
+    negative_id = (payload.get('id') or '').strip()
+    phrase = (payload.get('phrase') or '').strip().lower()
+    scope = (payload.get('scope') or 'global').strip().lower()
+    category = (payload.get('category') or '').strip().lower()
+
+    if not business_id:
+        return jsonify({'success': False, 'error': 'Не указан business_id'}), 400
+
+    conn = get_db_connection()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    try:
+        access_error = _ensure_business_access(cursor, user_data, business_id)
+        if access_error:
+            return access_error
+        _ensure_negative_table(cursor)
+        if negative_id:
+            cursor.execute(
+                "DELETE FROM seonegativekeywords WHERE business_id = %s AND id = %s",
+                (business_id, negative_id),
+            )
+        elif phrase:
+            cursor.execute(
+                """
+                DELETE FROM seonegativekeywords
+                WHERE business_id = %s
+                  AND phrase = %s
+                  AND scope = %s
+                  AND COALESCE(category, '') = %s
+                """,
+                (business_id, phrase, scope, category if scope == 'category' else ''),
+            )
+        else:
+            return jsonify({'success': False, 'error': 'Укажите id или phrase'}), 400
+        conn.commit()
+        return jsonify({'success': True, 'message': 'Минус-слово удалено'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        conn.close()

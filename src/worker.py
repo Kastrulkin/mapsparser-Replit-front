@@ -117,6 +117,18 @@ def _is_playwright_sync_in_async_error(message: str) -> bool:
     return "playwright sync api inside the asyncio loop" in msg
 
 
+def _normalize_yandex_org_url(raw_url: str) -> str:
+    text = str(raw_url or "").strip()
+    if not text:
+        return text
+    match = re.search(r"/org/(?:[^/]+/)?(\d+)", text)
+    if not match:
+        return text
+    org_id = match.group(1)
+    # Канонический URL парсинга: ru-домен + org/<id>, без лишних query параметров.
+    return f"https://yandex.ru/maps/org/{org_id}/"
+
+
 def _has_running_asyncio_loop() -> bool:
     try:
         asyncio.get_running_loop()
@@ -1601,7 +1613,7 @@ def process_queue():
     try:
         if not queue_dict.get("url"):
             raise ValueError("URL не указан для задачи парсинга")
-        
+
         url = queue_dict["url"]
 
         # --- АВТОМАТИЧЕСКОЕ ИСПРАВЛЕНИЕ ССЫЛОК (SPRAV -> MAPS) ---
@@ -1618,7 +1630,13 @@ def process_queue():
                 url = new_url
                 queue_dict['url'] = new_url # Обновляем и в словаре
 
-        url = queue_dict["url"]
+        # Нормализуем org URL, чтобы не получать региональные/редакционные вариации .com
+        # и шумные query-параметры.
+        normalized_url = _normalize_yandex_org_url(url)
+        if normalized_url and normalized_url != url:
+            print(f"🔄 URL normalized: {url} -> {normalized_url}")
+            url = normalized_url
+            queue_dict["url"] = normalized_url
 
         cookies = get_yandex_cookies()
         business_id = queue_dict.get("business_id")
@@ -2016,9 +2034,12 @@ def process_queue():
                                         services_saved_count = db_manager.upsert_parsed_services(business_id, owner_id, service_rows)
                                         print(f"[Services] Saved {services_saved_count} services")
                                     else:
-                                        cleared_count = _deactivate_parsed_service_source(db_manager.conn, business_id, "yandex_maps")
-                                        if cleared_count > 0:
-                                            print(f"[Services] Cleared {cleared_count} stale yandex_maps services after editorial-only payload")
+                                        # Безопасный режим: если парсер вернул только редакционные подборки
+                                        # или пустой список после фильтров, не скрываем ранее сохранённые услуги.
+                                        print(
+                                            f"[Services] Skip source deactivation for business_id={business_id}: "
+                                            "no valid parsed service rows after normalization"
+                                        )
                                 except Exception as svc_e:
                                     print(f"⚠️ upsert_parsed_services failed for {business_id}: {svc_e}")
                         except Exception as sync_e:
@@ -2388,6 +2409,23 @@ def process_queue():
             # Старое предупреждение про HTML fallback (если используется быстрый эндпоинт)
             if card_data.get('fallback_used'):
                 warning_parts.append("⚠️ Fast Endpoint Outdated (Used HTML Fallback)")
+
+            # Alert 2nd-level: парсер вернул products, но в userservices ничего не сохранилось.
+            # Это сигнализирует о возможном дрейфе схемы/маппера и не должен оставаться незамеченным.
+            try:
+                products_len = len(products) if isinstance(products, list) else 0
+            except Exception:
+                products_len = 0
+            if products_len > 0 and int(services_saved_count or 0) == 0:
+                services_alert = (
+                    f"services_upsert_zero:products_len={products_len},services_saved_count=0"
+                )
+                warning_parts.append(services_alert)
+                print(
+                    f"[SERVICES_ALERT] queue_id={queue_dict.get('id')} "
+                    f"business_id={business_id} {services_alert}",
+                    flush=True,
+                )
 
             # Предупреждения по отсутствующим CRITICAL-полям в источнике
             if validation_result:

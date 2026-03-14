@@ -99,6 +99,7 @@ def collect_ranked_keywords(
     fallback_global_when_empty_terms: bool = False,
     long_weight: int = 2,
     short_weight: int = 1,
+    include_negative_blocked: bool = False,
 ) -> dict[str, Any]:
     """Collect and rank Wordstat keywords by business context.
 
@@ -263,6 +264,61 @@ def collect_ranked_keywords(
             k for k in keywords
             if not is_beauty_keyword(k.get("keyword") or "", k.get("category") or "")
         ]
+
+    negative_global: list[str] = []
+    negative_by_category: dict[str, list[str]] = {}
+    if business_id:
+        try:
+            cursor.execute(
+                """
+                SELECT phrase, scope, category
+                FROM seonegativekeywords
+                WHERE business_id = %s
+                  AND is_active IS TRUE
+                ORDER BY created_at DESC
+                """,
+                (business_id,),
+            )
+            for row in cursor.fetchall() or []:
+                phrase = str(_row_get(row, "phrase", 0, "") or "").strip().lower()
+                if not phrase:
+                    continue
+                scope = str(_row_get(row, "scope", 1, "global") or "global").strip().lower()
+                category = str(_row_get(row, "category", 2, "") or "").strip().lower()
+                if scope == "category" and category:
+                    negative_by_category.setdefault(category, []).append(phrase)
+                else:
+                    negative_global.append(phrase)
+        except Exception:
+            pass
+
+    def _negative_reason(keyword_item: dict[str, Any]) -> str | None:
+        kw = str(keyword_item.get("keyword") or "").strip().lower()
+        if not kw:
+            return None
+        category = str(keyword_item.get("category") or "").strip().lower()
+        for phrase in negative_global:
+            if phrase and phrase in kw:
+                return f"global:{phrase}"
+        for phrase in negative_by_category.get(category, []):
+            if phrase and phrase in kw:
+                return f"category:{category}:{phrase}"
+        return None
+
+    if negative_global or negative_by_category:
+        filtered: list[dict[str, Any]] = []
+        for item in keywords:
+            reason = _negative_reason(item)
+            if reason:
+                if include_negative_blocked:
+                    item["negative_blocked"] = True
+                    item["negative_reason"] = reason
+                    filtered.append(item)
+                continue
+            item["negative_blocked"] = False
+            item["negative_reason"] = ""
+            filtered.append(item)
+        keywords = filtered
 
     uniq_terms = list(dict.fromkeys(terms))[:80]
     if uniq_terms:

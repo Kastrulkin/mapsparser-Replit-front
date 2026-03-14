@@ -167,6 +167,8 @@ def _ensure_partnership_columns(conn) -> None:
         ON prospectingleads (intent, partnership_stage)
         """
     )
+    # DDL в PostgreSQL транзакционный; без commit изменения могут откатиться при закрытии conn.
+    conn.commit()
 
 
 def _create_search_job(
@@ -378,6 +380,80 @@ def _lead_matches_filters(lead: dict[str, Any], filters: dict[str, Any]) -> bool
             return False
 
     return True
+
+
+def _insert_partnership_lead_if_new(
+    cur,
+    *,
+    business_id: str,
+    created_by: str,
+    source_url: str,
+    name: str | None,
+    city: str | None,
+    category: str | None,
+    source: str,
+    phone: str | None = None,
+    email: str | None = None,
+    website: str | None = None,
+    telegram_url: str | None = None,
+    whatsapp_url: str | None = None,
+    rating: float | None = None,
+    reviews_count: int | None = None,
+) -> tuple[str | None, bool]:
+    normalized_url = str(source_url or "").strip()
+    if not normalized_url:
+        return None, False
+    cur.execute(
+        """
+        SELECT id
+        FROM prospectingleads
+        WHERE business_id = %s
+          AND source_url = %s
+          AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
+        LIMIT 1
+        """,
+        (business_id, normalized_url),
+    )
+    existing = cur.fetchone()
+    if existing:
+        return (existing["id"] if hasattr(existing, "get") else existing[0]), False
+
+    lead_id = str(uuid.uuid4())
+    cur.execute(
+        """
+        INSERT INTO prospectingleads (
+            id, name, address, city, source_url, source, category, status,
+            phone, email, website, telegram_url, whatsapp_url, rating, reviews_count,
+            intent, partnership_stage, business_id, created_by, created_at, updated_at
+        ) VALUES (
+            %s, %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, NOW(), NOW()
+        )
+        """,
+        (
+            lead_id,
+            (name or "Новый партнёр"),
+            "",
+            city,
+            normalized_url,
+            source,
+            category,
+            "imported",
+            phone,
+            email,
+            website,
+            telegram_url,
+            whatsapp_url,
+            rating,
+            reviews_count,
+            "partnership_outreach",
+            "imported",
+            business_id,
+            created_by,
+        ),
+    )
+    return lead_id, True
 
 
 def _run_search_job(job_id: str, query: str, location: str, search_limit: int) -> None:
@@ -1822,6 +1898,73 @@ def _resolve_outreach_openclaw_health_endpoint() -> str:
     return f"{base}/healthz"
 
 
+def _resolve_partnership_openclaw_caps_endpoint() -> str:
+    return (
+        str(os.getenv("OPENCLAW_PARTNERS_CAPS_URL", "") or "").strip()
+        or str(os.getenv("OPENCLAW_SANDBOX_BRIDGE_URL", "") or "").strip()
+    )
+
+
+def _resolve_partnership_openclaw_token() -> str:
+    return (
+        str(os.getenv("OPENCLAW_PARTNERS_TOKEN", "") or "").strip()
+        or str(os.getenv("OPENCLAW_SANDBOX_BRIDGE_TOKEN", "") or "").strip()
+        or str(os.getenv("OPENCLAW_LOCALOS_TOKEN", "") or "").strip()
+    )
+
+
+def _is_partnership_openclaw_enabled() -> bool:
+    value = str(os.getenv("OPENCLAW_PARTNERS_ENABLED", "1") or "1").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+def _call_partnership_openclaw_capability(
+    capability: str,
+    *,
+    tenant_id: str,
+    payload: dict[str, Any],
+    timeout_sec: int = 35,
+) -> dict[str, Any]:
+    endpoint = _resolve_partnership_openclaw_caps_endpoint()
+    token = _resolve_partnership_openclaw_token()
+    if not endpoint:
+        return {"success": False, "error": "OPENCLAW_PARTNERS_CAPS_URL is not configured"}
+    if not token:
+        return {"success": False, "error": "OPENCLAW_PARTNERS_TOKEN is not configured"}
+
+    base = endpoint.rstrip("/")
+    if base.endswith("/capabilities"):
+        url = f"{base}/{capability}"
+    else:
+        url = base
+
+    body = dict(payload or {})
+    body.setdefault("tenant_id", tenant_id)
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-OpenClaw-Internal-Token": token,
+        "X-Tenant-Id": tenant_id,
+        "Content-Type": "application/json",
+    }
+
+    try:
+        response = requests.post(url, json=body, headers=headers, timeout=timeout_sec)
+    except Exception as exc:
+        return {"success": False, "error": f"OpenClaw request failed: {exc}"}
+
+    try:
+        data = response.json() if response.content else {}
+    except Exception:
+        data = {}
+
+    if response.status_code >= 400:
+        return {"success": False, "error": f"OpenClaw HTTP {response.status_code}: {data or response.text}"}
+
+    ok = bool(data.get("success", True) or data.get("ok"))
+    return {"success": ok, "data": data, "error": str(data.get("error") or "").strip() or None}
+
+
 def _dispatch_via_openclaw(item: dict[str, Any], channel: str, message: str) -> dict[str, Any]:
     endpoint = _resolve_outreach_openclaw_endpoint()
     token = _resolve_outreach_openclaw_token()
@@ -2584,49 +2727,21 @@ def partnership_import_links():
                 source_url = str(raw_link or "").strip()
                 if not source_url:
                     continue
-                cur.execute(
-                    """
-                    SELECT id
-                    FROM prospectingleads
-                    WHERE business_id = %s
-                      AND source_url = %s
-                      AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
-                    LIMIT 1
-                    """,
-                    (business_id, source_url),
+                lead_id, created = _insert_partnership_lead_if_new(
+                    cur,
+                    business_id=business_id,
+                    created_by=user_data["user_id"],
+                    source_url=source_url,
+                    name="Новый партнёр",
+                    city=default_city or None,
+                    category=default_category or None,
+                    source="manual_link",
                 )
-                existing = cur.fetchone()
-                if existing:
+                if not created:
                     skipped += 1
                     continue
-
-                lead_id = str(uuid.uuid4())
-                cur.execute(
-                    """
-                    INSERT INTO prospectingleads (
-                        id, name, address, city, source_url, source, category, status,
-                        intent, partnership_stage, business_id, created_by, created_at, updated_at
-                    ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, NOW(), NOW()
-                    )
-                    """,
-                    (
-                        lead_id,
-                        "Новый партнёр",
-                        "",
-                        default_city or None,
-                        source_url,
-                        "manual_link",
-                        default_category or None,
-                        "imported",
-                        "partnership_outreach",
-                        "imported",
-                        business_id,
-                        user_data["user_id"],
-                    ),
-                )
-                imported_ids.append(lead_id)
+                if lead_id:
+                    imported_ids.append(lead_id)
             conn.commit()
         finally:
             conn.close()
@@ -2641,6 +2756,126 @@ def partnership_import_links():
         )
     except Exception as e:
         print(f"Error importing partnership links: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/geo-search", methods=["POST"])
+def partnership_geo_search():
+    """OpenClaw geo-search import for partnership leads (P8 baseline)."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+
+    if not _is_partnership_openclaw_enabled():
+        return jsonify({"error": "OpenClaw partnership integration is disabled"}), 400
+
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        city = str(data.get("city") or "").strip()
+        category = str(data.get("category") or "").strip()
+        query = str(data.get("query") or "").strip()
+        radius_km = int(data.get("radius_km") or 5)
+        limit = int(data.get("limit") or 25)
+        radius_km = max(1, min(radius_km, 100))
+        limit = max(1, min(limit, 200))
+        if not city and not query:
+            return jsonify({"error": "city or query is required"}), 400
+
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+            cap_payload = {
+                "query": query,
+                "city": city,
+                "category": category,
+                "radius_km": radius_km,
+                "limit": limit,
+                "intent": "partnership_outreach",
+                "business_id": business_id,
+            }
+            openclaw_result = _call_partnership_openclaw_capability(
+                "partners.search_geo",
+                tenant_id=business_id,
+                payload=cap_payload,
+                timeout_sec=60,
+            )
+            if not openclaw_result.get("success"):
+                return jsonify({"error": str(openclaw_result.get("error") or "OpenClaw geo-search failed")}), 502
+
+            data_blob = openclaw_result.get("data") or {}
+            result_blob = data_blob.get("result") if isinstance(data_blob, dict) else {}
+            candidates = (
+                (result_blob.get("items") if isinstance(result_blob, dict) else None)
+                or (data_blob.get("items") if isinstance(data_blob, dict) else None)
+                or []
+            )
+            if not isinstance(candidates, list):
+                candidates = []
+
+            imported_ids: list[str] = []
+            skipped = 0
+            for item in candidates:
+                if not isinstance(item, dict):
+                    continue
+                source_url = str(item.get("source_url") or item.get("url") or item.get("maps_url") or "").strip()
+                lead_name = str(item.get("name") or item.get("title") or "Новый партнёр").strip()
+                lead_city = str(item.get("city") or city or "").strip() or None
+                lead_category = str(item.get("category") or category or "").strip() or None
+                phone = str(item.get("phone") or "").strip() or None
+                email = str(item.get("email") or "").strip() or None
+                website = str(item.get("website") or item.get("website_url") or "").strip() or None
+                telegram_url = str(item.get("telegram_url") or "").strip() or None
+                whatsapp_url = str(item.get("whatsapp_url") or "").strip() or None
+                try:
+                    rating = float(item.get("rating")) if item.get("rating") is not None else None
+                except Exception:
+                    rating = None
+                try:
+                    reviews_count = int(item.get("reviews_count")) if item.get("reviews_count") is not None else None
+                except Exception:
+                    reviews_count = None
+                lead_id, created = _insert_partnership_lead_if_new(
+                    cur,
+                    business_id=business_id,
+                    created_by=user_data["user_id"],
+                    source_url=source_url,
+                    name=lead_name,
+                    city=lead_city,
+                    category=lead_category,
+                    source="openclaw_geo",
+                    phone=phone,
+                    email=email,
+                    website=website,
+                    telegram_url=telegram_url,
+                    whatsapp_url=whatsapp_url,
+                    rating=rating,
+                    reviews_count=reviews_count,
+                )
+                if created:
+                    if lead_id:
+                        imported_ids.append(lead_id)
+                else:
+                    skipped += 1
+            conn.commit()
+        finally:
+            conn.close()
+
+        return jsonify(
+            {
+                "success": True,
+                "imported_count": len(imported_ids),
+                "skipped_count": skipped,
+                "lead_ids": imported_ids,
+                "source_total": len(candidates),
+            }
+        )
+    except Exception as e:
+        print(f"Error partnership geo search: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -2839,6 +3074,18 @@ def _extract_partner_service_names_from_snapshot(snapshot: dict[str, Any]) -> li
     return names
 
 
+def _extract_openclaw_result_blob(resp: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(resp, dict):
+        return {}
+    data = resp.get("data")
+    if not isinstance(data, dict):
+        return {}
+    result = data.get("result")
+    if isinstance(result, dict):
+        return result
+    return data
+
+
 @admin_prospecting_bp.route("/api/partnership/leads/<string:lead_id>/audit", methods=["POST"])
 def partnership_audit_lead(lead_id):
     user_data, error = _require_auth()
@@ -2859,7 +3106,26 @@ def partnership_audit_lead(lead_id):
             if not lead:
                 return jsonify({"error": "Lead not found"}), 404
 
-            snapshot = build_lead_card_preview_snapshot(lead)
+            snapshot: dict[str, Any] | None = None
+            if _is_partnership_openclaw_enabled():
+                openclaw_result = _call_partnership_openclaw_capability(
+                    "partners.audit_card",
+                    tenant_id=business_id,
+                    payload={
+                        "business_id": business_id,
+                        "lead_id": lead_id,
+                        "lead": lead,
+                        "intent": "partnership_outreach",
+                    },
+                    timeout_sec=40,
+                )
+                if openclaw_result.get("success"):
+                    result_blob = _extract_openclaw_result_blob(openclaw_result)
+                    candidate_snapshot = result_blob.get("snapshot")
+                    if isinstance(candidate_snapshot, dict) and candidate_snapshot:
+                        snapshot = candidate_snapshot
+            if not snapshot:
+                snapshot = build_lead_card_preview_snapshot(lead)
             cur.execute(
                 """
                 INSERT INTO partnershipleadartifacts (lead_id, audit_json, updated_at)
@@ -2919,37 +3185,58 @@ def partnership_match_lead(lead_id):
 
             own_services = _collect_business_service_names(cur, business_id)
             partner_services = _extract_partner_service_names_from_snapshot(audit_json)
+            match_result: dict[str, Any] | None = None
+            if _is_partnership_openclaw_enabled():
+                openclaw_result = _call_partnership_openclaw_capability(
+                    "partners.match_services",
+                    tenant_id=business_id,
+                    payload={
+                        "business_id": business_id,
+                        "lead_id": lead_id,
+                        "intent": "partnership_outreach",
+                        "our_services": own_services,
+                        "partner_services": partner_services,
+                        "audit_snapshot": audit_json,
+                    },
+                    timeout_sec=40,
+                )
+                if openclaw_result.get("success"):
+                    result_blob = _extract_openclaw_result_blob(openclaw_result)
+                    candidate_match = result_blob.get("match")
+                    if isinstance(candidate_match, dict) and candidate_match:
+                        match_result = candidate_match
 
-            own_tokens = _tokenize_match_text(" ".join(own_services))
-            partner_tokens = _tokenize_match_text(" ".join(partner_services))
-            overlap_tokens = sorted(list(own_tokens & partner_tokens))
-            own_unique = sorted(list(own_tokens - partner_tokens))
-            partner_unique = sorted(list(partner_tokens - own_tokens))
+            if not match_result:
+                own_tokens = _tokenize_match_text(" ".join(own_services))
+                partner_tokens = _tokenize_match_text(" ".join(partner_services))
+                overlap_tokens = sorted(list(own_tokens & partner_tokens))
+                own_unique = sorted(list(own_tokens - partner_tokens))
+                partner_unique = sorted(list(partner_tokens - own_tokens))
 
-            denominator = max(1, len(own_tokens | partner_tokens))
-            score = int(round((len(overlap_tokens) / denominator) * 100))
-            match_result = {
-                "match_score": score,
-                "overlap": overlap_tokens[:30],
-                "complement": {
-                    "our_strength_tokens": own_unique[:30],
-                    "partner_strength_tokens": partner_unique[:30],
-                },
-                "risks": [
-                    "Низкая точность, если у партнёра мало структурированных услуг."
-                    if not partner_services
-                    else "Проверьте каннибализацию по пересекающимся услугам."
-                ],
-                "offer_angles": [
-                    "Кросс-рекомендации по непересекающимся услугам",
-                    "Пакетные предложения с взаимной скидкой",
-                    "Совместный контент/новости для карт и соцсетей",
-                ],
-                "source_counts": {
-                    "our_services": len(own_services),
-                    "partner_services": len(partner_services),
-                },
-            }
+                denominator = max(1, len(own_tokens | partner_tokens))
+                score = int(round((len(overlap_tokens) / denominator) * 100))
+                match_result = {
+                    "match_score": score,
+                    "overlap": overlap_tokens[:30],
+                    "complement": {
+                        "our_strength_tokens": own_unique[:30],
+                        "partner_strength_tokens": partner_unique[:30],
+                    },
+                    "risks": [
+                        "Низкая точность, если у партнёра мало структурированных услуг."
+                        if not partner_services
+                        else "Проверьте каннибализацию по пересекающимся услугам."
+                    ],
+                    "offer_angles": [
+                        "Кросс-рекомендации по непересекающимся услугам",
+                        "Пакетные предложения с взаимной скидкой",
+                        "Совместный контент/новости для карт и соцсетей",
+                    ],
+                    "source_counts": {
+                        "our_services": len(own_services),
+                        "partner_services": len(partner_services),
+                    },
+                }
 
             cur.execute(
                 """
@@ -3009,26 +3296,49 @@ def partnership_draft_offer(lead_id):
             if not isinstance(match_json, dict):
                 match_json = {}
 
-            lead_name = str(lead.get("name") or "коллеги").strip()
-            city = str(lead.get("city") or "").strip()
-            overlap = match_json.get("overlap") or []
-            complement = ((match_json.get("complement") or {}).get("partner_strength_tokens") or [])
-            opener = f"Здравствуйте! Мы посмотрели вашу карточку на картах и видим потенциал для партнёрства."
-            if city:
-                opener += f" Работаем рядом в {city}."
-            value_line = "Можем предложить кросс-рекомендации и совместные офферы для обмена клиентским потоком."
-            if overlap:
-                value_line += f" Уже есть пересечения по темам: {', '.join(overlap[:5])}."
-            if complement:
-                value_line += f" И есть комплементарные направления: {', '.join(complement[:5])}."
-            draft_text = "\n".join(
-                [
-                    opener,
-                    value_line,
-                    "Если вам интересно, подготовим короткий план пилота на 2 недели с метриками и прозрачной механикой.",
-                    "Готовы обсудить удобный формат созвона/чата?",
-                ]
-            ).strip()
+            draft_text: str | None = None
+            if _is_partnership_openclaw_enabled():
+                openclaw_result = _call_partnership_openclaw_capability(
+                    "partners.draft_first_offer",
+                    tenant_id=business_id,
+                    payload={
+                        "business_id": business_id,
+                        "lead_id": lead_id,
+                        "intent": "partnership_outreach",
+                        "lead": lead,
+                        "match": match_json,
+                        "tone": tone,
+                        "channel": channel,
+                    },
+                    timeout_sec=40,
+                )
+                if openclaw_result.get("success"):
+                    result_blob = _extract_openclaw_result_blob(openclaw_result)
+                    candidate_text = str(result_blob.get("text") or result_blob.get("draft_text") or "").strip()
+                    if candidate_text:
+                        draft_text = candidate_text
+
+            if not draft_text:
+                lead_name = str(lead.get("name") or "коллеги").strip()
+                city = str(lead.get("city") or "").strip()
+                overlap = match_json.get("overlap") or []
+                complement = ((match_json.get("complement") or {}).get("partner_strength_tokens") or [])
+                opener = f"Здравствуйте! Мы посмотрели вашу карточку на картах и видим потенциал для партнёрства."
+                if city:
+                    opener += f" Работаем рядом в {city}."
+                value_line = "Можем предложить кросс-рекомендации и совместные офферы для обмена клиентским потоком."
+                if overlap:
+                    value_line += f" Уже есть пересечения по темам: {', '.join(overlap[:5])}."
+                if complement:
+                    value_line += f" И есть комплементарные направления: {', '.join(complement[:5])}."
+                draft_text = "\n".join(
+                    [
+                        opener,
+                        value_line,
+                        "Если вам интересно, подготовим короткий план пилота на 2 недели с метриками и прозрачной механикой.",
+                        "Готовы обсудить удобный формат созвона/чата?",
+                    ]
+                ).strip()
 
             draft_id = str(uuid.uuid4())
             cur.execute(

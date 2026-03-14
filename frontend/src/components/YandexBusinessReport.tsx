@@ -33,6 +33,32 @@ export const YandexBusinessReport: React.FC<YandexBusinessReportProps> = ({ data
     // Parse JSON fields
     const messengers = data.messengers ? JSON.parse(data.messengers) : [];
     const workingHours = data.workingHours ? JSON.parse(data.workingHours) : null;
+    const scheduleItems = Array.isArray(workingHours?.schedule) ? workingHours.schedule : [];
+
+    const formatWorkingHourItem = (item: unknown): { day: string; time: string } => {
+        if (typeof item === 'string') {
+            const raw = item.trim();
+            if (!raw) return { day: '—', time: '—' };
+            if (raw.includes(': ')) {
+                const [day, ...rest] = raw.split(': ');
+                return { day: day || '—', time: rest.join(': ') || '—' };
+            }
+            const idx = raw.indexOf(':');
+            if (idx > 0) {
+                return { day: raw.slice(0, idx).trim() || '—', time: raw.slice(idx + 1).trim() || '—' };
+            }
+            return { day: raw, time: '—' };
+        }
+
+        if (item && typeof item === 'object') {
+            const obj = item as Record<string, unknown>;
+            const day = String(obj.day || obj.weekday || obj.title || obj.name || '—').trim() || '—';
+            const time = String(obj.time || obj.hours || obj.value || obj.text || '—').trim() || '—';
+            return { day, time };
+        }
+
+        return { day: '—', time: '—' };
+    };
 
     // Completeness color
     const getCompletenessColor = (score: number) => {
@@ -202,7 +228,7 @@ export const YandexBusinessReport: React.FC<YandexBusinessReportProps> = ({ data
             </Card>
 
             {/* Working Hours */}
-            {workingHours?.schedule && workingHours.schedule.length > 0 && (
+            {scheduleItems.length > 0 && (
                 <Card>
                     <CardHeader>
                         <CardTitle className="text-lg flex items-center gap-2">
@@ -212,12 +238,15 @@ export const YandexBusinessReport: React.FC<YandexBusinessReportProps> = ({ data
                     </CardHeader>
                     <CardContent>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            {workingHours.schedule.map((item: string, idx: number) => (
+                            {scheduleItems.map((item: unknown, idx: number) => {
+                                const row = formatWorkingHourItem(item);
+                                return (
                                 <div key={idx} className="flex justify-between p-2 bg-gray-50 rounded">
-                                    <span className="font-medium text-gray-700">{item.split(': ')[0]}</span>
-                                    <span className="text-gray-600 font-mono text-sm">{item.split(': ')[1]}</span>
+                                    <span className="font-medium text-gray-700">{row.day}</span>
+                                    <span className="text-gray-600 font-mono text-sm">{row.time}</span>
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </CardContent>
                 </Card>

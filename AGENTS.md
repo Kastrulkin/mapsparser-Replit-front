@@ -61,6 +61,7 @@ Legacy details remain in git history and must not be used as default runbook.
 ## 8.1 Current Platform State
 - OpenClaw ↔ LocalOS integration roadmap (Phase 1–9) is complete in the current codebase.
 - Canonical agent map is documented in `docs/AGENT_REGISTRY_V1.md` (agent roles, capability map, orchestrator boundaries, Ralph loop).
+- Partnership implementation backlog is documented in `docs/PARTNERSHIP_ROADMAP_BACKLOG.md` (Sprints P0–P10).
 - Live platform includes:
   - Action Orchestrator + policy + ledger + human-in-the-loop
   - M2M callbacks with retry/DLQ/outbox

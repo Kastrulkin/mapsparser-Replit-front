@@ -8,18 +8,12 @@ import sqlite3
 import uuid
 import base64
 import random
-import re
-import secrets
-import hashlib
-import urllib.error as urllib_error
-import urllib.request as urllib_request
 from datetime import datetime, timedelta
 
 # Устанавливаем переменную окружения для отключения SSL проверки GigaChat
 os.environ.setdefault('GIGACHAT_SSL_VERIFY', 'false')
 from flask import Flask, request, jsonify, render_template_string, send_from_directory, Response
 from flask_cors import CORS
-from werkzeug.exceptions import HTTPException
 
 # Rate limiting для защиты от brute force и DDoS
 try:
@@ -35,22 +29,12 @@ from analyzer import analyze_card
 from report import generate_html_report
 from services.gigachat_client import analyze_screenshot_with_gigachat, analyze_text_with_gigachat
 from database_manager import DatabaseManager, get_db_connection
-from parsequeue_status import (
-    STATUS_CAPTCHA,
-    STATUS_COMPLETED,
-    STATUS_ERROR,
-    STATUS_PAUSED,
-    STATUS_PENDING,
-    STATUS_PROCESSING,
-    normalize_status,
-)
+from parsequeue_status import STATUS_COMPLETED, STATUS_ERROR, normalize_status
 from auth_system import authenticate_user, create_session, verify_session
 from init_database_schema import init_database_schema
-from messengers_api import messengers_bp
+from chatgpt_api import chatgpt_bp
 from chatgpt_search_api import chatgpt_search_bp
-from subscription_manager import get_automation_block_message, has_paid_automation_access
 from stripe_integration import stripe_bp
-from yookassa_integration import billing_bp
 from admin_moderation import admin_moderation_bp
 from bookings_api import bookings_bp
 from ai_agent_webhooks import ai_webhooks_bp
@@ -65,17 +49,6 @@ from api.metrics_history_api import metrics_history_bp
 from api.networks_api import networks_bp
 from api.network_health_api import network_health_bp
 from api.admin_prospecting import admin_prospecting_bp
-from core.default_ai_prompts import get_default_ai_prompts
-from core.default_business_types import get_default_business_types
-from core.seo_keywords import collect_ranked_keywords
-from core.ai_learning import record_ai_learning_event
-from core.action_orchestrator import ActionOrchestrator
-from core.channel_router import (
-    build_channel_statuses,
-    dispatch_with_routing,
-    get_routing_plan,
-    load_business_channel_context,
-)
 try:
     from api.google_business_api import google_business_bp
 except ImportError as e:
@@ -155,58 +128,10 @@ def rate_limit_if_available(limit_str):
         return f
     return decorator
 
-
-def _normalize_learning_intent(raw_intent) -> str:
-    value = str(raw_intent or "operations").strip().lower()
-    allowed = {"operations", "client_outreach", "partnership_outreach"}
-    return value if value in allowed else "operations"
-
-
-def _is_valid_internal_learning_request() -> bool:
-    internal_token = (os.getenv("OPENCLAW_LOCALOS_TOKEN") or "").strip()
-    header_token = (request.headers.get("X-Internal-Token") or "").strip()
-    return bool(internal_token and header_token and secrets.compare_digest(header_token, internal_token))
-
-
-@app.route('/api/ai/learning-events', methods=['POST', 'OPTIONS'])
-def ai_learning_events_internal():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    if not _is_valid_internal_learning_request():
-        return jsonify({"error": "Unauthorized internal request"}), 401
-
-    data = request.get_json(silent=True) or {}
-    capability = str(data.get("capability") or "").strip()
-    event_type = str(data.get("event_type") or "").strip()
-    if not capability or not event_type:
-        return jsonify({"error": "capability and event_type are required"}), 400
-
-    ok = record_ai_learning_event(
-        capability=capability,
-        event_type=event_type,
-        intent=_normalize_learning_intent(data.get("intent")),
-        user_id=data.get("user_id"),
-        business_id=data.get("business_id"),
-        accepted=data.get("accepted"),
-        rejected=data.get("rejected"),
-        edited_before_accept=data.get("edited_before_accept"),
-        outcome=data.get("outcome"),
-        action_id=data.get("action_id"),
-        prompt_key=data.get("prompt_key"),
-        prompt_version=data.get("prompt_version"),
-        draft_text=data.get("draft_text"),
-        final_text=data.get("final_text"),
-        metadata=data.get("metadata") if isinstance(data.get("metadata"), dict) else {},
-    )
-    if not ok:
-        return jsonify({"error": "failed_to_write_learning_event"}), 500
-    return jsonify({"success": True}), 200
-
 # Регистрируем Blueprint'ы сразу после создания app, чтобы они имели приоритет над SPA fallback
-app.register_blueprint(messengers_bp)
+app.register_blueprint(chatgpt_bp)
 app.register_blueprint(chatgpt_search_bp)
 app.register_blueprint(stripe_bp)
-app.register_blueprint(billing_bp)
 app.register_blueprint(admin_moderation_bp)
 app.register_blueprint(bookings_bp)
 app.register_blueprint(ai_webhooks_bp)
@@ -320,7 +245,7 @@ def competitor_exists(url: str) -> bool:
     try:
         db = DatabaseManager()
         cur = db.conn.cursor()
-        cur.execute("SELECT id FROM Cards WHERE url = %s LIMIT 1", (url,))
+        cur.execute("SELECT id FROM Cards WHERE url = ? LIMIT 1", (url,))
         row = cur.fetchone()
         db.close()
         return row is not None
@@ -366,36 +291,14 @@ def save_card_to_db(card: dict) -> None:
 
     cur.execute(
         """
-        INSERT INTO Cards (
+        INSERT OR REPLACE INTO Cards (
             id, url, title, address, phone, site, rating, reviews_count,
             categories, overview, products, news, photos, features_full,
             competitors, hours, hours_full, report_path, user_id, seo_score,
             ai_analysis, recommendations
         ) VALUES (
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
-        ON CONFLICT (id) DO UPDATE SET
-            url = EXCLUDED.url,
-            title = EXCLUDED.title,
-            address = EXCLUDED.address,
-            phone = EXCLUDED.phone,
-            site = EXCLUDED.site,
-            rating = EXCLUDED.rating,
-            reviews_count = EXCLUDED.reviews_count,
-            categories = EXCLUDED.categories,
-            overview = EXCLUDED.overview,
-            products = EXCLUDED.products,
-            news = EXCLUDED.news,
-            photos = EXCLUDED.photos,
-            features_full = EXCLUDED.features_full,
-            competitors = EXCLUDED.competitors,
-            hours = EXCLUDED.hours,
-            hours_full = EXCLUDED.hours_full,
-            report_path = EXCLUDED.report_path,
-            user_id = EXCLUDED.user_id,
-            seo_score = EXCLUDED.seo_score,
-            ai_analysis = EXCLUDED.ai_analysis,
-            recommendations = EXCLUDED.recommendations
         """,
         (
             card_id,
@@ -523,45 +426,10 @@ def get_token_usage_stats():
         
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        cursor.execute(
-            """
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'parsequeue'
-            """
-        )
-        parsequeue_columns = {
-            str(row.get("column_name") if hasattr(row, "get") else row[0])
-            for row in (cursor.fetchall() or [])
-            if (row.get("column_name") if hasattr(row, "get") else (row[0] if row else None))
-        }
-        cursor.execute(
-            """
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'parsequeue'
-            """
-        )
-        parsequeue_columns = {
-            str(row.get("column_name") if hasattr(row, "get") else row[0])
-            for row in (cursor.fetchall() or [])
-            if (row.get("column_name") if hasattr(row, "get") else (row[0] if row else None))
-        }
         
-        def _cell(row, key: str, idx: int, default=0):
-            if row is None:
-                return default
-            if isinstance(row, dict):
-                return row.get(key, default)
-            try:
-                return row[idx]
-            except Exception:
-                return default
-
         # Проверяем, существует ли таблица tokenusage (Postgres)
-        cursor.execute("SELECT to_regclass('public.tokenusage') AS reg")
-        reg_row = cursor.fetchone()
-        if not _cell(reg_row, "reg", 0, None):
+        cursor.execute("SELECT to_regclass('public.tokenusage')")
+        if not cursor.fetchone():
             db.close()
             return jsonify({
                 "success": True,
@@ -606,13 +474,13 @@ def get_token_usage_stats():
         users_stats = []
         for row in cursor.fetchall():
             users_stats.append({
-                "user_id": _cell(row, "id", 0),
-                "email": _cell(row, "email", 1),
-                "name": _cell(row, "name", 2),
-                "total_tokens": _cell(row, "total_tokens", 3, 0) or 0,
-                "prompt_tokens": _cell(row, "prompt_tokens", 4, 0) or 0,
-                "completion_tokens": _cell(row, "completion_tokens", 5, 0) or 0,
-                "requests_count": _cell(row, "requests_count", 6, 0) or 0
+                "user_id": row[0],
+                "email": row[1],
+                "name": row[2],
+                "total_tokens": row[3] or 0,
+                "prompt_tokens": row[4] or 0,
+                "completion_tokens": row[5] or 0,
+                "requests_count": row[6] or 0
             })
         
         # По бизнесам
@@ -636,14 +504,14 @@ def get_token_usage_stats():
         businesses_stats = []
         for row in cursor.fetchall():
             businesses_stats.append({
-                "business_id": _cell(row, "id", 0),
-                "business_name": _cell(row, "name", 1),
-                "owner_id": _cell(row, "owner_id", 2),
-                "owner_email": _cell(row, "owner_email", 3),
-                "total_tokens": _cell(row, "total_tokens", 4, 0) or 0,
-                "prompt_tokens": _cell(row, "prompt_tokens", 5, 0) or 0,
-                "completion_tokens": _cell(row, "completion_tokens", 6, 0) or 0,
-                "requests_count": _cell(row, "requests_count", 7, 0) or 0
+                "business_id": row[0],
+                "business_name": row[1],
+                "owner_id": row[2],
+                "owner_email": row[3],
+                "total_tokens": row[4] or 0,
+                "prompt_tokens": row[5] or 0,
+                "completion_tokens": row[6] or 0,
+                "requests_count": row[7] or 0
             })
         
         # По типам задач
@@ -661,11 +529,11 @@ def get_token_usage_stats():
         task_types_stats = []
         for row in cursor.fetchall():
             task_types_stats.append({
-                "task_type": _cell(row, "task_type", 0, "unknown") or "unknown",
-                "total_tokens": _cell(row, "total_tokens", 1, 0) or 0,
-                "prompt_tokens": _cell(row, "prompt_tokens", 2, 0) or 0,
-                "completion_tokens": _cell(row, "completion_tokens", 3, 0) or 0,
-                "requests_count": _cell(row, "requests_count", 4, 0) or 0
+                "task_type": row[0] or "unknown",
+                "total_tokens": row[1] or 0,
+                "prompt_tokens": row[2] or 0,
+                "completion_tokens": row[3] or 0,
+                "requests_count": row[4] or 0
             })
         
         db.close()
@@ -673,10 +541,10 @@ def get_token_usage_stats():
         return jsonify({
             "success": True,
             "total": {
-                "total_tokens": _cell(total_stats, "total", 0, 0) or 0,
-                "prompt_tokens": _cell(total_stats, "prompt_total", 1, 0) or 0,
-                "completion_tokens": _cell(total_stats, "completion_total", 2, 0) or 0,
-                "requests_count": _cell(total_stats, "requests_count", 3, 0) or 0
+                "total_tokens": total_stats[0] or 0,
+                "prompt_tokens": total_stats[1] or 0,
+                "completion_tokens": total_stats[2] or 0,
+                "requests_count": total_stats[3] or 0
             },
             "by_user": users_stats,
             "by_business": businesses_stats,
@@ -685,204 +553,6 @@ def get_token_usage_stats():
         
     except Exception as e:
         print(f"❌ Ошибка получения статистики токенов: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route('/api/token-usage', methods=['GET'])
-def get_user_token_usage():
-    """Пользовательская статистика токенов по бизнесу с разбивкой по категориям и периодам."""
-    try:
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-
-        token = auth_header.split(' ')[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-
-        user_id = user_data.get('user_id') or user_data.get('id')
-        business_id = request.args.get('business_id')
-        months_raw = request.args.get('months', '1')
-        try:
-            months = int(months_raw)
-        except Exception:
-            months = 1
-        if months < 1:
-            months = 1
-        if months > 24:
-            months = 24
-
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-
-        # Проверяем наличие таблицы
-        cursor.execute("SELECT to_regclass('public.tokenusage') AS reg")
-        reg_row = cursor.fetchone()
-        reg_val = (reg_row.get('reg') if isinstance(reg_row, dict) else reg_row[0]) if reg_row else None
-        if not reg_val:
-            db.close()
-            return jsonify({
-                "success": True,
-                "period_months": months,
-                "month_total": {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0, "requests_count": 0},
-                "period_total": {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0, "requests_count": 0},
-                "by_category": [],
-                "timeline": []
-            })
-
-        scope_col = "user_id"
-        scope_value = user_id
-        scope_sql = f"{scope_col} = %s"
-        scope_params = [scope_value]
-
-        if business_id:
-            cursor.execute("SELECT owner_id FROM businesses WHERE id = %s", (business_id,))
-            b_row = cursor.fetchone()
-            if not b_row:
-                db.close()
-                return jsonify({"error": "Бизнес не найден"}), 404
-            owner_id = b_row.get('owner_id') if isinstance(b_row, dict) else b_row[0]
-            if owner_id != user_id and not user_data.get('is_superadmin'):
-                db.close()
-                return jsonify({"error": "Нет доступа"}), 403
-            # Часть старых записей TokenUsage может не иметь business_id.
-            # Для выбранного бизнеса учитываем:
-            # 1) прямые записи по business_id
-            # 2) записи владельца без business_id (legacy)
-            scope_sql = "(business_id = %s OR (business_id IS NULL AND user_id = %s))"
-            scope_params = [business_id, owner_id]
-
-        # Общая сумма за текущий календарный месяц
-        cursor.execute(
-            f"""
-            SELECT
-                COALESCE(SUM(total_tokens), 0) AS total_tokens,
-                COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,
-                COALESCE(SUM(completion_tokens), 0) AS completion_tokens,
-                COUNT(*) AS requests_count
-            FROM tokenusage
-            WHERE {scope_sql}
-              AND created_at >= date_trunc('month', NOW())
-            """,
-            tuple(scope_params),
-        )
-        month_row = cursor.fetchone() or {}
-        month_total = {
-            "total_tokens": int((month_row.get('total_tokens') if isinstance(month_row, dict) else month_row[0]) or 0),
-            "prompt_tokens": int((month_row.get('prompt_tokens') if isinstance(month_row, dict) else month_row[1]) or 0),
-            "completion_tokens": int((month_row.get('completion_tokens') if isinstance(month_row, dict) else month_row[2]) or 0),
-            "requests_count": int((month_row.get('requests_count') if isinstance(month_row, dict) else month_row[3]) or 0),
-        }
-
-        # Период: N последних месяцев
-        cursor.execute(
-            f"""
-            SELECT
-                COALESCE(SUM(total_tokens), 0) AS total_tokens,
-                COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,
-                COALESCE(SUM(completion_tokens), 0) AS completion_tokens,
-                COUNT(*) AS requests_count
-            FROM tokenusage
-            WHERE {scope_sql}
-              AND created_at >= (NOW() - ((%s || ' months')::interval))
-            """,
-            tuple(scope_params + [months]),
-        )
-        period_row = cursor.fetchone() or {}
-        period_total = {
-            "total_tokens": int((period_row.get('total_tokens') if isinstance(period_row, dict) else period_row[0]) or 0),
-            "prompt_tokens": int((period_row.get('prompt_tokens') if isinstance(period_row, dict) else period_row[1]) or 0),
-            "completion_tokens": int((period_row.get('completion_tokens') if isinstance(period_row, dict) else period_row[2]) or 0),
-            "requests_count": int((period_row.get('requests_count') if isinstance(period_row, dict) else period_row[3]) or 0),
-        }
-
-        # Разбивка по функциональным блокам
-        cursor.execute(
-            f"""
-            SELECT
-                CASE
-                    WHEN task_type = 'service_optimization' THEN 'services_optimization'
-                    WHEN task_type = 'news_generation' THEN 'news_generation'
-                    WHEN task_type LIKE 'ai_agent%%' THEN 'ai_agents'
-                    WHEN task_type IN ('review_reply', 'review_response', 'reviews_reply', 'reviews') THEN 'reviews'
-                    ELSE 'other'
-                END AS category,
-                COALESCE(SUM(total_tokens), 0) AS total_tokens,
-                COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,
-                COALESCE(SUM(completion_tokens), 0) AS completion_tokens,
-                COUNT(*) AS requests_count
-            FROM tokenusage
-            WHERE {scope_sql}
-              AND created_at >= (NOW() - ((%s || ' months')::interval))
-            GROUP BY category
-            ORDER BY total_tokens DESC
-            """,
-            tuple(scope_params + [months]),
-        )
-        by_category = []
-        for row in cursor.fetchall() or []:
-            if isinstance(row, dict):
-                category = row.get('category') or 'other'
-                total_tokens = row.get('total_tokens') or 0
-                prompt_tokens = row.get('prompt_tokens') or 0
-                completion_tokens = row.get('completion_tokens') or 0
-                requests_count = row.get('requests_count') or 0
-            else:
-                category = row[0] or 'other'
-                total_tokens = row[1] or 0
-                prompt_tokens = row[2] or 0
-                completion_tokens = row[3] or 0
-                requests_count = row[4] or 0
-            by_category.append({
-                "category": category,
-                "total_tokens": int(total_tokens),
-                "prompt_tokens": int(prompt_tokens),
-                "completion_tokens": int(completion_tokens),
-                "requests_count": int(requests_count),
-            })
-
-        # Таймлайн по месяцам для прошлых периодов
-        cursor.execute(
-            f"""
-            SELECT
-                to_char(date_trunc('month', created_at), 'YYYY-MM') AS month_key,
-                COALESCE(SUM(total_tokens), 0) AS total_tokens
-            FROM tokenusage
-            WHERE {scope_sql}
-              AND created_at >= (NOW() - ((%s || ' months')::interval))
-            GROUP BY month_key
-            ORDER BY month_key DESC
-            """,
-            tuple(scope_params + [months]),
-        )
-        timeline = []
-        for row in cursor.fetchall() or []:
-            if isinstance(row, dict):
-                timeline.append({
-                    "month": row.get('month_key'),
-                    "total_tokens": int(row.get('total_tokens') or 0)
-                })
-            else:
-                timeline.append({
-                    "month": row[0],
-                    "total_tokens": int(row[1] or 0)
-                })
-
-        db.close()
-        return jsonify({
-            "success": True,
-            "period_months": months,
-            "scope": {"business_id": business_id, "user_id": None if business_id else user_id},
-            "month_total": month_total,
-            "period_total": period_total,
-            "by_category": by_category,
-            "timeline": timeline,
-        })
-    except Exception as e:
-        print(f"❌ Ошибка пользовательской статистики токенов: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
@@ -899,48 +569,6 @@ def _count_from_row(cursor, row):
     if "cnt" in rd and rd["cnt"] is not None:
         return int(rd["cnt"])
     return int(list(rd.values())[0]) if rd else 0
-
-
-def _has_captcha_artifacts(task_row: dict | None) -> bool:
-    if not task_row:
-        return False
-    return bool(task_row.get("captcha_url") or task_row.get("captcha_session_id"))
-
-
-def _is_task_in_captcha_state(task_row: dict | None) -> bool:
-    if not task_row:
-        return False
-    status_norm = normalize_status(task_row.get("status"))
-    if status_norm == STATUS_CAPTCHA:
-        return True
-    return status_norm == STATUS_PAUSED and _has_captcha_artifacts(task_row)
-
-
-def _classify_parsing_error(error_message: str | None, status: str | None = None) -> tuple[str | None, str | None]:
-    raw = str(error_message or "").strip()
-    status_norm = normalize_status(status)
-    if status_norm == STATUS_CAPTCHA:
-        return "captcha_required", "Нужна CAPTCHA"
-    if not raw:
-        if status_norm == STATUS_PAUSED:
-            return "network_paused", "Сеть остановлена после ошибки"
-        return None, None
-
-    lowered = raw.lower()
-    rules = (
-        ("captcha_required", ("captcha_required", "captcha_detected"), "Нужна CAPTCHA"),
-        ("playwright_crash", ("playwright_sync_in_async_loop", "playwright sync api inside the asyncio loop"), "Сбой Playwright"),
-        ("db_write_error", ("datatypemismatch", "operator does not exist", "duplicate key", "relation ", "column "), "Ошибка записи в БД"),
-        ("timeout", ("timed out", "sleep interrupted", "timeout"), "Таймаут парсинга"),
-        ("validation_failed", ("low_quality_payload", "validation", "quality_score"), "Низкое качество данных"),
-        ("auth_error", ("403", "auth failed", "token"), "Ошибка авторизации внешнего сервиса"),
-        ("network_paused", ("network_batch_paused_after_error",), "Сеть остановлена после ошибки"),
-    )
-    for code, needles, label in rules:
-        if any(needle in lowered for needle in needles):
-            return code, label
-    short = raw.splitlines()[0].strip()
-    return "technical_error", short[:120] if short else "Техническая ошибка"
 
 
 @app.route('/api/admin/parsing/tasks', methods=['GET'])
@@ -969,18 +597,6 @@ def get_parsing_tasks():
         
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        cursor.execute(
-            """
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'parsequeue'
-            """
-        )
-        parsequeue_columns = {
-            str(row.get("column_name") if hasattr(row, "get") else row[0])
-            for row in (cursor.fetchall() or [])
-            if (row.get("column_name") if hasattr(row, "get") else (row[0] if row else None))
-        }
         
         # Формируем WHERE условия
         where_conditions = []
@@ -1005,20 +621,10 @@ def get_parsing_tasks():
         
         where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
 
-        optional_selects = []
-        for col in ("batch_id", "batch_kind", "network_id", "batch_seq", "paused_reason"):
-            if col in parsequeue_columns:
-                optional_selects.append(f"pq.{col}")
-            else:
-                optional_selects.append(f"NULL AS {col}")
-        optional_sql = ",\n                ".join(optional_selects)
-
         cursor.execute(f"""
             SELECT
                 pq.id, pq.url, pq.user_id, pq.business_id, pq.task_type, pq.account_id, pq.source,
-                pq.status, pq.retry_after, pq.captcha_url, pq.captcha_session_id, pq.resume_requested,
-                pq.error_message, pq.created_at, pq.updated_at,
-                {optional_sql},
+                pq.status, pq.retry_after, pq.error_message, pq.created_at, pq.updated_at,
                 b.name AS business_name
             FROM parsequeue pq
             LEFT JOIN businesses b ON b.id = pq.business_id
@@ -1052,18 +658,7 @@ def get_parsing_tasks():
                 continue
             task_dict.setdefault("task_type", "parse_card")
             task_dict["status"] = normalize_status(task_dict.get("status"))
-            if task_dict["status"] == STATUS_PAUSED and (task_dict.get("captcha_url") or task_dict.get("captcha_session_id")):
-                task_dict["status"] = STATUS_CAPTCHA
             task_dict["business_name"] = (task_dict.get("business_name") or "").strip() or None
-            short_error_code, short_error_message = _classify_parsing_error(
-                task_dict.get("error_message"),
-                task_dict.get("status"),
-            )
-            task_dict["short_error_code"] = short_error_code
-            task_dict["short_error_message"] = short_error_message
-            task_dict["can_resume_batch"] = bool(task_dict.get("batch_id")) and task_dict.get("status") in (STATUS_PAUSED, STATUS_ERROR)
-            task_dict["can_open_captcha"] = task_dict.get("status") == STATUS_CAPTCHA and bool(task_dict.get("captcha_url") or task_dict.get("url"))
-            task_dict["can_restart_task"] = task_dict.get("status") in (STATUS_ERROR, STATUS_CAPTCHA, STATUS_PAUSED)
             tasks.append(task_dict)
         
         db.close()
@@ -1140,662 +735,6 @@ def restart_parsing_task(task_id):
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
-
-
-@app.route('/api/admin/parsing/network-batches/<string:batch_id>/resume', methods=['POST'])
-def resume_network_parsing_batch(batch_id):
-    """Возобновить сетевой batch парсинга с места первой ошибки."""
-    try:
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-
-        token = auth_header.split(' ')[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-
-        if not user_data.get('is_superadmin'):
-            return jsonify({"error": "Требуются права администратора"}), 403
-
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-        cursor.execute(
-            """
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'parsequeue'
-            """
-        )
-        parsequeue_columns = {
-            str(row.get("column_name") if hasattr(row, "get") else row[0])
-            for row in (cursor.fetchall() or [])
-            if (row.get("column_name") if hasattr(row, "get") else (row[0] if row else None))
-        }
-        required = {"batch_id", "batch_kind", "batch_seq", "paused_reason"}
-        if not required.issubset(parsequeue_columns):
-            db.close()
-            return jsonify({"success": False, "error": "Schema not ready for network batch resume"}), 409
-
-        cursor.execute(
-            """
-            SELECT
-                MIN(pq.batch_seq) FILTER (WHERE pq.status = 'error') AS first_error_seq,
-                MIN(pq.batch_seq) FILTER (WHERE pq.status = %s) AS first_paused_seq,
-                MIN(pq.batch_seq) FILTER (
-                    WHERE pq.status = %s
-                      AND (
-                        COALESCE(pq.updated_at, pq.created_at) < NOW() - INTERVAL '10 minutes'
-                        OR NOT EXISTS (
-                            SELECT 1
-                            FROM parsequeue pq2
-                            WHERE pq2.batch_id = pq.batch_id
-                              AND pq2.batch_kind = 'network_sync'
-                              AND pq2.status = %s
-                              AND COALESCE(pq2.updated_at, pq2.created_at) >= NOW() - INTERVAL '3 minutes'
-                        )
-                      )
-                ) AS first_stale_processing_seq,
-                COUNT(*) FILTER (WHERE pq.status = 'error') AS error_count,
-                COUNT(*) FILTER (WHERE pq.status = %s) AS paused_count,
-                COUNT(*) FILTER (
-                    WHERE pq.status = %s
-                      AND (
-                        COALESCE(pq.updated_at, pq.created_at) < NOW() - INTERVAL '10 minutes'
-                        OR NOT EXISTS (
-                            SELECT 1
-                            FROM parsequeue pq2
-                            WHERE pq2.batch_id = pq.batch_id
-                              AND pq2.batch_kind = 'network_sync'
-                              AND pq2.status = %s
-                              AND COALESCE(pq2.updated_at, pq2.created_at) >= NOW() - INTERVAL '3 minutes'
-                        )
-                      )
-                ) AS stale_processing_count
-            FROM parsequeue pq
-            WHERE pq.batch_id = %s
-              AND pq.batch_kind = 'network_sync'
-            """,
-            (
-                STATUS_PAUSED,
-                STATUS_PROCESSING,
-                STATUS_PROCESSING,
-                STATUS_PAUSED,
-                STATUS_PROCESSING,
-                STATUS_PROCESSING,
-                batch_id,
-            ),
-        )
-        state_row = _row_to_dict(cursor, cursor.fetchone()) or {}
-        paused_count = int(state_row.get("paused_count") or 0)
-        error_count = int(state_row.get("error_count") or 0)
-        stale_processing_count = int(state_row.get("stale_processing_count") or 0)
-        candidate_seqs = [
-            state_row.get("first_error_seq"),
-            state_row.get("first_paused_seq"),
-            state_row.get("first_stale_processing_seq"),
-        ]
-        candidate_seqs = [int(v) for v in candidate_seqs if v is not None]
-        start_seq = min(candidate_seqs) if candidate_seqs else None
-
-        if paused_count <= 0 and error_count <= 0 and stale_processing_count <= 0:
-            db.close()
-            return jsonify({"success": False, "error": "Для batch нет задач для возобновления"}), 404
-
-        if start_seq is None:
-            start_seq = 0
-
-        cursor.execute(
-            """
-            UPDATE parsequeue pq
-            SET status = 'pending',
-                retry_after = NULL,
-                resume_requested = 0,
-                captcha_required = 0,
-                captcha_url = NULL,
-                captcha_session_id = NULL,
-                captcha_started_at = NULL,
-                captcha_status = NULL,
-                paused_reason = NULL,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE pq.batch_id = %s
-              AND pq.batch_kind = 'network_sync'
-              AND COALESCE(pq.batch_seq, 0) >= %s
-              AND (
-                    pq.status IN (%s, 'error')
-                    OR (
-                        pq.status = %s
-                        AND (
-                            COALESCE(pq.updated_at, pq.created_at) < NOW() - INTERVAL '10 minutes'
-                            OR NOT EXISTS (
-                                SELECT 1
-                                FROM parsequeue pq2
-                                WHERE pq2.batch_id = pq.batch_id
-                                  AND pq2.batch_kind = 'network_sync'
-                                  AND pq2.status = %s
-                                  AND COALESCE(pq2.updated_at, pq2.created_at) >= NOW() - INTERVAL '3 minutes'
-                            )
-                        )
-                    )
-                  )
-            """,
-            (batch_id, int(start_seq), STATUS_PAUSED, STATUS_PROCESSING, STATUS_PROCESSING),
-        )
-        resumed_count = int(cursor.rowcount or 0)
-        db.conn.commit()
-        db.close()
-
-        return jsonify(
-            {
-                "success": True,
-                "message": f"Возобновлено задач: {resumed_count}",
-                "batch_id": batch_id,
-                "start_seq": int(start_seq),
-                "resumed_count": resumed_count,
-                "stale_processing_count": stale_processing_count,
-            }
-        )
-    except Exception as e:
-        print(f"❌ Ошибка возобновления сетевого batch {batch_id}: {e}")
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route('/api/admin/parsing/network-batches/<string:batch_id>/skip-failed', methods=['POST'])
-def skip_failed_network_parsing_batch_item(batch_id):
-    """Оставить текущую проблемную точку в error и продолжить batch со следующей."""
-    try:
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-
-        token = auth_header.split(' ')[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-
-        if not user_data.get('is_superadmin'):
-            return jsonify({"error": "Требуются права администратора"}), 403
-
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-        cursor.execute(
-            """
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'parsequeue'
-            """
-        )
-        parsequeue_columns = {
-            str(row.get("column_name") if hasattr(row, "get") else row[0])
-            for row in (cursor.fetchall() or [])
-            if (row.get("column_name") if hasattr(row, "get") else (row[0] if row else None))
-        }
-        required = {"batch_id", "batch_kind", "batch_seq", "paused_reason"}
-        if not required.issubset(parsequeue_columns):
-            db.close()
-            return jsonify({"success": False, "error": "Schema not ready for network batch skip"}), 409
-
-        cursor.execute(
-            """
-            SELECT
-                MIN(pq.batch_seq) FILTER (WHERE pq.status = 'error') AS first_error_seq,
-                MIN(pq.batch_seq) FILTER (WHERE pq.status = %s) AS first_paused_seq,
-                MIN(pq.batch_seq) FILTER (
-                    WHERE pq.status = %s
-                      AND (
-                        COALESCE(pq.updated_at, pq.created_at) < NOW() - INTERVAL '10 minutes'
-                        OR NOT EXISTS (
-                            SELECT 1
-                            FROM parsequeue pq2
-                            WHERE pq2.batch_id = pq.batch_id
-                              AND pq2.batch_kind = 'network_sync'
-                              AND pq2.status = %s
-                              AND COALESCE(pq2.updated_at, pq2.created_at) >= NOW() - INTERVAL '3 minutes'
-                        )
-                      )
-                ) AS first_stale_processing_seq,
-                COUNT(*) FILTER (WHERE pq.status = 'error') AS error_count,
-                COUNT(*) FILTER (WHERE pq.status = %s) AS paused_count,
-                COUNT(*) FILTER (
-                    WHERE pq.status = %s
-                      AND (
-                        COALESCE(pq.updated_at, pq.created_at) < NOW() - INTERVAL '10 minutes'
-                        OR NOT EXISTS (
-                            SELECT 1
-                            FROM parsequeue pq2
-                            WHERE pq2.batch_id = pq.batch_id
-                              AND pq2.batch_kind = 'network_sync'
-                              AND pq2.status = %s
-                              AND COALESCE(pq2.updated_at, pq2.created_at) >= NOW() - INTERVAL '3 minutes'
-                        )
-                      )
-                ) AS stale_processing_count
-            FROM parsequeue pq
-            WHERE pq.batch_id = %s
-              AND pq.batch_kind = 'network_sync'
-            """,
-            (
-                STATUS_PAUSED,
-                STATUS_PROCESSING,
-                STATUS_PROCESSING,
-                STATUS_PAUSED,
-                STATUS_PROCESSING,
-                STATUS_PROCESSING,
-                batch_id,
-            ),
-        )
-        state_row = _row_to_dict(cursor, cursor.fetchone()) or {}
-        error_count = int(state_row.get("error_count") or 0)
-        paused_count = int(state_row.get("paused_count") or 0)
-        stale_processing_count = int(state_row.get("stale_processing_count") or 0)
-        candidate_seqs = [
-            state_row.get("first_error_seq"),
-            state_row.get("first_paused_seq"),
-            state_row.get("first_stale_processing_seq"),
-        ]
-        candidate_seqs = [int(v) for v in candidate_seqs if v is not None]
-        failed_seq = min(candidate_seqs) if candidate_seqs else None
-
-        if failed_seq is None or (error_count <= 0 and paused_count <= 0 and stale_processing_count <= 0):
-            db.close()
-            return jsonify({"success": False, "error": "Для batch нет точки, которую можно пропустить"}), 404
-
-        failed_seq = int(failed_seq)
-        next_seq = failed_seq + 1
-
-        cursor.execute(
-            """
-            UPDATE parsequeue
-            SET status = 'error',
-                paused_reason = 'skipped_by_admin',
-                resume_requested = 0,
-                retry_after = NULL,
-                captcha_required = 0,
-                captcha_url = NULL,
-                captcha_session_id = NULL,
-                captcha_started_at = NULL,
-                captcha_status = NULL,
-                updated_at = CURRENT_TIMESTAMP,
-                error_message = CASE
-                    WHEN error_message IS NULL OR error_message = '' THEN 'skipped by admin; point left in error'
-                    ELSE error_message || '; skipped by admin; point left in error'
-                END
-            WHERE batch_id = %s
-              AND batch_kind = 'network_sync'
-              AND COALESCE(batch_seq, 0) = %s
-              AND status = %s
-            """,
-            (batch_id, failed_seq, STATUS_PAUSED),
-        )
-        skipped_from_paused = int(cursor.rowcount or 0)
-
-        cursor.execute(
-            """
-            UPDATE parsequeue pq
-            SET status = 'pending',
-                retry_after = NULL,
-                resume_requested = 0,
-                captcha_required = 0,
-                captcha_url = NULL,
-                captcha_session_id = NULL,
-                captcha_started_at = NULL,
-                captcha_status = NULL,
-                paused_reason = NULL,
-                updated_at = CURRENT_TIMESTAMP,
-                error_message = CASE
-                    WHEN paused_reason = 'manual_pause' THEN error_message
-                    WHEN error_message ILIKE '%%skipped by admin%%' THEN error_message
-                    ELSE error_message
-                END
-            WHERE pq.batch_id = %s
-              AND pq.batch_kind = 'network_sync'
-              AND COALESCE(pq.batch_seq, 0) >= %s
-              AND (
-                    pq.status IN (%s, 'error')
-                    OR (
-                        pq.status = %s
-                        AND (
-                            COALESCE(pq.updated_at, pq.created_at) < NOW() - INTERVAL '10 minutes'
-                            OR NOT EXISTS (
-                                SELECT 1
-                                FROM parsequeue pq2
-                                WHERE pq2.batch_id = pq.batch_id
-                                  AND pq2.batch_kind = 'network_sync'
-                                  AND pq2.status = %s
-                                  AND COALESCE(pq2.updated_at, pq2.created_at) >= NOW() - INTERVAL '3 minutes'
-                            )
-                        )
-                    )
-                  )
-            """,
-            (batch_id, next_seq, STATUS_PAUSED, STATUS_PROCESSING, STATUS_PROCESSING),
-        )
-        resumed_count = int(cursor.rowcount or 0)
-        db.conn.commit()
-        db.close()
-
-        return jsonify(
-            {
-                "success": True,
-                "message": f"Проблемная точка {failed_seq} пропущена. Возобновлено задач: {resumed_count}",
-                "batch_id": batch_id,
-                "skipped_seq": failed_seq,
-                "start_seq": next_seq,
-                "skipped_from_paused": skipped_from_paused,
-                "resumed_count": resumed_count,
-                "stale_processing_count": stale_processing_count,
-            }
-        )
-    except Exception as e:
-        print(f"❌ Ошибка skip-failed для сетевого batch {batch_id}: {e}")
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route('/api/admin/parsing/network-batches/<string:batch_id>/pause', methods=['POST'])
-def pause_network_parsing_batch(batch_id):
-    """Поставить сетевой batch на паузу, не трогая уже обрабатываемую задачу."""
-    try:
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-
-        token = auth_header.split(' ')[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-
-        if not user_data.get('is_superadmin'):
-            return jsonify({"error": "Требуются права администратора"}), 403
-
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-        cursor.execute(
-            """
-            UPDATE parsequeue
-            SET status = %s,
-                paused_reason = 'manual_pause',
-                updated_at = CURRENT_TIMESTAMP
-            WHERE batch_id = %s
-              AND batch_kind = 'network_sync'
-              AND status = %s
-            """,
-            (STATUS_PAUSED, batch_id, STATUS_PENDING),
-        )
-        paused_count = int(cursor.rowcount or 0)
-
-        cursor.execute(
-            """
-            SELECT COUNT(*) AS cnt
-            FROM parsequeue
-            WHERE batch_id = %s
-              AND batch_kind = 'network_sync'
-              AND status = %s
-            """,
-            (batch_id, STATUS_PROCESSING),
-        )
-        processing_count = _count_from_row(cursor, cursor.fetchone())
-        db.conn.commit()
-        db.close()
-
-        return jsonify(
-            {
-                "success": True,
-                "message": f"Batch поставлен на паузу. Остановлено в очереди: {paused_count}",
-                "batch_id": batch_id,
-                "paused_count": paused_count,
-                "processing_count": int(processing_count),
-            }
-        )
-    except Exception as e:
-        print(f"❌ Ошибка паузы сетевого batch {batch_id}: {e}")
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route('/api/admin/parsing/network-batches/<string:batch_id>/retry-errors', methods=['POST'])
-def retry_network_parsing_batch_errors(batch_id):
-    """Повторить только ошибочные задачи внутри batch, не затрагивая завершённые."""
-    try:
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-
-        token = auth_header.split(' ')[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-
-        if not user_data.get('is_superadmin'):
-            return jsonify({"error": "Требуются права администратора"}), 403
-
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-        cursor.execute(
-            """
-            UPDATE parsequeue
-            SET status = %s,
-                error_message = NULL,
-                retry_after = NULL,
-                resume_requested = 0,
-                captcha_required = 0,
-                captcha_url = NULL,
-                captcha_session_id = NULL,
-                captcha_started_at = NULL,
-                captcha_status = NULL,
-                paused_reason = NULL,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE batch_id = %s
-              AND batch_kind = 'network_sync'
-              AND status = %s
-            """,
-            (STATUS_PENDING, batch_id, STATUS_ERROR),
-        )
-        retried_count = int(cursor.rowcount or 0)
-        db.conn.commit()
-        db.close()
-
-        return jsonify(
-            {
-                "success": True,
-                "message": f"Ошибочные задачи возвращены в очередь: {retried_count}",
-                "batch_id": batch_id,
-                "retried_count": retried_count,
-            }
-        )
-    except Exception as e:
-        print(f"❌ Ошибка retry ошибочных задач batch {batch_id}: {e}")
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route('/api/admin/parsing/tasks/<task_id>/captcha/open', methods=['POST'])
-def open_parsing_task_captcha(task_id):
-    """Вернуть ссылку/метаданные captcha-сессии для конкретной задачи."""
-    try:
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-
-        token = auth_header.split(' ')[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-
-        if not user_data.get('is_superadmin'):
-            return jsonify({"error": "Требуются права администратора"}), 403
-
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-        cursor.execute("""
-            SELECT id, status, business_id, url, captcha_url, captcha_session_id, retry_after, resume_requested
-            FROM parsequeue
-            WHERE id = %s
-            LIMIT 1
-        """, (task_id,))
-        raw_task = cursor.fetchone()
-        task_row = _row_to_dict(cursor, raw_task) if raw_task else None
-        db.close()
-
-        if not task_row:
-            return jsonify({"success": False, "error": "Задача не найдена"}), 404
-        if not _is_task_in_captcha_state(task_row):
-            return jsonify({"success": False, "error": "Задача не в статусе captcha"}), 400
-        captcha_url = task_row.get("captcha_url") or task_row.get("url")
-        if not captcha_url:
-            return jsonify({"success": False, "error": "У задачи нет captcha_url"}), 400
-
-        return jsonify({
-            "success": True,
-            "task_id": task_row.get("id"),
-            "business_id": task_row.get("business_id"),
-            "captcha_url": captcha_url,
-            "captcha_session_id": task_row.get("captcha_session_id"),
-            "retry_after": task_row.get("retry_after"),
-            "resume_requested": bool(task_row.get("resume_requested")),
-            "message": "Откройте ссылку, пройдите captcha и нажмите «Продолжить»"
-        })
-    except Exception as e:
-        print(f"❌ Ошибка открытия captcha-сессии: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-@app.route('/api/admin/parsing/tasks/<task_id>/captcha/resume', methods=['POST'])
-def resume_parsing_task_captcha(task_id):
-    """Запросить продолжение парсинга после ручного прохождения captcha (task-level)."""
-    try:
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-
-        token = auth_header.split(' ')[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-
-        if not user_data.get('is_superadmin'):
-            return jsonify({"error": "Требуются права администратора"}), 403
-
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-        cursor.execute("""
-            SELECT id, status, captcha_session_id, captcha_url
-            FROM parsequeue
-            WHERE id = %s
-            LIMIT 1
-        """, (task_id,))
-        raw_task = cursor.fetchone()
-        task_row = _row_to_dict(cursor, raw_task) if raw_task else None
-
-        if not task_row:
-            db.close()
-            return jsonify({"success": False, "error": "Задача не найдена"}), 404
-        if not _is_task_in_captcha_state(task_row) and not _has_captcha_artifacts(task_row):
-            db.close()
-            return jsonify({
-                "success": True,
-                "task_id": task_id,
-                "message": "CAPTCHA-сессия уже очищена"
-            })
-        # Надежный режим: всегда переводим в fresh parse cycle.
-        # Старую parked captcha-сессию не используем, чтобы избежать зависаний между
-        # разными UI-точками/браузерными контекстами.
-        cursor.execute("""
-            UPDATE parsequeue
-            SET status = %s,
-                retry_after = CURRENT_TIMESTAMP,
-                captcha_required = 0,
-                captcha_status = NULL,
-                captcha_session_id = NULL,
-                captcha_started_at = NULL,
-                captcha_url = NULL,
-                resume_requested = 0,
-                updated_at = CURRENT_TIMESTAMP,
-                error_message = CASE
-                    WHEN error_message IS NULL OR error_message = '' THEN 'captcha resume requested by admin (fresh parse cycle)'
-                    ELSE error_message || '; captcha resume requested by admin (fresh parse cycle)'
-                END
-            WHERE id = %s
-        """, (STATUS_PENDING, task_id))
-        db.conn.commit()
-        db.close()
-
-        return jsonify({
-            "success": True,
-            "task_id": task_id,
-            "message": "Продолжение парсинга запрошено: задача переведена в новую попытку"
-        })
-    except Exception as e:
-        print(f"❌ Ошибка resume captcha (task-level): {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-@app.route('/api/admin/parsing/tasks/<task_id>/captcha/expire', methods=['POST'])
-def expire_parsing_task_captcha(task_id):
-    """Принудительно завершить captcha-сессию задачи с переводом в error."""
-    try:
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-
-        token = auth_header.split(' ')[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-
-        if not user_data.get('is_superadmin'):
-            return jsonify({"error": "Требуются права администратора"}), 403
-
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-        cursor.execute(
-            """
-            SELECT id, status, captcha_url, captcha_session_id, captcha_required, captcha_status
-            FROM parsequeue
-            WHERE id = %s
-            LIMIT 1
-            """,
-            (task_id,),
-        )
-        raw_task = cursor.fetchone()
-        task_row = _row_to_dict(cursor, raw_task) if raw_task else None
-        if not task_row:
-            db.close()
-            return jsonify({"success": False, "error": "Задача не найдена"}), 404
-        if not _is_task_in_captcha_state(task_row):
-            db.close()
-            return jsonify({"success": False, "error": "Задача не в статусе captcha"}), 400
-
-        cursor.execute("""
-            UPDATE parsequeue
-            SET status = %s,
-                retry_after = NULL,
-                captcha_required = 0,
-                captcha_status = NULL,
-                captcha_url = NULL,
-                captcha_session_id = NULL,
-                resume_requested = 0,
-                updated_at = CURRENT_TIMESTAMP,
-                error_message = CASE
-                    WHEN error_message IS NULL OR error_message = '' THEN 'captcha session expired by admin'
-                    ELSE error_message || '; captcha session expired by admin'
-                END
-            WHERE id = %s
-        """, (STATUS_ERROR, task_id))
-        db.conn.commit()
-        db.close()
-
-        return jsonify({
-            "success": True,
-            "task_id": task_id,
-            "message": "Captcha-сессия завершена, задача переведена в error"
-        })
-    except Exception as e:
-        print(f"❌ Ошибка expire captcha (task-level): {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/admin/parsing/tasks/<task_id>', methods=['DELETE'])
 def delete_parsing_task(task_id):
@@ -1973,280 +912,6 @@ def get_parsing_stats():
             rd = _row_to_dict(cursor, row)
             if rd and rd.get("source") is not None:
                 by_source[rd["source"]] = rd.get("cnt") or 0
-
-        cursor.execute(
-            """
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'parsequeue'
-            """
-        )
-        parsequeue_columns = {
-            str(row.get("column_name") if hasattr(row, "get") else row[0])
-            for row in (cursor.fetchall() or [])
-            if (row.get("column_name") if hasattr(row, "get") else (row[0] if row else None))
-        }
-
-        recoverable_batches = []
-        network_batches = []
-        if {"batch_id", "batch_kind"}.issubset(parsequeue_columns):
-            cursor.execute(
-                """
-                SELECT
-                    pq.batch_id,
-                    MAX(COALESCE(b.name, '')) AS business_name,
-                    MAX(COALESCE(pq.source, '')) AS source,
-                    MAX(COALESCE(pq.business_id::text, '')) AS business_id,
-                    MAX(COALESCE(pq.paused_reason, '')) AS paused_reason,
-                    MAX(COALESCE(pq.updated_at, pq.created_at)) AS last_activity_at,
-                    COUNT(*) FILTER (
-                        WHERE pq.status = %s
-                          AND pq.captcha_url IS NULL
-                          AND pq.captcha_session_id IS NULL
-                    ) AS paused_cnt,
-                    COUNT(*) FILTER (WHERE pq.status = %s) AS error_cnt,
-                    COUNT(*) FILTER (WHERE pq.status = %s) AS completed_cnt,
-                    COUNT(*) FILTER (WHERE pq.status = %s) AS pending_cnt,
-                    COUNT(*) FILTER (WHERE pq.status = %s) AS processing_cnt,
-                    COUNT(*) FILTER (
-                        WHERE pq.status = %s
-                           OR (pq.status = %s AND (pq.captcha_url IS NOT NULL OR pq.captcha_session_id IS NOT NULL))
-                    ) AS captcha_cnt,
-                    MIN(pq.batch_seq) FILTER (WHERE pq.status IN (%s, %s, %s)) AS first_failed_seq,
-                    MAX(pq.batch_seq) FILTER (WHERE pq.status = %s) AS current_seq,
-                    MAX(pq.error_message) FILTER (WHERE pq.status = %s AND pq.error_message IS NOT NULL) AS latest_error,
-                    COUNT(*) AS cnt
-                FROM parsequeue pq
-                LEFT JOIN businesses b ON b.id = pq.business_id
-                WHERE pq.batch_id IS NOT NULL
-                  AND pq.batch_kind = 'network_sync'
-                GROUP BY pq.batch_id
-                ORDER BY MAX(COALESCE(pq.updated_at, pq.created_at)) DESC
-                LIMIT 20
-                """,
-                (
-                    STATUS_PAUSED,
-                    STATUS_ERROR,
-                    STATUS_COMPLETED,
-                    STATUS_PENDING,
-                    STATUS_PROCESSING,
-                    STATUS_CAPTCHA,
-                    STATUS_PAUSED,
-                    STATUS_ERROR,
-                    STATUS_PAUSED,
-                    STATUS_CAPTCHA,
-                    STATUS_PROCESSING,
-                    STATUS_ERROR,
-                ),
-            )
-            for row in cursor.fetchall():
-                rd = _row_to_dict(cursor, row)
-                if not rd or not rd.get("batch_id"):
-                    continue
-                tasks_count = int(rd.get("cnt") or 0)
-                completed_count = int(rd.get("completed_cnt") or 0)
-                pending_count = int(rd.get("pending_cnt") or 0)
-                processing_count = int(rd.get("processing_cnt") or 0)
-                paused_count = int(rd.get("paused_cnt") or 0)
-                error_count = int(rd.get("error_cnt") or 0)
-                captcha_count = int(rd.get("captcha_cnt") or 0)
-                latest_error = rd.get("latest_error")
-                paused_reason = (rd.get("paused_reason") or "").strip() or None
-                short_error_code, short_error_message = _classify_parsing_error(
-                    latest_error,
-                    STATUS_ERROR if error_count else (
-                        STATUS_CAPTCHA if captcha_count else (
-                            STATUS_PAUSED if paused_count else (
-                                STATUS_PROCESSING if processing_count else (
-                                    STATUS_PENDING if pending_count else STATUS_COMPLETED
-                                )
-                            )
-                        )
-                    ),
-                )
-
-                if captcha_count:
-                    batch_status = "captcha"
-                    batch_status_label = "Ждёт CAPTCHA"
-                elif paused_count and paused_reason == "manual_pause" and error_count == 0:
-                    batch_status = "manual_paused"
-                    batch_status_label = "Остановлен вручную"
-                elif paused_count:
-                    batch_status = "paused"
-                    batch_status_label = "Остановлен из-за ошибки"
-                elif error_count:
-                    batch_status = "error"
-                    batch_status_label = "Ошибка"
-                elif processing_count:
-                    batch_status = "processing"
-                    batch_status_label = "В работе"
-                elif pending_count and completed_count == 0:
-                    batch_status = "pending"
-                    batch_status_label = "В очереди"
-                elif completed_count == tasks_count and tasks_count > 0:
-                    batch_status = "completed"
-                    batch_status_label = "Завершён"
-                else:
-                    batch_status = "partial"
-                    batch_status_label = "Завершён частично"
-
-                progress_percent = int(round((completed_count / tasks_count) * 100)) if tasks_count else 0
-                network_batches.append(
-                    {
-                        "batch_id": rd.get("batch_id"),
-                        "business_id": rd.get("business_id") or None,
-                        "business_name": (rd.get("business_name") or "").strip() or None,
-                        "source": (rd.get("source") or "").strip() or None,
-                        "tasks_count": tasks_count,
-                        "completed_count": completed_count,
-                        "pending_count": pending_count,
-                        "processing_count": processing_count,
-                        "paused_count": paused_count,
-                        "error_count": error_count,
-                        "captcha_count": captcha_count,
-                        "current_seq": rd.get("current_seq"),
-                        "first_failed_seq": rd.get("first_failed_seq"),
-                        "last_activity_at": rd.get("last_activity_at"),
-                        "last_error_short": short_error_message,
-                        "last_error_code": short_error_code,
-                        "resume_available": bool(paused_count or error_count or captcha_count),
-                        "paused_reason": paused_reason,
-                        "status": batch_status,
-                        "status_label": batch_status_label,
-                        "progress_percent": progress_percent,
-                    }
-                )
-
-            cursor.execute(
-                """
-                SELECT
-                    pq.batch_id,
-                    MAX(COALESCE(b.name, '')) AS business_name,
-                    MAX(COALESCE(pq.source, '')) AS source,
-                    MAX(COALESCE(pq.business_id::text, '')) AS business_id,
-                    MAX(COALESCE(pq.updated_at, pq.created_at)) AS last_activity_at,
-                    COUNT(*) FILTER (
-                        WHERE pq.status = %s
-                          AND pq.captcha_url IS NULL
-                          AND pq.captcha_session_id IS NULL
-                    ) AS paused_cnt,
-                    COUNT(*) FILTER (WHERE pq.status = %s) AS error_cnt,
-                    COUNT(*) FILTER (WHERE pq.status = %s) AS completed_cnt,
-                    COUNT(*) FILTER (WHERE pq.status = %s) AS pending_cnt,
-                    COUNT(*) FILTER (WHERE pq.status = %s) AS processing_cnt,
-                    COUNT(*) FILTER (
-                        WHERE pq.status = %s
-                           OR (pq.status = %s AND (pq.captcha_url IS NOT NULL OR pq.captcha_session_id IS NOT NULL))
-                    ) AS captcha_cnt,
-                    MIN(pq.batch_seq) FILTER (WHERE pq.status IN (%s, %s, %s)) AS first_failed_seq,
-                    MAX(pq.batch_seq) FILTER (WHERE pq.status = %s) AS current_seq,
-                    MAX(pq.error_message) FILTER (WHERE pq.status = %s AND pq.error_message IS NOT NULL) AS latest_error,
-                    COUNT(*) AS cnt
-                FROM parsequeue pq
-                LEFT JOIN businesses b ON b.id = pq.business_id
-                WHERE pq.batch_id IS NOT NULL
-                  AND pq.batch_kind = 'network_sync'
-                  AND pq.status IN (%s, %s)
-                GROUP BY pq.batch_id
-                ORDER BY cnt DESC
-                LIMIT 10
-                """,
-                (
-                    STATUS_PAUSED,
-                    STATUS_ERROR,
-                    STATUS_COMPLETED,
-                    STATUS_PENDING,
-                    STATUS_PROCESSING,
-                    STATUS_CAPTCHA,
-                    STATUS_PAUSED,
-                    STATUS_ERROR,
-                    STATUS_PAUSED,
-                    STATUS_CAPTCHA,
-                    STATUS_PROCESSING,
-                    STATUS_ERROR,
-                    STATUS_PAUSED,
-                    STATUS_ERROR,
-                ),
-            )
-            for row in cursor.fetchall():
-                rd = _row_to_dict(cursor, row)
-                if rd and rd.get("batch_id"):
-                    latest_error = rd.get("latest_error")
-                    short_error_code, short_error_message = _classify_parsing_error(latest_error, STATUS_ERROR if rd.get("error_cnt") else STATUS_PAUSED)
-                    recoverable_batches.append(
-                        {
-                            "batch_id": rd.get("batch_id"),
-                            "business_id": rd.get("business_id") or None,
-                            "business_name": (rd.get("business_name") or "").strip() or None,
-                            "source": (rd.get("source") or "").strip() or None,
-                            "tasks_count": int(rd.get("cnt") or 0),
-                            "paused_count": int(rd.get("paused_cnt") or 0),
-                            "error_count": int(rd.get("error_cnt") or 0),
-                            "completed_count": int(rd.get("completed_cnt") or 0),
-                            "pending_count": int(rd.get("pending_cnt") or 0),
-                            "processing_count": int(rd.get("processing_cnt") or 0),
-                            "captcha_count": int(rd.get("captcha_cnt") or 0),
-                            "current_seq": rd.get("current_seq"),
-                            "first_failed_seq": rd.get("first_failed_seq"),
-                            "last_activity_at": rd.get("last_activity_at"),
-                            "last_error_short": short_error_message,
-                            "last_error_code": short_error_code,
-                            "resume_available": True,
-                        }
-                    )
-
-        captcha_queue = []
-        cursor.execute(
-            """
-            SELECT
-                pq.id,
-                pq.business_id,
-                COALESCE(b.name, '') AS business_name,
-                pq.url,
-                pq.captcha_url,
-                pq.captcha_session_id,
-                pq.captcha_started_at,
-                pq.retry_after,
-                pq.resume_requested,
-                pq.created_at,
-                pq.error_message
-            FROM parsequeue pq
-            LEFT JOIN businesses b ON b.id = pq.business_id
-            WHERE pq.status = %s
-               OR (pq.status = %s AND (pq.captcha_url IS NOT NULL OR pq.captcha_session_id IS NOT NULL))
-            ORDER BY COALESCE(pq.retry_after, pq.updated_at, pq.created_at) ASC
-            LIMIT 20
-            """,
-            (STATUS_CAPTCHA, STATUS_PAUSED),
-        )
-        for row in cursor.fetchall():
-            rd = _row_to_dict(cursor, row)
-            if not rd:
-                continue
-            retry_after = rd.get("retry_after")
-            is_expired = False
-            try:
-                if retry_after:
-                    retry_dt = retry_after if isinstance(retry_after, datetime) else datetime.fromisoformat(str(retry_after))
-                    is_expired = retry_dt < datetime.now(retry_dt.tzinfo) if retry_dt.tzinfo else retry_dt < datetime.now()
-            except Exception:
-                is_expired = False
-            captcha_queue.append(
-                {
-                    "task_id": rd.get("id"),
-                    "business_id": rd.get("business_id"),
-                    "business_name": (rd.get("business_name") or "").strip() or None,
-                    "url": rd.get("url"),
-                    "captcha_url": rd.get("captcha_url"),
-                    "captcha_session_id": rd.get("captcha_session_id"),
-                    "captcha_started_at": rd.get("captcha_started_at"),
-                    "retry_after": retry_after,
-                    "resume_requested": bool(rd.get("resume_requested")),
-                    "created_at": rd.get("created_at"),
-                    "is_expired": is_expired,
-                    "short_error_message": _classify_parsing_error(rd.get("error_message"), STATUS_CAPTCHA)[1],
-                }
-            )
         
         cursor.execute("""
             SELECT id, business_id, task_type, created_at, updated_at
@@ -2266,25 +931,6 @@ def get_parsing_stats():
                     'updated_at': rd.get('updated_at') or rd.get('created_at')
                 })
         
-        cursor.execute(
-            """
-            SELECT COUNT(*) AS cnt
-            FROM parsequeue
-            WHERE status = %s
-              AND created_at >= date_trunc('day', NOW())
-            """,
-            (STATUS_COMPLETED,),
-        )
-        completed_today = _count_from_row(cursor, cursor.fetchone())
-
-        operator_summary = {
-            "active_runs": int((by_status or {}).get(STATUS_PENDING, 0) + (by_status or {}).get(STATUS_PROCESSING, 0)),
-            "action_required_count": int(len(recoverable_batches) + len(captcha_queue) + len(stuck_tasks)),
-            "captcha_waiting_count": int((by_status or {}).get(STATUS_CAPTCHA, 0)),
-            "error_count": int((by_status or {}).get(STATUS_ERROR, 0)),
-            "completed_today": int(completed_today),
-        }
-
         db.close()
         
         return jsonify({
@@ -2295,14 +941,7 @@ def get_parsing_stats():
                 "by_task_type": by_task_type or {},
                 "by_source": by_source or {},
                 "stuck_tasks_count": len(stuck_tasks),
-                "stuck_tasks": stuck_tasks or [],
-                "operator_summary": operator_summary,
-                "captcha_queue": captcha_queue,
-                "network_batches": network_batches,
-                "paused_batches_count": len([b for b in recoverable_batches if b.get("paused_count")]),
-                "paused_batches": [b for b in recoverable_batches if b.get("paused_count")],
-                "recoverable_batches_count": len(recoverable_batches),
-                "recoverable_batches": recoverable_batches,
+                "stuck_tasks": stuck_tasks or []
             }
         })
     except Exception as e:
@@ -2353,7 +992,7 @@ def get_external_accounts(business_id):
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
 
-        if owner_id != user_data["user_id"] and not user_data.get("is_superadmin"):
+        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
@@ -2421,7 +1060,7 @@ def upsert_external_account(business_id):
     Создать или обновить внешний аккаунт источника для бизнеса.
 
     Body:
-      - source: 'yandex_business' | 'google_business' | '2gis' | 'maton'
+      - source: 'yandex_business' | 'google_business' | '2gis'
       - external_id: string (опционально)
       - display_name: string (опционально)
       - auth_data: string (cookie / refresh_token / token) - будет зашифрован позже
@@ -2464,7 +1103,7 @@ def upsert_external_account(business_id):
             else:
                 return jsonify({"error": "auth_data должен быть строкой или объектом", "field": "auth_data"}), 400
 
-        if source not in ("yandex_business", "google_business", "2gis", "maton"):
+        if source not in ("yandex_business", "google_business", "2gis"):
             return jsonify({"error": "Некорректный source"}), 400
 
         db = DatabaseManager()
@@ -2476,7 +1115,7 @@ def upsert_external_account(business_id):
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
 
-        if owner_id != user_data["user_id"] and not user_data.get("is_superadmin"):
+        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
@@ -2561,7 +1200,10 @@ def upsert_external_account(business_id):
                     (external_id, display_name, new_active, now, account_id),
                 )
         else:
-            # Create: auth_data опционален — можно сохранить external_id, cookies добавить позже
+            # Create: auth_data обязателен; после INSERT проверяем дубли (без unique constraint)
+            if not auth_data_str:
+                db.close()
+                return jsonify({"error": "При создании аккаунта auth_data обязателен", "field": "auth_data"}), 400
             action = "created"
             new_active = bool(is_active)
             insert_id = str(uuid.uuid4())
@@ -2587,9 +1229,7 @@ def upsert_external_account(business_id):
             # Канонический id — запись с минимальным created_at (стабильный выбор при дублях)
             row0 = _row_to_dict(cursor, rows_after[0]) if rows_after else None
             account_id = row0.get("id") if row0 else insert_id
-            saved_fields = ["external_id", "display_name", "is_active"]
-            if auth_data_encrypted is not None:
-                saved_fields.append("auth_data_updated")
+            saved_fields = ["external_id", "display_name", "is_active", "auth_data_updated"]
 
         db.conn.commit()
         db.close()
@@ -2646,7 +1286,7 @@ def delete_external_account(account_id):
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
 
-        if owner_id != user_data["user_id"] and not user_data.get("is_superadmin"):
+        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
             db.close()
             return jsonify({"error": "Нет доступа"}), 403
 
@@ -2711,7 +1351,7 @@ def test_external_account_cookies(business_id):
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
 
-        if owner_id != user_data["user_id"] and not user_data.get("is_superadmin"):
+        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
             db.close()
             return jsonify({"error": "Нет доступа"}), 403
 
@@ -2925,198 +1565,6 @@ def test_external_account_cookies(business_id):
         }), 500
 
 
-@app.route("/api/channels/status", methods=["GET"])
-def get_channels_status():
-    try:
-        auth_header = request.headers.get("Authorization")
-        if not auth_header or not auth_header.startswith("Bearer "):
-            return jsonify({"error": "Требуется авторизация"}), 401
-
-        token = auth_header.split(" ")[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-
-        business_id = str(request.args.get("business_id") or "").strip()
-        if not business_id:
-            return jsonify({"error": "business_id обязателен"}), 400
-
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-        ctx = _load_business_channel_context(cursor, business_id)
-        if not ctx:
-            db.close()
-            return jsonify({"error": "Бизнес не найден"}), 404
-
-        owner_id = str(ctx.get("owner_id") or "")
-        if owner_id != user_data["user_id"] and not user_data.get("is_superadmin"):
-            db.close()
-            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
-
-        preferred_provider = str(request.args.get("preferred") or "telegram").strip().lower()
-        channels = _build_business_channels_payload(ctx)
-        recommended_route = get_routing_plan(ctx, preferred_provider=preferred_provider)
-        db.close()
-        return jsonify(
-            {
-                "success": True,
-                "business_id": business_id,
-                "business_name": str(ctx.get("name") or ""),
-                "owner_telegram_id": str(ctx.get("owner_telegram_id") or ""),
-                "preferred_provider": preferred_provider,
-                "channels": channels,
-                "recommended_route": recommended_route,
-            }
-        )
-    except Exception as e:
-        print(f"❌ Ошибка GET channels/status: {e}")
-        import traceback
-
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/channels/route-preview", methods=["GET"])
-def get_channels_route_preview():
-    try:
-        auth_header = request.headers.get("Authorization")
-        if not auth_header or not auth_header.startswith("Bearer "):
-            return jsonify({"error": "Требуется авторизация"}), 401
-
-        token = auth_header.split(" ")[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-
-        business_id = str(request.args.get("business_id") or "").strip()
-        preferred_provider = str(request.args.get("preferred") or "telegram").strip().lower()
-        if not business_id:
-            return jsonify({"error": "business_id обязателен"}), 400
-
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-        ctx = _load_business_channel_context(cursor, business_id)
-        if not ctx:
-            db.close()
-            return jsonify({"error": "Бизнес не найден"}), 404
-
-        owner_id = str(ctx.get("owner_id") or "")
-        if owner_id != user_data["user_id"] and not user_data.get("is_superadmin"):
-            db.close()
-            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
-
-        route = get_routing_plan(ctx, preferred_provider=preferred_provider)
-        db.close()
-        return jsonify(
-            {
-                "success": True,
-                "business_id": business_id,
-                "preferred_provider": preferred_provider,
-                "route": route,
-            }
-        )
-    except Exception as e:
-        print(f"❌ Ошибка GET channels/route-preview: {e}")
-        import traceback
-
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/channels/test-send", methods=["POST"])
-def test_channel_send():
-    try:
-        auth_header = request.headers.get("Authorization")
-        if not auth_header or not auth_header.startswith("Bearer "):
-            return jsonify({"error": "Требуется авторизация"}), 401
-
-        token = auth_header.split(" ")[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-
-        data = request.get_json() or {}
-        business_id = str(data.get("business_id") or "").strip()
-        channel_id = str(data.get("channel_id") or "").strip()
-        preferred_provider = str(data.get("preferred_provider") or "telegram").strip().lower()
-        custom_message = str(data.get("message") or "").strip()
-
-        if not business_id or not channel_id:
-            return jsonify({"error": "business_id и channel_id обязательны"}), 400
-
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-        ctx = _load_business_channel_context(cursor, business_id)
-        if not ctx:
-            db.close()
-            return jsonify({"error": "Бизнес не найден"}), 404
-
-        owner_id = str(ctx.get("owner_id") or "")
-        if owner_id != user_data["user_id"] and not user_data.get("is_superadmin"):
-            db.close()
-            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
-
-        business_name = str(ctx.get("name") or "вашего бизнеса")
-        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
-        message = custom_message or (
-            "Тестовый сигнал LocalOS.\n"
-            f"Бизнес: {business_name}\n"
-            f"Маршрут: {channel_id}\n"
-            f"Время: {timestamp}"
-        )
-
-        if channel_id == "auto":
-            result = dispatch_with_routing(
-                ctx,
-                message,
-                preferred_provider=preferred_provider,
-            )
-        else:
-            channels = {item["channel_id"]: item for item in _build_business_channels_payload(ctx)}
-            selected = channels.get(channel_id)
-            if not selected:
-                db.close()
-                return jsonify({"error": "Неизвестный канал"}), 400
-            if not selected.get("testable"):
-                db.close()
-                return jsonify({"error": "Этот канал пока нельзя протестировать из интерфейса"}), 400
-            result = dispatch_with_routing(
-                ctx,
-                message,
-                preferred_provider=preferred_provider,
-                force_channel_id=channel_id,
-            )
-
-        db.close()
-        if result.get("success"):
-            return jsonify(
-                {
-                    "success": True,
-                    "channel_id": str(result.get("selected_channel_id") or channel_id),
-                    "selected_provider": str(result.get("selected_provider") or ""),
-                    "message": "Тестовое сообщение отправлено",
-                    "attempts": result.get("attempts") or [],
-                }
-            )
-        return (
-            jsonify(
-                {
-                    "success": False,
-                    "channel_id": channel_id,
-                    "error": str(result.get("error") or "Не удалось отправить тестовое сообщение"),
-                    "attempts": result.get("attempts") or [],
-                }
-            ),
-            502,
-        )
-    except Exception as e:
-        print(f"❌ Ошибка POST channels/test-send: {e}")
-        import traceback
-
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
-
-
 @app.route("/api/business/<business_id>/external/reviews", methods=["GET"])
 def get_external_reviews(business_id):
     """
@@ -3150,14 +1598,7 @@ def get_external_reviews(business_id):
         # Проверяем, существует ли таблица externalbusinessreviews (Postgres)
         cursor.execute("SELECT to_regclass('public.externalbusinessreviews')")
         table_exists = cursor.fetchone()
-        reg_val = None
-        if isinstance(table_exists, dict):
-            reg_val = next(iter(table_exists.values()), None)
-        elif isinstance(table_exists, (list, tuple)):
-            reg_val = table_exists[0] if table_exists else None
-        else:
-            reg_val = table_exists
-        if not reg_val:
+        if not table_exists or (table_exists and (table_exists[0] if isinstance(table_exists, (list, tuple)) else table_exists) is None):
             db.close()
             return jsonify({"success": True, "reviews": [], "total": 0, "with_response": 0, "without_response": 0})
 
@@ -3241,50 +1682,6 @@ def get_external_summary(business_id):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
-        def _normalize_rating(value):
-            """Нормализовать рейтинг в float [0..5], поддерживая формат с запятой."""
-            if value is None:
-                return None
-            if isinstance(value, (int, float)):
-                candidate = float(value)
-            else:
-                try:
-                    raw = str(value).strip().replace(",", ".")
-                except Exception:
-                    return None
-                if not raw:
-                    return None
-                m = re.search(r"(\d+(?:\.\d+)?)", raw)
-                if not m:
-                    return None
-                try:
-                    candidate = float(m.group(1))
-                except (TypeError, ValueError):
-                    return None
-            if 0.0 <= candidate <= 5.0:
-                return candidate
-            return None
-
-        def _overview_rating(card_row):
-            if not card_row:
-                return None
-            overview = card_row.get("overview")
-            if isinstance(overview, str):
-                raw = overview.strip()
-                if raw:
-                    try:
-                        overview = json.loads(raw)
-                    except Exception:
-                        overview = {}
-            if isinstance(overview, dict):
-                return _normalize_rating(overview.get("rating"))
-            return None
-
-        cursor.execute("SELECT rating FROM businesses WHERE id = %s", (business_id,))
-        raw_business = cursor.fetchone()
-        business_row = _row_to_dict(cursor, raw_business) if raw_business else None
-        yandex_rating_cached = _normalize_rating((business_row or {}).get("rating"))
-
         # Проверяем, существуют ли таблицы (Postgres)
         cursor.execute("""
             SELECT table_name FROM information_schema.tables 
@@ -3295,7 +1692,7 @@ def get_external_summary(business_id):
         if 'externalbusinessstats' not in tables or 'externalbusinessreviews' not in tables:
             # Таблицы не существуют — отдаём хотя бы данные из cards (парсинг)
             cursor.execute("""
-                SELECT created_at, rating, reviews_count, competitors, overview
+                SELECT created_at, rating, reviews_count, competitors
                 FROM cards WHERE business_id = %s ORDER BY created_at DESC LIMIT 1
             """, (business_id,))
             raw = cursor.fetchone()
@@ -3306,11 +1703,10 @@ def get_external_summary(business_id):
             last_parse_date = None
             competitors = None
             if card_row:
-                rating = _normalize_rating(card_row.get("rating"))
-                if rating is None:
-                    rating = _overview_rating(card_row)
-                if rating is None:
-                    rating = yandex_rating_cached
+                try:
+                    rating = float(card_row.get("rating")) if card_row.get("rating") is not None else None
+                except (TypeError, ValueError):
+                    pass
                 reviews_total = int(card_row.get("reviews_count") or 0)
                 last_parse_date = card_row.get("created_at")
                 competitors = card_row.get("competitors")
@@ -3330,7 +1726,7 @@ def get_external_summary(business_id):
             """
             SELECT rating, reviews_total, date
             FROM externalbusinessstats
-            WHERE business_id = %s AND source IN ('yandex_business', 'yandex_maps')
+            WHERE business_id = %s AND source = 'yandex_business'
             ORDER BY date DESC
             LIMIT 1
             """,
@@ -3345,7 +1741,7 @@ def get_external_summary(business_id):
                    SUM(CASE WHEN response_text IS NOT NULL AND response_text != '' THEN 1 ELSE 0 END) AS with_response,
                    SUM(CASE WHEN response_text IS NULL OR response_text = '' THEN 1 ELSE 0 END) AS without_response
             FROM externalbusinessreviews
-            WHERE business_id = %s AND source IN ('yandex_business', 'yandex_maps')
+            WHERE business_id = %s AND source = 'yandex_business'
             """,
             (business_id,),
         )
@@ -3356,58 +1752,20 @@ def get_external_summary(business_id):
         # full_card  — последняя snapshot_type='full' (богатый слепок)
         # metrics_card — последняя is_latest (может быть metrics_update или full)
 
-        # 1) full_card: последняя полноценная карточка (совместимо с overview как text/json/jsonb)
+        # 1) full_card: последняя полноценная карточка
         cursor.execute(
             """
             SELECT *
             FROM cards
             WHERE business_id = %s
+              AND (overview->>'snapshot_type') = 'full'
             ORDER BY created_at DESC
-            LIMIT 100
+            LIMIT 1
             """,
             (business_id,),
         )
-        raw_cards = cursor.fetchall()
-        cards_rows = [_row_to_dict(cursor, row) for row in raw_cards if row]
-
-        def _snapshot_type(card_row):
-            if not card_row:
-                return None
-            overview = card_row.get("overview")
-            if isinstance(overview, dict):
-                st = overview.get("snapshot_type")
-                return str(st).strip().lower() if st else None
-            if isinstance(overview, str):
-                raw = overview.strip()
-                if not raw:
-                    return None
-                try:
-                    parsed = json.loads(raw)
-                except Exception:
-                    return None
-                if isinstance(parsed, dict):
-                    st = parsed.get("snapshot_type")
-                    return str(st).strip().lower() if st else None
-            return None
-
-        def _overview_dict(card_row):
-            if not card_row:
-                return {}
-            overview = card_row.get("overview")
-            if isinstance(overview, dict):
-                return overview
-            if isinstance(overview, str):
-                raw = overview.strip()
-                if not raw:
-                    return {}
-                try:
-                    parsed = json.loads(raw)
-                    return parsed if isinstance(parsed, dict) else {}
-                except Exception:
-                    return {}
-            return {}
-
-        full_card = next((row for row in cards_rows if _snapshot_type(row) == "full"), None)
+        raw_full = cursor.fetchone()
+        full_card = _row_to_dict(cursor, raw_full) if raw_full else None
 
         # 2) metrics_card: последняя is_latest (она может быть metrics_update или full)
         cursor.execute(
@@ -3431,7 +1789,7 @@ def get_external_summary(business_id):
         db.close()
 
         # Метрики: сначала внешние источники, затем cards (metrics_card / chosen_card)
-        rating = _normalize_rating(stats_row.get("rating")) if stats_row else None
+        rating = stats_row.get("rating") if stats_row else None
         reviews_total = (reviews_row.get("total") or 0) if reviews_row else 0
         reviews_with_response = (reviews_row.get("with_response") or 0) if reviews_row else 0
         reviews_without_response = (reviews_row.get("without_response") or 0) if reviews_row else 0
@@ -3440,15 +1798,19 @@ def get_external_summary(business_id):
         #   - сначала metrics_card, если это metrics_update
         #   - затем chosen_card (обычно full)
         if rating is None:
-            if metrics_card and _overview_dict(metrics_card).get("snapshot_type") == "metrics_update":
-                rating = _overview_rating(metrics_card) or _normalize_rating(metrics_card.get("rating"))
-            if rating is None and parse_row:
-                rating = _overview_rating(parse_row) or _normalize_rating(parse_row.get("rating"))
-            if rating is None:
-                rating = yandex_rating_cached
+            if metrics_card and (metrics_card.get("overview") or {}).get("snapshot_type") == "metrics_update" and metrics_card.get("rating") is not None:
+                try:
+                    rating = float(metrics_card.get("rating"))
+                except (TypeError, ValueError):
+                    rating = None
+            elif parse_row and parse_row.get("rating") is not None:
+                try:
+                    rating = float(parse_row.get("rating"))
+                except (TypeError, ValueError):
+                    rating = None
 
         if reviews_total == 0:
-            if metrics_card and _overview_dict(metrics_card).get("snapshot_type") == "metrics_update" and (metrics_card.get("reviews_count") or 0) != 0:
+            if metrics_card and (metrics_card.get("overview") or {}).get("snapshot_type") == "metrics_update" and (metrics_card.get("reviews_count") or 0) != 0:
                 reviews_total = int(metrics_card.get("reviews_count") or 0)
             elif parse_row and (parse_row.get("reviews_count") or 0) != 0:
                 reviews_total = int(parse_row.get("reviews_count") or 0)
@@ -3472,1331 +1834,6 @@ def get_external_summary(business_id):
         if getattr(app, "debug", False):
             payload["traceback"] = err_tb
         return jsonify(payload), 500
-
-
-def _ensure_manual_competitors_tables(cursor):
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS ManualCompetitors (
-            id TEXT PRIMARY KEY,
-            business_id TEXT NOT NULL,
-            created_by TEXT NOT NULL,
-            name TEXT,
-            url TEXT NOT NULL,
-            audit_status TEXT NOT NULL DEFAULT 'not_requested',
-            audit_requested_at TIMESTAMP NULL,
-            audit_requested_by TEXT NULL,
-            report_path TEXT NULL,
-            report_ready_at TIMESTAMP NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cursor.execute(
-        """
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_manualcompetitors_business_url_unique
-        ON ManualCompetitors (business_id, url)
-        """
-    )
-
-
-def _ensure_callback_recovery_history_table(cursor):
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS callback_recovery_history (
-            id TEXT PRIMARY KEY,
-            tenant_id TEXT NOT NULL,
-            triggered_by TEXT NOT NULL,
-            send_telegram_report BOOLEAN NOT NULL DEFAULT FALSE,
-            include_retry BOOLEAN NOT NULL DEFAULT TRUE,
-            replayed_count INTEGER NOT NULL DEFAULT 0,
-            sent_count INTEGER NOT NULL DEFAULT 0,
-            retried_count INTEGER NOT NULL DEFAULT 0,
-            dlq_count INTEGER NOT NULL DEFAULT 0,
-            telegram_sent_count INTEGER NOT NULL DEFAULT 0,
-            action_ids_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-            report_text TEXT NOT NULL,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cursor.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_callback_recovery_history_tenant_created
-        ON callback_recovery_history (tenant_id, created_at DESC)
-        """
-    )
-
-
-def _ensure_support_export_send_history_table(cursor):
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS support_export_send_history (
-            id TEXT PRIMARY KEY,
-            tenant_id TEXT NOT NULL,
-            triggered_by TEXT NOT NULL,
-            action_id TEXT NULL,
-            telegram_sent_count INTEGER NOT NULL DEFAULT 0,
-            target_ids_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-            report_text TEXT NOT NULL,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cursor.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_support_export_send_history_tenant_created
-        ON support_export_send_history (tenant_id, created_at DESC)
-        """
-    )
-
-
-def _send_telegram_plain_message(chat_id: str, text: str) -> bool:
-    token = (os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
-    chat_id = str(chat_id or "").strip()
-    if not token or not chat_id:
-        return False
-    try:
-        payload = json.dumps(
-            {
-                "chat_id": chat_id,
-                "text": text,
-                "disable_web_page_preview": True,
-            }
-        ).encode("utf-8")
-        req = urllib_request.Request(
-            f"https://api.telegram.org/bot{token}/sendMessage",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib_request.urlopen(req, timeout=10) as resp:
-            return 200 <= int(getattr(resp, "status", 500)) < 300
-    except (urllib_error.URLError, urllib_error.HTTPError, TimeoutError) as e:
-        print(f"⚠️ Telegram superadmin notify failed for chat_id={chat_id}: {e}")
-        return False
-    except Exception as e:
-        print(f"⚠️ Telegram superadmin notify unexpected error for chat_id={chat_id}: {e}")
-        return False
-
-
-def _get_superadmin_telegram_ids(cursor) -> list[str]:
-    env_ids = {
-        x.strip()
-        for x in str(os.getenv("OPENCLAW_SUPERADMIN_TELEGRAM_IDS", "")).split(",")
-        if x and x.strip()
-    }
-    target_ids = set(env_ids)
-    users_cols = _load_table_columns(cursor, "users")
-    if "telegram_id" not in users_cols:
-        return sorted(target_ids)
-
-    cursor.execute(
-        """
-        SELECT telegram_id
-        FROM users
-        WHERE is_superadmin = TRUE
-          AND telegram_id IS NOT NULL
-          AND NULLIF(TRIM(telegram_id), '') IS NOT NULL
-        """
-    )
-    for row in cursor.fetchall() or []:
-        telegram_id = str(_row_to_dict(cursor, row).get("telegram_id") or "").strip()
-        if telegram_id:
-            target_ids.add(telegram_id)
-    return sorted(target_ids)
-
-
-def _format_incident_snapshot_digest(snapshot: dict | None) -> str:
-    snapshot = snapshot or {}
-    overview = dict(snapshot.get("overview") or {})
-    action_id = str(snapshot.get("action_id") or "")
-    action_short = action_id[:8] if action_id else "unknown"
-    capability = str(snapshot.get("capability") or "unknown")
-    status = str(snapshot.get("status") or "unknown")
-    last_event = "-"
-    recent_timeline = list(snapshot.get("recent_timeline") or [])
-    if recent_timeline:
-        tail = dict(recent_timeline[-1] or {})
-        last_event = f"{tail.get('source') or '-'}:{tail.get('event_type') or '-'}:{tail.get('status') or '-'}"
-    return (
-        f"- {action_short} | {capability} | status={status} | "
-        f"attempts={int(overview.get('callback_attempts_total') or 0)} "
-        f"(failed={int(overview.get('callback_attempts_failed') or 0)}) | last={last_event}"
-    )
-
-
-def _load_callback_recovery_history_items(cursor, tenant_id: str, limit: int) -> list[dict]:
-    _ensure_callback_recovery_history_table(cursor)
-    cursor.execute(
-        """
-        SELECT id, tenant_id, triggered_by, send_telegram_report, include_retry,
-               replayed_count, sent_count, retried_count, dlq_count, telegram_sent_count,
-               action_ids_json, report_text, created_at
-        FROM callback_recovery_history
-        WHERE tenant_id = %s
-        ORDER BY created_at DESC
-        LIMIT %s
-        """,
-        (str(tenant_id), int(limit)),
-    )
-    rows = cursor.fetchall() or []
-    items = []
-    for row in rows:
-        rd = _row_to_dict(cursor, row)
-        raw_action_ids = rd.get("action_ids_json")
-        if isinstance(raw_action_ids, str):
-            try:
-                action_ids = json.loads(raw_action_ids)
-            except Exception:
-                action_ids = []
-        else:
-            action_ids = raw_action_ids or []
-        items.append(
-            {
-                "id": str(rd.get("id") or ""),
-                "tenant_id": str(rd.get("tenant_id") or ""),
-                "triggered_by": str(rd.get("triggered_by") or ""),
-                "send_telegram_report": bool(rd.get("send_telegram_report")),
-                "include_retry": bool(rd.get("include_retry")),
-                "replayed_count": int(rd.get("replayed_count") or 0),
-                "sent_count": int(rd.get("sent_count") or 0),
-                "retried_count": int(rd.get("retried_count") or 0),
-                "dlq_count": int(rd.get("dlq_count") or 0),
-                "telegram_sent_count": int(rd.get("telegram_sent_count") or 0),
-                "action_ids": action_ids,
-                "report_text": str(rd.get("report_text") or ""),
-                "created_at": str(rd.get("created_at") or ""),
-            }
-        )
-    return items
-
-
-def _render_callback_recovery_history_markdown(tenant_id: str, items: list[dict]) -> str:
-    lines = [
-        "# OpenClaw Recovery History",
-        "",
-        f"- tenant_id: `{tenant_id}`",
-        f"- exported_at: {datetime.utcnow().isoformat()}",
-        f"- count: **{len(items)}**",
-        "",
-    ]
-    if not items:
-        lines.append("- no recovery runs")
-        return "\n".join(lines)
-
-    for idx, item in enumerate(items, start=1):
-        lines.extend(
-            [
-                f"## {idx}. Recovery `{str(item.get('id') or '')[:8]}`",
-                "",
-                f"- created_at: {item.get('created_at') or ''}",
-                f"- triggered_by: `{item.get('triggered_by') or ''}`",
-                f"- include_retry: `{bool(item.get('include_retry'))}`",
-                f"- replayed/sent/retried/dlq: **{int(item.get('replayed_count') or 0)}/{int(item.get('sent_count') or 0)}/{int(item.get('retried_count') or 0)}/{int(item.get('dlq_count') or 0)}**",
-                f"- telegram: `{bool(item.get('send_telegram_report'))}` sent={int(item.get('telegram_sent_count') or 0)}",
-            ]
-        )
-        action_ids = list(item.get("action_ids") or [])
-        if action_ids:
-            lines.append(f"- action_ids: {', '.join(f'`{str(x)[:8]}`' for x in action_ids)}")
-        report_text = str(item.get("report_text") or "").strip()
-        if report_text:
-            lines.extend(["", "```", report_text, "```"])
-        lines.append("")
-    return "\n".join(lines)
-
-
-def _load_support_export_send_history_items(cursor, tenant_id: str, limit: int) -> list[dict]:
-    _ensure_support_export_send_history_table(cursor)
-    cursor.execute(
-        """
-        SELECT id, tenant_id, triggered_by, action_id, telegram_sent_count, target_ids_json, report_text, created_at
-        FROM support_export_send_history
-        WHERE tenant_id = %s
-        ORDER BY created_at DESC
-        LIMIT %s
-        """,
-        (str(tenant_id), int(limit)),
-    )
-    rows = cursor.fetchall() or []
-    items = []
-    for row in rows:
-        rd = _row_to_dict(cursor, row)
-        raw_target_ids = rd.get("target_ids_json")
-        if isinstance(raw_target_ids, str):
-            try:
-                target_ids = json.loads(raw_target_ids)
-            except Exception:
-                target_ids = []
-        else:
-            target_ids = raw_target_ids or []
-        items.append(
-            {
-                "id": str(rd.get("id") or ""),
-                "tenant_id": str(rd.get("tenant_id") or ""),
-                "triggered_by": str(rd.get("triggered_by") or ""),
-                "action_id": str(rd.get("action_id") or ""),
-                "telegram_sent_count": int(rd.get("telegram_sent_count") or 0),
-                "target_ids": target_ids,
-                "report_text": str(rd.get("report_text") or ""),
-                "created_at": str(rd.get("created_at") or ""),
-            }
-        )
-    return items
-
-
-def _render_support_export_send_history_markdown(tenant_id: str, items: list[dict]) -> str:
-    lines = [
-        "# OpenClaw Support Send History",
-        "",
-        f"- tenant_id: `{tenant_id}`",
-        f"- exported_at: {datetime.utcnow().isoformat()}",
-        f"- count: **{len(items)}**",
-        "",
-    ]
-    if not items:
-        lines.append("- no support-send runs")
-        return "\n".join(lines)
-
-    for idx, item in enumerate(items, start=1):
-        lines.extend(
-            [
-                f"## {idx}. Support send `{str(item.get('id') or '')[:8]}`",
-                "",
-                f"- created_at: {item.get('created_at') or ''}",
-                f"- triggered_by: `{item.get('triggered_by') or ''}`",
-                f"- telegram_sent_count: **{int(item.get('telegram_sent_count') or 0)}**",
-            ]
-        )
-        action_id = str(item.get("action_id") or "").strip()
-        if action_id:
-            lines.append(f"- action_id: `{action_id[:8]}`")
-        target_ids = list(item.get("target_ids") or [])
-        if target_ids:
-            lines.append(f"- target_ids: {', '.join(f'`{str(x)}`' for x in target_ids)}")
-        report_text = str(item.get("report_text") or "").strip()
-        if report_text:
-            lines.extend(["", "```", report_text, "```"])
-        lines.append("")
-    return "\n".join(lines)
-
-
-def _load_tenant_audit_timeline_items(
-    cursor,
-    tenant_id: str,
-    limit: int,
-    offset: int,
-    *,
-    source: str | None = None,
-    search: str | None = None,
-    action_id: str | None = None,
-) -> tuple[list[dict], int]:
-    _ensure_callback_recovery_history_table(cursor)
-    _ensure_support_export_send_history_table(cursor)
-    tenant_id = str(tenant_id)
-    limit = max(1, min(int(limit or 20), 200))
-    offset = max(0, int(offset or 0))
-    source = str(source or "").strip() or None
-    search = str(search or "").strip() or None
-    action_id = str(action_id or "").strip() or None
-
-    base_query = """
-        SELECT *
-        FROM (
-            SELECT
-                ar.created_at AS occurred_at,
-                'action_request' AS source,
-                'action_created' AS event_type,
-                ar.status AS status,
-                ar.action_id AS action_id,
-                ar.action_id AS event_id,
-                jsonb_build_object(
-                    'capability', ar.capability,
-                    'trace_id', ar.trace_id,
-                    'idempotency_key', ar.idempotency_key
-                ) AS details,
-                CONCAT_WS(' ', ar.action_id, ar.capability, ar.status, ar.trace_id, ar.idempotency_key) AS search_text
-            FROM action_requests ar
-            WHERE ar.tenant_id = %s
-
-            UNION ALL
-
-            SELECT
-                at.created_at AS occurred_at,
-                'action_transition' AS source,
-                COALESCE(NULLIF(TRIM(at.reason), ''), 'status_changed') AS event_type,
-                at.to_status AS status,
-                at.action_id AS action_id,
-                at.id AS event_id,
-                jsonb_build_object(
-                    'from_status', at.from_status,
-                    'to_status', at.to_status,
-                    'reason', at.reason
-                ) AS details,
-                CONCAT_WS(' ', at.action_id, at.from_status, at.to_status, at.reason) AS search_text
-            FROM action_transitions at
-            JOIN action_requests ar ON ar.action_id = at.action_id
-            WHERE ar.tenant_id = %s
-
-            UNION ALL
-
-            SELECT
-                aca.created_at AS occurred_at,
-                'callback_attempt' AS source,
-                aca.event_type AS event_type,
-                CASE WHEN aca.success THEN 'success' ELSE 'failed' END AS status,
-                aca.action_id AS action_id,
-                aca.id AS event_id,
-                jsonb_build_object(
-                    'attempt_no', aca.attempt_no,
-                    'success', aca.success,
-                    'http_status', aca.http_status,
-                    'duration_ms', aca.duration_ms,
-                    'error_text', aca.error_text
-                ) AS details,
-                CONCAT_WS(' ', aca.action_id, aca.event_type, aca.error_text, aca.http_status::text, aca.attempt_no::text) AS search_text
-            FROM action_callback_attempts aca
-            WHERE aca.tenant_id = %s
-
-            UNION ALL
-
-            SELECT
-                crh.created_at AS occurred_at,
-                'recovery_run' AS source,
-                'recovery_report' AS event_type,
-                CASE
-                    WHEN COALESCE(crh.dlq_count, 0) > 0 OR COALESCE(crh.retried_count, 0) > 0 THEN 'attention'
-                    ELSE 'ok'
-                END AS status,
-                NULL AS action_id,
-                crh.id AS event_id,
-                jsonb_build_object(
-                    'triggered_by', crh.triggered_by,
-                    'include_retry', crh.include_retry,
-                    'replayed_count', crh.replayed_count,
-                    'sent_count', crh.sent_count,
-                    'retried_count', crh.retried_count,
-                    'dlq_count', crh.dlq_count,
-                    'telegram_sent_count', crh.telegram_sent_count,
-                    'action_ids', crh.action_ids_json
-                ) AS details,
-                CONCAT_WS(' ', crh.id, crh.triggered_by, crh.report_text) AS search_text
-            FROM callback_recovery_history crh
-            WHERE crh.tenant_id = %s
-
-            UNION ALL
-
-            SELECT
-                sesh.created_at AS occurred_at,
-                'support_send' AS source,
-                'support_export_sent' AS event_type,
-                CASE
-                    WHEN COALESCE(sesh.telegram_sent_count, 0) > 0 THEN 'sent'
-                    ELSE 'noop'
-                END AS status,
-                NULLIF(TRIM(COALESCE(sesh.action_id, '')), '') AS action_id,
-                sesh.id AS event_id,
-                jsonb_build_object(
-                    'triggered_by', sesh.triggered_by,
-                    'telegram_sent_count', sesh.telegram_sent_count,
-                    'target_ids', sesh.target_ids_json
-                ) AS details,
-                CONCAT_WS(' ', sesh.id, sesh.action_id, sesh.triggered_by, sesh.report_text) AS search_text
-            FROM support_export_send_history sesh
-            WHERE sesh.tenant_id = %s
-        ) audit
-    """
-
-    filters = []
-    params: list = [tenant_id, tenant_id, tenant_id, tenant_id, tenant_id]
-    if source:
-        filters.append("source = %s")
-        params.append(source)
-    if action_id:
-        filters.append("action_id = %s")
-        params.append(action_id)
-    if search:
-        filters.append("search_text ILIKE %s")
-        params.append(f"%{search}%")
-
-    where_sql = f" WHERE {' AND '.join(filters)}" if filters else ""
-    count_query = f"SELECT COUNT(1) FROM ({base_query}) audit_rows{where_sql}"
-    cursor.execute(count_query, tuple(params))
-    count_row = cursor.fetchone()
-    if isinstance(count_row, (tuple, list)):
-        total_count = int(count_row[0] or 0)
-    else:
-        total_count = int(_row_to_dict(cursor, count_row).get("count") or 0)
-
-    query = (
-        f"{base_query}{where_sql} "
-        "ORDER BY occurred_at DESC, event_id DESC "
-        "LIMIT %s OFFSET %s"
-    )
-    query_params = list(params) + [limit, offset]
-    cursor.execute(query, tuple(query_params))
-    rows = cursor.fetchall() or []
-    items: list[dict] = []
-    for row in rows:
-        rd = _row_to_dict(cursor, row)
-        details = rd.get("details")
-        if isinstance(details, str):
-            try:
-                details = json.loads(details)
-            except Exception:
-                details = {}
-        elif not isinstance(details, dict):
-            details = {}
-        items.append(
-            {
-                "occurred_at": str(rd.get("occurred_at") or ""),
-                "source": str(rd.get("source") or ""),
-                "event_type": str(rd.get("event_type") or ""),
-                "status": str(rd.get("status") or ""),
-                "action_id": str(rd.get("action_id") or ""),
-                "event_id": str(rd.get("event_id") or ""),
-                "details": details,
-            }
-        )
-    return items, total_count
-
-
-def _load_tenant_audit_timeline_event(
-    cursor,
-    tenant_id: str,
-    event_id: str,
-    *,
-    source: str | None = None,
-) -> dict | None:
-    _ensure_callback_recovery_history_table(cursor)
-    _ensure_support_export_send_history_table(cursor)
-    tenant_id = str(tenant_id)
-    event_id = str(event_id or "").strip()
-    if not event_id:
-        return None
-    source = str(source or "").strip() or None
-
-    base_query = """
-        SELECT *
-        FROM (
-            SELECT
-                ar.created_at AS occurred_at,
-                'action_request' AS source,
-                'action_created' AS event_type,
-                ar.status AS status,
-                ar.action_id AS action_id,
-                ar.action_id AS event_id,
-                jsonb_build_object(
-                    'capability', ar.capability,
-                    'trace_id', ar.trace_id,
-                    'idempotency_key', ar.idempotency_key
-                ) AS details
-            FROM action_requests ar
-            WHERE ar.tenant_id = %s
-
-            UNION ALL
-
-            SELECT
-                at.created_at AS occurred_at,
-                'action_transition' AS source,
-                COALESCE(NULLIF(TRIM(at.reason), ''), 'status_changed') AS event_type,
-                at.to_status AS status,
-                at.action_id AS action_id,
-                at.id AS event_id,
-                jsonb_build_object(
-                    'from_status', at.from_status,
-                    'to_status', at.to_status,
-                    'reason', at.reason
-                ) AS details
-            FROM action_transitions at
-            JOIN action_requests ar ON ar.action_id = at.action_id
-            WHERE ar.tenant_id = %s
-
-            UNION ALL
-
-            SELECT
-                aca.created_at AS occurred_at,
-                'callback_attempt' AS source,
-                aca.event_type AS event_type,
-                CASE WHEN aca.success THEN 'success' ELSE 'failed' END AS status,
-                aca.action_id AS action_id,
-                aca.id AS event_id,
-                jsonb_build_object(
-                    'attempt_no', aca.attempt_no,
-                    'success', aca.success,
-                    'http_status', aca.http_status,
-                    'duration_ms', aca.duration_ms,
-                    'error_text', aca.error_text
-                ) AS details
-            FROM action_callback_attempts aca
-            WHERE aca.tenant_id = %s
-
-            UNION ALL
-
-            SELECT
-                crh.created_at AS occurred_at,
-                'recovery_run' AS source,
-                'recovery_report' AS event_type,
-                CASE
-                    WHEN COALESCE(crh.dlq_count, 0) > 0 OR COALESCE(crh.retried_count, 0) > 0 THEN 'attention'
-                    ELSE 'ok'
-                END AS status,
-                NULL AS action_id,
-                crh.id AS event_id,
-                jsonb_build_object(
-                    'triggered_by', crh.triggered_by,
-                    'include_retry', crh.include_retry,
-                    'replayed_count', crh.replayed_count,
-                    'sent_count', crh.sent_count,
-                    'retried_count', crh.retried_count,
-                    'dlq_count', crh.dlq_count,
-                    'telegram_sent_count', crh.telegram_sent_count,
-                    'action_ids', crh.action_ids_json
-                ) AS details
-            FROM callback_recovery_history crh
-            WHERE crh.tenant_id = %s
-
-            UNION ALL
-
-            SELECT
-                sesh.created_at AS occurred_at,
-                'support_send' AS source,
-                'support_export_sent' AS event_type,
-                CASE
-                    WHEN COALESCE(sesh.telegram_sent_count, 0) > 0 THEN 'sent'
-                    ELSE 'noop'
-                END AS status,
-                NULLIF(TRIM(COALESCE(sesh.action_id, '')), '') AS action_id,
-                sesh.id AS event_id,
-                jsonb_build_object(
-                    'triggered_by', sesh.triggered_by,
-                    'telegram_sent_count', sesh.telegram_sent_count,
-                    'target_ids', sesh.target_ids_json
-                ) AS details
-            FROM support_export_send_history sesh
-            WHERE sesh.tenant_id = %s
-        ) audit
-    """
-    params: list = [tenant_id, tenant_id, tenant_id, tenant_id, tenant_id, event_id]
-    filters = ["event_id = %s"]
-    if source:
-        filters.append("source = %s")
-        params.append(source)
-    query = f"{base_query} WHERE {' AND '.join(filters)} ORDER BY occurred_at DESC LIMIT 1"
-    cursor.execute(query, tuple(params))
-    row = cursor.fetchone()
-    if not row:
-        return None
-    rd = _row_to_dict(cursor, row)
-    details = rd.get("details")
-    if isinstance(details, str):
-        try:
-            details = json.loads(details)
-        except Exception:
-            details = {}
-    elif not isinstance(details, dict):
-        details = {}
-    return {
-        "occurred_at": str(rd.get("occurred_at") or ""),
-        "source": str(rd.get("source") or ""),
-        "event_type": str(rd.get("event_type") or ""),
-        "status": str(rd.get("status") or ""),
-        "action_id": str(rd.get("action_id") or ""),
-        "event_id": str(rd.get("event_id") or ""),
-        "details": details,
-    }
-
-
-def _render_tenant_audit_timeline_markdown(
-    tenant_id: str,
-    items: list[dict],
-    total_count: int,
-    *,
-    source: str | None = None,
-    search: str | None = None,
-    action_id: str | None = None,
-) -> str:
-    lines = [
-        "# OpenClaw Unified Audit Timeline",
-        "",
-        f"- tenant_id: `{tenant_id}`",
-        f"- exported_at: {datetime.utcnow().isoformat()}",
-        f"- total_count: **{int(total_count or 0)}**",
-        f"- shown_count: **{len(items)}**",
-    ]
-    if source:
-        lines.append(f"- source_filter: `{source}`")
-    if action_id:
-        lines.append(f"- action_id_filter: `{action_id}`")
-    if search:
-        lines.append(f"- search_filter: `{search}`")
-    lines.append("")
-
-    if not items:
-        lines.append("- no audit events")
-        return "\n".join(lines)
-
-    for idx, item in enumerate(items, start=1):
-        lines.extend(
-            [
-                f"## {idx}. {item.get('source') or 'event'} / {item.get('event_type') or 'unknown'}",
-                "",
-                f"- occurred_at: {item.get('occurred_at') or ''}",
-                f"- status: `{item.get('status') or ''}`",
-                f"- event_id: `{str(item.get('event_id') or '')[:12]}`",
-            ]
-        )
-        current_action_id = str(item.get("action_id") or "").strip()
-        if current_action_id:
-            lines.append(f"- action_id: `{current_action_id}`")
-        details = item.get("details")
-        if isinstance(details, dict) and details:
-            lines.append("- details:")
-            for key, value in list(details.items())[:6]:
-                if isinstance(value, (dict, list)):
-                    formatted = json.dumps(value, ensure_ascii=False)
-                else:
-                    formatted = str(value)
-                lines.append(f"  - {key}: {formatted}")
-        lines.append("")
-    return "\n".join(lines)
-
-
-def _build_tenant_audit_event_bundle(cursor, user_data: dict, tenant_id: str, event: dict) -> dict:
-    bundle = {
-        "success": True,
-        "tenant_id": str(tenant_id),
-        "generated_at": datetime.utcnow().isoformat(),
-        "event": event,
-    }
-    source = str(event.get("source") or "")
-    event_id = str(event.get("event_id") or "")
-    action_id = str(event.get("action_id") or "").strip()
-    if action_id:
-        bundle["action_snapshot"] = PHASE1_ACTION_ORCHESTRATOR.get_action_incident_snapshot(
-            action_id,
-            user_data,
-        )
-    if source == "recovery_run":
-        recovery_items = _load_callback_recovery_history_items(cursor, str(tenant_id), 20)
-        bundle["recovery_run"] = next((item for item in recovery_items if str(item.get("id") or "") == event_id), None)
-    elif source == "support_send":
-        send_items = _load_support_export_send_history_items(cursor, str(tenant_id), 20)
-        bundle["support_send"] = next((item for item in send_items if str(item.get("id") or "") == event_id), None)
-    return bundle
-
-
-def _render_tenant_audit_event_bundle_markdown(bundle: dict) -> str:
-    event = dict(bundle.get("event") or {})
-    lines = [
-        "# OpenClaw Audit Event Bundle",
-        "",
-        f"- tenant_id: `{bundle.get('tenant_id') or ''}`",
-        f"- generated_at: {bundle.get('generated_at') or ''}",
-        f"- source: `{event.get('source') or ''}`",
-        f"- event_type: `{event.get('event_type') or ''}`",
-        f"- status: `{event.get('status') or ''}`",
-        f"- event_id: `{event.get('event_id') or ''}`",
-    ]
-    action_id = str(event.get("action_id") or "").strip()
-    if action_id:
-        lines.append(f"- action_id: `{action_id}`")
-    details = event.get("details")
-    if isinstance(details, dict) and details:
-        lines.extend(["", "## Event details", ""])
-        for key, value in list(details.items())[:8]:
-            if isinstance(value, (dict, list)):
-                formatted = json.dumps(value, ensure_ascii=False)
-            else:
-                formatted = str(value)
-            lines.append(f"- {key}: {formatted}")
-    action_snapshot = dict(bundle.get("action_snapshot") or {})
-    if action_snapshot:
-        overview = dict(action_snapshot.get("overview") or {})
-        lines.extend(
-            [
-                "",
-                "## Related action",
-                "",
-                f"- capability: `{action_snapshot.get('capability') or ''}`",
-                f"- status: `{action_snapshot.get('status') or ''}`",
-                f"- callback_attempts_total: **{int(overview.get('callback_attempts_total') or 0)}**",
-                f"- callback_attempts_failed: **{int(overview.get('callback_attempts_failed') or 0)}**",
-            ]
-        )
-    recovery_run = dict(bundle.get("recovery_run") or {})
-    if recovery_run:
-        lines.extend(
-            [
-                "",
-                "## Recovery run",
-                "",
-                f"- recovery_id: `{recovery_run.get('id') or ''}`",
-                f"- replayed/sent/retried/dlq: **{int(recovery_run.get('replayed_count') or 0)}/{int(recovery_run.get('sent_count') or 0)}/{int(recovery_run.get('retried_count') or 0)}/{int(recovery_run.get('dlq_count') or 0)}**",
-            ]
-        )
-    support_send = dict(bundle.get("support_send") or {})
-    if support_send:
-        lines.extend(
-            [
-                "",
-                "## Support send",
-                "",
-                f"- support_send_id: `{support_send.get('id') or ''}`",
-                f"- telegram_sent_count: **{int(support_send.get('telegram_sent_count') or 0)}**",
-                f"- triggered_by: `{support_send.get('triggered_by') or ''}`",
-            ]
-        )
-    return "\n".join(lines)
-
-
-def _build_openclaw_support_export_bundle(
-    user_data: dict,
-    tenant_id: str,
-    *,
-    action_id: str | None = None,
-    health_window_minutes: int = 60,
-    trend_window_minutes: int = 12 * 60,
-    billing_window_minutes: int = 24 * 60,
-    trend_limit: int = 24,
-    billing_limit: int = 50,
-    recovery_limit: int = 10,
-) -> tuple[dict, int]:
-    health_payload, health_code = _build_openclaw_capabilities_health(
-        user_data,
-        str(tenant_id),
-        health_window_minutes,
-        persist=True,
-    )
-    if not health_payload.get("success"):
-        return health_payload, int(health_code)
-
-    trend_payload = PHASE1_ACTION_ORCHESTRATOR.get_capability_health_trend(
-        user_data,
-        tenant_id=str(tenant_id),
-        window_minutes=trend_window_minutes,
-        limit=trend_limit,
-    )
-    trend_code = int(trend_payload.pop("http_code", 200))
-    if not trend_payload.get("success"):
-        return trend_payload, trend_code
-
-    billing_payload = PHASE1_ACTION_ORCHESTRATOR.reconcile_billing(
-        user_data,
-        tenant_id=str(tenant_id),
-        window_minutes=billing_window_minutes,
-        limit=billing_limit,
-    )
-    billing_code = int(billing_payload.pop("http_code", 200))
-    if not billing_payload.get("success"):
-        return billing_payload, billing_code
-
-    callback_metrics_payload = PHASE1_ACTION_ORCHESTRATOR.get_callback_metrics(
-        user_data,
-        tenant_id=str(tenant_id),
-        window_minutes=health_window_minutes,
-    )
-    callback_metrics_code = int(callback_metrics_payload.pop("http_code", 200))
-    if not callback_metrics_payload.get("success"):
-        return callback_metrics_payload, callback_metrics_code
-
-    db = DatabaseManager()
-    try:
-        cursor = db.conn.cursor()
-        recovery_items = _load_callback_recovery_history_items(cursor, str(tenant_id), int(recovery_limit))
-    finally:
-        db.close()
-
-    selected_action_snapshot = None
-    if action_id:
-        selected_action_snapshot = PHASE1_ACTION_ORCHESTRATOR.get_action_incident_snapshot(action_id, user_data)
-        action_code = int(selected_action_snapshot.pop("http_code", 200))
-        if not selected_action_snapshot.get("success"):
-            return selected_action_snapshot, action_code
-        if str(selected_action_snapshot.get("tenant_id") or "") != str(tenant_id):
-            return {"success": False, "error": "tenant mismatch"}, 403
-
-    bundle = {
-        "success": True,
-        "tenant_id": str(tenant_id),
-        "generated_at": datetime.utcnow().isoformat(),
-        "health": health_payload,
-        "alerts": list(health_payload.get("alerts") or []),
-        "health_trend": {
-            "success": True,
-            "tenant_id": str(tenant_id),
-            "window_minutes": int(trend_window_minutes),
-            "count": int(trend_payload.get("count") or len(trend_payload.get("items") or [])),
-            "items": list(trend_payload.get("items") or []),
-        },
-        "callback_metrics": callback_metrics_payload,
-        "billing_reconcile": billing_payload,
-        "recovery_history": {
-            "success": True,
-            "tenant_id": str(tenant_id),
-            "count": len(recovery_items),
-            "items": recovery_items,
-        },
-        "selected_action_snapshot": selected_action_snapshot,
-    }
-    if action_id:
-        bundle["action_id"] = str(action_id)
-    return bundle, 200
-
-
-def _render_openclaw_support_export_markdown(bundle: dict) -> str:
-    bundle = bundle or {}
-    tenant_id = str(bundle.get("tenant_id") or "")
-    health = dict(bundle.get("health") or {})
-    checks = dict(health.get("checks") or {})
-    metrics = dict((bundle.get("callback_metrics") or {}).get("metrics") or health.get("metrics") or {})
-    billing_summary = dict((bundle.get("billing_reconcile") or {}).get("summary") or {})
-    trend_items = list(((bundle.get("health_trend") or {}).get("items") or []))[:5]
-    recovery_items = list(((bundle.get("recovery_history") or {}).get("items") or []))[:5]
-    alerts = list(bundle.get("alerts") or [])
-    lines = [
-        "# OpenClaw Support Export Bundle",
-        "",
-        f"- tenant_id: `{tenant_id}`",
-        f"- generated_at: {bundle.get('generated_at') or datetime.utcnow().isoformat()}",
-        f"- health: `{health.get('status') or 'unknown'}` ready={bool(health.get('ready'))}",
-        (
-            "- queue: "
-            f"sent={int(metrics.get('sent') or 0)} "
-            f"retry={int(metrics.get('retry') or 0)} "
-            f"dlq={int(metrics.get('dlq') or 0)} "
-            f"pending={int(metrics.get('pending') or 0)}"
-        ),
-        (
-            "- checks: "
-            f"token={bool(checks.get('token_configured'))} "
-            f"callbacks={bool(checks.get('callbacks_enabled'))} "
-            f"stuck_retry={int(checks.get('stuck_retry') or 0)}"
-        ),
-        "",
-        "## Alerts",
-        "",
-    ]
-    if alerts:
-        for item in alerts:
-            lines.append(
-                f"- [{str(item.get('severity') or 'info').upper()}] {str(item.get('code') or 'UNKNOWN')}: {str(item.get('message') or '')}"
-            )
-    else:
-        lines.append("- no alerts")
-
-    lines.extend(["", "## Health trend", ""])
-    if trend_items:
-        for item in trend_items:
-            trend_checks = dict(item.get("checks") or {})
-            lines.append(
-                f"- {item.get('captured_at') or ''} | {item.get('status') or 'unknown'} "
-                f"(dlq={int(trend_checks.get('dlq_count') or 0)}, stuck={int(trend_checks.get('stuck_retry') or 0)})"
-            )
-    else:
-        lines.append("- no trend snapshots")
-
-    lines.extend(
-        [
-            "",
-            "## Billing reconcile",
-            "",
-            (
-                "- checked/issues/token_delta: "
-                f"**{int(billing_summary.get('actions_checked') or 0)}/"
-                f"{int(billing_summary.get('actions_with_issues') or 0)}/"
-                f"{int(billing_summary.get('tokenusage_minus_settled') or 0)}**"
-            ),
-            "",
-            "## Recovery history",
-            "",
-        ]
-    )
-    if recovery_items:
-        for item in recovery_items:
-            lines.append(
-                f"- {item.get('created_at') or ''} | "
-                f"replay/sent/retry/dlq={int(item.get('replayed_count') or 0)}/"
-                f"{int(item.get('sent_count') or 0)}/"
-                f"{int(item.get('retried_count') or 0)}/"
-                f"{int(item.get('dlq_count') or 0)}"
-            )
-    else:
-        lines.append("- no recovery runs")
-
-    selected_action_snapshot = bundle.get("selected_action_snapshot")
-    if isinstance(selected_action_snapshot, dict) and selected_action_snapshot.get("success"):
-        lines.extend(["", "## Selected action", "", _format_incident_snapshot_digest(selected_action_snapshot)])
-
-    return "\n".join(lines)
-
-
-def _notify_superadmins_manual_competitor_audit(cursor, *, business_id: str, business_name: str, competitor_name: str, competitor_url: str, requester_name: str, requester_email: str, queue_task_id: str = "") -> int:
-    target_ids = set(_get_superadmin_telegram_ids(cursor))
-
-    users_cols = _load_table_columns(cursor, "users")
-    rows = []
-    if "telegram_id" in users_cols:
-        cursor.execute(
-            """
-            SELECT id, name, email, telegram_id
-            FROM users
-            WHERE is_superadmin = TRUE
-              AND telegram_id IS NOT NULL
-              AND NULLIF(TRIM(telegram_id), '') IS NOT NULL
-            ORDER BY created_at ASC
-            """
-        )
-        rows = cursor.fetchall() or []
-        for row in rows:
-            rd = _row_to_dict(cursor, row)
-            telegram_id = str(rd.get("telegram_id") or "").strip()
-            if telegram_id:
-                target_ids.add(telegram_id)
-    elif not target_ids:
-        print("⚠️ users.telegram_id отсутствует и OPENCLAW_SUPERADMIN_TELEGRAM_IDS пуст, уведомление суперадминов пропущено")
-        return 0
-
-    sent = 0
-    for row in rows:
-        rd = _row_to_dict(cursor, row)
-        telegram_id = str(rd.get("telegram_id") or "").strip()
-        if not telegram_id:
-            continue
-        if telegram_id not in target_ids:
-            continue
-        admin_name = str(rd.get("name") or rd.get("email") or f"superadmin:{telegram_id}")
-        lines = [
-            "🧭 Запрошен аудит ручного конкурента",
-            f"Бизнес: {business_name or business_id}",
-            f"Business ID: {business_id}",
-            f"Конкурент: {competitor_name or 'Без названия'}",
-            f"Ссылка: {competitor_url}",
-            f"Запросил: {requester_name or requester_email or 'пользователь'}",
-        ]
-        if queue_task_id:
-            lines.append(f"Queue task: {queue_task_id}")
-        lines.append(f"Админ: {admin_name}")
-        if _send_telegram_plain_message(telegram_id, "\n".join(lines)):
-            sent += 1
-        target_ids.discard(telegram_id)
-
-    # Fallback: ids from env that are not represented in users.telegram_id
-    for telegram_id in sorted(target_ids):
-        lines = [
-            "🧭 Запрошен аудит ручного конкурента",
-            f"Бизнес: {business_name or business_id}",
-            f"Business ID: {business_id}",
-            f"Конкурент: {competitor_name or 'Без названия'}",
-            f"Ссылка: {competitor_url}",
-            f"Запросил: {requester_name or requester_email or 'пользователь'}",
-        ]
-        if queue_task_id:
-            lines.append(f"Queue task: {queue_task_id}")
-        lines.append("Админ: superadmin_env")
-        if _send_telegram_plain_message(telegram_id, "\n".join(lines)):
-            sent += 1
-    return sent
-
-
-@app.route("/api/business/<business_id>/competitors/manual", methods=["GET"])
-def list_manual_competitors(business_id):
-    try:
-        auth_header = request.headers.get("Authorization")
-        if not auth_header or not auth_header.startswith("Bearer "):
-            return jsonify({"error": "Требуется авторизация"}), 401
-        token = auth_header.split(" ")[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-        owner_id = get_business_owner_id(cursor, business_id)
-        if not owner_id:
-            db.close()
-            return jsonify({"error": "Бизнес не найден"}), 404
-        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
-            db.close()
-            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
-
-        _ensure_manual_competitors_tables(cursor)
-        cursor.execute(
-            """
-            SELECT id, name, url, audit_status, audit_requested_at, report_path, report_ready_at, created_at
-            FROM ManualCompetitors
-            WHERE business_id = %s
-            ORDER BY created_at DESC
-            """,
-            (business_id,),
-        )
-        rows = cursor.fetchall() or []
-        competitors = []
-        for row in rows:
-            rd = _row_to_dict(cursor, row)
-            competitors.append(
-                {
-                    "id": rd.get("id"),
-                    "name": rd.get("name") or "",
-                    "url": rd.get("url"),
-                    "audit_status": rd.get("audit_status") or "not_requested",
-                    "audit_requested_at": rd.get("audit_requested_at"),
-                    "report_path": rd.get("report_path"),
-                    "report_ready_at": rd.get("report_ready_at"),
-                    "created_at": rd.get("created_at"),
-                }
-            )
-
-        db.close()
-        return jsonify({"success": True, "competitors": competitors})
-    except Exception as e:
-        import traceback
-
-        err_tb = traceback.format_exc()
-        print(f"❌ list_manual_competitors: {e}\n{err_tb}")
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-@app.route("/api/business/<business_id>/competitors/manual", methods=["POST"])
-def add_manual_competitor(business_id):
-    try:
-        auth_header = request.headers.get("Authorization")
-        if not auth_header or not auth_header.startswith("Bearer "):
-            return jsonify({"error": "Требуется авторизация"}), 401
-        token = auth_header.split(" ")[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-
-        data = request.get_json(silent=True) or {}
-        competitor_url = str(data.get("url") or "").strip()
-        if not competitor_url:
-            return jsonify({"error": "Ссылка конкурента обязательна"}), 400
-
-        if not re.match(r"^https?://", competitor_url, re.IGNORECASE):
-            return jsonify({"error": "Укажите корректную ссылку (http/https)"}), 400
-
-        competitor_name = str(data.get("name") or "").strip()
-
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-        owner_id = get_business_owner_id(cursor, business_id)
-        if not owner_id:
-            db.close()
-            return jsonify({"error": "Бизнес не найден"}), 404
-        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
-            db.close()
-            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
-
-        _ensure_manual_competitors_tables(cursor)
-
-        existing_id = None
-        cursor.execute(
-            "SELECT id FROM ManualCompetitors WHERE business_id = %s AND url = %s LIMIT 1",
-            (business_id, competitor_url),
-        )
-        existing_row = cursor.fetchone()
-        if existing_row:
-            existing = _row_to_dict(cursor, existing_row)
-            existing_id = existing.get("id")
-
-        if existing_id:
-            cursor.execute(
-                """
-                UPDATE ManualCompetitors
-                SET name = COALESCE(NULLIF(%s, ''), name), updated_at = CURRENT_TIMESTAMP
-                WHERE id = %s
-                """,
-                (competitor_name, existing_id),
-            )
-            competitor_id = existing_id
-        else:
-            competitor_id = str(uuid.uuid4())
-            cursor.execute(
-                """
-                INSERT INTO ManualCompetitors (id, business_id, created_by, name, url)
-                VALUES (%s, %s, %s, %s, %s)
-                """,
-                (competitor_id, business_id, user_data["user_id"], competitor_name, competitor_url),
-            )
-
-        db.conn.commit()
-        db.close()
-
-        return jsonify(
-            {
-                "success": True,
-                "competitor": {
-                    "id": competitor_id,
-                    "name": competitor_name,
-                    "url": competitor_url,
-                    "audit_status": "not_requested",
-                },
-            }
-        )
-    except Exception as e:
-        import traceback
-
-        err_tb = traceback.format_exc()
-        print(f"❌ add_manual_competitor: {e}\n{err_tb}")
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-@app.route("/api/business/<business_id>/competitors/manual/<competitor_id>/audit", methods=["POST"])
-def request_manual_competitor_audit(business_id, competitor_id):
-    try:
-        auth_header = request.headers.get("Authorization")
-        if not auth_header or not auth_header.startswith("Bearer "):
-            return jsonify({"error": "Требуется авторизация"}), 401
-        token = auth_header.split(" ")[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-        owner_id = get_business_owner_id(cursor, business_id)
-        if not owner_id:
-            db.close()
-            return jsonify({"error": "Бизнес не найден"}), 404
-        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
-            db.close()
-            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
-
-        _ensure_manual_competitors_tables(cursor)
-        cursor.execute("SELECT name FROM businesses WHERE id = %s LIMIT 1", (business_id,))
-        business_row = cursor.fetchone()
-        business_name = (_row_to_dict(cursor, business_row).get("name") if business_row else "") or ""
-
-        cursor.execute(
-            "SELECT id, name, url FROM ManualCompetitors WHERE id = %s AND business_id = %s LIMIT 1",
-            (competitor_id, business_id),
-        )
-        row = cursor.fetchone()
-        if not row:
-            db.close()
-            return jsonify({"error": "Конкурент не найден"}), 404
-        competitor_row = _row_to_dict(cursor, row)
-        competitor_url = str(competitor_row.get("url") or "").strip()
-        competitor_name = str(competitor_row.get("name") or "").strip()
-
-        queue_task_id = ""
-        if competitor_url:
-            cursor.execute(
-                """
-                SELECT id
-                FROM parsequeue
-                WHERE business_id IS NULL
-                  AND task_type = 'parse_card'
-                  AND source = 'manual_competitor_audit'
-                  AND user_id = %s
-                  AND url = %s
-                  AND status IN ('pending', 'processing', 'captcha')
-                ORDER BY created_at DESC
-                LIMIT 1
-                """,
-                (user_data["user_id"], competitor_url),
-            )
-            active_task = cursor.fetchone()
-            if active_task:
-                queue_task_id = _row_to_dict(cursor, active_task).get("id") or ""
-            else:
-                queue_task_id = str(uuid.uuid4())
-                cursor.execute(
-                    """
-                    INSERT INTO parsequeue (
-                        id, business_id, task_type, source,
-                        status, user_id, url, created_at, updated_at
-                    )
-                    VALUES (%s, %s, 'parse_card', 'manual_competitor_audit',
-                            'pending', %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                    """,
-                    (queue_task_id, None, user_data["user_id"], competitor_url),
-                )
-
-        cursor.execute(
-            """
-            UPDATE ManualCompetitors
-            SET audit_status = 'requested',
-                audit_requested_at = CURRENT_TIMESTAMP,
-                audit_requested_by = %s,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = %s
-            """,
-            (user_data["user_id"], competitor_id),
-        )
-        requester_name = str(user_data.get("name") or "").strip()
-        requester_email = str(user_data.get("email") or "").strip()
-        notified_count = _notify_superadmins_manual_competitor_audit(
-            cursor,
-            business_id=business_id,
-            business_name=business_name,
-            competitor_name=competitor_name,
-            competitor_url=competitor_url,
-            requester_name=requester_name,
-            requester_email=requester_email,
-            queue_task_id=queue_task_id,
-        )
-        db.conn.commit()
-        db.close()
-
-        return jsonify(
-            {
-                "success": True,
-                "message": "Запрос на аудит поставлен в очередь и отправлен суперадмину",
-                "queue_task_id": queue_task_id or None,
-                "superadmins_notified": notified_count,
-            }
-        )
-    except Exception as e:
-        import traceback
-
-        err_tb = traceback.format_exc()
-        print(f"❌ request_manual_competitor_audit: {e}\n{err_tb}")
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-@app.route("/api/business/<business_id>/competitors/manual/<competitor_id>", methods=["DELETE"])
-def delete_manual_competitor(business_id, competitor_id):
-    try:
-        auth_header = request.headers.get("Authorization")
-        if not auth_header or not auth_header.startswith("Bearer "):
-            return jsonify({"error": "Требуется авторизация"}), 401
-        token = auth_header.split(" ")[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-        owner_id = get_business_owner_id(cursor, business_id)
-        if not owner_id:
-            db.close()
-            return jsonify({"error": "Бизнес не найден"}), 404
-        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
-            db.close()
-            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
-
-        _ensure_manual_competitors_tables(cursor)
-        cursor.execute(
-            "DELETE FROM ManualCompetitors WHERE id = %s AND business_id = %s",
-            (competitor_id, business_id),
-        )
-        if cursor.rowcount == 0:
-            db.close()
-            return jsonify({"error": "Конкурент не найден"}), 404
-
-        db.conn.commit()
-        db.close()
-        return jsonify({"success": True})
-    except Exception as e:
-        import traceback
-
-        err_tb = traceback.format_exc()
-        print(f"❌ delete_manual_competitor: {e}\n{err_tb}")
-        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route("/api/business/<business_id>/external/posts", methods=["GET"])
@@ -4830,15 +1867,8 @@ def get_external_posts(business_id):
         # Сначала пробуем externalbusinessposts (Postgres)
         cursor.execute("SELECT to_regclass('public.externalbusinessposts')")
         table_exists = cursor.fetchone()
-        reg_val = None
-        if isinstance(table_exists, dict):
-            reg_val = next(iter(table_exists.values()), None)
-        elif isinstance(table_exists, (list, tuple)):
-            reg_val = table_exists[0] if table_exists else None
-        else:
-            reg_val = table_exists
         posts = []
-        if reg_val:
+        if table_exists and (table_exists[0] if isinstance(table_exists, (list, tuple)) else table_exists) is not None:
             cursor.execute(
                 """
                 SELECT id, source, external_post_id, title, text, published_at, created_at
@@ -5076,14 +2106,14 @@ def pause_user(user_id):
         cursor.execute("""
             UPDATE Users 
             SET is_active = 0, updated_at = CURRENT_TIMESTAMP 
-            WHERE id = %s
+            WHERE id = ?
         """, (user_id,))
         
         # Деактивируем все бизнесы пользователя
         cursor.execute("""
             UPDATE Businesses 
             SET is_active = 0, updated_at = CURRENT_TIMESTAMP 
-            WHERE owner_id = %s
+            WHERE owner_id = ?
         """, (user_id,))
         
         db.conn.commit()
@@ -5130,14 +2160,14 @@ def unpause_user(user_id):
         cursor.execute("""
             UPDATE Users 
             SET is_active = 1, updated_at = CURRENT_TIMESTAMP 
-            WHERE id = %s
+            WHERE id = ?
         """, (user_id,))
         
         # Активируем все бизнесы пользователя
         cursor.execute("""
             UPDATE Businesses 
             SET is_active = 1, updated_at = CURRENT_TIMESTAMP 
-            WHERE owner_id = %s
+            WHERE owner_id = ?
         """, (user_id,))
         
         db.conn.commit()
@@ -5288,18 +2318,6 @@ def _business_display_fields(row_dict):
     return s(row_dict.get("name")), s(row_dict.get("business_type")), s(row_dict.get("address")), s(row_dict.get("working_hours"))
 
 
-def _load_business_channel_context(cursor, business_id: str) -> dict | None:
-    return load_business_channel_context(
-        cursor,
-        business_id,
-        global_telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", ""),
-    )
-
-
-def _build_business_channels_payload(ctx: dict | None) -> list[dict]:
-    return build_channel_statuses(ctx)
-
-
 def suggest_city_from_address(address: str):
     """Подсказка города из адреса (best-effort, без справочника). Не перезаписывает введённый пользователем city."""
     if not address or not isinstance(address, str):
@@ -5343,66 +2361,6 @@ def parse_ll_from_maps_url(maps_url: str):
         return None, None
 
 
-def extract_yandex_org_id_from_url(yandex_url: str):
-    """Извлечь ID организации Яндекс из URL (/org/.../<id> или /sprav/<id>)."""
-    if not yandex_url or not isinstance(yandex_url, str):
-        return None
-    url = yandex_url.strip()
-    if not url:
-        return None
-    patterns = (
-        r"/org/[^/]+/(\d+)",
-        r"/org/(\d+)",
-        r"/sprav/(\d+)",
-    )
-    for pattern in patterns:
-        m = re.search(pattern, url, flags=re.IGNORECASE)
-        if m:
-            return m.group(1)
-    return None
-
-
-def get_business_map_links(cursor, business_id: str, yandex_url: str = None):
-    """
-    Вернуть mapLinks для API.
-    Канонический источник: businesses.yandex_url.
-    Legacy fallback: businessmaplinks (только если yandex_url пуст).
-    """
-    canonical_url = (yandex_url or "").strip()
-    if canonical_url:
-        return [
-            {
-                "id": f"business:{business_id}:yandex",
-                "url": canonical_url,
-                "mapType": "yandex",
-                "createdAt": None,
-            }
-        ]
-
-    links = []
-    cursor.execute(
-        """
-        SELECT id, url, map_type, created_at
-        FROM businessmaplinks
-        WHERE business_id = %s
-        ORDER BY created_at DESC
-        """,
-        (business_id,),
-    )
-    for row in cursor.fetchall():
-        rd = _row_to_dict(cursor, row)
-        if rd and (rd.get("url") or "").strip():
-            links.append(
-                {
-                    "id": rd.get("id"),
-                    "url": rd.get("url") or "",
-                    "mapType": rd.get("map_type") or "other",
-                    "createdAt": rd.get("created_at"),
-                }
-            )
-    return links
-
-
 def get_user_language(user_id: str, requested_language: str = None) -> str:
     """
     Получить язык пользователя из профиля бизнеса или использовать запрошенный язык.
@@ -5424,18 +2382,17 @@ def get_user_language(user_id: str, requested_language: str = None) -> str:
         cursor = db.conn.cursor()
         # Получаем первый активный бизнес пользователя
         cursor.execute("""
-            SELECT ai_agent_language
-            FROM businesses
-            WHERE owner_id = %s AND (is_active = TRUE OR is_active IS NULL)
+            SELECT ai_agent_language 
+            FROM Businesses 
+            WHERE owner_id = ? AND (is_active = 1 OR is_active IS NULL)
             ORDER BY created_at DESC
             LIMIT 1
         """, (user_id,))
         row = cursor.fetchone()
         db.close()
         
-        lang = row.get('ai_agent_language') if isinstance(row, dict) else (row[0] if row else None)
-        if lang:
-            return str(lang).lower()
+        if row and row[0]:
+            return row[0].lower()
     except Exception as e:
         print(f"⚠️ Ошибка получения языка пользователя: {e}")
     
@@ -5443,3295 +2400,54 @@ def get_user_language(user_id: str, requested_language: str = None) -> str:
     return 'ru'
 
 
-def _seo_extract_terms(text: str):
-    stop_words = {
-        "и", "в", "на", "с", "по", "для", "или", "от", "до", "под", "при", "за", "к", "из", "о",
-        "the", "and", "for", "with", "from", "to", "of", "a", "an",
-        "услуга", "услуги", "service", "services",
-    }
-    terms = re.findall(r"[a-zA-Zа-яА-ЯёЁ0-9]+", (text or "").lower())
-    out = []
-    for t in terms:
-        if len(t) < 3 or t in stop_words or t.isdigit():
-            continue
-        out.append(t)
-    return out
-
-
-SEO_BEAUTY_BUSINESS_TYPES = {
-    "beauty_salon", "barbershop", "nail_studio", "spa", "massage", "cosmetology", "brows_lashes", "makeup", "tanning"
-}
-SEO_BEAUTY_TERMS = {"маникюр", "педикюр", "ногти", "барбер", "косметолог", "ресниц", "бров", "спа", "стрижк", "окрашив"}
-SEO_BEAUTY_CATEGORIES = {"barber", "cosmetology", "eyebrows", "nails", "spa", "beauty", "hair", "makeup", "lashes"}
-
-
-def _seo_is_beauty_keyword(keyword_text: str, category: str = "") -> bool:
-    category_l = (category or "").strip().lower()
-    if category_l in SEO_BEAUTY_CATEGORIES:
-        return True
-    kw = (keyword_text or "").lower()
-    return any(t in kw for t in SEO_BEAUTY_TERMS)
-
-
-def build_seo_keywords_context(cursor, business_id: str | None, user_id: str | None, limit: int = 120) -> tuple[str, str]:
-    """
-    Возвращает:
-    - seo_keywords: список ключей для вставки в промпт (много строк)
-    - seo_keywords_top10: короткий список top-10 через запятую
-    """
-    payload = collect_ranked_keywords(
-        cursor,
-        business_id=business_id,
-        user_id=user_id,
-        limit=limit,
-        add_city_suffix=False,
-        fallback_global_when_empty_terms=False,
-        long_weight=2,
-        short_weight=1,
-    )
-    items = payload.get("items", [])
-    if not items:
-        return "No matched SEO keywords found", "No matched SEO keywords found"
-    seo_keywords = "\n".join([f"- {(item.get('keyword') or '').strip()} ({int(item.get('views') or 0)})" for item in items])
-    seo_keywords_top10 = ", ".join([(item.get('keyword') or '').strip() for item in items[:10] if (item.get('keyword') or '').strip()])
-    return seo_keywords, seo_keywords_top10
-
-
-def build_seo_keywords_context_for_service(
-    cursor,
-    business_id: str | None,
-    user_id: str | None,
-    service_name: str,
-    service_description: str,
-    limit: int = 120,
-) -> tuple[str, str]:
-    """
-    SEO-контекст, сфокусированный на конкретной услуге.
-    В отличие от общего контекста по бизнесу не смешивает ключи по всем услугам.
-    """
-    payload = collect_ranked_keywords(
-        cursor,
-        business_id=business_id,
-        user_id=user_id,
-        service_name=service_name,
-        service_description=service_description,
-        limit=limit,
-        add_city_suffix=False,
-        fallback_global_when_empty_terms=False,
-        long_weight=3,
-        short_weight=2,
-    )
-    items = payload.get("items", [])
-    if not items:
-        return "No matched SEO keywords found", "No matched SEO keywords found"
-    seo_keywords = "\n".join([f"- {(item.get('keyword') or '').strip()} ({int(item.get('views') or 0)})" for item in items])
-    seo_keywords_top10 = ", ".join([(item.get('keyword') or '').strip() for item in items[:10] if (item.get('keyword') or '').strip()])
-    return seo_keywords, seo_keywords_top10
-
-
-def _extract_json_candidate(raw_text: str):
-    if not isinstance(raw_text, str):
-        return None
-    txt = raw_text.strip()
-    if not txt:
-        return None
-    try:
-        direct = json.loads(txt)
-        if isinstance(direct, (dict, list)):
-            return direct
-    except Exception:
-        pass
-
-    start = txt.find("{")
-    end = txt.rfind("}") + 1
-    if start != -1 and end > start:
-        try:
-            return json.loads(txt[start:end])
-        except Exception:
-            return None
-    return None
-
-
-def _format_prompt_with_replacements(template: str, mapping: dict) -> str:
-    prompt = str(template or "")
-    for key, value in (mapping or {}).items():
-        prompt = prompt.replace("{" + str(key) + "}", str(value or ""))
-    return prompt
-
-
-def _capability_reviews_reply(envelope: dict, user_data: dict) -> dict:
-    payload = envelope.get("payload") or {}
-    review_text = str(payload.get("review") or "").strip()
-    tone = str(payload.get("tone") or "профессиональный").strip()
-    language = str(payload.get("language") or "ru").strip()
-    examples = payload.get("examples") or []
-    if not review_text:
-        raise ValueError("review is required for reviews.reply")
-
-    language_names = {
-        "ru": "Russian",
-        "en": "English",
-        "es": "Spanish",
-        "de": "German",
-        "fr": "French",
-        "it": "Italian",
-        "pt": "Portuguese",
-        "zh": "Chinese",
-    }
-    language_name = language_names.get(language, "Russian")
-
-    examples_text = ""
-    if isinstance(examples, list) and examples:
-        examples_text = "\n".join([str(x) for x in examples[:5] if str(x).strip()])
-
-    prompt_template, prompt_version = get_prompt_record_from_db("review_reply", None)
-    if not prompt_template:
-        raise ValueError("Промпт review_reply не настроен в админ-панели.")
-
-    prompt = _format_prompt_with_replacements(
-        prompt_template,
-        {
-            "tone": tone,
-            "language_name": language_name,
-            "examples_text": examples_text,
-            "review_text": review_text[:1000],
-        },
-    )
-
-    tenant_id = envelope.get("tenant_id")
-    result_text = analyze_text_with_gigachat(
-        prompt,
-        task_type="review_reply",
-        business_id=tenant_id,
-        user_id=user_data["user_id"],
-    )
-    parsed = _extract_json_candidate(result_text if isinstance(result_text, str) else "")
-    if isinstance(parsed, dict) and parsed.get("error"):
-        raise ValueError(str(parsed.get("error")))
-
-    reply_text = ""
-    if isinstance(parsed, dict):
-        reply_text = str(parsed.get("reply") or parsed.get("text") or "").strip()
-    if not reply_text:
-        reply_text = str(result_text or "").strip()
-
-    return {
-        "result": {"reply": reply_text},
-        "billing": {
-            "total_tokens": 0,
-            "cost": 0.0,
-            "tool_calls": 1,
-            "tariff_id": str(((envelope.get("billing") or {}).get("tariff_id") or "")),
-        },
-    }
-
-
-def _capability_services_optimize(envelope: dict, user_data: dict) -> dict:
-    payload = envelope.get("payload") or {}
-    language = str(payload.get("language") or "ru").strip()
-    tone = str(payload.get("tone") or "профессиональный").strip()
-    length = int(payload.get("description_length") or 150)
-    instructions = str(payload.get("instructions") or "").strip()
-    business_name = str(payload.get("business_name") or "бизнес").strip()
-    region = str(payload.get("region") or "").strip()
-
-    original_name = str(payload.get("name") or payload.get("original_name") or "").strip()
-    original_description = str(payload.get("description") or payload.get("original_description") or "").strip()
-    content = (original_name + ("\n" + original_description if original_description else "")).strip()
-    if not content:
-        raise ValueError("service name/description is required for services.optimize")
-
-    language_names = {
-        "ru": "Russian",
-        "en": "English",
-        "es": "Spanish",
-        "de": "German",
-        "fr": "French",
-        "it": "Italian",
-        "pt": "Portuguese",
-        "zh": "Chinese",
-    }
-    language_name = language_names.get(language, "Russian")
-
-    tenant_id = envelope.get("tenant_id")
-    prompt_template, prompt_version = get_prompt_record_from_db("service_optimization", None)
-    if not prompt_template:
-        raise ValueError("Промпт service_optimization не настроен в админ-панели.")
-
-    seo_keywords = "No matched SEO keywords found"
-    seo_keywords_top10 = "No matched SEO keywords found"
-    try:
-        db_kw = DatabaseManager()
-        cur_kw = db_kw.conn.cursor()
-        seo_keywords, seo_keywords_top10 = build_seo_keywords_context_for_service(
-            cur_kw,
-            tenant_id,
-            user_data["user_id"],
-            original_name,
-            original_description,
-        )
-        db_kw.close()
-    except Exception:
-        pass
-
-    prompt = _format_prompt_with_replacements(
-        prompt_template,
-        {
-            "region": region or "не указан",
-            "business_name": business_name,
-            "industry": str(payload.get("industry") or "-"),
-            "business_type": str(payload.get("business_type") or "-"),
-            "tone": tone,
-            "language_name": language_name,
-            "length": length,
-            "instructions": instructions or "-",
-            "frequent_queries": "",
-            "seo_keywords": seo_keywords,
-            "seo_keywords_top10": seo_keywords_top10,
-            "good_examples": "",
-            "content": content[:4000],
-        },
-    )
-
-    result_text = analyze_text_with_gigachat(
-        prompt,
-        task_type="service_optimization",
-        business_id=tenant_id,
-        user_id=user_data["user_id"],
-    )
-    parsed = _extract_json_candidate(result_text if isinstance(result_text, str) else "")
-    if isinstance(parsed, dict) and parsed.get("error"):
-        raise ValueError(str(parsed.get("error")))
-
-    services = []
-    if isinstance(parsed, dict):
-        raw_services = parsed.get("services")
-        if isinstance(raw_services, list):
-            services = raw_services
-    elif isinstance(parsed, list):
-        services = parsed
-
-    if not services:
-        services = [{
-            "original_name": original_name,
-            "optimized_name": original_name,
-            "original_description": original_description,
-            "seo_description": original_description,
-            "keywords": [],
-            "price": payload.get("price"),
-            "category": payload.get("category") or "other",
-        }]
-
-    normalized_services = []
-    for svc in services:
-        if not isinstance(svc, dict):
-            continue
-        normalized_services.append({
-            "original_name": str(svc.get("original_name") or original_name or "").strip(),
-            "optimized_name": str(svc.get("optimized_name") or svc.get("name") or original_name or "").strip(),
-            "original_description": str(svc.get("original_description") or original_description or "").strip(),
-            "seo_description": str(svc.get("seo_description") or svc.get("description") or original_description or "").strip(),
-            "keywords": svc.get("keywords") if isinstance(svc.get("keywords"), list) else [],
-            "price": svc.get("price"),
-            "category": str(svc.get("category") or payload.get("category") or "other"),
-        })
-
-    return {
-        "result": {
-            "services": normalized_services,
-            "general_recommendations": [],
-        },
-        "billing": {
-            "total_tokens": 0,
-            "cost": 0.0,
-            "tool_calls": 1,
-            "tariff_id": str(((envelope.get("billing") or {}).get("tariff_id") or "")),
-        },
-    }
-
-
-def _load_table_columns(cursor, table_name: str) -> set[str]:
-    cursor.execute(
-        """
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE lower(table_name) = lower(%s)
-          AND table_schema = ANY (current_schemas(false))
-        """,
-        (table_name,),
-    )
-    return {str((row[0] if isinstance(row, tuple) else row.get("column_name")) or "").lower() for row in (cursor.fetchall() or [])}
-
-
-def _ensure_bookings_table(cursor) -> None:
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS Bookings (
-            id TEXT PRIMARY KEY,
-            business_id TEXT NOT NULL,
-            client_name TEXT,
-            client_phone TEXT NOT NULL,
-            client_email TEXT,
-            service_id TEXT,
-            service_name TEXT,
-            booking_time TIMESTAMP,
-            booking_time_local TEXT,
-            source TEXT DEFAULT 'openclaw',
-            status TEXT DEFAULT 'pending',
-            notes TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-
-
-def _parse_booking_datetime(payload: dict) -> datetime:
-    dt_raw = str(payload.get("booking_time") or payload.get("appointment_time") or "").strip()
-    if not dt_raw:
-        date_part = str(payload.get("booking_date") or "").strip()
-        time_part = str(payload.get("booking_time_hhmm") or payload.get("time") or "").strip()
-        if date_part and time_part:
-            dt_raw = f"{date_part}T{time_part}"
-    if not dt_raw:
-        raise ValueError("booking_time/appointment_time is required for appointments.create")
-    try:
-        return datetime.fromisoformat(dt_raw.replace("Z", "+00:00"))
-    except Exception as exc:
-        raise ValueError("booking_time must be ISO-8601 datetime") from exc
-
-
-def _capability_appointments_create(envelope: dict, user_data: dict) -> dict:
-    payload = envelope.get("payload") or {}
-    tenant_id = str(envelope.get("tenant_id") or "").strip()
-    if not tenant_id:
-        raise ValueError("tenant_id is required for appointments.create")
-
-    client_phone = str(payload.get("client_phone") or "").strip()
-    if not client_phone:
-        raise ValueError("client_phone is required for appointments.create")
-
-    booking_dt = _parse_booking_datetime(payload)
-    booking_id = str(uuid.uuid4())
-    client_name = str(payload.get("client_name") or "").strip() or "Клиент"
-    client_email = str(payload.get("client_email") or "").strip() or None
-    service_id = str(payload.get("service_id") or "").strip() or None
-    service_name = str(payload.get("service_name") or "").strip() or None
-    status = str(payload.get("status") or "pending").strip().lower()
-    notes = str(payload.get("notes") or "").strip() or None
-    source = str(payload.get("source") or "openclaw").strip().lower()
-
-    db = DatabaseManager()
-    try:
-        cursor = db.conn.cursor()
-        _ensure_bookings_table(cursor)
-        cursor.execute(
-            """
-            INSERT INTO Bookings
-                (id, business_id, client_name, client_phone, client_email, service_id, service_name,
-                 booking_time, booking_time_local, source, status, notes)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """,
-            (
-                booking_id,
-                tenant_id,
-                client_name,
-                client_phone,
-                client_email,
-                service_id,
-                service_name,
-                booking_dt.isoformat(),
-                booking_dt.strftime("%Y-%m-%d %H:%M:%S"),
-                source,
-                status,
-                notes,
-            ),
-        )
-        db.conn.commit()
-    finally:
-        db.close()
-
-    notification_sent = False
-    try:
-        from notifications import send_booking_notification
-
-        notification_sent = bool(send_booking_notification(tenant_id, booking_id))
-    except Exception:
-        notification_sent = False
-
-    return {
-        "result": {
-            "appointment_id": booking_id,
-            "booking_id": booking_id,
-            "status": status,
-            "notification_sent": notification_sent,
-        },
-        "billing": {
-            "total_tokens": 0,
-            "cost": 0.0,
-            "tool_calls": 1,
-            "tariff_id": str(((envelope.get("billing") or {}).get("tariff_id") or "")),
-        },
-    }
-
-
-def _capability_appointments_update(envelope: dict, user_data: dict) -> dict:
-    payload = envelope.get("payload") or {}
-    tenant_id = str(envelope.get("tenant_id") or "").strip()
-    if not tenant_id:
-        raise ValueError("tenant_id is required for appointments.update")
-
-    appointment_id = str(payload.get("appointment_id") or payload.get("booking_id") or "").strip()
-    if not appointment_id:
-        raise ValueError("appointment_id is required for appointments.update")
-
-    db = DatabaseManager()
-    try:
-        cursor = db.conn.cursor()
-        _ensure_bookings_table(cursor)
-        cursor.execute("SELECT business_id FROM Bookings WHERE id = %s LIMIT 1", (appointment_id,))
-        row = cursor.fetchone()
-        row_business_id = (row[0] if isinstance(row, tuple) else row.get("business_id")) if row else None
-        if not row_business_id:
-            raise ValueError("appointment not found")
-        if str(row_business_id) != tenant_id:
-            raise ValueError("tenant mismatch for appointment")
-
-        cols = _load_table_columns(cursor, "bookings")
-        updates = []
-        params = []
-
-        def add_if_present(payload_key: str, col_name: str):
-            if col_name not in cols:
-                return
-            if payload_key not in payload:
-                return
-            updates.append(f"{col_name} = %s")
-            params.append(payload.get(payload_key))
-
-        if payload.get("booking_time") or payload.get("appointment_time"):
-            booking_dt = _parse_booking_datetime(payload)
-            if "booking_time" in cols:
-                updates.append("booking_time = %s")
-                params.append(booking_dt.isoformat())
-            if "booking_time_local" in cols:
-                updates.append("booking_time_local = %s")
-                params.append(booking_dt.strftime("%Y-%m-%d %H:%M:%S"))
-
-        add_if_present("status", "status")
-        add_if_present("notes", "notes")
-        add_if_present("service_id", "service_id")
-        add_if_present("service_name", "service_name")
-        add_if_present("client_name", "client_name")
-        add_if_present("client_phone", "client_phone")
-        add_if_present("client_email", "client_email")
-
-        if "updated_at" in cols:
-            updates.append("updated_at = CURRENT_TIMESTAMP")
-
-        if not updates:
-            raise ValueError("no updatable fields in payload")
-
-        params.append(appointment_id)
-        cursor.execute(f"UPDATE Bookings SET {', '.join(updates)} WHERE id = %s", tuple(params))
-        db.conn.commit()
-    finally:
-        db.close()
-
-    return {
-        "result": {
-            "appointment_id": appointment_id,
-            "updated": True,
-        },
-        "billing": {
-            "total_tokens": 0,
-            "cost": 0.0,
-            "tool_calls": 1,
-            "tariff_id": str(((envelope.get("billing") or {}).get("tariff_id") or "")),
-        },
-    }
-
-
-def _capability_appointments_cancel(envelope: dict, user_data: dict) -> dict:
-    payload = envelope.get("payload") or {}
-    payload = {**payload, "status": "cancelled"}
-    reason = str(payload.get("reason") or "").strip()
-    if reason:
-        existing_notes = str(payload.get("notes") or "").strip()
-        payload["notes"] = f"{existing_notes}\nПричина отмены: {reason}".strip()
-    update_env = {**envelope, "payload": payload}
-    result = _capability_appointments_update(update_env, user_data)
-    result["result"]["status"] = "cancelled"
-    return result
-
-
-def _capability_reminders_send(envelope: dict, user_data: dict) -> dict:
-    payload = envelope.get("payload") or {}
-    tenant_id = str(envelope.get("tenant_id") or "").strip()
-    if not tenant_id:
-        raise ValueError("tenant_id is required for reminders.send")
-
-    appointment_id = str(payload.get("appointment_id") or payload.get("booking_id") or "").strip()
-    channel = str(payload.get("channel") or "whatsapp").strip().lower()
-    message = str(payload.get("message") or "").strip()
-    client_phone = str(payload.get("client_phone") or "").strip()
-
-    if appointment_id:
-        db = DatabaseManager()
-        try:
-            cursor = db.conn.cursor()
-            _ensure_bookings_table(cursor)
-            cursor.execute(
-                """
-                SELECT business_id, client_phone, client_name, service_name, booking_time
-                FROM Bookings
-                WHERE id = %s
-                LIMIT 1
-                """,
-                (appointment_id,),
-            )
-            row = cursor.fetchone()
-            if not row:
-                raise ValueError("appointment not found")
-            row_business_id = row[0] if isinstance(row, tuple) else row.get("business_id")
-            if str(row_business_id) != tenant_id:
-                raise ValueError("tenant mismatch for appointment")
-            client_phone = client_phone or str((row[1] if isinstance(row, tuple) else row.get("client_phone")) or "").strip()
-            client_name = str((row[2] if isinstance(row, tuple) else row.get("client_name")) or "клиент").strip()
-            service_name = str((row[3] if isinstance(row, tuple) else row.get("service_name")) or "услуга").strip()
-            booking_time = str((row[4] if isinstance(row, tuple) else row.get("booking_time")) or "").strip()
-        finally:
-            db.close()
-        if not message:
-            message = (
-                f"Напоминание о записи: {service_name}. "
-                f"Дата и время: {booking_time}. "
-                f"Если нужно перенести — ответьте на это сообщение."
-            )
-    else:
-        client_name = str(payload.get("client_name") or "клиент").strip()
-
-    if not client_phone:
-        raise ValueError("client_phone is required for reminders.send")
-    if not message:
-        raise ValueError("message is required for reminders.send")
-
-    from ai_agent_tools import send_message_to_client
-
-    sent_result = send_message_to_client(
-        business_id=tenant_id,
-        client_phone=client_phone,
-        message=message,
-        channel=channel,
-    )
-    if not sent_result.get("success"):
-        raise ValueError(str(sent_result.get("error") or "failed to send reminder"))
-
-    return {
-        "result": {
-            "sent": True,
-            "channel": channel,
-            "client_phone": client_phone,
-            "client_name": client_name,
-            "appointment_id": appointment_id or None,
-        },
-        "billing": {
-            "total_tokens": 0,
-            "cost": 0.0,
-            "tool_calls": 1,
-            "tariff_id": str(((envelope.get("billing") or {}).get("tariff_id") or "")),
-        },
-    }
-
-
-def _normalize_news_text(value: str) -> str:
-    text = str(value or "").strip()
-    if not text:
-        return ""
-    parsed = _extract_json_candidate(text)
-    if isinstance(parsed, dict):
-        text = str(parsed.get("news") or parsed.get("text") or text)
-    if text.startswith("{") and '"news"' in text:
-        try:
-            candidate = _extract_json_candidate(text)
-            if isinstance(candidate, dict) and candidate.get("news"):
-                text = str(candidate.get("news"))
-        except Exception:
-            pass
-    return text.replace('\\"', '"').replace("\\n", "\n").strip()
-
-
-def _topic_tokens(text: str) -> set[str]:
-    tokens = re.findall(r"[A-Za-zА-Яа-яЁё0-9]+", (text or "").lower())
-    stop = {"для", "про", "услуга", "услуги", "новость", "и", "в", "на", "по", "the", "and", "for"}
-    return {t for t in tokens if len(t) >= 3 and t not in stop}
-
-
-def _news_mentions_service(news_text: str, service_name: str) -> bool:
-    news = (news_text or "").strip().lower()
-    service = (service_name or "").strip().lower()
-    if not news or not service:
-        return False
-    if service in news:
-        return True
-    service_tokens = _topic_tokens(service)
-    if not service_tokens:
-        return False
-    overlap = service_tokens & _topic_tokens(news)
-    if len(service_tokens) == 1:
-        return len(overlap) >= 1
-    return len(overlap) >= min(2, len(service_tokens))
-
-
-def _service_news_fallback(service_name: str, service_description: str, language: str = "ru") -> str:
-    name = (service_name or "").strip() or "услуга"
-    desc = (service_description or "").strip()
-    if str(language).lower() == "en":
-        if desc:
-            return f"Introducing {name}. {desc} Contact us to book and learn details."
-        return f"Introducing {name}. Contact us to book and learn details."
-    if desc:
-        return f"Представляем услугу «{name}». {desc} Запишитесь и узнайте подробности у администратора."
-    return f"Представляем услугу «{name}». Запишитесь и узнайте подробности у администратора."
-
-
-SOCIAL_FORMAT_LABELS = {
-    "announce": "анонс",
-    "case": "кейс",
-    "promo": "акция",
-}
-
-
-def _normalize_social_format(raw_value: str | None) -> str | None:
-    value = str(raw_value or "").strip().lower()
-    if not value:
-        return None
-    aliases = {
-        "анонс": "announce",
-        "announcement": "announce",
-        "announce": "announce",
-        "кейс": "case",
-        "case": "case",
-        "акция": "promo",
-        "promo": "promo",
-        "promotion": "promo",
-    }
-    return aliases.get(value)
-
-
-def _ensure_user_news_table(cursor) -> None:
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS UserNews (
-            id TEXT PRIMARY KEY,
-            user_id TEXT NOT NULL,
-            service_id TEXT,
-            source_text TEXT,
-            generated_text TEXT NOT NULL,
-            approved INTEGER DEFAULT 0,
-            content_mode TEXT DEFAULT 'news',
-            social_format TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    cursor.execute("ALTER TABLE UserNews ADD COLUMN IF NOT EXISTS content_mode TEXT DEFAULT 'news'")
-    cursor.execute("ALTER TABLE UserNews ADD COLUMN IF NOT EXISTS social_format TEXT")
-    cursor.execute("ALTER TABLE UserNews ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
-
-
-def _capability_news_generate(envelope: dict, user_data: dict) -> dict:
-    payload = envelope.get("payload") or {}
-    tenant_id = str(envelope.get("tenant_id") or "").strip()
-    if not tenant_id:
-        raise ValueError("tenant_id is required for news.generate")
-
-    language = str(payload.get("language") or "ru").strip()
-    language_names = {
-        "ru": "Russian",
-        "en": "English",
-        "es": "Spanish",
-        "de": "German",
-        "fr": "French",
-        "it": "Italian",
-        "pt": "Portuguese",
-        "zh": "Chinese",
-    }
-    language_name = language_names.get(language, "Russian")
-
-    use_service = bool(payload.get("use_service"))
-    use_transaction = bool(payload.get("use_transaction"))
-    use_seo_keywords = bool(payload.get("use_seo_keywords"))
-    selected_seo_keyword = str(payload.get("selected_seo_keyword") or "").strip()
-    selected_service_id = payload.get("service_id")
-    selected_transaction_id = payload.get("transaction_id")
-    raw_info = str(payload.get("raw_info") or "").strip()
-    content_mode = str(payload.get("content_mode") or "news").strip().lower()
-    if content_mode not in {"news", "social"}:
-        content_mode = "news"
-    social_format = _normalize_social_format(payload.get("social_format"))
-    if content_mode == "social" and not social_format:
-        social_format = "announce"
-    if content_mode != "social":
-        social_format = None
-
-    db = DatabaseManager()
-    cursor = db.conn.cursor()
-    try:
-        _ensure_user_news_table(cursor)
-
-        service_context = ""
-        selected_service_name = ""
-        selected_service_description = ""
-        transaction_context = ""
-
-        userservices_cols = _load_table_columns(cursor, "userservices")
-        if use_service and selected_service_id:
-            where_parts = ["id = %s"]
-            params = [selected_service_id]
-            if "business_id" in userservices_cols:
-                where_parts.append("business_id = %s")
-                params.append(tenant_id)
-            elif "user_id" in userservices_cols:
-                where_parts.append("user_id = %s")
-                params.append(user_data["user_id"])
-            cursor.execute(
-                f"""
-                SELECT name, description
-                FROM UserServices
-                WHERE {' AND '.join(where_parts)}
-                LIMIT 1
-                """,
-                tuple(params),
-            )
-            row = cursor.fetchone()
-            if row:
-                selected_service_name = str(row[0] if isinstance(row, tuple) else row.get("name") or "").strip()
-                selected_service_description = str(row[1] if isinstance(row, tuple) else row.get("description") or "").strip()
-                service_context = f"Услуга: {selected_service_name}. Описание: {selected_service_description}"
-
-        if use_transaction and selected_transaction_id:
-            cursor.execute(
-                """
-                SELECT transaction_date, amount, services, notes
-                FROM FinancialTransactions
-                WHERE id = %s
-                  AND (
-                    business_id = %s
-                    OR user_id = %s
-                  )
-                LIMIT 1
-                """,
-                (selected_transaction_id, tenant_id, user_data["user_id"]),
-            )
-            tx = cursor.fetchone()
-            if tx:
-                tx_date = tx[0] if isinstance(tx, tuple) else tx.get("transaction_date")
-                amount = tx[1] if isinstance(tx, tuple) else tx.get("amount")
-                services_raw = tx[2] if isinstance(tx, tuple) else tx.get("services")
-                notes = tx[3] if isinstance(tx, tuple) else tx.get("notes")
-                services_list = []
-                if isinstance(services_raw, list):
-                    services_list = services_raw
-                elif isinstance(services_raw, str) and services_raw.strip():
-                    try:
-                        parsed_services = json.loads(services_raw)
-                        if isinstance(parsed_services, list):
-                            services_list = parsed_services
-                    except Exception:
-                        services_list = [services_raw]
-                services_str = ", ".join([str(x).strip() for x in services_list if str(x).strip()]) or "Услуги"
-                transaction_context = f"Выполнена работа: {services_str}. Дата: {tx_date}. Сумма: {amount}₽. {notes or ''}"
-
-        news_examples = ""
-        try:
-            from core.db_helpers import ensure_user_examples_table
-
-            ensure_user_examples_table(cursor)
-            cursor.execute(
-                "SELECT example_text FROM UserExamples WHERE user_id = %s AND example_type = 'news' ORDER BY created_at DESC LIMIT 5",
-                (user_data["user_id"],),
-            )
-            examples_rows = cursor.fetchall() or []
-            examples = []
-            for row in examples_rows:
-                if isinstance(row, tuple):
-                    examples.append(str(row[0] or ""))
-                elif hasattr(row, "keys"):
-                    examples.append(str(row.get("example_text") or ""))
-            news_examples = "\n".join([x for x in examples if x.strip()])
-        except Exception:
-            news_examples = ""
-
-        if use_service and selected_service_name:
-            seo_keywords, seo_keywords_top10 = build_seo_keywords_context_for_service(
-                cursor,
-                tenant_id,
-                user_data["user_id"],
-                selected_service_name,
-                selected_service_description,
-            )
-        else:
-            seo_keywords, seo_keywords_top10 = build_seo_keywords_context(cursor, tenant_id, user_data["user_id"])
-
-        seo_generation_hint = ""
-        if use_seo_keywords:
-            seo_generation_hint = (
-                "Режим генерации: SEO-first. Сначала выбери 1-2 самых частотных SEO-запроса из блока WORDSTAT, "
-                "затем естественно свяжи их с реальными услугами бизнеса."
-            )
-            if selected_seo_keyword:
-                seo_generation_hint += f" Приоритетный ключ: {selected_seo_keyword}."
-        if content_mode == "social":
-            format_label = SOCIAL_FORMAT_LABELS.get(social_format or "", social_format or "пост")
-            seo_generation_hint += (
-                " Формат результата: короткий пост для соцсетей (1-2 абзаца + CTA, без markdown/JSON)."
-                f" Приоритетный формат: {format_label}."
-            )
-
-        prompt_key = "news_generation"
-        prompt_template = None
-        prompt_version = None
-        prompt_candidates = ["news_generation"]
-        if content_mode == "social":
-            prompt_candidates = ["news_social_generation", "social_media_generation", "news_generation"]
-        route_seed = f"{user_data.get('user_id')}:{datetime.utcnow().timestamp()}:{raw_info[:64]}"
-        for candidate in prompt_candidates:
-            prompt_template, prompt_version = get_prompt_record_from_db(
-                candidate,
-                None,
-                route_seed if candidate == "news_social_generation" else None,
-            )
-            if prompt_template:
-                prompt_key = candidate
-                break
-        if not prompt_template:
-            raise ValueError("Промпт news_generation не настроен в админ-панели.")
-
-        prompt = _format_prompt_with_replacements(
-            prompt_template,
-            {
-                "language_name": language_name,
-                "service_context": service_context,
-                "transaction_context": transaction_context,
-                "raw_info": raw_info[:800],
-                "seo_keywords": seo_keywords,
-                "seo_keywords_top10": seo_keywords_top10,
-                "seo_generation_hint": seo_generation_hint,
-                "news_examples": news_examples,
-            },
-        )
-
-        result_text = analyze_text_with_gigachat(
-            prompt,
-            task_type="news_generation",
-            business_id=tenant_id,
-            user_id=user_data["user_id"],
-        )
-        generated_text = _normalize_news_text(result_text if isinstance(result_text, str) else str(result_text))
-        if not generated_text:
-            raise ValueError("Пустой результат генерации")
-
-        if use_service and selected_service_name and not _news_mentions_service(generated_text, selected_service_name):
-            generated_text = _service_news_fallback(selected_service_name, selected_service_description, language)
-
-        news_id = str(uuid.uuid4())
-        cursor.execute(
-            """
-            INSERT INTO UserNews (id, user_id, service_id, source_text, generated_text, content_mode, social_format)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """,
-            (news_id, user_data["user_id"], selected_service_id, raw_info, generated_text, content_mode, social_format),
-        )
-        db.conn.commit()
-    finally:
-        db.close()
-
-    return {
-        "result": {
-            "news_id": news_id,
-            "generated_text": generated_text,
-            "content_mode": content_mode,
-            "social_format": social_format,
-        },
-        "billing": {
-            "total_tokens": 0,
-            "cost": 0.0,
-            "tool_calls": 1,
-            "tariff_id": str(((envelope.get("billing") or {}).get("tariff_id") or "")),
-        },
-    }
-
-
-def _capability_sales_ingest(envelope: dict, user_data: dict) -> dict:
-    payload = envelope.get("payload") or {}
-    tenant_id = str(envelope.get("tenant_id") or "").strip()
-    if not tenant_id:
-        raise ValueError("tenant_id is required for sales.ingest")
-
-    transactions = payload.get("transactions")
-    if not isinstance(transactions, list):
-        single = payload.get("transaction")
-        transactions = [single] if isinstance(single, dict) else []
-    if not transactions:
-        raise ValueError("transactions payload is required for sales.ingest")
-
-    db = DatabaseManager()
-    cursor = db.conn.cursor()
-    inserted = []
-    total_amount = 0.0
-    try:
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS FinancialTransactions (
-                id TEXT PRIMARY KEY,
-                user_id TEXT,
-                business_id TEXT,
-                transaction_date DATE,
-                amount REAL,
-                client_type TEXT,
-                services TEXT,
-                notes TEXT,
-                master_id TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-        cols = _load_table_columns(cursor, "financialtransactions")
-        if not cols:
-            raise ValueError("FinancialTransactions table is unavailable")
-
-        for item in transactions:
-            if not isinstance(item, dict):
-                continue
-            tx_id = str(uuid.uuid4())
-            tx_date = str(item.get("transaction_date") or datetime.now().strftime("%Y-%m-%d"))
-            amount = float(item.get("amount") or 0.0)
-            transaction_type = str(item.get("transaction_type") or ("income" if amount >= 0 else "expense")).strip().lower()
-            client_type = str(item.get("client_type") or "new")
-            notes = str(item.get("notes") or "")
-            services = item.get("services")
-            if isinstance(services, str):
-                services_value = json.dumps([services], ensure_ascii=False)
-            elif isinstance(services, list):
-                services_value = json.dumps([str(x) for x in services], ensure_ascii=False)
-            else:
-                services_value = json.dumps([], ensure_ascii=False)
-            master_id = item.get("master_id")
-
-            insert_cols = ["id"]
-            params = [tx_id]
-            if "user_id" in cols:
-                insert_cols.append("user_id")
-                params.append(str(user_data["user_id"]))
-            if "business_id" in cols:
-                insert_cols.append("business_id")
-                params.append(tenant_id)
-            if "transaction_date" in cols:
-                insert_cols.append("transaction_date")
-                params.append(tx_date)
-            if "amount" in cols:
-                insert_cols.append("amount")
-                params.append(amount)
-            if "transaction_type" in cols:
-                insert_cols.append("transaction_type")
-                params.append(transaction_type)
-            if "client_type" in cols:
-                insert_cols.append("client_type")
-                params.append(client_type)
-            if "services" in cols:
-                insert_cols.append("services")
-                params.append(services_value)
-            if "notes" in cols:
-                insert_cols.append("notes")
-                params.append(notes)
-            if "master_id" in cols and master_id:
-                insert_cols.append("master_id")
-                params.append(str(master_id))
-
-            placeholders = ", ".join(["%s"] * len(insert_cols))
-            cursor.execute(
-                f"INSERT INTO FinancialTransactions ({', '.join(insert_cols)}) VALUES ({placeholders})",
-                tuple(params),
-            )
-            inserted.append({"transaction_id": tx_id, "amount": amount, "transaction_date": tx_date})
-            total_amount += amount
-
-        if not inserted:
-            raise ValueError("No valid transactions to ingest")
-
-        db.conn.commit()
-    finally:
-        db.close()
-
-    return {
-        "result": {
-            "inserted_count": len(inserted),
-            "total_amount": round(total_amount, 2),
-            "transactions": inserted,
-        },
-        "billing": {
-            "total_tokens": 0,
-            "cost": 0.0,
-            "tool_calls": 1,
-            "tariff_id": str(((envelope.get("billing") or {}).get("tariff_id") or "")),
-        },
-    }
-
-
-PHASE1_ACTION_ORCHESTRATOR = ActionOrchestrator(
-    handlers={
-        "reviews.reply": _capability_reviews_reply,
-        "services.optimize": _capability_services_optimize,
-        "appointments.create": _capability_appointments_create,
-        "appointments.update": _capability_appointments_update,
-        "appointments.cancel": _capability_appointments_cancel,
-        "reminders.send": _capability_reminders_send,
-        "news.generate": _capability_news_generate,
-        "sales.ingest": _capability_sales_ingest,
-    }
-)
-
-
-CAPABILITY_CATALOG = {
-    "reviews.reply": {
-        "approval_default": {"mode": "auto", "ttl_sec": 1800},
-        "payload_required": ["review"],
-    },
-    "services.optimize": {
-        "approval_default": {"mode": "auto", "ttl_sec": 1800},
-        "payload_required": ["name"],
-    },
-    "appointments.create": {
-        "approval_default": {"mode": "auto", "ttl_sec": 1800},
-        "payload_required": ["client_phone", "appointment_time"],
-    },
-    "appointments.update": {
-        "approval_default": {"mode": "auto", "ttl_sec": 1800},
-        "payload_required": ["appointment_id"],
-    },
-    "appointments.cancel": {
-        "approval_default": {"mode": "auto", "ttl_sec": 1800},
-        "payload_required": ["appointment_id"],
-    },
-    "reminders.send": {
-        "approval_default": {"mode": "auto", "ttl_sec": 1800},
-        "payload_required": ["client_phone", "message"],
-    },
-    "news.generate": {
-        "approval_default": {"mode": "auto", "ttl_sec": 1800},
-        "payload_required": [],
-    },
-    "sales.ingest": {
-        "approval_default": {"mode": "auto", "ttl_sec": 1800},
-        "payload_required": ["transactions"],
-    },
-}
-
-
-def _capability_catalog_response():
-    return {
-        "success": True,
-        "version": "1.1.0-phase2",
-        "required_envelope_fields": [
-            "tenant_id",
-            "actor",
-            "trace_id",
-            "idempotency_key",
-            "capability",
-            "approval",
-            "billing",
-        ],
-        "capabilities": CAPABILITY_CATALOG,
-    }
-
-
-def _env_bool(name: str, default: bool) -> bool:
-    value = os.getenv(name)
+def _normalize_text_for_semantic_compare(value: str) -> str:
+    """Нормализует строку для сравнения «по смыслу» (без регистра/пунктуации/лишних пробелов)."""
+    import re as _re
     if value is None:
-        return default
-    return str(value).strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _resolve_tenant_owner_id(tenant_id: str):
-    db = DatabaseManager()
-    try:
-        cursor = db.conn.cursor()
-        cursor.execute("SELECT owner_id FROM businesses WHERE id = %s LIMIT 1", (tenant_id,))
-        row = cursor.fetchone()
-        if not row:
-            return None
-        if hasattr(row, "get"):
-            return row.get("owner_id")
-        if isinstance(row, (tuple, list)):
-            return row[0] if len(row) > 0 else None
-        return None
-    finally:
-        db.close()
-
-
-def _authenticate_openclaw_request():
-    expected = os.getenv("OPENCLAW_LOCALOS_TOKEN", "").strip()
-    provided = request.headers.get("X-OpenClaw-Token", "").strip()
-    if not expected:
-        return False, "OPENCLAW_LOCALOS_TOKEN is not configured"
-    if not provided:
-        return False, "X-OpenClaw-Token header is required"
-    if not secrets.compare_digest(expected, provided):
-        return False, "invalid integration token"
-    return True, ""
-
-
-def _openclaw_service_user(tenant_id: str):
-    owner_id = _resolve_tenant_owner_id(tenant_id)
-    if not owner_id:
-        return None
-    return {
-        "user_id": str(owner_id),
-        "id": str(owner_id),
-        "is_superadmin": False,
-        "email": "openclaw@system.local",
-        "name": "OpenClaw Service",
-    }
-
-
-def _build_openclaw_capabilities_health(user_data: dict, tenant_id: str, window_minutes: int | str = 60, *, persist: bool = True):
-    metrics_result = PHASE1_ACTION_ORCHESTRATOR.get_callback_metrics(
-        user_data,
-        tenant_id=tenant_id,
-        window_minutes=window_minutes,
-    )
-    http_code = int(metrics_result.pop("http_code", 200))
-    if not metrics_result.get("success"):
-        return metrics_result, http_code
-
-    metrics = metrics_result.get("metrics") or {}
-    dlq = int(metrics.get("dlq") or 0)
-    stuck_retry = int(metrics.get("stuck_retry") or 0)
-    retry = int(metrics.get("retry") or 0)
-    callbacks_enabled = _env_bool("OPENCLAW_CALLBACK_DISPATCH_ENABLED", True)
-    token_configured = bool(os.getenv("OPENCLAW_LOCALOS_TOKEN", "").strip())
-    ready = bool(token_configured and callbacks_enabled and dlq == 0 and stuck_retry == 0)
-    health_status = "ready" if ready else "degraded"
-    checks = {
-        "token_configured": token_configured,
-        "callbacks_enabled": callbacks_enabled,
-        "dlq_count": dlq,
-        "retry_backlog": retry,
-        "stuck_retry": stuck_retry,
-    }
-    alerts = metrics_result.get("alerts") or []
-    window = int(metrics_result.get("window_minutes") or 60)
-
-    snapshot_id = None
-    if persist:
-        snapshot_result = PHASE1_ACTION_ORCHESTRATOR.record_capability_health_snapshot(
-            user_data,
-            tenant_id=tenant_id,
-            status=health_status,
-            ready=ready,
-            checks=checks,
-            metrics=metrics,
-            alerts=alerts,
-            window_minutes=window,
-        )
-        if snapshot_result.get("success"):
-            snapshot_id = snapshot_result.get("snapshot_id")
-
-    return {
-        "success": True,
-        "tenant_id": tenant_id,
-        "status": health_status,
-        "ready": ready,
-        "checks": checks,
-        "metrics": metrics,
-        "alerts": alerts,
-        "window_minutes": window,
-        "snapshot_id": snapshot_id,
-    }, 200
-
-
-@app.route('/api/capabilities/execute', methods=['POST', 'OPTIONS'])
-def capabilities_execute():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    envelope = request.get_json(silent=True) or {}
-    if not isinstance(envelope, dict):
-        return jsonify({"error": "Invalid JSON body"}), 400
-
-    # business_id == tenant_id в текущей tenant-модели
-    if not envelope.get("tenant_id"):
-        requested_business_id = envelope.get("business_id") or request.args.get("business_id")
-        envelope["tenant_id"] = get_business_id_from_user(user_data["user_id"], requested_business_id)
-
-    if not envelope.get("trace_id"):
-        envelope["trace_id"] = str(uuid.uuid4())
-    if not envelope.get("idempotency_key"):
-        envelope["idempotency_key"] = str(uuid.uuid4())
-    if not envelope.get("actor") or not isinstance(envelope.get("actor"), dict):
-        envelope["actor"] = {}
-    envelope["actor"].setdefault("id", user_data.get("user_id"))
-    envelope["actor"].setdefault("type", "user")
-    envelope["actor"].setdefault("role", "owner")
-    envelope["actor"].setdefault("channel", "api")
-    envelope.setdefault("approval", {"mode": "auto", "ttl_sec": 1800})
-    envelope.setdefault("billing", {"tariff_id": "", "reserve_tokens": 2000})
-    envelope.setdefault("payload", {})
-
-    result = PHASE1_ACTION_ORCHESTRATOR.execute(envelope, user_data)
-    status = result.get("status")
-    http_code = 200
-    if status == "failed":
-        http_code = 400
-    return jsonify(result), http_code
-
-
-@app.route('/api/openclaw/capabilities/execute', methods=['POST', 'OPTIONS'])
-def openclaw_capabilities_execute():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    envelope = request.get_json(silent=True) or {}
-    if not isinstance(envelope, dict):
-        return jsonify({"success": False, "error": "Invalid JSON body"}), 400
-
-    tenant_id = str(envelope.get("tenant_id") or "").strip()
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    service_user = _openclaw_service_user(tenant_id)
-    if not service_user:
-        return jsonify({"success": False, "error": "tenant_id not found"}), 404
-
-    if not envelope.get("trace_id"):
-        envelope["trace_id"] = str(uuid.uuid4())
-    if not envelope.get("idempotency_key"):
-        envelope["idempotency_key"] = str(uuid.uuid4())
-    if not envelope.get("actor") or not isinstance(envelope.get("actor"), dict):
-        envelope["actor"] = {}
-    envelope["actor"].setdefault("id", service_user["user_id"])
-    envelope["actor"].setdefault("type", "system")
-    envelope["actor"].setdefault("role", "openclaw")
-    envelope["actor"].setdefault("channel", "openclaw")
-    envelope.setdefault("approval", {"mode": "auto", "ttl_sec": 1800})
-    envelope.setdefault("billing", {"tariff_id": "openclaw-default", "reserve_tokens": 2000})
-    envelope.setdefault("payload", {})
-    envelope["tenant_id"] = tenant_id
-
-    result = PHASE1_ACTION_ORCHESTRATOR.execute(envelope, service_user)
-    return jsonify(result), (200 if result.get("status") != "failed" else 400)
-
-
-@app.route('/api/openclaw/capabilities/catalog', methods=['GET', 'OPTIONS'])
-def openclaw_capabilities_catalog():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    return jsonify(_capability_catalog_response()), 200
-
-
-@app.route('/api/openclaw/capabilities/health', methods=['GET', 'OPTIONS'])
-def openclaw_capabilities_health():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    tenant_id = str(request.args.get("tenant_id") or "").strip()
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    service_user = _openclaw_service_user(tenant_id)
-    if not service_user:
-        return jsonify({"success": False, "error": "tenant_id not found"}), 404
-
-    window_minutes = request.args.get("window_minutes", 60)
-    payload, code = _build_openclaw_capabilities_health(service_user, tenant_id, window_minutes, persist=True)
-    return jsonify(payload), code
-
-
-@app.route('/api/openclaw/capabilities/health/trend', methods=['GET', 'OPTIONS'])
-def openclaw_capabilities_health_trend():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    tenant_id = str(request.args.get("tenant_id") or "").strip()
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    service_user = _openclaw_service_user(tenant_id)
-    if not service_user:
-        return jsonify({"success": False, "error": "tenant_id not found"}), 404
-
-    window_minutes = request.args.get("window_minutes", 24 * 60)
-    limit = request.args.get("limit", 200)
-    result = PHASE1_ACTION_ORCHESTRATOR.get_capability_health_trend(
-        service_user,
-        tenant_id=tenant_id,
-        window_minutes=window_minutes,
-        limit=limit,
-    )
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/openclaw/capabilities/actions/<action_id>', methods=['GET', 'OPTIONS'])
-def openclaw_capabilities_action_status(action_id):
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    tenant_id = str(request.args.get("tenant_id") or "").strip()
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    service_user = _openclaw_service_user(tenant_id)
-    if not service_user:
-        return jsonify({"success": False, "error": "tenant_id not found"}), 404
-
-    result = PHASE1_ACTION_ORCHESTRATOR.get_action(action_id, service_user)
-    if result.get("success") and str(result.get("tenant_id") or "") != tenant_id:
-        return jsonify({"success": False, "error": "tenant mismatch"}), 403
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/openclaw/capabilities/actions/<action_id>/billing', methods=['GET', 'OPTIONS'])
-def openclaw_capabilities_action_billing(action_id):
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    tenant_id = str(request.args.get("tenant_id") or "").strip()
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    service_user = _openclaw_service_user(tenant_id)
-    if not service_user:
-        return jsonify({"success": False, "error": "tenant_id not found"}), 404
-
-    result = PHASE1_ACTION_ORCHESTRATOR.get_action_billing(action_id, service_user)
-    if result.get("success") and str(result.get("tenant_id") or "") != tenant_id:
-        return jsonify({"success": False, "error": "tenant mismatch"}), 403
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/openclaw/capabilities/actions/<action_id>/timeline', methods=['GET', 'OPTIONS'])
-def openclaw_capabilities_action_timeline(action_id):
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    tenant_id = str(request.args.get("tenant_id") or "").strip()
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    service_user = _openclaw_service_user(tenant_id)
-    if not service_user:
-        return jsonify({"success": False, "error": "tenant_id not found"}), 404
-
-    limit = request.args.get("limit", 200)
-    offset = request.args.get("offset", 0)
-    source = str(request.args.get("source", "")).strip() or None
-    event_type = str(request.args.get("event_type", "")).strip() or None
-    status = str(request.args.get("status", "")).strip() or None
-    search = str(request.args.get("search", "")).strip() or None
-    only_problematic_raw = str(request.args.get("only_problematic", "")).strip().lower()
-    only_problematic = only_problematic_raw in {"1", "true", "yes", "on"}
-    result = PHASE1_ACTION_ORCHESTRATOR.get_action_timeline(
-        action_id,
-        service_user,
-        limit=limit,
-        offset=offset,
-        source=source,
-        event_type=event_type,
-        status=status,
-        search=search,
-        only_problematic=only_problematic,
-    )
-    if result.get("success") and str(result.get("tenant_id") or "") != tenant_id:
-        return jsonify({"success": False, "error": "tenant mismatch"}), 403
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/openclaw/capabilities/actions/<action_id>/callback-attempts', methods=['GET', 'OPTIONS'])
-def openclaw_capabilities_action_callback_attempts(action_id):
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    tenant_id = str(request.args.get("tenant_id") or "").strip()
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    service_user = _openclaw_service_user(tenant_id)
-    if not service_user:
-        return jsonify({"success": False, "error": "tenant_id not found"}), 404
-
-    limit = request.args.get("limit", 100)
-    offset = request.args.get("offset", 0)
-    success_raw = str(request.args.get("success", "")).strip().lower()
-    success = None
-    if success_raw in {"1", "true", "yes", "on"}:
-        success = True
-    elif success_raw in {"0", "false", "no", "off"}:
-        success = False
-    event_type = str(request.args.get("event_type", "")).strip() or None
-    result = PHASE1_ACTION_ORCHESTRATOR.list_action_callback_attempts(
-        action_id, service_user, limit=limit, offset=offset, success=success, event_type=event_type
-    )
-    if result.get("success") and str(result.get("tenant_id") or "") != tenant_id:
-        return jsonify({"success": False, "error": "tenant mismatch"}), 403
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/openclaw/capabilities/actions/<action_id>/support-package', methods=['GET', 'OPTIONS'])
-def openclaw_capabilities_action_support_package(action_id):
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    tenant_id = str(request.args.get("tenant_id") or "").strip()
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    service_user = _openclaw_service_user(tenant_id)
-    if not service_user:
-        return jsonify({"success": False, "error": "tenant_id not found"}), 404
-
-    limit = request.args.get("limit", 200)
-    offset = request.args.get("offset", 0)
-    source = str(request.args.get("source", "")).strip() or None
-    event_type = str(request.args.get("event_type", "")).strip() or None
-    status = str(request.args.get("status", "")).strip() or None
-    search = str(request.args.get("search", "")).strip() or None
-    only_problematic_raw = str(request.args.get("only_problematic", "")).strip().lower()
-    only_problematic = only_problematic_raw in {"1", "true", "yes", "on"}
-    full_raw = str(request.args.get("full", "")).strip().lower()
-    full = full_raw in {"1", "true", "yes", "on"}
-    result = PHASE1_ACTION_ORCHESTRATOR.get_action_support_package(
-        action_id,
-        service_user,
-        limit=limit,
-        offset=offset,
-        source=source,
-        event_type=event_type,
-        status=status,
-        search=search,
-        only_problematic=only_problematic,
-        full=full,
-    )
-    if result.get("success") and str(result.get("tenant_id") or "") != tenant_id:
-        return jsonify({"success": False, "error": "tenant mismatch"}), 403
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/openclaw/capabilities/actions/<action_id>/diagnostics-bundle', methods=['GET', 'OPTIONS'])
-def openclaw_capabilities_action_diagnostics_bundle(action_id):
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    tenant_id = str(request.args.get("tenant_id") or "").strip()
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    service_user = _openclaw_service_user(tenant_id)
-    if not service_user:
-        return jsonify({"success": False, "error": "tenant_id not found"}), 404
-
-    limit = request.args.get("limit", 200)
-    offset = request.args.get("offset", 0)
-    source = str(request.args.get("source", "")).strip() or None
-    event_type = str(request.args.get("event_type", "")).strip() or None
-    status = str(request.args.get("status", "")).strip() or None
-    search = str(request.args.get("search", "")).strip() or None
-    only_problematic_raw = str(request.args.get("only_problematic", "")).strip().lower()
-    only_problematic = only_problematic_raw in {"1", "true", "yes", "on"}
-    full_raw = str(request.args.get("full", "")).strip().lower()
-    full = full_raw in {"1", "true", "yes", "on"}
-
-    attempts_limit = request.args.get("attempts_limit", 200)
-    attempts_offset = request.args.get("attempts_offset", 0)
-    attempts_success_raw = str(request.args.get("attempts_success", "")).strip().lower()
-    attempts_success = None
-    if attempts_success_raw in {"1", "true", "yes", "on"}:
-        attempts_success = True
-    elif attempts_success_raw in {"0", "false", "no", "off"}:
-        attempts_success = False
-    attempts_event_type = str(request.args.get("attempts_event_type", "")).strip() or None
-    attempts_full_raw = str(request.args.get("attempts_full", "")).strip().lower()
-    attempts_full = attempts_full_raw in {"1", "true", "yes", "on"}
-    response_format = str(request.args.get("format", "")).strip().lower()
-
-    result = PHASE1_ACTION_ORCHESTRATOR.get_action_diagnostics_bundle(
-        action_id,
-        service_user,
-        limit=limit,
-        offset=offset,
-        source=source,
-        event_type=event_type,
-        status=status,
-        search=search,
-        only_problematic=only_problematic,
-        full=full,
-        attempts_limit=attempts_limit,
-        attempts_offset=attempts_offset,
-        attempts_success=attempts_success,
-        attempts_event_type=attempts_event_type,
-        attempts_full=attempts_full,
-    )
-    if result.get("success") and str(result.get("tenant_id") or "") != tenant_id:
-        return jsonify({"success": False, "error": "tenant mismatch"}), 403
-    if result.get("success") and response_format == "markdown":
-        result["markdown_report"] = PHASE1_ACTION_ORCHESTRATOR.render_action_diagnostics_markdown(result)
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/openclaw/capabilities/actions/<action_id>/lifecycle-summary', methods=['GET', 'OPTIONS'])
-def openclaw_capabilities_action_lifecycle_summary(action_id):
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    tenant_id = str(request.args.get("tenant_id") or "").strip()
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    service_user = _openclaw_service_user(tenant_id)
-    if not service_user:
-        return jsonify({"success": False, "error": "tenant_id not found"}), 404
-
-    limit = request.args.get("limit", 200)
-    offset = request.args.get("offset", 0)
-    source = str(request.args.get("source", "")).strip() or None
-    event_type = str(request.args.get("event_type", "")).strip() or None
-    status = str(request.args.get("status", "")).strip() or None
-    search = str(request.args.get("search", "")).strip() or None
-    only_problematic_raw = str(request.args.get("only_problematic", "")).strip().lower()
-    only_problematic = only_problematic_raw in {"1", "true", "yes", "on"}
-    full_raw = str(request.args.get("full", "true")).strip().lower()
-    full = full_raw in {"1", "true", "yes", "on"}
-    result = PHASE1_ACTION_ORCHESTRATOR.get_action_lifecycle_summary(
-        action_id,
-        service_user,
-        limit=limit,
-        offset=offset,
-        source=source,
-        event_type=event_type,
-        status=status,
-        search=search,
-        only_problematic=only_problematic,
-        full=full,
-    )
-    if result.get("success") and str(result.get("tenant_id") or "") != tenant_id:
-        return jsonify({"success": False, "error": "tenant mismatch"}), 403
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/openclaw/capabilities/actions/<action_id>/incident-report', methods=['GET', 'OPTIONS'])
-def openclaw_capabilities_action_incident_report(action_id):
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    tenant_id = str(request.args.get("tenant_id") or "").strip()
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    service_user = _openclaw_service_user(tenant_id)
-    if not service_user:
-        return jsonify({"success": False, "error": "tenant_id not found"}), 404
-
-    result = PHASE1_ACTION_ORCHESTRATOR.render_action_incident_report_markdown(action_id, service_user)
-    if result.get("success") and str(result.get("tenant_id") or "") != tenant_id:
-        return jsonify({"success": False, "error": "tenant mismatch"}), 403
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/openclaw/capabilities/actions/<action_id>/incident-snapshot', methods=['GET', 'OPTIONS'])
-def openclaw_capabilities_action_incident_snapshot(action_id):
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    tenant_id = str(request.args.get("tenant_id") or "").strip()
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    service_user = _openclaw_service_user(tenant_id)
-    if not service_user:
-        return jsonify({"success": False, "error": "tenant_id not found"}), 404
-
-    result = PHASE1_ACTION_ORCHESTRATOR.get_action_incident_snapshot(action_id, service_user)
-    if result.get("success") and str(result.get("tenant_id") or "") != tenant_id:
-        return jsonify({"success": False, "error": "tenant mismatch"}), 403
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/openclaw/capabilities/billing/reconcile', methods=['GET', 'OPTIONS'])
-def openclaw_capabilities_billing_reconcile():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    tenant_id = str(request.args.get("tenant_id") or "").strip()
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    service_user = _openclaw_service_user(tenant_id)
-    if not service_user:
-        return jsonify({"success": False, "error": "tenant_id not found"}), 404
-
-    window_minutes = request.args.get("window_minutes", 24 * 60)
-    limit = request.args.get("limit", 200)
-    result = PHASE1_ACTION_ORCHESTRATOR.reconcile_billing(
-        service_user,
-        tenant_id=tenant_id,
-        window_minutes=window_minutes,
-        limit=limit,
-    )
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/openclaw/capabilities/actions', methods=['GET', 'OPTIONS'])
-def openclaw_capabilities_actions_list():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    tenant_id = str(request.args.get("tenant_id") or "").strip()
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    service_user = _openclaw_service_user(tenant_id)
-    if not service_user:
-        return jsonify({"success": False, "error": "tenant_id not found"}), 404
-
-    status = request.args.get("status")
-    limit = request.args.get("limit", 50)
-    offset = request.args.get("offset", 0)
-
-    result = PHASE1_ACTION_ORCHESTRATOR.list_actions(
-        service_user,
-        tenant_id=tenant_id,
-        status=status,
-        limit=limit,
-        offset=offset,
-    )
-    return jsonify(result), 200
-
-
-@app.route('/api/openclaw/callbacks/dispatch', methods=['POST', 'OPTIONS'])
-def openclaw_callbacks_dispatch():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    data = request.get_json(silent=True) or {}
-    batch_size = data.get("batch_size", request.args.get("batch_size", 50))
-    result = PHASE1_ACTION_ORCHESTRATOR.dispatch_callback_outbox(batch_size=batch_size)
-    return jsonify(result), 200
-
-
-@app.route('/api/openclaw/callbacks/outbox', methods=['GET', 'OPTIONS'])
-def openclaw_callbacks_outbox():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    tenant_id = str(request.args.get("tenant_id") or "").strip()
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    service_user = _openclaw_service_user(tenant_id)
-    if not service_user:
-        return jsonify({"success": False, "error": "tenant_id not found"}), 404
-
-    status = request.args.get("status")
-    limit = request.args.get("limit", 50)
-    offset = request.args.get("offset", 0)
-    result = PHASE1_ACTION_ORCHESTRATOR.list_callback_outbox(
-        service_user,
-        tenant_id=tenant_id,
-        status=status,
-        limit=limit,
-        offset=offset,
-    )
-    return jsonify(result), 200
-
-
-@app.route('/api/openclaw/callbacks/metrics', methods=['GET', 'OPTIONS'])
-def openclaw_callbacks_metrics():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    tenant_id = str(request.args.get("tenant_id") or "").strip()
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    service_user = _openclaw_service_user(tenant_id)
-    if not service_user:
-        return jsonify({"success": False, "error": "tenant_id not found"}), 404
-
-    window_minutes = request.args.get("window_minutes", 60)
-    result = PHASE1_ACTION_ORCHESTRATOR.get_callback_metrics(
-        service_user,
-        tenant_id=tenant_id,
-        window_minutes=window_minutes,
-    )
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/openclaw/audit-timeline', methods=['GET', 'OPTIONS'])
-def openclaw_audit_timeline():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    tenant_id = str(request.args.get("tenant_id") or "").strip()
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    service_user = _openclaw_service_user(tenant_id)
-    if not service_user:
-        return jsonify({"success": False, "error": "tenant_id not found"}), 404
-
-    limit = max(1, min(int(request.args.get("limit", 20) or 20), 200))
-    offset = max(0, int(request.args.get("offset", 0) or 0))
-    source = str(request.args.get("source") or "").strip() or None
-    search = str(request.args.get("search") or "").strip() or None
-    action_id = str(request.args.get("action_id") or "").strip() or None
-
-    db = DatabaseManager()
-    try:
-        cursor = db.conn.cursor()
-        items, total_count = _load_tenant_audit_timeline_items(
-            cursor,
-            tenant_id,
-            limit,
-            offset,
-            source=source,
-            search=search,
-            action_id=action_id,
-        )
-        return jsonify(
-            {
-                "success": True,
-                "tenant_id": tenant_id,
-                "items": items,
-                "count": len(items),
-                "total_count": total_count,
-                "limit": limit,
-                "offset": offset,
-            }
-        ), 200
-    finally:
-        db.close()
-
-
-@app.route('/api/openclaw/audit-timeline/export', methods=['GET', 'OPTIONS'])
-def openclaw_audit_timeline_export():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    tenant_id = str(request.args.get("tenant_id") or "").strip()
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    service_user = _openclaw_service_user(tenant_id)
-    if not service_user:
-        return jsonify({"success": False, "error": "tenant_id not found"}), 404
-
-    limit = max(1, min(int(request.args.get("limit", 20) or 20), 200))
-    offset = max(0, int(request.args.get("offset", 0) or 0))
-    source = str(request.args.get("source") or "").strip() or None
-    search = str(request.args.get("search") or "").strip() or None
-    action_id = str(request.args.get("action_id") or "").strip() or None
-    export_format = str(request.args.get("format") or "json").strip().lower()
-
-    db = DatabaseManager()
-    try:
-        cursor = db.conn.cursor()
-        items, total_count = _load_tenant_audit_timeline_items(
-            cursor,
-            tenant_id,
-            limit,
-            offset,
-            source=source,
-            search=search,
-            action_id=action_id,
-        )
-        if export_format == "markdown":
-            return jsonify(
-                {
-                    "success": True,
-                    "tenant_id": tenant_id,
-                    "count": len(items),
-                    "total_count": total_count,
-                    "limit": limit,
-                    "offset": offset,
-                    "markdown_report": _render_tenant_audit_timeline_markdown(
-                        tenant_id,
-                        items,
-                        total_count,
-                        source=source,
-                        search=search,
-                        action_id=action_id,
-                    ),
-                }
-            ), 200
-        return jsonify(
-            {
-                "success": True,
-                "tenant_id": tenant_id,
-                "items": items,
-                "count": len(items),
-                "total_count": total_count,
-                "limit": limit,
-                "offset": offset,
-            }
-        ), 200
-    finally:
-        db.close()
-
-
-@app.route('/api/openclaw/audit-timeline/event-bundle', methods=['GET', 'OPTIONS'])
-def openclaw_audit_timeline_event_bundle():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    tenant_id = str(request.args.get("tenant_id") or "").strip()
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    service_user = _openclaw_service_user(tenant_id)
-    if not service_user:
-        return jsonify({"success": False, "error": "tenant_id not found"}), 404
-
-    event_id = str(request.args.get("event_id") or "").strip()
-    if not event_id:
-        return jsonify({"success": False, "error": "event_id is required"}), 400
-    source = str(request.args.get("source") or "").strip() or None
-    export_format = str(request.args.get("format") or "json").strip().lower()
-
-    db = DatabaseManager()
-    try:
-        cursor = db.conn.cursor()
-        event = _load_tenant_audit_timeline_event(cursor, tenant_id, event_id, source=source)
-        if not event:
-            return jsonify({"success": False, "error": "event not found"}), 404
-        bundle = _build_tenant_audit_event_bundle(cursor, service_user, tenant_id, event)
-        if export_format == "markdown":
-            return jsonify(
-                {
-                    "success": True,
-                    "tenant_id": tenant_id,
-                    "event_id": event_id,
-                    "markdown_report": _render_tenant_audit_event_bundle_markdown(bundle),
-                }
-            ), 200
-        return jsonify(bundle), 200
-    finally:
-        db.close()
-
-
-@app.route('/api/openclaw/callbacks/recovery-history', methods=['GET', 'OPTIONS'])
-def openclaw_callbacks_recovery_history():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    tenant_id = str(request.args.get("tenant_id") or "").strip()
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    service_user = _openclaw_service_user(tenant_id)
-    if not service_user:
-        return jsonify({"success": False, "error": "tenant_id not found"}), 404
-
-    limit = max(1, min(int(request.args.get("limit", 10) or 10), 50))
-    db = DatabaseManager()
-    try:
-        cursor = db.conn.cursor()
-        items = _load_callback_recovery_history_items(cursor, str(tenant_id), limit)
-        return jsonify({"success": True, "tenant_id": str(tenant_id), "items": items, "count": len(items)}), 200
-    finally:
-        db.close()
-
-
-@app.route('/api/openclaw/callbacks/recovery-history/export', methods=['GET', 'OPTIONS'])
-def openclaw_callbacks_recovery_history_export():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    tenant_id = str(request.args.get("tenant_id") or "").strip()
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    service_user = _openclaw_service_user(tenant_id)
-    if not service_user:
-        return jsonify({"success": False, "error": "tenant_id not found"}), 404
-
-    limit = max(1, min(int(request.args.get("limit", 10) or 10), 50))
-    export_format = str(request.args.get("format") or "json").strip().lower()
-    db = DatabaseManager()
-    try:
-        cursor = db.conn.cursor()
-        items = _load_callback_recovery_history_items(cursor, str(tenant_id), limit)
-        if export_format == "markdown":
-            return jsonify(
-                {
-                    "success": True,
-                    "tenant_id": str(tenant_id),
-                    "count": len(items),
-                    "markdown_report": _render_callback_recovery_history_markdown(str(tenant_id), items),
-                }
-            ), 200
-        return jsonify({"success": True, "tenant_id": str(tenant_id), "items": items, "count": len(items)}), 200
-    finally:
-        db.close()
-
-
-@app.route('/api/openclaw/capabilities/support-export/send-history', methods=['GET', 'OPTIONS'])
-def openclaw_capabilities_support_export_send_history():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    tenant_id = str(request.args.get("tenant_id") or "").strip()
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    service_user = _openclaw_service_user(tenant_id)
-    if not service_user:
-        return jsonify({"success": False, "error": "tenant_id not found"}), 404
-
-    limit = max(1, min(int(request.args.get("limit", 10) or 10), 50))
-    db = DatabaseManager()
-    try:
-        cursor = db.conn.cursor()
-        items = _load_support_export_send_history_items(cursor, str(tenant_id), limit)
-        return jsonify({"success": True, "tenant_id": str(tenant_id), "items": items, "count": len(items)}), 200
-    finally:
-        db.close()
-
-
-@app.route('/api/openclaw/capabilities/support-export/send-history/export', methods=['GET', 'OPTIONS'])
-def openclaw_capabilities_support_export_send_history_export():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    tenant_id = str(request.args.get("tenant_id") or "").strip()
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    service_user = _openclaw_service_user(tenant_id)
-    if not service_user:
-        return jsonify({"success": False, "error": "tenant_id not found"}), 404
-
-    limit = max(1, min(int(request.args.get("limit", 10) or 10), 50))
-    export_format = str(request.args.get("format") or "json").strip().lower()
-    db = DatabaseManager()
-    try:
-        cursor = db.conn.cursor()
-        items = _load_support_export_send_history_items(cursor, str(tenant_id), limit)
-        if export_format == "markdown":
-            return jsonify(
-                {
-                    "success": True,
-                    "tenant_id": str(tenant_id),
-                    "count": len(items),
-                    "markdown_report": _render_support_export_send_history_markdown(str(tenant_id), items),
-                }
-            ), 200
-        return jsonify({"success": True, "tenant_id": str(tenant_id), "items": items, "count": len(items)}), 200
-    finally:
-        db.close()
-
-
-@app.route('/api/openclaw/capabilities/support-export', methods=['GET', 'OPTIONS'])
-def openclaw_capabilities_support_export():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    tenant_id = str(request.args.get("tenant_id") or "").strip()
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    service_user = _openclaw_service_user(tenant_id)
-    if not service_user:
-        return jsonify({"success": False, "error": "tenant_id not found"}), 404
-
-    action_id = str(request.args.get("action_id") or "").strip() or None
-    export_format = str(request.args.get("format") or "json").strip().lower()
-    bundle, code = _build_openclaw_support_export_bundle(
-        service_user,
-        tenant_id,
-        action_id=action_id,
-    )
-    if not bundle.get("success"):
-        return jsonify(bundle), int(code)
-    if export_format == "markdown":
-        return jsonify(
-            {
-                "success": True,
-                "tenant_id": str(tenant_id),
-                "generated_at": bundle.get("generated_at"),
-                "action_id": action_id,
-                "markdown_report": _render_openclaw_support_export_markdown(bundle),
-            }
-        ), 200
-    return jsonify(bundle), 200
-
-
-@app.route('/api/openclaw/callbacks/outbox/replay', methods=['POST', 'OPTIONS'])
-def openclaw_callbacks_outbox_replay():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    data = request.get_json(silent=True) or {}
-    tenant_id = str(data.get("tenant_id") or request.args.get("tenant_id") or "").strip()
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    service_user = _openclaw_service_user(tenant_id)
-    if not service_user:
-        return jsonify({"success": False, "error": "tenant_id not found"}), 404
-
-    include_retry = bool(data.get("include_retry", False))
-    limit = data.get("limit", 100)
-    result = PHASE1_ACTION_ORCHESTRATOR.replay_callback_outbox(
-        service_user,
-        tenant_id=tenant_id,
-        include_retry=include_retry,
-        limit=limit,
-    )
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/openclaw/callbacks/outbox/cleanup', methods=['POST', 'OPTIONS'])
-def openclaw_callbacks_outbox_cleanup():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    data = request.get_json(silent=True) or {}
-    tenant_id = str(data.get("tenant_id") or request.args.get("tenant_id") or "").strip()
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    service_user = _openclaw_service_user(tenant_id)
-    if not service_user:
-        return jsonify({"success": False, "error": "tenant_id not found"}), 404
-
-    older_than_minutes = data.get("older_than_minutes", 24 * 60)
-    limit = data.get("limit", 500)
-    result = PHASE1_ACTION_ORCHESTRATOR.cleanup_callback_outbox(
-        service_user,
-        tenant_id=tenant_id,
-        older_than_minutes=older_than_minutes,
-        limit=limit,
-    )
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/openclaw/capabilities/actions/<action_id>/decision', methods=['POST', 'OPTIONS'])
-def openclaw_capabilities_action_decision(action_id):
-    if request.method == 'OPTIONS':
-        return ('', 204)
-
-    ok, reason = _authenticate_openclaw_request()
-    if not ok:
-        return jsonify({"success": False, "error": reason}), 401
-
-    data = request.get_json(silent=True) or {}
-    tenant_id = str(data.get("tenant_id") or request.args.get("tenant_id") or "").strip()
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    service_user = _openclaw_service_user(tenant_id)
-    if not service_user:
-        return jsonify({"success": False, "error": "tenant_id not found"}), 404
-
-    status_check = PHASE1_ACTION_ORCHESTRATOR.get_action(action_id, service_user)
-    if not status_check.get("success"):
-        return jsonify(status_check), int(status_check.pop("http_code", 400))
-    if str(status_check.get("tenant_id") or "") != tenant_id:
-        return jsonify({"success": False, "error": "tenant mismatch"}), 403
-
-    decision = str(data.get("decision") or "").strip().lower()
-    reason_text = str(data.get("reason") or "").strip()
-    result = PHASE1_ACTION_ORCHESTRATOR.resolve_human_decision(action_id, decision, service_user, reason_text)
-    return jsonify(result), int(result.pop("http_code", 200 if result.get("success") else 400))
-
-
-@app.route('/api/capabilities/actions/<action_id>/decision', methods=['POST', 'OPTIONS'])
-def capabilities_action_decision(action_id):
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    data = request.get_json(silent=True) or {}
-    decision = str(data.get("decision") or "").strip().lower()
-    reason = str(data.get("reason") or "").strip()
-    result = PHASE1_ACTION_ORCHESTRATOR.resolve_human_decision(action_id, decision, user_data, reason)
-    return jsonify(result), int(result.pop("http_code", 200 if result.get("success") else 400))
-
-
-@app.route('/api/capabilities/callbacks/metrics', methods=['GET', 'OPTIONS'])
-def capabilities_callbacks_metrics():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    tenant_id = request.args.get("tenant_id") or request.args.get("business_id")
-    if not tenant_id:
-        tenant_id = get_business_id_from_user(user_data["user_id"], None)
-    window_minutes = request.args.get("window_minutes", 60)
-    result = PHASE1_ACTION_ORCHESTRATOR.get_callback_metrics(
-        user_data,
-        tenant_id=str(tenant_id),
-        window_minutes=window_minutes,
-    )
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/capabilities/callbacks/dispatch', methods=['POST', 'OPTIONS'])
-def capabilities_callbacks_dispatch():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    data = request.get_json(silent=True) or {}
-    requested_business_id = data.get("tenant_id") or data.get("business_id") or request.args.get("tenant_id") or request.args.get("business_id")
-    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    batch_size = data.get("batch_size", 50)
-    result = PHASE1_ACTION_ORCHESTRATOR.dispatch_callback_outbox_for_tenant(
-        user_data,
-        tenant_id=str(tenant_id),
-        batch_size=batch_size,
-    )
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/capabilities/callbacks/outbox/replay', methods=['POST', 'OPTIONS'])
-def capabilities_callbacks_outbox_replay():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    data = request.get_json(silent=True) or {}
-    requested_business_id = data.get("tenant_id") or data.get("business_id") or request.args.get("tenant_id") or request.args.get("business_id")
-    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    include_retry = bool(data.get("include_retry", False))
-    limit = data.get("limit", 100)
-    result = PHASE1_ACTION_ORCHESTRATOR.replay_callback_outbox(
-        user_data,
-        tenant_id=str(tenant_id),
-        include_retry=include_retry,
-        limit=limit,
-    )
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/capabilities/audit-timeline', methods=['GET', 'OPTIONS'])
-def capabilities_audit_timeline():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    requested_business_id = request.args.get("tenant_id") or request.args.get("business_id")
-    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    limit = max(1, min(int(request.args.get("limit", 20) or 20), 200))
-    offset = max(0, int(request.args.get("offset", 0) or 0))
-    source = str(request.args.get("source") or "").strip() or None
-    search = str(request.args.get("search") or "").strip() or None
-    action_id = str(request.args.get("action_id") or "").strip() or None
-
-    db = DatabaseManager()
-    try:
-        cursor = db.conn.cursor()
-        items, total_count = _load_tenant_audit_timeline_items(
-            cursor,
-            str(tenant_id),
-            limit,
-            offset,
-            source=source,
-            search=search,
-            action_id=action_id,
-        )
-        return jsonify(
-            {
-                "success": True,
-                "tenant_id": str(tenant_id),
-                "items": items,
-                "count": len(items),
-                "total_count": total_count,
-                "limit": limit,
-                "offset": offset,
-            }
-        ), 200
-    finally:
-        db.close()
-
-
-@app.route('/api/capabilities/audit-timeline/export', methods=['GET', 'OPTIONS'])
-def capabilities_audit_timeline_export():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    requested_business_id = request.args.get("tenant_id") or request.args.get("business_id")
-    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    limit = max(1, min(int(request.args.get("limit", 20) or 20), 200))
-    offset = max(0, int(request.args.get("offset", 0) or 0))
-    source = str(request.args.get("source") or "").strip() or None
-    search = str(request.args.get("search") or "").strip() or None
-    action_id = str(request.args.get("action_id") or "").strip() or None
-    export_format = str(request.args.get("format") or "json").strip().lower()
-
-    db = DatabaseManager()
-    try:
-        cursor = db.conn.cursor()
-        items, total_count = _load_tenant_audit_timeline_items(
-            cursor,
-            str(tenant_id),
-            limit,
-            offset,
-            source=source,
-            search=search,
-            action_id=action_id,
-        )
-        if export_format == "markdown":
-            return jsonify(
-                {
-                    "success": True,
-                    "tenant_id": str(tenant_id),
-                    "count": len(items),
-                    "total_count": total_count,
-                    "limit": limit,
-                    "offset": offset,
-                    "markdown_report": _render_tenant_audit_timeline_markdown(
-                        str(tenant_id),
-                        items,
-                        total_count,
-                        source=source,
-                        search=search,
-                        action_id=action_id,
-                    ),
-                }
-            ), 200
-        return jsonify(
-            {
-                "success": True,
-                "tenant_id": str(tenant_id),
-                "items": items,
-                "count": len(items),
-                "total_count": total_count,
-                "limit": limit,
-                "offset": offset,
-            }
-        ), 200
-    finally:
-        db.close()
-
-
-@app.route('/api/capabilities/audit-timeline/event-bundle', methods=['GET', 'OPTIONS'])
-def capabilities_audit_timeline_event_bundle():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    requested_business_id = request.args.get("tenant_id") or request.args.get("business_id")
-    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    event_id = str(request.args.get("event_id") or "").strip()
-    if not event_id:
-        return jsonify({"success": False, "error": "event_id is required"}), 400
-    source = str(request.args.get("source") or "").strip() or None
-    export_format = str(request.args.get("format") or "json").strip().lower()
-
-    db = DatabaseManager()
-    try:
-        cursor = db.conn.cursor()
-        event = _load_tenant_audit_timeline_event(cursor, str(tenant_id), event_id, source=source)
-        if not event:
-            return jsonify({"success": False, "error": "event not found"}), 404
-        bundle = _build_tenant_audit_event_bundle(cursor, user_data, str(tenant_id), event)
-        if export_format == "markdown":
-            return jsonify(
-                {
-                    "success": True,
-                    "tenant_id": str(tenant_id),
-                    "event_id": event_id,
-                    "markdown_report": _render_tenant_audit_event_bundle_markdown(bundle),
-                }
-            ), 200
-        return jsonify(bundle), 200
-    finally:
-        db.close()
-
-
-@app.route('/api/capabilities/callbacks/recovery-report', methods=['POST', 'OPTIONS'])
-def capabilities_callbacks_recovery_report():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    data = request.get_json(silent=True) or {}
-    requested_business_id = data.get("tenant_id") or data.get("business_id") or request.args.get("tenant_id") or request.args.get("business_id")
-    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    snapshot_limit = max(1, min(int(data.get("snapshot_limit", 2) or 2), 5))
-    include_retry = bool(data.get("include_retry", True))
-    replay_limit = max(1, min(int(data.get("replay_limit", 200) or 200), 2000))
-    batch_size = max(1, min(int(data.get("batch_size", 200) or 200), 1000))
-    send_telegram_report = bool(data.get("send_telegram_report", False))
-
-    pre_metrics = PHASE1_ACTION_ORCHESTRATOR.get_callback_metrics(
-        user_data,
-        tenant_id=str(tenant_id),
-        window_minutes=60,
-    )
-    if not pre_metrics.get("success"):
-        return jsonify(pre_metrics), int(pre_metrics.pop("http_code", 400))
-
-    outbox_items = []
-    for status_name in ("dlq", "retry"):
-        if status_name == "retry" and not include_retry:
+        return ""
+    text = str(value).strip().lower().replace("ё", "е")
+    text = _re.sub(r"[^\w\sа-яА-Я]", " ", text, flags=_re.UNICODE)
+    text = _re.sub(r"\s+", " ", text, flags=_re.UNICODE).strip()
+    return text
+
+
+def _strip_unchanged_service_suggestions(parsed_result: dict) -> dict:
+    """
+    Убирает псевдо-оптимизации, которые повторяют исходный текст.
+    Это защищает UI от «предложений SEO», равных оригиналу.
+    """
+    if not isinstance(parsed_result, dict):
+        return parsed_result
+    services = parsed_result.get("services")
+    if not isinstance(services, list):
+        return parsed_result
+
+    for service in services:
+        if not isinstance(service, dict):
             continue
-        listing = PHASE1_ACTION_ORCHESTRATOR.list_callback_outbox(
-            user_data,
-            tenant_id=str(tenant_id),
-            status=status_name,
-            limit=replay_limit,
-            offset=0,
-        )
-        if not listing.get("success"):
-            return jsonify(listing), int(listing.pop("http_code", 400))
-        outbox_items.extend(listing.get("items") or [])
 
-    seen_action_ids = set()
-    action_ids = []
-    for item in outbox_items:
-        action_id = str(item.get("action_id") or "").strip()
-        if not action_id or action_id in seen_action_ids:
-            continue
-        seen_action_ids.add(action_id)
-        action_ids.append(action_id)
-    action_ids = action_ids[:snapshot_limit]
-
-    before_snapshots = []
-    for action_id in action_ids:
-        snapshot = PHASE1_ACTION_ORCHESTRATOR.get_action_incident_snapshot(action_id, user_data)
-        if snapshot.get("success"):
-            before_snapshots.append(snapshot)
-
-    replay = PHASE1_ACTION_ORCHESTRATOR.replay_callback_outbox(
-        user_data,
-        tenant_id=str(tenant_id),
-        include_retry=include_retry,
-        limit=replay_limit,
-    )
-    if not replay.get("success"):
-        return jsonify(replay), int(replay.pop("http_code", 400))
-
-    dispatch = PHASE1_ACTION_ORCHESTRATOR.dispatch_callback_outbox_for_tenant(
-        user_data,
-        tenant_id=str(tenant_id),
-        batch_size=batch_size,
-    )
-    if not dispatch.get("success"):
-        return jsonify(dispatch), int(dispatch.pop("http_code", 400))
-
-    post_metrics = PHASE1_ACTION_ORCHESTRATOR.get_callback_metrics(
-        user_data,
-        tenant_id=str(tenant_id),
-        window_minutes=60,
-    )
-    if not post_metrics.get("success"):
-        return jsonify(post_metrics), int(post_metrics.pop("http_code", 400))
-
-    after_snapshots = []
-    for action_id in action_ids:
-        snapshot = PHASE1_ACTION_ORCHESTRATOR.get_action_incident_snapshot(action_id, user_data)
-        if snapshot.get("success"):
-            after_snapshots.append(snapshot)
-
-    before_metric_summary = dict(pre_metrics.get("metrics") or {})
-    after_metric_summary = dict(post_metrics.get("metrics") or {})
-    lines = [
-        "OpenClaw recovery report",
-        f"tenant_id: {tenant_id}",
-        f"generated_at: {datetime.utcnow().isoformat()}",
-        "",
-        "Metrics before:",
-        f"- sent={int(before_metric_summary.get('sent') or 0)} retry={int(before_metric_summary.get('retry') or 0)} dlq={int(before_metric_summary.get('dlq') or 0)} pending={int(before_metric_summary.get('pending') or 0)}",
-        "Metrics after:",
-        f"- sent={int(after_metric_summary.get('sent') or 0)} retry={int(after_metric_summary.get('retry') or 0)} dlq={int(after_metric_summary.get('dlq') or 0)} pending={int(after_metric_summary.get('pending') or 0)}",
-        "",
-        "Recovery result:",
-        f"- replayed={int(replay.get('replayed_count') or 0)} include_retry={include_retry}",
-        f"- dispatched sent={int(dispatch.get('sent') or 0)} retried={int(dispatch.get('retried') or 0)} dlq={int(dispatch.get('dlq') or 0)} picked={int(dispatch.get('picked') or 0)}",
-    ]
-    if before_snapshots:
-        lines.extend(["", "Before snapshots:"])
-        lines.extend(_format_incident_snapshot_digest(item) for item in before_snapshots)
-    if after_snapshots:
-        lines.extend(["", "After snapshots:"])
-        lines.extend(_format_incident_snapshot_digest(item) for item in after_snapshots)
-    report_text = "\n".join(lines)
-
-    telegram_sent = 0
-    if send_telegram_report:
-        db = DatabaseManager()
-        try:
-            cursor = db.conn.cursor()
-            for telegram_id in _get_superadmin_telegram_ids(cursor):
-                if _send_telegram_plain_message(telegram_id, report_text):
-                    telegram_sent += 1
-        finally:
-            db.close()
-
-    history_id = str(uuid.uuid4())
-    db = DatabaseManager()
-    try:
-        cursor = db.conn.cursor()
-        _ensure_callback_recovery_history_table(cursor)
-        cursor.execute(
-            """
-            INSERT INTO callback_recovery_history (
-                id, tenant_id, triggered_by, send_telegram_report, include_retry,
-                replayed_count, sent_count, retried_count, dlq_count, telegram_sent_count,
-                action_ids_json, report_text
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s)
-            """,
-            (
-                history_id,
-                str(tenant_id),
-                str(user_data.get("user_id") or ""),
-                bool(send_telegram_report),
-                bool(include_retry),
-                int(replay.get("replayed_count") or 0),
-                int(dispatch.get("sent") or 0),
-                int(dispatch.get("retried") or 0),
-                int(dispatch.get("dlq") or 0),
-                int(telegram_sent or 0),
-                json.dumps(action_ids, ensure_ascii=False),
-                report_text,
-            ),
-        )
-        db.conn.commit()
-    finally:
-        db.close()
-
-    return jsonify(
-        {
-            "success": True,
-            "history_id": history_id,
-            "tenant_id": str(tenant_id),
-            "metrics_before": pre_metrics.get("metrics") or {},
-            "metrics_after": post_metrics.get("metrics") or {},
-            "replay": replay,
-            "dispatch": dispatch,
-            "action_ids": action_ids,
-            "before_snapshots": before_snapshots,
-            "after_snapshots": after_snapshots,
-            "telegram_sent": telegram_sent,
-            "report_text": report_text,
-        }
-    ), 200
-
-
-@app.route('/api/capabilities/callbacks/recovery-history', methods=['GET', 'OPTIONS'])
-def capabilities_callbacks_recovery_history():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    requested_business_id = request.args.get("tenant_id") or request.args.get("business_id")
-    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    limit = max(1, min(int(request.args.get("limit", 10) or 10), 50))
-    db = DatabaseManager()
-    try:
-        cursor = db.conn.cursor()
-        items = _load_callback_recovery_history_items(cursor, str(tenant_id), limit)
-        return jsonify({"success": True, "tenant_id": str(tenant_id), "items": items, "count": len(items)}), 200
-    finally:
-        db.close()
-
-
-@app.route('/api/capabilities/callbacks/recovery-history/export', methods=['GET', 'OPTIONS'])
-def capabilities_callbacks_recovery_history_export():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    requested_business_id = request.args.get("tenant_id") or request.args.get("business_id")
-    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    limit = max(1, min(int(request.args.get("limit", 10) or 10), 50))
-    export_format = str(request.args.get("format") or "json").strip().lower()
-    db = DatabaseManager()
-    try:
-        cursor = db.conn.cursor()
-        items = _load_callback_recovery_history_items(cursor, str(tenant_id), limit)
-        if export_format == "markdown":
-            return jsonify(
-                {
-                    "success": True,
-                    "tenant_id": str(tenant_id),
-                    "count": len(items),
-                    "markdown_report": _render_callback_recovery_history_markdown(str(tenant_id), items),
-                }
-            ), 200
-        return jsonify({"success": True, "tenant_id": str(tenant_id), "items": items, "count": len(items)}), 200
-    finally:
-        db.close()
-
-
-@app.route('/api/capabilities/callbacks/outbox/cleanup', methods=['POST', 'OPTIONS'])
-def capabilities_callbacks_outbox_cleanup():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    data = request.get_json(silent=True) or {}
-    requested_business_id = data.get("tenant_id") or data.get("business_id") or request.args.get("tenant_id") or request.args.get("business_id")
-    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    older_than_minutes = data.get("older_than_minutes", 24 * 60)
-    limit = data.get("limit", 500)
-    result = PHASE1_ACTION_ORCHESTRATOR.cleanup_callback_outbox(
-        user_data,
-        tenant_id=str(tenant_id),
-        older_than_minutes=older_than_minutes,
-        limit=limit,
-    )
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/capabilities/billing/reconcile', methods=['GET', 'OPTIONS'])
-def capabilities_billing_reconcile():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    requested_business_id = request.args.get("tenant_id") or request.args.get("business_id")
-    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    window_minutes = request.args.get("window_minutes", 24 * 60)
-    limit = request.args.get("limit", 200)
-    result = PHASE1_ACTION_ORCHESTRATOR.reconcile_billing(
-        user_data,
-        tenant_id=str(tenant_id),
-        window_minutes=window_minutes,
-        limit=limit,
-    )
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/capabilities/health', methods=['GET', 'OPTIONS'])
-def capabilities_health():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    tenant_id = request.args.get("tenant_id") or request.args.get("business_id")
-    if not tenant_id:
-        tenant_id = get_business_id_from_user(user_data["user_id"], None)
-    window_minutes = request.args.get("window_minutes", 60)
-    payload, code = _build_openclaw_capabilities_health(user_data, str(tenant_id), window_minutes, persist=True)
-    return jsonify(payload), code
-
-
-@app.route('/api/capabilities/health/trend', methods=['GET', 'OPTIONS'])
-def capabilities_health_trend():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    tenant_id = request.args.get("tenant_id") or request.args.get("business_id")
-    if not tenant_id:
-        tenant_id = get_business_id_from_user(user_data["user_id"], None)
-    window_minutes = request.args.get("window_minutes", 24 * 60)
-    limit = request.args.get("limit", 200)
-    result = PHASE1_ACTION_ORCHESTRATOR.get_capability_health_trend(
-        user_data,
-        tenant_id=str(tenant_id),
-        window_minutes=window_minutes,
-        limit=limit,
-    )
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/capabilities/support-export', methods=['GET', 'OPTIONS'])
-def capabilities_support_export():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    requested_business_id = request.args.get("tenant_id") or request.args.get("business_id")
-    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    action_id = str(request.args.get("action_id") or "").strip() or None
-    export_format = str(request.args.get("format") or "json").strip().lower()
-    bundle, code = _build_openclaw_support_export_bundle(
-        user_data,
-        str(tenant_id),
-        action_id=action_id,
-    )
-    if not bundle.get("success"):
-        return jsonify(bundle), int(code)
-    if export_format == "markdown":
-        return jsonify(
-            {
-                "success": True,
-                "tenant_id": str(tenant_id),
-                "generated_at": bundle.get("generated_at"),
-                "action_id": action_id,
-                "markdown_report": _render_openclaw_support_export_markdown(bundle),
-            }
-        ), 200
-    return jsonify(bundle), 200
-
-
-@app.route('/api/capabilities/support-export/send', methods=['POST', 'OPTIONS'])
-def capabilities_support_export_send():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    data = request.get_json(silent=True) or {}
-    requested_business_id = data.get("tenant_id") or data.get("business_id") or request.args.get("tenant_id") or request.args.get("business_id")
-    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    action_id = str(data.get("action_id") or request.args.get("action_id") or "").strip() or None
-    bundle, code = _build_openclaw_support_export_bundle(
-        user_data,
-        str(tenant_id),
-        action_id=action_id,
-    )
-    if not bundle.get("success"):
-        return jsonify(bundle), int(code)
-
-    report_text = _render_openclaw_support_export_markdown(bundle)
-    db = DatabaseManager()
-    try:
-        cursor = db.conn.cursor()
-        target_ids = _get_superadmin_telegram_ids(cursor)
-        sent_count = 0
-        for telegram_id in target_ids:
-            if _send_telegram_plain_message(telegram_id, report_text):
-                sent_count += 1
-
-        history_id = str(uuid.uuid4())
-        _ensure_support_export_send_history_table(cursor)
-        cursor.execute(
-            """
-            INSERT INTO support_export_send_history (
-                id, tenant_id, triggered_by, action_id, telegram_sent_count, target_ids_json, report_text
-            ) VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s)
-            """,
-            (
-                history_id,
-                str(tenant_id),
-                str(user_data.get("user_id") or ""),
-                str(action_id or ""),
-                int(sent_count),
-                json.dumps(list(target_ids), ensure_ascii=False),
-                report_text,
-            ),
-        )
-        db.conn.commit()
-    finally:
-        db.close()
-
-    return jsonify(
-        {
-            "success": True,
-            "history_id": history_id,
-            "tenant_id": str(tenant_id),
-            "action_id": action_id,
-            "telegram_sent_count": int(sent_count),
-            "target_count": len(target_ids),
-            "report_text": report_text,
-        }
-    ), 200
-
-
-@app.route('/api/capabilities/support-export/send-history', methods=['GET', 'OPTIONS'])
-def capabilities_support_export_send_history():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    requested_business_id = request.args.get("tenant_id") or request.args.get("business_id")
-    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    limit = max(1, min(int(request.args.get("limit", 10) or 10), 50))
-    db = DatabaseManager()
-    try:
-        cursor = db.conn.cursor()
-        items = _load_support_export_send_history_items(cursor, str(tenant_id), limit)
-        return jsonify({"success": True, "tenant_id": str(tenant_id), "items": items, "count": len(items)}), 200
-    finally:
-        db.close()
-
-
-@app.route('/api/capabilities/support-export/send-history/export', methods=['GET', 'OPTIONS'])
-def capabilities_support_export_send_history_export():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    requested_business_id = request.args.get("tenant_id") or request.args.get("business_id")
-    tenant_id = get_business_id_from_user(user_data["user_id"], requested_business_id)
-    if not tenant_id:
-        return jsonify({"success": False, "error": "tenant_id is required"}), 400
-
-    limit = max(1, min(int(request.args.get("limit", 10) or 10), 50))
-    export_format = str(request.args.get("format") or "json").strip().lower()
-    db = DatabaseManager()
-    try:
-        cursor = db.conn.cursor()
-        items = _load_support_export_send_history_items(cursor, str(tenant_id), limit)
-        if export_format == "markdown":
-            return jsonify(
-                {
-                    "success": True,
-                    "tenant_id": str(tenant_id),
-                    "count": len(items),
-                    "markdown_report": _render_support_export_send_history_markdown(str(tenant_id), items),
-                }
-            ), 200
-        return jsonify({"success": True, "tenant_id": str(tenant_id), "items": items, "count": len(items)}), 200
-    finally:
-        db.close()
-
-
-@app.route('/api/capabilities/actions/<action_id>', methods=['GET', 'OPTIONS'])
-def capabilities_action_status(action_id):
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    result = PHASE1_ACTION_ORCHESTRATOR.get_action(action_id, user_data)
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/capabilities/actions/<action_id>/billing', methods=['GET', 'OPTIONS'])
-def capabilities_action_billing(action_id):
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    result = PHASE1_ACTION_ORCHESTRATOR.get_action_billing(action_id, user_data)
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/capabilities/actions/<action_id>/timeline', methods=['GET', 'OPTIONS'])
-def capabilities_action_timeline(action_id):
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    limit = request.args.get("limit", 200)
-    offset = request.args.get("offset", 0)
-    source = str(request.args.get("source", "")).strip() or None
-    event_type = str(request.args.get("event_type", "")).strip() or None
-    status = str(request.args.get("status", "")).strip() or None
-    search = str(request.args.get("search", "")).strip() or None
-    only_problematic_raw = str(request.args.get("only_problematic", "")).strip().lower()
-    only_problematic = only_problematic_raw in {"1", "true", "yes", "on"}
-    result = PHASE1_ACTION_ORCHESTRATOR.get_action_timeline(
-        action_id,
-        user_data,
-        limit=limit,
-        offset=offset,
-        source=source,
-        event_type=event_type,
-        status=status,
-        search=search,
-        only_problematic=only_problematic,
-    )
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/capabilities/actions/<action_id>/callback-attempts', methods=['GET', 'OPTIONS'])
-def capabilities_action_callback_attempts(action_id):
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    limit = request.args.get("limit", 100)
-    offset = request.args.get("offset", 0)
-    success_raw = str(request.args.get("success", "")).strip().lower()
-    success = None
-    if success_raw in {"1", "true", "yes", "on"}:
-        success = True
-    elif success_raw in {"0", "false", "no", "off"}:
-        success = False
-    event_type = str(request.args.get("event_type", "")).strip() or None
-    result = PHASE1_ACTION_ORCHESTRATOR.list_action_callback_attempts(
-        action_id, user_data, limit=limit, offset=offset, success=success, event_type=event_type
-    )
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/capabilities/actions/<action_id>/support-package', methods=['GET', 'OPTIONS'])
-def capabilities_action_support_package(action_id):
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    limit = request.args.get("limit", 200)
-    offset = request.args.get("offset", 0)
-    source = str(request.args.get("source", "")).strip() or None
-    event_type = str(request.args.get("event_type", "")).strip() or None
-    status = str(request.args.get("status", "")).strip() or None
-    search = str(request.args.get("search", "")).strip() or None
-    only_problematic_raw = str(request.args.get("only_problematic", "")).strip().lower()
-    only_problematic = only_problematic_raw in {"1", "true", "yes", "on"}
-    full_raw = str(request.args.get("full", "")).strip().lower()
-    full = full_raw in {"1", "true", "yes", "on"}
-    result = PHASE1_ACTION_ORCHESTRATOR.get_action_support_package(
-        action_id,
-        user_data,
-        limit=limit,
-        offset=offset,
-        source=source,
-        event_type=event_type,
-        status=status,
-        search=search,
-        only_problematic=only_problematic,
-        full=full,
-    )
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/capabilities/actions/<action_id>/diagnostics-bundle', methods=['GET', 'OPTIONS'])
-def capabilities_action_diagnostics_bundle(action_id):
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    limit = request.args.get("limit", 200)
-    offset = request.args.get("offset", 0)
-    source = str(request.args.get("source", "")).strip() or None
-    event_type = str(request.args.get("event_type", "")).strip() or None
-    status = str(request.args.get("status", "")).strip() or None
-    search = str(request.args.get("search", "")).strip() or None
-    only_problematic_raw = str(request.args.get("only_problematic", "")).strip().lower()
-    only_problematic = only_problematic_raw in {"1", "true", "yes", "on"}
-    full_raw = str(request.args.get("full", "")).strip().lower()
-    full = full_raw in {"1", "true", "yes", "on"}
-
-    attempts_limit = request.args.get("attempts_limit", 200)
-    attempts_offset = request.args.get("attempts_offset", 0)
-    attempts_success_raw = str(request.args.get("attempts_success", "")).strip().lower()
-    attempts_success = None
-    if attempts_success_raw in {"1", "true", "yes", "on"}:
-        attempts_success = True
-    elif attempts_success_raw in {"0", "false", "no", "off"}:
-        attempts_success = False
-    attempts_event_type = str(request.args.get("attempts_event_type", "")).strip() or None
-    attempts_full_raw = str(request.args.get("attempts_full", "")).strip().lower()
-    attempts_full = attempts_full_raw in {"1", "true", "yes", "on"}
-    response_format = str(request.args.get("format", "")).strip().lower()
-
-    result = PHASE1_ACTION_ORCHESTRATOR.get_action_diagnostics_bundle(
-        action_id,
-        user_data,
-        limit=limit,
-        offset=offset,
-        source=source,
-        event_type=event_type,
-        status=status,
-        search=search,
-        only_problematic=only_problematic,
-        full=full,
-        attempts_limit=attempts_limit,
-        attempts_offset=attempts_offset,
-        attempts_success=attempts_success,
-        attempts_event_type=attempts_event_type,
-        attempts_full=attempts_full,
-    )
-    if result.get("success") and response_format == "markdown":
-        result["markdown_report"] = PHASE1_ACTION_ORCHESTRATOR.render_action_diagnostics_markdown(result)
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/capabilities/actions/<action_id>/lifecycle-summary', methods=['GET', 'OPTIONS'])
-def capabilities_action_lifecycle_summary(action_id):
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    limit = request.args.get("limit", 200)
-    offset = request.args.get("offset", 0)
-    source = str(request.args.get("source", "")).strip() or None
-    event_type = str(request.args.get("event_type", "")).strip() or None
-    status = str(request.args.get("status", "")).strip() or None
-    search = str(request.args.get("search", "")).strip() or None
-    only_problematic_raw = str(request.args.get("only_problematic", "")).strip().lower()
-    only_problematic = only_problematic_raw in {"1", "true", "yes", "on"}
-    full_raw = str(request.args.get("full", "true")).strip().lower()
-    full = full_raw in {"1", "true", "yes", "on"}
-    result = PHASE1_ACTION_ORCHESTRATOR.get_action_lifecycle_summary(
-        action_id,
-        user_data,
-        limit=limit,
-        offset=offset,
-        source=source,
-        event_type=event_type,
-        status=status,
-        search=search,
-        only_problematic=only_problematic,
-        full=full,
-    )
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/capabilities/actions/<action_id>/incident-report', methods=['GET', 'OPTIONS'])
-def capabilities_action_incident_report(action_id):
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    result = PHASE1_ACTION_ORCHESTRATOR.render_action_incident_report_markdown(action_id, user_data)
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/capabilities/actions/<action_id>/incident-snapshot', methods=['GET', 'OPTIONS'])
-def capabilities_action_incident_snapshot(action_id):
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    result = PHASE1_ACTION_ORCHESTRATOR.get_action_incident_snapshot(action_id, user_data)
-    return jsonify(result), int(result.pop("http_code", 200))
-
-
-@app.route('/api/capabilities/actions', methods=['GET', 'OPTIONS'])
-def capabilities_actions_list():
-    if request.method == 'OPTIONS':
-        return ('', 204)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return jsonify({"error": "Недействительный токен"}), 401
-
-    tenant_id = request.args.get("tenant_id") or request.args.get("business_id")
-    status = request.args.get("status")
-    limit = request.args.get("limit", 50)
-    offset = request.args.get("offset", 0)
-    result = PHASE1_ACTION_ORCHESTRATOR.list_actions(
-        user_data,
-        tenant_id=tenant_id,
-        status=status,
-        limit=limit,
-        offset=offset,
-    )
-    return jsonify(result), 200
-
+        original_name = str(service.get("original_name") or service.get("name") or "").strip()
+        optimized_name = str(service.get("optimized_name") or service.get("optimizedName") or "").strip()
+        if original_name and optimized_name:
+            if _normalize_text_for_semantic_compare(original_name) == _normalize_text_for_semantic_compare(optimized_name):
+                service["optimized_name"] = ""
+                if "optimizedName" in service:
+                    service["optimizedName"] = ""
+
+        original_desc = str(
+            service.get("original_description")
+            or service.get("description")
+            or service.get("source_description")
+            or ""
+        ).strip()
+        optimized_desc = str(service.get("seo_description") or service.get("seoDescription") or "").strip()
+        if original_desc and optimized_desc:
+            if _normalize_text_for_semantic_compare(original_desc) == _normalize_text_for_semantic_compare(optimized_desc):
+                service["seo_description"] = ""
+                if "seoDescription" in service:
+                    service["seoDescription"] = ""
+
+    return parsed_result
 
 # ==================== СЕРВИС: ОПТИМИЗАЦИЯ УСЛУГ ====================
 @app.route('/api/services/optimize', methods=['POST', 'OPTIONS'])
@@ -8752,19 +2468,14 @@ def services_optimize():
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
 
-        payload = request.get_json(silent=True) or {}
-        tone = request.form.get('tone') or payload.get('tone')
-        instructions = request.form.get('instructions') or payload.get('instructions')
-        region = request.form.get('region') or payload.get('region')
-        business_name = request.form.get('business_name') or payload.get('business_name')
-        length = request.form.get('description_length') or payload.get('description_length') or 150
-        recognize_only_raw = request.form.get('recognize_only')
-        if recognize_only_raw is None:
-            recognize_only_raw = payload.get('recognize_only')
-        recognize_only = str(recognize_only_raw).strip().lower() in ('1', 'true', 'yes', 'on')
+        tone = request.form.get('tone') or request.json.get('tone') if request.is_json else None
+        instructions = request.form.get('instructions') or (request.json.get('instructions') if request.is_json else None)
+        region = request.form.get('region') or (request.json.get('region') if request.is_json else None)
+        business_name = request.form.get('business_name') or (request.json.get('business_name') if request.is_json else None)
+        length = request.form.get('description_length') or (request.json.get('description_length') if request.is_json else 150)
 
         # Язык результата: получаем из запроса или из профиля пользователя
-        requested_language = request.form.get('language') or payload.get('language')
+        requested_language = request.form.get('language') or (request.json.get('language') if request.is_json else None)
         language = get_user_language(user_data['user_id'], requested_language)
         language_names = {
             'ru': 'Russian',
@@ -8777,40 +2488,10 @@ def services_optimize():
             'zh': 'Chinese'
         }
         language_name = language_names.get(language, 'Russian')
-        requested_business_id = None
-        if request.is_json:
-            requested_business_id = payload.get('business_id')
-        if not requested_business_id:
-            requested_business_id = request.args.get('business_id')
-        business_id = get_business_id_from_user(user_data['user_id'], requested_business_id)
-        if not has_paid_automation_access(business_id):
-            return jsonify({"error": get_automation_block_message(business_id), "code": "automation_locked"}), 403
-        business_industry = ""
-        business_type_value = ""
-        try:
-            db_meta = DatabaseManager()
-            cursor_meta = db_meta.conn.cursor()
-            cursor_meta.execute("SELECT industry, business_type FROM businesses WHERE id = %s", (business_id,))
-            row_meta = cursor_meta.fetchone()
-            if row_meta:
-                if hasattr(row_meta, "keys"):
-                    business_industry = (row_meta.get("industry") or "").strip()
-                    business_type_value = (row_meta.get("business_type") or "").strip()
-                elif isinstance(row_meta, (tuple, list)):
-                    business_industry = (row_meta[0] or "").strip() if len(row_meta) > 0 else ""
-                    business_type_value = (row_meta[1] or "").strip() if len(row_meta) > 1 else ""
-            db_meta.close()
-        except Exception:
-            business_industry = ""
-            business_type_value = ""
 
         # Источник: файл или текст
         file = request.files.get('file') if 'file' in request.files else None
         if file:
-            # Для файлов всегда выполняем шаг распознавания (без SEO-оптимизации).
-            # SEO-оптимизация должна выполняться отдельным явным действием.
-            recognize_only = True
-
             # Проверяем тип файла (прайс-листы + скриншоты)
             allowed_types = [
                 'application/pdf', 
@@ -8836,82 +2517,63 @@ def services_optimize():
                 
                 # Используем упрощенный промпт для анализа скриншота прайс-листа
                 try:
-                    if recognize_only:
-                        screenshot_prompt = """Ты анализируешь изображение прайс-листа/услуг.
-Верни СТРОГО валидный JSON без markdown:
-{
-  "services": [
-    {
-      "original_name": "точный текст названия услуги из изображения",
-      "original_description": "краткое описание из изображения или пустая строка",
-      "price": "цена как в изображении или null",
-      "keywords": [],
-      "category": "other"
-    }
-  ]
-}
-ПРАВИЛА:
-- НИЧЕГО не оптимизируй и не переписывай.
-- Не подменяй тематику услуг.
-- Если услуги не найдены, верни {"services": []}.
-"""
-                    else:
-                        with open('prompts/screenshot-analysis-prompt.txt', 'r', encoding='utf-8') as f:
-                            prompt_content = f.read()
-                        
-                        # Парсим SYSTEM_PROMPT и USER_PROMPT_TEMPLATE
-                        system_prompt = ""
-                        user_prompt_template = ""
-                        
-                        lines = prompt_content.split('\n')
-                        current_section = None
-                        
-                        for line in lines:
-                            if line.strip().startswith('SYSTEM_PROMPT'):
-                                current_section = 'system'
-                                continue
-                            elif line.strip().startswith('USER_PROMPT_TEMPLATE'):
-                                current_section = 'user'
-                                continue
-                            elif line.strip().startswith('"""') and current_section:
-                                if current_section == 'system':
-                                    system_prompt = line.replace('"""', '').strip()
-                                elif current_section == 'user':
-                                    user_prompt_template = line.replace('"""', '').strip()
-                                current_section = None
-                                continue
-                            elif current_section == 'system':
-                                system_prompt += line + '\n'
+                    with open('prompts/screenshot-analysis-prompt.txt', 'r', encoding='utf-8') as f:
+                        prompt_content = f.read()
+                    
+                    # Парсим SYSTEM_PROMPT и USER_PROMPT_TEMPLATE
+                    system_prompt = ""
+                    user_prompt_template = ""
+                    
+                    lines = prompt_content.split('\n')
+                    current_section = None
+                    
+                    for line in lines:
+                        if line.strip().startswith('SYSTEM_PROMPT'):
+                            current_section = 'system'
+                            continue
+                        elif line.strip().startswith('USER_PROMPT_TEMPLATE'):
+                            current_section = 'user'
+                            continue
+                        elif line.strip().startswith('"""') and current_section:
+                            if current_section == 'system':
+                                system_prompt = line.replace('"""', '').strip()
                             elif current_section == 'user':
-                                user_prompt_template += line + '\n'
-                        
-                        # Формируем финальный промпт
-                        formatted_user_prompt = user_prompt_template.format(
-                            region=region or 'Санкт-Петербург',
-                            business_name=business_name or 'Салон красоты',
-                            tone=tone or 'Профессиональный',
-                            length=length or 150,
-                            instructions=instructions or 'Оптимизируй услуги для Яндекс.Карт'
-                        )
-                        screenshot_prompt = f"{system_prompt}\n\n{formatted_user_prompt}"
+                                user_prompt_template = line.replace('"""', '').strip()
+                            current_section = None
+                            continue
+                        elif current_section == 'system':
+                            system_prompt += line + '\n'
+                        elif current_section == 'user':
+                            user_prompt_template += line + '\n'
+                    
+                    # Формируем финальный промпт
+                    formatted_user_prompt = user_prompt_template.format(
+                        region=region or 'Санкт-Петербург',
+                        business_name=business_name or 'Салон красоты',
+                        tone=tone or 'Профессиональный',
+                        length=length or 150,
+                        instructions=instructions or 'Оптимизируй услуги для Яндекс.Карт'
+                    )
+                    screenshot_prompt = f"{system_prompt}\n\n{formatted_user_prompt}"
                     
                 except FileNotFoundError:
-                    screenshot_prompt = """Проанализируй скриншот прайс-листа и найди все услуги.
+                    screenshot_prompt = """Проанализируй скриншот прайс-листа салона красоты и найди все услуги.
 
 ВЕРНИ РЕЗУЛЬТАТ СТРОГО В JSON ФОРМАТЕ:
 {
   "services": [
     {
       "original_name": "исходное название с скриншота",
-      "original_description": "описание услуги или пустая строка",
-      "price": null,
-      "keywords": [],
-      "category": "other"
+      "optimized_name": "SEO-оптимизированное название",
+      "seo_description": "детальное описание с ключевыми словами",
+      "keywords": ["ключ1", "ключ2", "ключ3"],
+      "category": "hair|nails|spa|barber|massage|makeup|brows|lashes|other"
     }
   ]
 }"""
                 
                 print(f"🔍 Анализ скриншота, размер base64: {len(image_base64)} символов")
+                business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id'))
                 result = analyze_screenshot_with_gigachat(
                     image_base64, 
                     screenshot_prompt,
@@ -8921,118 +2583,11 @@ def services_optimize():
                 )
                 print(f"🔍 Результат анализа скриншота: {type(result)}, keys: {result.keys() if isinstance(result, dict) else 'not dict'}")
             else:
-                # Для документов - извлекаем текст по типу/расширению.
-                raw_bytes = file.read()
-                filename = (file.filename or "").lower()
-                content = ""
-
-                # TXT / CSV
-                if file.content_type in ("text/plain", "text/csv") or filename.endswith((".txt", ".csv")):
-                    content = raw_bytes.decode("utf-8", errors="ignore")
-
-                # DOCX (zip + word/document.xml)
-                elif file.content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" or filename.endswith(".docx"):
-                    try:
-                        import io
-                        import zipfile
-                        import xml.etree.ElementTree as ET
-
-                        with zipfile.ZipFile(io.BytesIO(raw_bytes)) as zf:
-                            xml_data = zf.read("word/document.xml")
-                        root = ET.fromstring(xml_data)
-                        text_parts = [node.text.strip() for node in root.iter() if node.tag.endswith("}t") and node.text and node.text.strip()]
-                        content = "\n".join(text_parts)
-                    except Exception as docx_err:
-                        print(f"⚠️ Не удалось извлечь текст из DOCX: {docx_err}")
-                        content = ""
-
-                # XLSX (zip + xl/worksheets + sharedStrings)
-                elif file.content_type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" or filename.endswith(".xlsx"):
-                    try:
-                        import io
-                        import zipfile
-                        import xml.etree.ElementTree as ET
-
-                        with zipfile.ZipFile(io.BytesIO(raw_bytes)) as zf:
-                            shared_strings = []
-                            if "xl/sharedStrings.xml" in zf.namelist():
-                                ss_root = ET.fromstring(zf.read("xl/sharedStrings.xml"))
-                                for si in ss_root.iter():
-                                    if si.tag.endswith("}si"):
-                                        parts = [t.text for t in si.iter() if t.tag.endswith("}t") and t.text]
-                                        shared_strings.append("".join(parts).strip())
-
-                            sheet_names = [n for n in zf.namelist() if n.startswith("xl/worksheets/") and n.endswith(".xml")]
-                            rows_text = []
-
-                            def _cell_value(cell_node):
-                                cell_type = cell_node.attrib.get("t")
-
-                                # Inline string: <c t="inlineStr"><is><t>...</t></is></c>
-                                if cell_type == "inlineStr":
-                                    t_nodes = [t.text for t in cell_node.iter() if t.tag.endswith("}t") and t.text]
-                                    return "".join(t_nodes).strip()
-
-                                v_node = None
-                                for ch in cell_node:
-                                    if ch.tag.endswith("}v"):
-                                        v_node = ch
-                                        break
-
-                                if v_node is None or v_node.text is None:
-                                    return ""
-
-                                raw_val = v_node.text.strip()
-                                if not raw_val:
-                                    return ""
-
-                                if cell_type == "s" and raw_val.isdigit():
-                                    idx = int(raw_val)
-                                    if 0 <= idx < len(shared_strings):
-                                        return shared_strings[idx].strip()
-
-                                # Для чисел/текста возвращаем как есть — цены важны.
-                                return raw_val
-
-                            for sheet_name in sheet_names:
-                                root = ET.fromstring(zf.read(sheet_name))
-                                for row in root.iter():
-                                    if not row.tag.endswith("}row"):
-                                        continue
-
-                                    row_values = []
-                                    for cell in row:
-                                        if not cell.tag.endswith("}c"):
-                                            continue
-                                        value = _cell_value(cell)
-                                        if value:
-                                            row_values.append(value)
-
-                                    if not row_values:
-                                        continue
-
-                                    # Строковый вид сохраняет связь "услуга + цена" в одной строке.
-                                    rows_text.append(" | ".join(row_values))
-
-                            # Убираем дубли строк, сохраняя порядок.
-                            seen_rows = set()
-                            normalized_rows = []
-                            for row_text in rows_text:
-                                key = row_text.strip().lower()
-                                if not key or key in seen_rows:
-                                    continue
-                                seen_rows.add(key)
-                                normalized_rows.append(row_text.strip())
-                            content = "\n".join(normalized_rows)
-                    except Exception as xlsx_err:
-                        print(f"⚠️ Не удалось извлечь текст из XLSX: {xlsx_err}")
-                        content = ""
-
-                # Для PDF/DOC/XLS без парсера не пытаемся декодировать бинарь как текст.
-                else:
-                    content = ""
+                # Для документов - анализ текста
+                content = file.read().decode('utf-8', errors='ignore')
         else:
-            content = (payload.get('text') or '').strip()
+            data = request.get_json(silent=True) or {}
+            content = (data.get('text') or '').strip()
 
         # Если файл - изображение, результат уже получен выше
         if file and file.content_type.startswith('image/'):
@@ -9041,102 +2596,150 @@ def services_optimize():
             content = ""
         else:
             # Для текста и документов - проверяем наличие контента
-            if not content or not content.strip():
-                return jsonify({
-                    "error": "Не удалось извлечь текст из файла. Для документов используйте TXT/CSV или DOCX с текстом."
-                }), 400
+            if not content:
+                return jsonify({"error": "Не передан текст услуг или файл"}), 400
 
-            if recognize_only:
-                prompt = f"""Ты анализируешь файл с услугами и должен только извлечь услуги.
-Отвечай только валидным JSON без markdown:
+            # Загружаем частотные запросы
+            try:
+                with open('prompts/frequent-queries.txt', 'r', encoding='utf-8') as f:
+                    frequent_queries = f.read()
+            except FileNotFoundError:
+                frequent_queries = "Частотные запросы не найдены"
+
+            # Проверяем наличие косметологических терминов в услугах
+            cosmetic_terms = [
+                'косметология', 'косметолог', 'чистка лица', 'пилинг лица',
+                'ботокс', 'диспорт', 'контурная пластика', 'филлеры',
+                'гиалуроновая кислота', 'биоревитализация', 'мезотерапия',
+                'плазмолифтинг', 'rf-лифтинг', 'smas-лифтинг', 'ультразвуковой smas',
+                'лазерная эпиляция', 'фотоэпиляция', 'лазерное омоложение',
+                'лазерная шлифовка', 'нитевой лифтинг', 'липолитики',
+                'микротоки', 'аппаратная косметология', 'дермапен', 'микронидлинг',
+                'антивозрастные процедуры', 'лечение акне', 'постакне', 'купероз',
+                'уход за кожей', 'омоложение лица', 'маска для лица'
+            ]
+
+            lower_content = content.lower()
+            lower_frequent = frequent_queries.lower() if frequent_queries else ""
+            missing_cosmetic_terms = [
+                term for term in cosmetic_terms
+                if term in lower_content and term not in lower_frequent
+            ]
+
+            if missing_cosmetic_terms:
+                print(f"⚠️ Найдены косметологические термины без частоток: {missing_cosmetic_terms}")
+                # Пытаемся инициировать обновление Wordstat
+                try:
+                    from update_wordstat_data import main as update_wordstat_main
+                    update_wordstat_main()
+                except Exception as e:
+                    print(f"⚠️ Не удалось запустить обновление Wordstat: {e}")
+                # Отправляем уведомление
+                try:
+                    send_email(
+                        "demyanovap@yandex.ru",
+                        "Нужны новые Wordstat-ключи (косметология)",
+                        "При анализе услуг найдены термины без частотных запросов:\n"
+                        + "\n".join(missing_cosmetic_terms)
+                    )
+                except Exception as e:
+                    print(f"⚠️ Не удалось отправить уведомление: {e}")
+
+            # Загружаем новый промпт из файла
+            try:
+                with open('prompts/services-optimization-prompt.txt', 'r', encoding='utf-8') as f:
+                    prompt_file = f.read()
+                
+                # Парсим SYSTEM_PROMPT и USER_PROMPT_TEMPLATE
+                system_prompt = ""
+                user_template = ""
+                
+                if "SYSTEM_PROMPT = " in prompt_file:
+                    system_start = prompt_file.find('SYSTEM_PROMPT = """') + len('SYSTEM_PROMPT = """')
+                    system_end = prompt_file.find('"""', system_start)
+                    system_prompt = prompt_file[system_start:system_end]
+                
+                if "USER_PROMPT_TEMPLATE = " in prompt_file:
+                    user_start = prompt_file.find('USER_PROMPT_TEMPLATE = """') + len('USER_PROMPT_TEMPLATE = """')
+                    user_end = prompt_file.find('"""', user_start)
+                    user_template = prompt_file[user_start:user_end]
+                
+                # Загружаем примеры хороших формулировок из БД пользователя
+                try:
+                    db = DatabaseManager()
+                    cur = db.conn.cursor()
+                    from core.db_helpers import ensure_user_examples_table
+                    ensure_user_examples_table(cur)
+                    cur.execute("SELECT example_text FROM UserExamples WHERE user_id = ? AND example_type = 'service' ORDER BY created_at DESC LIMIT 5", (user_data['user_id'],))
+                    rows = cur.fetchall()
+                    db.close()
+                    examples_list = [row[0] if isinstance(row, tuple) else row['example_text'] for row in rows]
+                    good_examples = "\n".join(examples_list) if examples_list else ""
+                except Exception:
+                    good_examples = ""
+                
+                # Формируем финальный промпт
+                user_prompt = user_template.replace('{region}', str(region or 'не указан'))
+                user_prompt = user_prompt.replace('{business_name}', str(business_name or 'салон красоты'))
+                user_prompt = user_prompt.replace('{tone}', str(tone or 'профессиональный'))
+                user_prompt = user_prompt.replace('{length}', str(length or 150))
+                user_prompt = user_prompt.replace('{instructions}', str(instructions or '-'))
+                user_prompt = user_prompt.replace('{frequent_queries}', str(frequent_queries))
+                user_prompt = user_prompt.replace('{good_examples}', str(good_examples))
+                user_prompt = user_prompt.replace('{content}', str(content[:4000]))
+                
+                # Объединяем system и user промпты
+                prompt = f"{system_prompt}\n\n{user_prompt}"
+                
+            except FileNotFoundError:
+                # Fallback на старый промпт
+                default_prompt_template = """Ты - SEO-специалист для бьюти-индустрии. Перефразируй ТОЛЬКО названия услуг и короткие описания для карточек Яндекс.Карт.
+Запрещено любые мнения, диалог, оценочные суждения, обсуждение конкурентов, оскорбления. Никакого текста кроме результата.
+
+Регион: {region}
+Название бизнеса: {business_name}
+Тон: {tone}
+Язык результата: {language_name} (все текстовые поля optimized_name, seo_description и general_recommendations должны быть на этом языке)
+Длина описания: {length} символов
+Дополнительные инструкции: {instructions}
+
+ИСПОЛЬЗУЙ ЧАСТОТНЫЕ ЗАПРОСЫ:
+{frequent_queries}
+
+Формат ответа СТРОГО В JSON:
 {{
   "services": [
     {{
-      "original_name": "точное название услуги из файла",
-      "original_description": "описание услуги из файла или пустая строка",
-      "price": "цена как в файле или null",
-      "keywords": [],
-      "category": "other"
+      "original_name": "...",
+      "optimized_name": "...",              
+      "seo_description": "...",             
+      "keywords": ["...", "...", "..."], 
+      "price": null,
+      "category": "hair|nails|spa|barber|massage|other"
     }}
-  ]
+  ],
+  "general_recommendations": ["...", "..."]
 }}
-ПРАВИЛА:
-- Ничего не оптимизируй, не переписывай и не заменяй тематику.
-- Используй только данные из исходного текста.
-- Если подходящих услуг нет, верни: {{"services":[]}}.
 
-Текст файла:
-{content[:4000]}"""
-            else:
-                # Загружаем частотные запросы
-                try:
-                    with open('prompts/frequent-queries.txt', 'r', encoding='utf-8') as f:
-                        frequent_queries = f.read()
-                except FileNotFoundError:
-                    frequent_queries = "Частотные запросы не найдены"
-
-                seo_keywords = "SEO keywords are unavailable"
-                seo_keywords_top10 = "SEO keywords are unavailable"
-                try:
-                    db_kw = DatabaseManager()
-                    cur_kw = db_kw.conn.cursor()
-                    seo_keywords, seo_keywords_top10 = build_seo_keywords_context(cur_kw, business_id, user_data['user_id'])
-                    db_kw.close()
-                except Exception:
-                    pass
-
-                # Загружаем примеры хороших формулировок из профиля пользователя
-                try:
-                    db_examples = DatabaseManager()
-                    cur_examples = db_examples.conn.cursor()
-                    from core.db_helpers import ensure_user_examples_table
-                    ensure_user_examples_table(cur_examples)
-                    cur_examples.execute(
-                        "SELECT example_text FROM UserExamples WHERE user_id = %s AND example_type = 'service' ORDER BY created_at DESC LIMIT 5",
-                        (user_data['user_id'],)
-                    )
-                    rows = cur_examples.fetchall()
-                    db_examples.close()
-                    examples_list = [row[0] if isinstance(row, tuple) else row.get('example_text') for row in rows]
-                    good_examples = "\n".join([e for e in examples_list if e]) if examples_list else ""
-                except Exception:
-                    good_examples = ""
-
-                # Единственный источник промпта: админка (AIPrompts)
-                prompt_template_db, prompt_version = get_prompt_record_from_db('service_optimization', None)
-                if not prompt_template_db:
-                    return jsonify({
-                        "success": False,
-                        "error": "Промпт service_optimization не настроен в админ-панели."
-                    }), 500
+Исходные услуги/контент:
+{content}"""
+                
+                # Пытаемся получить промпт из БД, если не получилось - используем дефолтный
+                prompt_template = get_prompt_from_db('service_optimization', default_prompt_template)
 
                 prompt = (
-                    prompt_template_db
+                    prompt_template
                     .replace('{region}', str(region or 'не указан'))
-                    .replace('{business_name}', str(business_name or 'бизнес'))
-                    .replace('{industry}', str(business_industry or '-'))
-                    .replace('{business_type}', str(business_type_value or '-'))
+                    .replace('{business_name}', str(business_name or 'салон красоты'))
                     .replace('{tone}', str(tone or 'профессиональный'))
                     .replace('{language_name}', language_name)
                     .replace('{length}', str(length or 150))
                     .replace('{instructions}', str(instructions or '-'))
                     .replace('{frequent_queries}', str(frequent_queries))
-                    .replace('{seo_keywords}', str(seo_keywords))
-                    .replace('{seo_keywords_top10}', str(seo_keywords_top10))
-                    .replace('{good_examples}', str(good_examples))
                     .replace('{content}', str(content[:4000]))
                 )
 
-                # Страховка от "утечки" примеров: запрещаем перенос контента из examples в итог.
-                prompt += (
-                    "\n\n"
-                    "КРИТИЧЕСКИЕ ОГРАНИЧЕНИЯ:\n"
-                    "1) Используй ТОЛЬКО исходные услуги из блока {content}. Не добавляй чужие тематики.\n"
-                    "2) Текст из разделов с примерами (good_examples/Примеры) нельзя копировать в ответ.\n"
-                    "3) Если не можешь сформировать корректный SEO-вариант по исходной услуге, верни исходное название и исходное описание.\n"
-                    "4) Верни СТРОГО JSON в требуемой схеме, без markdown и без пояснений.\n"
-                )
-
+            business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id'))
             result = analyze_text_with_gigachat(
                 prompt, 
                 task_type="service_optimization",
@@ -9148,249 +2751,47 @@ def services_optimize():
         print(f"🔍 DEBUG services_optimize: result type = {type(result)}")
         print(f"🔍 DEBUG services_optimize: result = {result[:200] if isinstance(result, str) else result}")
         
-        # Парсим JSON из ответа GigaChat (устойчиво: fenced-json / шум вокруг JSON / plain-text ошибки)
+        # Парсим JSON из ответа GigaChat
         parsed_result = None
-
-        def _extract_balanced_json_block(text: str, open_ch: str, close_ch: str):
-            start = text.find(open_ch)
-            if start < 0:
-                return None
-            depth = 0
-            in_str = False
-            escape = False
-            for i in range(start, len(text)):
-                ch = text[i]
-                if in_str:
-                    if escape:
-                        escape = False
-                    elif ch == '\\':
-                        escape = True
-                    elif ch == '"':
-                        in_str = False
-                    continue
-                if ch == '"':
-                    in_str = True
-                    continue
-                if ch == open_ch:
-                    depth += 1
-                elif ch == close_ch:
-                    depth -= 1
-                    if depth == 0:
-                        return text[start:i + 1]
-            return None
-
-        def _try_parse_json_payload(raw_text: str):
-            if not isinstance(raw_text, str):
-                return None
-            txt = raw_text.strip()
-            if not txt:
-                return None
-
-            candidates = [txt]
-            try:
-                import re as _re
-                fenced = _re.findall(r"```json\s*(.*?)\s*```", txt, flags=_re.IGNORECASE | _re.DOTALL)
-                fenced += _re.findall(r"```\s*(.*?)\s*```", txt, flags=_re.DOTALL)
-                candidates.extend([c.strip() for c in fenced if c and c.strip()])
-            except Exception:
-                pass
-
-            obj_block = _extract_balanced_json_block(txt, '{', '}')
-            arr_block = _extract_balanced_json_block(txt, '[', ']')
-            if obj_block:
-                candidates.append(obj_block)
-            if arr_block:
-                candidates.append(arr_block)
-
-            seen = set()
-            for candidate in candidates:
-                if not candidate or candidate in seen:
-                    continue
-                seen.add(candidate)
-                try:
-                    parsed = json.loads(candidate)
-                except Exception:
-                    continue
-                if isinstance(parsed, str):
-                    nested = _try_parse_json_payload(parsed)
-                    if nested is not None:
-                        return nested
-                    continue
-                return parsed
-            return None
-
-        def _extract_identity_service_from_content():
-            """Fail-safe: вернуть исходную услугу из входного текста без оптимизации."""
-            try:
-                source_lines = [ln.strip(" -*\t") for ln in str(content or "").splitlines() if ln.strip()]
-                original_name = source_lines[0] if source_lines else ""
-                original_description = " ".join(source_lines[1:]).strip() if len(source_lines) > 1 else ""
-                if not original_name:
-                    return None
-                return {
-                    "services": [
-                        {
-                            "original_name": str(original_name).strip(),
-                            "optimized_name": str(original_name).strip(),
-                            "original_description": str(original_description).strip(),
-                            "seo_description": str(original_description).strip(),
-                            "keywords": [],
-                            "price": None,
-                            "category": "other"
-                        }
-                    ],
-                    "general_recommendations": []
-                }
-            except Exception:
-                return None
-
-        def _extract_service_from_markdown(raw_text: str):
-            """Fallback: вытаскивает название/описание из markdown-текста модели."""
-            if not isinstance(raw_text, str):
-                return None
-            txt = raw_text.strip()
-            if not txt:
-                return None
-            try:
-                import re as _re
-
-                # Исходные значения из content (что пришло на оптимизацию)
-                original_name = ""
-                original_description = ""
-                content_lines = [ln.strip(" -*\t") for ln in str(content or "").splitlines() if ln.strip()]
-                if content_lines:
-                    original_name = content_lines[0]
-                if len(content_lines) > 1:
-                    original_description = " ".join(content_lines[1:]).strip()
-
-                patterns_name = [
-                    r"(?:Новое\s+)?Название\s+услуги[:\s]*\*{0,2}\s*([^\n\r*]+)",
-                    r"###\s*Название\s+услуги[:\s]*([^\n\r]+)",
-                ]
-                patterns_desc = [
-                    r"(?:Новое\s+)?Описание\s+услуги[:\s]*\*{0,2}\s*([^\n\r]+(?:\n(?!\s*(?:-|\*|###|##|\*\*|Название|Описание)).+)*)",
-                    r"###\s*Описание\s+услуги[:\s]*([^\n\r]+(?:\n(?!\s*(?:-|\*|###|##|\*\*|Название|Описание)).+)*)",
-                ]
-
-                extracted_name = ""
-                extracted_desc = ""
-                for p in patterns_name:
-                    m = _re.search(p, txt, flags=_re.IGNORECASE)
-                    if m:
-                        extracted_name = " ".join(m.group(1).split()).strip(" -*_")
-                        if extracted_name:
-                            break
-                for p in patterns_desc:
-                    m = _re.search(p, txt, flags=_re.IGNORECASE | _re.DOTALL)
-                    if m:
-                        extracted_desc = " ".join(m.group(1).split()).strip(" -*_")
-                        if extracted_desc:
-                            break
-
-                if not extracted_name and not extracted_desc:
-                    return None
-
-                if not original_name:
-                    original_name = extracted_name
-                if not original_description:
-                    original_description = extracted_desc
-
-                return {
-                    "services": [
-                        {
-                            "original_name": str(original_name or "").strip(),
-                            "optimized_name": str(extracted_name or original_name or "").strip(),
-                            "original_description": str(original_description or "").strip(),
-                            "seo_description": str(extracted_desc or original_description or "").strip(),
-                            "keywords": [],
-                            "price": None,
-                            "category": "other"
-                        }
-                    ],
-                    "general_recommendations": []
-                }
-            except Exception:
-                return None
-
-        def _default_seo_description(service_name: str) -> str:
-            name = str(service_name or "").strip()
-            if not name:
-                return "Уточните детали услуги и условия оказания при обращении."
-            return (
-                f"{name} — актуальная услуга с профессиональным подходом. "
-                "Уточните детали и формат при обращении."
-            )
-
-        def _infer_service_category(service_name: str, service_description: str) -> str:
-            text = f"{service_name or ''} {service_description or ''}".strip().lower()
-            if not text:
-                return str(business_type_value or business_industry or "general").strip() or "general"
-
-            keyword_map = [
-                ("nails", ("маник", "педик", "ногт", "гель-лак", "nail")),
-                ("massage", ("массаж", "massage", "релакс", "лимфодренаж")),
-                ("cosmetology", ("космет", "чистк", "пилинг", "биоревитал", "hydrafacial", "лифтинг")),
-                ("laser", ("лазер", "эпиляц", "laser")),
-                ("injections", ("ботокс", "инъекц", "контурн", "филлер", "диспорт")),
-                ("body", ("emsculpt", "ems", "фигура", "коррекц", "body")),
-                ("hair", ("стриж", "уклад", "окраш", "волос", "hair")),
-                ("medical", ("прием", "консультац", "врач", "диагност", "анализ", "узи", "процедур")),
-            ]
-            for category_key, markers in keyword_map:
-                if any(marker in text for marker in markers):
-                    return category_key
-
-            fallback = str(business_type_value or business_industry or "").strip().lower()
-            return fallback or "general"
-
         if isinstance(result, dict):
+            # Если словарь (на всякий случай), проверяем наличие ошибки
             if 'error' in result:
-                error_msg = str(result.get('error') or 'Ошибка оптимизации')
+                error_msg = result.get('error', 'Ошибка оптимизации')
                 print(f"❌ Ошибка в результате: {error_msg}")
-                status_code = 429 if '429' in error_msg else 502
                 return jsonify({
                     "success": False,
                     "error": error_msg,
                     "raw": result.get('raw_response')
-                }), status_code
+                    }), 502
             parsed_result = result
         elif isinstance(result, str):
-            # Если провайдер вернул текстовую ошибку — пробрасываем её как есть.
-            text_result = result.strip()
-            if (
-                "Запрос к GigaChat не удался" in text_result
-                or "HTTP 429" in text_result
-                or text_result.lower().startswith("error")
-            ):
-                status_code = 429 if "429" in text_result else 502
-                return jsonify({
-                    "success": False,
-                    "error": text_result,
-                    "raw": result
-                }), status_code
-
-            parsed_result = _try_parse_json_payload(result)
-            if parsed_result is None:
-                parsed_result = _extract_service_from_markdown(result)
-                if parsed_result is None:
-                    fallback_result = None
-                    # Для одиночной оптимизации из UI не роняем запрос:
-                    # возвращаем исходную услугу, если модель прислала "грязный" текст.
-                    if not recognize_only and not file:
-                        fallback_result = _extract_identity_service_from_content()
-                    if fallback_result is not None:
-                        fallback_name = fallback_result["services"][0].get("original_name") if fallback_result.get("services") else ""
-                        print(f"⚠️ Не удалось распарсить результат оптимизации, применён fallback для услуги: {fallback_name}")
-                        print(f"⚠️ Сырой ответ модели (первые 500): {result[:500]}")
-                        parsed_result = fallback_result
-                    else:
-                        print(f"❌ Не удалось распарсить JSON из результата")
-                        print(f"❌ Полный результат: {result[:500]}")
+            # Если строка, пробуем распарсить как JSON
+            try:
+                # Ищем JSON объект в строке
+                start_idx = result.find('{')
+                end_idx = result.rfind('}') + 1
+                if start_idx != -1 and end_idx != 0:
+                    json_str = result[start_idx:end_idx]
+                    parsed_result = json.loads(json_str)
+                    if isinstance(parsed_result, dict) and 'error' in parsed_result:
+                        error_msg = parsed_result.get('error', 'Ошибка оптимизации')
+                        print(f"❌ Ошибка в результате: {error_msg}")
                         return jsonify({
                             "success": False,
-                            "error": "Не удалось распарсить результат оптимизации",
+                            "error": error_msg,
                             "raw": result
                         }), 502
+                else:
+                    # JSON не найден, пробуем распарсить всю строку
+                    parsed_result = json.loads(result)
+            except json.JSONDecodeError:
+                print(f"❌ Не удалось распарсить JSON из результата")
+                print(f"❌ Полный результат: {result[:500]}")
+                return jsonify({
+                    "success": False,
+                    "error": "Не удалось распарсить результат оптимизации",
+                    "raw": result
+                }), 502
         else:
             print(f"❌ Неожиданный тип результата: {type(result)}")
             return jsonify({
@@ -9399,139 +2800,12 @@ def services_optimize():
                 "raw": str(result)
             }), 502
 
-        # Нормализуем тип результата
-        if isinstance(parsed_result, list):
-            parsed_result = {"services": parsed_result}
-        elif isinstance(parsed_result, dict):
-            nested_result = parsed_result.get("result")
-            if isinstance(nested_result, dict) and "services" in nested_result and "services" not in parsed_result:
-                parsed_result = nested_result
-
         # Проверяем, что parsed_result - это словарь
         if not isinstance(parsed_result, dict):
             print(f"❌ Ошибка: parsed_result не является словарём, тип: {type(parsed_result)}")
             parsed_result = {}
-
-        # Защита от "утечки примеров" из промпта в финальный ответ:
-        # если модель ушла в нерелевантную тему, не применяем такой SEO-текст.
-        def _tokenize_topic(text: str):
-            import re as _re
-            if not text:
-                return set()
-            return {
-                w.lower()
-                for w in _re.findall(r"[A-Za-zА-Яа-яЁё0-9]{4,}", str(text))
-                if len(w) >= 4
-            }
-
-        def _looks_like_prompt_leak(text: str) -> bool:
-            if not text:
-                return False
-            lower = str(text).lower()
-            markers = (
-                "пример",
-                "исходные данные",
-                "результат:",
-                "seo-ключи",
-                "название услуги:",
-                "описание услуги:",
-                "###",
-                "---",
-            )
-            return sum(1 for m in markers if m in lower) >= 2
-
-        source_lines = [ln.strip() for ln in str(content or "").splitlines() if ln.strip()]
-        input_original_name = source_lines[0] if source_lines else ""
-        input_original_description = " ".join(source_lines[1:]).strip() if len(source_lines) > 1 else ""
-
-        services_block = parsed_result.get("services")
-        if not isinstance(services_block, list):
-            services_block = []
-            parsed_result["services"] = services_block
-
-        # Для одиночной оптимизации из UI всегда фиксируем исходные поля из входного текста.
-        if (
-            not recognize_only
-            and not file
-            and isinstance(services_block, list)
-            and len(services_block) == 1
-            and input_original_name
-            and isinstance(services_block[0], dict)
-        ):
-            services_block[0]["original_name"] = input_original_name
-            if input_original_description:
-                services_block[0]["original_description"] = input_original_description
-
-        # Fail-safe для одиночной оптимизации из UI:
-        # если модель вернула пустой список, сохраняем исходную услугу вместо ошибки на фронте.
-        if (
-            not recognize_only
-            and not file
-            and input_original_name
-            and isinstance(services_block, list)
-            and len(services_block) == 0
-        ):
-            print(f"⚠️ Пустой services[] от модели, применён fallback для услуги: {input_original_name}")
-            fallback_description = input_original_description or _default_seo_description(input_original_name)
-            services_block = [{
-                "original_name": input_original_name,
-                "optimized_name": input_original_name,
-                "original_description": input_original_description,
-                "seo_description": fallback_description,
-                "keywords": [],
-                "price": None,
-                "category": _infer_service_category(input_original_name, input_original_description)
-            }]
-            parsed_result["services"] = services_block
-
-        sanitized_services = []
-        for svc in services_block:
-            if not isinstance(svc, dict):
-                continue
-            original_name = str(svc.get("original_name") or input_original_name or "").strip()
-            original_description = str(svc.get("original_description") or input_original_description or "").strip()
-            optimized_name = str(svc.get("optimized_name") or "").strip()
-            seo_description = str(svc.get("seo_description") or "").strip()
-
-            # Если модель не дала optimized_* в ожидаемом JSON, но вернула "Название/Описание услуги" строками.
-            if not optimized_name and "Название услуги:" in seo_description:
-                import re as _re
-                m_name = _re.search(r"Название услуги:\s*\*{0,2}\s*([^\n\r*]+)", seo_description, flags=_re.IGNORECASE)
-                if m_name:
-                    optimized_name = " ".join(m_name.group(1).split()).strip(" -*_")
-                m_desc = _re.search(r"Описание услуги:\s*\*{0,2}\s*(.+)", seo_description, flags=_re.IGNORECASE | _re.DOTALL)
-                if m_desc:
-                    seo_description = " ".join(m_desc.group(1).split()).strip(" -*_")
-
-            # Анти-дрифт: проверяем пересечение темы исходника и оптимизации.
-            src_tokens = _tokenize_topic(f"{original_name} {original_description}")
-            out_tokens = _tokenize_topic(f"{optimized_name} {seo_description}")
-            overlap = len(src_tokens & out_tokens)
-            leaked = _looks_like_prompt_leak(seo_description) or _looks_like_prompt_leak(optimized_name)
-            topic_mismatch = bool(src_tokens) and overlap == 0
-
-            if (leaked or topic_mismatch) and not recognize_only:
-                print(f"⚠️ Нерелевантный SEO-ответ (leaked={leaked}, overlap={overlap}). Оставляем исходный текст.")
-                optimized_name = original_name or optimized_name
-                seo_description = original_description or seo_description
-
-            svc["original_name"] = original_name
-            svc["original_description"] = original_description
-            svc["optimized_name"] = optimized_name or original_name
-            svc["seo_description"] = (
-                seo_description
-                or original_description
-                or _default_seo_description(optimized_name or original_name)
-            )
-            current_category = str(svc.get("category") or "").strip()
-            if not current_category or current_category.lower() == "other":
-                svc["category"] = _infer_service_category(
-                    original_name or optimized_name,
-                    original_description or seo_description,
-                )
-            sanitized_services.append(svc)
-
-        parsed_result["services"] = sanitized_services
+        else:
+            parsed_result = _strip_unchanged_service_suggestions(parsed_result)
 
         # Сохраним в БД (как оптимизацию прайса, даже для текстового режима)
         db = DatabaseManager()
@@ -9559,82 +2833,7 @@ def services_optimize():
             f.write(content)
 
         result = parsed_result
-
-        if recognize_only and isinstance(result, dict):
-            raw_services = result.get('services', [])
-            normalized_services = []
-            if isinstance(raw_services, list):
-                for item in raw_services:
-                    if isinstance(item, str):
-                        name = item.strip()
-                        if not name:
-                            continue
-                        normalized_services.append({
-                            "original_name": name,
-                            "optimized_name": name,
-                            "original_description": "",
-                            "seo_description": "",
-                            "keywords": [],
-                            "price": None,
-                            "category": "other"
-                        })
-                        continue
-                    if not isinstance(item, dict):
-                        continue
-
-                    original_name = (
-                        item.get('original_name')
-                        or item.get('name')
-                        or item.get('service_name')
-                        or item.get('title')
-                        or ''
-                    )
-                    original_name = str(original_name).strip()
-                    if not original_name:
-                        continue
-
-                    original_description = (
-                        item.get('original_description')
-                        or item.get('description')
-                        or item.get('seo_description')
-                        or ''
-                    )
-                    original_description = str(original_description).strip()
-
-                    raw_keywords = item.get('keywords', [])
-                    if isinstance(raw_keywords, list):
-                        keywords = [str(v).strip() for v in raw_keywords if str(v).strip()]
-                    elif isinstance(raw_keywords, str):
-                        keywords = [v.strip() for v in re.split(r"[,\n;]+", raw_keywords) if v.strip()]
-                    else:
-                        keywords = []
-
-                    price = item.get('price')
-                    category = item.get('category') or 'other'
-
-                    normalized_services.append({
-                        "original_name": original_name,
-                        "optimized_name": original_name,
-                        "original_description": original_description,
-                        "seo_description": original_description,
-                        "keywords": keywords,
-                        "price": price,
-                        "category": _infer_service_category(original_name, original_description) if not category or str(category).strip().lower() == "other" else category
-                    })
-
-            result = {
-                "services": normalized_services,
-                "general_recommendations": []
-            }
-
         services_count = len(result.get('services', [])) if isinstance(result.get('services'), list) else 0
-
-        if file and services_count == 0:
-            return jsonify({
-                "success": False,
-                "error": "В файле не найдены подходящие услуги. Проверьте содержание и формат файла."
-            }), 422
-
         cursor.execute("""
             INSERT INTO PricelistOptimizations (id, user_id, original_file_path, optimized_data, services_count, expires_at)
             VALUES (%s, %s, %s, %s, %s, %s)
@@ -9648,33 +2847,6 @@ def services_optimize():
         ))
         db.conn.commit()
         db.close()
-
-        try:
-            first_generated = ""
-            if isinstance(result.get("services"), list) and result["services"]:
-                first_service = result["services"][0] if isinstance(result["services"][0], dict) else {}
-                first_generated = str(first_service.get("optimized_name") or first_service.get("original_name") or "").strip()
-            record_ai_learning_event(
-                capability="services.optimize",
-                event_type="generated",
-                intent=_normalize_learning_intent(payload.get("intent")),
-                user_id=user_data.get("user_id"),
-                business_id=business_id,
-                accepted=None,
-                prompt_key="service_optimization",
-                prompt_version=(locals().get("prompt_version")),
-                metadata={
-                    "services_count": services_count,
-                    "recognize_only": bool(recognize_only),
-                    "from_file": bool(file),
-                    "tone": tone or "professional",
-                    "language": language,
-                },
-                draft_text=content[:1500] if isinstance(content, str) else "",
-                final_text=first_generated,
-            )
-        except Exception as learning_exc:
-            print(f"⚠️ services.optimize learning skipped: {learning_exc}")
 
         return jsonify({
             "success": True,
@@ -9709,7 +2881,7 @@ def user_service_examples():
         ensure_user_examples_table(cur)
 
         if request.method == 'GET':
-            cur.execute("SELECT id, example_text, created_at FROM UserExamples WHERE user_id = %s AND example_type = 'service' ORDER BY created_at DESC", (user_data['user_id'],))
+            cur.execute("SELECT id, example_text, created_at FROM UserExamples WHERE user_id = ? AND example_type = 'service' ORDER BY created_at DESC", (user_data['user_id'],))
             rows = cur.fetchall()
             db.close()
             examples = []
@@ -9728,13 +2900,13 @@ def user_service_examples():
             db.close()
             return jsonify({"error": "Текст примера обязателен"}), 400
         # Ограничим 5 примеров на пользователя
-        cur.execute("SELECT COUNT(*) FROM UserExamples WHERE user_id = %s AND example_type = 'service'", (user_data['user_id'],))
+        cur.execute("SELECT COUNT(*) FROM UserExamples WHERE user_id = ? AND example_type = 'service'", (user_data['user_id'],))
         count = cur.fetchone()[0]
         if count >= 5:
             db.close()
             return jsonify({"error": "Максимум 5 примеров"}), 400
         example_id = str(uuid.uuid4())
-        cur.execute("INSERT INTO UserExamples (id, user_id, example_type, example_text) VALUES (%s, %s, 'service', %s)", (example_id, user_data['user_id'], text))
+        cur.execute("INSERT INTO UserExamples (id, user_id, example_type, example_text) VALUES (?, ?, 'service', ?)", (example_id, user_data['user_id'], text))
         db.conn.commit()
         db.close()
         return jsonify({"success": True, "id": example_id})
@@ -9757,7 +2929,7 @@ def delete_user_service_example(example_id: str):
 
         db = DatabaseManager()
         cur = db.conn.cursor()
-        cur.execute("DELETE FROM UserExamples WHERE id = %s AND user_id = %s AND example_type = 'service'", (example_id, user_data['user_id']))
+        cur.execute("DELETE FROM UserExamples WHERE id = ? AND user_id = ? AND example_type = 'service'", (example_id, user_data['user_id']))
         deleted = cur.rowcount
         db.conn.commit()
         db.close()
@@ -9786,19 +2958,9 @@ def news_generate():
         data = request.get_json(silent=True) or {}
         use_service = bool(data.get('use_service'))
         use_transaction = bool(data.get('use_transaction'))
-        use_seo_keywords = bool(data.get('use_seo_keywords'))
-        selected_seo_keyword = (data.get('selected_seo_keyword') or '').strip()
         selected_service_id = data.get('service_id')
         selected_transaction_id = data.get('transaction_id')
         raw_info = (data.get('raw_info') or '').strip()
-        content_mode = str(data.get('content_mode') or 'news').strip().lower()
-        if content_mode not in {'news', 'social'}:
-            content_mode = 'news'
-        social_format = _normalize_social_format(data.get("social_format"))
-        if content_mode == "social" and not social_format:
-            social_format = "announce"
-        if content_mode != "social":
-            social_format = None
 
         # Язык новости: получаем из запроса или из профиля пользователя
         requested_language = data.get('language')
@@ -9814,57 +2976,42 @@ def news_generate():
             'zh': 'Chinese'
         }
         language_name = language_names.get(language, 'Russian')
-        business_id = get_business_id_from_user(
-            user_data['user_id'],
-            data.get('business_id') or request.args.get('business_id')
-        )
-        if not has_paid_automation_access(business_id):
-            return jsonify({"error": get_automation_block_message(business_id), "code": "automation_locked"}), 403
 
         db = DatabaseManager()
         cur = db.conn.cursor()
         # ensure table
-        _ensure_user_news_table(cur)
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS UserNews (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                service_id TEXT,
+                source_text TEXT,
+                generated_text TEXT NOT NULL,
+                approved INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE,
+                FOREIGN KEY (service_id) REFERENCES UserServices(id) ON DELETE SET NULL
+            )
+            """
+        )
 
         service_context = ''
-        selected_service_name = ''
-        selected_service_description = ''
         transaction_context = ''
         
-        userservices_cols = _load_table_columns(cur, "userservices")
         if use_service:
             if selected_service_id:
-                where_parts = ["id = %s"]
-                params = [selected_service_id]
-                if "business_id" in userservices_cols and business_id:
-                    where_parts.append("business_id = %s")
-                    params.append(business_id)
-                elif "user_id" in userservices_cols:
-                    where_parts.append("user_id = %s")
-                    params.append(user_data['user_id'])
-                cur.execute(
-                    f"SELECT name, description FROM UserServices WHERE {' AND '.join(where_parts)} LIMIT 1",
-                    tuple(params),
-                )
+                cur.execute("SELECT name, description FROM UserServices WHERE id = ? AND user_id = ?", (selected_service_id, user_data['user_id']))
                 row = cur.fetchone()
                 if row:
                     name, desc = (row if isinstance(row, tuple) else (row['name'], row['description']))
-                    selected_service_name = name or ''
-                    selected_service_description = desc or ''
                     service_context = f"Услуга: {name}. Описание: {desc or ''}"
             else:
                 # выбрать случайную услугу пользователя
-                if "business_id" in userservices_cols and business_id:
-                    cur.execute("SELECT name, description FROM UserServices WHERE business_id = %s ORDER BY RANDOM() LIMIT 1", (business_id,))
-                elif "user_id" in userservices_cols:
-                    cur.execute("SELECT name, description FROM UserServices WHERE user_id = %s ORDER BY RANDOM() LIMIT 1", (user_data['user_id'],))
-                else:
-                    cur.execute("SELECT name, description FROM UserServices ORDER BY RANDOM() LIMIT 1")
+                cur.execute("SELECT name, description FROM UserServices WHERE user_id = ? ORDER BY RANDOM() LIMIT 1", (user_data['user_id'],))
                 row = cur.fetchone()
                 if row:
                     name, desc = (row if isinstance(row, tuple) else (row['name'], row['description']))
-                    selected_service_name = name or ''
-                    selected_service_description = desc or ''
                     service_context = f"Услуга: {name}. Описание: {desc or ''}"
         
         if use_transaction:
@@ -9873,7 +3020,7 @@ def news_generate():
                 cur.execute("""
                     SELECT transaction_date, amount, services, notes, client_type
                     FROM FinancialTransactions
-                    WHERE id = %s AND user_id = %s
+                    WHERE id = ? AND user_id = ?
                 """, (selected_transaction_id, user_data['user_id']))
                 row = cur.fetchone()
                 if row:
@@ -9894,7 +3041,7 @@ def news_generate():
                 cur.execute("""
                     SELECT transaction_date, amount, services, notes
                     FROM FinancialTransactions
-                    WHERE user_id = %s
+                    WHERE user_id = ?
                     ORDER BY transaction_date DESC, created_at DESC
                     LIMIT 1
                 """, (user_data['user_id'],))
@@ -9918,7 +3065,7 @@ def news_generate():
         try:
             from core.db_helpers import ensure_user_examples_table
             ensure_user_examples_table(cur)
-            cur.execute("SELECT example_text FROM UserExamples WHERE user_id = %s AND example_type = 'news' ORDER BY created_at DESC LIMIT 5", (user_data['user_id'],))
+            cur.execute("SELECT example_text FROM UserExamples WHERE user_id = ? AND example_type = 'news' ORDER BY created_at DESC LIMIT 5", (user_data['user_id'],))
             r = cur.fetchall()
             ex = [row[0] if isinstance(row, tuple) else row['example_text'] for row in r]
             if ex:
@@ -9926,123 +3073,76 @@ def news_generate():
         except Exception:
             news_examples = ""
 
-        if use_service and selected_service_name:
-            seo_keywords, seo_keywords_top10 = build_seo_keywords_context_for_service(
-                cur,
-                business_id,
-                user_data['user_id'],
-                selected_service_name,
-                selected_service_description,
-            )
+        # Получаем промпт из БД или используем дефолтный
+        # ВАЖНО: default_prompt должен быть шаблоном с плейсхолдерами, а не f-string!
+        default_prompt = """Ты - маркетолог для локального бизнеса. Сгенерируй новость для публикации на картах (Google, Яндекс).
+Требования: до 1500 символов, можно использовать 2-3 эмодзи (не переборщи), без хештегов, без оценочных суждений, без упоминания конкурентов. Стиль - информативный и дружелюбный.
+Write all generated text in {language_name}.
+Верни СТРОГО JSON: {{"news": "текст новости"}}
+
+Контекст услуги (может отсутствовать): {service_context}
+Контекст выполненной работы/транзакции (может отсутствовать): {transaction_context}
+Свободная информация (может отсутствовать): {raw_info}
+Если уместно, ориентируйся на стиль этих примеров (если они есть):
+{news_examples}"""
+        
+        prompt_template = get_prompt_from_db('news_generation', default_prompt)
+        
+        # Логируем тип и значение prompt_template
+        print(f"🔍 DEBUG news_generate: prompt_template type = {type(prompt_template)}", flush=True)
+        print(f"🔍 DEBUG news_generate: prompt_template (первые 200 символов) = {str(prompt_template)[:200] if prompt_template else 'None'}", flush=True)
+        
+        # Убеждаемся, что prompt_template - это строка
+        if not isinstance(prompt_template, str):
+            print(f"⚠️ prompt_template не строка: {type(prompt_template)} = {prompt_template}", flush=True)
+            prompt_template = default_prompt
         else:
-            seo_keywords, seo_keywords_top10 = build_seo_keywords_context(cur, business_id, user_data['user_id'])
-        seo_service_context = ""
-        if use_seo_keywords:
+            # Принудительно преобразуем в строку (на случай, если это bytes или что-то еще)
             try:
-                if business_id:
-                    cur.execute(
-                        """
-                        SELECT DISTINCT name
-                        FROM userservices
-                        WHERE business_id = %s
-                          AND (is_active IS TRUE OR is_active IS NULL)
-                          AND name IS NOT NULL
-                          AND TRIM(name) <> ''
-                        ORDER BY name ASC
-                        LIMIT 30
-                        """,
-                        (business_id,),
-                    )
-                else:
-                    cur.execute(
-                        """
-                        SELECT DISTINCT name
-                        FROM userservices
-                        WHERE user_id = %s
-                          AND (is_active IS TRUE OR is_active IS NULL)
-                          AND name IS NOT NULL
-                          AND TRIM(name) <> ''
-                        ORDER BY name ASC
-                        LIMIT 30
-                        """,
-                        (user_data['user_id'],),
-                    )
-                rows = cur.fetchall() or []
-                service_names = []
-                for row in rows:
-                    if isinstance(row, tuple):
-                        name = (row[0] or "").strip()
-                    elif hasattr(row, "keys"):
-                        name = (row.get("name") or "").strip()
-                    else:
-                        name = ""
-                    if name:
-                        service_names.append(name)
-                if service_names:
-                    seo_service_context = ", ".join(service_names)
-            except Exception:
-                seo_service_context = ""
-
-        seo_generation_hint = ""
-        if use_seo_keywords:
-            seo_generation_hint = (
-                "Режим генерации: SEO-first. Сначала выбери 1-2 самых частотных SEO-запроса из блока WORDSTAT, "
-                "затем естественно свяжи их с реальными услугами бизнеса. "
-                f"Доступные услуги бизнеса: {seo_service_context or 'не указаны'}."
-            )
-            if selected_seo_keyword:
-                seo_generation_hint += f" Приоритетный ключ для этой новости: {selected_seo_keyword}."
-        if content_mode == 'social':
-            format_label = SOCIAL_FORMAT_LABELS.get(social_format or "", social_format or "пост")
-            seo_generation_hint += (
-                " Формат результата: короткий пост для соцсетей (1-2 абзаца + CTA, без markdown/JSON)."
-                f" Приоритетный формат: {format_label}."
-            )
-        if use_service and selected_service_name:
-            seo_generation_hint += (
-                f" Жесткое ограничение темы: новость должна быть только про услугу '{selected_service_name}'. "
-                "Нельзя подменять услугу на другую, даже если у другой услуги частотность выше."
-            )
-
-        prompt_key = "news_generation"
-        prompt_template = None
-        prompt_version = None
-        prompt_candidates = ["news_generation"]
-        if content_mode == "social":
-            prompt_candidates = ["news_social_generation", "social_media_generation", "news_generation"]
-        route_seed = f"{user_data.get('user_id')}:{datetime.utcnow().timestamp()}:{raw_info[:64]}"
-        for candidate in prompt_candidates:
-            prompt_template, prompt_version = get_prompt_record_from_db(
-                candidate,
-                None,
-                route_seed if candidate == "news_social_generation" else None,
-            )
-            if prompt_template:
-                prompt_key = candidate
-                break
-        if not prompt_template:
-            db.close()
-            return jsonify({
-                "error": "Промпт news_generation не настроен в админ-панели."
-            }), 500
+                prompt_template = str(prompt_template)
+            except Exception as conv_err:
+                print(f"⚠️ Ошибка преобразования prompt_template в строку: {conv_err}", flush=True)
+                prompt_template = default_prompt
+        
+        # Финальная проверка
+        if not isinstance(prompt_template, str):
+            print(f"❌ prompt_template всё ещё не строка после преобразования: {type(prompt_template)}", flush=True)
+            prompt_template = default_prompt
+        
+        # Принудительно преобразуем в обычную строку Python (не bytes, не специальные типы)
         try:
-            # Безопасная подстановка только известных плейсхолдеров.
-            # В админ-шаблонах могут быть JSON-блоки с фигурными скобками,
-            # которые нельзя пропускать через str.format/format_map.
-            prompt = str(prompt_template)
-            prompt = prompt.replace("{language_name}", str(language_name))
-            prompt = prompt.replace("{service_context}", str(service_context))
-            prompt = prompt.replace("{transaction_context}", str(transaction_context))
-            prompt = prompt.replace("{raw_info}", str(raw_info[:800]))
-            prompt = prompt.replace("{seo_keywords}", str(seo_keywords))
-            prompt = prompt.replace("{seo_keywords_top10}", str(seo_keywords_top10))
-            prompt = prompt.replace("{seo_generation_hint}", str(seo_generation_hint))
-            prompt = prompt.replace("{news_examples}", str(news_examples))
-        except Exception as format_err:
-            db.close()
-            return jsonify({
-                "error": f"Ошибка шаблона news_generation в админ-панели: {format_err}"
-            }), 500
+            if isinstance(prompt_template, bytes):
+                prompt_template = prompt_template.decode('utf-8')
+            else:
+                prompt_template = str(prompt_template)
+        except Exception as conv_err:
+            print(f"⚠️ Ошибка финального преобразования prompt_template: {conv_err}", flush=True)
+            prompt_template = default_prompt
+        
+        # Форматируем промпт с обработкой ошибок
+        try:
+            # Преобразуем все аргументы в строки для безопасности
+            prompt = prompt_template.format(
+                language_name=str(language_name),
+                service_context=str(service_context),
+                transaction_context=str(transaction_context),
+                raw_info=str(raw_info[:800]),
+                news_examples=str(news_examples)
+            )
+        except (KeyError, AttributeError, ValueError, TypeError) as e:
+            print(f"⚠️ Ошибка форматирования промпта: {e}. Используем default_prompt", flush=True)
+            import traceback
+            traceback.print_exc()
+            # Используем default_prompt как fallback
+            prompt = default_prompt.format(
+                language_name=str(language_name),
+                service_context=str(service_context),
+                transaction_context=str(transaction_context),
+                raw_info=str(raw_info[:800]),
+                news_examples=str(news_examples)
+        )
+
+        business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id'))
         result = analyze_text_with_gigachat(
             prompt, 
             task_type="news_generation",
@@ -10106,84 +3206,24 @@ def news_generate():
                 else:
                     # Если ключей нет, но это словарь - странно, но оставим result или json dump
                     pass
-
-            # Последний fail-safe: если в текст попала обёртка {"news": "..."},
-            # вытаскиваем только содержимое новости.
-            if isinstance(generated_text, str):
-                gt = generated_text.strip()
-                try:
-                    import re
-                    # Валидный JSON-объект с полем news
-                    m_json = re.match(r'^\s*\{\s*"news"\s*:\s*"(.*)"\s*\}\s*$', gt, flags=re.DOTALL)
-                    if m_json:
-                        gt = m_json.group(1)
-                    else:
-                        # Невалидный, но типичный формат: {"news": "...}
-                        m_broken = re.match(r'^\s*\{\s*"news"\s*:\s*"(.*)\}\s*$', gt, flags=re.DOTALL)
-                        if m_broken:
-                            gt = m_broken.group(1)
-                        else:
-                            # Без кавычек вокруг значения: {"news": text}
-                            m_unquoted = re.match(r'^\s*\{\s*"news"\s*:\s*(.*?)\s*\}\s*$', gt, flags=re.DOTALL)
-                            if m_unquoted:
-                                gt = m_unquoted.group(1).strip().strip('"')
-                    # Декодируем частые экранирования
-                    gt = gt.replace('\\"', '"').replace("\\n", "\n").strip()
-                    generated_text = gt
-                except Exception:
-                    pass
         
         # Проверяем, что generated_text не пустой
         if not generated_text or not generated_text.strip():
             db.close()
             return jsonify({"error": "Пустой результат генерации"}), 500
 
-        if use_service and selected_service_name and not _news_mentions_service(generated_text, selected_service_name):
-            generated_text = _service_news_fallback(selected_service_name, selected_service_description, language)
-
         news_id = str(uuid.uuid4())
         cur.execute(
             """
-            INSERT INTO UserNews (id, user_id, service_id, source_text, generated_text, content_mode, social_format)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO UserNews (id, user_id, service_id, source_text, generated_text)
+            VALUES (?, ?, ?, ?, ?)
             """,
-            (news_id, user_data['user_id'], selected_service_id, raw_info, generated_text, content_mode, social_format)
+            (news_id, user_data['user_id'], selected_service_id, raw_info, generated_text)
         )
         db.conn.commit()
         db.close()
 
-        try:
-            record_ai_learning_event(
-                capability="news.generate",
-                event_type="generated",
-                intent=_normalize_learning_intent(data.get("intent")),
-                user_id=user_data.get("user_id"),
-                business_id=business_id,
-                prompt_key=prompt_key,
-                prompt_version=prompt_version,
-                metadata={
-                    "use_service": bool(use_service),
-                    "use_transaction": bool(use_transaction),
-                    "use_seo_keywords": bool(use_seo_keywords),
-                    "language": language,
-                    "content_mode": content_mode,
-                    "social_format": social_format,
-                },
-                draft_text=raw_info[:1500],
-                final_text=generated_text[:2000],
-            )
-        except Exception as learning_exc:
-            print(f"⚠️ news.generate learning skipped: {learning_exc}")
-
-        return jsonify(
-            {
-                "success": True,
-                "news_id": news_id,
-                "generated_text": generated_text,
-                "content_mode": content_mode,
-                "social_format": social_format,
-            }
-        )
+        return jsonify({"success": True, "news_id": news_id, "generated_text": generated_text})
     except Exception as e:
         print(f"❌ Ошибка генерации новости: {e}", flush=True)
         import traceback
@@ -10211,126 +3251,28 @@ def news_approve():
         db = DatabaseManager()
         cur = db.conn.cursor()
         # ensure table exists
-        _ensure_user_news_table(cur)
         cur.execute(
-            "SELECT generated_text, content_mode, social_format FROM UserNews WHERE id = %s AND user_id = %s",
-            (news_id, user_data['user_id']),
+            """
+            CREATE TABLE IF NOT EXISTS UserNews (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                service_id TEXT,
+                source_text TEXT,
+                generated_text TEXT NOT NULL,
+                approved INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
         )
-        news_row = cur.fetchone()
-        generated_text = ""
-        content_mode = "news"
-        social_format = None
-        if news_row:
-            if isinstance(news_row, (list, tuple)):
-                generated_text = str(news_row[0] or "")
-                content_mode = str(news_row[1] or "news")
-                social_format = news_row[2]
-            elif hasattr(news_row, "get"):
-                generated_text = str(news_row.get("generated_text") or "")
-                content_mode = str(news_row.get("content_mode") or "news")
-                social_format = news_row.get("social_format")
-
-        cur.execute("UPDATE UserNews SET approved = 1 WHERE id = %s AND user_id = %s", (news_id, user_data['user_id']))
+        cur.execute("UPDATE UserNews SET approved = 1 WHERE id = ? AND user_id = ?", (news_id, user_data['user_id']))
         if cur.rowcount == 0:
             db.close()
             return jsonify({"error": "Новость не найдена"}), 404
         db.conn.commit()
         db.close()
-
-        try:
-            record_ai_learning_event(
-                capability="news.generate",
-                event_type="accepted",
-                intent=_normalize_learning_intent(data.get("intent")),
-                user_id=user_data.get("user_id"),
-                accepted=True,
-                edited_before_accept=False,
-                draft_text=generated_text[:2000],
-                final_text=generated_text[:2000],
-                metadata={"news_id": news_id, "content_mode": content_mode, "social_format": social_format},
-            )
-        except Exception as learning_exc:
-            print(f"⚠️ news.approve learning skipped: {learning_exc}")
         return jsonify({"success": True})
     except Exception as e:
         print(f"❌ Ошибка утверждения новости: {e}")
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route('/api/news/generate/accept', methods=['POST', 'OPTIONS'])
-def news_generate_accept():
-    """Совместимый endpoint принятия новости (alias для /api/news/approve с финальным текстом)."""
-    try:
-        if request.method == 'OPTIONS':
-            return ('', 204)
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-        token = auth_header.split(' ')[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-
-        data = request.get_json(silent=True) or {}
-        news_id = data.get("news_id")
-        final_text = str(data.get("final_text") or "").strip()
-        if not news_id:
-            return jsonify({"error": "news_id обязателен"}), 400
-
-        db = DatabaseManager()
-        cur = db.conn.cursor()
-        _ensure_user_news_table(cur)
-        cur.execute(
-            "SELECT generated_text, content_mode, social_format FROM UserNews WHERE id = %s AND user_id = %s",
-            (news_id, user_data['user_id']),
-        )
-        row = cur.fetchone()
-        if not row:
-            db.close()
-            return jsonify({"error": "Новость не найдена"}), 404
-        draft_text = ""
-        content_mode = "news"
-        social_format = None
-        if isinstance(row, (tuple, list)):
-            draft_text = str(row[0] or "")
-            content_mode = str(row[1] or "news")
-            social_format = row[2]
-        else:
-            draft_text = str(row.get("generated_text") or "")
-            content_mode = str(row.get("content_mode") or "news")
-            social_format = row.get("social_format")
-        applied_text = final_text or draft_text
-        cur.execute(
-            """
-            UPDATE UserNews
-            SET generated_text = %s,
-                approved = 1,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = %s AND user_id = %s
-            """,
-            (applied_text, news_id, user_data['user_id']),
-        )
-        db.conn.commit()
-        db.close()
-
-        try:
-            record_ai_learning_event(
-                capability="news.generate",
-                event_type="accepted",
-                intent=_normalize_learning_intent(data.get("intent")),
-                user_id=user_data.get("user_id"),
-                accepted=True,
-                edited_before_accept=(draft_text.strip() != applied_text.strip()),
-                draft_text=draft_text[:2000],
-                final_text=applied_text[:2000],
-                metadata={"news_id": news_id, "content_mode": content_mode, "social_format": social_format},
-            )
-        except Exception as learning_exc:
-            print(f"⚠️ news.generate.accept learning skipped: {learning_exc}")
-
-        return jsonify({"success": True})
-    except Exception as e:
-        print(f"❌ Ошибка принятия новости: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/news/list', methods=['GET', 'OPTIONS'])
@@ -10348,16 +3290,20 @@ def news_list():
 
         db = DatabaseManager()
         cur = db.conn.cursor()
-        _ensure_user_news_table(cur)
         cur.execute(
             """
-            SELECT id, service_id, source_text, generated_text, approved, content_mode, social_format, created_at
-            FROM UserNews
-            WHERE user_id = %s
-            ORDER BY created_at DESC
-            """,
-            (user_data['user_id'],),
+            CREATE TABLE IF NOT EXISTS UserNews (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                service_id TEXT,
+                source_text TEXT,
+                generated_text TEXT NOT NULL,
+                approved INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
         )
+        cur.execute("SELECT id, service_id, source_text, generated_text, approved, created_at FROM UserNews WHERE user_id = ? ORDER BY created_at DESC", (user_data['user_id'],))
         rows = cur.fetchall()
         db.close()
         items = []
@@ -10365,13 +3311,12 @@ def news_list():
             if isinstance(row, tuple):
                 items.append({
                     "id": row[0], "service_id": row[1], "source_text": row[2],
-                    "generated_text": row[3], "approved": bool(row[4]), "content_mode": row[5], "social_format": row[6], "created_at": row[7]
+                    "generated_text": row[3], "approved": bool(row[4]), "created_at": row[5]
                 })
             else:
                 items.append({
                     "id": row['id'], "service_id": row['service_id'], "source_text": row['source_text'],
-                    "generated_text": row['generated_text'], "approved": bool(row['approved']),
-                    "content_mode": row.get('content_mode'), "social_format": row.get('social_format'), "created_at": row['created_at']
+                    "generated_text": row['generated_text'], "approved": bool(row['approved']), "created_at": row['created_at']
                 })
         return jsonify({"success": True, "news": items})
     except Exception as e:
@@ -10396,43 +3341,10 @@ def news_update():
         if not news_id or not text:
             return jsonify({"error": "news_id и text обязательны"}), 400
         db = DatabaseManager(); cur = db.conn.cursor()
-        _ensure_user_news_table(cur)
-        cur.execute(
-            "SELECT generated_text, content_mode, social_format FROM UserNews WHERE id = %s AND user_id = %s",
-            (news_id, user_data['user_id']),
-        )
-        prev_row = cur.fetchone()
-        previous_text = ""
-        content_mode = "news"
-        social_format = None
-        if prev_row:
-            if isinstance(prev_row, (list, tuple)):
-                previous_text = str(prev_row[0] or "")
-                content_mode = str(prev_row[1] or "news")
-                social_format = prev_row[2]
-            elif hasattr(prev_row, "get"):
-                previous_text = str(prev_row.get("generated_text") or "")
-                content_mode = str(prev_row.get("content_mode") or "news")
-                social_format = prev_row.get("social_format")
-
-        cur.execute("UPDATE UserNews SET generated_text = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s AND user_id = %s", (text, news_id, user_data['user_id']))
+        cur.execute("UPDATE UserNews SET generated_text = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?", (text, news_id, user_data['user_id']))
         if cur.rowcount == 0:
             db.close(); return jsonify({"error": "Новость не найдена"}), 404
         db.conn.commit(); db.close()
-
-        try:
-            record_ai_learning_event(
-                capability="news.generate",
-                event_type="edited",
-                intent=_normalize_learning_intent(data.get("intent")),
-                user_id=user_data.get("user_id"),
-                edited_before_accept=(previous_text.strip() != text.strip()),
-                draft_text=previous_text[:2000],
-                final_text=text[:2000],
-                metadata={"news_id": news_id, "content_mode": content_mode, "social_format": social_format},
-            )
-        except Exception as learning_exc:
-            print(f"⚠️ news.update learning skipped: {learning_exc}")
         return jsonify({"success": True})
     except Exception as e:
         print(f"❌ Ошибка обновления новости: {e}")
@@ -10458,7 +3370,7 @@ def news_delete():
         
         db = DatabaseManager()
         cur = db.conn.cursor()
-        cur.execute("DELETE FROM UserNews WHERE id = %s AND user_id = %s", (news_id, user_data['user_id']))
+        cur.execute("DELETE FROM UserNews WHERE id = ? AND user_id = ?", (news_id, user_data['user_id']))
         deleted = cur.rowcount
         db.conn.commit()
         db.close()
@@ -10489,7 +3401,7 @@ def review_examples():
         ensure_user_examples_table(cur)
 
         if request.method == 'GET':
-            cur.execute("SELECT id, example_text, created_at FROM UserExamples WHERE user_id = %s AND example_type = 'review' ORDER BY created_at DESC", (user_data['user_id'],))
+            cur.execute("SELECT id, example_text, created_at FROM UserExamples WHERE user_id = ? AND example_type = 'review' ORDER BY created_at DESC", (user_data['user_id'],))
             rows = cur.fetchall(); db.close()
             items = []
             for row in rows:
@@ -10500,12 +3412,12 @@ def review_examples():
         text = (data.get('text') or '').strip()
         if not text:
             db.close(); return jsonify({"error": "Текст примера обязателен"}), 400
-        cur.execute("SELECT COUNT(*) FROM UserExamples WHERE user_id = %s AND example_type = 'review'", (user_data['user_id'],))
+        cur.execute("SELECT COUNT(*) FROM UserExamples WHERE user_id = ? AND example_type = 'review'", (user_data['user_id'],))
         cnt = cur.fetchone()[0]
         if cnt >= 5:
             db.close(); return jsonify({"error": "Максимум 5 примеров"}), 400
         ex_id = str(uuid.uuid4())
-        cur.execute("INSERT INTO UserExamples (id, user_id, example_type, example_text) VALUES (%s, %s, 'review', %s)", (ex_id, user_data['user_id'], text))
+        cur.execute("INSERT INTO UserExamples (id, user_id, example_type, example_text) VALUES (?, ?, 'review', ?)", (ex_id, user_data['user_id'], text))
         db.conn.commit(); db.close()
         return jsonify({"success": True, "id": ex_id})
     except Exception as e:
@@ -10525,7 +3437,7 @@ def review_examples_delete(example_id: str):
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
         db = DatabaseManager(); cur = db.conn.cursor()
-        cur.execute("DELETE FROM UserExamples WHERE id = %s AND user_id = %s AND example_type = 'review'", (example_id, user_data['user_id']))
+        cur.execute("DELETE FROM UserExamples WHERE id = ? AND user_id = ? AND example_type = 'review'", (example_id, user_data['user_id']))
         deleted = cur.rowcount
         db.conn.commit(); db.close()
         if deleted == 0:
@@ -10553,7 +3465,7 @@ def news_examples():
         ensure_user_examples_table(cur)
 
         if request.method == 'GET':
-            cur.execute("SELECT id, example_text, created_at FROM UserExamples WHERE user_id = %s AND example_type = 'news' ORDER BY created_at DESC", (user_data['user_id'],))
+            cur.execute("SELECT id, example_text, created_at FROM UserExamples WHERE user_id = ? AND example_type = 'news' ORDER BY created_at DESC", (user_data['user_id'],))
             rows = cur.fetchall(); db.close()
             items = []
             for row in rows:
@@ -10564,12 +3476,12 @@ def news_examples():
         text = (data.get('text') or '').strip()
         if not text:
             db.close(); return jsonify({"error": "Текст примера обязателен"}), 400
-        cur.execute("SELECT COUNT(*) FROM UserExamples WHERE user_id = %s AND example_type = 'news'", (user_data['user_id'],))
+        cur.execute("SELECT COUNT(*) FROM UserExamples WHERE user_id = ? AND example_type = 'news'", (user_data['user_id'],))
         cnt = cur.fetchone()[0]
         if cnt >= 5:
             db.close(); return jsonify({"error": "Максимум 5 примеров"}), 400
         ex_id = str(uuid.uuid4())
-        cur.execute("INSERT INTO UserExamples (id, user_id, example_type, example_text) VALUES (%s, %s, 'news', %s)", (ex_id, user_data['user_id'], text))
+        cur.execute("INSERT INTO UserExamples (id, user_id, example_type, example_text) VALUES (?, ?, 'news', ?)", (ex_id, user_data['user_id'], text))
         db.conn.commit(); db.close()
         return jsonify({"success": True, "id": ex_id})
     except Exception as e:
@@ -10589,7 +3501,7 @@ def news_examples_delete(example_id: str):
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
         db = DatabaseManager(); cur = db.conn.cursor()
-        cur.execute("DELETE FROM UserExamples WHERE id = %s AND user_id = %s AND example_type = 'news'", (example_id, user_data['user_id']))
+        cur.execute("DELETE FROM UserExamples WHERE id = ? AND user_id = ? AND example_type = 'news'", (example_id, user_data['user_id']))
         deleted = cur.rowcount
         db.conn.commit(); db.close()
         if deleted == 0:
@@ -10643,11 +3555,6 @@ def reviews_reply():
         if not review_text:
             return jsonify({"error": "Не передан текст отзыва"}), 400
 
-        requested_business_id = data.get('business_id') or request.args.get('business_id')
-        business_id = get_business_id_from_user(user_data['user_id'], requested_business_id)
-        if not has_paid_automation_access(business_id):
-            return jsonify({"error": get_automation_block_message(business_id), "code": "automation_locked"}), 403
-
         # Подтянем примеры ответов пользователя (до 5)
         # Сначала проверяем, переданы ли примеры в запросе
         examples_from_request = data.get('examples', [])
@@ -10663,7 +3570,7 @@ def reviews_reply():
                 cur = db.conn.cursor()
                 from core.db_helpers import ensure_user_examples_table
                 ensure_user_examples_table(cur)
-                cur.execute("SELECT example_text FROM UserExamples WHERE user_id = %s AND example_type = 'review' ORDER BY created_at DESC LIMIT 5", (user_data['user_id'],))
+                cur.execute("SELECT example_text FROM UserExamples WHERE user_id = ? AND example_type = 'review' ORDER BY created_at DESC LIMIT 5", (user_data['user_id'],))
                 rows = cur.fetchall(); db.close()
                 examples = []
                 for row in rows:
@@ -10684,28 +3591,89 @@ def reviews_reply():
             except Exception:
                 examples_text = ""
 
-        prompt_template, prompt_version = get_prompt_record_from_db('review_reply', None)
-        if not prompt_template:
-            return jsonify({
-                "error": "Промпт review_reply не настроен в админ-панели."
-            }), 500
+        # Получаем промпт из БД или используем дефолтный
+        # ВАЖНО: default_prompt должен быть шаблоном с плейсхолдерами, а не f-string!
+        default_prompt_template = """Ты - вежливый менеджер салона красоты. Сгенерируй КОРОТКИЙ (до 250 символов) ответ на отзыв клиента.
+Тон: {tone}. Запрещены оценки, оскорбления, обсуждение конкурентов, лишние рассуждения. Только благодарность/сочувствие/решение.
+Write the reply in {language_name}.
+Если уместно, ориентируйся на стиль этих примеров (если они есть):
+{examples_text}
+Верни СТРОГО JSON: {{"reply": "текст ответа"}}
 
+Отзыв клиента: {review_text}"""
+        
+        prompt_template = get_prompt_from_db('review_reply', default_prompt_template)
+        
+        # Логируем тип и значение prompt_template
+        print(f"🔍 DEBUG reviews_reply: prompt_template type = {type(prompt_template)}", flush=True)
+        print(f"🔍 DEBUG reviews_reply: prompt_template (первые 200 символов) = {str(prompt_template)[:200] if prompt_template else 'None'}", flush=True)
+        
+        # Убеждаемся, что prompt_template - это строка
+        if not isinstance(prompt_template, str):
+            print(f"⚠️ prompt_template не строка: {type(prompt_template)} = {prompt_template}", flush=True)
+            prompt_template = default_prompt
+        else:
+            # Принудительно преобразуем в строку (на случай, если это bytes или что-то еще)
+            try:
+                prompt_template = str(prompt_template)
+            except Exception as conv_err:
+                print(f"⚠️ Ошибка преобразования prompt_template в строку: {conv_err}", flush=True)
+                prompt_template = default_prompt
+        
+        # Финальная проверка
+        if not isinstance(prompt_template, str):
+            print(f"❌ prompt_template всё ещё не строка после преобразования: {type(prompt_template)}", flush=True)
+            prompt_template = default_prompt_template
+        
+        # Принудительно преобразуем в обычную строку Python (не bytes, не специальные типы)
         try:
-            # В админ-шаблоне могут быть JSON-блоки с фигурными скобками.
-            # Используем безопасную подстановку только известных плейсхолдеров.
-            prompt = _format_prompt_with_replacements(
-                str(prompt_template),
-                {
-                    "tone": str(tone) if tone else "",
-                    "language_name": str(language_name) if language_name else "Russian",
-                    "examples_text": str(examples_text) if examples_text else "",
-                    "review_text": str(review_text[:1000]) if review_text else "",
-                },
+            if isinstance(prompt_template, bytes):
+                prompt_template = prompt_template.decode('utf-8')
+            else:
+                prompt_template = str(prompt_template)
+        except Exception as conv_err:
+            print(f"⚠️ Ошибка финального преобразования prompt_template: {conv_err}", flush=True)
+            prompt_template = default_prompt_template
+        
+        # Убеждаемся, что это действительно строка
+        if not isinstance(prompt_template, str):
+            print(f"❌ КРИТИЧЕСКАЯ ОШИБКА: prompt_template не строка: {type(prompt_template)}", flush=True)
+            prompt_template = default_prompt_template
+        
+        # Логируем все аргументы перед format
+        print(f"🔍 DEBUG reviews_reply: tone type = {type(tone)}, value = {tone}", flush=True)
+        print(f"🔍 DEBUG reviews_reply: language_name type = {type(language_name)}, value = {language_name}", flush=True)
+        print(f"🔍 DEBUG reviews_reply: examples_text type = {type(examples_text)}, value (первые 100) = {str(examples_text)[:100] if examples_text else 'None'}", flush=True)
+        print(f"🔍 DEBUG reviews_reply: review_text type = {type(review_text)}, value (первые 100) = {str(review_text)[:100] if review_text else 'None'}", flush=True)
+        
+        # Принудительно преобразуем все аргументы в строки
+        tone_str = str(tone) if tone else ''
+        language_name_str = str(language_name) if language_name else 'Russian'
+        examples_text_str = str(examples_text) if examples_text else ''
+        review_text_str = str(review_text[:1000]) if review_text else ''
+        
+        try:
+            prompt = prompt_template.format(
+                tone=tone_str,
+                language_name=language_name_str,
+                examples_text=examples_text_str,
+                review_text=review_text_str
             )
         except (KeyError, ValueError, TypeError) as format_err:
-            return jsonify({
-                "error": f"Ошибка шаблона review_reply в админ-панели: {format_err}"
-            }), 500
+            print(f"⚠️ Ошибка форматирования промпта: {format_err}, type: {type(format_err)}", flush=True)
+            import traceback
+            traceback.print_exc()
+            # Используем default_prompt_template как fallback
+            prompt = default_prompt_template.format(
+                tone=tone_str,
+                language_name=language_name_str,
+                examples_text=examples_text_str,
+                review_text=review_text_str
+            )
+        # Логируем промпт для отладки
+        print(f"🔍 DEBUG reviews_reply: prompt (первые 500 символов) = {prompt[:500]}")
+        print(f"🔍 DEBUG reviews_reply: review_text = {review_text[:200] if review_text else 'ПУСТО'}")
+        print(f"🔍 DEBUG reviews_reply: examples_text (первые 200 символов) = {examples_text[:200] if examples_text else 'ПУСТО'}")
         
         business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id'))
         result_text = analyze_text_with_gigachat(
@@ -10723,7 +3691,6 @@ def reviews_reply():
         import json
         
         # Проверяем тип result_text перед обработкой
-        reply_text = ""
         if result_text is None:
             print("⚠️ result_text is None")
             reply_text = "Ошибка генерации ответа"
@@ -10748,44 +3715,16 @@ def reviews_reply():
                         if 'error' in parsed_result:
                             print(f"❌ Ошибка в распарсенном JSON: {parsed_result.get('error')}")
                             return jsonify({"error": parsed_result.get('error', 'Ошибка генерации')}), 500
-                        # Извлекаем reply из JSON-словаря
-                        reply_text = str(parsed_result.get('reply') or parsed_result.get('text') or "").strip()
-                    else:
-                        # Если JSON не словарь — используем исходный текст модели
-                        reply_text = str(result_text or "").strip()
+                    # Извлекаем reply из JSON
+                    reply_text = parsed_result.get('reply', result_text)
                 except json.JSONDecodeError as json_err:
                     # Если не удалось распарсить JSON, используем весь текст
                     print(f"⚠️ Ошибка парсинга JSON: {json_err}")
-                    reply_text = str(result_text or "").strip()
-            else:
-                reply_text = str(result_text or "").strip()
+                    pass
         else:
             # Если другой тип - конвертируем в строку
             print(f"⚠️ Неожиданный тип result_text: {type(result_text)}")
             reply_text = str(result_text) if result_text else "Ошибка генерации ответа"
-
-        if not reply_text:
-            reply_text = "Ошибка генерации ответа"
-
-        try:
-            record_ai_learning_event(
-                capability="reviews.reply",
-                event_type="generated",
-                intent=_normalize_learning_intent(data.get("intent")),
-                user_id=user_data.get("user_id"),
-                business_id=business_id,
-                prompt_key="review_reply",
-                prompt_version=prompt_version,
-                metadata={
-                    "tone": tone or "профессиональный",
-                    "language": language,
-                    "review_len": len(review_text),
-                },
-                draft_text=review_text[:1500],
-                final_text=reply_text,
-            )
-        except Exception as learning_exc:
-            print(f"⚠️ reviews.reply learning skipped: {learning_exc}")
         
         return jsonify({"success": True, "result": {"reply": reply_text}})
     except Exception as e:
@@ -10845,12 +3784,9 @@ def review_replies_update():
         
         # Обновляем или создаем запись
         cursor.execute("""
-            INSERT INTO UserReviewReplies (id, user_id, reply_text, updated_at)
-            VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
-            ON CONFLICT (id) DO UPDATE SET
-                user_id = EXCLUDED.user_id,
-                reply_text = EXCLUDED.reply_text,
-                updated_at = CURRENT_TIMESTAMP
+            INSERT OR REPLACE INTO UserReviewReplies 
+            (id, user_id, reply_text, updated_at)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
         """, (reply_id, user_data['user_id'], reply_text))
         
         db.conn.commit()
@@ -10897,46 +3833,20 @@ def add_service():
         user_id = user_data['user_id']
         service_id = str(uuid.uuid4())
 
-        # Проверяем, есть ли поле business_id в таблице UserServices (PostgreSQL: information_schema)
-        cursor.execute("""
-            SELECT column_name FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'userservices'
-        """)
-        columns = [r.get('column_name') if isinstance(r, dict) else r[0] for r in cursor.fetchall()]
+        # Проверяем, есть ли поле business_id в таблице UserServices
+        cursor.execute("PRAGMA table_info(UserServices)")
+        columns = [row[1] for row in cursor.fetchall()]
         
-        def _keywords_to_jsonb_payload(raw_keywords):
-            if isinstance(raw_keywords, list):
-                cleaned = [str(v).strip() for v in raw_keywords if str(v).strip()]
-                return json.dumps(cleaned, ensure_ascii=False)
-            if isinstance(raw_keywords, str):
-                text = raw_keywords.strip()
-                if not text:
-                    return json.dumps([], ensure_ascii=False)
-                try:
-                    parsed = json.loads(text)
-                    if isinstance(parsed, list):
-                        cleaned = [str(v).strip() for v in parsed if str(v).strip()]
-                        return json.dumps(cleaned, ensure_ascii=False)
-                    if isinstance(parsed, str):
-                        return json.dumps([parsed.strip()] if parsed.strip() else [], ensure_ascii=False)
-                except Exception:
-                    pass
-                cleaned = [p.strip() for p in re.split(r"[,\n;]+", text) if p.strip()]
-                return json.dumps(cleaned, ensure_ascii=False)
-            return json.dumps([], ensure_ascii=False)
-
-        keywords_json = _keywords_to_jsonb_payload(keywords)
-
         if 'business_id' in columns and business_id:
             cursor.execute("""
                 INSERT INTO UserServices (id, user_id, business_id, category, name, description, keywords, price, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-            """, (service_id, user_id, business_id, category, name, description, keywords_json, price))
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """, (service_id, user_id, business_id, category, name, description, json.dumps(keywords), price))
         else:
             cursor.execute("""
                 INSERT INTO UserServices (id, user_id, category, name, description, keywords, price, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-            """, (service_id, user_id, category, name, description, keywords_json, price))
+                VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """, (service_id, user_id, category, name, description, json.dumps(keywords), price))
 
         db.conn.commit()
         db.close()
@@ -10974,12 +3884,9 @@ def get_services_legacy():
             owner_id = get_business_owner_id(cursor, business_id, include_active_check=True)
             if owner_id:
                 if owner_id == user_id or user_data.get('is_superadmin'):
-                    # Проверяем, есть ли поля optimized_description и optimized_name (PostgreSQL)
-                    cursor.execute("""
-                        SELECT column_name FROM information_schema.columns
-                        WHERE table_schema = 'public' AND table_name = 'userservices'
-                    """)
-                    columns = [c.get('column_name') if isinstance(c, dict) else c[0] for c in cursor.fetchall()]
+                    # Проверяем, есть ли поля optimized_description и optimized_name
+                    cursor.execute("PRAGMA table_info(UserServices)")
+                    columns = [col[1] for col in cursor.fetchall()]
                     has_optimized_desc = 'optimized_description' in columns
                     has_optimized_name = 'optimized_name' in columns
                     
@@ -10990,7 +3897,7 @@ def get_services_legacy():
                     if has_optimized_name:
                         select_fields.insert(select_fields.index('name') + 1, 'optimized_name')
                     
-                    select_sql = f"SELECT {', '.join(select_fields)} FROM UserServices WHERE business_id = %s ORDER BY created_at DESC"
+                    select_sql = f"SELECT {', '.join(select_fields)} FROM UserServices WHERE business_id = ? ORDER BY created_at DESC"
                     cursor.execute(select_sql, (business_id,))
                     
                     user_services = []
@@ -11015,15 +3922,7 @@ def get_services_legacy():
                     # Получаем внешние услуги
                     external_services = []
                     cursor.execute("SELECT to_regclass('public.externalbusinessservices')")
-                    ext_reg_row = cursor.fetchone()
-                    ext_reg_val = None
-                    if isinstance(ext_reg_row, dict):
-                        ext_reg_val = next(iter(ext_reg_row.values()), None)
-                    elif isinstance(ext_reg_row, (list, tuple)):
-                        ext_reg_val = ext_reg_row[0] if ext_reg_row else None
-                    else:
-                        ext_reg_val = ext_reg_row
-                    if ext_reg_val:
+                    if cursor.fetchone():
                         # Проверяем колонки externalbusinessservices (Postgres)
                         cursor.execute("""
                             SELECT column_name FROM information_schema.columns 
@@ -11075,11 +3974,9 @@ def get_services_legacy():
                 return jsonify({"error": "Бизнес не найден"}), 404
         else:
             # Старая логика для обратной совместимости
-            cursor.execute("""
-                SELECT column_name FROM information_schema.columns
-                WHERE table_schema = 'public' AND table_name = 'userservices'
-            """)
-            columns = [c.get('column_name') if isinstance(c, dict) else c[0] for c in cursor.fetchall()]
+            # Проверяем, есть ли поля optimized_description и optimized_name
+            cursor.execute("PRAGMA table_info(UserServices)")
+            columns = [col[1] for col in cursor.fetchall()]
             has_optimized_desc = 'optimized_description' in columns
             has_optimized_name = 'optimized_name' in columns
             
@@ -11090,7 +3987,7 @@ def get_services_legacy():
             if has_optimized_name:
                 select_fields.insert(select_fields.index('name') + 1, 'optimized_name')
             
-            select_sql = f"SELECT {', '.join(select_fields)} FROM UserServices WHERE user_id = %s ORDER BY created_at DESC"
+            select_sql = f"SELECT {', '.join(select_fields)} FROM UserServices WHERE user_id = ? ORDER BY created_at DESC"
             print(f"🔍 DEBUG get_services: SQL запрос (старая логика) = {select_sql}", flush=True)
             print(f"🔍 DEBUG get_services: select_fields = {select_fields}", flush=True)
             # Сохраняем select_fields для использования в цикле
@@ -11113,11 +4010,8 @@ def get_services_legacy():
             # Если не установлены (старая логика), проверяем заново
             cursor_temp = db.conn.cursor() if 'db' in locals() else None
             if cursor_temp:
-                cursor_temp.execute("""
-                    SELECT column_name FROM information_schema.columns
-                    WHERE table_schema = 'public' AND table_name = 'userservices'
-                """)
-                columns = [c.get('column_name') if isinstance(c, dict) else c[0] for c in cursor_temp.fetchall()]
+                cursor_temp.execute("PRAGMA table_info(UserServices)")
+                columns = [col[1] for col in cursor_temp.fetchall()]
                 has_optimized_desc = 'optimized_description' in columns
                 has_optimized_name = 'optimized_name' in columns
                 select_fields = ['id', 'category', 'name', 'description', 'keywords', 'price', 'created_at']
@@ -11174,6 +4068,7 @@ def get_services_legacy():
 def update_service(service_id):
     """Обновление существующей услуги пользователя."""
     try:
+        print(f"🔍 Начало обновления услуги: {service_id}", flush=True)
         if request.method == 'OPTIONS':
             return ('', 204)
 
@@ -11185,210 +4080,80 @@ def update_service(service_id):
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
 
-        data = request.get_json(silent=True) or {}
+        data = request.get_json()
         if not data:
             return jsonify({"error": "Данные не предоставлены"}), 400
+
+        print(f"🔍 DEBUG update_service: data keys = {list(data.keys())}", flush=True)
 
         category = data.get('category', '')
         name = data.get('name', '')
         description = data.get('description', '')
-        optimized_description = data.get('optimized_description', '')
-        optimized_name = data.get('optimized_name', '')
+        optimized_description = data.get('optimized_description', '')  # Новое поле для SEO описания
         keywords = data.get('keywords', [])
+        price = data.get('price', '')
         user_id = user_data['user_id']
-        if not name:
-            return jsonify({"error": "Название услуги обязательно"}), 400
-
+        
+        print(f"🔍 DEBUG update_service: keywords type = {type(keywords)}, value = {keywords}", flush=True)
+        
+        # Преобразуем keywords в строку JSON, если это массив
         if isinstance(keywords, list):
             keywords_str = json.dumps(keywords, ensure_ascii=False)
         elif isinstance(keywords, str):
             keywords_str = keywords
         else:
-            keywords_str = json.dumps([], ensure_ascii=False)
+            keywords_str = json.dumps([])
+        
+        print(f"🔍 DEBUG update_service: keywords_str = {keywords_str[:100]}", flush=True)
 
-        raw_price = data.get('price')
-        if isinstance(raw_price, str):
-            raw_price = raw_price.strip()
-            price_value = None if raw_price == '' else raw_price
-        elif raw_price in ({}, [], ()):
-            price_value = None
-        else:
-            price_value = raw_price
+        if not name:
+            return jsonify({"error": "Название услуги обязательно"}), 400
 
         db = DatabaseManager()
         cursor = db.conn.cursor()
-
-        cursor.execute("SELECT user_id, business_id FROM UserServices WHERE id = %s", (service_id,))
-        row = cursor.fetchone()
-        if not row:
-            db.close()
-            return jsonify({"error": "Услуга не найдена"}), 404
-
-        if hasattr(row, "get"):
-            service_user_id = row.get("user_id")
-        elif isinstance(row, (tuple, list)):
-            service_user_id = row[0] if len(row) > 0 else None
-        else:
-            service_user_id = None
-
-        if service_user_id != user_id and not db.is_superadmin(user_id):
-            db.close()
-            return jsonify({"error": "Нет доступа к этой услуге"}), 403
         
-        # Проверяем, есть ли поля optimized_description и optimized_name (PostgreSQL)
-        cursor.execute("""
-            SELECT column_name FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'userservices'
-        """)
-        columns = [c.get('column_name') if isinstance(c, dict) else c[0] for c in cursor.fetchall()]
+        # Проверяем, есть ли поля optimized_description и optimized_name в таблице
+        cursor.execute("PRAGMA table_info(UserServices)")
+        columns = [col[1] for col in cursor.fetchall()]
         has_optimized_description = 'optimized_description' in columns
         has_optimized_name = 'optimized_name' in columns
-
+        
+        optimized_name = data.get('optimized_name', '')
+        
+        print(f"🔍 DEBUG update_service: has_optimized_description = {has_optimized_description}, has_optimized_name = {has_optimized_name}", flush=True)
+        print(f"🔍 DEBUG update_service: columns = {columns}", flush=True)
+        print(f"🔍 DEBUG update_service: optimized_name = '{optimized_name}' (type: {type(optimized_name)}, length: {len(optimized_name) if optimized_name else 0})", flush=True)
+        print(f"🔍 DEBUG update_service: optimized_description = '{optimized_description[:100] if optimized_description else ''}...' (type: {type(optimized_description)}, length: {len(optimized_description) if optimized_description else 0})", flush=True)
+        
         if has_optimized_description and has_optimized_name:
+            print(f"🔍 DEBUG update_service: Обновление с optimized_description и optimized_name", flush=True)
             cursor.execute("""
                 UPDATE UserServices SET
-                category = %s, name = %s, optimized_name = %s, description = %s, optimized_description = %s, keywords = %s, price = %s, updated_at = CURRENT_TIMESTAMP
-                WHERE id = %s AND user_id = %s
-            """, (category, name, optimized_name, description, optimized_description, keywords_str, price_value, service_id, user_id))
-        elif has_optimized_description:
-            cursor.execute("""
-                UPDATE UserServices SET
-                category = %s, name = %s, description = %s, optimized_description = %s, keywords = %s, price = %s, updated_at = CURRENT_TIMESTAMP
-                WHERE id = %s AND user_id = %s
-            """, (category, name, description, optimized_description, keywords_str, price_value, service_id, user_id))
-        elif has_optimized_name:
-            cursor.execute("""
-                UPDATE UserServices SET
-                category = %s, name = %s, optimized_name = %s, description = %s, keywords = %s, price = %s, updated_at = CURRENT_TIMESTAMP
-                WHERE id = %s AND user_id = %s
-            """, (category, name, optimized_name, description, keywords_str, price_value, service_id, user_id))
+                category = ?, name = ?, optimized_name = ?, description = ?, optimized_description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND user_id = ?
+            """, (category, name, optimized_name, description, optimized_description, keywords_str, price, service_id, user_id))
+            print(f"✅ DEBUG update_service: UPDATE выполнен, rowcount = {cursor.rowcount}", flush=True)
+
         else:
+            print(f"🔍 DEBUG update_service: Обновление БЕЗ optimized_description/name", flush=True)
             cursor.execute("""
                 UPDATE UserServices SET
-                category = %s, name = %s, description = %s, keywords = %s, price = %s, updated_at = CURRENT_TIMESTAMP
-                WHERE id = %s AND user_id = %s
-            """, (category, name, description, keywords_str, price_value, service_id, user_id))
+                category = ?, name = ?, description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND user_id = ?
+            """, (category, name, description, keywords_str, price, service_id, user_id))
 
         if cursor.rowcount == 0:
             db.close()
             return jsonify({"error": "Услуга не найдена или нет прав для редактирования"}), 404
 
-        try:
-            optimized_candidate = str(optimized_name or "").strip()
-            if not optimized_candidate:
-                optimized_candidate = str(name or "").strip()
-            optimized_desc_candidate = str(optimized_description or "").strip()
-            if not optimized_desc_candidate:
-                optimized_desc_candidate = str(description or "").strip()
-            edited_before_accept = (
-                str(name or "").strip() != optimized_candidate
-                or str(description or "").strip() != optimized_desc_candidate
-            )
-            event_type = "accepted" if (optimized_name or optimized_description) else "edited"
-            record_ai_learning_event(
-                capability="services.optimize",
-                event_type=event_type,
-                intent=_normalize_learning_intent(data.get("intent")),
-                user_id=user_data.get("user_id"),
-                business_id=(row.get("business_id") if hasattr(row, "get") else (row[1] if isinstance(row, (tuple, list)) and len(row) > 1 else None)),
-                accepted=True if event_type == "accepted" else None,
-                edited_before_accept=edited_before_accept if event_type == "accepted" else None,
-                draft_text=f"{optimized_candidate}\n{optimized_desc_candidate}"[:2000],
-                final_text=f"{str(name or '').strip()}\n{str(description or '').strip()}"[:2000],
-                metadata={
-                    "service_id": service_id,
-                    "has_optimized_name": bool(optimized_name),
-                    "has_optimized_description": bool(optimized_description),
-                },
-            )
-        except Exception as learning_exc:
-            print(f"⚠️ services.update learning skipped: {learning_exc}")
-
         db.conn.commit()
         db.close()
-        return jsonify({"success": True})
+        return jsonify({"success": True, "message": "Услуга обновлена"})
 
     except Exception as e:
         print(f"❌ Ошибка обновления услуги: {e}", flush=True)
         import traceback
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route('/api/reviews/reply/accept', methods=['POST', 'OPTIONS'])
-def reviews_reply_accept():
-    """Принять (с правкой или без) сгенерированный ответ на отзыв."""
-    try:
-        if request.method == 'OPTIONS':
-            return ('', 204)
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-        token = auth_header.split(' ')[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-
-        data = request.get_json(silent=True) or {}
-        draft_reply = str(data.get("draft_reply") or "").strip()
-        final_reply = str(data.get("final_reply") or "").strip()
-        review_text = str(data.get("review_text") or "").strip()
-        business_id = get_business_id_from_user(user_data['user_id'], data.get('business_id') or request.args.get('business_id'))
-        if not has_paid_automation_access(business_id):
-            return jsonify({"error": get_automation_block_message(business_id), "code": "automation_locked"}), 403
-        if not final_reply:
-            return jsonify({"error": "final_reply обязателен"}), 400
-
-        reply_id = str(data.get("reply_id") or str(uuid.uuid4()))
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS UserReviewReplies (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                original_review TEXT,
-                reply_text TEXT NOT NULL,
-                tone TEXT DEFAULT 'профессиональный',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-        cursor.execute(
-            """
-            INSERT INTO UserReviewReplies (id, user_id, original_review, reply_text, updated_at)
-            VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
-            ON CONFLICT (id) DO UPDATE SET
-                user_id = EXCLUDED.user_id,
-                original_review = EXCLUDED.original_review,
-                reply_text = EXCLUDED.reply_text,
-                updated_at = CURRENT_TIMESTAMP
-            """,
-            (reply_id, user_data['user_id'], review_text, final_reply),
-        )
-        db.conn.commit()
-        db.close()
-
-        try:
-            record_ai_learning_event(
-                capability="reviews.reply",
-                event_type="accepted",
-                intent=_normalize_learning_intent(data.get("intent")),
-                user_id=user_data.get("user_id"),
-                business_id=business_id,
-                accepted=True,
-                edited_before_accept=(draft_reply != final_reply) if draft_reply else None,
-                draft_text=draft_reply[:2000],
-                final_text=final_reply[:2000],
-                metadata={"reply_id": reply_id},
-            )
-        except Exception as learning_exc:
-            print(f"⚠️ reviews.reply.accept learning skipped: {learning_exc}")
-
-        return jsonify({"success": True, "reply_id": reply_id})
-    except Exception as e:
-        print(f"❌ Ошибка принятия ответа на отзыв: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/services/delete/<string:service_id>', methods=['DELETE', 'OPTIONS'])
@@ -11410,7 +4175,7 @@ def delete_service(service_id):
 
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        cursor.execute("DELETE FROM UserServices WHERE id = %s AND user_id = %s", (service_id, user_id))
+        cursor.execute("DELETE FROM UserServices WHERE id = ? AND user_id = ?", (service_id, user_id))
 
         if cursor.rowcount == 0:
             db.close()
@@ -11422,94 +4187,6 @@ def delete_service(service_id):
 
     except Exception as e:
         print(f"❌ Ошибка удаления услуги: {e}")
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route('/api/services/optimize/accept', methods=['POST', 'OPTIONS'])
-def services_optimize_accept():
-    """Принять оптимизацию услуги и применить финальные поля."""
-    try:
-        if request.method == 'OPTIONS':
-            return ('', 204)
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-        token = auth_header.split(' ')[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-
-        data = request.get_json(silent=True) or {}
-        service_id = str(data.get("service_id") or "").strip()
-        final_name = str(data.get("final_name") or "").strip()
-        final_description = str(data.get("final_description") or "").strip()
-        draft_name = str(data.get("draft_name") or "").strip()
-        draft_description = str(data.get("draft_description") or "").strip()
-        if not service_id:
-            return jsonify({"error": "service_id обязателен"}), 400
-        if not final_name:
-            return jsonify({"error": "final_name обязателен"}), 400
-
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-        cursor.execute(
-            "SELECT user_id, business_id FROM UserServices WHERE id = %s",
-            (service_id,),
-        )
-        row = cursor.fetchone()
-        if not row:
-            db.close()
-            return jsonify({"error": "Услуга не найдена"}), 404
-        service_user_id = row.get("user_id") if hasattr(row, "get") else row[0]
-        business_id = row.get("business_id") if hasattr(row, "get") else (row[1] if isinstance(row, (tuple, list)) and len(row) > 1 else None)
-        if service_user_id != user_data['user_id'] and not db.is_superadmin(user_data['user_id']):
-            db.close()
-            return jsonify({"error": "Нет доступа"}), 403
-
-        if business_id and not has_paid_automation_access(str(business_id)):
-            db.close()
-            return jsonify({"error": get_automation_block_message(str(business_id)), "code": "automation_locked"}), 403
-
-        cursor.execute(
-            """
-            UPDATE UserServices
-            SET name = %s,
-                description = %s,
-                optimized_name = %s,
-                optimized_description = %s,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = %s AND user_id = %s
-            """,
-            (final_name, final_description, draft_name or final_name, draft_description or final_description, service_id, user_data['user_id']),
-        )
-        if cursor.rowcount == 0:
-            db.close()
-            return jsonify({"error": "Услуга не найдена или нет прав"}), 404
-        db.conn.commit()
-        db.close()
-
-        try:
-            record_ai_learning_event(
-                capability="services.optimize",
-                event_type="accepted",
-                intent=_normalize_learning_intent(data.get("intent")),
-                user_id=user_data.get("user_id"),
-                business_id=str(business_id) if business_id else None,
-                accepted=True,
-                edited_before_accept=(
-                    (draft_name and draft_name != final_name)
-                    or (draft_description and draft_description != final_description)
-                ),
-                draft_text=f"{draft_name}\n{draft_description}"[:2000],
-                final_text=f"{final_name}\n{final_description}"[:2000],
-                metadata={"service_id": service_id},
-            )
-        except Exception as learning_exc:
-            print(f"⚠️ services.optimize.accept learning skipped: {learning_exc}")
-
-        return jsonify({"success": True})
-    except Exception as e:
-        print(f"❌ Ошибка принятия оптимизации услуги: {e}")
         return jsonify({"error": str(e)}), 500
 
 # ==================== КЛИЕНТСКАЯ ИНФОРМАЦИЯ (ПРОФИЛЬ БИЗНЕСА) ====================
@@ -11535,9 +4212,8 @@ def client_info():
         db = DatabaseManager()
         cursor = db.conn.cursor()
 
-        # Postgres-only: данные профиля из businesses, userservices, businessprofiles, users.
-        # Каноническая ссылка на карты хранится в businesses.yandex_url.
-        # businessmaplinks используется только как legacy fallback на чтение.
+        # Postgres-only: данные профиля из businesses, userservices, businessprofiles, users;
+        # ссылки на карты — только из businessmaplinks. Таблица ClientInfo не используется.
 
         if request.method == 'GET':
             current_business_id = request.args.get('business_id')
@@ -11547,7 +4223,7 @@ def client_info():
             if current_business_id:
                 print(f"🔍 GET /api/client-info: Ищу бизнес в таблице businesses, business_id={current_business_id}")
                 cursor.execute(
-                    "SELECT owner_id, name, business_type, address, working_hours, is_active, city, geo_lat, geo_lon, yandex_url FROM businesses WHERE id = %s AND (is_active = TRUE OR is_active IS NULL)",
+                    "SELECT owner_id, name, business_type, address, working_hours, is_active, city, geo_lat, geo_lon FROM businesses WHERE id = %s AND (is_active = TRUE OR is_active IS NULL)",
                     (current_business_id,),
                 )
                 business_row = cursor.fetchone()
@@ -11566,7 +4242,23 @@ def client_info():
                     print(f"🔍 GET /api/client-info: Бизнес найден, owner_id={owner_id}, name={business_name!r}, is_active={is_active_val}")
                     if owner_id == user_id or user_data.get("is_superadmin"):
                         print(f"✅ GET /api/client-info: Доступ разрешен, возвращаю данные из businesses")
-                        links = get_business_map_links(cursor, current_business_id, row_dict.get("yandex_url"))
+                        links = []
+                        cursor.execute("""
+                            SELECT id, url, map_type, created_at 
+                            FROM businessmaplinks 
+                            WHERE business_id = %s 
+                            ORDER BY created_at DESC
+                        """, (current_business_id,))
+                        link_rows = cursor.fetchall()
+                        for r in link_rows:
+                            rd = _row_to_dict(cursor, r) if not hasattr(r, "keys") else dict(r)
+                            if rd:
+                                links.append({
+                                    "id": rd.get("id"),
+                                    "url": rd.get("url") or "",
+                                    "mapType": rd.get("map_type") or "other",
+                                    "createdAt": rd.get("created_at"),
+                                })
 
                         cursor.execute("""
                             SELECT name, description, category, price 
@@ -11671,7 +4363,7 @@ def client_info():
                 db.close()
                 return jsonify({"success": True, "businessName": "", "businessType": "", "address": "", "workingHours": "", "description": "", "services": [], "mapLinks": [], "owner": None})
             cursor.execute(
-                "SELECT owner_id, name, business_type, address, working_hours, is_active, city, geo_lat, geo_lon, yandex_url FROM businesses WHERE id = %s AND (is_active = TRUE OR is_active IS NULL)",
+                "SELECT owner_id, name, business_type, address, working_hours, is_active, city, geo_lat, geo_lon FROM businesses WHERE id = %s AND (is_active = TRUE OR is_active IS NULL)",
                 (current_business_id,),
             )
             business_row = cursor.fetchone()
@@ -11685,7 +4377,19 @@ def client_info():
             city = (row_dict.get("city") or "").strip() or None
             geo_lat, geo_lon = row_dict.get("geo_lat"), row_dict.get("geo_lon")
             city_suggestion = suggest_city_from_address(address) if not city and address else None
-            links = get_business_map_links(cursor, current_business_id, row_dict.get("yandex_url"))
+            links = []
+            cursor.execute("""
+                SELECT id, url, map_type, created_at FROM businessmaplinks WHERE business_id = %s ORDER BY created_at DESC
+            """, (current_business_id,))
+            for r in cursor.fetchall():
+                rd = _row_to_dict(cursor, r) if not hasattr(r, "keys") else dict(r)
+                if rd:
+                    links.append({
+                        "id": rd.get("id"),
+                        "url": rd.get("url") or "",
+                        "mapType": rd.get("map_type") or "other",
+                        "createdAt": rd.get("created_at"),
+                    })
             cursor.execute("SELECT name, description, category, price FROM userservices WHERE business_id = %s ORDER BY created_at DESC", (current_business_id,))
             services_list = []
             for r in cursor.fetchall():
@@ -11749,7 +4453,7 @@ def client_info():
                 # Если бизнеса нет, используем user_id как business_id для обратной совместимости
                 business_id = user_id
         
-        # Принимаем mapLinks, но сохраняем только каноническую yandex_url в businesses.
+        # Сохраняем ссылки на карты в businessmaplinks (Postgres-only, ClientInfo не используется)
         map_links = None
         if 'mapLinks' in data:
             map_links = data.get('mapLinks')
@@ -11770,9 +4474,7 @@ def client_info():
         # Парсер больше не запускается автоматически при сохранении ссылок
         # Он запускается только вручную через кнопку "Запустить парсер" на странице "Обзор карточки"
 
-        # mapLinks: обновляем только если в теле явно передан ключ mapLinks/map_links.
-        # Ключ отсутствует -> yandex_url не трогаем.
-        # mapLinks=[] -> очистить yandex_url.
+        # mapLinks: обновляем только если в теле явно передан ключ mapLinks/map_links. Если ключа нет — существующие ссылки не трогаем. Пустой список [] = удалить все.
         if business_id and ("mapLinks" in data or "map_links" in data) and isinstance(map_links, list):
             print(f"📝 SAVE mapLinks: business_id={business_id}, user_id={user_id}, map_links={map_links}")
             valid_links = []
@@ -11782,45 +4484,61 @@ def client_info():
                     valid_links.append(url.strip())
             print(f"📝 SAVE mapLinks: valid_links={valid_links}, count={len(valid_links)}")
 
-            canonical_yandex_url = None
-            for url in valid_links:
-                if detect_map_type(url) == "yandex":
-                    canonical_yandex_url = url
-                    break
+            cursor.execute("DELETE FROM businessmaplinks WHERE business_id = %s", (business_id,))
+            deleted_count = cursor.rowcount
+            print(f"📝 DELETE mapLinks: business_id={business_id}, deleted_count={deleted_count}")
 
-            cursor.execute(
-                "UPDATE businesses SET yandex_url = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
-                (canonical_yandex_url, business_id),
-            )
+            inserted_count = 0
+            for url in valid_links:
+                map_type = detect_map_type(url)
+                link_id = str(uuid.uuid4())
+                cursor.execute("""
+                    INSERT INTO businessmaplinks (id, user_id, business_id, url, map_type, created_at)
+                    VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                """, (link_id, user_id, business_id, url, map_type))
+                inserted_count += cursor.rowcount
+                print(f"📝 INSERT mapLink: id={link_id}, business_id={business_id}, url={url}, map_type={map_type}")
+
             db.conn.commit()
-            print(f"📝 SAVE yandex_url: business_id={business_id}, yandex_url={canonical_yandex_url}")
+            print(f"📝 mapLinks: commit() выполнен (DELETE + {inserted_count} INSERT)")
 
             # Парсим ll=lon,lat из первой ссылки на Яндекс.Карты и сохраняем в businesses
-            if canonical_yandex_url and "ll=" in canonical_yandex_url:
-                geo_lon, geo_lat = parse_ll_from_maps_url(canonical_yandex_url)
-                if geo_lon is not None and geo_lat is not None:
-                    cursor.execute(
-                        "UPDATE businesses SET geo_lon = %s, geo_lat = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
-                        (geo_lon, geo_lat, business_id),
-                    )
-                    db.conn.commit()
-                    print(f"📝 geo: business_id={business_id} geo_lon={geo_lon} geo_lat={geo_lat} из ll в ссылке")
-            elif not canonical_yandex_url:
-                print(f"📝 yandex_url очищен для business_id={business_id}")
+            for url in valid_links:
+                if "yandex" in (url or "").lower() and "ll=" in (url or ""):
+                    geo_lon, geo_lat = parse_ll_from_maps_url(url)
+                    if geo_lon is not None and geo_lat is not None:
+                        cursor.execute(
+                            "UPDATE businesses SET geo_lon = %s, geo_lat = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                            (geo_lon, geo_lat, business_id),
+                        )
+                        db.conn.commit()
+                        print(f"📝 geo: business_id={business_id} geo_lon={geo_lon} geo_lat={geo_lat} из ll в ссылке")
+                    break
 
-            cursor.execute("SELECT yandex_url FROM businesses WHERE id = %s", (business_id,))
-            raw_saved = cursor.fetchone()
-            saved = _row_to_dict(cursor, raw_saved) if raw_saved else {}
-            print(f"📝 VERIFY yandex_url: business_id={business_id}, saved={saved.get('yandex_url') if saved else None}")
+            cursor.execute("SELECT COUNT(*) FROM businessmaplinks WHERE business_id = %s", (business_id,))
+            count_row = cursor.fetchone()
+            saved_count = count_row['count'] if isinstance(count_row, dict) else count_row[0]
+            print(f"📝 VERIFY mapLinks: business_id={business_id}, saved_count={saved_count}")
 
         # Всегда возвращаем текущие ссылки для бизнеса
         current_links = []
         if business_id:
             print(f"📖 GET mapLinks: business_id={business_id}")
-            cursor.execute("SELECT yandex_url FROM businesses WHERE id = %s", (business_id,))
-            raw_biz = cursor.fetchone()
-            biz_row = _row_to_dict(cursor, raw_biz) if raw_biz else {}
-            current_links = get_business_map_links(cursor, business_id, (biz_row or {}).get("yandex_url"))
+            cursor.execute("""
+                SELECT id, url, map_type, created_at 
+                FROM businessmaplinks 
+                WHERE business_id = %s 
+                ORDER BY created_at DESC
+            """, (business_id,))
+            link_rows = cursor.fetchall()
+            current_links = [
+                {
+                    "id": r['id'] if isinstance(r, dict) else r[0],
+                    "url": r['url'] if isinstance(r, dict) else r[1],
+                    "mapType": r['map_type'] if isinstance(r, dict) else r[2],
+                    "createdAt": r['created_at'] if isinstance(r, dict) else r[3]
+                } for r in link_rows
+            ]
             print(f"📖 GET mapLinks: business_id={business_id}, found_count={len(current_links)}, links={[l['url'] for l in current_links]}")
 
         # Синхронизация с Businesses: обновляем существующий бизнес
@@ -11972,7 +4690,7 @@ def get_parse_status(business_id):
             return jsonify({"error": "Нет доступа"}), 403
 
         cursor.execute("""
-            SELECT status, retry_after, captcha_url, error_message, created_at
+            SELECT status, retry_after, created_at
             FROM parsequeue
             WHERE business_id = %s
             ORDER BY created_at DESC
@@ -12079,9 +4797,7 @@ def get_parse_status(business_id):
             "success": True,
             "status": overall_status,
             "details": statuses,
-            "retry_info": retry_info,
-            "captcha_url": (queue_row.get("captcha_url") if queue_row else None),
-            "error_message": (queue_row.get("error_message") if queue_row else None),
+            "retry_info": retry_info
         })
 
     except Exception as e:
@@ -12092,77 +4808,6 @@ def get_parse_status(business_id):
         if getattr(app, "debug", False):
             payload["traceback"] = err_tb
         return jsonify(payload), 500
-
-
-@app.route('/api/business/<string:business_id>/parse-resume', methods=['POST'])
-def resume_parse_after_captcha(business_id):
-    """Запросить продолжение парсинга после ручного прохождения captcha."""
-    try:
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-        token = auth_header.split(' ')[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-
-        user_id = user_data.get('user_id') or user_data.get('id')
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-
-        owner_id = get_business_owner_id(cursor, business_id)
-        if not owner_id:
-            db.close()
-            return jsonify({"error": "Бизнес не найден"}), 404
-        if owner_id != user_id and not db.is_superadmin(user_id):
-            db.close()
-            return jsonify({"error": "Нет доступа"}), 403
-
-        cursor.execute("""
-            SELECT id, status, captcha_session_id, captcha_url, retry_after
-            FROM parsequeue
-            WHERE business_id = %s
-              AND status = 'captcha'
-            ORDER BY created_at DESC
-            LIMIT 1
-        """, (business_id,))
-        raw_task = cursor.fetchone()
-        task_row = _row_to_dict(cursor, raw_task) if raw_task else None
-
-        if not task_row:
-            db.close()
-            return jsonify({"success": False, "error": "Нет активной captcha-задачи"}), 404
-
-        cursor.execute("""
-            UPDATE parsequeue
-            SET status = %s,
-                retry_after = CURRENT_TIMESTAMP,
-                captcha_required = 0,
-                captcha_status = NULL,
-                captcha_session_id = NULL,
-                captcha_started_at = NULL,
-                captcha_url = NULL,
-                resume_requested = 0,
-                updated_at = CURRENT_TIMESTAMP,
-                error_message = CASE
-                    WHEN error_message IS NULL OR error_message = '' THEN 'captcha resume requested (fresh parse cycle)'
-                    ELSE error_message || '; captcha resume requested (fresh parse cycle)'
-                END
-            WHERE id = %s
-        """, (STATUS_PENDING, task_row["id"]))
-        db.conn.commit()
-        db.close()
-
-        return jsonify({
-            "success": True,
-            "message": "Продолжение парсинга запрошено: задача переведена в новую попытку",
-            "task_id": task_row["id"],
-        })
-    except Exception as e:
-        import traceback
-        err_tb = traceback.format_exc()
-        print(f"❌ resume_parse_after_captcha: {e}\n{err_tb}")
-        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/business/<string:business_id>/map-parses', methods=['GET'])
 def get_map_parses(business_id):
@@ -12191,13 +4836,13 @@ def get_map_parses(business_id):
         # В PostgreSQL все результаты парсинга в cards. Берём реальные поля и считаем counts из JSONB.
         cursor.execute("""
             SELECT id, url, rating, reviews_count, report_path, created_at,
-                   overview, products, news, photos, competitors, hours_full, phone, site
+                   overview, products, news, photos, competitors, hours_full
             FROM cards
             WHERE business_id = %s
             ORDER BY created_at DESC
         """, (business_id,))
-        rows_raw = cursor.fetchall()
-        rows = [_row_to_dict(cursor, r) for r in rows_raw if r]
+        rows = cursor.fetchall()
+        db.close()
 
         def _len(v):
             if v is None:
@@ -12212,168 +4857,30 @@ def get_map_parses(business_id):
                     return 0
             return 0
 
-        def _products_count(v):
-            """Считает уникальные услуги: дедуп по (name, category, price)."""
-            if v is None:
-                return 0
-            if isinstance(v, str):
-                try:
-                    v = json.loads(v)
-                except Exception:
-                    return 0
-            if not isinstance(v, list):
-                return 0
-            seen = set()
-            for cat in v:
-                if isinstance(cat, dict) and "items" in cat:
-                    cat_name = (cat.get("category") or "Разное").strip() or "Разное"
-                    for item in (cat.get("items") or []):
-                        if not isinstance(item, dict):
-                            continue
-                        name = (item.get("name") or item.get("title") or "").strip().lower()
-                        if not name:
-                            continue
-                        price = str(item.get("price") or item.get("price_from") or item.get("price_to") or "").strip()
-                        seen.add((name, cat_name.lower(), price))
-                else:
-                    if isinstance(cat, dict):
-                        name = (cat.get("name") or cat.get("title") or "").strip().lower()
-                        if name:
-                            price = str(cat.get("price") or "").strip()
-                            ccat = (cat.get("category") or "Разное").strip().lower()
-                            seen.add((name, ccat, price))
-            return len(seen)
-
-        def _overview_dict(v):
-            if isinstance(v, dict):
-                return v
-            if isinstance(v, str):
-                raw = v.strip()
-                if not raw:
-                    return {}
-                try:
-                    parsed = json.loads(raw)
-                    return parsed if isinstance(parsed, dict) else {}
-                except Exception:
-                    return {}
-            return {}
-
-        # Текущее число неотвеченных отзывов (для отображения в прогрессе и отчёте)
-        unanswered_current = 0
-        latest_parsed_services_count = 0
-        stat_cursor = None
-        try:
-            stat_cursor = db.conn.cursor()
-            stat_cursor.execute(
-                """
-                SELECT COUNT(*) AS cnt
-                FROM externalbusinessreviews
-                WHERE business_id = %s
-                  AND source IN ('yandex_business', 'yandex_maps')
-                  AND (response_text IS NULL OR TRIM(COALESCE(response_text, '')) = '')
-                """,
-                (business_id,),
-            )
-            raw_unanswered = stat_cursor.fetchone()
-            raw_unanswered = _row_to_dict(stat_cursor, raw_unanswered) if raw_unanswered else None
-            unanswered_current = int((raw_unanswered or {}).get("cnt") or 0)
-
-            # Количество услуг из последнего распарсенного снапшота userservices.
-            stat_cursor.execute(
-                """
-                WITH latest_ts AS (
-                    SELECT MAX(updated_at) AS ts
-                    FROM userservices
-                    WHERE business_id = %s
-                      AND source IN ('yandex_maps', 'yandex_business')
-                      AND (is_active IS TRUE OR is_active IS NULL)
-                      AND raw IS NOT NULL
-                )
-                SELECT COUNT(DISTINCT (
-                    LOWER(TRIM(COALESCE(name, ''))),
-                    LOWER(TRIM(COALESCE(category, ''))),
-                    TRIM(COALESCE(price::text, ''))
-                )) AS cnt
-                FROM userservices
-                WHERE business_id = %s
-                  AND source IN ('yandex_maps', 'yandex_business')
-                  AND (is_active IS TRUE OR is_active IS NULL)
-                  AND raw IS NOT NULL
-                  AND updated_at = (SELECT ts FROM latest_ts)
-                """,
-                (business_id, business_id),
-            )
-            raw_services_cnt = stat_cursor.fetchone()
-            raw_services_cnt = _row_to_dict(stat_cursor, raw_services_cnt) if raw_services_cnt else None
-            latest_parsed_services_count = int((raw_services_cnt or {}).get("cnt") or 0)
-        except Exception:
-            unanswered_current = 0
-        finally:
-            if stat_cursor is not None:
-                stat_cursor.close()
-
         items = []
-        for rd in rows:
+        for r in rows:
+            rd = _row_to_dict(cursor, r)
             if not rd:
                 continue
             news_count = _len(rd.get("news"))
             photos_count = _len(rd.get("photos"))
-            overview = _overview_dict(rd.get("overview"))
-            try:
-                overview_photos_count = int(overview.get("photos_count") or 0)
-            except (TypeError, ValueError):
-                overview_photos_count = 0
-            photos_count = max(photos_count, overview_photos_count)
-            products_count = _products_count(rd.get("products"))
-            if len(items) == 0 and latest_parsed_services_count > 0:
-                products_count = latest_parsed_services_count
-            phone = (rd.get("phone") or "").strip() if isinstance(rd.get("phone"), str) else (rd.get("phone") or "")
-            website = (rd.get("site") or "").strip() if isinstance(rd.get("site"), str) else (rd.get("site") or "")
-            hours_full = rd.get("hours_full")
-            if isinstance(hours_full, str):
-                try:
-                    hours_full = json.loads(hours_full)
-                except Exception:
-                    hours_full = []
-            if not isinstance(hours_full, list):
-                hours_full = []
-            working_hours_payload = {"schedule": hours_full} if hours_full else None
-            social_links = overview.get("social_links") if isinstance(overview, dict) else None
-            competitors_val = rd.get("competitors")
-            if isinstance(competitors_val, (list, dict)):
-                competitors_val = json.dumps(competitors_val, ensure_ascii=False)
-
-            completeness_points = 0
-            completeness_points += 1 if phone else 0
-            completeness_points += 1 if website else 0
-            completeness_points += 1 if hours_full else 0
-            completeness_points += 1 if products_count > 0 else 0
-            completeness_points += 1 if photos_count > 0 else 0
-            profile_completeness = int((completeness_points / 5) * 100)
-
+            products_count = _len(rd.get("products"))
             item = {
                 "id": rd.get("id"),
                 "url": rd.get("url"),
                 "mapType": "yandex",
                 "rating": rd.get("rating"),
                 "reviewsCount": rd.get("reviews_count") or 0,
-                "unansweredReviewsCount": unanswered_current if len(items) == 0 else 0,
+                "unansweredReviewsCount": 0,
                 "newsCount": news_count,
                 "photosCount": photos_count,
                 "productsCount": products_count,
                 "servicesCount": products_count,
-                "phone": phone or None,
-                "website": website or None,
-                "workingHours": json.dumps(working_hours_payload, ensure_ascii=False) if working_hours_payload else None,
-                "messengers": json.dumps(social_links, ensure_ascii=False) if isinstance(social_links, list) else None,
-                "profileCompleteness": profile_completeness,
-                "competitors": competitors_val,
                 "reportPath": rd.get("report_path"),
                 "createdAt": rd.get("created_at"),
             }
             items.append(item)
 
-        db.close()
         return jsonify({"success": True, "items": items})
 
     except Exception as e:
@@ -12531,7 +5038,7 @@ def analyze_screenshot():
         cursor = db.conn.cursor()
         cursor.execute("""
             INSERT INTO ScreenshotAnalyses (id, user_id, image_path, analysis_result, completeness_score, business_name, category, expires_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             analysis_id,
             user_data['user_id'],
@@ -12568,11 +5075,6 @@ def optimize_pricelist():
         user_data = verify_session(token)
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
-
-        requested_business_id = request.form.get('business_id') or request.args.get('business_id')
-        business_id = get_business_id_from_user(user_data['user_id'], requested_business_id)
-        if not has_paid_automation_access(business_id):
-            return jsonify({"error": get_automation_block_message(business_id), "code": "automation_locked"}), 403
         
         # Проверяем наличие файла
         if 'file' not in request.files:
@@ -12687,7 +5189,7 @@ def get_analysis(analysis_id):
         # Ищем анализ скриншота
         cursor.execute("""
             SELECT * FROM ScreenshotAnalyses 
-            WHERE id = %s AND user_id = %s AND expires_at > %s
+            WHERE id = ? AND user_id = ? AND expires_at > ?
         """, (analysis_id, user_data['user_id'], datetime.now().isoformat()))
         
         analysis = cursor.fetchone()
@@ -12703,7 +5205,7 @@ def get_analysis(analysis_id):
         # Ищем оптимизацию прайс-листа
         cursor.execute("""
             SELECT * FROM PricelistOptimizations 
-            WHERE id = %s AND user_id = %s AND expires_at > %s
+            WHERE id = ? AND user_id = ? AND expires_at > ?
         """, (analysis_id, user_data['user_id'], datetime.now().isoformat()))
         
         optimization = cursor.fetchone()
@@ -12767,7 +5269,7 @@ def analyze_card_auto():
         cursor.execute("""
             INSERT INTO ScreenshotAnalyses 
             (id, user_id, analysis_result, completeness_score, business_name, category, expires_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (
             analysis_id,
             user_data['user_id'],
@@ -12902,19 +5404,16 @@ def add_transaction():
         
         transaction_id = str(uuid.uuid4())
         
-        # Проверяем наличие поля master_id (PostgreSQL)
-        cursor.execute("""
-            SELECT column_name FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'financialtransactions'
-        """)
-        columns = [r.get('column_name') if isinstance(r, dict) else r[0] for r in cursor.fetchall()]
+        # Проверяем наличие поля master_id в таблице
+        cursor.execute("PRAGMA table_info(FinancialTransactions)")
+        columns = [row[1] for row in cursor.fetchall()]
         has_master_id = 'master_id' in columns
         
         if has_master_id:
             cursor.execute("""
                 INSERT INTO FinancialTransactions 
                 (id, user_id, transaction_date, amount, client_type, services, notes, master_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 transaction_id,
                 user_data['user_id'],
@@ -12929,7 +5428,7 @@ def add_transaction():
             cursor.execute("""
                 INSERT INTO FinancialTransactions 
                 (id, user_id, transaction_date, amount, client_type, services, notes)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (
                 transaction_id,
                 user_data['user_id'],
@@ -12976,7 +5475,7 @@ def update_transaction(transaction_id):
         cursor = db.conn.cursor()
 
         # Проверяем принадлежность транзакции пользователю
-        cursor.execute("SELECT id, user_id FROM FinancialTransactions WHERE id = %s LIMIT 1", (transaction_id,))
+        cursor.execute("SELECT id, user_id FROM FinancialTransactions WHERE id = ? LIMIT 1", (transaction_id,))
         row = cursor.fetchone()
         if not row:
             db.close()
@@ -12988,19 +5487,19 @@ def update_transaction(transaction_id):
         fields = []
         params = []
         if 'transaction_date' in data:
-            fields.append("transaction_date = %s")
+            fields.append("transaction_date = ?")
             params.append(data.get('transaction_date'))
         if 'amount' in data:
-            fields.append("amount = %s")
+            fields.append("amount = ?")
             params.append(float(data.get('amount') or 0))
         if 'client_type' in data:
-            fields.append("client_type = %s")
+            fields.append("client_type = ?")
             params.append(data.get('client_type') or 'new')
         if 'services' in data:
-            fields.append("services = %s")
+            fields.append("services = ?")
             params.append(json.dumps(data.get('services') or []))
         if 'notes' in data:
-            fields.append("notes = %s")
+            fields.append("notes = ?")
             params.append(data.get('notes') or '')
 
         if not fields:
@@ -13008,7 +5507,7 @@ def update_transaction(transaction_id):
             return jsonify({"error": "Нет полей для обновления"}), 400
 
         params.append(transaction_id)
-        cursor.execute(f"UPDATE FinancialTransactions SET {', '.join(fields)} WHERE id = %s", params)
+        cursor.execute(f"UPDATE FinancialTransactions SET {', '.join(fields)} WHERE id = ?", params)
         db.conn.commit()
         db.close()
 
@@ -13039,7 +5538,7 @@ def delete_transaction(transaction_id):
         cursor = db.conn.cursor()
 
         # Проверяем принадлежность транзакции пользователю
-        cursor.execute("SELECT id, user_id FROM FinancialTransactions WHERE id = %s LIMIT 1", (transaction_id,))
+        cursor.execute("SELECT id, user_id FROM FinancialTransactions WHERE id = ? LIMIT 1", (transaction_id,))
         row = cursor.fetchone()
         if not row:
             db.close()
@@ -13048,7 +5547,7 @@ def delete_transaction(transaction_id):
             db.close()
             return jsonify({"error": "Нет доступа к транзакции"}), 403
 
-        cursor.execute("DELETE FROM FinancialTransactions WHERE id = %s", (transaction_id,))
+        cursor.execute("DELETE FROM FinancialTransactions WHERE id = ?", (transaction_id,))
         db.conn.commit()
         db.close()
 
@@ -13172,12 +5671,9 @@ def upload_transaction_file():
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        # Проверяем наличие полей master_id и business_id (PostgreSQL)
-        cursor.execute("""
-            SELECT column_name FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'financialtransactions'
-        """)
-        columns = [r.get('column_name') if isinstance(r, dict) else r[0] for r in cursor.fetchall()]
+        # Проверяем наличие полей master_id и business_id
+        cursor.execute("PRAGMA table_info(FinancialTransactions)")
+        columns = [row[1] for row in cursor.fetchall()]
         has_master_id = 'master_id' in columns
         has_business_id = 'business_id' in columns
         
@@ -13199,7 +5695,7 @@ def upload_transaction_file():
             # Получаем business_id из текущего бизнеса пользователя
             business_id = None
             if has_business_id:
-                cursor.execute("SELECT id FROM Businesses WHERE owner_id = %s LIMIT 1", (user_data['user_id'],))
+                cursor.execute("SELECT id FROM Businesses WHERE owner_id = ? LIMIT 1", (user_data['user_id'],))
                 business_row = cursor.fetchone()
                 if business_row:
                     business_id = business_row[0]
@@ -13208,7 +5704,7 @@ def upload_transaction_file():
                 cursor.execute("""
                     INSERT INTO FinancialTransactions 
                     (id, user_id, business_id, transaction_date, amount, client_type, services, notes, master_id)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     transaction_id,
                     user_data['user_id'],
@@ -13224,7 +5720,7 @@ def upload_transaction_file():
                 cursor.execute("""
                     INSERT INTO FinancialTransactions 
                     (id, user_id, transaction_date, amount, client_type, services, notes, master_id)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     transaction_id,
                     user_data['user_id'],
@@ -13239,7 +5735,7 @@ def upload_transaction_file():
                 cursor.execute("""
                     INSERT INTO FinancialTransactions 
                     (id, user_id, business_id, transaction_date, amount, client_type, services, notes)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     transaction_id,
                     user_data['user_id'],
@@ -13254,7 +5750,7 @@ def upload_transaction_file():
                 cursor.execute("""
                     INSERT INTO FinancialTransactions 
                     (id, user_id, transaction_date, amount, client_type, services, notes)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, (
                     transaction_id,
                     user_data['user_id'],
@@ -13311,15 +5807,6 @@ def get_transactions():
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        # Проверяем наличие client_type в схеме (для совместимости старых БД)
-        cursor.execute("""
-            SELECT column_name FROM information_schema.columns
-            WHERE table_schema = 'public' AND lower(table_name) = 'financialtransactions'
-        """)
-        tx_columns = {r.get('column_name') if isinstance(r, dict) else r[0] for r in (cursor.fetchall() or [])}
-        has_client_type = 'client_type' in tx_columns
-        client_type_select = "client_type" if has_client_type else "'new'::text AS client_type"
-
         # Строим запрос с явными полями (без SELECT *)
         query = """
             SELECT 
@@ -13327,30 +5814,30 @@ def get_transactions():
                 business_id,
                 transaction_date,
                 amount,
-                """ + client_type_select + """,
+                client_type,
                 services,
                 notes,
                 created_at
             FROM FinancialTransactions
-            WHERE user_id = %s
+            WHERE user_id = ?
         """
         params = [user_data['user_id']]
         
         # Фильтр по бизнесу, если передан
         current_business_id = request.args.get('business_id')
         if current_business_id:
-            query += " AND business_id = %s"
+            query += " AND business_id = ?"
             params.append(current_business_id)
         
         if start_date:
-            query += " AND transaction_date >= %s"
+            query += " AND transaction_date >= ?"
             params.append(start_date)
         
         if end_date:
-            query += " AND transaction_date <= %s"
+            query += " AND transaction_date <= ?"
             params.append(end_date)
         
-        query += " ORDER BY transaction_date DESC, created_at DESC LIMIT %s OFFSET %s"
+        query += " ORDER BY transaction_date DESC, created_at DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
         
         cursor.execute(query, params)
@@ -13451,35 +5938,25 @@ def get_financial_metrics():
                 end_date = now.strftime('%Y-%m-%d')
         
         # Формируем WHERE условие с учётом business_id
-        where_clause = "transaction_date BETWEEN %s AND %s"
+        where_clause = "transaction_date BETWEEN ? AND ?"
         where_params = [start_date, end_date]
         
         if business_id:
-            where_clause = f"business_id = %s AND {where_clause}"
+            where_clause = f"business_id = ? AND {where_clause}"
             where_params = [business_id] + where_params
         else:
             # Старая логика для обратной совместимости
-            where_clause = f"user_id = %s AND {where_clause}"
+            where_clause = f"user_id = ? AND {where_clause}"
             where_params = [user_data['user_id']] + where_params
         
-        # Проверяем наличие client_type в схеме (для совместимости старых БД)
-        cursor.execute("""
-            SELECT column_name FROM information_schema.columns
-            WHERE table_schema = 'public' AND lower(table_name) = 'financialtransactions'
-        """)
-        tx_columns = {r.get('column_name') if isinstance(r, dict) else r[0] for r in (cursor.fetchall() or [])}
-        has_client_type = 'client_type' in tx_columns
-        new_clients_expr = "SUM(CASE WHEN client_type = 'new' THEN 1 ELSE 0 END)" if has_client_type else "0"
-        returning_clients_expr = "SUM(CASE WHEN client_type = 'returning' THEN 1 ELSE 0 END)" if has_client_type else "0"
-
         # Получаем агрегированные данные
         cursor.execute(f"""
             SELECT 
                 COUNT(*) as total_orders,
                 SUM(amount) as total_revenue,
                 AVG(amount) as average_check,
-                {new_clients_expr} as new_clients,
-                {returning_clients_expr} as returning_clients
+                SUM(CASE WHEN client_type = 'new' THEN 1 ELSE 0 END) as new_clients,
+                SUM(CASE WHEN client_type = 'returning' THEN 1 ELSE 0 END) as returning_clients
             FROM FinancialTransactions 
             WHERE {where_clause}
         """, tuple(where_params))
@@ -13503,14 +5980,14 @@ def get_financial_metrics():
         prev_end = start_date
         
         # Формируем WHERE условие для предыдущего периода
-        prev_where_clause = "transaction_date BETWEEN %s AND %s"
+        prev_where_clause = "transaction_date BETWEEN ? AND ?"
         prev_where_params = [prev_start, prev_end]
         
         if business_id:
-            prev_where_clause = f"business_id = %s AND {prev_where_clause}"
+            prev_where_clause = f"business_id = ? AND {prev_where_clause}"
             prev_where_params = [business_id] + prev_where_params
         else:
-            prev_where_clause = f"user_id = %s AND {prev_where_clause}"
+            prev_where_clause = f"user_id = ? AND {prev_where_clause}"
             prev_where_params = [user_data['user_id']] + prev_where_params
         
         cursor.execute(f"""
@@ -13599,12 +6076,9 @@ def get_financial_breakdown():
                 start_date = (now - timedelta(days=365)).strftime('%Y-%m-%d')
                 end_date = now.strftime('%Y-%m-%d')
         
-        # Проверяем наличие полей в таблице (PostgreSQL)
-        cursor.execute("""
-            SELECT column_name FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'financialtransactions'
-        """)
-        columns = [r.get('column_name') if isinstance(r, dict) else r[0] for r in cursor.fetchall()]
+        # Проверяем наличие полей в таблице
+        cursor.execute("PRAGMA table_info(FinancialTransactions)")
+        columns = [row[1] for row in cursor.fetchall()]
         has_business_id = 'business_id' in columns
         has_master_id = 'master_id' in columns
         
@@ -13617,26 +6091,26 @@ def get_financial_breakdown():
                 cursor.execute("""
                     SELECT services, amount, master_id
                     FROM FinancialTransactions 
-                    WHERE business_id = %s AND transaction_date BETWEEN %s AND %s
+                    WHERE business_id = ? AND transaction_date BETWEEN ? AND ?
                 """, (current_business_id, start_date, end_date))
             else:
                 cursor.execute("""
                     SELECT services, amount, NULL as master_id
                     FROM FinancialTransactions 
-                    WHERE business_id = %s AND transaction_date BETWEEN %s AND %s
+                    WHERE business_id = ? AND transaction_date BETWEEN ? AND ?
                 """, (current_business_id, start_date, end_date))
         else:
             if has_master_id:
                 cursor.execute("""
                     SELECT services, amount, master_id
                     FROM FinancialTransactions 
-                    WHERE user_id = %s AND transaction_date BETWEEN %s AND %s
+                    WHERE user_id = ? AND transaction_date BETWEEN ? AND ?
                 """, (user_data['user_id'], start_date, end_date))
             else:
                 cursor.execute("""
                     SELECT services, amount, NULL as master_id
                     FROM FinancialTransactions 
-                    WHERE user_id = %s AND transaction_date BETWEEN %s AND %s
+                    WHERE user_id = ? AND transaction_date BETWEEN ? AND ?
                 """, (user_data['user_id'], start_date, end_date))
         
         transactions = cursor.fetchall()
@@ -13726,7 +6200,7 @@ def get_network_locations_by_network_id(network_id):
         cursor = db.conn.cursor()
         
         # Проверяем, что пользователь имеет доступ к сети
-        cursor.execute("SELECT owner_id FROM Networks WHERE id = %s", (network_id,))
+        cursor.execute("SELECT owner_id FROM Networks WHERE id = ?", (network_id,))
         network = cursor.fetchone()
         
         if not network:
@@ -13742,7 +6216,7 @@ def get_network_locations_by_network_id(network_id):
         cursor.execute("""
             SELECT id, name, address, description 
             FROM Businesses 
-            WHERE network_id = %s 
+            WHERE network_id = ? 
             ORDER BY name
         """, (network_id,))
         
@@ -13786,7 +6260,7 @@ def get_network_stats(network_id):
         cursor = db.conn.cursor()
         
         # Проверяем доступ к сети
-        cursor.execute("SELECT owner_id FROM Networks WHERE id = %s", (network_id,))
+        cursor.execute("SELECT owner_id FROM Networks WHERE id = ?", (network_id,))
         network = cursor.fetchone()
         
         if not network:
@@ -13798,7 +6272,7 @@ def get_network_stats(network_id):
             return jsonify({"error": "Нет доступа к этой сети"}), 403
         
         # Получаем точки сети
-        cursor.execute("SELECT id, name FROM Businesses WHERE network_id = %s", (network_id,))
+        cursor.execute("SELECT id, name FROM Businesses WHERE network_id = ?", (network_id,))
         locations = cursor.fetchall()
         location_ids = [loc[0] for loc in locations]
         
@@ -13836,27 +6310,25 @@ def get_network_stats(network_id):
                 start_date = (now - timedelta(days=365)).strftime('%Y-%m-%d')
                 end_date = now.strftime('%Y-%m-%d')
         
-        # Получаем транзакции всех точек сети (PostgreSQL)
-        cursor.execute("""
-            SELECT column_name FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'financialtransactions'
-        """)
-        columns = [r.get('column_name') if isinstance(r, dict) else r[0] for r in cursor.fetchall()]
+        # Получаем транзакции всех точек сети
+        # Проверяем наличие поля business_id
+        cursor.execute("PRAGMA table_info(FinancialTransactions)")
+        columns = [row[1] for row in cursor.fetchall()]
         has_business_id = 'business_id' in columns
         
         if has_business_id and location_ids:
-            placeholders = ','.join(['%s'] * len(location_ids))
+            placeholders = ','.join(['?'] * len(location_ids))
             cursor.execute(f"""
                 SELECT services, amount, master_id, business_id
                 FROM FinancialTransactions 
-                WHERE business_id IN ({placeholders}) AND transaction_date BETWEEN %s AND %s
+                WHERE business_id IN ({placeholders}) AND transaction_date BETWEEN ? AND ?
             """, location_ids + [start_date, end_date])
         else:
             # Если business_id нет, получаем через user_id владельца сети
             cursor.execute("""
                 SELECT services, amount, master_id, NULL as business_id
                 FROM FinancialTransactions 
-                WHERE user_id = %s AND transaction_date BETWEEN %s AND %s
+                WHERE user_id = ? AND transaction_date BETWEEN ? AND ?
             """, (network[0], start_date, end_date))
         
         transactions = cursor.fetchall()
@@ -13887,7 +6359,7 @@ def get_network_stats(network_id):
             
             # По мастерам
             if master_id:
-                cursor.execute("SELECT name FROM Masters WHERE id = %s", (master_id,))
+                cursor.execute("SELECT name FROM Masters WHERE id = ?", (master_id,))
                 master_row = cursor.fetchone()
                 master_name = master_row[0] if master_row else f"Мастер {master_id[:8]}"
                 masters_revenue[master_name] = masters_revenue.get(master_name, 0) + amount
@@ -13912,7 +6384,7 @@ def get_network_stats(network_id):
                 """
                 SELECT id, name, yandex_rating, yandex_reviews_total, yandex_reviews_30d, yandex_last_sync
                 FROM Businesses
-                WHERE network_id = %s AND is_active = 1
+                WHERE network_id = ? AND is_active = 1
                 """,
                 (network_id,),
             )
@@ -13971,7 +6443,7 @@ def admin_sync_network_yandex(network_id):
         db = DatabaseManager()
         cursor = db.conn.cursor()
 
-        cursor.execute("SELECT owner_id FROM Networks WHERE id = %s", (network_id,))
+        cursor.execute("SELECT owner_id FROM Networks WHERE id = ?", (network_id,))
         network = cursor.fetchone()
 
         if not network:
@@ -14010,10 +6482,8 @@ def admin_sync_network_yandex(network_id):
 @app.route('/api/admin/yandex/sync/business/<string:business_id>', methods=['POST'])
 def admin_sync_business_yandex(business_id):
     """
-    Ручной запуск парсинга/синхронизации Яндекс для одного бизнеса или всей сети.
-    scope:
-      - single (default): только текущий бизнес
-      - network: все точки сети с постановкой в очередь (с задержкой через retry_after)
+    Ручной запуск синхронизации Яндекс-данных для одного бизнеса.
+    Требует действующей сессии и прав суперадмина или владельца бизнеса.
     """
     import traceback
     print(f"🔄 Запрос на синхронизацию бизнеса {business_id}")
@@ -14027,24 +6497,10 @@ def admin_sync_business_yandex(business_id):
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
 
-        payload = request.get_json(silent=True) or {}
-        scope = str(payload.get("scope") or "single").strip().lower()
-        if scope not in ("single", "network"):
-            scope = "single"
-
-        try:
-            delay_seconds = int(payload.get("delay_seconds", 15))
-        except (TypeError, ValueError):
-            delay_seconds = 15
-        delay_seconds = max(0, min(delay_seconds, 300))
-
-        user_id = user_data.get("user_id") or user_data.get("id")
-        is_superadmin = bool(user_data.get("is_superadmin"))
-
         db = DatabaseManager()
         cursor = db.conn.cursor()
 
-        cursor.execute("SELECT id, owner_id, name, network_id FROM businesses WHERE id = %s", (business_id,))
+        cursor.execute("SELECT owner_id, name FROM businesses WHERE id = %s", (business_id,))
         raw_business = cursor.fetchone()
         business = _row_to_dict(cursor, raw_business) if raw_business else None
 
@@ -14055,275 +6511,72 @@ def admin_sync_business_yandex(business_id):
         business_owner_id = business.get("owner_id")
         business_name = (business.get("name") or "").strip() or "Unknown"
 
-        if business_owner_id != user_id and not is_superadmin:
+        if business_owner_id != user_data["user_id"] and not user_data.get("is_superadmin"):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
-        # Собираем целевые бизнесы
-        target_businesses = [business]
-        resolved_network_id = business.get("network_id")
+        # Аккаунт Яндекс.Бизнес (таблица externalbusinessaccounts — Postgres)
+        cursor.execute("""
+            SELECT id, auth_data_encrypted, external_id
+            FROM externalbusinessaccounts
+            WHERE business_id = %s AND source = 'yandex_business' AND is_active = TRUE
+            ORDER BY created_at DESC
+            LIMIT 1
+        """, (business_id,))
+        raw_account = cursor.fetchone()
+        account_row = _row_to_dict(cursor, raw_account) if raw_account else None
+        account_id = account_row.get("id") if account_row else None
 
-        if scope == "network":
-            # Для материнского аккаунта сеть может быть не в business.network_id
-            if not resolved_network_id:
-                cursor.execute("SELECT id FROM networks WHERE id = %s LIMIT 1", (business_id,))
-                row = cursor.fetchone()
-                if row:
-                    resolved_network_id = row[0] if not hasattr(row, "keys") else row.get("id")
+        if account_id:
+            print(f"✅ Найден аккаунт: {account_id}")
+        else:
+            print(f"⚠️ Аккаунт Яндекс.Бизнес не найден")
 
-            if not resolved_network_id:
-                cursor.execute(
-                    """
-                    SELECT n.id
-                    FROM networks n
-                    WHERE n.owner_id = %s
-                    ORDER BY (
-                        SELECT COUNT(*) FROM businesses b WHERE b.network_id = n.id
-                    ) DESC, n.created_at DESC
-                    LIMIT 1
-                    """,
-                    (business_owner_id,),
-                )
-                row = cursor.fetchone()
-                if row:
-                    resolved_network_id = row[0] if not hasattr(row, "keys") else row.get("id")
+        cursor.execute("SELECT url FROM businessmaplinks WHERE business_id = %s AND map_type = 'yandex' LIMIT 1", (business_id,))
+        raw_map = cursor.fetchone()
+        map_link_row = _row_to_dict(cursor, raw_map) if raw_map else None
+        map_url = map_link_row.get("url") if map_link_row else None
 
-            if not resolved_network_id:
-                db.close()
-                return jsonify(
-                    {
-                        "success": False,
-                        "error": "Сеть не найдена",
-                        "message": "Для выбранного бизнеса не найдена сеть с точками",
-                    }
-                ), 400
+        if not account_id and not map_url:
+            db.close()
+            return jsonify({
+                "success": False,
+                "error": "Не найден источник данных",
+                "message": "Для запуска парсинга добавьте ссылку на Яндекс.Карты или подключите аккаунт Яндекс.Бизнес"
+            }), 400
 
-            if is_superadmin:
-                cursor.execute(
-                    """
-                    SELECT id, owner_id, name, network_id
-                    FROM businesses
-                    WHERE network_id = %s AND (is_active = TRUE OR is_active IS NULL)
-                    ORDER BY created_at ASC
-                    """,
-                    (resolved_network_id,),
-                )
-            else:
-                cursor.execute(
-                    """
-                    SELECT id, owner_id, name, network_id
-                    FROM businesses
-                    WHERE network_id = %s
-                      AND owner_id = %s
-                      AND (is_active = TRUE OR is_active IS NULL)
-                    ORDER BY created_at ASC
-                    """,
-                    (resolved_network_id, user_id),
-                )
+        task_id = str(uuid.uuid4())
+        user_id = user_data["user_id"]
 
-            target_businesses = []
-            for row in cursor.fetchall():
-                item = _row_to_dict(cursor, row)
-                if item:
-                    target_businesses.append(item)
+        if map_url:
+            task_type = 'parse_card'
+            source = 'yandex_maps'
+            target_url = map_url
+            message = "Запущен парсинг карт"
+        else:
+            task_type = 'sync_yandex_business'
+            source = 'yandex_business'
+            target_url = ''
+            message = "Запущена синхронизация (без парсинга)"
 
-            if not target_businesses:
-                db.close()
-                return jsonify(
-                    {
-                        "success": False,
-                        "error": "Нет точек сети",
-                        "message": "В выбранной сети не найдено активных точек",
-                    }
-                ), 400
-
-        # Формируем и ставим задачи в очередь
-        enqueued = []
-        skipped_no_source = []
-        skipped_has_active = []
-        now = datetime.now()
-        network_batch_id = str(uuid.uuid4()) if scope == "network" else None
-
-        cursor.execute(
-            """
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'parsequeue'
-            """
-        )
-        parsequeue_columns = {
-            str(row.get("column_name") if hasattr(row, "get") else row[0])
-            for row in (cursor.fetchall() or [])
-            if (row.get("column_name") if hasattr(row, "get") else (row[0] if row else None))
-        }
-
-        for idx, biz in enumerate(target_businesses):
-            target_business_id = biz.get("id")
-            target_business_name = (biz.get("name") or "").strip() or target_business_id
-
-            cursor.execute(
-                """
-                SELECT id
-                FROM externalbusinessaccounts
-                WHERE business_id = %s
-                  AND source IN ('yandex_business', 'yandex')
-                  AND is_active = TRUE
-                ORDER BY created_at DESC
-                LIMIT 1
-                """,
-                (target_business_id,),
+        cursor.execute("""
+            INSERT INTO parsequeue (
+                id, business_id, account_id, task_type, source,
+                status, user_id, url, created_at, updated_at
             )
-            raw_account = cursor.fetchone()
-            account_row = _row_to_dict(cursor, raw_account) if raw_account else None
-            account_id = account_row.get("id") if account_row else None
-
-            cursor.execute("SELECT yandex_url FROM businesses WHERE id = %s", (target_business_id,))
-            raw_biz_map = cursor.fetchone()
-            biz_map_row = _row_to_dict(cursor, raw_biz_map) if raw_biz_map else None
-            map_url = (biz_map_row.get("yandex_url") or "").strip() if biz_map_row else ""
-            if not map_url:
-                # legacy fallback
-                cursor.execute(
-                    """
-                    SELECT url
-                    FROM businessmaplinks
-                    WHERE business_id = %s
-                      AND map_type IN ('yandex', 'yandex_maps')
-                    ORDER BY created_at DESC
-                    LIMIT 1
-                    """,
-                    (target_business_id,),
-                )
-                raw_map = cursor.fetchone()
-                map_link_row = _row_to_dict(cursor, raw_map) if raw_map else None
-                map_url = map_link_row.get("url") if map_link_row else None
-
-            if not account_id and not map_url:
-                skipped_no_source.append(target_business_name)
-                continue
-
-            cursor.execute(
-                """
-                SELECT id
-                FROM parsequeue
-                WHERE business_id = %s
-                  AND task_type IN ('parse_card', 'sync_yandex_business')
-                  AND status IN ('pending', 'processing', 'captcha')
-                ORDER BY created_at DESC
-                LIMIT 1
-                """,
-                (target_business_id,),
-            )
-            if cursor.fetchone():
-                skipped_has_active.append(target_business_name)
-                continue
-
-            if map_url:
-                task_type = "parse_card"
-                source = "yandex_maps"
-                target_url = map_url
-            else:
-                task_type = "sync_yandex_business"
-                source = "yandex_business"
-                target_url = ""
-
-            task_id = str(uuid.uuid4())
-            delay = delay_seconds * len(enqueued) if scope == "network" else 0
-            retry_after = (now + timedelta(seconds=delay)).isoformat() if delay > 0 else None
-
-            insert_fields = [
-                "id", "business_id", "account_id", "task_type", "source",
-                "status", "user_id", "url", "retry_after", "created_at", "updated_at",
-            ]
-            insert_values = [
-                task_id, target_business_id, account_id, task_type, source,
-                "pending", user_id, target_url, retry_after, None, None,
-            ]
-            if "batch_id" in parsequeue_columns:
-                insert_fields.append("batch_id")
-                insert_values.append(network_batch_id)
-            if "batch_kind" in parsequeue_columns:
-                insert_fields.append("batch_kind")
-                insert_values.append("network_sync" if scope == "network" else None)
-            if "network_id" in parsequeue_columns:
-                insert_fields.append("network_id")
-                insert_values.append(resolved_network_id if scope == "network" else None)
-            if "batch_seq" in parsequeue_columns:
-                insert_fields.append("batch_seq")
-                insert_values.append(idx + 1)
-
-            value_expr = []
-            params = []
-            for field, value in zip(insert_fields, insert_values):
-                if field in ("created_at", "updated_at"):
-                    value_expr.append("CURRENT_TIMESTAMP")
-                else:
-                    value_expr.append("%s")
-                    params.append(value)
-
-            cursor.execute(
-                f"""
-                INSERT INTO parsequeue ({", ".join(insert_fields)})
-                VALUES ({", ".join(value_expr)})
-                """,
-                params,
-            )
-            enqueued.append(
-                {
-                    "task_id": task_id,
-                    "business_id": target_business_id,
-                    "business_name": target_business_name,
-                    "task_type": task_type,
-                    "retry_after": retry_after,
-                    "batch_id": network_batch_id,
-                    "batch_seq": idx + 1,
-                }
-            )
-
+            VALUES (%s, %s, %s, %s, %s,
+                    'pending', %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        """, (task_id, business_id, account_id, task_type, source, user_id, target_url))
         db.conn.commit()
         db.close()
+        print(f"✅ Задача {task_type} добавлена в очередь: {task_id}")
 
-        if not enqueued:
-            return jsonify(
-                {
-                    "success": True,
-                    "noop": True,
-                    "error": "Нет задач для запуска",
-                    "message": "Новых задач для запуска нет: все точки уже в очереди или отсутствует источник данных",
-                    "details": {
-                        "scope": scope,
-                        "skipped_no_source": skipped_no_source,
-                        "skipped_has_active": skipped_has_active,
-                    },
-                }
-            )
-
-        # Backward compatibility для одиночного запуска
-        if scope == "single":
-            item = enqueued[0]
-            return jsonify(
-                {
-                    "success": True,
-                    "message": "Запущен парсинг карт" if item["task_type"] == "parse_card" else "Запущена синхронизация (без парсинга)",
-                    "sync_id": item["task_id"],
-                    "task_type": item["task_type"],
-                }
-            )
-
-        return jsonify(
-            {
-                "success": True,
-                "message": f"Поставлено в очередь: {len(enqueued)} точек сети. Капча, если появится, будет в статусе задачи.",
-                "network_id": resolved_network_id,
-                "batch_id": network_batch_id,
-                "scope": scope,
-                "delay_seconds": delay_seconds,
-                "enqueued_count": len(enqueued),
-                "skipped_no_source_count": len(skipped_no_source),
-                "skipped_has_active_count": len(skipped_has_active),
-                "enqueued": enqueued[:25],
-            }
-        )
+        return jsonify({
+            "success": True,
+            "message": message,
+            "sync_id": task_id,
+            "task_type": task_type
+        })
 
     except Exception as e:
         error_details = traceback.format_exc()
@@ -14519,7 +6772,7 @@ def _sync_yandex_business_sync_task(sync_id, business_id, account_id):
                             # Проверяем, есть ли уже такая услуга
                             cursor.execute("""
                                 SELECT id FROM UserServices 
-                                WHERE business_id = %s AND name = %s 
+                                WHERE business_id = ? AND name = ? 
                                 LIMIT 1
                             """, (business_id, service["name"]))
                             existing = cursor.fetchone()
@@ -14543,7 +6796,7 @@ def _sync_yandex_business_sync_task(sync_id, business_id, account_id):
                                 service_id = str(uuid.uuid4())
                                 cursor.execute("""
                                     INSERT INTO UserServices (id, user_id, business_id, category, name, description, keywords, price, created_at, updated_at)
-                                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                                 """, (
                                     service_id,
                                     user_id,
@@ -14559,8 +6812,8 @@ def _sync_yandex_business_sync_task(sync_id, business_id, account_id):
                                 # Обновляем существующую услугу
                                 cursor.execute("""
                                     UPDATE UserServices 
-                                    SET category = %s, description = %s, keywords = %s, price = %s, updated_at = CURRENT_TIMESTAMP
-                                    WHERE business_id = %s AND name = %s
+                                    SET category = ?, description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
+                                    WHERE business_id = ? AND name = ?
                                 """, (
                                     category,
                                     description,
@@ -14710,11 +6963,10 @@ def get_user_networks():
         cursor = db.conn.cursor()
         
         # Проверяем наличие таблицы networks (Postgres)
-        cursor.execute("SELECT to_regclass('public.networks') as reg")
-        reg_row = cursor.fetchone()
-        reg_val = (reg_row.get('reg') if isinstance(reg_row, dict) else reg_row[0]) if reg_row else None
-
-        if not reg_val:
+        cursor.execute("SELECT to_regclass('public.networks')")
+        networks_table_exists = cursor.fetchone()
+        
+        if not networks_table_exists:
             db.close()
             return jsonify({
                 "success": True,
@@ -14725,16 +6977,16 @@ def get_user_networks():
         cursor.execute("""
             SELECT id, name, description 
             FROM Networks 
-            WHERE owner_id = %s 
+            WHERE owner_id = ? 
             ORDER BY name
         """, (user_data['user_id'],))
         
         networks = []
         for row in cursor.fetchall():
             networks.append({
-                "id": row.get("id") if isinstance(row, dict) else row[0],
-                "name": row.get("name") if isinstance(row, dict) else row[1],
-                "description": row.get("description") if isinstance(row, dict) else row[2]
+                "id": row[0],
+                "name": row[1],
+                "description": row[2]
             })
         
         db.close()
@@ -14808,7 +7060,7 @@ def add_business_to_network(network_id):
         cursor = db.conn.cursor()
         
         # Проверяем права доступа к сети
-        cursor.execute("SELECT owner_id FROM Networks WHERE id = %s", (network_id,))
+        cursor.execute("SELECT owner_id FROM Networks WHERE id = ?", (network_id,))
         network = cursor.fetchone()
         
         if not network:
@@ -14881,17 +7133,15 @@ def get_roi_data():
         
         # Получаем последние данные ROI
         cursor.execute("""
-            SELECT investment_amount, returns_amount, roi_percentage, period_start, period_end
-            FROM roidata
-            WHERE user_id = %s
-            ORDER BY created_at DESC NULLS LAST
+            SELECT * FROM ROIData 
+            WHERE user_id = ? 
+            ORDER BY created_at DESC 
             LIMIT 1
         """, (user_data['user_id'],))
         
         roi_data = cursor.fetchone()
         
         if not roi_data:
-            db.close()
             # Если данных нет, возвращаем базовую структуру
             return jsonify({
                 "success": True,
@@ -14910,11 +7160,11 @@ def get_roi_data():
         return jsonify({
             "success": True,
             "roi": {
-                "investment_amount": float(roi_data[0] or 0),
-                "returns_amount": float(roi_data[1] or 0),
-                "roi_percentage": float(roi_data[2] or 0),
-                "period_start": roi_data[3],
-                "period_end": roi_data[4]
+                "investment_amount": float(roi_data[2]),
+                "returns_amount": float(roi_data[3]),
+                "roi_percentage": float(roi_data[4]),
+                "period_start": roi_data[5],
+                "period_end": roi_data[6]
             }
         })
         
@@ -14959,9 +7209,9 @@ def calculate_roi():
         period_end = data.get('period_end', datetime.now().strftime('%Y-%m-%d'))
         
         cursor.execute("""
-            INSERT INTO roidata
-            (id, user_id, investment_amount, returns_amount, roi_percentage, period_start, period_end, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            INSERT OR REPLACE INTO ROIData 
+            (id, user_id, investment_amount, returns_amount, roi_percentage, period_start, period_end)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (roi_id, user_data['user_id'], investment, returns, roi_percentage, period_start, period_end))
         
         db.conn.commit()
@@ -15286,10 +7536,10 @@ def update_user_profile():
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        set_clause = ', '.join([f"{key} = %s" for key in updates.keys()])
+        set_clause = ', '.join([f"{key} = ?" for key in updates.keys()])
         values = list(updates.values()) + [user['user_id']]
         
-        cursor.execute(f"UPDATE Users SET {set_clause} WHERE id = %s", values)
+        cursor.execute(f"UPDATE Users SET {set_clause} WHERE id = ?", values)
         db.conn.commit()
         db.close()
         
@@ -15383,7 +7633,7 @@ def create_business():
                     try:
                         cursor.execute("""
                             INSERT INTO Users (id, email, name, phone, created_at, is_active, is_verified)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
                         """, (
                             owner_id,
                             owner_email,
@@ -15536,7 +7786,7 @@ def add_proxy():
                 id, proxy_type, host, port, username, password,
                 is_active, is_working, created_at, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            VALUES (?, ?, ?, ?, ?, ?, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         """, (
             proxy_id,
             data.get('type', 'http'),
@@ -15574,7 +7824,7 @@ def delete_proxy(proxy_id):
             return jsonify({"error": "Недостаточно прав"}), 403
         
         cursor = db.conn.cursor()
-        cursor.execute("DELETE FROM ProxyServers WHERE id = %s", (proxy_id,))
+        cursor.execute("DELETE FROM ProxyServers WHERE id = ?", (proxy_id,))
         db.conn.commit()
         db.close()
         
@@ -15605,7 +7855,7 @@ def toggle_proxy(proxy_id):
         
         cursor = db.conn.cursor()
         # Получаем текущий статус
-        cursor.execute("SELECT is_active FROM ProxyServers WHERE id = %s", (proxy_id,))
+        cursor.execute("SELECT is_active FROM ProxyServers WHERE id = ?", (proxy_id,))
         row = cursor.fetchone()
         if not row:
             db.close()
@@ -15614,8 +7864,8 @@ def toggle_proxy(proxy_id):
         new_status = 0 if row[0] else 1
         cursor.execute("""
             UPDATE ProxyServers 
-            SET is_active = %s, updated_at = CURRENT_TIMESTAMP
-            WHERE id = %s
+            SET is_active = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
         """, (new_status, proxy_id))
         db.conn.commit()
         db.close()
@@ -15629,224 +7879,24 @@ def toggle_proxy(proxy_id):
         return jsonify({"error": str(e)}), 500
 
 # ==================== ПРОМПТЫ ДЛЯ AI ====================
-def _ensure_prompt_templates_schema(cursor):
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS prompttemplates (
-            id TEXT PRIMARY KEY,
-            prompt_key TEXT UNIQUE NOT NULL,
-            description TEXT,
-            current_version INTEGER NOT NULL DEFAULT 1,
-            is_active BOOLEAN NOT NULL DEFAULT TRUE,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_by TEXT
-        )
-        """
-    )
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS prompttemplateversions (
-            id TEXT PRIMARY KEY,
-            template_id TEXT NOT NULL REFERENCES prompttemplates(id) ON DELETE CASCADE,
-            prompt_key TEXT NOT NULL,
-            version INTEGER NOT NULL,
-            prompt_text TEXT NOT NULL,
-            description TEXT,
-            is_active BOOLEAN NOT NULL DEFAULT TRUE,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            created_by TEXT,
-            UNIQUE (prompt_key, version)
-        )
-        """
-    )
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_prompttemplateversions_prompt_key ON prompttemplateversions(prompt_key, version DESC)"
-    )
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_prompttemplates_active ON prompttemplates(is_active)"
-    )
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS promptabtests (
-            prompt_key TEXT PRIMARY KEY,
-            enabled BOOLEAN NOT NULL DEFAULT FALSE,
-            version_a INTEGER NOT NULL,
-            version_b INTEGER NOT NULL,
-            traffic_a INTEGER NOT NULL DEFAULT 50,
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_by TEXT
-        )
-        """
-    )
-
-
-def _load_prompt_ab_config(cursor, prompt_key: str) -> dict | None:
-    _ensure_prompt_templates_schema(cursor)
-    cursor.execute(
-        """
-        SELECT prompt_key, enabled, version_a, version_b, traffic_a, updated_at, updated_by
-        FROM promptabtests
-        WHERE prompt_key = %s
-        LIMIT 1
-        """,
-        (prompt_key,),
-    )
-    row = cursor.fetchone()
-    if not row:
-        return None
-    if hasattr(row, "get"):
-        return {
-            "prompt_key": str(row.get("prompt_key") or ""),
-            "enabled": bool(row.get("enabled")),
-            "version_a": int(row.get("version_a") or 1),
-            "version_b": int(row.get("version_b") or 1),
-            "traffic_a": int(row.get("traffic_a") or 50),
-            "updated_at": row.get("updated_at"),
-            "updated_by": row.get("updated_by"),
-        }
-    return {
-        "prompt_key": str(row[0] or ""),
-        "enabled": bool(row[1]),
-        "version_a": int(row[2] or 1),
-        "version_b": int(row[3] or 1),
-        "traffic_a": int(row[4] or 50),
-        "updated_at": row[5],
-        "updated_by": row[6],
-    }
-
-
-def _pick_ab_bucket(route_seed: str, traffic_a: int) -> str:
-    try:
-        bucket_hash = hashlib.sha256(str(route_seed or "").encode("utf-8")).hexdigest()[:8]
-        bucket = int(bucket_hash, 16) % 100
-    except Exception:
-        bucket = random.randint(0, 99)
-    return "a" if bucket < int(max(0, min(100, traffic_a))) else "b"
-
-
-def _ensure_prompt_audit_schema(cursor):
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS prompttemplateaudits (
-            id TEXT PRIMARY KEY,
-            prompt_key TEXT NOT NULL,
-            action_type TEXT NOT NULL,
-            actor_user_id TEXT,
-            actor_is_superadmin BOOLEAN NOT NULL DEFAULT FALSE,
-            prev_version INTEGER,
-            next_version INTEGER,
-            note TEXT,
-            metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-        """
-    )
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_prompttemplateaudits_key_created ON prompttemplateaudits(prompt_key, created_at DESC)"
-    )
-
-
-def _record_prompt_audit(
-    cursor,
-    *,
-    prompt_key: str,
-    action_type: str,
-    actor_user_id: str | None = None,
-    actor_is_superadmin: bool = False,
-    prev_version: int | None = None,
-    next_version: int | None = None,
-    note: str | None = None,
-    metadata: dict | None = None,
-):
-    _ensure_prompt_audit_schema(cursor)
-    cursor.execute(
-        """
-        INSERT INTO prompttemplateaudits (
-            id, prompt_key, action_type, actor_user_id, actor_is_superadmin,
-            prev_version, next_version, note, metadata_json
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """,
-        (
-            f"pta_{uuid.uuid4()}",
-            str(prompt_key or "").strip(),
-            str(action_type or "").strip(),
-            (str(actor_user_id).strip() if actor_user_id else None),
-            bool(actor_is_superadmin),
-            prev_version,
-            next_version,
-            (str(note).strip() if note else None),
-            Json(metadata or {}),
-        ),
-    )
-
-
-def _get_prompts_auth():
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return None, jsonify({"error": "Требуется авторизация"}), 401
-    token = auth_header.split(' ')[1]
-    user_data = verify_session(token)
-    if not user_data:
-        return None, jsonify({"error": "Недействительный токен"}), 401
-    return user_data, None, None
-
-
-def _can_publish_prompts(db: DatabaseManager, user_id: str) -> bool:
-    try:
-        return bool(db.is_superadmin(user_id))
-    except Exception:
-        return False
-
-
-def _seed_prompt_versions_from_ai_prompts(cursor):
-    cursor.execute("SELECT prompt_type, prompt_text, description, updated_by FROM AIPrompts")
-    rows = cursor.fetchall()
-    for row in rows:
-        if hasattr(row, "keys"):
-            prompt_key = str(row.get("prompt_type") or "").strip()
-            prompt_text = str(row.get("prompt_text") or "")
-            description = row.get("description")
-            updated_by = row.get("updated_by")
-        else:
-            prompt_key = str(row[0] or "").strip()
-            prompt_text = str(row[1] or "")
-            description = row[2] if len(row) > 2 else None
-            updated_by = row[3] if len(row) > 3 else None
-        if not prompt_key:
-            continue
-        template_id = f"tpl_{prompt_key}"
-        version_id = f"tplv_{prompt_key}_1"
-        cursor.execute(
-            """
-            INSERT INTO prompttemplates (id, prompt_key, description, current_version, is_active, updated_by)
-            VALUES (%s, %s, %s, 1, TRUE, %s)
-            ON CONFLICT (prompt_key) DO NOTHING
-            """,
-            (template_id, prompt_key, description, updated_by),
-        )
-        cursor.execute(
-            """
-            INSERT INTO prompttemplateversions (
-                id, template_id, prompt_key, version, prompt_text, description, is_active, created_by
-            ) VALUES (%s, %s, %s, 1, %s, %s, TRUE, %s)
-            ON CONFLICT (prompt_key, version) DO NOTHING
-            """,
-            (version_id, template_id, prompt_key, prompt_text, description, updated_by),
-        )
-
-
 @app.route('/api/admin/prompts', methods=['GET', 'OPTIONS'])
 def get_prompts():
-    """Получить все промпты"""
+    """Получить все промпты (только для суперадмина)"""
     try:
         if request.method == 'OPTIONS':
             return ('', 204)
-        user_data, auth_error, auth_status = _get_prompts_auth()
-        if auth_error:
-            return auth_error, auth_status
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
         db = DatabaseManager()
-        can_publish = _can_publish_prompts(db, user_data['user_id'])
+        if not db.is_superadmin(user_data['user_id']):
+            return jsonify({"error": "Недостаточно прав"}), 403
         
         cursor = db.conn.cursor()
         # Проверяем, существует ли таблица, если нет - создаём
@@ -15862,80 +7912,90 @@ def get_prompts():
             )
         """)
         db.conn.commit()
-        _ensure_prompt_templates_schema(cursor)
         
-        default_prompts = get_default_ai_prompts()
-        for prompt_type, prompt_text, description in default_prompts:
-            cursor.execute(
-                """
-                INSERT INTO AIPrompts (id, prompt_type, prompt_text, description)
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT (prompt_type) DO NOTHING
-                """,
-                (f"prompt_{prompt_type}", prompt_type, prompt_text, description),
-            )
-        db.conn.commit()
-        _seed_prompt_versions_from_ai_prompts(cursor)
-        db.conn.commit()
-
-        cursor.execute(
-            """
-            SELECT
-                a.prompt_type,
-                a.prompt_text,
-                a.description,
-                a.updated_at,
-                a.updated_by,
-                pt.current_version
-            FROM AIPrompts a
-            LEFT JOIN prompttemplates pt ON pt.prompt_key = a.prompt_type
-            ORDER BY a.prompt_type
-            """
-        )
+        cursor.execute("SELECT prompt_type, prompt_text, description, updated_at, updated_by FROM AIPrompts ORDER BY prompt_type")
         rows = cursor.fetchall()
+        
+        # Если таблица пустая, инициализируем дефолтные промпты
+        if not rows:
+            default_prompts = [
+                ('service_optimization', 
+                 """Ты - SEO-специалист для бьюти-индустрии. Перефразируй ТОЛЬКО названия услуг и короткие описания для карточек Яндекс.Карт.
+Запрещено любые мнения, диалог, оценочные суждения, обсуждение конкурентов, оскорбления. Никакого текста кроме результата.
+
+Регион: {region}
+Название бизнеса: {business_name}
+Тон: {tone}
+Язык результата: {language_name} (все текстовые поля optimized_name, seo_description и general_recommendations должны быть на этом языке)
+Длина описания: {length} символов
+Дополнительные инструкции: {instructions}
+
+ИСПОЛЬЗУЙ ЧАСТОТНЫЕ ЗАПРОСЫ:
+{frequent_queries}
+
+Формат ответа СТРОГО В JSON:
+{{
+  "services": [
+    {{
+      "original_name": "...",
+      "optimized_name": "...",              
+      "seo_description": "...",             
+      "keywords": ["...", "...", "..."], 
+      "price": null,
+      "category": "hair|nails|spa|barber|massage|other"
+    }}
+  ],
+  "general_recommendations": ["...", "..."]
+}}
+
+Исходные услуги/контент:
+{content}""",
+                 'Промпт для оптимизации услуг и прайс-листа'),
+                ('review_reply',
+                 """Ты - вежливый менеджер салона красоты. Сгенерируй КОРОТКИЙ (до 250 символов) ответ на отзыв клиента.
+Тон: {tone}. Запрещены оценки, оскорбления, обсуждение конкурентов, лишние рассуждения. Только благодарность/сочувствие/решение.
+Write the reply in {language_name}.
+Если уместно, ориентируйся на стиль этих примеров (если они есть):\n{examples_text}
+Верни СТРОГО JSON: {{"reply": "текст ответа"}}
+
+Отзыв клиента: {review_text[:1000]}""",
+                 'Промпт для генерации ответов на отзывы'),
+                ('news_generation',
+                 """Ты - маркетолог для локального бизнеса. Сгенерируй новость для публикации на картах (Google, Яндекс).
+Требования: до 1500 символов, можно использовать 2-3 эмодзи (не переборщи), без хештегов, без оценочных суждений, без упоминания конкурентов. Стиль - информативный и дружелюбный.
+Write all generated text in {language_name}.
+Верни СТРОГО JSON: {{"news": "текст новости"}}
+
+Контекст услуги (может отсутствовать): {service_context}
+Контекст выполненной работы/транзакции (может отсутствовать): {transaction_context}
+Свободная информация (может отсутствовать): {raw_info[:800]}
+Если уместно, ориентируйся на стиль этих примеров (если они есть):\n{news_examples}""",
+                 'Промпт для генерации новостей')
+            ]
+            
+            for prompt_type, prompt_text, description in default_prompts:
+                cursor.execute("""
+                    INSERT OR IGNORE INTO AIPrompts (id, prompt_type, prompt_text, description)
+                    VALUES (?, ?, ?, ?)
+                """, (f"prompt_{prompt_type}", prompt_type, prompt_text, description))
+            
+            db.conn.commit()
+            # Перечитываем после вставки
+            cursor.execute("SELECT prompt_type, prompt_text, description, updated_at, updated_by FROM AIPrompts ORDER BY prompt_type")
+            rows = cursor.fetchall()
         
         prompts = []
         for row in rows:
-            if hasattr(row, 'keys'):
-                row_type = row.get('prompt_type')
-                row_text = row.get('prompt_text')
-                row_desc = row.get('description')
-                row_updated_at = row.get('updated_at')
-                row_updated_by = row.get('updated_by')
-                row_current_version = row.get('current_version')
-            elif isinstance(row, dict):
-                row_type = row.get('prompt_type')
-                row_text = row.get('prompt_text')
-                row_desc = row.get('description')
-                row_updated_at = row.get('updated_at')
-                row_updated_by = row.get('updated_by')
-                row_current_version = row.get('current_version')
-            else:
-                row_type = row[0]
-                row_text = row[1]
-                row_desc = row[2]
-                row_updated_at = row[3]
-                row_updated_by = row[4]
-                row_current_version = row[5] if len(row) > 5 else None
             prompts.append({
-                'type': row_type,
-                'text': row_text,
-                'description': row_desc,
-                'updated_at': row_updated_at,
-                'updated_by': row_updated_by,
-                'current_version': int(row_current_version or 1)
+                'type': row[0],
+                'text': row[1],
+                'description': row[2],
+                'updated_at': row[3],
+                'updated_by': row[4]
             })
         
         db.close()
-        return jsonify(
-            {
-                "prompts": prompts,
-                "permissions": {
-                    "can_view": True,
-                    "can_publish": can_publish,
-                },
-            }
-        )
+        return jsonify({"prompts": prompts})
         
     except Exception as e:
         print(f"❌ Ошибка получения промптов: {e}")
@@ -15949,12 +8009,17 @@ def update_prompt(prompt_type):
     try:
         if request.method == 'OPTIONS':
             return ('', 204)
-        user_data, auth_error, auth_status = _get_prompts_auth()
-        if auth_error:
-            return auth_error, auth_status
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        
         db = DatabaseManager()
-        can_publish = _can_publish_prompts(db, user_data['user_id'])
-        if not can_publish:
+        if not db.is_superadmin(user_data['user_id']):
             return jsonify({"error": "Недостаточно прав"}), 403
         
         data = request.get_json()
@@ -15965,78 +8030,18 @@ def update_prompt(prompt_type):
             return jsonify({"error": "Текст промпта не может быть пустым"}), 400
         
         cursor = db.conn.cursor()
-        _ensure_prompt_templates_schema(cursor)
         cursor.execute("""
             UPDATE AIPrompts 
-            SET prompt_text = %s, description = %s, updated_at = CURRENT_TIMESTAMP, updated_by = %s
-            WHERE prompt_type = %s
+            SET prompt_text = ?, description = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ?
+            WHERE prompt_type = ?
         """, (prompt_text, description, user_data['user_id'], prompt_type))
         
         if cursor.rowcount == 0:
             # Если промпта нет, создаём его
             cursor.execute("""
                 INSERT INTO AIPrompts (id, prompt_type, prompt_text, description, updated_by)
-                VALUES (%s, %s, %s, %s, %s)
+                VALUES (?, ?, ?, ?, ?)
             """, (f"prompt_{prompt_type}", prompt_type, prompt_text, description, user_data['user_id']))
-
-        cursor.execute(
-            """
-            INSERT INTO prompttemplates (id, prompt_key, description, current_version, is_active, updated_by)
-            VALUES (%s, %s, %s, 1, TRUE, %s)
-            ON CONFLICT (prompt_key) DO NOTHING
-            """,
-            (f"tpl_{prompt_type}", prompt_type, description, user_data['user_id']),
-        )
-        cursor.execute("SELECT current_version FROM prompttemplates WHERE prompt_key = %s", (prompt_type,))
-        current_row = cursor.fetchone()
-        current_version = (
-            int(current_row.get("current_version") or 1)
-            if hasattr(current_row, "get")
-            else int((current_row[0] if current_row else 1) or 1)
-        )
-        next_version = current_version + 1
-        cursor.execute(
-            """
-            INSERT INTO prompttemplateversions (
-                id, template_id, prompt_key, version, prompt_text, description, is_active, created_by
-            ) VALUES (%s, %s, %s, %s, %s, %s, TRUE, %s)
-            ON CONFLICT (prompt_key, version) DO UPDATE
-            SET prompt_text = EXCLUDED.prompt_text,
-                description = EXCLUDED.description,
-                is_active = TRUE
-            """,
-            (
-                f"tplv_{prompt_type}_{next_version}",
-                f"tpl_{prompt_type}",
-                prompt_type,
-                next_version,
-                prompt_text,
-                description,
-                user_data["user_id"],
-            ),
-        )
-        cursor.execute(
-            """
-            UPDATE prompttemplates
-            SET current_version = %s,
-                description = %s,
-                updated_by = %s,
-                updated_at = NOW()
-            WHERE prompt_key = %s
-            """,
-            (next_version, description, user_data["user_id"], prompt_type),
-        )
-        _record_prompt_audit(
-            cursor,
-            prompt_key=prompt_type,
-            action_type="save_and_publish",
-            actor_user_id=user_data["user_id"],
-            actor_is_superadmin=can_publish,
-            prev_version=current_version,
-            next_version=next_version,
-            note="prompt updated via PUT /api/admin/prompts/<prompt_type>",
-            metadata={"source": "admin_prompts_ui"},
-        )
         
         db.conn.commit()
         db.close()
@@ -16049,757 +8054,66 @@ def update_prompt(prompt_type):
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
-
-@app.route('/api/admin/prompts/<prompt_type>', methods=['GET'])
-def get_prompt_by_key(prompt_type):
-    """Получить конкретный промпт и его версии."""
-    try:
-        user_data, auth_error, auth_status = _get_prompts_auth()
-        if auth_error:
-            return auth_error, auth_status
-        db = DatabaseManager()
-        can_publish = _can_publish_prompts(db, user_data['user_id'])
-
-        cursor = db.conn.cursor()
-        _ensure_prompt_templates_schema(cursor)
-        cursor.execute(
-            """
-            SELECT prompt_key, description, current_version, updated_at, updated_by
-            FROM prompttemplates
-            WHERE prompt_key = %s
-            """,
-            (prompt_type,),
-        )
-        template = cursor.fetchone()
-        if not template:
-            db.close()
-            return jsonify({"error": "Промпт не найден"}), 404
-
-        cursor.execute(
-            """
-            SELECT version, prompt_text, description, created_at, created_by
-            FROM prompttemplateversions
-            WHERE prompt_key = %s
-            ORDER BY version DESC
-            LIMIT 50
-            """,
-            (prompt_type,),
-        )
-        versions_rows = cursor.fetchall()
-        db.close()
-
-        template_dict = template if isinstance(template, dict) or hasattr(template, "keys") else {
-            "prompt_key": template[0], "description": template[1], "current_version": template[2], "updated_at": template[3], "updated_by": template[4]
-        }
-        versions = []
-        for row in versions_rows:
-            if hasattr(row, "keys"):
-                versions.append(
-                    {
-                        "version": int(row.get("version") or 0),
-                        "prompt_text": row.get("prompt_text") or "",
-                        "description": row.get("description"),
-                        "created_at": row.get("created_at"),
-                        "created_by": row.get("created_by"),
-                    }
-                )
-            else:
-                versions.append(
-                    {
-                        "version": int(row[0] or 0),
-                        "prompt_text": row[1] or "",
-                        "description": row[2],
-                        "created_at": row[3],
-                        "created_by": row[4],
-                    }
-                )
-
-        return jsonify(
-            {
-                "success": True,
-                "template": {
-                    "prompt_key": template_dict["prompt_key"] if hasattr(template_dict, "__getitem__") else template_dict.get("prompt_key"),
-                    "description": template_dict["description"] if hasattr(template_dict, "__getitem__") else template_dict.get("description"),
-                    "current_version": int((template_dict["current_version"] if hasattr(template_dict, "__getitem__") else template_dict.get("current_version")) or 1),
-                    "updated_at": template_dict["updated_at"] if hasattr(template_dict, "__getitem__") else template_dict.get("updated_at"),
-                    "updated_by": template_dict["updated_by"] if hasattr(template_dict, "__getitem__") else template_dict.get("updated_by"),
-                },
-                "versions": versions,
-                "permissions": {"can_view": True, "can_publish": can_publish},
-            }
-        )
-    except Exception as e:
-        print(f"❌ Ошибка получения версии промпта: {e}")
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route('/api/admin/prompts/<prompt_type>/ab', methods=['GET', 'PUT', 'OPTIONS'])
-def prompt_ab_test_config(prompt_type):
-    """Get/update A/B routing config for prompt key (superadmin publish permissions)."""
-    try:
-        if request.method == 'OPTIONS':
-            return ('', 204)
-        user_data, auth_error, auth_status = _get_prompts_auth()
-        if auth_error:
-            return auth_error, auth_status
-        db = DatabaseManager()
-        can_publish = _can_publish_prompts(db, user_data['user_id'])
-        if request.method == 'PUT' and not can_publish:
-            db.close()
-            return jsonify({"error": "Недостаточно прав для публикации промптов"}), 403
-
-        cursor = db.conn.cursor()
-        _ensure_prompt_templates_schema(cursor)
-
-        if request.method == 'GET':
-            cfg = _load_prompt_ab_config(cursor, prompt_type)
-            db.close()
-            return jsonify(
-                {
-                    "success": True,
-                    "prompt_key": prompt_type,
-                    "config": cfg or {
-                        "prompt_key": prompt_type,
-                        "enabled": False,
-                        "version_a": 1,
-                        "version_b": 1,
-                        "traffic_a": 50,
-                    },
-                    "permissions": {"can_view": True, "can_publish": can_publish},
-                }
-            )
-
-        data = request.get_json(silent=True) or {}
-        enabled = bool(data.get("enabled"))
-        version_a = int(data.get("version_a") or 1)
-        version_b = int(data.get("version_b") or 1)
-        traffic_a = int(data.get("traffic_a") or 50)
-        traffic_a = max(0, min(100, traffic_a))
-
-        cursor.execute(
-            """
-            SELECT version
-            FROM prompttemplateversions
-            WHERE prompt_key = %s
-              AND version IN (%s, %s)
-            """,
-            (prompt_type, version_a, version_b),
-        )
-        found = {int((row.get("version") if hasattr(row, "get") else row[0]) or 0) for row in (cursor.fetchall() or [])}
-        required = {version_a, version_b}
-        if not required.issubset(found):
-            db.close()
-            return jsonify({"error": "Одна или обе версии не существуют для этого prompt_key"}), 400
-
-        cursor.execute(
-            """
-            INSERT INTO promptabtests (prompt_key, enabled, version_a, version_b, traffic_a, updated_by)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            ON CONFLICT (prompt_key) DO UPDATE
-            SET enabled = EXCLUDED.enabled,
-                version_a = EXCLUDED.version_a,
-                version_b = EXCLUDED.version_b,
-                traffic_a = EXCLUDED.traffic_a,
-                updated_at = NOW(),
-                updated_by = EXCLUDED.updated_by
-            """,
-            (prompt_type, enabled, version_a, version_b, traffic_a, user_data["user_id"]),
-        )
-        _record_prompt_audit(
-            cursor,
-            prompt_key=prompt_type,
-            action_type="ab_config_updated",
-            actor_user_id=user_data.get("user_id"),
-            actor_is_superadmin=bool(user_data.get("is_superadmin")),
-            note="A/B config updated",
-            metadata={
-                "enabled": enabled,
-                "version_a": version_a,
-                "version_b": version_b,
-                "traffic_a": traffic_a,
-            },
-        )
-        db.conn.commit()
-        cfg = _load_prompt_ab_config(cursor, prompt_type)
-        db.close()
-        return jsonify({"success": True, "prompt_key": prompt_type, "config": cfg})
-    except Exception as e:
-        print(f"❌ Ошибка настройки A/B промпта: {e}")
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route('/api/admin/prompts/<prompt_type>/version', methods=['POST', 'OPTIONS'])
-def create_prompt_version(prompt_type):
-    """Создать новую версию промпта (только для суперадмина)."""
-    try:
-        if request.method == 'OPTIONS':
-            return ('', 204)
-        user_data, auth_error, auth_status = _get_prompts_auth()
-        if auth_error:
-            return auth_error, auth_status
-        db = DatabaseManager()
-        can_publish = _can_publish_prompts(db, user_data['user_id'])
-        if not can_publish:
-            return jsonify({"error": "Недостаточно прав"}), 403
-
-        data = request.get_json(silent=True) or {}
-        prompt_text = str(data.get("text") or "").strip()
-        description = str(data.get("description") or "").strip()
-        if not prompt_text:
-            return jsonify({"error": "Текст промпта не может быть пустым"}), 400
-
-        cursor = db.conn.cursor()
-        _ensure_prompt_templates_schema(cursor)
-        cursor.execute(
-            """
-            INSERT INTO prompttemplates (id, prompt_key, description, current_version, is_active, updated_by)
-            VALUES (%s, %s, %s, 1, TRUE, %s)
-            ON CONFLICT (prompt_key) DO NOTHING
-            """,
-            (f"tpl_{prompt_type}", prompt_type, description or None, user_data["user_id"]),
-        )
-        cursor.execute("SELECT current_version FROM prompttemplates WHERE prompt_key = %s", (prompt_type,))
-        current_row = cursor.fetchone()
-        current_version = (
-            int(current_row.get("current_version") or 1)
-            if hasattr(current_row, "get")
-            else int((current_row[0] if current_row else 1) or 1)
-        )
-        next_version = current_version + 1
-        cursor.execute(
-            """
-            INSERT INTO prompttemplateversions (
-                id, template_id, prompt_key, version, prompt_text, description, is_active, created_by
-            ) VALUES (%s, %s, %s, %s, %s, %s, TRUE, %s)
-            """,
-            (
-                f"tplv_{prompt_type}_{next_version}",
-                f"tpl_{prompt_type}",
-                prompt_type,
-                next_version,
-                prompt_text,
-                description or None,
-                user_data["user_id"],
-            ),
-        )
-        cursor.execute(
-            """
-            UPDATE prompttemplates
-            SET current_version = %s,
-                description = %s,
-                updated_by = %s,
-                updated_at = NOW()
-            WHERE prompt_key = %s
-            """,
-            (next_version, description or None, user_data["user_id"], prompt_type),
-        )
-        _record_prompt_audit(
-            cursor,
-            prompt_key=prompt_type,
-            action_type="publish_version",
-            actor_user_id=user_data["user_id"],
-            actor_is_superadmin=can_publish,
-            prev_version=current_version,
-            next_version=next_version,
-            note="prompt version published via POST /api/admin/prompts/<prompt_type>/version",
-            metadata={"source": "admin_prompts_ui"},
-        )
-        cursor.execute(
-            """
-            INSERT INTO AIPrompts (id, prompt_type, prompt_text, description, updated_by)
-            VALUES (%s, %s, %s, %s, %s)
-            ON CONFLICT (prompt_type) DO UPDATE
-            SET prompt_text = EXCLUDED.prompt_text,
-                description = EXCLUDED.description,
-                updated_by = EXCLUDED.updated_by,
-                updated_at = NOW()
-            """,
-            (f"prompt_{prompt_type}", prompt_type, prompt_text, description or None, user_data["user_id"]),
-        )
-        db.conn.commit()
-        db.close()
-
-        return jsonify({"success": True, "prompt_key": prompt_type, "version": next_version})
-    except Exception as e:
-        print(f"❌ Ошибка создания версии промпта: {e}")
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route('/api/admin/prompts/audit', methods=['GET'])
-def get_prompt_audit_log():
-    """Журнал действий по версиям промптов."""
-    try:
-        user_data, auth_error, auth_status = _get_prompts_auth()
-        if auth_error:
-            return auth_error, auth_status
-
-        db = DatabaseManager()
-        can_publish = _can_publish_prompts(db, user_data['user_id'])
-        cursor = db.conn.cursor()
-        _ensure_prompt_audit_schema(cursor)
-
-        prompt_type = str(request.args.get('prompt_type') or '').strip()
-        limit = max(1, min(int(request.args.get('limit') or 100), 500))
-        where_sql = []
-        params = []
-        if prompt_type:
-            where_sql.append("prompt_key = %s")
-            params.append(prompt_type)
-
-        query = """
-            SELECT
-                id, prompt_key, action_type, actor_user_id, actor_is_superadmin,
-                prev_version, next_version, note, metadata_json, created_at
-            FROM prompttemplateaudits
-        """
-        if where_sql:
-            query += f" WHERE {' AND '.join(where_sql)}"
-        query += " ORDER BY created_at DESC LIMIT %s"
-        params.append(limit)
-        cursor.execute(query, tuple(params))
-        rows = cursor.fetchall()
-        db.close()
-
-        items = []
-        for row in rows:
-            if hasattr(row, "get"):
-                items.append(
-                    {
-                        "id": row.get("id"),
-                        "prompt_key": row.get("prompt_key"),
-                        "action_type": row.get("action_type"),
-                        "actor_user_id": row.get("actor_user_id"),
-                        "actor_is_superadmin": bool(row.get("actor_is_superadmin")),
-                        "prev_version": row.get("prev_version"),
-                        "next_version": row.get("next_version"),
-                        "note": row.get("note"),
-                        "metadata_json": row.get("metadata_json") or {},
-                        "created_at": row.get("created_at"),
-                    }
-                )
-            else:
-                items.append(
-                    {
-                        "id": row[0],
-                        "prompt_key": row[1],
-                        "action_type": row[2],
-                        "actor_user_id": row[3],
-                        "actor_is_superadmin": bool(row[4]),
-                        "prev_version": row[5],
-                        "next_version": row[6],
-                        "note": row[7],
-                        "metadata_json": row[8] or {},
-                        "created_at": row[9],
-                    }
-                )
-
-        return jsonify(
-            {
-                "success": True,
-                "items": items,
-                "count": len(items),
-                "permissions": {"can_view": True, "can_publish": can_publish},
-            }
-        )
-    except Exception as e:
-        print(f"❌ Ошибка получения журнала промптов: {e}")
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route('/api/admin/prompts/recommendations', methods=['GET'])
-def get_prompt_recommendations():
-    """Рекомендации по текущей версии промптов на основе learning событий."""
-    try:
-        user_data, auth_error, auth_status = _get_prompts_auth()
-        if auth_error:
-            return auth_error, auth_status
-
-        db = DatabaseManager()
-        can_publish = _can_publish_prompts(db, user_data['user_id'])
-        cursor = db.conn.cursor()
-        _ensure_prompt_templates_schema(cursor)
-
-        prompt_type = str(request.args.get('prompt_type') or '').strip()
-        days = max(1, min(int(request.args.get('days') or 30), 365))
-
-        where_sql = ["created_at >= NOW() - (%s || ' days')::interval"]
-        params = [str(days)]
-        if prompt_type:
-            where_sql.append("prompt_key = %s")
-            params.append(prompt_type)
-
-        cursor.execute(
-            f"""
-            SELECT
-                prompt_key,
-                COALESCE(prompt_version, '0') AS prompt_version,
-                COUNT(*) FILTER (WHERE event_type = 'generated') AS generated_count,
-                COUNT(*) FILTER (WHERE accepted IS TRUE OR event_type IN ('accepted', 'generate_accepted')) AS accepted_count,
-                COUNT(*) FILTER (WHERE edited_before_accept IS TRUE) AS edited_count
-            FROM ailearningevents
-            WHERE {' AND '.join(where_sql)}
-            GROUP BY prompt_key, COALESCE(prompt_version, '0')
-            """,
-            tuple(params),
-        )
-        perf_rows = cursor.fetchall()
-
-        cursor.execute(
-            f"""
-            SELECT
-                prompt_key,
-                COALESCE(metadata_json->>'content_mode', 'news') AS content_mode,
-                COUNT(*) FILTER (WHERE event_type = 'generated') AS generated_count,
-                COUNT(*) FILTER (WHERE accepted IS TRUE OR event_type IN ('accepted', 'generate_accepted')) AS accepted_count,
-                COUNT(*) FILTER (
-                    WHERE (accepted IS TRUE OR event_type IN ('accepted', 'generate_accepted'))
-                      AND COALESCE(edited_before_accept, FALSE) = FALSE
-                ) AS accepted_raw_count
-            FROM ailearningevents
-            WHERE {' AND '.join(where_sql)}
-              AND prompt_key IN ('news_generation', 'news_social_generation')
-            GROUP BY prompt_key, COALESCE(metadata_json->>'content_mode', 'news')
-            """,
-            tuple(params),
-        )
-        content_mode_rows = cursor.fetchall()
-        cursor.execute(
-            f"""
-            SELECT
-                prompt_key,
-                COALESCE(NULLIF(metadata_json->>'social_format', ''), 'unknown') AS social_format,
-                COUNT(*) FILTER (WHERE event_type = 'generated') AS generated_count,
-                COUNT(*) FILTER (WHERE accepted IS TRUE OR event_type IN ('accepted', 'generate_accepted')) AS accepted_count,
-                COUNT(*) FILTER (
-                    WHERE (accepted IS TRUE OR event_type IN ('accepted', 'generate_accepted'))
-                      AND COALESCE(edited_before_accept, FALSE) = FALSE
-                ) AS accepted_raw_count
-            FROM ailearningevents
-            WHERE {' AND '.join(where_sql)}
-              AND prompt_key IN ('news_social_generation')
-            GROUP BY prompt_key, COALESCE(NULLIF(metadata_json->>'social_format', ''), 'unknown')
-            """,
-            tuple(params),
-        )
-        social_format_rows = cursor.fetchall()
-
-        perf_map: dict[str, list[dict]] = {}
-        content_mode_map: dict[str, list[dict]] = {}
-        social_format_map: dict[str, list[dict]] = {}
-        for row in perf_rows:
-            if hasattr(row, "get"):
-                key = str(row.get("prompt_key") or "").strip()
-                version = str(row.get("prompt_version") or "0").strip()
-                generated = int(row.get("generated_count") or 0)
-                accepted = int(row.get("accepted_count") or 0)
-                edited = int(row.get("edited_count") or 0)
-            else:
-                key = str(row[0] or "").strip()
-                version = str(row[1] or "0").strip()
-                generated = int(row[2] or 0)
-                accepted = int(row[3] or 0)
-                edited = int(row[4] or 0)
-            if not key:
-                continue
-            acceptance_rate = (accepted / generated) if generated > 0 else 0.0
-            edit_rate = (edited / accepted) if accepted > 0 else 0.0
-            # weight acceptance up, edits down; ignore tiny samples
-            confidence = min(1.0, generated / 20.0)
-            score = (acceptance_rate * 0.85 + (1.0 - edit_rate) * 0.15) * confidence
-            perf_map.setdefault(key, []).append(
-                {
-                    "prompt_version": version,
-                    "generated_count": generated,
-                    "accepted_count": accepted,
-                    "edited_count": edited,
-                    "acceptance_rate": round(acceptance_rate, 4),
-                    "edit_rate": round(edit_rate, 4),
-                    "score": round(score, 4),
-                }
-            )
-
-        for row in content_mode_rows:
-            if hasattr(row, "get"):
-                key = str(row.get("prompt_key") or "").strip()
-                content_mode = str(row.get("content_mode") or "news").strip().lower()
-                generated = int(row.get("generated_count") or 0)
-                accepted = int(row.get("accepted_count") or 0)
-                accepted_raw = int(row.get("accepted_raw_count") or 0)
-            else:
-                key = str(row[0] or "").strip()
-                content_mode = str(row[1] or "news").strip().lower()
-                generated = int(row[2] or 0)
-                accepted = int(row[3] or 0)
-                accepted_raw = int(row[4] or 0)
-            if not key:
-                continue
-            acceptance_rate = (accepted / generated) if generated > 0 else 0.0
-            accepted_raw_rate = (accepted_raw / generated) if generated > 0 else 0.0
-            content_mode_map.setdefault(key, []).append(
-                {
-                    "content_mode": content_mode,
-                    "generated_count": generated,
-                    "accepted_count": accepted,
-                    "accepted_raw_count": accepted_raw,
-                    "acceptance_rate": round(acceptance_rate, 4),
-                    "accepted_raw_rate": round(accepted_raw_rate, 4),
-                }
-            )
-
-        for row in social_format_rows:
-            if hasattr(row, "get"):
-                key = str(row.get("prompt_key") or "").strip()
-                social_format = str(row.get("social_format") or "unknown").strip().lower()
-                generated = int(row.get("generated_count") or 0)
-                accepted = int(row.get("accepted_count") or 0)
-                accepted_raw = int(row.get("accepted_raw_count") or 0)
-            else:
-                key = str(row[0] or "").strip()
-                social_format = str(row[1] or "unknown").strip().lower()
-                generated = int(row[2] or 0)
-                accepted = int(row[3] or 0)
-                accepted_raw = int(row[4] or 0)
-            if not key:
-                continue
-            acceptance_rate = (accepted / generated) if generated > 0 else 0.0
-            accepted_raw_rate = (accepted_raw / generated) if generated > 0 else 0.0
-            social_format_map.setdefault(key, []).append(
-                {
-                    "social_format": social_format,
-                    "generated_count": generated,
-                    "accepted_count": accepted,
-                    "accepted_raw_count": accepted_raw,
-                    "acceptance_rate": round(acceptance_rate, 4),
-                    "accepted_raw_rate": round(accepted_raw_rate, 4),
-                }
-            )
-
-        cursor.execute(
-            """
-            SELECT prompt_key, current_version
-            FROM prompttemplates
-            """
-        )
-        template_rows = cursor.fetchall()
-
-        social_format_winners: dict[int, dict[str, dict]] = {14: {}, 30: {}}
-        for window_days in (14, 30):
-            cursor.execute(
-                """
-                SELECT
-                    prompt_key,
-                    COALESCE(NULLIF(metadata_json->>'social_format', ''), 'unknown') AS social_format,
-                    COUNT(*) FILTER (WHERE event_type = 'generated') AS generated_count,
-                    COUNT(*) FILTER (
-                        WHERE (accepted IS TRUE OR event_type IN ('accepted', 'generate_accepted'))
-                          AND COALESCE(edited_before_accept, FALSE) = FALSE
-                    ) AS accepted_raw_count
-                FROM ailearningevents
-                WHERE created_at >= NOW() - (%s || ' days')::interval
-                  AND prompt_key = 'news_social_generation'
-                GROUP BY prompt_key, COALESCE(NULLIF(metadata_json->>'social_format', ''), 'unknown')
-                """,
-                (str(window_days),),
-            )
-            rows = cursor.fetchall() or []
-            local_map: dict[str, list[dict]] = {}
-            for row in rows:
-                if hasattr(row, "get"):
-                    key = str(row.get("prompt_key") or "").strip()
-                    fmt = str(row.get("social_format") or "unknown").strip().lower()
-                    generated = int(row.get("generated_count") or 0)
-                    accepted_raw = int(row.get("accepted_raw_count") or 0)
-                else:
-                    key = str(row[0] or "").strip()
-                    fmt = str(row[1] or "unknown").strip().lower()
-                    generated = int(row[2] or 0)
-                    accepted_raw = int(row[3] or 0)
-                if not key or generated <= 0:
-                    continue
-                rate = accepted_raw / generated
-                local_map.setdefault(key, []).append(
-                    {
-                        "social_format": fmt,
-                        "generated_count": generated,
-                        "accepted_raw_count": accepted_raw,
-                        "accepted_raw_rate": round(rate, 4),
-                    }
-                )
-            for key, versions in local_map.items():
-                winner = sorted(
-                    versions,
-                    key=lambda item: (item.get("accepted_raw_rate", 0), item.get("generated_count", 0)),
-                    reverse=True,
-                )[0]
-                social_format_winners[window_days][key] = winner
-
-        db.close()
-
-        items = []
-        for row in template_rows:
-            if hasattr(row, "get"):
-                key = str(row.get("prompt_key") or "").strip()
-                current_version = int(row.get("current_version") or 1)
-            else:
-                key = str(row[0] or "").strip()
-                current_version = int(row[1] or 1)
-            if prompt_type and key != prompt_type:
-                continue
-            versions = sorted(
-                perf_map.get(key, []),
-                key=lambda item: item.get("score", 0.0),
-                reverse=True,
-            )
-            recommended_version = str(current_version)
-            if versions:
-                best = versions[0]
-                if int(best.get("generated_count") or 0) >= 3:
-                    recommended_version = str(best.get("prompt_version") or recommended_version)
-            items.append(
-                {
-                    "prompt_key": key,
-                    "current_version": str(current_version),
-                    "recommended_version": recommended_version,
-                    "is_change_recommended": str(current_version) != str(recommended_version),
-                    "window_days": days,
-                    "versions": versions[:10],
-                    "by_content_mode": sorted(
-                        content_mode_map.get(key, []),
-                        key=lambda item: item.get("generated_count", 0),
-                        reverse=True,
-                    ),
-                    "by_social_format": sorted(
-                        social_format_map.get(key, []),
-                        key=lambda item: item.get("generated_count", 0),
-                        reverse=True,
-                    ),
-                    "social_format_winner_14d": social_format_winners[14].get(key),
-                    "social_format_winner_30d": social_format_winners[30].get(key),
-                }
-            )
-
-        return jsonify(
-            {
-                "success": True,
-                "items": items,
-                "count": len(items),
-                "permissions": {"can_view": True, "can_publish": can_publish},
-            }
-        )
-    except Exception as e:
-        print(f"❌ Ошибка расчёта рекомендаций по промптам: {e}")
-        return jsonify({"error": str(e)}), 500
-
-def get_prompt_record_from_db(prompt_type: str, fallback: str = None, route_seed: str | None = None) -> tuple[str, int | None]:
-    """Получить промпт и его версию. Приоритет: versioned tables -> AIPrompts."""
+def get_prompt_from_db(prompt_type: str, fallback: str = None) -> str:
+    """Получить промпт из БД или использовать fallback"""
     try:
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        try:
-            _ensure_prompt_templates_schema(cursor)
-            # Optional A/B routing by prompt version
-            if route_seed:
-                cfg = _load_prompt_ab_config(cursor, prompt_type)
-                if cfg and bool(cfg.get("enabled")):
-                    bucket = _pick_ab_bucket(route_seed, int(cfg.get("traffic_a") or 50))
-                    selected_version = int(cfg.get("version_a") if bucket == "a" else cfg.get("version_b") or 1)
-                    cursor.execute(
-                        """
-                        SELECT prompt_text, version
-                        FROM prompttemplateversions
-                        WHERE prompt_key = %s
-                          AND version = %s
-                        LIMIT 1
-                        """,
-                        (prompt_type, selected_version),
-                    )
-                    ab_row = cursor.fetchone()
-                    if ab_row:
-                        if hasattr(ab_row, "keys"):
-                            text = str(ab_row.get("prompt_text") or "").strip()
-                            version = int(ab_row.get("version") or selected_version)
-                        else:
-                            text = str((ab_row[0] if len(ab_row) > 0 else "") or "").strip()
-                            version = int((ab_row[1] if len(ab_row) > 1 else selected_version) or selected_version)
-                        if text:
-                            return text, version
-
-            cursor.execute(
-                """
-                SELECT v.prompt_text, v.version
-                FROM prompttemplates t
-                JOIN prompttemplateversions v
-                  ON v.prompt_key = t.prompt_key
-                 AND v.version = t.current_version
-                WHERE t.prompt_key = %s
-                LIMIT 1
-                """,
-                (prompt_type,),
-            )
-            row = cursor.fetchone()
-            if row:
-                if hasattr(row, "keys"):
-                    text = str(row.get("prompt_text") or "").strip()
-                    version = int(row.get("version") or 1)
-                else:
-                    text = str((row[0] if len(row) > 0 else "") or "").strip()
-                    version = int((row[1] if len(row) > 1 else 1) or 1)
-                if text:
-                    return text, version
-        except Exception:
-            pass
-
-        cursor.execute("SELECT prompt_text FROM AIPrompts WHERE prompt_type = %s", (prompt_type,))
+        cursor.execute("SELECT prompt_text FROM AIPrompts WHERE prompt_type = ?", (prompt_type,))
         row = cursor.fetchone()
         db.close()
+        
         if row:
+            # Правильно извлекаем строку из row (может быть tuple, dict, или sqlite3.Row)
+            prompt_text = None
+            
+            # Если это sqlite3.Row (имеет атрибут keys)
             if hasattr(row, 'keys'):
-                text = str(row.get('prompt_text') or '').strip()
+                try:
+                    prompt_text = row['prompt_text']
+                except (KeyError, IndexError):
+                    try:
+                        prompt_text = row[0]
+                    except (KeyError, IndexError):
+                        prompt_text = None
+            # Если это dict
             elif isinstance(row, dict):
-                text = str(row.get('prompt_text') or '').strip()
+                prompt_text = row.get('prompt_text', '')
+            # Если это tuple или list
+            elif isinstance(row, (tuple, list)) and len(row) > 0:
+                prompt_text = row[0]
             else:
-                text = str((row[0] if row else '') or '').strip()
-            if text:
-                return text, None
-        return (fallback or ""), None
+                prompt_text = None
+            
+            # Убеждаемся, что это строка
+            if prompt_text is not None:
+                print(f"🔍 DEBUG get_prompt_from_db: prompt_text type before conversion = {type(prompt_text)}", flush=True)
+                prompt_text = str(prompt_text) if not isinstance(prompt_text, str) else prompt_text
+                print(f"🔍 DEBUG get_prompt_from_db: prompt_text type after conversion = {type(prompt_text)}", flush=True)
+                if prompt_text.strip():
+                    return prompt_text
+            
+            # Если не удалось извлечь - используем fallback
+            if fallback:
+                print(f"⚠️ Не удалось извлечь промпт из row, используем fallback. Row type: {type(row)}, Row value: {row}", flush=True)
+                return fallback
+            else:
+                return ""
+        elif fallback:
+            return fallback
+        else:
+            return ""
     except Exception as e:
         print(f"⚠️ Ошибка получения промпта из БД: {e}")
-        return (fallback or ""), None
-
-
-def get_prompt_from_db(prompt_type: str, fallback: str = None) -> str:
-    text, _ = get_prompt_record_from_db(prompt_type, fallback)
-    return text
+        import traceback
+        traceback.print_exc()
+        return fallback or ""
 
 # ==================== СХЕМА РОСТА (GROWTH PLAN) ====================
-def _ensure_default_business_types(cursor):
-    for type_key, label, description in get_default_business_types():
-        cursor.execute(
-            """
-            INSERT INTO BusinessTypes (id, type_key, label, description)
-            VALUES (%s, %s, %s, %s)
-            ON CONFLICT (type_key) DO UPDATE
-            SET label = EXCLUDED.label,
-                description = COALESCE(BusinessTypes.description, EXCLUDED.description),
-                updated_at = CURRENT_TIMESTAMP
-            """,
-            (f"bt_{type_key}", type_key, label, description),
-        )
-
-
 @app.route('/api/business-types', methods=['GET'])
 def get_business_types_public():
     """Получить все активные типы бизнеса (для всех пользователей)"""
     try:
-        def _row_get(row_obj, index, key, default=None):
-            if row_obj is None:
-                return default
-            if hasattr(row_obj, "get"):
-                return row_obj.get(key, default)
-            if isinstance(row_obj, (tuple, list)):
-                return row_obj[index] if len(row_obj) > index else default
-            return default
-
         auth_header = request.headers.get('Authorization')
         if not auth_header or not auth_header.startswith('Bearer '):
             return jsonify({"error": "Требуется авторизация"}), 401
@@ -16811,21 +8125,14 @@ def get_business_types_public():
         
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        _ensure_default_business_types(cursor)
-        db.conn.commit()
-        cursor.execute("""
-            SELECT type_key, label
-            FROM businesstypes
-            WHERE COALESCE(LOWER(TRIM(is_active::text)), '1') IN ('1', 'true', 't', 'yes', 'on')
-            ORDER BY label
-        """)
+        cursor.execute("SELECT type_key, label FROM businesstypes WHERE is_active = TRUE ORDER BY label")
         rows = cursor.fetchall()
         
         types = []
         for row in rows:
             types.append({
-                'type_key': _row_get(row, 0, 'type_key'),
-                'label': _row_get(row, 1, 'label')
+                'type_key': row[0],
+                'label': row[1]
             })
         
         db.close()
@@ -16857,8 +8164,6 @@ def get_business_types():
             return jsonify({"error": "Недостаточно прав"}), 403
         
         cursor = db.conn.cursor()
-        _ensure_default_business_types(cursor)
-        db.conn.commit()
         cursor.execute("SELECT id, type_key, label, description, is_active FROM BusinessTypes ORDER BY label")
         rows = cursor.fetchall()
         
@@ -16915,7 +8220,7 @@ def create_business_type():
         cursor = db.conn.cursor()
         cursor.execute("""
             INSERT INTO BusinessTypes (id, type_key, label, description)
-            VALUES (%s, %s, %s, %s)
+            VALUES (?, ?, ?, ?)
         """, (type_id, type_key, label, description))
         
         db.conn.commit()
@@ -16970,8 +8275,8 @@ def update_or_delete_business_type(type_id):
         
         cursor.execute("""
             UPDATE BusinessTypes 
-            SET label = %s, description = %s, is_active = %s, updated_at = CURRENT_TIMESTAMP
-            WHERE id = %s
+            SET label = ?, description = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
         """, (label, description, 1 if is_active else 0, type_id))
         
         db.conn.commit()
@@ -17046,7 +8351,7 @@ def get_business_progress():
         cursor.execute("""
             SELECT id, stage_number, title, description, goal, expected_result, duration, is_permanent
             FROM GrowthStages
-            WHERE business_type_id = %s
+            WHERE business_type_id = ?
             ORDER BY stage_number
         """, (business_type_id,))
         stages_rows = cursor.fetchall()
@@ -17060,7 +8365,7 @@ def get_business_progress():
             cursor.execute("""
                 SELECT id, task_number, task_text
                 FROM GrowthTasks
-                WHERE stage_id = %s
+                WHERE stage_id = ?
                 ORDER BY task_number
             """, (stage_id,))
             tasks_rows = cursor.fetchall()
@@ -17228,7 +8533,7 @@ def get_growth_stages(business_type_id):
         cursor.execute("""
             SELECT id, stage_number, title, description, goal, expected_result, duration, is_permanent
             FROM GrowthStages
-            WHERE business_type_id = %s
+            WHERE business_type_id = ?
             ORDER BY stage_number
         """, (business_type_id,))
         stages_rows = cursor.fetchall()
@@ -17240,7 +8545,7 @@ def get_growth_stages(business_type_id):
             cursor.execute("""
                 SELECT id, task_number, task_text
                 FROM GrowthTasks
-                WHERE stage_id = %s
+                WHERE stage_id = ?
                 ORDER BY task_number
             """, (stage_id,))
             tasks_rows = cursor.fetchall()
@@ -17306,7 +8611,7 @@ def create_growth_stage():
         cursor = db.conn.cursor()
         cursor.execute("""
             INSERT INTO GrowthStages (id, business_type_id, stage_number, title, description, goal, expected_result, duration, is_permanent)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (stage_id, business_type_id, stage_number, title, description, goal, expected_result, duration, 1 if is_permanent else 0))
         
         # Добавляем задачи
@@ -17314,7 +8619,7 @@ def create_growth_stage():
             task_id = f"gt_{uuid.uuid4().hex[:12]}"
             cursor.execute("""
                 INSERT INTO GrowthTasks (id, stage_id, task_number, task_text)
-                VALUES (%s, %s, %s, %s)
+                VALUES (?, ?, ?, ?)
             """, (task_id, stage_id, task_idx, task_text.strip()))
         
         db.conn.commit()
@@ -17371,17 +8676,17 @@ def update_or_delete_growth_stage(stage_id):
         
         cursor.execute("""
             UPDATE GrowthStages 
-            SET stage_number = %s, title = %s, description = %s, goal = %s, expected_result = %s, duration = %s, is_permanent = %s, updated_at = CURRENT_TIMESTAMP
-            WHERE id = %s
+            SET stage_number = ?, title = ?, description = ?, goal = ?, expected_result = ?, duration = ?, is_permanent = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
         """, (stage_number, title, description, goal, expected_result, duration, 1 if is_permanent else 0, stage_id))
         
         # Удаляем старые задачи и добавляем новые
-        cursor.execute("DELETE FROM GrowthTasks WHERE stage_id = %s", (stage_id,))
+        cursor.execute("DELETE FROM GrowthTasks WHERE stage_id = ?", (stage_id,))
         for task_idx, task_text in enumerate(tasks, 1):
             task_id = f"gt_{uuid.uuid4().hex[:12]}"
             cursor.execute("""
                 INSERT INTO GrowthTasks (id, stage_id, task_number, task_text)
-                VALUES (%s, %s, %s, %s)
+                VALUES (?, ?, ?, ?)
             """, (task_id, stage_id, task_idx, task_text.strip()))
         
         db.conn.commit()
@@ -17420,7 +8725,7 @@ def send_business_credentials(business_id):
             SELECT b.*, u.email, u.name as owner_name
             FROM Businesses b
             LEFT JOIN Users u ON b.owner_id = u.id
-            WHERE b.id = %s
+            WHERE b.id = ?
         """, (business_id,))
         business_row = cursor.fetchone()
         
@@ -17457,7 +8762,7 @@ def send_business_credentials(business_id):
             print(f"✅ Сгенерирован временный пароль для {owner_email}")
         
         # Отправляем email с данными для входа
-        login_url = "https://localhost/login"
+        login_url = "https://beautybot.pro/login"
         subject = f"Данные для входа в личный кабинет {business.get('name', 'BeautyBot')}"
         
         if temp_password:
@@ -17709,12 +9014,9 @@ def set_promo_tier(business_id):
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
         
-        # Проверяем наличие колонок subscription_tier и subscription_status (PostgreSQL)
-        cursor.execute("""
-            SELECT column_name FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'businesses'
-        """)
-        columns = [r.get('column_name') if isinstance(r, dict) else r[0] for r in cursor.fetchall()]
+        # Проверяем наличие колонок subscription_tier и subscription_status
+        cursor.execute("PRAGMA table_info(Businesses)")
+        columns = [row[1] for row in cursor.fetchall()]
         
         # Добавляем колонки, если их нет
         if 'subscription_tier' not in columns:
@@ -17733,7 +9035,7 @@ def set_promo_tier(business_id):
                 SET subscription_tier = 'promo',
                     subscription_status = 'active',
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = %s
+                WHERE id = ?
             """, (business_id,))
             message = "Промо тариф установлен"
         else:
@@ -17743,7 +9045,7 @@ def set_promo_tier(business_id):
                 SET subscription_tier = 'trial',
                     subscription_status = 'inactive',
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = %s
+                WHERE id = ?
             """, (business_id,))
             message = "Промо тариф отключен"
         
@@ -17754,84 +9056,6 @@ def set_promo_tier(business_id):
         
     except Exception as e:
         print(f"❌ Ошибка установки промо тарифа: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route('/api/admin/networks/<network_id>/promo', methods=['POST'])
-def set_network_promo_tier(network_id):
-    """Установить/отключить промо тариф для всех точек сети (только для суперадмина)"""
-    try:
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-
-        token = auth_header.split(' ')[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-
-        db = DatabaseManager()
-        if not db.is_superadmin(user_data['user_id']):
-            db.close()
-            return jsonify({"error": "Доступ запрещён"}), 403
-
-        data = request.get_json(silent=True) or {}
-        is_promo = data.get('is_promo', True)
-
-        cursor = db.conn.cursor()
-        cursor.execute("SELECT id, name FROM networks WHERE id = %s", (network_id,))
-        network = cursor.fetchone()
-        if not network:
-            db.close()
-            return jsonify({"error": "Сеть не найдена"}), 404
-
-        cursor.execute(
-            """
-            SELECT column_name FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'businesses'
-            """
-        )
-        columns = [r.get('column_name') if isinstance(r, dict) else r[0] for r in cursor.fetchall()]
-
-        if 'subscription_tier' not in columns:
-            cursor.execute("ALTER TABLE Businesses ADD COLUMN subscription_tier TEXT DEFAULT 'trial'")
-        if 'subscription_status' not in columns:
-            cursor.execute("ALTER TABLE Businesses ADD COLUMN subscription_status TEXT DEFAULT 'active'")
-
-        if is_promo:
-            cursor.execute(
-                """
-                UPDATE Businesses
-                SET subscription_tier = 'promo',
-                    subscription_status = 'active',
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE network_id = %s
-                """,
-                (network_id,),
-            )
-            message = "Промо тариф установлен для всей сети"
-        else:
-            cursor.execute(
-                """
-                UPDATE Businesses
-                SET subscription_tier = 'trial',
-                    subscription_status = 'inactive',
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE network_id = %s
-                """,
-                (network_id,),
-            )
-            message = "Промо тариф отключен для всей сети"
-
-        updated_count = cursor.rowcount
-        db.conn.commit()
-        db.close()
-
-        return jsonify({"success": True, "message": message, "updated_count": updated_count})
-    except Exception as e:
-        print(f"❌ Ошибка установки промо тарифа для сети: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
@@ -17851,43 +9075,25 @@ def get_network_locations(business_id):
             return jsonify({"error": "Недействительный токен"}), 401
         
         db = DatabaseManager()
-        cursor = db.conn.cursor()
-
+        
         # Получаем бизнес
         business = db.get_business_by_id(business_id)
         if not business:
             db.close()
             return jsonify({"error": "Бизнес не найден"}), 404
-        business_owner_id = business.get("owner_id")
-
-        # Проверяем доступ (владелец бизнеса или суперадмин)
-        user_id = user_data.get('user_id') or user_data.get('id')
-        if business_owner_id != user_id and not user_data.get("is_superadmin"):
-            db.close()
-            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
-
-        # Резолвим сеть:
-        # 1) бизнес уже привязан к сети через businesses.network_id (обычная точка сети)
-        # 2) business_id совпадает с id сети (legacy кейс "мастер-аккаунт")
-        # ВАЖНО: не используем fallback по owner_id -> "самая большая сеть",
-        # иначе отдельные бизнесы владельца ошибочно становятся "сетевыми".
-        direct_network_id = business.get('network_id')
-        network_id = direct_network_id
-        is_network_master = False
-
+        
+        # ! FIX: Получаем только точки ТОЙ ЖЕ сети, к которой принадлежит бизнес
+        network_id = business.get('network_id')
+        print(f"🔍 API DEBUG: Business {business_id} ({business.get('name')}) -> Network {network_id}")
+        
         if not network_id:
-            cursor.execute("SELECT id FROM networks WHERE id = %s LIMIT 1", (business_id,))
-            row = cursor.fetchone()
-            if row:
-                network_id = row[0] if not hasattr(row, "keys") else row.get("id")
-                is_network_master = True
-
-        if not network_id:
+            print("🔍 API DEBUG: No network_id, returning []")
             db.close()
             return jsonify({"success": True, "is_network": False, "locations": []})
-
+            
         locations = db.get_businesses_by_network(network_id)
-
+        print(f"🔍 API DEBUG: Found {len(locations)} locations for network {network_id}")
+        
         # Нормализация: алиас website = site для фронта, пустые строки вместо NULL
         def _norm_loc(loc):
             if not loc or not isinstance(loc, dict):
@@ -17901,18 +9107,11 @@ def get_network_locations(business_id):
         normalized_locations = [_norm_loc(loc) for loc in locations]
         db.close()
 
-        return jsonify(
-            {
-                "success": True,
-                # Признак "сетевой аккаунт" для UI-блокировок:
-                # только legacy-мастер сети (business_id == network_id), а не обычная точка.
-                "is_network": bool(is_network_master),
-                "is_network_master": bool(is_network_master),
-                "is_network_member": bool(direct_network_id),
-                "network_id": network_id,
-                "locations": normalized_locations,
-            }
-        )
+        return jsonify({
+            "success": True,
+            "is_network": (business_id == network_id),
+            "locations": normalized_locations
+        })
         
     except Exception as e:
         print(f"❌ Ошибка получения точек сети: {e}")
@@ -17971,15 +9170,15 @@ def business_optimization_wizard(business_id):
                 # Обновляем существующую запись
                 cursor.execute("""
                     UPDATE BusinessOptimizationWizard 
-                    SET data = %s, completed = 1, updated_at = CURRENT_TIMESTAMP
-                    WHERE business_id = %s
+                    SET data = ?, completed = 1, updated_at = CURRENT_TIMESTAMP
+                    WHERE business_id = ?
                 """, (json.dumps(wizard_data, ensure_ascii=False), business_id))
             else:
                 # Создаем новую запись
                 wizard_id = str(uuid.uuid4())
                 cursor.execute("""
                     INSERT INTO BusinessOptimizationWizard (id, business_id, step, data, completed)
-                    VALUES (%s, %s, 3, %s, 1)
+                    VALUES (?, ?, 3, ?, 1)
                 """, (wizard_id, business_id, json.dumps(wizard_data, ensure_ascii=False)))
             
             db.conn.commit()
@@ -17994,7 +9193,7 @@ def business_optimization_wizard(business_id):
             # Получаем данные мастера
             cursor.execute("""
                 SELECT data, completed FROM BusinessOptimizationWizard 
-                WHERE business_id = %s 
+                WHERE business_id = ? 
                 ORDER BY updated_at DESC 
                 LIMIT 1
             """, (business_id,))
@@ -18074,7 +9273,7 @@ def business_sprint(business_id):
             # Получаем данные мастера
             cursor.execute("""
                 SELECT data FROM BusinessOptimizationWizard 
-                WHERE business_id = %s AND completed = 1
+                WHERE business_id = ? AND completed = 1
                 ORDER BY updated_at DESC 
                 LIMIT 1
             """, (business_id,))
@@ -18133,26 +9332,12 @@ def business_sprint(business_id):
                         'status': 'pending'
                     })
             
-            # Сохраняем спринт (обновляем существующий спринт недели, если есть)
+            # Сохраняем спринт
+            sprint_id = str(uuid.uuid4())
             cursor.execute("""
-                SELECT id FROM BusinessSprints
-                WHERE business_id = %s AND week_start = %s
-                ORDER BY updated_at DESC
-                LIMIT 1
-            """, (business_id, week_start.isoformat()))
-            existing = cursor.fetchone()
-            sprint_id = (existing[0] if isinstance(existing, (list, tuple)) else existing.get("id")) if existing else str(uuid.uuid4())
-            if existing:
-                cursor.execute("""
-                    UPDATE BusinessSprints
-                    SET tasks = %s, updated_at = CURRENT_TIMESTAMP
-                    WHERE id = %s
-                """, (json.dumps(tasks, ensure_ascii=False), sprint_id))
-            else:
-                cursor.execute("""
-                    INSERT INTO BusinessSprints (id, business_id, week_start, tasks, updated_at)
-                    VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
-                """, (sprint_id, business_id, week_start.isoformat(), json.dumps(tasks, ensure_ascii=False)))
+                INSERT OR REPLACE INTO BusinessSprints (id, business_id, week_start, tasks, updated_at)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """, (sprint_id, business_id, week_start.isoformat(), json.dumps(tasks, ensure_ascii=False)))
             
             db.conn.commit()
             db.close()
@@ -18170,7 +9355,7 @@ def business_sprint(business_id):
             # Получаем спринт на текущую неделю
             cursor.execute("""
                 SELECT id, tasks, updated_at FROM BusinessSprints 
-                WHERE business_id = %s AND week_start = %s
+                WHERE business_id = ? AND week_start = ?
                 ORDER BY updated_at DESC 
                 LIMIT 1
             """, (business_id, week_start.isoformat()))
@@ -18237,7 +9422,8 @@ def get_business_data(business_id):
         # Создаем таблицу BusinessProfiles если её нет
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS BusinessProfiles (
-                business_id TEXT PRIMARY KEY,
+                id TEXT PRIMARY KEY,
+                business_id TEXT NOT NULL,
                 contact_name TEXT,
                 contact_phone TEXT,
                 contact_email TEXT,
@@ -18289,7 +9475,7 @@ def get_business_data(business_id):
         cursor.execute("""
             SELECT contact_name, contact_phone, contact_email
             FROM BusinessProfiles 
-            WHERE business_id = %s
+            WHERE business_id = ?
         """, (business_id,))
         profile_row = cursor.fetchone()
         business_profile = {
@@ -18353,55 +9539,20 @@ def update_business_yandex_link(business_id):
             db.close()
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
-        # Обновляем каноническую ссылку в businesses + org_id в externalbusinessaccounts.external_id
-        org_id = extract_yandex_org_id_from_url(yandex_url)
+        # Обновляем ссылку и, при возможности, yandex_org_id
+        from yandex_adapter import YandexAdapter
+
+        adapter = YandexAdapter()
+        org_id = adapter.parse_org_id_from_url(yandex_url)
 
         cursor.execute(
             """
-            UPDATE businesses
-            SET yandex_url = %s, updated_at = CURRENT_TIMESTAMP
-            WHERE id = %s
+            UPDATE Businesses
+            SET yandex_url = ?, yandex_org_id = ?
+            WHERE id = ?
             """,
-            (yandex_url, business_id),
+            (yandex_url, org_id, business_id),
         )
-
-        cursor.execute(
-            """
-            SELECT id
-            FROM externalbusinessaccounts
-            WHERE business_id = %s
-              AND source IN ('yandex_business', 'yandex')
-            ORDER BY created_at ASC
-            LIMIT 1
-            FOR UPDATE
-            """,
-            (business_id,),
-        )
-        existing_account = cursor.fetchone()
-        existing_account_dict = _row_to_dict(cursor, existing_account) if existing_account else None
-        account_id = existing_account_dict.get("id") if existing_account_dict else None
-
-        if account_id:
-            cursor.execute(
-                """
-                UPDATE externalbusinessaccounts
-                SET external_id = %s,
-                    is_active = TRUE,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = %s
-                """,
-                (org_id, account_id),
-            )
-        else:
-            cursor.execute(
-                """
-                INSERT INTO externalbusinessaccounts (
-                    id, business_id, source, external_id, display_name, is_active, created_at, updated_at
-                )
-                VALUES (%s, %s, 'yandex_business', %s, %s, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                """,
-                (str(uuid.uuid4()), business_id, org_id, "Yandex Business"),
-            )
 
         db.conn.commit()
         db.close()
@@ -18452,7 +9603,8 @@ def update_business_profile(business_id):
         # Создаем таблицу BusinessProfiles если её нет
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS BusinessProfiles (
-                business_id TEXT PRIMARY KEY,
+                id TEXT PRIMARY KEY,
+                business_id TEXT NOT NULL,
                 contact_name TEXT,
                 contact_phone TEXT,
                 contact_email TEXT,
@@ -18462,17 +9614,14 @@ def update_business_profile(business_id):
             )
         """)
         
-        # Обновляем или создаем профиль бизнеса (PK = business_id).
+        # Обновляем или создаем профиль бизнеса
+        profile_id = f"profile_{business_id}"
         cursor.execute("""
-            INSERT INTO BusinessProfiles
-            (business_id, contact_name, contact_phone, contact_email, updated_at)
-            VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
-            ON CONFLICT (business_id) DO UPDATE SET
-                contact_name = EXCLUDED.contact_name,
-                contact_phone = EXCLUDED.contact_phone,
-                contact_email = EXCLUDED.contact_email,
-                updated_at = CURRENT_TIMESTAMP
+            INSERT OR REPLACE INTO BusinessProfiles 
+            (id, business_id, contact_name, contact_phone, contact_email, updated_at)
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         """, (
+            profile_id,
             business_id,
             data.get('contact_name', ''),
             data.get('contact_phone', ''),
@@ -18499,7 +9648,7 @@ def send_email(to_email, subject, body, from_name="BeautyBot"):
         # Настройки SMTP из .env
         smtp_server = os.getenv("SMTP_SERVER", "mail.hosting.reg.ru")
         smtp_port = int(os.getenv("SMTP_PORT", "587"))
-        smtp_username = os.getenv("SMTP_USERNAME", "info@localhost")
+        smtp_username = os.getenv("SMTP_USERNAME", "info@beautybot.pro")
         smtp_password = os.getenv("SMTP_PASSWORD")
         
         if not smtp_password:
@@ -18530,7 +9679,7 @@ def send_email(to_email, subject, body, from_name="BeautyBot"):
 
 def send_contact_email(name, email, phone, message):
     """Отправка email с сообщением обратной связи"""
-    contact_email = os.getenv("CONTACT_EMAIL", "info@localhost")
+    contact_email = os.getenv("CONTACT_EMAIL", "info@beautybot.pro")
     
     subject = f"Новое сообщение с сайта BeautyBot от {name}"
     body = f"""
@@ -18544,7 +9693,7 @@ Email: {email}
 {message}
 
 ---
-Отправлено с сайта localhost
+Отправлено с сайта beautybot.pro
     """
     
     return send_email(contact_email, subject, body)
@@ -18563,7 +9712,7 @@ def reset_password():
         # Проверяем, существует ли пользователь
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id, name FROM Users WHERE email = %s", (email,))
+        cursor.execute("SELECT id, name FROM Users WHERE email = ?", (email,))
         user = cursor.fetchone()
         
         if not user:
@@ -18579,8 +9728,8 @@ def reset_password():
         # Сохраняем токен в базе
         cursor.execute("""
             UPDATE Users 
-            SET reset_token = %s, reset_token_expires = %s 
-            WHERE email = %s
+            SET reset_token = ?, reset_token_expires = ? 
+            WHERE email = ?
         """, (reset_token, expires_at.isoformat(), email))
         conn.commit()
         conn.close()
@@ -18598,7 +9747,7 @@ def reset_password():
 Действителен до: {expires_at.strftime('%d.%m.%Y %H:%M')}
 
 Для сброса пароля перейдите по ссылке:
-https://localhost/reset-password?token={reset_token}&email={email}
+https://beautybot.pro/reset-password?token={reset_token}&email={email}
 
 Если вы не запрашивали восстановление пароля, проигнорируйте это письмо.
 
@@ -18641,7 +9790,7 @@ def confirm_reset():
         cursor.execute("""
             SELECT id, reset_token, reset_token_expires 
             FROM Users 
-            WHERE email = %s AND reset_token = %s
+            WHERE email = ? AND reset_token = ?
         """, (email, token))
         user = cursor.fetchone()
         
@@ -18664,7 +9813,7 @@ def confirm_reset():
         cursor.execute("""
             UPDATE Users 
             SET reset_token = NULL, reset_token_expires = NULL 
-            WHERE id = %s
+            WHERE id = ?
         """, (user[0],))
         conn.commit()
         conn.close()
@@ -18678,7 +9827,7 @@ def confirm_reset():
 @app.route('/api/public/request-report', methods=['POST', 'OPTIONS'])
 def public_request_report():
     """Публичная заявка на отчёт без авторизации.
-    Принимает email и url, отправляет email на info@localhost о новой заявке.
+    Принимает email и url, отправляет email на info@beautybot.pro о новой заявке.
     """
     try:
         if request.method == 'OPTIONS':
@@ -18694,8 +9843,8 @@ def public_request_report():
         if not email or not url:
             return jsonify({"error": "Email и URL обязательны"}), 400
         
-        # Отправляем email на info@localhost о новой заявке
-        contact_email = os.getenv("CONTACT_EMAIL", "info@localhost")
+        # Отправляем email на info@beautybot.pro о новой заявке
+        contact_email = os.getenv("CONTACT_EMAIL", "info@beautybot.pro")
         subject = f"Новая заявка с сайта BeautyBot от {email}"
         body = f"""
 Новая заявка с сайта BeautyBot
@@ -18704,7 +9853,7 @@ Email клиента: {email}
 Ссылка на бизнес: {url}
 
 ---
-Отправлено с сайта localhost
+Отправлено с сайта beautybot.pro
         """
         
         email_sent = send_email(contact_email, subject, body)
@@ -18728,7 +9877,7 @@ Email клиента: {email}
 @app.route('/api/public/request-registration', methods=['POST', 'OPTIONS'])
 def public_request_registration():
     """Публичная заявка на регистрацию без авторизации.
-    Принимает данные регистрации, отправляет email на info@localhost о новой заявке.
+    Принимает данные регистрации, отправляет email на info@beautybot.pro о новой заявке.
     """
     try:
         if request.method == 'OPTIONS':
@@ -18746,8 +9895,8 @@ def public_request_registration():
         if not email:
             return jsonify({"error": "Email обязателен"}), 400
         
-        # Отправляем email на info@localhost о новой заявке на регистрацию
-        contact_email = os.getenv("CONTACT_EMAIL", "info@localhost")
+        # Отправляем email на info@beautybot.pro о новой заявке на регистрацию
+        contact_email = os.getenv("CONTACT_EMAIL", "info@beautybot.pro")
         subject = f"Новая заявка на регистрацию от {email}"
         body = f"""
 Новая заявка на регистрацию с сайта BeautyBot
@@ -18758,7 +9907,7 @@ Email: {email}
 Ссылка на Яндекс.Карты: {yandex_url or 'Не указана'}
 
 ---
-Отправлено с сайта localhost
+Отправлено с сайта beautybot.pro
         """
         
         email_sent = send_email(contact_email, subject, body)
@@ -18820,56 +9969,39 @@ def generate_telegram_bind_token():
         bind_token = secrets.token_urlsafe(32)
         expires_at = datetime.now() + timedelta(minutes=5)  # Токен действует 5 минут
         
-        # Гарантируем существование таблицы TelegramBindTokens
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS TelegramBindTokens (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                token TEXT NOT NULL,
-                expires_at TIMESTAMP NOT NULL,
-                used INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        db.conn.commit()
-
-        # Проверяем наличие поля business_id в TelegramBindTokens (PostgreSQL)
-        cursor.execute("""
-            SELECT column_name FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'telegrambindtokens'
-        """)
-        columns = [r.get('column_name') if isinstance(r, dict) else r[0] for r in cursor.fetchall()]
+        # Проверяем наличие поля business_id в таблице TelegramBindTokens
+        cursor.execute("PRAGMA table_info(TelegramBindTokens)")
+        columns = [row[1] for row in cursor.fetchall()]
         has_business_id = 'business_id' in columns
-
+        
         # Если поля нет, добавляем его
         if not has_business_id:
             cursor.execute("ALTER TABLE TelegramBindTokens ADD COLUMN business_id TEXT")
             db.conn.commit()
-            has_business_id = True  # только что добавили
         
         # Удаляем старые неиспользованные токены для этого бизнеса
-        if has_business_id:
+        if has_business_id or 'business_id' in [row[1] for row in cursor.execute("PRAGMA table_info(TelegramBindTokens)").fetchall()]:
             cursor.execute("""
                 DELETE FROM TelegramBindTokens 
-                WHERE business_id = %s AND used = 0 AND expires_at < %s
+                WHERE business_id = ? AND used = 0 AND expires_at < ?
             """, (business_id, datetime.now().isoformat()))
         else:
             cursor.execute("""
                 DELETE FROM TelegramBindTokens 
-                WHERE user_id = %s AND used = 0 AND expires_at < %s
+                WHERE user_id = ? AND used = 0 AND expires_at < ?
             """, (user_data['user_id'], datetime.now().isoformat()))
         
         # Создаем новый токен
         token_id = str(uuid.uuid4())
-        if has_business_id:
+        if has_business_id or 'business_id' in [row[1] for row in cursor.execute("PRAGMA table_info(TelegramBindTokens)").fetchall()]:
             cursor.execute("""
                 INSERT INTO TelegramBindTokens (id, user_id, business_id, token, expires_at, used, created_at)
-                VALUES (%s, %s, %s, %s, %s, 0, %s)
+                VALUES (?, ?, ?, ?, ?, 0, ?)
             """, (token_id, user_data['user_id'], business_id, bind_token, expires_at.isoformat(), datetime.now().isoformat()))
         else:
             cursor.execute("""
                 INSERT INTO TelegramBindTokens (id, user_id, token, expires_at, used, created_at)
-                VALUES (%s, %s, %s, %s, 0, %s)
+                VALUES (?, ?, ?, ?, 0, ?)
             """, (token_id, user_data['user_id'], bind_token, expires_at.isoformat(), datetime.now().isoformat()))
         
         db.conn.commit()
@@ -18879,7 +10011,7 @@ def generate_telegram_bind_token():
             "success": True,
             "token": bind_token,
             "expires_at": expires_at.isoformat(),
-            "qr_data": f"https://t.me/LocalOspro_bot?start={bind_token}"
+            "qr_data": f"https://t.me/BeautyBotPro_bot?start={bind_token}"
         }), 200
         
     except Exception as e:
@@ -18916,39 +10048,11 @@ def get_telegram_bind_status():
             db.close()
             return jsonify({"error": "Бизнес не найден или не принадлежит вам"}), 403
         
-        # Гарантируем существование таблицы TelegramBindTokens
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS TelegramBindTokens (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                token TEXT NOT NULL,
-                expires_at TIMESTAMP NOT NULL,
-                used INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        db.conn.commit()
-
-        # Проверяем наличие поля business_id в TelegramBindTokens (PostgreSQL)
-        cursor.execute("""
-            SELECT column_name FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'telegrambindtokens'
-        """)
-        columns = [r.get('column_name') if isinstance(r, dict) else r[0] for r in cursor.fetchall()]
+        # Проверяем наличие поля business_id в таблице TelegramBindTokens
+        cursor.execute("PRAGMA table_info(TelegramBindTokens)")
+        columns = [row[1] for row in cursor.fetchall()]
         has_business_id = 'business_id' in columns
-
-        # Проверяем наличие поля telegram_id в users
-        cursor.execute("""
-            SELECT column_name FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'users'
-        """)
-        user_columns = [r.get('column_name') if isinstance(r, dict) else r[0] for r in cursor.fetchall()]
-        has_user_telegram_id = 'telegram_id' in user_columns
-        if not has_user_telegram_id:
-            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_id TEXT")
-            db.conn.commit()
-            has_user_telegram_id = True
-
+        
         # Проверяем, привязан ли Telegram для этого бизнеса
         is_linked = False
         user_row = None
@@ -18959,14 +10063,10 @@ def get_telegram_bind_status():
             # Токены с business_id = NULL или другим бизнесом не учитываются
             cursor.execute("""
                 SELECT COUNT(*) as count FROM TelegramBindTokens 
-                WHERE business_id = %s AND used = 1 AND user_id = %s
+                WHERE business_id = ? AND used = 1 AND user_id = ?
             """, (business_id, user_data['user_id']))
             result = cursor.fetchone()
-            count_val = (
-                result.get("count") if isinstance(result, dict)
-                else (result[0] if result else 0)
-            )
-            has_used_token_for_this_business = int(count_val or 0) > 0
+            has_used_token_for_this_business = result[0] > 0 if result else False
             
             print(f"🔍 Проверка статуса Telegram для бизнеса {business_id}: has_used_token_for_this_business={has_used_token_for_this_business}")
             
@@ -18974,12 +10074,8 @@ def get_telegram_bind_status():
                 # Проверяем, что у пользователя есть telegram_id
                 cursor.execute("SELECT telegram_id FROM users WHERE id = %s", (user_data['user_id'],))
                 user_row = cursor.fetchone()
-                telegram_id_val = (
-                    user_row.get("telegram_id") if isinstance(user_row, dict)
-                    else (user_row[0] if user_row else None)
-                )
-                is_linked = bool(telegram_id_val and str(telegram_id_val) != 'None')
-                print(f"🔍 Telegram ID пользователя: {telegram_id_val}, is_linked={is_linked}")
+                is_linked = user_row and user_row[0] is not None and user_row[0] != 'None' and user_row[0] != ''
+                print(f"🔍 Telegram ID пользователя: {user_row[0] if user_row else None}, is_linked={is_linked}")
             else:
                 # Нет использованного токена для этого бизнеса - не подключен
                 is_linked = False
@@ -18987,23 +10083,16 @@ def get_telegram_bind_status():
                 print(f"🔍 Нет использованного токена для бизнеса {business_id} - не подключен")
         else:
             # Старая логика: проверяем только привязку к пользователю
-            cursor.execute("SELECT telegram_id FROM Users WHERE id = %s", (user_data['user_id'],))
+            cursor.execute("SELECT telegram_id FROM Users WHERE id = ?", (user_data['user_id'],))
             user_row = cursor.fetchone()
-            telegram_id_val = (
-                user_row.get("telegram_id") if isinstance(user_row, dict)
-                else (user_row[0] if user_row else None)
-            )
-            is_linked = bool(telegram_id_val and str(telegram_id_val) != 'None')
+            is_linked = user_row and user_row[0] is not None and user_row[0] != 'None'
         
         db.close()
         
         return jsonify({
             "success": True,
             "is_linked": is_linked,
-            "telegram_id": (
-                user_row.get("telegram_id") if (is_linked and isinstance(user_row, dict))
-                else (user_row[0] if (is_linked and user_row) else None)
-            )
+            "telegram_id": user_row[0] if is_linked and user_row else None
         }), 200
         
     except Exception as e:
@@ -19027,51 +10116,31 @@ def verify_telegram_bind_token():
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        # Проверяем наличие telegram_id в users
-        cursor.execute("""
-            SELECT column_name FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'users'
-        """)
-        user_columns = [r.get('column_name') if isinstance(r, dict) else r[0] for r in cursor.fetchall()]
-        if 'telegram_id' not in user_columns:
-            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_id TEXT")
-            db.conn.commit()
-
-        # Проверяем токен (включая business_id) (PostgreSQL)
-        cursor.execute("""
-            SELECT column_name FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'telegrambindtokens'
-        """)
-        columns = [r.get('column_name') if isinstance(r, dict) else r[0] for r in cursor.fetchall()]
+        # Проверяем токен (включая business_id)
+        cursor.execute("PRAGMA table_info(TelegramBindTokens)")
+        columns = [row[1] for row in cursor.fetchall()]
         has_business_id = 'business_id' in columns
-
+        
         if has_business_id:
             cursor.execute("""
                 SELECT id, user_id, business_id, expires_at, used
                 FROM TelegramBindTokens
-                WHERE token = %s
+                WHERE token = ?
             """, (bind_token,))
             token_row = cursor.fetchone()
             if token_row:
-                token_id = token_row.get('id') if isinstance(token_row, dict) else token_row[0]
-                user_id = token_row.get('user_id') if isinstance(token_row, dict) else token_row[1]
-                business_id_from_token = token_row.get('business_id') if isinstance(token_row, dict) else token_row[2]
-                expires_at = token_row.get('expires_at') if isinstance(token_row, dict) else token_row[3]
-                used = token_row.get('used') if isinstance(token_row, dict) else token_row[4]
+                token_id, user_id, business_id_from_token, expires_at, used = token_row
             else:
                 token_row = None
         else:
             cursor.execute("""
                 SELECT id, user_id, expires_at, used
                 FROM TelegramBindTokens
-                WHERE token = %s
+                WHERE token = ?
             """, (bind_token,))
             token_row = cursor.fetchone()
             if token_row:
-                token_id = token_row.get('id') if isinstance(token_row, dict) else token_row[0]
-                user_id = token_row.get('user_id') if isinstance(token_row, dict) else token_row[1]
-                expires_at = token_row.get('expires_at') if isinstance(token_row, dict) else token_row[2]
-                used = token_row.get('used') if isinstance(token_row, dict) else token_row[3]
+                token_id, user_id, expires_at, used = token_row
                 business_id_from_token = None
             else:
                 token_row = None
@@ -19082,10 +10151,7 @@ def verify_telegram_bind_token():
         
         # Проверяем срок действия
         from datetime import datetime
-        expires_at_dt = expires_at
-        if isinstance(expires_at, str):
-            expires_at_dt = datetime.fromisoformat(expires_at)
-        if expires_at_dt < datetime.now():
+        if datetime.fromisoformat(expires_at) < datetime.now():
             db.close()
             return jsonify({"error": "Токен истек"}), 400
         
@@ -19095,7 +10161,7 @@ def verify_telegram_bind_token():
             return jsonify({"error": "Токен уже использован"}), 400
         
         # Проверяем, не привязан ли уже этот Telegram к другому аккаунту
-        cursor.execute("SELECT id FROM Users WHERE telegram_id = %s AND id != %s", (telegram_id, user_id))
+        cursor.execute("SELECT id FROM Users WHERE telegram_id = ? AND id != ?", (telegram_id, user_id))
         existing_user = cursor.fetchone()
         if existing_user:
             db.close()
@@ -19104,8 +10170,8 @@ def verify_telegram_bind_token():
         # Привязываем Telegram к аккаунту
         cursor.execute("""
             UPDATE Users 
-            SET telegram_id = %s, updated_at = %s
-            WHERE id = %s
+            SET telegram_id = ?, updated_at = ?
+            WHERE id = ?
         """, (telegram_id, datetime.now().isoformat(), user_id))
         
         # Помечаем токен как использованный
@@ -19113,14 +10179,14 @@ def verify_telegram_bind_token():
         if has_business_id and business_id_from_token:
             cursor.execute("""
                 UPDATE TelegramBindTokens
-                SET used = 1, business_id = %s
-                WHERE id = %s
+                SET used = 1, business_id = ?
+                WHERE id = ?
             """, (business_id_from_token, token_id))
         else:
             cursor.execute("""
                 UPDATE TelegramBindTokens
                 SET used = 1
-                WHERE id = %s
+                WHERE id = ?
             """, (token_id,))
         
         db.conn.commit()
@@ -19135,8 +10201,8 @@ def verify_telegram_bind_token():
             "success": True,
             "user": {
                 "id": user_id,
-                "email": (user_info.get('email') if isinstance(user_info, dict) else (user_info[0] if user_info else None)),
-                "name": (user_info.get('name') if isinstance(user_info, dict) else (user_info[1] if user_info else None))
+                "email": user_info[0] if user_info else None,
+                "name": user_info[1] if user_info else None
             }
         }), 200
         
@@ -19193,7 +10259,7 @@ def download_report(card_id):
         # Получаем данные карточки из SQLite
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM Cards WHERE id = %s", (normalized_id,))
+        cursor.execute("SELECT * FROM Cards WHERE id = ?", (normalized_id,))
         card_data = cursor.fetchone()
         conn.close()
         
@@ -19263,7 +10329,7 @@ def view_report(card_id):
         # Получаем данные карточки из SQLite
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM Cards WHERE id = %s", (normalized_id,))
+        cursor.execute("SELECT * FROM Cards WHERE id = ?", (normalized_id,))
         card_data = cursor.fetchone()
         conn.close()
         
@@ -19306,7 +10372,7 @@ def report_status(card_id):
         # Получаем данные карточки из SQLite
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM Cards WHERE id = %s", (normalized_id,))
+        cursor.execute("SELECT * FROM Cards WHERE id = ?", (normalized_id,))
         card_data = cursor.fetchone()
         conn.close()
         
@@ -19330,12 +10396,6 @@ def report_status(card_id):
 def handle_exception(e):
     """Глобальный обработчик исключений"""
     import traceback
-    if isinstance(e, HTTPException):
-        if request.method == "CONNECT":
-            return ("", e.code or 405)
-        if request.path.startswith('/api/'):
-            return jsonify({"error": e.description or str(e)}), e.code or 500
-        return e
     print(f"🚨 ГЛОБАЛЬНАЯ ОШИБКА: {str(e)}")
     print(f"🚨 ТРАССИРОВКА: {traceback.format_exc()}")
     return jsonify({"error": f"Внутренняя ошибка сервера: {str(e)}"}), 500

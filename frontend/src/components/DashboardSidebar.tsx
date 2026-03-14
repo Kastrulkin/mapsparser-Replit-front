@@ -29,7 +29,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   onClose
 }) => {
   const location = useLocation();
-  const { t, language } = useLanguage();
+  const { t } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
 
   const menuItems = [
@@ -64,6 +64,12 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       path: '/dashboard/chats',
     },
     {
+      id: 'partnerships',
+      label: 'Поиск партнёров',
+      icon: Handshake,
+      path: '/dashboard/partnerships',
+    },
+    {
       id: 'finance',
       label: t.dashboard.sidebar.finance,
       icon: DollarSign,
@@ -74,12 +80,6 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       label: t.dashboard.sidebar.aiChatPromotion,
       icon: Sparkles,
       path: '/dashboard/ai-chat-promotion',
-    },
-    {
-      id: 'partnerships',
-      label: language === 'ru' ? 'Поиск партнёрств' : 'Partnership Search',
-      icon: Handshake,
-      path: '/dashboard/partnerships',
     },
     {
       id: 'settings',
@@ -115,12 +115,12 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
             <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full" />
             <img
               src={logo}
-              alt={language === 'ru' ? 'ЛокалОС' : 'LocalOS'}
+              alt="LocalOS"
               className="h-10 w-auto relative z-10 drop-shadow-sm transition-transform hover:scale-105 duration-300"
             />
           </div>
           <span className="font-bold text-xl bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 hidden lg:block">
-            {language === 'ru' ? 'ЛокалОС' : 'LocalOS'}
+            LocalOS
           </span>
         </div>
       </div>

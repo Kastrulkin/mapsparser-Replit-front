@@ -49,6 +49,8 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
   const [language, setLanguage] = useState<string>(interfaceLanguage);
   const [contentMode, setContentMode] = useState<'news' | 'social'>('news');
   const [socialFormat, setSocialFormat] = useState<'announce' | 'case' | 'promo'>('announce');
+  const [abModeAllowed, setAbModeAllowed] = useState(false);
+  const [abMode, setAbMode] = useState<'auto' | 'force_a' | 'force_b'>('auto');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -77,6 +79,24 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
   };
 
   useEffect(() => { loadNews(); }, []);
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = localStorage.getItem('auth_token');
+        const res = await fetch(`${window.location.origin}/api/news/ab-mode/availability`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (res.ok && data?.success) {
+          setAbModeAllowed(Boolean(data.allowed));
+        } else {
+          setAbModeAllowed(false);
+        }
+      } catch {
+        setAbModeAllowed(false);
+      }
+    })();
+  }, []);
   useEffect(() => {
     (async () => {
       try {
@@ -155,6 +175,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
           use_seo_keywords: useSeoKeywords,
           content_mode: contentMode,
           social_format: contentMode === 'social' ? socialFormat : undefined,
+          ab_mode: contentMode === 'social' && abModeAllowed ? abMode : undefined,
           selected_seo_keyword: selectedSeoKeyword || undefined,
           service_id: serviceId || undefined,
           transaction_id: transactionId || undefined,
@@ -403,32 +424,64 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
               </div>
 
               {contentMode === 'social' && (
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
-                    <Sparkles className="w-4 h-4 text-amber-500" />
-                    Шаблон соцпоста
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { key: 'announce', label: 'Анонс' },
-                      { key: 'case', label: 'Кейс' },
-                      { key: 'promo', label: 'Акция' },
-                    ].map((item) => (
-                      <button
-                        key={item.key}
-                        type="button"
-                        onClick={() => setSocialFormat(item.key as 'announce' | 'case' | 'promo')}
-                        className={cn(
-                          "rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
-                          socialFormat === item.key
-                            ? "border-orange-300 bg-orange-50 text-orange-800"
-                            : "border-gray-200 bg-white text-gray-600 hover:text-gray-900"
-                        )}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
+                <div className="space-y-4">
+                  <div>
+                    <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                      <Sparkles className="w-4 h-4 text-amber-500" />
+                      Шаблон соцпоста
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { key: 'announce', label: 'Анонс' },
+                        { key: 'case', label: 'Кейс' },
+                        { key: 'promo', label: 'Акция' },
+                      ].map((item) => (
+                        <button
+                          key={item.key}
+                          type="button"
+                          onClick={() => setSocialFormat(item.key as 'announce' | 'case' | 'promo')}
+                          className={cn(
+                            "rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
+                            socialFormat === item.key
+                              ? "border-orange-300 bg-orange-50 text-orange-800"
+                              : "border-gray-200 bg-white text-gray-600 hover:text-gray-900"
+                          )}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
+
+                  {abModeAllowed && (
+                    <div>
+                      <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                        <Sparkles className="w-4 h-4 text-violet-500" />
+                        AB-режим (тест)
+                      </label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          { key: 'auto', label: 'Auto' },
+                          { key: 'force_a', label: 'Force A' },
+                          { key: 'force_b', label: 'Force B' },
+                        ].map((item) => (
+                          <button
+                            key={item.key}
+                            type="button"
+                            onClick={() => setAbMode(item.key as 'auto' | 'force_a' | 'force_b')}
+                            className={cn(
+                              "rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
+                              abMode === item.key
+                                ? "border-violet-300 bg-violet-50 text-violet-800"
+                                : "border-gray-200 bg-white text-gray-600 hover:text-gray-900"
+                            )}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

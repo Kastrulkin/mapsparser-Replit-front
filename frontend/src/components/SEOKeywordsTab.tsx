@@ -9,6 +9,16 @@ interface Keyword {
     views: number;
     category: string;
     updated_at: string;
+    negative_blocked?: boolean;
+    negative_reason?: string;
+}
+
+interface NegativeKeyword {
+    id: string;
+    phrase: string;
+    scope: 'global' | 'category';
+    category: string;
+    created_at: string;
 }
 
 interface GroupedKeywords {
@@ -34,12 +44,21 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
     const [searching, setSearching] = useState(false);
     const [suggestions, setSuggestions] = useState<Keyword[]>([]);
     const [rejectedSuggestions, setRejectedSuggestions] = useState<Set<string>>(new Set());
+    const [showBlocked, setShowBlocked] = useState(false);
+    const [negativeKeywords, setNegativeKeywords] = useState<NegativeKeyword[]>([]);
+    const [negativePhrase, setNegativePhrase] = useState('');
+    const [negativeScope, setNegativeScope] = useState<'global' | 'category'>('global');
+    const [negativeCategory, setNegativeCategory] = useState('');
+    const [negativeBulkText, setNegativeBulkText] = useState('');
+    const [negativeLoading, setNegativeLoading] = useState(false);
 
     const loadKeywords = async () => {
         setLoading(true);
         try {
             const token = localStorage.getItem('auth_token');
-            const qs = businessId ? `?business_id=${encodeURIComponent(businessId)}&use_city=1` : '';
+            const qs = businessId
+                ? `?business_id=${encodeURIComponent(businessId)}&use_city=1&include_blocked=${showBlocked ? '1' : '0'}`
+                : '';
             const response = await fetch(`${window.location.origin}/api/wordstat/keywords${qs}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -55,6 +74,128 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
             setError(e.message);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const loadNegativeKeywords = async () => {
+        if (!businessId) {
+            setNegativeKeywords([]);
+            return;
+        }
+        setNegativeLoading(true);
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(
+                `${window.location.origin}/api/wordstat/negative-keywords?business_id=${encodeURIComponent(businessId)}`,
+                { headers: { 'Authorization': `Bearer ${token}` } },
+            );
+            const data = await response.json();
+            if (data.success) {
+                setNegativeKeywords(data.items || []);
+            } else {
+                setError(data.error || 'Ошибка загрузки минус-слов');
+            }
+        } catch (e: any) {
+            setError(e.message);
+        } finally {
+            setNegativeLoading(false);
+        }
+    };
+
+    const addNegativeKeyword = async () => {
+        if (!businessId) return;
+        const phrase = negativePhrase.trim();
+        if (!phrase) return;
+        if (negativeScope === 'category' && !negativeCategory.trim()) {
+            setError('Для категории укажите category');
+            return;
+        }
+        try {
+            setError(null);
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`${window.location.origin}/api/wordstat/negative-keywords`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    business_id: businessId,
+                    phrase,
+                    scope: negativeScope,
+                    category: negativeScope === 'category' ? negativeCategory.trim() : '',
+                }),
+            });
+            const data = await response.json();
+            if (!data.success) {
+                setError(data.error || 'Ошибка добавления минус-слова');
+                return;
+            }
+            setNegativePhrase('');
+            setSuccess('Минус-слово добавлено');
+            await Promise.all([loadNegativeKeywords(), loadKeywords()]);
+        } catch (e: any) {
+            setError(e.message);
+        }
+    };
+
+    const addNegativeKeywordsBulk = async () => {
+        if (!businessId) return;
+        if (!negativeBulkText.trim()) return;
+        if (negativeScope === 'category' && !negativeCategory.trim()) {
+            setError('Для категории укажите category');
+            return;
+        }
+        try {
+            setError(null);
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`${window.location.origin}/api/wordstat/negative-keywords/bulk`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    business_id: businessId,
+                    scope: negativeScope,
+                    category: negativeScope === 'category' ? negativeCategory.trim() : '',
+                    raw_text: negativeBulkText,
+                }),
+            });
+            const data = await response.json();
+            if (!data.success) {
+                setError(data.error || 'Ошибка bulk-добавления минус-слов');
+                return;
+            }
+            setNegativeBulkText('');
+            setSuccess(data.message || 'Минус-слова добавлены');
+            await Promise.all([loadNegativeKeywords(), loadKeywords()]);
+        } catch (e: any) {
+            setError(e.message);
+        }
+    };
+
+    const removeNegativeKeyword = async (item: NegativeKeyword) => {
+        if (!businessId) return;
+        try {
+            setError(null);
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`${window.location.origin}/api/wordstat/negative-keywords`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ business_id: businessId, id: item.id }),
+            });
+            const data = await response.json();
+            if (!data.success) {
+                setError(data.error || 'Ошибка удаления минус-слова');
+                return;
+            }
+            await Promise.all([loadNegativeKeywords(), loadKeywords()]);
+        } catch (e: any) {
+            setError(e.message);
         }
     };
 
@@ -192,7 +333,8 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
 
     useEffect(() => {
         loadKeywords();
-    }, [businessId]);
+        loadNegativeKeywords();
+    }, [businessId, showBlocked]);
 
     const categories = ['all', ...Object.keys(grouped)];
     const displayedKeywords = (activeCategory === 'all'
@@ -262,6 +404,84 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                         {cat !== 'all' && <span className="ml-2 text-xs opacity-60">({grouped[cat]?.length || 0})</span>}
                     </button>
                 ))}
+            </div>
+
+            <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50/50 p-4">
+                <h3 className="text-sm font-semibold text-amber-900 mb-3">Минус-слова SEO</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-2">
+                    <input
+                        value={negativePhrase}
+                        onChange={(e) => setNegativePhrase(e.target.value)}
+                        placeholder="Добавить минус-слово"
+                        className="rounded-lg border border-amber-200 px-3 py-2 text-sm md:col-span-2"
+                    />
+                    <select
+                        value={negativeScope}
+                        onChange={(e) => setNegativeScope(e.target.value as 'global' | 'category')}
+                        className="rounded-lg border border-amber-200 px-3 py-2 text-sm bg-white"
+                    >
+                        <option value="global">Глобально</option>
+                        <option value="category">По категории</option>
+                    </select>
+                    <input
+                        value={negativeCategory}
+                        onChange={(e) => setNegativeCategory(e.target.value)}
+                        placeholder="Категория (если выбрано)"
+                        disabled={negativeScope !== 'category'}
+                        className="rounded-lg border border-amber-200 px-3 py-2 text-sm disabled:bg-gray-100"
+                    />
+                </div>
+                <div className="flex flex-col md:flex-row gap-2 mb-3">
+                    <Button variant="outline" onClick={addNegativeKeyword} disabled={!businessId || !negativePhrase.trim()}>
+                        Добавить минус-слово
+                    </Button>
+                    <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                        <input
+                            type="checkbox"
+                            checked={showBlocked}
+                            onChange={(e) => setShowBlocked(e.target.checked)}
+                        />
+                        Показать исключённые минус-словами
+                    </label>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
+                    <textarea
+                        value={negativeBulkText}
+                        onChange={(e) => setNegativeBulkText(e.target.value)}
+                        placeholder="Bulk добавление: одно минус-слово на строку"
+                        className="rounded-lg border border-amber-200 px-3 py-2 text-sm min-h-[90px]"
+                    />
+                    <div className="rounded-lg border border-amber-200 bg-white p-2 max-h-[140px] overflow-y-auto">
+                        {negativeLoading ? (
+                            <div className="text-xs text-gray-500">Загрузка…</div>
+                        ) : negativeKeywords.length === 0 ? (
+                            <div className="text-xs text-gray-500">Минус-слов пока нет</div>
+                        ) : (
+                            <div className="space-y-1">
+                                {negativeKeywords.map((item) => (
+                                    <div key={item.id} className="flex items-center justify-between rounded border border-gray-100 px-2 py-1 text-xs">
+                                        <div>
+                                            <span className="font-medium text-gray-800">{item.phrase}</span>
+                                            <span className="ml-2 text-gray-500">
+                                                [{item.scope}{item.scope === 'category' ? `:${item.category}` : ''}]
+                                            </span>
+                                        </div>
+                                        <Button variant="ghost" size="sm" onClick={() => removeNegativeKeyword(item)}>
+                                            <Trash2 className="w-3 h-3 text-red-600" />
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+                <Button
+                    variant="outline"
+                    onClick={addNegativeKeywordsBulk}
+                    disabled={!businessId || !negativeBulkText.trim()}
+                >
+                    Добавить bulk
+                </Button>
             </div>
 
             <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4">
@@ -365,6 +585,11 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                                             {k.category}
                                         </span>
+                                        {k.negative_blocked && (
+                                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                                                blocked: {k.negative_reason}
+                                            </span>
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 text-sm text-gray-900 font-semibold">{k.views.toLocaleString()}</td>
                                     <td className="px-6 py-4 text-right text-sm text-gray-500">

@@ -485,6 +485,13 @@ export const CardOverviewPage = () => {
   };
 
   const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+  const normalizeForCompare = (value: string) =>
+    String(value || '')
+      .toLowerCase()
+      .replace(/ё/g, 'е')
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
 
   // Оптимизация услуги
   const optimizeService = async (
@@ -527,6 +534,16 @@ export const CardOverviewPage = () => {
 
       if (data.success && data.result?.services?.length > 0) {
         const optimized = data.result.services[0];
+        const nameCandidate = String(optimized.optimized_name || optimized.optimizedName || '').trim();
+        const descriptionCandidate = String(optimized.seo_description || optimized.seoDescription || '').trim();
+        const safeOptimizedName =
+          nameCandidate && normalizeForCompare(nameCandidate) !== normalizeForCompare(service.name || '')
+            ? nameCandidate
+            : '';
+        const safeOptimizedDescription =
+          descriptionCandidate && normalizeForCompare(descriptionCandidate) !== normalizeForCompare(service.description || '')
+            ? descriptionCandidate
+            : '';
 
         // Исправляем keywords
         let fixedKeywords = [];
@@ -549,19 +566,19 @@ export const CardOverviewPage = () => {
         const updateData = {
           category: service.category || '',
           name: service.name || '',
-          optimized_name: optimized.optimized_name || optimized.optimizedName || '',
+          optimized_name: safeOptimizedName,
           description: service.description || '',
-          optimized_description: optimized.seo_description || optimized.seoDescription || '',
+          optimized_description: safeOptimizedDescription,
           keywords: fixedKeywords,
           price: service.price || ''
         };
 
         try {
-          await updateService(serviceId, updateData);
+          await updateService(serviceId, updateData, { reload: false, showSuccess: false });
+          patchServiceInState(serviceId, updateData);
           if (!options?.silent) {
             setSuccess(t.common.success || "Success");
           }
-          await loadUserServices();
           return 'ok';
         } catch (updateError: any) {
           if (!options?.silent) {
@@ -628,8 +645,27 @@ export const CardOverviewPage = () => {
     setOptimizingAll(false);
   };
 
+  const patchServiceInState = (serviceId: string, patch: Record<string, any>) => {
+    const nowIso = new Date().toISOString();
+    setUserServices((prev) =>
+      prev.map((item) => (
+        item.id === serviceId
+          ? {
+              ...item,
+              ...patch,
+              updated_at: nowIso,
+            }
+          : item
+      ))
+    );
+  };
+
   // Обновление услуги
-  const updateService = async (serviceId: string, updatedData: any) => {
+  const updateService = async (
+    serviceId: string,
+    updatedData: any,
+    options?: { reload?: boolean; showSuccess?: boolean }
+  ) => {
     const token = localStorage.getItem('auth_token');
     const response = await fetch(`${window.location.origin}/api/services/update/${serviceId}`, {
       method: 'PUT',
@@ -648,8 +684,12 @@ export const CardOverviewPage = () => {
     const data = await response.json();
     if (data.success) {
       setEditingService(null);
-      await loadUserServices();
-      setSuccess(t.common.success || "Success");
+      if (options?.reload !== false) {
+        await loadUserServices();
+      }
+      if (options?.showSuccess !== false) {
+        setSuccess(t.common.success || "Success");
+      }
     } else {
       throw new Error(data.error || t.common.error || "Error");
     }
@@ -1197,7 +1237,7 @@ export const CardOverviewPage = () => {
                     ))}
                   </select>
                 </div>
-                <div>
+                <div className="flex gap-2">
                   <select
                     value={servicesSort}
                     onChange={(e) => setServicesSort(e.target.value as any)}
@@ -1211,6 +1251,15 @@ export const CardOverviewPage = () => {
                     <option value="price_asc">Цена: по возрастанию</option>
                     <option value="price_desc">Цена: по убыванию</option>
                   </select>
+                  <Button
+                    type="button"
+                    variant={servicesSort === 'name_asc' ? 'default' : 'outline'}
+                    onClick={() => setServicesSort((prev) => (prev === 'name_asc' ? 'default' : 'name_asc'))}
+                    className="shrink-0 h-10 px-3"
+                    title="Сортировка по алфавиту"
+                  >
+                    А-Я
+                  </Button>
                 </div>
               </div>
 
@@ -1295,7 +1344,7 @@ export const CardOverviewPage = () => {
                                         size="sm"
                                         variant="ghost"
                                         onClick={async () => {
-                                          await updateService(service.id, {
+                                          const payload = {
                                             category: service.category,
                                             name: service.optimized_name,
                                             optimized_name: '',
@@ -1303,9 +1352,10 @@ export const CardOverviewPage = () => {
                                             optimized_description: service.optimized_description,
                                             keywords: service.keywords,
                                             price: service.price
-                                          });
+                                          };
+                                          await updateService(service.id, payload, { reload: false, showSuccess: false });
+                                          patchServiceInState(service.id, payload);
                                           setSuccess(t.common.success || "Accepted");
-                                          await loadUserServices();
                                         }}
                                         className="h-6 text-xs bg-white text-indigo-600 border border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
                                       >
@@ -1316,7 +1366,7 @@ export const CardOverviewPage = () => {
                                         size="sm"
                                         variant="ghost"
                                         onClick={async () => {
-                                          await updateService(service.id, {
+                                          const payload = {
                                             category: service.category,
                                             name: service.name,
                                             optimized_name: '',
@@ -1324,9 +1374,10 @@ export const CardOverviewPage = () => {
                                             optimized_description: service.optimized_description,
                                             keywords: service.keywords,
                                             price: service.price
-                                          });
+                                          };
+                                          await updateService(service.id, payload, { reload: false, showSuccess: false });
+                                          patchServiceInState(service.id, payload);
                                           setSuccess(t.common.success || "Rejected");
-                                          await loadUserServices();
                                         }}
                                         className="h-6 text-xs text-gray-400 hover:text-gray-600 hover:bg-gray-100"
                                       >
@@ -1357,16 +1408,17 @@ export const CardOverviewPage = () => {
                                         size="sm"
                                         variant="ghost"
                                         onClick={async () => {
-                                          await updateService(service.id, {
+                                          const payload = {
                                             category: service.category,
                                             name: service.name,
                                             description: service.optimized_description,
                                             optimized_description: '',
                                             keywords: service.keywords,
                                             price: service.price
-                                          });
+                                          };
+                                          await updateService(service.id, payload, { reload: false, showSuccess: false });
+                                          patchServiceInState(service.id, payload);
                                           setSuccess(t.common.success || "Accepted");
-                                          await loadUserServices();
                                         }}
                                         className="h-6 text-xs bg-white text-indigo-600 border border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
                                       >
@@ -1377,16 +1429,17 @@ export const CardOverviewPage = () => {
                                         size="sm"
                                         variant="ghost"
                                         onClick={async () => {
-                                          await updateService(service.id, {
+                                          const payload = {
                                             category: service.category,
                                             name: service.name,
                                             description: service.description,
                                             optimized_description: '',
                                             keywords: service.keywords,
                                             price: service.price
-                                          });
+                                          };
+                                          await updateService(service.id, payload, { reload: false, showSuccess: false });
+                                          patchServiceInState(service.id, payload);
                                           setSuccess(t.common.success || "Rejected");
-                                          await loadUserServices();
                                         }}
                                         className="h-6 text-xs text-gray-400 hover:text-gray-600 hover:bg-gray-100"
                                       >

@@ -695,7 +695,9 @@ export const ParsingManagement: React.FC = () => {
   ] : [];
 
   const actionItems = [
-    ...((stats?.recoverable_batches || []).map((batch) => ({
+    ...((stats?.recoverable_batches || [])
+      .filter((batch) => (batch.captcha_count || 0) === 0)
+      .map((batch) => ({
       key: `batch-${batch.batch_id}`,
       title: batch.business_name || `Batch ${batch.batch_id.slice(0, 8)}`,
       subtitle: `Сетевой запуск • ${batch.source || 'источник не указан'}`,
@@ -706,6 +708,8 @@ export const ParsingManagement: React.FC = () => {
     }))),
   ];
   const filteredActionItems = onlyActionRequired ? actionItems : actionItems;
+  const hasCaptchaQueue = ((stats?.captcha_queue || []).length > 0);
+  const showActionRequiredPanel = filteredActionItems.length > 0 && !hasCaptchaQueue;
 
   return (
     <div className="space-y-6">
@@ -781,12 +785,12 @@ export const ParsingManagement: React.FC = () => {
         </div>
       )}
 
-      {filteredActionItems.length > 0 && (
+      {showActionRequiredPanel && (
         <Card className="border-amber-200 bg-amber-50/70">
           <CardHeader>
             <CardTitle>Требует действия</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Сначала решите эти задачи: они блокируют продолжение парсинга или требуют human-in-the-loop.
+              Сначала решите эти задачи: они блокируют продолжение парсинга.
             </p>
           </CardHeader>
           <CardContent className="space-y-3">

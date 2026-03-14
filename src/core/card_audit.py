@@ -194,6 +194,62 @@ def _is_editorial_service_entry(name: str, description: str | None) -> bool:
     return False
 
 
+def _extract_services_from_products_payload(products_payload: Any, *, limit: int = 8) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    if not isinstance(products_payload, list):
+        return rows
+
+    def _push_item(item: Any, fallback_category: str = "Парсинг карточки") -> None:
+        if not isinstance(item, dict):
+            return
+        name = str(item.get("name") or "").strip()
+        if not name:
+            return
+        description = str(item.get("description") or "").strip()
+        if _is_editorial_service_entry(name, description):
+            return
+        category = str(
+            item.get("category")
+            or item.get("category_name")
+            or item.get("group")
+            or item.get("section")
+            or fallback_category
+        ).strip() or fallback_category
+        price = item.get("price") or item.get("price_from") or item.get("price_to")
+        note_parts = []
+        if price is not None and str(price).strip():
+            note_parts.append(f"Цена: {str(price).strip()}")
+        if category:
+            note_parts.append(f"Источник: {category}")
+        rows.append(
+            {
+                "current_name": name,
+                "suggested_name": name,
+                "note": " • ".join(note_parts) if note_parts else "Парсинг карточки",
+                "description": description or None,
+                "_price_present": bool(price is not None and str(price).strip()),
+            }
+        )
+
+    for block in products_payload:
+        if isinstance(block, dict):
+            block_category = str(block.get("category") or block.get("name") or "Парсинг карточки").strip() or "Парсинг карточки"
+            block_items = block.get("items") if isinstance(block.get("items"), list) else None
+            if block_items is not None:
+                for item in block_items:
+                    _push_item(item, block_category)
+            else:
+                _push_item(block, block_category)
+        elif isinstance(block, list):
+            for item in block:
+                _push_item(item, "Парсинг карточки")
+
+        if len(rows) >= max(1, limit):
+            break
+
+    return rows[: max(1, limit)]
+
+
 def _resolve_lead_business_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
     """
     Try to resolve an existing LocalOS business for a lead and enrich preview metrics.
@@ -347,6 +403,7 @@ def _resolve_lead_business_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
 
         photos_payload = _safe_json(latest_card.get("photos"))
         news_payload = _safe_json(latest_card.get("news"))
+        products_payload = _safe_json(latest_card.get("products"))
         overview_payload = _safe_json(latest_card.get("overview")) or {}
         overview_social_links = overview_payload.get("social_links") if isinstance(overview_payload, dict) else None
         social_links = _extract_contact_links(overview_social_links)
@@ -387,6 +444,11 @@ def _resolve_lead_business_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
                     "description": description or None,
                 }
             )
+
+        if not services_preview:
+            services_preview = _extract_services_from_products_payload(products_payload, limit=8)
+            if services_preview and active_services <= 0:
+                active_services = len(services_preview)
 
         reviews_preview: List[Dict[str, Any]] = []
         if _table_exists(cursor, "externalbusinessreviews"):
@@ -1026,6 +1088,7 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
         overview = _safe_json(latest_card.get("overview")) or {}
         photos = _safe_json(latest_card.get("photos"))
         news = _safe_json(latest_card.get("news"))
+        products_payload = _safe_json(latest_card.get("products"))
 
         photos_count = len(photos) if isinstance(photos, list) else int(overview.get("photos_count") or 0)
         if isinstance(news, list):
@@ -1047,6 +1110,11 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
             services_count = total_services
         priced_services_count = int(services_row.get("priced_services") or 0)
         active_yandex_services = int(services_row.get("active_yandex_services") or 0)
+        if services_count <= 0:
+            fallback_services = _extract_services_from_products_payload(products_payload, limit=200)
+            if fallback_services:
+                services_count = len(fallback_services)
+                priced_services_count = sum(1 for row in fallback_services if row.get("_price_present"))
 
         average_check = _extract_numeric(wizard_data.get("average_check"))
         current_revenue = _extract_numeric(wizard_data.get("revenue"))

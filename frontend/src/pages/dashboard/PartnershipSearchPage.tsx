@@ -61,6 +61,15 @@ type PartnershipReaction = {
   human_confirmed_outcome?: string | null;
 };
 
+type PartnershipLearningMetric = {
+  capability: string;
+  accepted_total: number;
+  accepted_raw_total: number;
+  accepted_edited_total: number;
+  accepted_raw_pct: number;
+  edited_before_accept_pct: number;
+};
+
 const STAGE_OPTIONS = [
   { value: 'all', label: 'Все этапы' },
   { value: 'imported', label: 'Импортировано' },
@@ -87,6 +96,7 @@ export const PartnershipSearchPage: React.FC = () => {
   const [reactions, setReactions] = useState<PartnershipReaction[]>([]);
   const [sendQueueBusy, setSendQueueBusy] = useState<Record<string, string>>({});
   const [reactionBusy, setReactionBusy] = useState<Record<string, string>>({});
+  const [learningMetrics, setLearningMetrics] = useState<PartnershipLearningMetric[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -134,10 +144,22 @@ export const PartnershipSearchPage: React.FC = () => {
     setReactions(Array.isArray(data.reactions) ? data.reactions : []);
   };
 
+  const loadLearningMetrics = async () => {
+    try {
+      const data = await newAuth.makeRequest('/admin/ai/learning-metrics?intent=partnership_outreach', {
+        method: 'GET',
+      });
+      setLearningMetrics(Array.isArray(data.items) ? data.items : []);
+    } catch {
+      setLearningMetrics([]);
+    }
+  };
+
   useEffect(() => {
     void loadLeads();
     void loadDrafts();
     void loadBatches();
+    void loadLearningMetrics();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentBusinessId, stage]);
 
@@ -442,6 +464,32 @@ export const PartnershipSearchPage: React.FC = () => {
                 ))
               )}
             </div>
+          </div>
+
+          <div className="rounded-xl border bg-white p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold">Метрики обучения (30 дней)</h2>
+              <Button variant="outline" onClick={() => void loadLearningMetrics()} disabled={loading}>
+                Обновить
+              </Button>
+            </div>
+            {learningMetrics.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Метрики пока недоступны.</p>
+            ) : (
+              <div className="grid gap-2 md:grid-cols-2">
+                {learningMetrics.map((metric) => (
+                  <div key={metric.capability} className="rounded-lg border border-gray-200 p-3 bg-gray-50">
+                    <div className="text-sm font-semibold text-foreground">{metric.capability}</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Принято: {metric.accepted_total} · без правок: {metric.accepted_raw_total} ({metric.accepted_raw_pct}%)
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      С правками: {metric.accepted_edited_total} ({metric.edited_before_accept_pct}%)
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="rounded-xl border bg-white p-4 space-y-3">
