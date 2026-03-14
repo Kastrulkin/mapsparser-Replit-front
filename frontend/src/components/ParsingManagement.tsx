@@ -694,23 +694,6 @@ export const ParsingManagement: React.FC = () => {
     { key: 'done', label: 'Успешно сегодня', value: stats.operator_summary.completed_today, filter: 'completed', className: 'text-green-600' },
   ] : [];
 
-  const actionItems = [
-    ...((stats?.recoverable_batches || [])
-      .filter((batch) => (batch.captcha_count || 0) === 0)
-      .map((batch) => ({
-      key: `batch-${batch.batch_id}`,
-      title: batch.business_name || `Batch ${batch.batch_id.slice(0, 8)}`,
-      subtitle: `Сетевой запуск • ${batch.source || 'источник не указан'}`,
-      description: batch.last_error_short || 'Сеть можно продолжить с места сбоя',
-      meta: `Прогресс: ${batch.completed_count}/${batch.tasks_count} • paused: ${batch.paused_count} • error: ${batch.error_count}`,
-      actionLabel: 'Возобновить с места сбоя',
-      onAction: () => handleResumeNetworkBatch(batch.batch_id),
-    }))),
-  ];
-  const filteredActionItems = onlyActionRequired ? actionItems : actionItems;
-  const hasCaptchaQueue = ((stats?.captcha_queue || []).length > 0);
-  const showActionRequiredPanel = filteredActionItems.length > 0 && !hasCaptchaQueue;
-
   return (
     <div className="space-y-6">
       {/* Заголовок с кнопкой обновления */}
@@ -783,32 +766,6 @@ export const ParsingManagement: React.FC = () => {
             </Card>
           ))}
         </div>
-      )}
-
-      {showActionRequiredPanel && (
-        <Card className="border-amber-200 bg-amber-50/70">
-          <CardHeader>
-            <CardTitle>Требует действия</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Сначала решите эти задачи: они блокируют продолжение парсинга.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {filteredActionItems.map((item) => (
-              <div key={item.key} className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-white p-4 md:flex-row md:items-center md:justify-between">
-                <div className="space-y-1">
-                  <div className="text-sm font-semibold text-foreground">{item.title}</div>
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground">{item.subtitle}</div>
-                  <div className="text-sm text-foreground">{item.description}</div>
-                  <div className="text-xs text-muted-foreground">{item.meta}</div>
-                </div>
-                <Button onClick={item.onAction} variant="outline" className="border-amber-300 text-amber-900 hover:bg-amber-100">
-                  {item.actionLabel}
-                </Button>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
       )}
 
       {/* Статистика */}

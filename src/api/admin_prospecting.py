@@ -2918,8 +2918,22 @@ def partnership_list_leads():
                 f"""
                 SELECT id, name, address, city, category, source_url, source, phone, email,
                        telegram_url, whatsapp_url, website, rating, reviews_count,
-                       status, selected_channel, intent, partnership_stage, updated_at, created_at
+                       status, selected_channel, intent, partnership_stage, updated_at, created_at,
+                       pq_last.id AS parse_task_id,
+                       pq_last.status AS parse_status,
+                       COALESCE(pq_last.updated_at, pq_last.created_at) AS parse_updated_at,
+                       pq_last.retry_after AS parse_retry_after,
+                       pq_last.error_message AS parse_error
                 FROM prospectingleads
+                LEFT JOIN LATERAL (
+                    SELECT
+                        pq.id, pq.status, pq.updated_at, pq.created_at, pq.retry_after, pq.error_message
+                    FROM parsequeue pq
+                    WHERE pq.business_id = prospectingleads.business_id
+                      AND pq.task_type IN ('parse_card', 'sync_yandex_business')
+                    ORDER BY COALESCE(pq.updated_at, pq.created_at) DESC
+                    LIMIT 1
+                ) pq_last ON TRUE
                 WHERE {' AND '.join(where_sql)}
                 ORDER BY updated_at DESC NULLS LAST, created_at DESC
                 LIMIT %s OFFSET %s
@@ -2934,6 +2948,72 @@ def partnership_list_leads():
         return jsonify({"success": True, "count": len(items), "items": items})
     except Exception as e:
         print(f"Error listing partnership leads: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/leads/<string:lead_id>/parse", methods=["POST"])
+def partnership_parse_lead(lead_id):
+    """User-level parse enqueue for partnership lead."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+            lead = _load_partnership_lead(cur, lead_id=lead_id, business_id=business_id)
+            if not lead:
+                return jsonify({"error": "Lead not found"}), 404
+        finally:
+            conn.close()
+
+        display_lead = _normalize_lead_for_display(dict(lead))
+        if not display_lead:
+            return jsonify({"error": "Lead is not available for parsing"}), 400
+
+        business, business_created = _ensure_parse_business_for_lead(display_lead, str(user_data["user_id"]))
+        parse_business_id = str(business.get("id") or "").strip()
+        if not parse_business_id:
+            return jsonify({"error": "Failed to resolve business for lead"}), 500
+
+        _update_lead_business_link(lead_id, parse_business_id)
+        source_url = str(business.get("yandex_url") or display_lead.get("source_url") or "").strip()
+        if not source_url:
+            return jsonify({"error": "У лида нет ссылки на Яндекс Карты для запуска парсинга"}), 400
+
+        task = _enqueue_parse_task_for_business(parse_business_id, user_data["user_id"], source_url)
+        refreshed_lead = _load_prospecting_lead(lead_id) or display_lead
+        return jsonify(
+            {
+                "success": True,
+                "lead": _normalize_lead_for_display(refreshed_lead),
+                "business": {
+                    "id": parse_business_id,
+                    "name": business.get("name"),
+                    "created": bool(business_created),
+                    "shadow": str(business.get("moderation_status") or "").strip().lower() == LEAD_OUTREACH_MODERATION_STATUS,
+                },
+                "parse_task": {
+                    "id": task.get("id"),
+                    "status": task.get("status"),
+                    "task_type": task.get("task_type"),
+                    "source": task.get("source"),
+                    "updated_at": task.get("updated_at"),
+                    "retry_after": task.get("retry_after"),
+                    "existing": bool(task.get("existing")),
+                },
+            }
+        )
+    except Exception as e:
+        print(f"Error partnership parse lead: {e}")
         return jsonify({"error": str(e)}), 500
 
 

@@ -16,6 +16,11 @@ type PartnershipLead = {
   partnership_stage?: string;
   selected_channel?: string;
   updated_at?: string;
+  parse_task_id?: string;
+  parse_status?: string;
+  parse_updated_at?: string;
+  parse_retry_after?: string;
+  parse_error?: string;
 };
 
 type PartnershipDraft = {
@@ -199,6 +204,11 @@ export const PartnershipSearchPage: React.FC = () => {
       setError(null);
       setMatchData(null);
       setDraftText('');
+      const lead = items.find((x) => x.id === leadId);
+      const parseStatus = String(lead?.parse_status || '').toLowerCase();
+      if (['pending', 'processing', 'captcha'].includes(parseStatus)) {
+        throw new Error('Парсинг ещё не завершён. Дождитесь статуса completed/error и обновите список.');
+      }
       const data = await newAuth.makeRequest(`/partnership/leads/${leadId}/audit`, {
         method: 'POST',
         body: JSON.stringify({ business_id: currentBusinessId }),
@@ -210,6 +220,29 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadBatches();
     } catch (e: any) {
       setError(e.message || 'Не удалось выполнить аудит');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const runParse = async (leadId: string) => {
+    if (!currentBusinessId) return;
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await newAuth.makeRequest(`/partnership/leads/${leadId}/parse`, {
+        method: 'POST',
+        body: JSON.stringify({ business_id: currentBusinessId }),
+      });
+      const task = data?.parse_task;
+      if (task?.id) {
+        setMessage(`Парсинг запущен: ${task.id} (${task.status || 'pending'})`);
+      } else {
+        setMessage('Парсинг запрошен');
+      }
+      await loadLeads();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось запустить парсинг');
     } finally {
       setLoading(false);
     }
@@ -439,6 +472,14 @@ export const PartnershipSearchPage: React.FC = () => {
                         <div className="text-sm text-muted-foreground">
                           {item.city || '—'} · {item.category || '—'} · этап: {item.partnership_stage || 'imported'}
                         </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          Парсинг: {item.parse_status || 'не запускался'}
+                          {item.parse_updated_at ? ` · ${new Date(item.parse_updated_at).toLocaleString('ru-RU')}` : ''}
+                          {item.parse_retry_after ? ` · retry_after: ${new Date(item.parse_retry_after).toLocaleString('ru-RU')}` : ''}
+                        </div>
+                        {item.parse_error ? (
+                          <div className="text-xs text-red-600 mt-1">{item.parse_error}</div>
+                        ) : null}
                         <a
                           href={item.source_url}
                           target="_blank"
@@ -449,6 +490,9 @@ export const PartnershipSearchPage: React.FC = () => {
                         </a>
                       </div>
                       <div className="flex flex-wrap gap-2">
+                        <Button variant="outline" size="sm" onClick={() => void runParse(item.id)} disabled={loading}>
+                          Запустить парсинг
+                        </Button>
                         <Button variant="outline" size="sm" onClick={() => void runAudit(item.id)} disabled={loading}>
                           Аудит
                         </Button>
