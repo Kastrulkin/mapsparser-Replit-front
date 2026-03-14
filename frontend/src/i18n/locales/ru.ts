@@ -20,7 +20,7 @@ export const ru = {
   },
 
   // Page title
-  pageTitle: "BeautyBot.pro - Локальное продвижение локального бизнеса",
+  pageTitle: "LocalOS.pro - Локальное продвижение локального бизнеса",
 
   // Header
   header: {
@@ -33,13 +33,13 @@ export const ru = {
 
   // Footer
   footer: {
-    title: "BeautyBot",
+    title: "LocalOS",
     description: "Локальное продвижение локального бизнеса",
     madeWithLove: "Сделано с любовью для индустрии красоты",
     company: "Компания",
     whoWeAre: "Кто мы?",
     contacts: "Контакты",
-    copyright: "© 2026 BeautyBot.Pro. Все права защищены.",
+    copyright: "© 2026 LocalOS.pro. Все права защищены.",
   },
 
   // Stats

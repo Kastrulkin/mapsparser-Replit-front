@@ -20,7 +20,7 @@ export const en = {
   },
 
   // Page title
-  pageTitle: "BeautyBot.pro - Local promotion for local business",
+  pageTitle: "LocalOS.pro - Local promotion for local business",
 
   // Header
   header: {
@@ -33,13 +33,13 @@ export const en = {
 
   // Footer
   footer: {
-    title: "BeautyBot",
+    title: "LocalOS",
     description: "Local promotion for local business",
     madeWithLove: "Made with love for the beauty industry",
     company: "Company",
     whoWeAre: "Who We Are?",
     contacts: "Contacts",
-    copyright: "© 2025 BeautyBot. All rights reserved."
+    copyright: "© 2026 LocalOS.pro. All rights reserved."
   },
 
   // Stats
@@ -1168,7 +1168,7 @@ export const en = {
     },
     4: {
       title: "Communication Automation and Bots",
-      description: "Launching chatbots, voice robots, automated campaigns via BeautyBot.pro",
+      description: "Launching chatbots, voice robots, automated campaigns via LocalOS.pro",
       goal: "Reduce no-shows from 30-40% to 10-15%, automate 60% of incoming requests",
       expectedResult: "Staff time savings, increased client loyalty",
       duration: "1-2 weeks",
