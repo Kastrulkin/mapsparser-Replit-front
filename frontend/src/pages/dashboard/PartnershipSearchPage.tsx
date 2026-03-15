@@ -629,6 +629,36 @@ export const PartnershipSearchPage: React.FC = () => {
     }
   };
 
+  const downloadPartnershipCsvTemplate = () => {
+    const header = [
+      'name',
+      'source_url',
+      'city',
+      'category',
+      'phone',
+      'email',
+      'website',
+      'telegram_url',
+      'whatsapp_url',
+      'rating',
+      'reviews_count',
+    ].join(',');
+    const example = [
+      'Салон Ромашка',
+      'https://yandex.ru/maps/org/1234567890/',
+      'Санкт-Петербург',
+      'Салон красоты',
+      '+7 921 000-00-00',
+      'owner@example.com',
+      'https://romashka.example',
+      'https://t.me/romashka',
+      'https://wa.me/79210000000',
+      '4.8',
+      '152',
+    ].join(',');
+    downloadTextFile('partnership-import-template.csv', `${header}\n${example}\n`, 'text/csv;charset=utf-8');
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -673,6 +703,9 @@ export const PartnershipSearchPage: React.FC = () => {
                 />
                 <Button onClick={handleImportFile} disabled={loading || !importFileContent.trim()}>
                   Импортировать файл
+                </Button>
+                <Button variant="outline" onClick={downloadPartnershipCsvTemplate} disabled={loading}>
+                  Скачать CSV-шаблон
                 </Button>
               </div>
               {importFileName ? (
