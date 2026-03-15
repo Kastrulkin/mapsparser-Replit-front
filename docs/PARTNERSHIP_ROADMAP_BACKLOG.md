@@ -205,6 +205,9 @@
   - `scripts/smoke_partnership_flow.py`
   - покрывает: import -> parse -> audit -> match -> draft -> approve -> batch -> outcome -> health
   - сохраняет JSON-экспорт отчёта (`/tmp/partnership_smoke_<ts>.json` по умолчанию)
+- Добавлен CI gate:
+  - `scripts/ci_gate_partnership.sh`
+  - strict-режим в CI требует `AUTH_TOKEN`, `BUSINESS_ID`, `MAP_URL` и прогоняет partnership smoke end-to-end
 
 ### API
 - health/trend/export для partnership routes

@@ -3044,6 +3044,142 @@ def partnership_health():
         return jsonify({"error": str(e)}), 500
 
 
+@admin_prospecting_bp.route("/api/partnership/export", methods=["GET"])
+def partnership_export():
+    """Export partnership flow snapshot for support/ops."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        requested_business_id = str(request.args.get("business_id") or "").strip() or None
+        export_format = str(request.args.get("format") or "json").strip().lower()
+        limit = max(1, min(int(request.args.get("limit") or 30), 200))
+
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+
+            cur.execute(
+                """
+                SELECT id, name, city, category, source_url, status, selected_channel,
+                       partnership_stage, updated_at
+                FROM prospectingleads
+                WHERE business_id = %s
+                  AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
+                ORDER BY updated_at DESC NULLS LAST, created_at DESC
+                LIMIT %s
+                """,
+                (business_id, limit),
+            )
+            leads = [dict(r) if hasattr(r, "keys") else {} for r in cur.fetchall()]
+
+            cur.execute(
+                """
+                SELECT d.id, d.lead_id, d.channel, d.status, d.updated_at, l.name AS lead_name
+                FROM outreachmessagedrafts d
+                JOIN prospectingleads l ON l.id = d.lead_id
+                WHERE l.business_id = %s
+                  AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+                ORDER BY d.updated_at DESC NULLS LAST, d.created_at DESC
+                LIMIT %s
+                """,
+                (business_id, limit),
+            )
+            drafts = [dict(r) if hasattr(r, "keys") else {} for r in cur.fetchall()]
+
+            cur.execute(
+                """
+                SELECT b.id, b.status, b.batch_date, b.created_at, b.updated_at
+                FROM outreachsendbatches b
+                WHERE b.business_id = %s
+                ORDER BY b.updated_at DESC NULLS LAST, b.created_at DESC
+                LIMIT %s
+                """,
+                (business_id, limit),
+            )
+            batches = [dict(r) if hasattr(r, "keys") else {} for r in cur.fetchall()]
+
+            cur.execute(
+                """
+                SELECT r.id, r.queue_id, r.classified_outcome, r.human_confirmed_outcome,
+                       r.created_at, l.name AS lead_name
+                FROM outreachmessagereactions r
+                JOIN outreachsendqueue q ON q.id = r.queue_id
+                JOIN prospectingleads l ON l.id = q.lead_id
+                WHERE l.business_id = %s
+                  AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+                ORDER BY r.created_at DESC NULLS LAST
+                LIMIT %s
+                """,
+                (business_id, limit),
+            )
+            reactions = [dict(r) if hasattr(r, "keys") else {} for r in cur.fetchall()]
+        finally:
+            conn.close()
+
+        snapshot = {
+            "business_id": business_id,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "limit": limit,
+            "counts": {
+                "leads": len(leads),
+                "drafts": len(drafts),
+                "batches": len(batches),
+                "reactions": len(reactions),
+            },
+            "leads": leads,
+            "drafts": drafts,
+            "batches": batches,
+            "reactions": reactions,
+        }
+
+        if export_format == "markdown":
+            lines = [
+                "# Partnership Export",
+                "",
+                f"- business_id: `{business_id}`",
+                f"- generated_at: `{snapshot['generated_at']}`",
+                f"- limit: `{limit}`",
+                "",
+                "## Counts",
+                f"- leads: {snapshot['counts']['leads']}",
+                f"- drafts: {snapshot['counts']['drafts']}",
+                f"- batches: {snapshot['counts']['batches']}",
+                f"- reactions: {snapshot['counts']['reactions']}",
+                "",
+                "## Recent Leads",
+            ]
+            for lead in leads[:10]:
+                lines.append(
+                    f"- `{lead.get('id')}` | {lead.get('name') or '-'} | stage={lead.get('partnership_stage') or '-'} | status={lead.get('status') or '-'}"
+                )
+            lines.extend(["", "## Recent Drafts"])
+            for draft in drafts[:10]:
+                lines.append(
+                    f"- `{draft.get('id')}` | lead={draft.get('lead_name') or draft.get('lead_id') or '-'} | status={draft.get('status') or '-'} | channel={draft.get('channel') or '-'}"
+                )
+            lines.extend(["", "## Recent Batches"])
+            for batch in batches[:10]:
+                lines.append(
+                    f"- `{batch.get('id')}` | status={batch.get('status') or '-'} | batch_date={batch.get('batch_date') or '-'}"
+                )
+            lines.extend(["", "## Recent Reactions"])
+            for reaction in reactions[:10]:
+                lines.append(
+                    f"- `{reaction.get('id')}` | lead={reaction.get('lead_name') or '-'} | classified={reaction.get('classified_outcome') or '-'} | confirmed={reaction.get('human_confirmed_outcome') or '-'}"
+                )
+            return jsonify({"success": True, "format": "markdown", "markdown_report": "\n".join(lines), **snapshot})
+
+        return jsonify({"success": True, "format": "json", **snapshot})
+    except Exception as e:
+        print(f"Error partnership export: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @admin_prospecting_bp.route("/api/partnership/leads/<string:lead_id>/parse", methods=["POST"])
 def partnership_parse_lead(lead_id):
     """User-level parse enqueue for partnership lead."""
