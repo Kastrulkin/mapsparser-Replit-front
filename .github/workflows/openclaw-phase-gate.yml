@@ -15,6 +15,10 @@ jobs:
       TENANT_ID: ${{ secrets.TENANT_ID }}
       BASE_URL: ${{ secrets.OPENCLAW_BASE_URL || 'https://localos.pro' }}
       OPENCLAW_CI_STRICT: ${{ secrets.OPENCLAW_TOKEN != '' && secrets.TENANT_ID != '' && '1' || '0' }}
+      AUTH_TOKEN: ${{ secrets.PARTNERSHIP_AUTH_TOKEN }}
+      BUSINESS_ID: ${{ secrets.PARTNERSHIP_BUSINESS_ID }}
+      MAP_URL: ${{ secrets.PARTNERSHIP_MAP_URL }}
+      PARTNERSHIP_CI_STRICT: ${{ secrets.PARTNERSHIP_AUTH_TOKEN != '' && secrets.PARTNERSHIP_BUSINESS_ID != '' && secrets.PARTNERSHIP_MAP_URL != '' && '1' || '0' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,3 +38,8 @@ jobs:
         run: |
           chmod +x scripts/ci_gate_openclaw_phase1.sh
           ./scripts/ci_gate_openclaw_phase1.sh
+
+      - name: Run Partnership CI gate
+        run: |
+          chmod +x scripts/ci_gate_partnership.sh
+          ./scripts/ci_gate_partnership.sh

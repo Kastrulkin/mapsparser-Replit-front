@@ -208,6 +208,10 @@
 - Добавлен CI gate:
   - `scripts/ci_gate_partnership.sh`
   - strict-режим в CI требует `AUTH_TOKEN`, `BUSINESS_ID`, `MAP_URL` и прогоняет partnership smoke end-to-end
+  - в GitHub Actions strict включается при наличии secrets:
+    - `PARTNERSHIP_AUTH_TOKEN`
+    - `PARTNERSHIP_BUSINESS_ID`
+    - `PARTNERSHIP_MAP_URL`
 
 ### API
 - health/trend/export для partnership routes
