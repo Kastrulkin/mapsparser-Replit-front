@@ -111,6 +111,31 @@ type PartnershipFunnel = {
   };
 };
 
+type PartnershipOutcomeSummary = {
+  total_reactions?: number;
+  positive_count?: number;
+  question_count?: number;
+  no_response_count?: number;
+  hard_no_count?: number;
+  positive_rate_pct?: number;
+  question_rate_pct?: number;
+  no_response_rate_pct?: number;
+  hard_no_rate_pct?: number;
+};
+
+type PartnershipOutcomes = {
+  window_days?: number;
+  summary?: PartnershipOutcomeSummary;
+  by_channel?: Array<{
+    channel?: string;
+    total?: number;
+    positive_count?: number;
+    question_count?: number;
+    no_response_count?: number;
+    hard_no_count?: number;
+  }>;
+};
+
 const STAGE_OPTIONS = [
   { value: 'all', label: 'Все этапы' },
   { value: 'imported', label: 'Импортировано' },
@@ -149,6 +174,7 @@ export const PartnershipSearchPage: React.FC = () => {
   const [learningMetrics, setLearningMetrics] = useState<PartnershipLearningMetric[]>([]);
   const [health, setHealth] = useState<PartnershipHealth | null>(null);
   const [funnel, setFunnel] = useState<PartnershipFunnel | null>(null);
+  const [outcomes, setOutcomes] = useState<PartnershipOutcomes | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -232,6 +258,19 @@ export const PartnershipSearchPage: React.FC = () => {
     }
   };
 
+  const loadOutcomes = async () => {
+    if (!currentBusinessId) return;
+    try {
+      const data = await newAuth.makeRequest(
+        `/partnership/outcomes-summary?business_id=${encodeURIComponent(currentBusinessId)}&window_days=30`,
+        { method: 'GET' }
+      );
+      setOutcomes(data || null);
+    } catch {
+      setOutcomes(null);
+    }
+  };
+
   useEffect(() => {
     void loadLeads();
     void loadDrafts();
@@ -239,6 +278,7 @@ export const PartnershipSearchPage: React.FC = () => {
     void loadLearningMetrics();
     void loadHealth();
     void loadFunnel();
+    void loadOutcomes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentBusinessId, stage]);
 
@@ -266,6 +306,7 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadBatches();
       await loadHealth();
       await loadFunnel();
+      await loadOutcomes();
     } catch (e: any) {
       setError(e.message || 'Не удалось импортировать ссылки');
     } finally {
@@ -314,6 +355,7 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadBatches();
       await loadHealth();
       await loadFunnel();
+      await loadOutcomes();
     } catch (e: any) {
       setError(e.message || 'Не удалось импортировать файл партнёров');
     } finally {
@@ -382,6 +424,7 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadDrafts();
       await loadBatches();
       await loadFunnel();
+      await loadOutcomes();
     } catch (e: any) {
       setError(e.message || 'Не удалось выполнить аудит');
     } finally {
@@ -428,6 +471,7 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadDrafts();
       await loadBatches();
       await loadFunnel();
+      await loadOutcomes();
     } catch (e: any) {
       setError(e.message || 'Не удалось выполнить матчинг');
     } finally {
@@ -468,6 +512,7 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadDrafts();
       await loadBatches();
       await loadFunnel();
+      await loadOutcomes();
     } catch (e: any) {
       setError(e.message || 'Не удалось сгенерировать первое письмо');
     } finally {
@@ -489,6 +534,7 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadBatches();
       await loadLeads();
       await loadFunnel();
+      await loadOutcomes();
     } catch (e: any) {
       setError(e.message || 'Не удалось утвердить черновик');
     } finally {
@@ -513,6 +559,7 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadBatches();
       await loadLeads();
       await loadFunnel();
+      await loadOutcomes();
     } catch (e: any) {
       setError(e.message || 'Не удалось создать batch');
     } finally {
@@ -533,6 +580,7 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadBatches();
       await loadLeads();
       await loadFunnel();
+      await loadOutcomes();
     } catch (e: any) {
       setError(e.message || 'Не удалось утвердить batch');
     } finally {
@@ -555,6 +603,7 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadBatches();
       await loadLeads();
       await loadFunnel();
+      await loadOutcomes();
     } catch (e: any) {
       setError(e.message || 'Не удалось сохранить реакцию');
     } finally {
@@ -578,6 +627,7 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadBatches();
       await loadLeads();
       await loadFunnel();
+      await loadOutcomes();
     } catch (e: any) {
       setError(e.message || 'Не удалось подтвердить outcome');
     } finally {
@@ -857,6 +907,66 @@ export const PartnershipSearchPage: React.FC = () => {
                 <div className="text-sm text-muted-foreground">
                   Общая конверсия import → sent: <span className="font-medium text-foreground">{funnel.summary?.import_to_sent_pct ?? 0}%</span>
                   {' '}({funnel.summary?.sent_count ?? 0} из {funnel.summary?.imported_count ?? 0})
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="rounded-xl border bg-white p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold">Outcome-аналитика (30 дней)</h2>
+              <Button variant="outline" onClick={() => void loadOutcomes()} disabled={loading}>
+                Обновить
+              </Button>
+            </div>
+            {!outcomes?.summary ? (
+              <p className="text-sm text-muted-foreground">Данные outcome пока недоступны.</p>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                  <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
+                    <div className="text-xs text-muted-foreground uppercase">Всего</div>
+                    <div className="text-2xl font-semibold">{outcomes.summary.total_reactions ?? 0}</div>
+                  </div>
+                  <div className="rounded-lg border border-emerald-200 p-3 bg-emerald-50">
+                    <div className="text-xs text-emerald-700 uppercase">Positive</div>
+                    <div className="text-2xl font-semibold text-emerald-700">{outcomes.summary.positive_count ?? 0}</div>
+                    <div className="text-xs text-emerald-700">{outcomes.summary.positive_rate_pct ?? 0}%</div>
+                  </div>
+                  <div className="rounded-lg border border-blue-200 p-3 bg-blue-50">
+                    <div className="text-xs text-blue-700 uppercase">Question</div>
+                    <div className="text-2xl font-semibold text-blue-700">{outcomes.summary.question_count ?? 0}</div>
+                    <div className="text-xs text-blue-700">{outcomes.summary.question_rate_pct ?? 0}%</div>
+                  </div>
+                  <div className="rounded-lg border border-amber-200 p-3 bg-amber-50">
+                    <div className="text-xs text-amber-700 uppercase">No response</div>
+                    <div className="text-2xl font-semibold text-amber-700">{outcomes.summary.no_response_count ?? 0}</div>
+                    <div className="text-xs text-amber-700">{outcomes.summary.no_response_rate_pct ?? 0}%</div>
+                  </div>
+                  <div className="rounded-lg border border-rose-200 p-3 bg-rose-50">
+                    <div className="text-xs text-rose-700 uppercase">Hard no</div>
+                    <div className="text-2xl font-semibold text-rose-700">{outcomes.summary.hard_no_count ?? 0}</div>
+                    <div className="text-xs text-rose-700">{outcomes.summary.hard_no_rate_pct ?? 0}%</div>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
+                  <div className="text-sm font-medium mb-2">По каналам</div>
+                  {!Array.isArray(outcomes.by_channel) || outcomes.by_channel.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">Пока нет разбивки по каналам.</div>
+                  ) : (
+                    <div className="space-y-1 text-sm">
+                      {outcomes.by_channel.map((ch, idx) => (
+                        <div key={`${ch.channel || 'channel'}-${idx}`} className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">{ch.channel || 'unknown'}</span>
+                          <span className="text-muted-foreground">всего: {ch.total ?? 0}</span>
+                          <span className="text-emerald-700">positive: {ch.positive_count ?? 0}</span>
+                          <span className="text-blue-700">question: {ch.question_count ?? 0}</span>
+                          <span className="text-amber-700">no_response: {ch.no_response_count ?? 0}</span>
+                          <span className="text-rose-700">hard_no: {ch.hard_no_count ?? 0}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </>
             )}

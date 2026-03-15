@@ -3532,6 +3532,132 @@ def partnership_funnel():
         return jsonify({"error": str(e)}), 500
 
 
+@admin_prospecting_bp.route("/api/partnership/outcomes-summary", methods=["GET"])
+def partnership_outcomes_summary():
+    """Partnership outcomes summary by channel and class for selected window."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        requested_business_id = str(request.args.get("business_id") or "").strip() or None
+        window_days = max(1, min(int(request.args.get("window_days") or 30), 365))
+
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+
+            cur.execute(
+                """
+                WITH leads_scope AS (
+                    SELECT l.id
+                    FROM prospectingleads l
+                    WHERE l.business_id = %s
+                      AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+                ),
+                reactions_scope AS (
+                    SELECT
+                        COALESCE(q.channel, 'unknown') AS channel,
+                        COALESCE(NULLIF(r.human_confirmed_outcome, ''), NULLIF(r.classified_outcome, ''), 'no_response') AS outcome
+                    FROM outreachmessagereactions r
+                    JOIN outreachsendqueue q ON q.id = r.queue_id
+                    JOIN leads_scope ls ON ls.id = q.lead_id
+                    WHERE COALESCE(r.updated_at, r.created_at) >= NOW() - (%s || ' days')::INTERVAL
+                )
+                SELECT
+                    COUNT(*)::INT AS total_reactions,
+                    COUNT(*) FILTER (WHERE outcome = 'positive')::INT AS positive_count,
+                    COUNT(*) FILTER (WHERE outcome = 'question')::INT AS question_count,
+                    COUNT(*) FILTER (WHERE outcome = 'no_response')::INT AS no_response_count,
+                    COUNT(*) FILTER (WHERE outcome = 'hard_no')::INT AS hard_no_count
+                FROM reactions_scope
+                """,
+                (business_id, window_days),
+            )
+            row = cur.fetchone()
+            if row and hasattr(row, "keys"):
+                total_reactions = int(row.get("total_reactions") or 0)
+                positive_count = int(row.get("positive_count") or 0)
+                question_count = int(row.get("question_count") or 0)
+                no_response_count = int(row.get("no_response_count") or 0)
+                hard_no_count = int(row.get("hard_no_count") or 0)
+            else:
+                values = list(row or [0, 0, 0, 0, 0])
+                total_reactions = int(values[0] or 0)
+                positive_count = int(values[1] or 0)
+                question_count = int(values[2] or 0)
+                no_response_count = int(values[3] or 0)
+                hard_no_count = int(values[4] or 0)
+
+            cur.execute(
+                """
+                WITH leads_scope AS (
+                    SELECT l.id
+                    FROM prospectingleads l
+                    WHERE l.business_id = %s
+                      AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+                ),
+                reactions_scope AS (
+                    SELECT
+                        COALESCE(q.channel, 'unknown') AS channel,
+                        COALESCE(NULLIF(r.human_confirmed_outcome, ''), NULLIF(r.classified_outcome, ''), 'no_response') AS outcome
+                    FROM outreachmessagereactions r
+                    JOIN outreachsendqueue q ON q.id = r.queue_id
+                    JOIN leads_scope ls ON ls.id = q.lead_id
+                    WHERE COALESCE(r.updated_at, r.created_at) >= NOW() - (%s || ' days')::INTERVAL
+                )
+                SELECT
+                    channel,
+                    COUNT(*)::INT AS total,
+                    COUNT(*) FILTER (WHERE outcome = 'positive')::INT AS positive_count,
+                    COUNT(*) FILTER (WHERE outcome = 'question')::INT AS question_count,
+                    COUNT(*) FILTER (WHERE outcome = 'no_response')::INT AS no_response_count,
+                    COUNT(*) FILTER (WHERE outcome = 'hard_no')::INT AS hard_no_count
+                FROM reactions_scope
+                GROUP BY channel
+                ORDER BY total DESC, channel ASC
+                """,
+                (business_id, window_days),
+            )
+            by_channel_rows = cur.fetchall() or []
+            by_channel = [dict(r) if hasattr(r, "keys") else {} for r in by_channel_rows]
+        finally:
+            conn.close()
+
+        def _pct(part: int, total: int) -> float:
+            if total <= 0:
+                return 0.0
+            return round((part / total) * 100.0, 2)
+
+        summary = {
+            "total_reactions": total_reactions,
+            "positive_count": positive_count,
+            "question_count": question_count,
+            "no_response_count": no_response_count,
+            "hard_no_count": hard_no_count,
+            "positive_rate_pct": _pct(positive_count, total_reactions),
+            "question_rate_pct": _pct(question_count, total_reactions),
+            "no_response_rate_pct": _pct(no_response_count, total_reactions),
+            "hard_no_rate_pct": _pct(hard_no_count, total_reactions),
+        }
+
+        return jsonify(
+            {
+                "success": True,
+                "business_id": business_id,
+                "window_days": window_days,
+                "summary": summary,
+                "by_channel": by_channel,
+            }
+        )
+    except Exception as e:
+        print(f"Error partnership outcomes summary: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @admin_prospecting_bp.route("/api/partnership/leads/<string:lead_id>/parse", methods=["POST"])
 def partnership_parse_lead(lead_id):
     """User-level parse enqueue for partnership lead."""
