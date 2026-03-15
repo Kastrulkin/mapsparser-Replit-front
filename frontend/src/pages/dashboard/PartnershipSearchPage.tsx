@@ -495,6 +495,46 @@ export const PartnershipSearchPage: React.FC = () => {
     }
   };
 
+  const downloadTextFile = (filename: string, content: string, mime = 'text/plain;charset=utf-8') => {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportPartnershipReport = async (format: 'json' | 'markdown') => {
+    if (!currentBusinessId) return;
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await newAuth.makeRequest(
+        `/partnership/export?business_id=${encodeURIComponent(currentBusinessId)}&format=${format}&limit=50`,
+        { method: 'GET' }
+      );
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      if (format === 'markdown') {
+        const md = String(data?.markdown_report || '');
+        downloadTextFile(`partnership-export-${currentBusinessId}-${stamp}.md`, md, 'text/markdown;charset=utf-8');
+      } else {
+        downloadTextFile(
+          `partnership-export-${currentBusinessId}-${stamp}.json`,
+          JSON.stringify(data || {}, null, 2),
+          'application/json;charset=utf-8'
+        );
+      }
+      setMessage(`Экспорт (${format}) сформирован`);
+    } catch (e: any) {
+      setError(e.message || 'Не удалось экспортировать отчёт');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -589,9 +629,17 @@ export const PartnershipSearchPage: React.FC = () => {
           <div className="rounded-xl border bg-white p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-lg font-semibold">Состояние потока партнёрств</h2>
-              <Button variant="outline" onClick={() => void loadHealth()} disabled={loading}>
-                Обновить
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => void exportPartnershipReport('json')} disabled={loading}>
+                  Экспорт JSON
+                </Button>
+                <Button variant="outline" onClick={() => void exportPartnershipReport('markdown')} disabled={loading}>
+                  Экспорт Markdown
+                </Button>
+                <Button variant="outline" onClick={() => void loadHealth()} disabled={loading}>
+                  Обновить
+                </Button>
+              </div>
             </div>
             {!health ? (
               <p className="text-sm text-muted-foreground">Health недоступен.</p>
