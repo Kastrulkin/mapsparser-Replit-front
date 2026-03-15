@@ -194,10 +194,10 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
               Для получения доступа к системе обратитесь к нам по электронной почте:
               <br />
               <a
-                href="mailto:info@beautybot.pro"
+                href="mailto:info@localos.pro"
                 className="text-blue-600 hover:text-blue-800 underline font-medium"
               >
-                info@beautybot.pro
+                info@localos.pro
               </a>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -211,4 +211,3 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     </header>
   );
 };
-

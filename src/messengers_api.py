@@ -360,7 +360,7 @@ def connect_telegram():
         return jsonify({
             "success": True,
             "token": token,
-            "instructions": "Используйте этот токен для подключения бота @BeautyBotPro_bot"
+            "instructions": "Используйте этот токен для подключения бота @LocalOspro_bot"
         })
         
     except Exception as e:

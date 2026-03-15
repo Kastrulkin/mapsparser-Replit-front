@@ -2916,9 +2916,13 @@ def partnership_list_leads():
 
             cur.execute(
                 f"""
-                SELECT id, name, address, city, category, source_url, source, phone, email,
-                       telegram_url, whatsapp_url, website, rating, reviews_count,
-                       status, selected_channel, intent, partnership_stage, updated_at, created_at,
+                SELECT prospectingleads.id, prospectingleads.name, prospectingleads.address, prospectingleads.city,
+                       prospectingleads.category, prospectingleads.source_url, prospectingleads.source,
+                       prospectingleads.phone, prospectingleads.email, prospectingleads.telegram_url,
+                       prospectingleads.whatsapp_url, prospectingleads.website, prospectingleads.rating,
+                       prospectingleads.reviews_count, prospectingleads.status, prospectingleads.selected_channel,
+                       prospectingleads.intent, prospectingleads.partnership_stage, prospectingleads.updated_at,
+                       prospectingleads.created_at,
                        pq_last.id AS parse_task_id,
                        pq_last.status AS parse_status,
                        COALESCE(pq_last.updated_at, pq_last.created_at) AS parse_updated_at,
@@ -2935,7 +2939,7 @@ def partnership_list_leads():
                     LIMIT 1
                 ) pq_last ON TRUE
                 WHERE {' AND '.join(where_sql)}
-                ORDER BY updated_at DESC NULLS LAST, created_at DESC
+                ORDER BY prospectingleads.updated_at DESC NULLS LAST, prospectingleads.created_at DESC
                 LIMIT %s OFFSET %s
                 """,
                 (*params, limit, offset),
