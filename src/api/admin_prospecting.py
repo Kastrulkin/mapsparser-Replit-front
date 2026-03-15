@@ -3166,6 +3166,22 @@ def _extract_openclaw_result_blob(resp: dict[str, Any] | None) -> dict[str, Any]
     return data
 
 
+def _normalize_enriched_contact_fields(payload: dict[str, Any] | None) -> dict[str, Any]:
+    data = payload if isinstance(payload, dict) else {}
+    phone = str(data.get("phone") or data.get("phone_e164") or "").strip() or None
+    email = str(data.get("email") or "").strip() or None
+    website = str(data.get("website") or data.get("website_url") or "").strip() or None
+    telegram_url = str(data.get("telegram_url") or data.get("telegram") or "").strip() or None
+    whatsapp_url = str(data.get("whatsapp_url") or data.get("whatsapp") or "").strip() or None
+    return {
+        "phone": phone,
+        "email": email,
+        "website": website,
+        "telegram_url": telegram_url,
+        "whatsapp_url": whatsapp_url,
+    }
+
+
 @admin_prospecting_bp.route("/api/partnership/leads/<string:lead_id>/audit", methods=["POST"])
 def partnership_audit_lead(lead_id):
     user_data, error = _require_auth()
@@ -3345,6 +3361,93 @@ def partnership_match_lead(lead_id):
         return jsonify({"success": True, "result": match_result})
     except Exception as e:
         print(f"Error partnership match lead: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/leads/<string:lead_id>/enrich-contacts", methods=["POST"])
+def partnership_enrich_lead_contacts(lead_id):
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+            lead = _load_partnership_lead(cur, lead_id=lead_id, business_id=business_id)
+            if not lead:
+                return jsonify({"error": "Lead not found"}), 404
+
+            lead_payload = {
+                "lead_id": lead_id,
+                "name": lead.get("name"),
+                "source_url": lead.get("source_url"),
+                "phone": lead.get("phone"),
+                "email": lead.get("email"),
+                "website": lead.get("website"),
+                "telegram_url": lead.get("telegram_url"),
+                "whatsapp_url": lead.get("whatsapp_url"),
+            }
+
+            enriched_source: dict[str, Any] = {}
+            if _is_partnership_openclaw_enabled():
+                openclaw_result = _call_partnership_openclaw_capability(
+                    "partners.enrich_contacts",
+                    tenant_id=business_id,
+                    payload={"lead": lead_payload, "intent": "partnership_outreach", "business_id": business_id},
+                    timeout_sec=60,
+                )
+                if not openclaw_result.get("success"):
+                    return jsonify({"error": str(openclaw_result.get("error") or "OpenClaw contact enrich failed")}), 502
+                enriched_source = _extract_openclaw_result_blob(openclaw_result) or {}
+            else:
+                enriched_source = lead_payload
+
+            normalized = _normalize_enriched_contact_fields(enriched_source)
+            cur.execute(
+                """
+                UPDATE prospectingleads
+                SET
+                    phone = COALESCE(%s, phone),
+                    email = COALESCE(%s, email),
+                    website = COALESCE(%s, website),
+                    telegram_url = COALESCE(%s, telegram_url),
+                    whatsapp_url = COALESCE(%s, whatsapp_url),
+                    updated_at = NOW()
+                WHERE id = %s
+                  AND business_id = %s
+                  AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
+                RETURNING id, name, phone, email, website, telegram_url, whatsapp_url, updated_at
+                """,
+                (
+                    normalized.get("phone"),
+                    normalized.get("email"),
+                    normalized.get("website"),
+                    normalized.get("telegram_url"),
+                    normalized.get("whatsapp_url"),
+                    lead_id,
+                    business_id,
+                ),
+            )
+            updated = cur.fetchone()
+            conn.commit()
+        finally:
+            conn.close()
+
+        return jsonify(
+            {
+                "success": True,
+                "lead": dict(updated) if updated and hasattr(updated, "keys") else {},
+                "enriched": normalized,
+            }
+        )
+    except Exception as e:
+        print(f"Error partnership enrich contacts: {e}")
         return jsonify({"error": str(e)}), 500
 
 

@@ -12,6 +12,11 @@ type PartnershipLead = {
   city?: string;
   category?: string;
   source_url?: string;
+  phone?: string;
+  email?: string;
+  website?: string;
+  telegram_url?: string;
+  whatsapp_url?: string;
   status?: string;
   partnership_stage?: string;
   selected_channel?: string;
@@ -313,6 +318,24 @@ export const PartnershipSearchPage: React.FC = () => {
     }
   };
 
+  const enrichContacts = async (leadId: string) => {
+    if (!currentBusinessId) return;
+    try {
+      setLoading(true);
+      setError(null);
+      await newAuth.makeRequest(`/partnership/leads/${leadId}/enrich-contacts`, {
+        method: 'POST',
+        body: JSON.stringify({ business_id: currentBusinessId }),
+      });
+      setMessage('Контакты лида обновлены');
+      await loadLeads();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось обогатить контакты');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const runDraft = async (leadId: string) => {
     if (!currentBusinessId) return;
     try {
@@ -578,6 +601,9 @@ export const PartnershipSearchPage: React.FC = () => {
                           {item.parse_updated_at ? ` · ${new Date(item.parse_updated_at).toLocaleString('ru-RU')}` : ''}
                           {item.parse_retry_after ? ` · retry_after: ${new Date(item.parse_retry_after).toLocaleString('ru-RU')}` : ''}
                         </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          Контакты: {item.phone || 'телефон —'} · {item.email || 'email —'} · {item.telegram_url ? 'telegram ✓' : 'telegram —'} · {item.whatsapp_url ? 'whatsapp ✓' : 'whatsapp —'}
+                        </div>
                         {item.parse_error ? (
                           <div className="text-xs text-red-600 mt-1">{item.parse_error}</div>
                         ) : null}
@@ -593,6 +619,9 @@ export const PartnershipSearchPage: React.FC = () => {
                       <div className="flex flex-wrap gap-2">
                         <Button variant="outline" size="sm" onClick={() => void runParse(item.id)} disabled={loading}>
                           Запустить парсинг
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => void enrichContacts(item.id)} disabled={loading}>
+                          Обогатить контакты
                         </Button>
                         <Button variant="outline" size="sm" onClick={() => void runAudit(item.id)} disabled={loading}>
                           Аудит
