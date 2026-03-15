@@ -261,9 +261,8 @@ export const PartnershipSearchPage: React.FC = () => {
           limit: Number.isFinite(limit) ? limit : 25,
         }),
       });
-      setMessage(
-        `Гео-поиск: импортировано ${data.imported_count || 0}, пропущено ${data.skipped_count || 0}, найдено источником ${data.source_total || 0}`
-      );
+      const baseMsg = `Гео-поиск: импортировано ${data.imported_count || 0}, пропущено ${data.skipped_count || 0}, найдено источником ${data.source_total || 0}`;
+      setMessage(data.warning ? `${baseMsg}. ${data.warning}` : baseMsg);
       await loadLeads();
       await loadDrafts();
       await loadBatches();

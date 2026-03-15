@@ -2809,6 +2809,7 @@ def partnership_geo_search():
 
             data_blob = openclaw_result.get("data") or {}
             result_blob = data_blob.get("result") if isinstance(data_blob, dict) else {}
+            meta_blob = result_blob.get("meta") if isinstance(result_blob, dict) else None
             candidates = (
                 (result_blob.get("items") if isinstance(result_blob, dict) else None)
                 or (data_blob.get("items") if isinstance(data_blob, dict) else None)
@@ -2872,6 +2873,12 @@ def partnership_geo_search():
                 "skipped_count": skipped,
                 "lead_ids": imported_ids,
                 "source_total": len(candidates),
+                "openclaw_meta": meta_blob if isinstance(meta_blob, dict) else {},
+                "warning": (
+                    "OpenClaw geo-provider сейчас работает в режиме provider=none, поэтому items может быть пустым."
+                    if isinstance(meta_blob, dict) and str(meta_blob.get("provider") or "").strip().lower() == "none"
+                    else None
+                ),
             }
         )
     except Exception as e:
