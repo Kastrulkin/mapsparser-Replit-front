@@ -100,9 +100,12 @@
 ### Задачи
 - Добавить пункт меню `Поиск партнёрств`.
 - Экран ручного импорта ссылок компаний.
+- Добавить импорт списком из файла (CSV/JSON/JSONL) как fallback до стабильного geo-API.
+- Встроить валидацию/очистку файла на стороне LocalOS с отчётом ошибок по строкам.
 
 ### API
 - `POST /api/partnership/leads/import-links`
+- `POST /api/partnership/leads/import-file`
 - `GET /api/partnership/leads`
 - `PATCH /api/partnership/leads/:id`
 
@@ -192,6 +195,9 @@
 
 ### Критерии приёмки
 - Поиск по `city/radius/category` работает и продолжает pipeline.
+- При недоступности/ограничениях geo-provider процесс не блокируется:
+  - ручной импорт файла остаётся каноничным fallback,
+  - OpenClaw получает уже очищенные `seed_items` из LocalOS.
 
 ---
 

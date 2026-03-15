@@ -124,6 +124,10 @@ export const PartnershipSearchPage: React.FC = () => {
   const { currentBusinessId } = useOutletContext<any>();
   const [loading, setLoading] = useState(false);
   const [linksText, setLinksText] = useState('');
+  const [importFileName, setImportFileName] = useState('');
+  const [importFileContent, setImportFileContent] = useState('');
+  const [importFileFormat, setImportFileFormat] = useState<'csv' | 'json' | 'jsonl' | ''>('');
+  const [importFileErrors, setImportFileErrors] = useState<Array<{ row?: number; error?: string }>>([]);
   const [geoCity, setGeoCity] = useState('');
   const [geoCategory, setGeoCategory] = useState('');
   const [geoQuery, setGeoQuery] = useState('');
@@ -264,6 +268,54 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadFunnel();
     } catch (e: any) {
       setError(e.message || 'Не удалось импортировать ссылки');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleImportFilePick = async (file?: File | null) => {
+    if (!file) return;
+    const name = file.name || 'partners-import';
+    const lower = name.toLowerCase();
+    const format: 'csv' | 'json' | 'jsonl' | '' =
+      lower.endsWith('.csv') ? 'csv' : lower.endsWith('.jsonl') ? 'jsonl' : lower.endsWith('.json') ? 'json' : '';
+    const text = await file.text();
+    setImportFileName(name);
+    setImportFileFormat(format);
+    setImportFileContent(text);
+    setImportFileErrors([]);
+    setMessage(`Файл загружен: ${name}`);
+  };
+
+  const handleImportFile = async () => {
+    if (!currentBusinessId) return;
+    if (!importFileContent.trim()) {
+      setError('Выберите CSV/JSON файл для импорта');
+      return;
+    }
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await newAuth.makeRequest('/partnership/leads/import-file', {
+        method: 'POST',
+        body: JSON.stringify({
+          business_id: currentBusinessId,
+          filename: importFileName || 'partners-import',
+          format: importFileFormat || undefined,
+          content: importFileContent,
+        }),
+      });
+      setImportFileErrors(Array.isArray(data.errors) ? data.errors : []);
+      setMessage(
+        `Импорт файла: ${data.imported_count || 0} добавлено, ${data.skipped_count || 0} пропущено, строк: ${data.rows_total || 0}`
+      );
+      await loadLeads();
+      await loadDrafts();
+      await loadBatches();
+      await loadHealth();
+      await loadFunnel();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось импортировать файл партнёров');
     } finally {
       setLoading(false);
     }
@@ -607,6 +659,39 @@ export const PartnershipSearchPage: React.FC = () => {
               <Button variant="outline" onClick={() => void loadLeads()} disabled={loading}>
                 Обновить список
               </Button>
+            </div>
+            <div className="pt-2 border-t border-gray-100 space-y-2">
+              <h3 className="text-sm font-semibold">Импорт файла партнёров (CSV/JSON/JSONL)</h3>
+              <p className="text-xs text-muted-foreground">
+                Рекомендуемые поля: <code>name, source_url, city, category, phone, email, website, telegram_url, whatsapp_url, rating, reviews_count</code>.
+              </p>
+              <div className="flex flex-col md:flex-row gap-2 md:items-center">
+                <Input
+                  type="file"
+                  accept=".csv,.json,.jsonl,text/csv,application/json"
+                  onChange={(e) => void handleImportFilePick(e.target.files?.[0] || null)}
+                />
+                <Button onClick={handleImportFile} disabled={loading || !importFileContent.trim()}>
+                  Импортировать файл
+                </Button>
+              </div>
+              {importFileName ? (
+                <p className="text-xs text-muted-foreground">
+                  Файл: {importFileName} {importFileFormat ? `(${importFileFormat.toUpperCase()})` : ''}
+                </p>
+              ) : null}
+              {importFileErrors.length > 0 ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                  <div className="font-medium mb-1">Ошибки валидации (первые {importFileErrors.length})</div>
+                  <div className="space-y-1 max-h-32 overflow-auto">
+                    {importFileErrors.map((err, idx) => (
+                      <div key={`${err.row || 'x'}-${idx}`}>
+                        Строка {err.row || '?'}: {err.error || 'ошибка'}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
 

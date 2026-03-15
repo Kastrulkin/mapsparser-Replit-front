@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import csv
+import io
 import threading
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -454,6 +456,147 @@ def _insert_partnership_lead_if_new(
         ),
     )
     return lead_id, True
+
+
+def _pick_first_value(row: dict[str, Any], candidates: list[str]) -> str | None:
+    for key in candidates:
+        if key in row and row.get(key) not in (None, ""):
+            value = str(row.get(key)).strip()
+            if value:
+                return value
+    return None
+
+
+def _safe_float(raw: Any) -> float | None:
+    if raw is None:
+        return None
+    text = str(raw).strip().replace(",", ".")
+    if not text:
+        return None
+    try:
+        return float(text)
+    except Exception:
+        return None
+
+
+def _safe_int(raw: Any) -> int | None:
+    if raw is None:
+        return None
+    text = str(raw).strip().replace(" ", "")
+    if not text:
+        return None
+    try:
+        return int(float(text))
+    except Exception:
+        return None
+
+
+def _normalize_contact_url(raw: str | None) -> str | None:
+    value = str(raw or "").strip()
+    if not value:
+        return None
+    if value.startswith(("http://", "https://", "tg://")):
+        return value
+    if value.startswith("@"):
+        return f"https://t.me/{value[1:]}"
+    if "t.me/" in value:
+        return f"https://{value}" if not value.startswith("http") else value
+    if value.startswith("wa.me/"):
+        return f"https://{value}"
+    return value
+
+
+def _normalize_partnership_file_row(
+    row: dict[str, Any],
+    *,
+    default_city: str | None,
+    default_category: str | None,
+) -> tuple[dict[str, Any] | None, str | None]:
+    name = _pick_first_value(row, ["name", "company", "company_name", "название", "компания"]) or "Новый партнёр"
+    source_url = _pick_first_value(
+        row,
+        [
+            "source_url",
+            "url",
+            "link",
+            "map_url",
+            "maps_url",
+            "yandex_url",
+            "source",
+            "ссылка",
+            "ссылка_на_карту",
+            "карта",
+        ],
+    )
+    if not source_url:
+        return None, "missing source_url/link"
+
+    city = _pick_first_value(row, ["city", "город"]) or (default_city or None)
+    category = _pick_first_value(row, ["category", "категория"]) or (default_category or None)
+    phone = _pick_first_value(row, ["phone", "телефон"])
+    email = _pick_first_value(row, ["email", "почта", "e-mail"])
+    website = _pick_first_value(row, ["website", "site", "сайт"])
+    telegram_url = _normalize_contact_url(
+        _pick_first_value(row, ["telegram_url", "telegram", "tg", "tg_url", "телеграм"])
+    )
+    whatsapp_url = _normalize_contact_url(
+        _pick_first_value(row, ["whatsapp_url", "whatsapp", "wa", "wa_url", "ватсап"])
+    )
+    rating = _safe_float(_pick_first_value(row, ["rating", "рейтинг"]))
+    reviews_count = _safe_int(_pick_first_value(row, ["reviews_count", "reviews", "отзывов", "количество_отзывов"]))
+
+    normalized = {
+        "name": name,
+        "source_url": str(source_url).strip(),
+        "city": city,
+        "category": category,
+        "phone": phone,
+        "email": email,
+        "website": website,
+        "telegram_url": telegram_url,
+        "whatsapp_url": whatsapp_url,
+        "rating": rating,
+        "reviews_count": reviews_count,
+    }
+    return normalized, None
+
+
+def _parse_partnership_file_content(file_format: str, content: str) -> list[dict[str, Any]]:
+    fmt = (file_format or "").strip().lower()
+    if fmt in {"json", "jsonl"}:
+        if fmt == "jsonl":
+            rows: list[dict[str, Any]] = []
+            for ln in (content or "").splitlines():
+                line = ln.strip()
+                if not line:
+                    continue
+                obj = json.loads(line)
+                if isinstance(obj, dict):
+                    rows.append(obj)
+            return rows
+        payload = json.loads(content or "[]")
+        if isinstance(payload, list):
+            return [item for item in payload if isinstance(item, dict)]
+        if isinstance(payload, dict):
+            for key in ("items", "leads", "data", "results"):
+                value = payload.get(key)
+                if isinstance(value, list):
+                    return [item for item in value if isinstance(item, dict)]
+        return []
+
+    if fmt == "csv":
+        raw = content or ""
+        sample = raw[:2048]
+        delimiter = ";"
+        try:
+            dialect = csv.Sniffer().sniff(sample, delimiters=",;\t")
+            delimiter = dialect.delimiter
+        except Exception:
+            delimiter = ";" if sample.count(";") >= sample.count(",") else ","
+        reader = csv.DictReader(io.StringIO(raw), delimiter=delimiter)
+        return [dict(row or {}) for row in reader]
+
+    raise ValueError("unsupported format; use csv/json/jsonl")
 
 
 def _run_search_job(job_id: str, query: str, location: str, search_limit: int) -> None:
@@ -2756,6 +2899,113 @@ def partnership_import_links():
         )
     except Exception as e:
         print(f"Error importing partnership links: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/leads/import-file", methods=["POST"])
+def partnership_import_file():
+    """User-level import of partnership candidates from CSV/JSON/JSONL content."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        filename = str(data.get("filename") or "").strip()
+        file_format = str(data.get("format") or "").strip().lower()
+        content = str(data.get("content") or "")
+        default_city = str(data.get("default_city") or "").strip()
+        default_category = str(data.get("default_category") or "").strip()
+
+        if not content.strip():
+            return jsonify({"error": "file content is required"}), 400
+
+        if file_format not in {"csv", "json", "jsonl"}:
+            if filename.lower().endswith(".csv"):
+                file_format = "csv"
+            elif filename.lower().endswith(".jsonl"):
+                file_format = "jsonl"
+            elif filename.lower().endswith(".json"):
+                file_format = "json"
+            else:
+                return jsonify({"error": "Unsupported file format. Use CSV, JSON or JSONL"}), 400
+
+        rows = _parse_partnership_file_content(file_format, content)
+        if not rows:
+            return jsonify({"error": "No records found in file"}), 400
+
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+
+            imported_ids: list[str] = []
+            skipped_count = 0
+            errors: list[dict[str, Any]] = []
+
+            for idx, raw_row in enumerate(rows, start=1):
+                if not isinstance(raw_row, dict):
+                    skipped_count += 1
+                    if len(errors) < 100:
+                        errors.append({"row": idx, "error": "row is not an object"})
+                    continue
+
+                normalized, row_error = _normalize_partnership_file_row(
+                    raw_row,
+                    default_city=default_city or None,
+                    default_category=default_category or None,
+                )
+                if row_error or not normalized:
+                    skipped_count += 1
+                    if len(errors) < 100:
+                        errors.append({"row": idx, "error": row_error or "invalid row"})
+                    continue
+
+                lead_id, created = _insert_partnership_lead_if_new(
+                    cur,
+                    business_id=business_id,
+                    created_by=user_data["user_id"],
+                    source_url=normalized["source_url"],
+                    name=normalized.get("name"),
+                    city=normalized.get("city"),
+                    category=normalized.get("category"),
+                    source="file_import",
+                    phone=normalized.get("phone"),
+                    email=normalized.get("email"),
+                    website=normalized.get("website"),
+                    telegram_url=normalized.get("telegram_url"),
+                    whatsapp_url=normalized.get("whatsapp_url"),
+                    rating=normalized.get("rating"),
+                    reviews_count=normalized.get("reviews_count"),
+                )
+                if not created:
+                    skipped_count += 1
+                    continue
+                if lead_id:
+                    imported_ids.append(lead_id)
+
+            conn.commit()
+        finally:
+            conn.close()
+
+        return jsonify(
+            {
+                "success": True,
+                "filename": filename,
+                "format": file_format,
+                "rows_total": len(rows),
+                "imported_count": len(imported_ids),
+                "skipped_count": skipped_count,
+                "lead_ids": imported_ids,
+                "errors": errors,
+            }
+        )
+    except Exception as e:
+        print(f"Error importing partnership file: {e}")
         return jsonify({"error": str(e)}), 500
 
 
