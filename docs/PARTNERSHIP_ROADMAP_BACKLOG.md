@@ -200,6 +200,12 @@
 - Контрактные тесты и smoke для partnership flow.
 - Мониторинг ошибок/retry и прозрачность в UI.
 
+### Реализация (в работе)
+- Добавлен e2e smoke-скрипт:
+  - `scripts/smoke_partnership_flow.py`
+  - покрывает: import -> parse -> audit -> match -> draft -> approve -> batch -> outcome -> health
+  - сохраняет JSON-экспорт отчёта (`/tmp/partnership_smoke_<ts>.json` по умолчанию)
+
 ### API
 - health/trend/export для partnership routes
 
