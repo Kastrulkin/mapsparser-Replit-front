@@ -94,6 +94,23 @@ type PartnershipHealth = {
   };
 };
 
+type PartnershipFunnelStage = {
+  key: string;
+  label: string;
+  count: number;
+  conversion_from_prev_pct?: number;
+};
+
+type PartnershipFunnel = {
+  window_days?: number;
+  funnel?: PartnershipFunnelStage[];
+  summary?: {
+    import_to_sent_pct?: number;
+    imported_count?: number;
+    sent_count?: number;
+  };
+};
+
 const STAGE_OPTIONS = [
   { value: 'all', label: 'Все этапы' },
   { value: 'imported', label: 'Импортировано' },
@@ -127,6 +144,7 @@ export const PartnershipSearchPage: React.FC = () => {
   const [reactionBusy, setReactionBusy] = useState<Record<string, string>>({});
   const [learningMetrics, setLearningMetrics] = useState<PartnershipLearningMetric[]>([]);
   const [health, setHealth] = useState<PartnershipHealth | null>(null);
+  const [funnel, setFunnel] = useState<PartnershipFunnel | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -197,12 +215,26 @@ export const PartnershipSearchPage: React.FC = () => {
     }
   };
 
+  const loadFunnel = async () => {
+    if (!currentBusinessId) return;
+    try {
+      const data = await newAuth.makeRequest(
+        `/partnership/funnel?business_id=${encodeURIComponent(currentBusinessId)}&window_days=30`,
+        { method: 'GET' }
+      );
+      setFunnel(data || null);
+    } catch {
+      setFunnel(null);
+    }
+  };
+
   useEffect(() => {
     void loadLeads();
     void loadDrafts();
     void loadBatches();
     void loadLearningMetrics();
     void loadHealth();
+    void loadFunnel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentBusinessId, stage]);
 
@@ -229,6 +261,7 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadDrafts();
       await loadBatches();
       await loadHealth();
+      await loadFunnel();
     } catch (e: any) {
       setError(e.message || 'Не удалось импортировать ссылки');
     } finally {
@@ -267,6 +300,7 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadDrafts();
       await loadBatches();
       await loadHealth();
+      await loadFunnel();
     } catch (e: any) {
       setError(e.message || 'Не удалось выполнить гео-поиск');
     } finally {
@@ -295,6 +329,7 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadLeads();
       await loadDrafts();
       await loadBatches();
+      await loadFunnel();
     } catch (e: any) {
       setError(e.message || 'Не удалось выполнить аудит');
     } finally {
@@ -340,6 +375,7 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadLeads();
       await loadDrafts();
       await loadBatches();
+      await loadFunnel();
     } catch (e: any) {
       setError(e.message || 'Не удалось выполнить матчинг');
     } finally {
@@ -379,6 +415,7 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadLeads();
       await loadDrafts();
       await loadBatches();
+      await loadFunnel();
     } catch (e: any) {
       setError(e.message || 'Не удалось сгенерировать первое письмо');
     } finally {
@@ -399,6 +436,7 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadDrafts();
       await loadBatches();
       await loadLeads();
+      await loadFunnel();
     } catch (e: any) {
       setError(e.message || 'Не удалось утвердить черновик');
     } finally {
@@ -422,6 +460,7 @@ export const PartnershipSearchPage: React.FC = () => {
       }
       await loadBatches();
       await loadLeads();
+      await loadFunnel();
     } catch (e: any) {
       setError(e.message || 'Не удалось создать batch');
     } finally {
@@ -441,6 +480,7 @@ export const PartnershipSearchPage: React.FC = () => {
       setMessage(`Batch утверждён: ${batchId}`);
       await loadBatches();
       await loadLeads();
+      await loadFunnel();
     } catch (e: any) {
       setError(e.message || 'Не удалось утвердить batch');
     } finally {
@@ -462,6 +502,7 @@ export const PartnershipSearchPage: React.FC = () => {
       setMessage('Реакция сохранена');
       await loadBatches();
       await loadLeads();
+      await loadFunnel();
     } catch (e: any) {
       setError(e.message || 'Не удалось сохранить реакцию');
     } finally {
@@ -484,6 +525,7 @@ export const PartnershipSearchPage: React.FC = () => {
       setMessage('Outcome подтверждён');
       await loadBatches();
       await loadLeads();
+      await loadFunnel();
     } catch (e: any) {
       setError(e.message || 'Не удалось подтвердить outcome');
     } finally {
@@ -667,6 +709,38 @@ export const PartnershipSearchPage: React.FC = () => {
                   </div>
                 </div>
               </div>
+            )}
+          </div>
+
+          <div className="rounded-xl border bg-white p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold">Воронка партнёрств (30 дней)</h2>
+              <Button variant="outline" onClick={() => void loadFunnel()} disabled={loading}>
+                Обновить
+              </Button>
+            </div>
+            {!funnel || !Array.isArray(funnel.funnel) ? (
+              <p className="text-sm text-muted-foreground">Данные воронки пока недоступны.</p>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+                  {funnel.funnel.map((stage) => (
+                    <div key={stage.key} className="rounded-lg border border-gray-200 p-3 bg-gray-50">
+                      <div className="text-xs uppercase tracking-wide text-muted-foreground">{stage.label}</div>
+                      <div className="text-2xl font-semibold text-foreground mt-1">{stage.count ?? 0}</div>
+                      {stage.key !== 'imported' ? (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          Конверсия: {stage.conversion_from_prev_pct ?? 0}%
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  Общая конверсия import → sent: <span className="font-medium text-foreground">{funnel.summary?.import_to_sent_pct ?? 0}%</span>
+                  {' '}({funnel.summary?.sent_count ?? 0} из {funnel.summary?.imported_count ?? 0})
+                </div>
+              </>
             )}
           </div>
 

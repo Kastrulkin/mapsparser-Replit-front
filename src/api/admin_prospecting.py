@@ -3187,6 +3187,101 @@ def partnership_export():
         return jsonify({"error": str(e)}), 500
 
 
+@admin_prospecting_bp.route("/api/partnership/funnel", methods=["GET"])
+def partnership_funnel():
+    """Partnership funnel metrics: import -> audit -> match -> draft -> sent."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        requested_business_id = str(request.args.get("business_id") or "").strip() or None
+        window_days = max(1, min(int(request.args.get("window_days") or 30), 365))
+
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+
+            cur.execute(
+                """
+                WITH leads_scope AS (
+                    SELECT l.id, l.partnership_stage, l.updated_at, l.created_at
+                    FROM prospectingleads l
+                    WHERE l.business_id = %s
+                      AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+                      AND COALESCE(l.updated_at, l.created_at) >= NOW() - (%s || ' days')::INTERVAL
+                ),
+                draft_leads AS (
+                    SELECT DISTINCT d.lead_id
+                    FROM outreachmessagedrafts d
+                    JOIN leads_scope ls ON ls.id = d.lead_id
+                ),
+                sent_leads AS (
+                    SELECT DISTINCT q.lead_id
+                    FROM outreachsendqueue q
+                    JOIN leads_scope ls ON ls.id = q.lead_id
+                    WHERE COALESCE(q.delivery_status, '') IN ('sent', 'delivered')
+                )
+                SELECT
+                    (SELECT COUNT(*)::INT FROM leads_scope) AS imported_count,
+                    (SELECT COUNT(*)::INT FROM leads_scope WHERE COALESCE(partnership_stage, 'imported') IN ('audited','matched','proposal_draft_ready','approved_for_send','sent')) AS audited_count,
+                    (SELECT COUNT(*)::INT FROM leads_scope WHERE COALESCE(partnership_stage, 'imported') IN ('matched','proposal_draft_ready','approved_for_send','sent')) AS matched_count,
+                    (SELECT COUNT(*)::INT FROM draft_leads) AS draft_count,
+                    (SELECT COUNT(*)::INT FROM sent_leads) AS sent_count
+                """,
+                (business_id, window_days),
+            )
+            row = cur.fetchone()
+            if row and hasattr(row, "keys"):
+                imported_count = int(row.get("imported_count") or 0)
+                audited_count = int(row.get("audited_count") or 0)
+                matched_count = int(row.get("matched_count") or 0)
+                draft_count = int(row.get("draft_count") or 0)
+                sent_count = int(row.get("sent_count") or 0)
+            else:
+                values = list(row or [0, 0, 0, 0, 0])
+                imported_count = int(values[0] or 0)
+                audited_count = int(values[1] or 0)
+                matched_count = int(values[2] or 0)
+                draft_count = int(values[3] or 0)
+                sent_count = int(values[4] or 0)
+        finally:
+            conn.close()
+
+        def _pct(numerator: int, denominator: int) -> float:
+            if denominator <= 0:
+                return 0.0
+            return round((numerator / denominator) * 100.0, 2)
+
+        stages = [
+            {"key": "imported", "label": "Импортировано", "count": imported_count},
+            {"key": "audited", "label": "Аудит", "count": audited_count, "conversion_from_prev_pct": _pct(audited_count, imported_count)},
+            {"key": "matched", "label": "Матчинг", "count": matched_count, "conversion_from_prev_pct": _pct(matched_count, audited_count)},
+            {"key": "draft", "label": "Черновик", "count": draft_count, "conversion_from_prev_pct": _pct(draft_count, matched_count)},
+            {"key": "sent", "label": "Отправлено", "count": sent_count, "conversion_from_prev_pct": _pct(sent_count, draft_count)},
+        ]
+
+        return jsonify(
+            {
+                "success": True,
+                "business_id": business_id,
+                "window_days": window_days,
+                "funnel": stages,
+                "summary": {
+                    "import_to_sent_pct": _pct(sent_count, imported_count),
+                    "imported_count": imported_count,
+                    "sent_count": sent_count,
+                },
+            }
+        )
+    except Exception as e:
+        print(f"Error partnership funnel: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @admin_prospecting_bp.route("/api/partnership/leads/<string:lead_id>/parse", methods=["POST"])
 def partnership_parse_lead(lead_id):
     """User-level parse enqueue for partnership lead."""
