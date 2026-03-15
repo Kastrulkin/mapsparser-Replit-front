@@ -80,6 +80,20 @@ type PartnershipLearningMetric = {
   edited_before_accept_pct: number;
 };
 
+type PartnershipHealth = {
+  openclaw?: {
+    enabled?: boolean;
+    caps_endpoint_configured?: boolean;
+    token_configured?: boolean;
+  };
+  counts?: {
+    leads_total?: number;
+    drafts_total?: number;
+    batches_total?: number;
+    reactions_total?: number;
+  };
+};
+
 const STAGE_OPTIONS = [
   { value: 'all', label: 'Все этапы' },
   { value: 'imported', label: 'Импортировано' },
@@ -112,6 +126,7 @@ export const PartnershipSearchPage: React.FC = () => {
   const [sendQueueBusy, setSendQueueBusy] = useState<Record<string, string>>({});
   const [reactionBusy, setReactionBusy] = useState<Record<string, string>>({});
   const [learningMetrics, setLearningMetrics] = useState<PartnershipLearningMetric[]>([]);
+  const [health, setHealth] = useState<PartnershipHealth | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -170,11 +185,24 @@ export const PartnershipSearchPage: React.FC = () => {
     }
   };
 
+  const loadHealth = async () => {
+    if (!currentBusinessId) return;
+    try {
+      const data = await newAuth.makeRequest(`/partnership/health?business_id=${encodeURIComponent(currentBusinessId)}`, {
+        method: 'GET',
+      });
+      setHealth(data || null);
+    } catch {
+      setHealth(null);
+    }
+  };
+
   useEffect(() => {
     void loadLeads();
     void loadDrafts();
     void loadBatches();
     void loadLearningMetrics();
+    void loadHealth();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentBusinessId, stage]);
 
@@ -200,6 +228,7 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadLeads();
       await loadDrafts();
       await loadBatches();
+      await loadHealth();
     } catch (e: any) {
       setError(e.message || 'Не удалось импортировать ссылки');
     } finally {
@@ -238,6 +267,7 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadLeads();
       await loadDrafts();
       await loadBatches();
+      await loadHealth();
     } catch (e: any) {
       setError(e.message || 'Не удалось выполнить гео-поиск');
     } finally {
@@ -557,6 +587,42 @@ export const PartnershipSearchPage: React.FC = () => {
             </div>
           </div>
 
+          <div className="rounded-xl border bg-white p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold">Состояние потока партнёрств</h2>
+              <Button variant="outline" onClick={() => void loadHealth()} disabled={loading}>
+                Обновить
+              </Button>
+            </div>
+            {!health ? (
+              <p className="text-sm text-muted-foreground">Health недоступен.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
+                  <div className="font-semibold text-foreground">OpenClaw</div>
+                  <div className="text-muted-foreground mt-1">
+                    Включен: {health.openclaw?.enabled ? 'да' : 'нет'}
+                  </div>
+                  <div className="text-muted-foreground">
+                    Endpoint: {health.openclaw?.caps_endpoint_configured ? 'ok' : 'не задан'}
+                  </div>
+                  <div className="text-muted-foreground">
+                    Token: {health.openclaw?.token_configured ? 'ok' : 'не задан'}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
+                  <div className="font-semibold text-foreground">Объёмы</div>
+                  <div className="text-muted-foreground mt-1">
+                    Лиды: {health.counts?.leads_total ?? 0} · Черновики: {health.counts?.drafts_total ?? 0}
+                  </div>
+                  <div className="text-muted-foreground">
+                    Batch: {health.counts?.batches_total ?? 0} · Реакции: {health.counts?.reactions_total ?? 0}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="rounded-xl border bg-white p-4">
             <div className="flex flex-col md:flex-row gap-3 mb-4">
               <Input
@@ -578,6 +644,9 @@ export const PartnershipSearchPage: React.FC = () => {
               </Select>
               <Button variant="outline" onClick={() => void loadLeads()} disabled={loading}>
                 Применить
+              </Button>
+              <Button variant="outline" onClick={() => void loadHealth()} disabled={loading}>
+                Health
               </Button>
             </div>
 

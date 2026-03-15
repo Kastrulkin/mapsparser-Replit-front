@@ -2951,6 +2951,95 @@ def partnership_list_leads():
         return jsonify({"error": str(e)}), 500
 
 
+@admin_prospecting_bp.route("/api/partnership/health", methods=["GET"])
+def partnership_health():
+    """Health snapshot for partnership flow by business."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        requested_business_id = str(request.args.get("business_id") or "").strip() or None
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+
+            cur.execute(
+                """
+                SELECT COUNT(*)::INT
+                FROM prospectingleads
+                WHERE business_id = %s
+                  AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
+                """,
+                (business_id,),
+            )
+            leads_total = int((cur.fetchone() or [0])[0] or 0)
+
+            cur.execute(
+                """
+                SELECT COUNT(*)::INT
+                FROM outreachmessagedrafts d
+                JOIN prospectingleads l ON l.id = d.lead_id
+                WHERE l.business_id = %s
+                  AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+                """,
+                (business_id,),
+            )
+            drafts_total = int((cur.fetchone() or [0])[0] or 0)
+
+            cur.execute(
+                """
+                SELECT COUNT(*)::INT
+                FROM outreachsendbatches b
+                WHERE b.business_id = %s
+                """,
+                (business_id,),
+            )
+            batches_total = int((cur.fetchone() or [0])[0] or 0)
+
+            cur.execute(
+                """
+                SELECT COUNT(*)::INT
+                FROM outreachmessagereactions r
+                JOIN outreachsendqueue q ON q.id = r.queue_id
+                JOIN prospectingleads l ON l.id = q.lead_id
+                WHERE l.business_id = %s
+                  AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+                """,
+                (business_id,),
+            )
+            reactions_total = int((cur.fetchone() or [0])[0] or 0)
+        finally:
+            conn.close()
+
+        openclaw_enabled = _is_partnership_openclaw_enabled()
+        caps_endpoint = _resolve_partnership_openclaw_caps_endpoint()
+        token_present = bool(_resolve_partnership_openclaw_token())
+        return jsonify(
+            {
+                "success": True,
+                "business_id": business_id,
+                "openclaw": {
+                    "enabled": openclaw_enabled,
+                    "caps_endpoint_configured": bool(caps_endpoint),
+                    "token_configured": token_present,
+                },
+                "counts": {
+                    "leads_total": leads_total,
+                    "drafts_total": drafts_total,
+                    "batches_total": batches_total,
+                    "reactions_total": reactions_total,
+                },
+            }
+        )
+    except Exception as e:
+        print(f"Error partnership health: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @admin_prospecting_bp.route("/api/partnership/leads/<string:lead_id>/parse", methods=["POST"])
 def partnership_parse_lead(lead_id):
     """User-level parse enqueue for partnership lead."""
