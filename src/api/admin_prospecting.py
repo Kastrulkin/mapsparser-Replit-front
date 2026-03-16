@@ -5734,18 +5734,30 @@ def ai_learning_metrics():
             ensure_ai_learning_events_table(conn)
             cur.execute(
                 """
+                WITH latest_prompts AS (
+                    SELECT DISTINCT ON (capability)
+                        capability,
+                        prompt_key,
+                        prompt_version
+                    FROM ailearningevents
+                    WHERE intent = %s
+                    ORDER BY capability, created_at DESC
+                )
                 SELECT
-                    capability,
+                    e.capability,
                     COUNT(*) FILTER (WHERE event_type = 'accepted') AS accepted_total,
                     COUNT(*) FILTER (WHERE event_type = 'accepted' AND COALESCE(edited_before_accept, FALSE) = FALSE) AS accepted_raw_total,
-                    COUNT(*) FILTER (WHERE event_type = 'accepted' AND COALESCE(edited_before_accept, FALSE) = TRUE) AS accepted_edited_total
-                FROM ailearningevents
-                WHERE intent = %s
-                  AND created_at >= NOW() - INTERVAL '30 days'
-                GROUP BY capability
-                ORDER BY capability
+                    COUNT(*) FILTER (WHERE event_type = 'accepted' AND COALESCE(edited_before_accept, FALSE) = TRUE) AS accepted_edited_total,
+                    COALESCE(lp.prompt_key, '') AS prompt_key,
+                    COALESCE(lp.prompt_version, '') AS prompt_version
+                FROM ailearningevents e
+                LEFT JOIN latest_prompts lp ON lp.capability = e.capability
+                WHERE e.intent = %s
+                  AND e.created_at >= NOW() - INTERVAL '30 days'
+                GROUP BY e.capability, lp.prompt_key, lp.prompt_version
+                ORDER BY e.capability
                 """,
-                (intent,),
+                (intent, intent),
             )
             rows = cur.fetchall()
         finally:
@@ -5757,6 +5769,8 @@ def ai_learning_metrics():
             accepted_total = int((row["accepted_total"] if hasattr(row, "get") else row[1]) or 0)
             accepted_raw_total = int((row["accepted_raw_total"] if hasattr(row, "get") else row[2]) or 0)
             accepted_edited_total = int((row["accepted_edited_total"] if hasattr(row, "get") else row[3]) or 0)
+            prompt_key = (row["prompt_key"] if hasattr(row, "get") else row[4]) or ""
+            prompt_version = (row["prompt_version"] if hasattr(row, "get") else row[5]) or ""
             accepted_raw_pct = (accepted_raw_total / accepted_total * 100.0) if accepted_total else 0.0
             edited_before_accept_pct = (accepted_edited_total / accepted_total * 100.0) if accepted_total else 0.0
             items.append(
@@ -5767,6 +5781,8 @@ def ai_learning_metrics():
                     "accepted_edited_total": accepted_edited_total,
                     "accepted_raw_pct": round(accepted_raw_pct, 2),
                     "edited_before_accept_pct": round(edited_before_accept_pct, 2),
+                    "prompt_key": prompt_key,
+                    "prompt_version": prompt_version,
                 }
             )
 

@@ -87,6 +87,7 @@ export const CardOverviewPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isNetworkMaster, setIsNetworkMaster] = useState(false);
+  const [operationsLearning, setOperationsLearning] = useState<Record<string, any>>({});
 
   // Загрузка сводки (рейтинг, количество отзывов)
   const loadSummary = async () => {
@@ -305,6 +306,34 @@ export const CardOverviewPage = () => {
     } catch (e) { console.error('Error loading map sources', e); }
   };
 
+  const loadOperationsLearning = async () => {
+    if (!user?.is_superadmin) {
+      setOperationsLearning({});
+      return;
+    }
+    try {
+      const token = localStorage.getItem('auth_token');
+      const query = new URLSearchParams({ intent: 'operations' });
+      const res = await fetch(`${window.location.origin}/api/admin/ai/learning-metrics?${query.toString()}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        setOperationsLearning({});
+        return;
+      }
+      const data = await res.json();
+      const items = Array.isArray(data.items) ? data.items : [];
+      const byCapability: Record<string, any> = {};
+      for (const item of items) {
+        const key = String(item?.capability || '').trim();
+        if (key) byCapability[key] = item;
+      }
+      setOperationsLearning(byCapability);
+    } catch {
+      setOperationsLearning({});
+    }
+  };
+
   useEffect(() => {
     if (currentBusinessId && context) {
       loadSummary();
@@ -313,6 +342,7 @@ export const CardOverviewPage = () => {
       loadManualCompetitors();
       loadMapSources();
       checkIfNetworkMaster();
+      loadOperationsLearning();
     }
   }, [currentBusinessId, context]);
 
@@ -866,6 +896,45 @@ export const CardOverviewPage = () => {
               Конкуренты
             </TabsTrigger>
           </TabsList>
+
+          {user?.is_superadmin && (
+            <div className="rounded-xl border border-indigo-100 bg-indigo-50/70 p-4">
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-indigo-900">Обучение ИИ (30 дней)</h3>
+                  <p className="text-xs text-indigo-700">Ralph loop по услугам, отзывам и новостям</p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-indigo-200 text-indigo-800 hover:bg-indigo-100"
+                  onClick={loadOperationsLearning}
+                >
+                  Обновить
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
+                {[
+                  { key: 'services.optimize', label: 'Оптимизация услуг' },
+                  { key: 'reviews.reply', label: 'Ответы на отзывы' },
+                  { key: 'news.generate', label: 'Генерация новостей' },
+                ].map((row) => {
+                  const metric = operationsLearning[row.key] || {};
+                  return (
+                    <div key={row.key} className="rounded-lg border border-indigo-100 bg-white p-3">
+                      <div className="font-medium text-gray-900">{row.label}</div>
+                      <div className="text-xs text-gray-600 mt-1">
+                        raw: {metric.accepted_raw_pct ?? 0}% · edited: {metric.edited_before_accept_pct ?? 0}%
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        Принято: {metric.accepted_total ?? 0} · prompt: {metric.prompt_version || '—'}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
 
           <TabsContent value="competitors" className="space-y-6">

@@ -17,7 +17,7 @@
 ---
 
 ## Sprint P0: Unified Learning Foundation
-Статус: backend done (11.03.2026), UI metric widgets pending
+Статус: backend done (11.03.2026), базовые UI metric widgets added (16.03.2026)
 ### Задачи
 - Ввести единый `intent` во все agent/capability action.
 - Начать запись learning-сигналов для edit/accept/reject/outcome.
@@ -36,7 +36,7 @@
 ---
 
 ## Sprint P1: Edit-before-accept (Operations agents)
-Статус: backend endpoints done (11.03.2026), UI wiring pending
+Статус: backend endpoints done (11.03.2026), UI wiring base layer added (16.03.2026)
 ### Задачи
 - Дать inline-редактирование перед принятием:
   - services optimization
