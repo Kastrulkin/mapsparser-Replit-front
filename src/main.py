@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 os.environ.setdefault('GIGACHAT_SSL_VERIFY', 'false')
 from flask import Flask, request, jsonify, render_template_string, send_from_directory, Response
 from flask_cors import CORS
+from werkzeug.serving import WSGIRequestHandler
 
 # Rate limiting для защиты от brute force и DDoS
 try:
@@ -10405,6 +10406,46 @@ def handle_exception(e):
     print(f"🚨 ТРАССИРОВКА: {traceback.format_exc()}")
     return jsonify({"error": f"Внутренняя ошибка сервера: {str(e)}"}), 500
 
+
+class QuietWSGIRequestHandler(WSGIRequestHandler):
+    """Suppress malformed scanner noise while keeping normal access logs."""
+
+    _HTTP_METHOD_PREFIXES = (
+        "GET ",
+        "POST ",
+        "PUT ",
+        "PATCH ",
+        "DELETE ",
+        "OPTIONS ",
+        "HEAD ",
+    )
+
+    def log_error(self, format, *args):
+        try:
+            if (
+                format.startswith("code %d, message %s")
+                and len(args) >= 2
+                and int(args[0]) == 400
+            ):
+                message = str(args[1] or "")
+                if "Bad request syntax" in message or "Bad request version" in message:
+                    return
+        except Exception:
+            pass
+        super().log_error(format, *args)
+
+    def log_request(self, code="-", size="-"):
+        try:
+            status_code = int(code)
+        except Exception:
+            status_code = -1
+        if status_code == 400:
+            request_line = (self.requestline or "")
+            if not request_line.startswith(self._HTTP_METHOD_PREFIXES):
+                return
+        super().log_request(code, size)
+
+
 if __name__ == "__main__":
     # Runtime строго Postgres-only: подключаемся только через pg_db_utils.
     from pg_db_utils import log_connection_info
@@ -10412,4 +10453,4 @@ if __name__ == "__main__":
     log_connection_info(prefix="BACKEND")
 
     print("SEO анализатор запущен на порту 8000")
-    app.run(host="0.0.0.0", port=8000, debug=False)
+    app.run(host="0.0.0.0", port=8000, debug=False, request_handler=QuietWSGIRequestHandler)
