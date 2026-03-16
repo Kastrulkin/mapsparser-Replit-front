@@ -4,16 +4,17 @@ End-to-end smoke for partnership pipeline.
 
 Flow:
 1) import link
-2) list leads + pick lead
-3) parse
-4) audit
-5) match
-6) draft offer
-7) approve draft
-8) create batch
-9) approve batch
-10) record reaction/outcome
-11) health snapshot
+2) import file (CSV payload)
+3) list leads + pick lead
+4) parse
+5) audit
+6) match
+7) draft offer
+8) approve draft
+9) create batch
+10) approve batch
+11) record reaction/outcome
+12) outcomes summary + health snapshot
 
 Usage example:
   AUTH_TOKEN="<jwt>" \
@@ -192,6 +193,31 @@ def main() -> int:
                 args.token,
                 method="POST",
                 payload={"business_id": args.business_id, "links": [args.map_url]},
+                timeout=args.timeout,
+            ),
+            fatal=False,
+        )
+
+        file_csv = "\n".join(
+            [
+                "name,source_url,city,category,phone,email,website,telegram_url,whatsapp_url,rating,reviews_count",
+                f"smoke-file-{int(time.time())},{args.map_url},Санкт-Петербург,Партнер,+79000000000,smoke@example.com,https://example.com,https://t.me/example,https://wa.me/79000000000,4.7,17",
+            ]
+        )
+        _run_step(
+            steps,
+            "import_file",
+            lambda: _api_call(
+                args.base_url,
+                "/api/partnership/leads/import-file",
+                args.token,
+                method="POST",
+                payload={
+                    "business_id": args.business_id,
+                    "filename": "smoke_partners.csv",
+                    "format": "csv",
+                    "content": file_csv,
+                },
                 timeout=args.timeout,
             ),
             fatal=False,
@@ -383,6 +409,18 @@ def main() -> int:
                 ),
                 fatal=False,
             )
+
+        _run_step(
+            steps,
+            "outcomes_summary",
+            lambda: _api_call(
+                args.base_url,
+                f"/api/partnership/outcomes-summary?business_id={urllib.parse.quote(args.business_id)}&window_days=30",
+                args.token,
+                timeout=args.timeout,
+            ),
+            fatal=False,
+        )
 
         _run_step(
             steps,
