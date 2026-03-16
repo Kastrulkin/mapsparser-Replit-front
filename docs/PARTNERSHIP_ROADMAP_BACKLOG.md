@@ -143,7 +143,7 @@
 ---
 
 ## Sprint P6: Partnership Match Agent
-Статус: local backend MVP done (11.03.2026), OpenClaw capability wiring pending
+Статус: local backend MVP done (11.03.2026), reason-codes + score explanation added in LocalOS UI/API (16.03.2026), OpenClaw capability wiring pending
 ### Задачи
 - Ввести capability:
   - `partnership.audit_card`

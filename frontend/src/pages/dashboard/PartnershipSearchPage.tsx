@@ -1108,6 +1108,26 @@ export const PartnershipSearchPage: React.FC = () => {
                 <p className="text-sm text-muted-foreground">
                   Пересечения: {(matchData.overlap || []).slice(0, 8).join(', ') || '—'}
                 </p>
+                {matchData.score_explanation ? (
+                  <p className="text-sm text-gray-700 mt-2">
+                    {String(matchData.score_explanation)}
+                  </p>
+                ) : null}
+                {Array.isArray(matchData.reason_codes) && matchData.reason_codes.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {matchData.reason_codes.map((code: string) => (
+                      <span key={code} className="inline-flex items-center rounded-full border border-gray-300 bg-white px-2 py-0.5 text-[11px] text-gray-700">
+                        {code}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                <p className="text-sm text-muted-foreground mt-2">
+                  Комплементарные направления: {((matchData.complement || {}).partner_strength_tokens || []).slice(0, 6).join(', ') || '—'}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Углы оффера: {(matchData.offer_angles || []).slice(0, 3).join(' · ') || '—'}
+                </p>
               </div>
             )}
 

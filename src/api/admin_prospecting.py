@@ -3861,6 +3861,104 @@ def _extract_partner_service_names_from_snapshot(snapshot: dict[str, Any]) -> li
     return names
 
 
+def _normalize_match_result(
+    raw_match: dict[str, Any] | None,
+    *,
+    own_services_count: int,
+    partner_services_count: int,
+) -> dict[str, Any]:
+    """Normalize match payload and enrich it with reason-codes + human-readable explanation."""
+    data = raw_match if isinstance(raw_match, dict) else {}
+
+    overlap = data.get("overlap")
+    if not isinstance(overlap, list):
+        overlap = []
+    overlap = [str(x).strip() for x in overlap if str(x).strip()]
+
+    complement_raw = data.get("complement")
+    if not isinstance(complement_raw, dict):
+        complement_raw = {}
+    our_strength = complement_raw.get("our_strength_tokens")
+    partner_strength = complement_raw.get("partner_strength_tokens")
+    if not isinstance(our_strength, list):
+        our_strength = []
+    if not isinstance(partner_strength, list):
+        partner_strength = []
+    our_strength = [str(x).strip() for x in our_strength if str(x).strip()]
+    partner_strength = [str(x).strip() for x in partner_strength if str(x).strip()]
+
+    try:
+        score = int(round(float(data.get("match_score") or 0)))
+    except Exception:
+        score = 0
+    score = max(0, min(100, score))
+
+    reason_codes: list[str] = []
+    if own_services_count <= 0:
+        reason_codes.append("NO_OUR_SERVICES")
+    if partner_services_count <= 0:
+        reason_codes.append("NO_PARTNER_SERVICES")
+    if own_services_count < 3 or partner_services_count < 3:
+        reason_codes.append("LOW_SIGNAL_DATA")
+    if overlap:
+        reason_codes.append("HAS_OVERLAP")
+    else:
+        reason_codes.append("NO_DIRECT_OVERLAP")
+    if partner_strength:
+        reason_codes.append("HAS_COMPLEMENT")
+
+    if score >= 70:
+        reason_codes.append("STRONG_MATCH")
+    elif score >= 40:
+        reason_codes.append("MEDIUM_MATCH")
+    else:
+        reason_codes.append("LOW_MATCH")
+
+    explanation_parts = []
+    explanation_parts.append(
+        f"Сопоставлено услуг: ваши {own_services_count}, партнёра {partner_services_count}."
+    )
+    if overlap:
+        explanation_parts.append(f"Прямые пересечения: {', '.join(overlap[:5])}.")
+    else:
+        explanation_parts.append("Прямых пересечений по названиям услуг почти нет.")
+    if partner_strength:
+        explanation_parts.append(
+            f"Комплементарные направления у партнёра: {', '.join(partner_strength[:5])}."
+        )
+    explanation_parts.append(
+        f"Итоговый score {score}% рассчитан по балансу пересечений и комплементарности."
+    )
+
+    risks = data.get("risks")
+    if not isinstance(risks, list):
+        risks = []
+    risks = [str(x).strip() for x in risks if str(x).strip()]
+
+    offer_angles = data.get("offer_angles")
+    if not isinstance(offer_angles, list):
+        offer_angles = []
+    offer_angles = [str(x).strip() for x in offer_angles if str(x).strip()]
+
+    normalized = {
+        "match_score": score,
+        "overlap": overlap[:30],
+        "complement": {
+            "our_strength_tokens": our_strength[:30],
+            "partner_strength_tokens": partner_strength[:30],
+        },
+        "risks": risks[:10],
+        "offer_angles": offer_angles[:10],
+        "source_counts": {
+            "our_services": own_services_count,
+            "partner_services": partner_services_count,
+        },
+        "reason_codes": reason_codes,
+        "score_explanation": " ".join(explanation_parts).strip(),
+    }
+    return normalized
+
+
 def _extract_openclaw_result_blob(resp: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(resp, dict):
         return {}
@@ -4040,6 +4138,11 @@ def partnership_match_lead(lead_id):
                         "partner_services": len(partner_services),
                     },
                 }
+            match_result = _normalize_match_result(
+                match_result,
+                own_services_count=len(own_services),
+                partner_services_count=len(partner_services),
+            )
 
             cur.execute(
                 """
