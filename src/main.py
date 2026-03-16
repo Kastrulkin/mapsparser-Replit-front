@@ -8125,7 +8125,12 @@ def get_business_types_public():
         
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        cursor.execute("SELECT type_key, label FROM businesstypes WHERE is_active = TRUE ORDER BY label")
+        cursor.execute("""
+            SELECT type_key, label
+            FROM businesstypes
+            WHERE COALESCE(LOWER(is_active::text), '1') IN ('1', 'true', 't')
+            ORDER BY label
+        """)
         rows = cursor.fetchall()
         
         types = []
