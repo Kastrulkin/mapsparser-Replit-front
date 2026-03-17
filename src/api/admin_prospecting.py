@@ -3850,6 +3850,126 @@ def partnership_funnel():
         return jsonify({"error": str(e)}), 500
 
 
+@admin_prospecting_bp.route("/api/partnership/source-quality-summary", methods=["GET"])
+def partnership_source_quality_summary():
+    """Quality of partnership lead sources across the operator pipeline."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        requested_business_id = str(request.args.get("business_id") or "").strip() or None
+        window_days = max(1, min(int(request.args.get("window_days") or 30), 365))
+
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+
+            cur.execute(
+                """
+                WITH leads_scope AS (
+                    SELECT
+                        l.id,
+                        COALESCE(l.source_kind, 'unknown') AS source_kind,
+                        COALESCE(l.source_provider, 'unknown') AS source_provider,
+                        COALESCE(l.partnership_stage, 'imported') AS partnership_stage
+                    FROM prospectingleads l
+                    WHERE l.business_id = %s
+                      AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+                      AND COALESCE(l.updated_at, l.created_at) >= NOW() - (%s || ' days')::INTERVAL
+                ),
+                draft_leads AS (
+                    SELECT DISTINCT d.lead_id
+                    FROM outreachmessagedrafts d
+                    JOIN leads_scope ls ON ls.id = d.lead_id
+                ),
+                sent_leads AS (
+                    SELECT DISTINCT q.lead_id
+                    FROM outreachsendqueue q
+                    JOIN leads_scope ls ON ls.id = q.lead_id
+                    WHERE COALESCE(q.delivery_status, '') IN ('sent', 'delivered')
+                ),
+                positive_leads AS (
+                    SELECT DISTINCT q.lead_id
+                    FROM outreachmessagereactions r
+                    JOIN outreachsendqueue q ON q.id = r.queue_id
+                    JOIN leads_scope ls ON ls.id = q.lead_id
+                    WHERE COALESCE(r.human_confirmed_outcome, r.classified_outcome, '') = 'positive'
+                )
+                SELECT
+                    ls.source_kind,
+                    ls.source_provider,
+                    COUNT(*)::INT AS leads_total,
+                    COUNT(*) FILTER (
+                        WHERE ls.partnership_stage IN ('audited','matched','proposal_draft_ready','approved_for_send','sent')
+                    )::INT AS audited_count,
+                    COUNT(*) FILTER (
+                        WHERE ls.partnership_stage IN ('matched','proposal_draft_ready','approved_for_send','sent')
+                    )::INT AS matched_count,
+                    COUNT(DISTINCT dl.lead_id)::INT AS draft_count,
+                    COUNT(DISTINCT sl.lead_id)::INT AS sent_count,
+                    COUNT(DISTINCT pl.lead_id)::INT AS positive_count
+                FROM leads_scope ls
+                LEFT JOIN draft_leads dl ON dl.lead_id = ls.id
+                LEFT JOIN sent_leads sl ON sl.lead_id = ls.id
+                LEFT JOIN positive_leads pl ON pl.lead_id = ls.id
+                GROUP BY ls.source_kind, ls.source_provider
+                ORDER BY COUNT(*) DESC, ls.source_kind ASC, ls.source_provider ASC
+                """,
+                (business_id, window_days),
+            )
+            rows = [dict(r) if hasattr(r, "keys") else {} for r in (cur.fetchall() or [])]
+        finally:
+            conn.close()
+
+        def _pct(numerator: int, denominator: int) -> float:
+            if denominator <= 0:
+                return 0.0
+            return round((numerator / denominator) * 100.0, 2)
+
+        items: list[dict[str, Any]] = []
+        for row in rows:
+            leads_total = int(row.get("leads_total") or 0)
+            audited_count = int(row.get("audited_count") or 0)
+            matched_count = int(row.get("matched_count") or 0)
+            draft_count = int(row.get("draft_count") or 0)
+            sent_count = int(row.get("sent_count") or 0)
+            positive_count = int(row.get("positive_count") or 0)
+            items.append(
+                {
+                    "source_kind": row.get("source_kind") or "unknown",
+                    "source_provider": row.get("source_provider") or "unknown",
+                    "leads_total": leads_total,
+                    "audited_count": audited_count,
+                    "matched_count": matched_count,
+                    "draft_count": draft_count,
+                    "sent_count": sent_count,
+                    "positive_count": positive_count,
+                    "audit_rate_pct": _pct(audited_count, leads_total),
+                    "match_rate_pct": _pct(matched_count, leads_total),
+                    "draft_rate_pct": _pct(draft_count, leads_total),
+                    "sent_rate_pct": _pct(sent_count, leads_total),
+                    "positive_rate_pct": _pct(positive_count, sent_count),
+                    "lead_to_positive_pct": _pct(positive_count, leads_total),
+                }
+            )
+
+        return jsonify(
+            {
+                "success": True,
+                "business_id": business_id,
+                "window_days": window_days,
+                "items": items,
+            }
+        )
+    except Exception as e:
+        print(f"Error partnership source quality summary: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @admin_prospecting_bp.route("/api/partnership/blockers-summary", methods=["GET"])
 def partnership_blockers_summary():
     """Operational blockers that slow partnership conversion."""

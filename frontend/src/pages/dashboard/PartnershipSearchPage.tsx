@@ -153,6 +153,28 @@ type PartnershipOutcomes = {
   }>;
 };
 
+type PartnershipSourceQualityItem = {
+  source_kind?: string;
+  source_provider?: string;
+  leads_total?: number;
+  audited_count?: number;
+  matched_count?: number;
+  draft_count?: number;
+  sent_count?: number;
+  positive_count?: number;
+  audit_rate_pct?: number;
+  match_rate_pct?: number;
+  draft_rate_pct?: number;
+  sent_rate_pct?: number;
+  positive_rate_pct?: number;
+  lead_to_positive_pct?: number;
+};
+
+type PartnershipSourceQuality = {
+  window_days?: number;
+  items?: PartnershipSourceQualityItem[];
+};
+
 type PartnershipBlocker = {
   key: string;
   label: string;
@@ -345,6 +367,7 @@ export const PartnershipSearchPage: React.FC = () => {
   const [funnel, setFunnel] = useState<PartnershipFunnel | null>(null);
   const [blockers, setBlockers] = useState<PartnershipBlockers | null>(null);
   const [outcomes, setOutcomes] = useState<PartnershipOutcomes | null>(null);
+  const [sourceQuality, setSourceQuality] = useState<PartnershipSourceQuality | null>(null);
   const [ralphLoop, setRalphLoop] = useState<PartnershipRalphLoop | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -608,6 +631,19 @@ export const PartnershipSearchPage: React.FC = () => {
     }
   };
 
+  const loadSourceQuality = async () => {
+    if (!currentBusinessId) return;
+    try {
+      const data = await newAuth.makeRequest(
+        `/partnership/source-quality-summary?business_id=${encodeURIComponent(currentBusinessId)}&window_days=30`,
+        { method: 'GET' }
+      );
+      setSourceQuality(data || null);
+    } catch {
+      setSourceQuality(null);
+    }
+  };
+
   useEffect(() => {
     void loadLeads();
     void loadDrafts();
@@ -617,6 +653,7 @@ export const PartnershipSearchPage: React.FC = () => {
     void loadFunnel();
     void loadBlockers();
     void loadOutcomes();
+    void loadSourceQuality();
     void loadRalphLoop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentBusinessId, stage, pilotCohort]);
@@ -646,6 +683,7 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadHealth();
       await loadFunnel();
       await loadOutcomes();
+      await loadSourceQuality();
     } catch (e: any) {
       setError(e.message || 'Не удалось импортировать ссылки');
     } finally {
@@ -695,6 +733,7 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadHealth();
       await loadFunnel();
       await loadOutcomes();
+      await loadSourceQuality();
     } catch (e: any) {
       setError(e.message || 'Не удалось импортировать файл партнёров');
     } finally {
@@ -1883,6 +1922,60 @@ export const PartnershipSearchPage: React.FC = () => {
                   {' '}({funnel.summary?.sent_count ?? 0} из {funnel.summary?.imported_count ?? 0})
                 </div>
               </>
+            )}
+          </div>
+
+          <div className="rounded-xl border bg-white p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold">Качество источников лидов</h2>
+              <Button variant="outline" onClick={() => void loadSourceQuality()} disabled={loading}>
+                Обновить
+              </Button>
+            </div>
+            {!sourceQuality || !Array.isArray(sourceQuality.items) || sourceQuality.items.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Пока нет данных по качеству источников.</p>
+            ) : (
+              <div className="space-y-2">
+                {sourceQuality.items.map((item, idx) => (
+                  <div key={`${item.source_kind || 'source'}-${item.source_provider || 'provider'}-${idx}`} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                      <div>
+                        <div className="font-medium text-foreground">
+                          {item.source_kind || 'unknown'} · {item.source_provider || 'unknown'}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          Лидов: {item.leads_total ?? 0} · Аудит: {item.audited_count ?? 0} · Матчинг: {item.matched_count ?? 0} · Черновики: {item.draft_count ?? 0} · Отправлено: {item.sent_count ?? 0}
+                        </div>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        lead → positive: <span className="font-medium text-foreground">{item.lead_to_positive_pct ?? 0}%</span>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+                      <div className="rounded-md border border-white bg-white p-2">
+                        <div className="text-muted-foreground uppercase">Audit rate</div>
+                        <div className="text-sm font-semibold text-foreground mt-1">{item.audit_rate_pct ?? 0}%</div>
+                      </div>
+                      <div className="rounded-md border border-white bg-white p-2">
+                        <div className="text-muted-foreground uppercase">Match rate</div>
+                        <div className="text-sm font-semibold text-foreground mt-1">{item.match_rate_pct ?? 0}%</div>
+                      </div>
+                      <div className="rounded-md border border-white bg-white p-2">
+                        <div className="text-muted-foreground uppercase">Draft rate</div>
+                        <div className="text-sm font-semibold text-foreground mt-1">{item.draft_rate_pct ?? 0}%</div>
+                      </div>
+                      <div className="rounded-md border border-white bg-white p-2">
+                        <div className="text-muted-foreground uppercase">Sent rate</div>
+                        <div className="text-sm font-semibold text-foreground mt-1">{item.sent_rate_pct ?? 0}%</div>
+                      </div>
+                      <div className="rounded-md border border-white bg-white p-2">
+                        <div className="text-muted-foreground uppercase">Positive rate</div>
+                        <div className="text-sm font-semibold text-foreground mt-1">{item.positive_rate_pct ?? 0}%</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
