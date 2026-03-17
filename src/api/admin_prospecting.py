@@ -3737,7 +3737,29 @@ def partnership_update_lead(lead_id):
         stage = str(data.get("partnership_stage") or "").strip().lower()
         status = str(data.get("status") or "").strip().lower()
         selected_channel = str(data.get("selected_channel") or "").strip().lower() or None
-        if not stage and not status and selected_channel is None:
+        name = str(data.get("name") or "").strip() or None
+        city = str(data.get("city") or "").strip() or None
+        category = str(data.get("category") or "").strip() or None
+        address = str(data.get("address") or "").strip() or None
+        phone = str(data.get("phone") or "").strip() or None
+        email = str(data.get("email") or "").strip() or None
+        website = str(data.get("website") or "").strip() or None
+        telegram_url = str(data.get("telegram_url") or "").strip() or None
+        whatsapp_url = str(data.get("whatsapp_url") or "").strip() or None
+        if (
+            not stage
+            and not status
+            and selected_channel is None
+            and name is None
+            and city is None
+            and category is None
+            and address is None
+            and phone is None
+            and email is None
+            and website is None
+            and telegram_url is None
+            and whatsapp_url is None
+        ):
             return jsonify({"error": "Nothing to update"}), 400
 
         conn = get_db_connection()
@@ -3759,6 +3781,33 @@ def partnership_update_lead(lead_id):
             if selected_channel is not None:
                 assignments.append("selected_channel = %s")
                 params.append(selected_channel)
+            if name is not None:
+                assignments.append("name = %s")
+                params.append(name)
+            if city is not None:
+                assignments.append("city = %s")
+                params.append(city)
+            if category is not None:
+                assignments.append("category = %s")
+                params.append(category)
+            if address is not None:
+                assignments.append("address = %s")
+                params.append(address)
+            if phone is not None:
+                assignments.append("phone = %s")
+                params.append(phone)
+            if email is not None:
+                assignments.append("email = %s")
+                params.append(email)
+            if website is not None:
+                assignments.append("website = %s")
+                params.append(website)
+            if telegram_url is not None:
+                assignments.append("telegram_url = %s")
+                params.append(telegram_url)
+            if whatsapp_url is not None:
+                assignments.append("whatsapp_url = %s")
+                params.append(whatsapp_url)
 
             params.extend([lead_id, business_id])
             cur.execute(
@@ -3768,7 +3817,8 @@ def partnership_update_lead(lead_id):
                 WHERE id = %s
                   AND business_id = %s
                   AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
-                RETURNING id, name, source_url, status, selected_channel, partnership_stage, updated_at
+                RETURNING id, name, source_url, status, selected_channel, partnership_stage,
+                          phone, email, website, telegram_url, whatsapp_url, city, category, address, updated_at
                 """,
                 tuple(params),
             )
@@ -3782,6 +3832,44 @@ def partnership_update_lead(lead_id):
         return jsonify({"success": True, "item": dict(updated) if hasattr(updated, "keys") else updated})
     except Exception as e:
         print(f"Error updating partnership lead: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/leads/<string:lead_id>", methods=["DELETE"])
+def partnership_delete_lead(lead_id):
+    """Delete one partnership lead (with linked artifacts via FK cascade)."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        requested_business_id = str(request.args.get("business_id") or "").strip() or None
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            _ensure_partnership_artifacts_table(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+            cur.execute(
+                """
+                DELETE FROM prospectingleads
+                WHERE id = %s
+                  AND business_id = %s
+                  AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
+                RETURNING id
+                """,
+                (lead_id, business_id),
+            )
+            deleted = cur.fetchone()
+            if not deleted:
+                return jsonify({"error": "Lead not found"}), 404
+            conn.commit()
+        finally:
+            conn.close()
+        return jsonify({"success": True, "deleted_id": lead_id})
+    except Exception as e:
+        print(f"Error deleting partnership lead: {e}")
         return jsonify({"error": str(e)}), 500
 
 

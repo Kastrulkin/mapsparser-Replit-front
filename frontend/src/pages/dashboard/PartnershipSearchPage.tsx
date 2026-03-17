@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 type PartnershipLead = {
   id: string;
   name?: string;
+  address?: string;
   city?: string;
   category?: string;
   source_url?: string;
@@ -177,11 +178,60 @@ export const PartnershipSearchPage: React.FC = () => {
   const [outcomes, setOutcomes] = useState<PartnershipOutcomes | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [leadEdit, setLeadEdit] = useState<{
+    name: string;
+    city: string;
+    category: string;
+    address: string;
+    phone: string;
+    email: string;
+    website: string;
+    telegram_url: string;
+    whatsapp_url: string;
+  }>({
+    name: '',
+    city: '',
+    category: '',
+    address: '',
+    phone: '',
+    email: '',
+    website: '',
+    telegram_url: '',
+    whatsapp_url: '',
+  });
 
   const selectedLead = useMemo(
     () => items.find((item) => item.id === selectedLeadId) || null,
     [items, selectedLeadId]
   );
+
+  useEffect(() => {
+    if (!selectedLead) {
+      setLeadEdit({
+        name: '',
+        city: '',
+        category: '',
+        address: '',
+        phone: '',
+        email: '',
+        website: '',
+        telegram_url: '',
+        whatsapp_url: '',
+      });
+      return;
+    }
+    setLeadEdit({
+      name: selectedLead.name || '',
+      city: selectedLead.city || '',
+      category: selectedLead.category || '',
+      address: selectedLead.address || '',
+      phone: selectedLead.phone || '',
+      email: selectedLead.email || '',
+      website: selectedLead.website || '',
+      telegram_url: selectedLead.telegram_url || '',
+      whatsapp_url: selectedLead.whatsapp_url || '',
+    });
+  }, [selectedLeadId, selectedLead, items]);
 
   const loadLeads = async () => {
     if (!currentBusinessId) return;
@@ -515,6 +565,55 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadOutcomes();
     } catch (e: any) {
       setError(e.message || 'Не удалось сгенерировать первое письмо');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveLeadContacts = async () => {
+    if (!currentBusinessId || !selectedLeadId) return;
+    try {
+      setLoading(true);
+      setError(null);
+      await newAuth.makeRequest(`/partnership/leads/${selectedLeadId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          business_id: currentBusinessId,
+          ...leadEdit,
+        }),
+      });
+      setMessage('Данные лида сохранены');
+      await loadLeads();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось сохранить данные лида');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteLead = async (leadId: string) => {
+    if (!currentBusinessId) return;
+    const ok = window.confirm('Удалить этого партнёра из списка?');
+    if (!ok) return;
+    try {
+      setLoading(true);
+      setError(null);
+      await newAuth.makeRequest(
+        `/partnership/leads/${leadId}?business_id=${encodeURIComponent(currentBusinessId)}`,
+        { method: 'DELETE' }
+      );
+      if (selectedLeadId === leadId) {
+        setSelectedLeadId(null);
+        setAuditData(null);
+        setMatchData(null);
+        setDraftText('');
+      }
+      setMessage('Лид удалён');
+      await loadLeads();
+      await loadDrafts();
+      await loadBatches();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось удалить лида');
     } finally {
       setLoading(false);
     }
@@ -1050,6 +1149,9 @@ export const PartnershipSearchPage: React.FC = () => {
                         <Button size="sm" onClick={() => void runDraft(item.id)} disabled={loading}>
                           Первое письмо
                         </Button>
+                        <Button variant="outline" size="sm" onClick={() => void deleteLead(item.id)} disabled={loading}>
+                          Удалить
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -1135,6 +1237,28 @@ export const PartnershipSearchPage: React.FC = () => {
               <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
                 <div className="font-medium mb-2">Первое письмо</div>
                 <Textarea value={draftText} rows={8} readOnly />
+              </div>
+            )}
+
+            {selectedLead && (
+              <div className="rounded-lg border border-gray-200 p-3 bg-gray-50 space-y-2">
+                <div className="font-medium">Ручное редактирование лида</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <Input value={leadEdit.name} onChange={(e) => setLeadEdit((p) => ({ ...p, name: e.target.value }))} placeholder="Название" />
+                  <Input value={leadEdit.category} onChange={(e) => setLeadEdit((p) => ({ ...p, category: e.target.value }))} placeholder="Категория" />
+                  <Input value={leadEdit.city} onChange={(e) => setLeadEdit((p) => ({ ...p, city: e.target.value }))} placeholder="Город" />
+                  <Input value={leadEdit.address} onChange={(e) => setLeadEdit((p) => ({ ...p, address: e.target.value }))} placeholder="Адрес" />
+                  <Input value={leadEdit.phone} onChange={(e) => setLeadEdit((p) => ({ ...p, phone: e.target.value }))} placeholder="Телефон" />
+                  <Input value={leadEdit.email} onChange={(e) => setLeadEdit((p) => ({ ...p, email: e.target.value }))} placeholder="Email" />
+                  <Input value={leadEdit.website} onChange={(e) => setLeadEdit((p) => ({ ...p, website: e.target.value }))} placeholder="Сайт" />
+                  <Input value={leadEdit.telegram_url} onChange={(e) => setLeadEdit((p) => ({ ...p, telegram_url: e.target.value }))} placeholder="Telegram URL" />
+                  <Input value={leadEdit.whatsapp_url} onChange={(e) => setLeadEdit((p) => ({ ...p, whatsapp_url: e.target.value }))} placeholder="WhatsApp URL" />
+                </div>
+                <div className="flex justify-end">
+                  <Button variant="outline" onClick={() => void saveLeadContacts()} disabled={loading}>
+                    Сохранить данные лида
+                  </Button>
+                </div>
               </div>
             )}
           </div>
