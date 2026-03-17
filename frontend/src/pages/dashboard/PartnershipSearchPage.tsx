@@ -181,6 +181,33 @@ const CHANNEL_OPTIONS = [
   { value: 'manual', label: 'Вручную' },
 ];
 const OUTCOME_OPTIONS = ['positive', 'question', 'no_response', 'hard_no'] as const;
+const LEAD_VIEW_OPTIONS = [
+  { value: 'all', label: 'Все лиды' },
+  { value: 'requires_action', label: 'Требуют действия' },
+  { value: 'ready_next_step', label: 'Готовы к следующему шагу' },
+  { value: 'parsed', label: 'Парсинг завершён' },
+  { value: 'with_contacts', label: 'С контактами' },
+] as const;
+const DRAFT_VIEW_OPTIONS = [
+  { value: 'all', label: 'Все черновики' },
+  { value: 'needs_approval', label: 'Ждут утверждения' },
+  { value: 'approved', label: 'Утверждённые' },
+] as const;
+const QUEUE_VIEW_OPTIONS = [
+  { value: 'all', label: 'Вся очередь' },
+  { value: 'needs_approval', label: 'Batch ждёт утверждения' },
+  { value: 'waiting_delivery', label: 'Ждут доставки' },
+  { value: 'waiting_outcome', label: 'Ждут outcome' },
+  { value: 'failed', label: 'С ошибкой доставки' },
+] as const;
+const REACTION_VIEW_OPTIONS = [
+  { value: 'all', label: 'Все реакции' },
+  { value: 'needs_confirmation', label: 'Требуют подтверждения' },
+  { value: 'positive', label: 'Positive' },
+  { value: 'question', label: 'Question' },
+  { value: 'no_response', label: 'No response' },
+  { value: 'hard_no', label: 'Hard no' },
+] as const;
 
 export const PartnershipSearchPage: React.FC = () => {
   const { currentBusinessId } = useOutletContext<any>();
@@ -200,6 +227,7 @@ export const PartnershipSearchPage: React.FC = () => {
   const [items, setItems] = useState<PartnershipLead[]>([]);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
+  const [leadView, setLeadView] = useState<(typeof LEAD_VIEW_OPTIONS)[number]['value']>('all');
   const [bulkStage, setBulkStage] = useState('');
   const [bulkChannel, setBulkChannel] = useState('');
   const [auditData, setAuditData] = useState<any>(null);
@@ -207,11 +235,14 @@ export const PartnershipSearchPage: React.FC = () => {
   const [draftText, setDraftText] = useState('');
   const [drafts, setDrafts] = useState<PartnershipDraft[]>([]);
   const [selectedDraftIds, setSelectedDraftIds] = useState<string[]>([]);
+  const [draftView, setDraftView] = useState<(typeof DRAFT_VIEW_OPTIONS)[number]['value']>('all');
   const [batches, setBatches] = useState<PartnershipBatch[]>([]);
   const [selectedQueueIds, setSelectedQueueIds] = useState<string[]>([]);
   const [bulkQueueStatus, setBulkQueueStatus] = useState('');
+  const [queueView, setQueueView] = useState<(typeof QUEUE_VIEW_OPTIONS)[number]['value']>('all');
   const [queueReadyDrafts, setQueueReadyDrafts] = useState<PartnershipDraft[]>([]);
   const [reactions, setReactions] = useState<PartnershipReaction[]>([]);
+  const [reactionView, setReactionView] = useState<(typeof REACTION_VIEW_OPTIONS)[number]['value']>('all');
   const [sendQueueBusy, setSendQueueBusy] = useState<Record<string, string>>({});
   const [reactionBusy, setReactionBusy] = useState<Record<string, string>>({});
   const [learningMetrics, setLearningMetrics] = useState<PartnershipLearningMetric[]>([]);
@@ -247,6 +278,87 @@ export const PartnershipSearchPage: React.FC = () => {
     () => items.find((item) => item.id === selectedLeadId) || null,
     [items, selectedLeadId]
   );
+
+  const visibleLeads = useMemo(() => {
+    return items.filter((item) => {
+      const parseStatus = String(item.parse_status || '').toLowerCase();
+      const nextCode = String(item.next_best_action?.code || '').toLowerCase();
+      const hasContacts = Boolean(item.phone || item.email || item.telegram_url || item.whatsapp_url || item.website);
+      if (leadView === 'requires_action') {
+        return ['captcha', 'error'].includes(parseStatus) || ['parse_captcha', 'parse_error', 'fill_contacts'].includes(nextCode);
+      }
+      if (leadView === 'ready_next_step') {
+        return ['parse', 'match', 'draft', 'approve_draft', 'queue', 'approve_batch', 'confirm_outcome'].includes(nextCode);
+      }
+      if (leadView === 'parsed') {
+        return parseStatus === 'completed';
+      }
+      if (leadView === 'with_contacts') {
+        return hasContacts;
+      }
+      return true;
+    });
+  }, [items, leadView]);
+
+  const visibleDrafts = useMemo(() => {
+    return drafts.filter((draft) => {
+      const status = String(draft.status || '').toLowerCase();
+      if (draftView === 'needs_approval') return !status || status === 'generated' || status === 'draft';
+      if (draftView === 'approved') return status === 'approved';
+      return true;
+    });
+  }, [drafts, draftView]);
+
+  const allQueueItems = useMemo(
+    () => batches.flatMap((batch) => (batch.items || []).map((item) => ({ ...item, batch_status: batch.status, batch_id: batch.id }))),
+    [batches]
+  );
+
+  const visibleBatches = useMemo(() => {
+    return batches
+      .map((batch) => {
+        const items = (batch.items || []).filter((item) => {
+          const delivery = String(item.delivery_status || '').toLowerCase();
+          const outcome = String(item.latest_human_outcome || item.latest_outcome || '').toLowerCase();
+          if (queueView === 'needs_approval') return String(batch.status || '').toLowerCase() === 'draft';
+          if (queueView === 'waiting_delivery') return ['queued', 'pending', 'created', 'draft', ''].includes(delivery);
+          if (queueView === 'waiting_outcome') return delivery === 'sent' && !outcome;
+          if (queueView === 'failed') return delivery === 'failed';
+          return true;
+        });
+        return { ...batch, items };
+      })
+      .filter((batch) => queueView === 'needs_approval' ? String(batch.status || '').toLowerCase() === 'draft' : (batch.items || []).length > 0);
+  }, [batches, queueView]);
+
+  const visibleReactions = useMemo(() => {
+    return reactions.filter((reaction) => {
+      const finalOutcome = String(reaction.human_confirmed_outcome || reaction.classified_outcome || '').toLowerCase();
+      if (reactionView === 'needs_confirmation') {
+        return !reaction.human_confirmed_outcome;
+      }
+      if (reactionView !== 'all') {
+        return finalOutcome === reactionView;
+      }
+      return true;
+    });
+  }, [reactions, reactionView]);
+
+  const pilotSummary = useMemo(() => {
+    const total = items.length;
+    const parsed = items.filter((item) => String(item.parse_status || '').toLowerCase() === 'completed').length;
+    const readyForDraft = items.filter((item) => String(item.next_best_action?.code || '') === 'draft').length;
+    const waitingApproval = drafts.filter((draft) => {
+      const status = String(draft.status || '').toLowerCase();
+      return !status || status === 'generated' || status === 'draft';
+    }).length;
+    const waitingOutcome = allQueueItems.filter((item) => {
+      const delivery = String(item.delivery_status || '').toLowerCase();
+      return delivery === 'sent' && !(item.latest_human_outcome || item.latest_outcome);
+    }).length;
+    const acceptance = Number(outcomes?.summary?.positive_rate_pct || 0);
+    return { total, parsed, readyForDraft, waitingApproval, waitingOutcome, acceptance };
+  }, [items, drafts, allQueueItems, outcomes]);
 
   useEffect(() => {
     if (!selectedLead) {
@@ -662,7 +774,7 @@ export const PartnershipSearchPage: React.FC = () => {
   };
 
   const toggleAllLeadSelection = (checked: boolean) => {
-    setSelectedLeadIds(checked ? items.map((item) => item.id) : []);
+    setSelectedLeadIds(checked ? visibleLeads.map((item) => item.id) : []);
   };
 
   const applyBulkUpdate = async () => {
@@ -784,7 +896,7 @@ export const PartnershipSearchPage: React.FC = () => {
   };
 
   const toggleAllDraftSelection = (checked: boolean) => {
-    setSelectedDraftIds(checked ? drafts.map((draft) => draft.id) : []);
+    setSelectedDraftIds(checked ? visibleDrafts.map((draft) => draft.id) : []);
   };
 
   const bulkApproveDrafts = async () => {
@@ -893,7 +1005,7 @@ export const PartnershipSearchPage: React.FC = () => {
   };
 
   const toggleAllQueueSelection = (checked: boolean) => {
-    const ids = batches.flatMap((batch) => (batch.items || []).map((item) => item.id));
+    const ids = visibleBatches.flatMap((batch) => (batch.items || []).map((item) => item.id));
     setSelectedQueueIds(checked ? ids : []);
   };
 
@@ -1245,6 +1357,39 @@ export const PartnershipSearchPage: React.FC = () => {
 
           <div className="rounded-xl border bg-white p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold">Пилотный запуск: сводка оператора</h2>
+              <div className="text-xs text-muted-foreground">Короткий срез по текущему бизнесу</div>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
+              <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
+                <div className="text-xs uppercase text-muted-foreground">Лиды</div>
+                <div className="text-2xl font-semibold mt-1">{pilotSummary.total}</div>
+              </div>
+              <div className="rounded-lg border border-sky-200 p-3 bg-sky-50">
+                <div className="text-xs uppercase text-sky-700">Парсинг завершён</div>
+                <div className="text-2xl font-semibold mt-1 text-sky-700">{pilotSummary.parsed}</div>
+              </div>
+              <div className="rounded-lg border border-violet-200 p-3 bg-violet-50">
+                <div className="text-xs uppercase text-violet-700">Готовы к письму</div>
+                <div className="text-2xl font-semibold mt-1 text-violet-700">{pilotSummary.readyForDraft}</div>
+              </div>
+              <div className="rounded-lg border border-amber-200 p-3 bg-amber-50">
+                <div className="text-xs uppercase text-amber-700">Ждут утверждения</div>
+                <div className="text-2xl font-semibold mt-1 text-amber-700">{pilotSummary.waitingApproval}</div>
+              </div>
+              <div className="rounded-lg border border-blue-200 p-3 bg-blue-50">
+                <div className="text-xs uppercase text-blue-700">Ждут outcome</div>
+                <div className="text-2xl font-semibold mt-1 text-blue-700">{pilotSummary.waitingOutcome}</div>
+              </div>
+              <div className="rounded-lg border border-emerald-200 p-3 bg-emerald-50">
+                <div className="text-xs uppercase text-emerald-700">Positive rate</div>
+                <div className="text-2xl font-semibold mt-1 text-emerald-700">{pilotSummary.acceptance}%</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border bg-white p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
               <h2 className="text-lg font-semibold">Воронка партнёрств (30 дней)</h2>
               <Button variant="outline" onClick={() => void loadFunnel()} disabled={loading}>
                 Обновить
@@ -1392,6 +1537,18 @@ export const PartnershipSearchPage: React.FC = () => {
               <Button variant="outline" onClick={() => void loadHealth()} disabled={loading}>
                 Health
               </Button>
+              <Select value={leadView} onValueChange={(value) => setLeadView(value as typeof leadView)}>
+                <SelectTrigger className="w-full md:w-[250px]">
+                  <SelectValue placeholder="Операторский фильтр" />
+                </SelectTrigger>
+                <SelectContent>
+                  {LEAD_VIEW_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 mb-4">
@@ -1438,19 +1595,19 @@ export const PartnershipSearchPage: React.FC = () => {
             </div>
 
             <div className="space-y-3">
-              {items.length === 0 ? (
+              {visibleLeads.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Список пуст.</p>
               ) : (
                 <>
                   <label className="flex items-center gap-2 text-sm text-muted-foreground">
                     <input
                       type="checkbox"
-                      checked={items.length > 0 && selectedLeadIds.length === items.length}
+                      checked={visibleLeads.length > 0 && visibleLeads.every((item) => selectedLeadIds.includes(item.id))}
                       onChange={(e) => toggleAllLeadSelection(e.target.checked)}
                     />
-                    Выбрать все на странице
+                    Выбрать все в текущем фильтре
                   </label>
-                {items.map((item) => (
+                {visibleLeads.map((item) => (
                   <div
                     key={item.id}
                     className={`rounded-lg border p-3 ${selectedLeadId === item.id ? 'border-primary' : 'border-gray-200'}`}
@@ -1640,11 +1797,25 @@ export const PartnershipSearchPage: React.FC = () => {
           <div className="rounded-xl border bg-white p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-lg font-semibold">Черновики партнёрского оффера</h2>
-              <Button variant="outline" onClick={() => void loadDrafts()} disabled={loading}>
-                Обновить
-              </Button>
+              <div className="flex gap-2">
+                <Select value={draftView} onValueChange={(value) => setDraftView(value as typeof draftView)}>
+                  <SelectTrigger className="w-[220px]">
+                    <SelectValue placeholder="Фильтр черновиков" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DRAFT_VIEW_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" onClick={() => void loadDrafts()} disabled={loading}>
+                  Обновить
+                </Button>
+              </div>
             </div>
-            {drafts.length > 0 && (
+            {visibleDrafts.length > 0 && (
               <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
                   <div className="text-xs text-muted-foreground">
@@ -1661,19 +1832,19 @@ export const PartnershipSearchPage: React.FC = () => {
                 </div>
               </div>
             )}
-            {drafts.length === 0 ? (
+            {visibleDrafts.length === 0 ? (
               <p className="text-sm text-muted-foreground">Черновиков пока нет.</p>
             ) : (
               <>
                 <label className="flex items-center gap-2 text-sm text-muted-foreground">
                   <input
                     type="checkbox"
-                    checked={drafts.length > 0 && selectedDraftIds.length === drafts.length}
+                    checked={visibleDrafts.length > 0 && visibleDrafts.every((draft) => selectedDraftIds.includes(draft.id))}
                     onChange={(e) => toggleAllDraftSelection(e.target.checked)}
                   />
-                  Выбрать все черновики
+                  Выбрать все черновики в текущем фильтре
                 </label>
-              {drafts.map((draft) => (
+              {visibleDrafts.map((draft) => (
                 <div key={draft.id} className="rounded-lg border border-gray-200 p-3">
                   <div className="flex items-start gap-3">
                     <input
@@ -1717,6 +1888,18 @@ export const PartnershipSearchPage: React.FC = () => {
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-lg font-semibold">Очередь отправки партнёрств</h2>
               <div className="flex gap-2">
+                <Select value={queueView} onValueChange={(value) => setQueueView(value as typeof queueView)}>
+                  <SelectTrigger className="w-[230px]">
+                    <SelectValue placeholder="Фильтр очереди" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {QUEUE_VIEW_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Button variant="outline" onClick={() => void loadBatches()} disabled={loading}>
                   Обновить
                 </Button>
@@ -1725,7 +1908,7 @@ export const PartnershipSearchPage: React.FC = () => {
                 </Button>
               </div>
             </div>
-            {batches.length > 0 && (
+            {visibleBatches.length > 0 && (
               <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
                 <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3">
                   <div className="text-xs text-muted-foreground">
@@ -1752,7 +1935,7 @@ export const PartnershipSearchPage: React.FC = () => {
                 </div>
               </div>
             )}
-            {batches.length === 0 ? (
+            {visibleBatches.length === 0 ? (
               <p className="text-sm text-muted-foreground">Batch пока нет.</p>
             ) : (
               <>
@@ -1760,14 +1943,14 @@ export const PartnershipSearchPage: React.FC = () => {
                   <input
                     type="checkbox"
                     checked={
-                      batches.flatMap((batch) => (batch.items || []).map((item) => item.id)).length > 0 &&
-                      selectedQueueIds.length === batches.flatMap((batch) => (batch.items || []).map((item) => item.id)).length
+                      visibleBatches.flatMap((batch) => (batch.items || []).map((item) => item.id)).length > 0 &&
+                      visibleBatches.flatMap((batch) => (batch.items || []).map((item) => item.id)).every((id) => selectedQueueIds.includes(id))
                     }
                     onChange={(e) => toggleAllQueueSelection(e.target.checked)}
                   />
-                  Выбрать все queue-элементы
+                  Выбрать все queue-элементы в текущем фильтре
                 </label>
-              {batches.map((batch) => (
+              {visibleBatches.map((batch) => (
                 <div key={batch.id} className="rounded-lg border border-gray-200 p-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
@@ -1843,14 +2026,28 @@ export const PartnershipSearchPage: React.FC = () => {
           <div className="rounded-xl border bg-white p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-lg font-semibold">Реакции и outcome</h2>
-              <Button variant="outline" onClick={() => void loadBatches()} disabled={loading}>
-                Обновить
-              </Button>
+              <div className="flex gap-2">
+                <Select value={reactionView} onValueChange={(value) => setReactionView(value as typeof reactionView)}>
+                  <SelectTrigger className="w-[220px]">
+                    <SelectValue placeholder="Фильтр outcome" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {REACTION_VIEW_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" onClick={() => void loadBatches()} disabled={loading}>
+                  Обновить
+                </Button>
+              </div>
             </div>
-            {reactions.length === 0 ? (
+            {visibleReactions.length === 0 ? (
               <p className="text-sm text-muted-foreground">Реакций пока нет.</p>
             ) : (
-              reactions.slice(0, 20).map((reaction) => (
+              visibleReactions.slice(0, 20).map((reaction) => (
                 <div key={reaction.id} className="rounded-lg border border-gray-200 p-3">
                   <div className="text-sm font-semibold">{reaction.lead_name || reaction.lead_id}</div>
                   <div className="text-xs text-muted-foreground">
