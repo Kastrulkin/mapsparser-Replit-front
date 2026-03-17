@@ -1596,6 +1596,7 @@ export const PartnershipSearchPage: React.FC = () => {
     funnel,
     outcomes,
     health,
+    source_quality: sourceQuality,
   });
 
   const buildOperatorSnapshotMarkdown = () => {
@@ -1661,7 +1662,34 @@ export const PartnershipSearchPage: React.FC = () => {
     } else {
       lines.push('- none');
     }
+    lines.push('', '### Source Quality');
+    const sourceItems = Array.isArray(snapshot.source_quality?.items) ? snapshot.source_quality?.items || [] : [];
+    if (sourceItems.length > 0) {
+      sourceItems.slice(0, 10).forEach((item) => {
+        lines.push(
+          `- ${item.source_kind || 'unknown'} / ${item.source_provider || 'unknown'} | leads=${item.leads_total ?? 0} | draft=${item.draft_rate_pct ?? 0}% | sent=${item.sent_rate_pct ?? 0}% | lead_to_positive=${item.lead_to_positive_pct ?? 0}%`
+        );
+      });
+    } else {
+      lines.push('- none');
+    }
     return lines.join('\n');
+  };
+
+  const exportWeeklyReview = () => {
+    if (!currentBusinessId) return;
+    try {
+      setError(null);
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      downloadTextFile(
+        `partnership-weekly-review-${currentBusinessId}-${stamp}.md`,
+        buildOperatorSnapshotMarkdown(),
+        'text/markdown;charset=utf-8'
+      );
+      setMessage('Weekly review сформирован');
+    } catch (e: any) {
+      setError(e.message || 'Не удалось сформировать weekly review');
+    }
   };
 
   const exportPartnershipReport = async (format: 'json' | 'markdown') => {
@@ -1868,6 +1896,9 @@ export const PartnershipSearchPage: React.FC = () => {
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-lg font-semibold">Состояние потока партнёрств</h2>
               <div className="flex gap-2">
+                <Button variant="outline" onClick={exportWeeklyReview} disabled={loading}>
+                  Weekly review
+                </Button>
                 <Button variant="outline" onClick={() => void exportPartnershipReport('json')} disabled={loading}>
                   Экспорт JSON
                 </Button>
