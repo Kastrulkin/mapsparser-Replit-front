@@ -209,8 +209,9 @@
 ### Реализация (в работе)
 - Добавлен e2e smoke-скрипт:
   - `scripts/smoke_partnership_flow.py`
-  - покрывает: import-links -> import-file -> parse -> audit -> match -> draft -> approve -> batch -> outcome -> outcomes-summary -> health
+  - покрывает: import-links -> import-file -> parse -> audit -> match -> draft -> approve -> batch -> outcome -> outcomes-summary -> health -> export(json/markdown)
   - сохраняет JSON-экспорт отчёта (`/tmp/partnership_smoke_<ts>.json` по умолчанию)
+  - сохраняет Markdown snapshot (`/tmp/partnership_smoke_<ts>.md` по умолчанию)
 - Добавлен CI gate:
   - `scripts/ci_gate_partnership.sh`
   - strict-режим в CI требует `AUTH_TOKEN`, `BUSINESS_ID`, `MAP_URL` и прогоняет partnership smoke end-to-end

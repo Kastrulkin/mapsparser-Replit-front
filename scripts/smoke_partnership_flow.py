@@ -15,6 +15,7 @@ Flow:
 10) approve batch
 11) record reaction/outcome
 12) outcomes summary + health snapshot
+13) export JSON + Markdown snapshot
 
 Usage example:
   AUTH_TOKEN="<jwt>" \
@@ -157,6 +158,7 @@ def main() -> int:
     parser.add_argument("--map-url", default=os.getenv("MAP_URL", ""))
     parser.add_argument("--lead-name", default=os.getenv("LEAD_NAME", f"partnership-smoke-{int(time.time())}"))
     parser.add_argument("--report", default=os.getenv("REPORT_PATH", ""))
+    parser.add_argument("--markdown-report", default=os.getenv("MARKDOWN_REPORT_PATH", ""))
     parser.add_argument("--timeout", type=int, default=int(os.getenv("SMOKE_TIMEOUT_SEC", "90")))
     args = parser.parse_args()
 
@@ -171,12 +173,15 @@ def main() -> int:
         return 2
 
     report_path = args.report or f"/tmp/partnership_smoke_{int(time.time())}.json"
+    markdown_report_path = args.markdown_report or report_path.replace(".json", ".md")
     steps: list[StepResult] = []
     artifacts: dict[str, Any] = {
         "base_url": args.base_url,
         "business_id": args.business_id,
         "map_url": args.map_url,
         "lead_name": args.lead_name,
+        "report_path": report_path,
+        "markdown_report_path": markdown_report_path,
     }
 
     started_at = _utc_now()
@@ -433,6 +438,38 @@ def main() -> int:
             ),
             fatal=False,
         )
+
+        export_json_data = _run_step(
+            steps,
+            "export_json",
+            lambda: _api_call(
+                args.base_url,
+                f"/api/partnership/export?business_id={urllib.parse.quote(args.business_id)}&format=json&limit=50",
+                args.token,
+                timeout=args.timeout,
+            ),
+            fatal=False,
+        )
+        if isinstance(export_json_data, dict):
+            artifacts["export_json_counts"] = export_json_data.get("counts") or {}
+
+        export_markdown_data = _run_step(
+            steps,
+            "export_markdown",
+            lambda: _api_call(
+                args.base_url,
+                f"/api/partnership/export?business_id={urllib.parse.quote(args.business_id)}&format=markdown&limit=50",
+                args.token,
+                timeout=args.timeout,
+            ),
+            fatal=False,
+        )
+        markdown_report = ""
+        if isinstance(export_markdown_data, dict):
+            markdown_report = str(export_markdown_data.get("markdown_report") or "")
+        if markdown_report:
+            with open(markdown_report_path, "w", encoding="utf-8") as f:
+                f.write(markdown_report)
     except SmokeFailure as exc:
         ok = False
         failure = str(exc)
@@ -458,10 +495,20 @@ def main() -> int:
         json.dump(summary, f, ensure_ascii=False, indent=2)
 
     print(f"[smoke] report: {report_path}")
+    print(f"[smoke] markdown report: {markdown_report_path}")
     for s in steps:
         print(f"- {s.name}: {'OK' if s.ok else 'FAIL'}"
               + (f" (HTTP {s.http_status})" if s.http_status is not None else "")
               + (f" :: {s.detail}" if s.detail else ""))
+    print("[smoke] artifacts:")
+    for key in ("lead_id", "draft_id", "batch_id", "queue_id"):
+        if artifacts.get(key):
+            print(f"  - {key}: {artifacts[key]}")
+    counts = artifacts.get("export_json_counts") or {}
+    if isinstance(counts, dict) and counts:
+        print("[smoke] export counts:")
+        for key, value in counts.items():
+            print(f"  - {key}: {value}")
     if summary["ok"]:
         print("[smoke] partnership flow: PASS")
         return 0
