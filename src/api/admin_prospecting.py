@@ -3532,6 +3532,152 @@ def partnership_funnel():
         return jsonify({"error": str(e)}), 500
 
 
+@admin_prospecting_bp.route("/api/partnership/blockers-summary", methods=["GET"])
+def partnership_blockers_summary():
+    """Operational blockers that slow partnership conversion."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        requested_business_id = str(request.args.get("business_id") or "").strip() or None
+        window_days = max(1, min(int(request.args.get("window_days") or 30), 365))
+
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+
+            cur.execute(
+                """
+                WITH leads_scope AS (
+                    SELECT l.id
+                    FROM prospectingleads l
+                    WHERE l.business_id = %s
+                      AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+                      AND COALESCE(l.updated_at, l.created_at) >= NOW() - (%s || ' days')::INTERVAL
+                )
+                SELECT
+                    (SELECT COUNT(*)::INT
+                     FROM prospectingleads l
+                     JOIN leads_scope ls ON ls.id = l.id
+                     WHERE COALESCE(l.parse_status, '') IN ('pending', 'processing')) AS parse_in_progress_count,
+                    (SELECT COUNT(*)::INT
+                     FROM prospectingleads l
+                     JOIN leads_scope ls ON ls.id = l.id
+                     WHERE COALESCE(l.parse_status, '') = 'captcha') AS captcha_required_count,
+                    (SELECT COUNT(*)::INT
+                     FROM prospectingleads l
+                     JOIN leads_scope ls ON ls.id = l.id
+                     WHERE COALESCE(l.parse_status, '') = 'error') AS parse_error_count,
+                    (SELECT COUNT(*)::INT
+                     FROM outreachmessagedrafts d
+                     JOIN leads_scope ls ON ls.id = d.lead_id
+                     WHERE COALESCE(d.status, '') = %s) AS drafts_waiting_approval_count,
+                    (SELECT COUNT(*)::INT
+                     FROM outreachsendqueue q
+                     JOIN leads_scope ls ON ls.id = q.lead_id
+                     WHERE COALESCE(q.delivery_status, '') IN ('queued', 'sending', 'retry')) AS queue_waiting_delivery_count,
+                    (SELECT COUNT(*)::INT
+                     FROM outreachsendqueue q
+                     JOIN leads_scope ls ON ls.id = q.lead_id
+                     LEFT JOIN LATERAL (
+                         SELECT COALESCE(NULLIF(r.human_confirmed_outcome, ''), NULLIF(r.classified_outcome, ''), '') AS outcome
+                         FROM outreachmessagereactions r
+                         WHERE r.queue_id = q.id
+                         ORDER BY COALESCE(r.updated_at, r.created_at) DESC
+                         LIMIT 1
+                     ) rx ON TRUE
+                     WHERE COALESCE(q.delivery_status, '') IN ('sent', 'delivered')
+                       AND COALESCE(rx.outcome, '') = '') AS sent_without_outcome_count
+                """,
+                (business_id, window_days, DRAFT_GENERATED),
+            )
+            row = cur.fetchone()
+        finally:
+            conn.close()
+
+        if row and hasattr(row, "keys"):
+            payload = {
+                "parse_in_progress_count": int(row.get("parse_in_progress_count") or 0),
+                "captcha_required_count": int(row.get("captcha_required_count") or 0),
+                "parse_error_count": int(row.get("parse_error_count") or 0),
+                "drafts_waiting_approval_count": int(row.get("drafts_waiting_approval_count") or 0),
+                "queue_waiting_delivery_count": int(row.get("queue_waiting_delivery_count") or 0),
+                "sent_without_outcome_count": int(row.get("sent_without_outcome_count") or 0),
+            }
+        else:
+            values = list(row or [0, 0, 0, 0, 0, 0])
+            payload = {
+                "parse_in_progress_count": int(values[0] or 0),
+                "captcha_required_count": int(values[1] or 0),
+                "parse_error_count": int(values[2] or 0),
+                "drafts_waiting_approval_count": int(values[3] or 0),
+                "queue_waiting_delivery_count": int(values[4] or 0),
+                "sent_without_outcome_count": int(values[5] or 0),
+            }
+
+        blockers = [
+            {
+                "key": "parse_in_progress",
+                "label": "Парсинг ещё идёт",
+                "count": payload["parse_in_progress_count"],
+                "severity": "info",
+                "hint": "Лиды ещё не дошли до аудита и матчинга.",
+            },
+            {
+                "key": "captcha_required",
+                "label": "Нужна CAPTCHA",
+                "count": payload["captcha_required_count"],
+                "severity": "warning",
+                "hint": "Парсинг остановился и ждёт human-in-the-loop.",
+            },
+            {
+                "key": "parse_error",
+                "label": "Ошибки парсинга",
+                "count": payload["parse_error_count"],
+                "severity": "danger",
+                "hint": "Эти лиды не продвинутся дальше, пока ошибка не обработана.",
+            },
+            {
+                "key": "drafts_waiting_approval",
+                "label": "Черновики ждут утверждения",
+                "count": payload["drafts_waiting_approval_count"],
+                "severity": "warning",
+                "hint": "Офферы уже готовы, но не переведены в очередь отправки.",
+            },
+            {
+                "key": "queue_waiting_delivery",
+                "label": "Очередь ждёт доставки",
+                "count": payload["queue_waiting_delivery_count"],
+                "severity": "warning",
+                "hint": "Batch создан, но доставка ещё не закрыта по статусам.",
+            },
+            {
+                "key": "sent_without_outcome",
+                "label": "Нет outcome после отправки",
+                "count": payload["sent_without_outcome_count"],
+                "severity": "info",
+                "hint": "Сообщения ушли, но реакция ещё не классифицирована.",
+            },
+        ]
+
+        return jsonify(
+            {
+                "success": True,
+                "business_id": business_id,
+                "window_days": window_days,
+                "summary": payload,
+                "blockers": blockers,
+            }
+        )
+    except Exception as e:
+        print(f"Error partnership blockers summary: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @admin_prospecting_bp.route("/api/partnership/outcomes-summary", methods=["GET"])
 def partnership_outcomes_summary():
     """Partnership outcomes summary by channel and class for selected window."""

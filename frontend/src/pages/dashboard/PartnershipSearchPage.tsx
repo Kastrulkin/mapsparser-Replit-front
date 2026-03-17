@@ -137,6 +137,20 @@ type PartnershipOutcomes = {
   }>;
 };
 
+type PartnershipBlocker = {
+  key: string;
+  label: string;
+  count: number;
+  severity?: 'info' | 'warning' | 'danger';
+  hint?: string;
+};
+
+type PartnershipBlockers = {
+  window_days?: number;
+  summary?: Record<string, number>;
+  blockers?: PartnershipBlocker[];
+};
+
 const STAGE_OPTIONS = [
   { value: 'all', label: 'Все этапы' },
   { value: 'imported', label: 'Импортировано' },
@@ -197,6 +211,7 @@ export const PartnershipSearchPage: React.FC = () => {
   const [learningMetrics, setLearningMetrics] = useState<PartnershipLearningMetric[]>([]);
   const [health, setHealth] = useState<PartnershipHealth | null>(null);
   const [funnel, setFunnel] = useState<PartnershipFunnel | null>(null);
+  const [blockers, setBlockers] = useState<PartnershipBlockers | null>(null);
   const [outcomes, setOutcomes] = useState<PartnershipOutcomes | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -336,6 +351,19 @@ export const PartnershipSearchPage: React.FC = () => {
     }
   };
 
+  const loadBlockers = async () => {
+    if (!currentBusinessId) return;
+    try {
+      const data = await newAuth.makeRequest(
+        `/partnership/blockers-summary?business_id=${encodeURIComponent(currentBusinessId)}&window_days=30`,
+        { method: 'GET' }
+      );
+      setBlockers(data || null);
+    } catch {
+      setBlockers(null);
+    }
+  };
+
   const loadOutcomes = async () => {
     if (!currentBusinessId) return;
     try {
@@ -356,6 +384,7 @@ export const PartnershipSearchPage: React.FC = () => {
     void loadLearningMetrics();
     void loadHealth();
     void loadFunnel();
+    void loadBlockers();
     void loadOutcomes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentBusinessId, stage]);
@@ -1237,6 +1266,38 @@ export const PartnershipSearchPage: React.FC = () => {
                   {' '}({funnel.summary?.sent_count ?? 0} из {funnel.summary?.imported_count ?? 0})
                 </div>
               </>
+            )}
+          </div>
+
+          <div className="rounded-xl border bg-white p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold">Что тормозит конверсию</h2>
+              <Button variant="outline" onClick={() => void loadBlockers()} disabled={loading}>
+                Обновить
+              </Button>
+            </div>
+            {!blockers || !Array.isArray(blockers.blockers) ? (
+              <p className="text-sm text-muted-foreground">Диагностика пока недоступна.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+                {blockers.blockers.map((item) => {
+                  const tone =
+                    item.severity === 'danger'
+                      ? 'border-rose-200 bg-rose-50'
+                      : item.severity === 'warning'
+                        ? 'border-amber-200 bg-amber-50'
+                        : 'border-sky-200 bg-sky-50';
+                  return (
+                    <div key={item.key} className={`rounded-lg border p-3 ${tone}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="text-sm font-semibold text-foreground">{item.label}</div>
+                        <div className="text-2xl font-semibold text-foreground">{item.count ?? 0}</div>
+                      </div>
+                      <div className="mt-2 text-xs text-muted-foreground">{item.hint || '—'}</div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
 
