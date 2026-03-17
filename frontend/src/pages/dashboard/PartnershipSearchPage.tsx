@@ -20,6 +20,7 @@ type PartnershipLead = {
   whatsapp_url?: string;
   status?: string;
   partnership_stage?: string;
+  pilot_cohort?: string;
   selected_channel?: string;
   updated_at?: string;
   parse_task_id?: string;
@@ -157,6 +158,40 @@ type PartnershipBlockers = {
   blockers?: PartnershipBlocker[];
 };
 
+type PartnershipRalphLoop = {
+  window_days?: number;
+  pilot_cohort?: string;
+  summary?: {
+    leads_total?: number;
+    parsed_completed_count?: number;
+    audited_count?: number;
+    matched_count?: number;
+    drafts_total?: number;
+    drafts_approved_count?: number;
+    sent_total?: number;
+    positive_count?: number;
+    question_count?: number;
+    no_response_count?: number;
+    hard_no_count?: number;
+    positive_rate_pct?: number;
+  };
+  top_channels?: Array<{
+    channel?: string;
+    total?: number;
+    positive_count?: number;
+    positive_rate_pct?: number;
+  }>;
+  learning?: Array<{
+    capability?: string;
+    accepted_total?: number;
+    accepted_edited_total?: number;
+    edited_before_accept_pct?: number;
+    prompt_key?: string;
+    prompt_version?: string;
+  }>;
+  blockers?: string[];
+};
+
 const STAGE_OPTIONS = [
   { value: 'all', label: 'Все этапы' },
   { value: 'imported', label: 'Импортировано' },
@@ -208,6 +243,12 @@ const REACTION_VIEW_OPTIONS = [
   { value: 'no_response', label: 'No response' },
   { value: 'hard_no', label: 'Hard no' },
 ] as const;
+const PILOT_COHORT_OPTIONS = [
+  { value: 'all', label: 'Все когорты' },
+  { value: 'pilot', label: 'Пилот' },
+  { value: 'backlog', label: 'Backlog' },
+  { value: 'watchlist', label: 'Watchlist' },
+] as const;
 
 export const PartnershipSearchPage: React.FC = () => {
   const { currentBusinessId } = useOutletContext<any>();
@@ -223,6 +264,7 @@ export const PartnershipSearchPage: React.FC = () => {
   const [geoRadiusKm, setGeoRadiusKm] = useState('5');
   const [geoLimit, setGeoLimit] = useState('25');
   const [stage, setStage] = useState('all');
+  const [pilotCohort, setPilotCohort] = useState<(typeof PILOT_COHORT_OPTIONS)[number]['value']>('all');
   const [query, setQuery] = useState('');
   const [items, setItems] = useState<PartnershipLead[]>([]);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
@@ -230,6 +272,7 @@ export const PartnershipSearchPage: React.FC = () => {
   const [leadView, setLeadView] = useState<(typeof LEAD_VIEW_OPTIONS)[number]['value']>('all');
   const [bulkStage, setBulkStage] = useState('');
   const [bulkChannel, setBulkChannel] = useState('');
+  const [bulkPilotCohort, setBulkPilotCohort] = useState('');
   const [auditData, setAuditData] = useState<any>(null);
   const [matchData, setMatchData] = useState<any>(null);
   const [draftText, setDraftText] = useState('');
@@ -250,6 +293,7 @@ export const PartnershipSearchPage: React.FC = () => {
   const [funnel, setFunnel] = useState<PartnershipFunnel | null>(null);
   const [blockers, setBlockers] = useState<PartnershipBlockers | null>(null);
   const [outcomes, setOutcomes] = useState<PartnershipOutcomes | null>(null);
+  const [ralphLoop, setRalphLoop] = useState<PartnershipRalphLoop | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [leadEdit, setLeadEdit] = useState<{
@@ -396,6 +440,7 @@ export const PartnershipSearchPage: React.FC = () => {
       const params = new URLSearchParams();
       params.set('business_id', currentBusinessId);
       if (stage !== 'all') params.set('stage', stage);
+      if (pilotCohort !== 'all') params.set('pilot_cohort', pilotCohort);
       if (query.trim()) params.set('q', query.trim());
       const data = await newAuth.makeRequest(`/partnership/leads?${params.toString()}`, { method: 'GET' });
       setItems(Array.isArray(data.items) ? data.items : []);
@@ -407,6 +452,22 @@ export const PartnershipSearchPage: React.FC = () => {
       setError(e.message || 'Не удалось загрузить список партнёров');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadRalphLoop = async () => {
+    if (!currentBusinessId) return;
+    try {
+      const params = new URLSearchParams();
+      params.set('business_id', currentBusinessId);
+      params.set('window_days', '7');
+      if (pilotCohort !== 'all') params.set('pilot_cohort', pilotCohort);
+      const data = await newAuth.makeRequest(`/partnership/ralph-loop-summary?${params.toString()}`, {
+        method: 'GET',
+      });
+      setRalphLoop(data || null);
+    } catch {
+      setRalphLoop(null);
     }
   };
 
@@ -504,8 +565,9 @@ export const PartnershipSearchPage: React.FC = () => {
     void loadFunnel();
     void loadBlockers();
     void loadOutcomes();
+    void loadRalphLoop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentBusinessId, stage]);
+  }, [currentBusinessId, stage, pilotCohort]);
 
   const handleImportLinks = async () => {
     if (!currentBusinessId) return;
@@ -788,13 +850,14 @@ export const PartnershipSearchPage: React.FC = () => {
       setError(null);
       const data = await newAuth.makeRequest('/partnership/leads/bulk-update', {
         method: 'POST',
-        body: JSON.stringify({
-          business_id: currentBusinessId,
-          lead_ids: selectedLeadIds,
-          partnership_stage: bulkStage || undefined,
-          selected_channel: bulkChannel || undefined,
-        }),
-      });
+          body: JSON.stringify({
+            business_id: currentBusinessId,
+            lead_ids: selectedLeadIds,
+            partnership_stage: bulkStage || undefined,
+            selected_channel: bulkChannel || undefined,
+            pilot_cohort: bulkPilotCohort || undefined,
+          }),
+        });
       setMessage(`Обновлено лидов: ${data.updated_count || 0}`);
       setSelectedLeadIds([]);
       await loadLeads();
@@ -1390,6 +1453,99 @@ export const PartnershipSearchPage: React.FC = () => {
 
           <div className="rounded-xl border bg-white p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold">Ralph loop summary (7 дней)</h2>
+              <Button variant="outline" onClick={() => void loadRalphLoop()} disabled={loading}>
+                Обновить
+              </Button>
+            </div>
+            {!ralphLoop?.summary ? (
+              <p className="text-sm text-muted-foreground">Недельная summary пока недоступна.</p>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2">
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                    <div className="text-xs uppercase text-muted-foreground">Лиды</div>
+                    <div className="text-2xl font-semibold mt-1">{ralphLoop.summary.leads_total ?? 0}</div>
+                  </div>
+                  <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
+                    <div className="text-xs uppercase text-sky-700">Парсинг</div>
+                    <div className="text-2xl font-semibold mt-1 text-sky-700">{ralphLoop.summary.parsed_completed_count ?? 0}</div>
+                  </div>
+                  <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3">
+                    <div className="text-xs uppercase text-indigo-700">Аудит</div>
+                    <div className="text-2xl font-semibold mt-1 text-indigo-700">{ralphLoop.summary.audited_count ?? 0}</div>
+                  </div>
+                  <div className="rounded-lg border border-violet-200 bg-violet-50 p-3">
+                    <div className="text-xs uppercase text-violet-700">Матчинг</div>
+                    <div className="text-2xl font-semibold mt-1 text-violet-700">{ralphLoop.summary.matched_count ?? 0}</div>
+                  </div>
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                    <div className="text-xs uppercase text-amber-700">Черновики</div>
+                    <div className="text-2xl font-semibold mt-1 text-amber-700">{ralphLoop.summary.drafts_total ?? 0}</div>
+                  </div>
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                    <div className="text-xs uppercase text-emerald-700">Sent</div>
+                    <div className="text-2xl font-semibold mt-1 text-emerald-700">{ralphLoop.summary.sent_total ?? 0}</div>
+                  </div>
+                  <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+                    <div className="text-xs uppercase text-green-700">Positive</div>
+                    <div className="text-2xl font-semibold mt-1 text-green-700">{ralphLoop.summary.positive_count ?? 0}</div>
+                  </div>
+                  <div className="rounded-lg border border-teal-200 bg-teal-50 p-3">
+                    <div className="text-xs uppercase text-teal-700">Positive rate</div>
+                    <div className="text-2xl font-semibold mt-1 text-teal-700">{ralphLoop.summary.positive_rate_pct ?? 0}%</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                    <div className="text-sm font-semibold mb-2">Лучшие каналы</div>
+                    {Array.isArray(ralphLoop.top_channels) && ralphLoop.top_channels.length > 0 ? (
+                      <div className="space-y-1 text-sm">
+                        {ralphLoop.top_channels.map((item, idx) => (
+                          <div key={`${item.channel || 'channel'}-${idx}`} className="flex items-center justify-between gap-2">
+                            <span>{item.channel || 'unknown'}</span>
+                            <span className="text-muted-foreground">{item.positive_rate_pct ?? 0}% ({item.positive_count ?? 0}/{item.total ?? 0})</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">Пока нет канальной статистики.</div>
+                    )}
+                  </div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                    <div className="text-sm font-semibold mb-2">Обучение по промптам</div>
+                    {Array.isArray(ralphLoop.learning) && ralphLoop.learning.length > 0 ? (
+                      <div className="space-y-1 text-sm">
+                        {ralphLoop.learning.map((item, idx) => (
+                          <div key={`${item.capability || 'cap'}-${idx}`} className="flex items-center justify-between gap-2">
+                            <span>{item.capability || '—'}</span>
+                            <span className="text-muted-foreground">{item.edited_before_accept_pct ?? 0}% правок</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">Пока нет learning-сигналов.</div>
+                    )}
+                  </div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                    <div className="text-sm font-semibold mb-2">Что мешает росту</div>
+                    {Array.isArray(ralphLoop.blockers) && ralphLoop.blockers.length > 0 ? (
+                      <div className="space-y-1 text-sm">
+                        {ralphLoop.blockers.map((item, idx) => (
+                          <div key={`${item}-${idx}`} className="text-muted-foreground">{item}</div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">Явных блокеров за период не найдено.</div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="rounded-xl border bg-white p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
               <h2 className="text-lg font-semibold">Воронка партнёрств (30 дней)</h2>
               <Button variant="outline" onClick={() => void loadFunnel()} disabled={loading}>
                 Обновить
@@ -1537,6 +1693,18 @@ export const PartnershipSearchPage: React.FC = () => {
               <Button variant="outline" onClick={() => void loadHealth()} disabled={loading}>
                 Health
               </Button>
+              <Select value={pilotCohort} onValueChange={(value) => setPilotCohort(value as typeof pilotCohort)}>
+                <SelectTrigger className="w-full md:w-[190px]">
+                  <SelectValue placeholder="Когорта" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PILOT_COHORT_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Select value={leadView} onValueChange={(value) => setLeadView(value as typeof leadView)}>
                 <SelectTrigger className="w-full md:w-[250px]">
                   <SelectValue placeholder="Операторский фильтр" />
@@ -1584,6 +1752,18 @@ export const PartnershipSearchPage: React.FC = () => {
                       ))}
                     </SelectContent>
                   </Select>
+                  <Select value={bulkPilotCohort} onValueChange={setBulkPilotCohort}>
+                    <SelectTrigger className="w-[180px] bg-white">
+                      <SelectValue placeholder="Когорта" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PILOT_COHORT_OPTIONS.filter((opt) => opt.value !== 'all').map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Button variant="outline" onClick={applyBulkUpdate} disabled={loading || selectedLeadIds.length === 0}>
                     Применить к выбранным
                   </Button>
@@ -1623,7 +1803,7 @@ export const PartnershipSearchPage: React.FC = () => {
                         <div>
                         <div className="font-semibold text-foreground">{item.name || 'Без названия'}</div>
                         <div className="text-sm text-muted-foreground">
-                          {item.city || '—'} · {item.category || '—'} · этап: {item.partnership_stage || 'imported'}
+                          {item.city || '—'} · {item.category || '—'} · этап: {item.partnership_stage || 'imported'} · когорта: {item.pilot_cohort || 'backlog'}
                         </div>
                         <div className="text-xs text-muted-foreground mt-1">
                           Парсинг: {item.parse_status || 'не запускался'}
@@ -1786,10 +1966,47 @@ export const PartnershipSearchPage: React.FC = () => {
                   <Input value={leadEdit.whatsapp_url} onChange={(e) => setLeadEdit((p) => ({ ...p, whatsapp_url: e.target.value }))} placeholder="WhatsApp URL" />
                 </div>
                 <div className="flex justify-end">
-                  <Button variant="outline" onClick={() => void saveLeadContacts()} disabled={loading}>
-                    Сохранить данные лида
-                  </Button>
-                </div>
+              <Button variant="outline" onClick={() => void saveLeadContacts()} disabled={loading}>
+                Сохранить данные лида
+              </Button>
+              {selectedLead ? (
+                <Select
+                  value={selectedLead.pilot_cohort || 'backlog'}
+                  onValueChange={async (value) => {
+                    if (!currentBusinessId || !selectedLead) return;
+                    try {
+                      setLoading(true);
+                      setError(null);
+                      await newAuth.makeRequest(`/partnership/leads/${selectedLead.id}`, {
+                        method: 'PATCH',
+                        body: JSON.stringify({
+                          business_id: currentBusinessId,
+                          pilot_cohort: value,
+                        }),
+                      });
+                      setMessage(`Когорта обновлена: ${value}`);
+                      await loadLeads();
+                      await loadRalphLoop();
+                    } catch (e: any) {
+                      setError(e.message || 'Не удалось обновить когорту');
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-[180px] bg-white">
+                    <SelectValue placeholder="Когорта" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PILOT_COHORT_OPTIONS.filter((opt) => opt.value !== 'all').map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
+            </div>
               </div>
             )}
           </div>

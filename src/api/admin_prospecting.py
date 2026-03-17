@@ -161,6 +161,7 @@ def _ensure_partnership_columns(conn) -> None:
     cur = conn.cursor()
     cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS intent TEXT DEFAULT 'client_outreach'")
     cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS partnership_stage TEXT DEFAULT 'imported'")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS pilot_cohort TEXT DEFAULT 'backlog'")
     cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS business_id UUID")
     cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS created_by UUID")
     cur.execute(
@@ -3146,6 +3147,7 @@ def partnership_list_leads():
     try:
         requested_business_id = str(request.args.get("business_id") or "").strip() or None
         stage_filter = str(request.args.get("stage") or "").strip().lower() or None
+        pilot_cohort = str(request.args.get("pilot_cohort") or "").strip().lower() or None
         q = str(request.args.get("q") or "").strip().lower()
         limit = max(1, min(int(request.args.get("limit") or 100), 500))
         offset = max(0, int(request.args.get("offset") or 0))
@@ -3166,6 +3168,9 @@ def partnership_list_leads():
             if stage_filter:
                 where_sql.append("COALESCE(partnership_stage, 'imported') = %s")
                 params.append(stage_filter)
+            if pilot_cohort:
+                where_sql.append("COALESCE(pilot_cohort, 'backlog') = %s")
+                params.append(pilot_cohort)
             if q:
                 where_sql.append("(LOWER(COALESCE(name, '')) LIKE %s OR LOWER(COALESCE(source_url, '')) LIKE %s)")
                 q_like = f"%{q}%"
@@ -3178,7 +3183,7 @@ def partnership_list_leads():
                        prospectingleads.phone, prospectingleads.email, prospectingleads.telegram_url,
                        prospectingleads.whatsapp_url, prospectingleads.website, prospectingleads.rating,
                        prospectingleads.reviews_count, prospectingleads.status, prospectingleads.selected_channel,
-                       prospectingleads.intent, prospectingleads.partnership_stage, prospectingleads.updated_at,
+                       prospectingleads.intent, prospectingleads.partnership_stage, prospectingleads.pilot_cohort, prospectingleads.updated_at,
                        prospectingleads.created_at,
                        pq_last.id AS parse_task_id,
                        pq_last.status AS parse_status,
@@ -3887,6 +3892,7 @@ def partnership_update_lead(lead_id):
         stage = str(data.get("partnership_stage") or "").strip().lower()
         status = str(data.get("status") or "").strip().lower()
         selected_channel = str(data.get("selected_channel") or "").strip().lower() or None
+        pilot_cohort = str(data.get("pilot_cohort") or "").strip().lower() or None
         name = str(data.get("name") or "").strip() or None
         city = str(data.get("city") or "").strip() or None
         category = str(data.get("category") or "").strip() or None
@@ -3900,6 +3906,7 @@ def partnership_update_lead(lead_id):
             not stage
             and not status
             and selected_channel is None
+            and pilot_cohort is None
             and name is None
             and city is None
             and category is None
@@ -3931,6 +3938,9 @@ def partnership_update_lead(lead_id):
             if selected_channel is not None:
                 assignments.append("selected_channel = %s")
                 params.append(selected_channel)
+            if pilot_cohort is not None:
+                assignments.append("pilot_cohort = %s")
+                params.append(pilot_cohort)
             if name is not None:
                 assignments.append("name = %s")
                 params.append(name)
@@ -3967,7 +3977,7 @@ def partnership_update_lead(lead_id):
                 WHERE id = %s
                   AND business_id = %s
                   AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
-                RETURNING id, name, source_url, status, selected_channel, partnership_stage,
+                RETURNING id, name, source_url, status, selected_channel, partnership_stage, pilot_cohort,
                           phone, email, website, telegram_url, whatsapp_url, city, category, address, updated_at
                 """,
                 tuple(params),
@@ -4001,10 +4011,11 @@ def partnership_bulk_update_leads():
         stage = str(data.get("partnership_stage") or "").strip().lower()
         status = str(data.get("status") or "").strip().lower()
         selected_channel = str(data.get("selected_channel") or "").strip().lower() or None
+        pilot_cohort = str(data.get("pilot_cohort") or "").strip().lower() or None
 
         if not lead_ids:
             return jsonify({"error": "lead_ids is required"}), 400
-        if not stage and not status and selected_channel is None:
+        if not stage and not status and selected_channel is None and pilot_cohort is None:
             return jsonify({"error": "Nothing to update"}), 400
         if selected_channel is not None and selected_channel not in ALLOWED_OUTREACH_CHANNELS:
             return jsonify({"error": "Unsupported channel"}), 400
@@ -4028,6 +4039,9 @@ def partnership_bulk_update_leads():
             if selected_channel is not None:
                 assignments.append("selected_channel = %s")
                 params.append(selected_channel)
+            if pilot_cohort is not None:
+                assignments.append("pilot_cohort = %s")
+                params.append(pilot_cohort)
 
             params.extend([lead_ids, business_id])
             cur.execute(
@@ -4050,6 +4064,224 @@ def partnership_bulk_update_leads():
         return jsonify({"success": True, "updated_count": len(updated_ids), "updated_ids": updated_ids})
     except Exception as e:
         print(f"Error bulk updating partnership leads: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/ralph-loop-summary", methods=["GET"])
+def partnership_ralph_loop_summary():
+    """Weekly operator summary for pilot cohort: throughput, outcomes and learning signals."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+
+    try:
+        requested_business_id = str(request.args.get("business_id") or "").strip() or None
+        window_days = max(1, min(int(request.args.get("window_days") or 7), 90))
+        pilot_cohort = str(request.args.get("pilot_cohort") or "").strip().lower() or None
+
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+
+            lead_filter_sql = [
+                "l.business_id = %s",
+                "COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'",
+            ]
+            lead_filter_params: list[Any] = [business_id]
+            if pilot_cohort and pilot_cohort != "all":
+                lead_filter_sql.append("COALESCE(l.pilot_cohort, 'backlog') = %s")
+                lead_filter_params.append(pilot_cohort)
+            lead_filter = " AND ".join(lead_filter_sql)
+
+            cur.execute(
+                f"""
+                WITH leads_scope AS (
+                    SELECT
+                        l.id,
+                        l.partnership_stage,
+                        l.selected_channel,
+                        l.created_at,
+                        l.updated_at,
+                        (
+                            SELECT pq.status
+                            FROM parsequeue pq
+                            WHERE pq.business_id = l.business_id
+                              AND pq.task_type IN ('parse_card', 'sync_yandex_business')
+                            ORDER BY COALESCE(pq.updated_at, pq.created_at) DESC
+                            LIMIT 1
+                        ) AS parse_status
+                    FROM prospectingleads l
+                    WHERE {lead_filter}
+                ),
+                sent_scope AS (
+                    SELECT q.id, q.channel, q.delivery_status, q.created_at, q.lead_id
+                    FROM outreachsendqueue q
+                    JOIN leads_scope ls ON ls.id = q.lead_id
+                    WHERE q.created_at >= NOW() - (%s || ' days')::INTERVAL
+                ),
+                reaction_scope AS (
+                    SELECT r.id,
+                           COALESCE(r.human_confirmed_outcome, r.classified_outcome, '') AS final_outcome,
+                           q.channel
+                    FROM outreachmessagereactions r
+                    JOIN outreachsendqueue q ON q.id = r.queue_id
+                    JOIN leads_scope ls ON ls.id = q.lead_id
+                    WHERE r.created_at >= NOW() - (%s || ' days')::INTERVAL
+                ),
+                draft_scope AS (
+                    SELECT d.id, d.status
+                    FROM outreachmessagedrafts d
+                    JOIN leads_scope ls ON ls.id = d.lead_id
+                    WHERE COALESCE(d.updated_at, d.created_at) >= NOW() - (%s || ' days')::INTERVAL
+                )
+                SELECT
+                    (SELECT COUNT(*) FROM leads_scope) AS leads_total,
+                    (SELECT COUNT(*) FROM leads_scope WHERE COALESCE(parse_status, '') = 'completed') AS parsed_completed_count,
+                    (SELECT COUNT(*) FROM leads_scope WHERE COALESCE(partnership_stage, 'imported') IN ('audited','matched','proposal_draft_ready','selected_for_outreach','channel_selected','approved_for_send','sent')) AS audited_count,
+                    (SELECT COUNT(*) FROM leads_scope WHERE COALESCE(partnership_stage, 'imported') IN ('matched','proposal_draft_ready','selected_for_outreach','channel_selected','approved_for_send','sent')) AS matched_count,
+                    (SELECT COUNT(*) FROM draft_scope) AS drafts_total,
+                    (SELECT COUNT(*) FROM draft_scope WHERE COALESCE(status, '') = 'approved') AS drafts_approved_count,
+                    (SELECT COUNT(*) FROM sent_scope) AS sent_total,
+                    (SELECT COUNT(*) FROM reaction_scope WHERE final_outcome = 'positive') AS positive_count,
+                    (SELECT COUNT(*) FROM reaction_scope WHERE final_outcome = 'question') AS question_count,
+                    (SELECT COUNT(*) FROM reaction_scope WHERE final_outcome = 'no_response') AS no_response_count,
+                    (SELECT COUNT(*) FROM reaction_scope WHERE final_outcome = 'hard_no') AS hard_no_count
+                """,
+                (*lead_filter_params, window_days, window_days, window_days),
+            )
+            row = cur.fetchone()
+
+            cur.execute(
+                f"""
+                WITH leads_scope AS (
+                    SELECT l.id
+                    FROM prospectingleads l
+                    WHERE {lead_filter}
+                )
+                SELECT
+                    q.channel,
+                    COUNT(*) AS total,
+                    COUNT(*) FILTER (WHERE COALESCE(r.human_confirmed_outcome, r.classified_outcome, '') = 'positive') AS positive_count,
+                    COUNT(*) FILTER (WHERE COALESCE(r.human_confirmed_outcome, r.classified_outcome, '') = 'question') AS question_count,
+                    COUNT(*) FILTER (WHERE COALESCE(r.human_confirmed_outcome, r.classified_outcome, '') = 'no_response') AS no_response_count,
+                    COUNT(*) FILTER (WHERE COALESCE(r.human_confirmed_outcome, r.classified_outcome, '') = 'hard_no') AS hard_no_count
+                FROM outreachsendqueue q
+                LEFT JOIN outreachmessagereactions r ON r.queue_id = q.id
+                JOIN leads_scope ls ON ls.id = q.lead_id
+                WHERE q.created_at >= NOW() - (%s || ' days')::INTERVAL
+                GROUP BY q.channel
+                ORDER BY total DESC, q.channel
+                """,
+                (*lead_filter_params, window_days),
+            )
+            by_channel_rows = cur.fetchall() or []
+
+            ensure_ai_learning_events_table(conn)
+            cur.execute(
+                """
+                WITH latest_prompts AS (
+                    SELECT DISTINCT ON (capability)
+                        capability, prompt_key, prompt_version
+                    FROM ailearningevents
+                    WHERE intent = 'partnership_outreach'
+                    ORDER BY capability, created_at DESC
+                )
+                SELECT
+                    e.capability,
+                    COUNT(*) FILTER (WHERE event_type = 'accepted') AS accepted_total,
+                    COUNT(*) FILTER (WHERE event_type = 'accepted' AND COALESCE(edited_before_accept, FALSE) = TRUE) AS accepted_edited_total,
+                    COALESCE(lp.prompt_key, '') AS prompt_key,
+                    COALESCE(lp.prompt_version, '') AS prompt_version
+                FROM ailearningevents e
+                LEFT JOIN latest_prompts lp ON lp.capability = e.capability
+                WHERE e.intent = 'partnership_outreach'
+                  AND e.created_at >= NOW() - (%s || ' days')::INTERVAL
+                GROUP BY e.capability, lp.prompt_key, lp.prompt_version
+                ORDER BY accepted_total DESC, e.capability
+                """,
+                (window_days,),
+            )
+            learning_rows = cur.fetchall() or []
+        finally:
+            conn.close()
+
+        row_dict = dict(row) if hasattr(row, "keys") else {}
+        sent_total = int(row_dict.get("sent_total") or 0)
+        positive_count = int(row_dict.get("positive_count") or 0)
+        question_count = int(row_dict.get("question_count") or 0)
+        no_response_count = int(row_dict.get("no_response_count") or 0)
+        hard_no_count = int(row_dict.get("hard_no_count") or 0)
+        positive_rate_pct = round((positive_count / sent_total * 100.0), 2) if sent_total else 0.0
+
+        top_channels = []
+        for ch in by_channel_rows:
+            chd = dict(ch) if hasattr(ch, "keys") else {}
+            total = int(chd.get("total") or 0)
+            pos = int(chd.get("positive_count") or 0)
+            top_channels.append(
+                {
+                    "channel": chd.get("channel") or "unknown",
+                    "total": total,
+                    "positive_count": pos,
+                    "positive_rate_pct": round((pos / total * 100.0), 2) if total else 0.0,
+                }
+            )
+
+        learning = []
+        for lr in learning_rows:
+            lrd = dict(lr) if hasattr(lr, "keys") else {}
+            accepted_total = int(lrd.get("accepted_total") or 0)
+            accepted_edited_total = int(lrd.get("accepted_edited_total") or 0)
+            learning.append(
+                {
+                    "capability": lrd.get("capability") or "",
+                    "accepted_total": accepted_total,
+                    "accepted_edited_total": accepted_edited_total,
+                    "edited_before_accept_pct": round((accepted_edited_total / accepted_total * 100.0), 2) if accepted_total else 0.0,
+                    "prompt_key": lrd.get("prompt_key") or "",
+                    "prompt_version": lrd.get("prompt_version") or "",
+                }
+            )
+
+        blockers = []
+        if int(row_dict.get("leads_total") or 0) and int(row_dict.get("parsed_completed_count") or 0) < int(row_dict.get("leads_total") or 0):
+            blockers.append("Не все лиды допарсены")
+        if int(row_dict.get("drafts_total") or 0) > int(row_dict.get("drafts_approved_count") or 0):
+            blockers.append("Есть черновики без утверждения")
+        if sent_total and (positive_count + question_count + no_response_count + hard_no_count) < sent_total:
+            blockers.append("Есть отправки без зафиксированного outcome")
+
+        return jsonify(
+            {
+                "success": True,
+                "business_id": business_id,
+                "window_days": window_days,
+                "pilot_cohort": pilot_cohort or "all",
+                "summary": {
+                    "leads_total": int(row_dict.get("leads_total") or 0),
+                    "parsed_completed_count": int(row_dict.get("parsed_completed_count") or 0),
+                    "audited_count": int(row_dict.get("audited_count") or 0),
+                    "matched_count": int(row_dict.get("matched_count") or 0),
+                    "drafts_total": int(row_dict.get("drafts_total") or 0),
+                    "drafts_approved_count": int(row_dict.get("drafts_approved_count") or 0),
+                    "sent_total": sent_total,
+                    "positive_count": positive_count,
+                    "question_count": question_count,
+                    "no_response_count": no_response_count,
+                    "hard_no_count": hard_no_count,
+                    "positive_rate_pct": positive_rate_pct,
+                },
+                "top_channels": top_channels,
+                "learning": learning,
+                "blockers": blockers,
+            }
+        )
+    except Exception as e:
+        print(f"Error partnership Ralph loop summary: {e}")
         return jsonify({"error": str(e)}), 500
 
 
