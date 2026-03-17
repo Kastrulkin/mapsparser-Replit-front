@@ -175,6 +175,17 @@ type PartnershipRalphLoop = {
     hard_no_count?: number;
     positive_rate_pct?: number;
   };
+  baseline?: {
+    window_days?: number;
+    sent_total?: number;
+    positive_count?: number;
+    positive_rate_pct?: number;
+    deltas?: {
+      sent_total?: number;
+      positive_count?: number;
+      positive_rate_pct?: number;
+    };
+  };
   top_channels?: Array<{
     channel?: string;
     total?: number;
@@ -190,6 +201,7 @@ type PartnershipRalphLoop = {
     prompt_version?: string;
   }>;
   blockers?: string[];
+  recommendations?: string[];
 };
 
 const STAGE_OPTIONS = [
@@ -1494,6 +1506,68 @@ export const PartnershipSearchPage: React.FC = () => {
                   <div className="rounded-lg border border-teal-200 bg-teal-50 p-3">
                     <div className="text-xs uppercase text-teal-700">Positive rate</div>
                     <div className="text-2xl font-semibold mt-1 text-teal-700">{ralphLoop.summary.positive_rate_pct ?? 0}%</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+                    <div className="text-sm font-semibold mb-2">Сравнение с предыдущими 7 днями</div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                      <div className="rounded-lg border border-white/80 bg-white/80 p-3">
+                        <div className="text-xs uppercase text-muted-foreground">Sent</div>
+                        <div className="text-lg font-semibold text-foreground mt-1">
+                          {ralphLoop.summary.sent_total ?? 0}
+                          <span className={`ml-2 text-sm ${(ralphLoop.baseline?.deltas?.sent_total || 0) >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                            {(ralphLoop.baseline?.deltas?.sent_total || 0) >= 0 ? '+' : ''}
+                            {ralphLoop.baseline?.deltas?.sent_total || 0}
+                          </span>
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          было: {ralphLoop.baseline?.sent_total ?? 0}
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-white/80 bg-white/80 p-3">
+                        <div className="text-xs uppercase text-muted-foreground">Positive</div>
+                        <div className="text-lg font-semibold text-foreground mt-1">
+                          {ralphLoop.summary.positive_count ?? 0}
+                          <span className={`ml-2 text-sm ${(ralphLoop.baseline?.deltas?.positive_count || 0) >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                            {(ralphLoop.baseline?.deltas?.positive_count || 0) >= 0 ? '+' : ''}
+                            {ralphLoop.baseline?.deltas?.positive_count || 0}
+                          </span>
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          было: {ralphLoop.baseline?.positive_count ?? 0}
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-white/80 bg-white/80 p-3">
+                        <div className="text-xs uppercase text-muted-foreground">Positive rate</div>
+                        <div className="text-lg font-semibold text-foreground mt-1">
+                          {ralphLoop.summary.positive_rate_pct ?? 0}%
+                          <span className={`ml-2 text-sm ${(ralphLoop.baseline?.deltas?.positive_rate_pct || 0) >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                            {(ralphLoop.baseline?.deltas?.positive_rate_pct || 0) >= 0 ? '+' : ''}
+                            {ralphLoop.baseline?.deltas?.positive_rate_pct || 0} п.п.
+                          </span>
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          было: {ralphLoop.baseline?.positive_rate_pct ?? 0}%
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                    <div className="text-sm font-semibold mb-2">Что менять на следующей неделе</div>
+                    {Array.isArray(ralphLoop.recommendations) && ralphLoop.recommendations.length > 0 ? (
+                      <div className="space-y-1 text-sm">
+                        {ralphLoop.recommendations.map((item, idx) => (
+                          <div key={`${item}-${idx}`} className="text-muted-foreground">
+                            {idx + 1}. {item}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">
+                        Явных рекомендаций пока нет. Можно продолжать текущий сценарий и смотреть на outcome.
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">

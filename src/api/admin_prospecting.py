@@ -4158,6 +4158,73 @@ def partnership_ralph_loop_summary():
             cur.execute(
                 f"""
                 WITH leads_scope AS (
+                    SELECT
+                        l.id,
+                        l.partnership_stage,
+                        (
+                            SELECT pq.status
+                            FROM parsequeue pq
+                            WHERE pq.business_id = l.business_id
+                              AND pq.task_type IN ('parse_card', 'sync_yandex_business')
+                            ORDER BY COALESCE(pq.updated_at, pq.created_at) DESC
+                            LIMIT 1
+                        ) AS parse_status
+                    FROM prospectingleads l
+                    WHERE {lead_filter}
+                ),
+                sent_scope AS (
+                    SELECT q.id, q.channel, q.delivery_status, q.created_at, q.lead_id
+                    FROM outreachsendqueue q
+                    JOIN leads_scope ls ON ls.id = q.lead_id
+                    WHERE q.created_at >= NOW() - (%s || ' days')::INTERVAL
+                      AND q.created_at < NOW() - (%s || ' days')::INTERVAL
+                ),
+                reaction_scope AS (
+                    SELECT r.id,
+                           COALESCE(r.human_confirmed_outcome, r.classified_outcome, '') AS final_outcome
+                    FROM outreachmessagereactions r
+                    JOIN outreachsendqueue q ON q.id = r.queue_id
+                    JOIN leads_scope ls ON ls.id = q.lead_id
+                    WHERE r.created_at >= NOW() - (%s || ' days')::INTERVAL
+                      AND r.created_at < NOW() - (%s || ' days')::INTERVAL
+                ),
+                draft_scope AS (
+                    SELECT d.id, d.status
+                    FROM outreachmessagedrafts d
+                    JOIN leads_scope ls ON ls.id = d.lead_id
+                    WHERE COALESCE(d.updated_at, d.created_at) >= NOW() - (%s || ' days')::INTERVAL
+                      AND COALESCE(d.updated_at, d.created_at) < NOW() - (%s || ' days')::INTERVAL
+                )
+                SELECT
+                    (SELECT COUNT(*) FROM leads_scope) AS leads_total,
+                    (SELECT COUNT(*) FROM leads_scope WHERE COALESCE(parse_status, '') = 'completed') AS parsed_completed_count,
+                    (SELECT COUNT(*) FROM leads_scope WHERE COALESCE(partnership_stage, 'imported') IN ('audited','matched','proposal_draft_ready','selected_for_outreach','channel_selected','approved_for_send','sent')) AS audited_count,
+                    (SELECT COUNT(*) FROM leads_scope WHERE COALESCE(partnership_stage, 'imported') IN ('matched','proposal_draft_ready','selected_for_outreach','channel_selected','approved_for_send','sent')) AS matched_count,
+                    (SELECT COUNT(*) FROM draft_scope) AS drafts_total,
+                    (SELECT COUNT(*) FROM draft_scope WHERE COALESCE(status, '') = 'approved') AS drafts_approved_count,
+                    (SELECT COUNT(*) FROM sent_scope) AS sent_total,
+                    (SELECT COUNT(*) FROM reaction_scope WHERE final_outcome = 'positive') AS positive_count,
+                    (SELECT COUNT(*) FROM reaction_scope WHERE final_outcome = 'question') AS question_count,
+                    (SELECT COUNT(*) FROM reaction_scope WHERE final_outcome = 'no_response') AS no_response_count,
+                    (SELECT COUNT(*) FROM reaction_scope WHERE final_outcome = 'hard_no') AS hard_no_count
+                """,
+                (
+                    *lead_filter_params,
+                    window_days * 2,
+                    window_days,
+                    window_days * 2,
+                    window_days,
+                    window_days * 2,
+                    window_days,
+                    window_days * 2,
+                    window_days,
+                ),
+            )
+            baseline_row = cur.fetchone()
+
+            cur.execute(
+                f"""
+                WITH leads_scope AS (
                     SELECT l.id
                     FROM prospectingleads l
                     WHERE {lead_filter}
@@ -4210,12 +4277,16 @@ def partnership_ralph_loop_summary():
             conn.close()
 
         row_dict = dict(row) if hasattr(row, "keys") else {}
+        baseline_dict = dict(baseline_row) if hasattr(baseline_row, "keys") else {}
         sent_total = int(row_dict.get("sent_total") or 0)
         positive_count = int(row_dict.get("positive_count") or 0)
         question_count = int(row_dict.get("question_count") or 0)
         no_response_count = int(row_dict.get("no_response_count") or 0)
         hard_no_count = int(row_dict.get("hard_no_count") or 0)
         positive_rate_pct = round((positive_count / sent_total * 100.0), 2) if sent_total else 0.0
+        baseline_sent_total = int(baseline_dict.get("sent_total") or 0)
+        baseline_positive_count = int(baseline_dict.get("positive_count") or 0)
+        baseline_positive_rate_pct = round((baseline_positive_count / baseline_sent_total * 100.0), 2) if baseline_sent_total else 0.0
 
         top_channels = []
         for ch in by_channel_rows:
@@ -4255,6 +4326,26 @@ def partnership_ralph_loop_summary():
         if sent_total and (positive_count + question_count + no_response_count + hard_no_count) < sent_total:
             blockers.append("Есть отправки без зафиксированного outcome")
 
+        recommendations = []
+        if positive_rate_pct < baseline_positive_rate_pct:
+            recommendations.append("Позитивная конверсия ниже предыдущей недели: проверьте оффер и первый абзац письма.")
+        if int(row_dict.get("drafts_total") or 0) > int(row_dict.get("drafts_approved_count") or 0):
+            recommendations.append("Сократите очередь утверждения: разберите черновики, чтобы не терять темп отправок.")
+        if sent_total == 0 and int(row_dict.get("drafts_approved_count") or 0) > 0:
+            recommendations.append("Есть утверждённые сообщения без отправки: соберите и утвердите batch.")
+        if top_channels:
+            best_channel = max(top_channels, key=lambda item: float(item.get("positive_rate_pct") or 0.0))
+            if float(best_channel.get("positive_rate_pct") or 0.0) > 0:
+                recommendations.append(
+                    f"Лучший канал недели: {best_channel.get('channel') or 'unknown'} ({best_channel.get('positive_rate_pct') or 0}% positive)."
+                )
+        if learning:
+            most_edited = max(learning, key=lambda item: float(item.get("edited_before_accept_pct") or 0.0))
+            if float(most_edited.get("edited_before_accept_pct") or 0.0) >= 40.0:
+                recommendations.append(
+                    f"Промпт {most_edited.get('capability') or 'unknown'} часто правят вручную — стоит обновить формулировки в админке."
+                )
+
         return jsonify(
             {
                 "success": True,
@@ -4275,9 +4366,21 @@ def partnership_ralph_loop_summary():
                     "hard_no_count": hard_no_count,
                     "positive_rate_pct": positive_rate_pct,
                 },
+                "baseline": {
+                    "window_days": window_days,
+                    "sent_total": baseline_sent_total,
+                    "positive_count": baseline_positive_count,
+                    "positive_rate_pct": baseline_positive_rate_pct,
+                    "deltas": {
+                        "sent_total": sent_total - baseline_sent_total,
+                        "positive_count": positive_count - baseline_positive_count,
+                        "positive_rate_pct": round(positive_rate_pct - baseline_positive_rate_pct, 2),
+                    },
+                },
                 "top_channels": top_channels,
                 "learning": learning,
                 "blockers": blockers,
+                "recommendations": recommendations,
             }
         )
     except Exception as e:
