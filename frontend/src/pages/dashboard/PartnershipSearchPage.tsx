@@ -311,6 +311,7 @@ const LEAD_VIEW_OPTIONS = [
   { value: 'ready_next_step', label: 'Готовы к следующему шагу' },
   { value: 'parsed', label: 'Парсинг завершён' },
   { value: 'with_contacts', label: 'С контактами' },
+  { value: 'best_source', label: 'Лучший источник недели' },
 ] as const;
 const DRAFT_VIEW_OPTIONS = [
   { value: 'all', label: 'Все черновики' },
@@ -360,6 +361,7 @@ export const PartnershipSearchPage: React.FC = () => {
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
   const [leadView, setLeadView] = useState<(typeof LEAD_VIEW_OPTIONS)[number]['value']>('all');
+  const [preferredSourceFilter, setPreferredSourceFilter] = useState<{ source_kind?: string; source_provider?: string } | null>(null);
   const [bulkStage, setBulkStage] = useState('');
   const [bulkChannel, setBulkChannel] = useState('');
   const [bulkPilotCohort, setBulkPilotCohort] = useState('');
@@ -431,9 +433,21 @@ export const PartnershipSearchPage: React.FC = () => {
       if (leadView === 'with_contacts') {
         return hasContacts;
       }
+      if (leadView === 'best_source') {
+        if (!preferredSourceFilter) return false;
+        return (
+          String(item.source_kind || '').toLowerCase() === String(preferredSourceFilter.source_kind || '').toLowerCase() &&
+          String(item.source_provider || '').toLowerCase() === String(preferredSourceFilter.source_provider || '').toLowerCase()
+        );
+      }
       return true;
     });
-  }, [items, leadView]);
+  }, [items, leadView, preferredSourceFilter]);
+
+  const bestSourceThisWeek = useMemo(() => {
+    if (!Array.isArray(ralphLoop?.source_performance) || ralphLoop.source_performance.length === 0) return null;
+    return ralphLoop.source_performance[0] || null;
+  }, [ralphLoop]);
 
   const visibleDrafts = useMemo(() => {
     return drafts.filter((draft) => {
@@ -1031,6 +1045,65 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadLeads();
     } catch (e: any) {
       setError(e.message || 'Не удалось массово обогатить контакты');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const focusBestSourceLeads = () => {
+    if (!bestSourceThisWeek) return;
+    setPreferredSourceFilter({
+      source_kind: bestSourceThisWeek.source_kind,
+      source_provider: bestSourceThisWeek.source_provider,
+    });
+    setLeadView('best_source');
+    setSelectedLeadIds(
+      items
+        .filter(
+          (item) =>
+            String(item.source_kind || '').toLowerCase() === String(bestSourceThisWeek.source_kind || '').toLowerCase() &&
+            String(item.source_provider || '').toLowerCase() === String(bestSourceThisWeek.source_provider || '').toLowerCase()
+        )
+        .map((item) => item.id)
+    );
+    setMessage(
+      `Показаны лиды из лучшего источника: ${bestSourceThisWeek.source_kind || 'unknown'} / ${bestSourceThisWeek.source_provider || 'unknown'}`
+    );
+  };
+
+  const moveBestSourceToPilot = async () => {
+    if (!currentBusinessId || !bestSourceThisWeek) return;
+    const candidateIds = items
+      .filter(
+        (item) =>
+          String(item.source_kind || '').toLowerCase() === String(bestSourceThisWeek.source_kind || '').toLowerCase() &&
+          String(item.source_provider || '').toLowerCase() === String(bestSourceThisWeek.source_provider || '').toLowerCase() &&
+          String(item.pilot_cohort || 'backlog').toLowerCase() !== 'pilot'
+      )
+      .map((item) => item.id);
+    if (candidateIds.length === 0) {
+      setMessage('Для лучшего источника уже нет лидов вне pilot cohort.');
+      return;
+    }
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await newAuth.makeRequest('/partnership/leads/bulk-update', {
+        method: 'POST',
+        body: JSON.stringify({
+          business_id: currentBusinessId,
+          lead_ids: candidateIds,
+          pilot_cohort: 'pilot',
+        }),
+      });
+      setMessage(
+        `В pilot cohort переведено ${data.updated_count || 0} лидов из источника ${bestSourceThisWeek.source_kind || 'unknown'} / ${bestSourceThisWeek.source_provider || 'unknown'}`
+      );
+      setSelectedLeadIds(candidateIds);
+      await loadLeads();
+      await loadRalphLoop();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось перевести лучший источник в pilot cohort');
     } finally {
       setLoading(false);
     }
@@ -1802,7 +1875,17 @@ export const PartnershipSearchPage: React.FC = () => {
                     )}
                   </div>
                   <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                    <div className="text-sm font-semibold mb-2">Источники недели</div>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="text-sm font-semibold">Источники недели</div>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={focusBestSourceLeads} disabled={loading || !bestSourceThisWeek}>
+                          Показать лиды
+                        </Button>
+                        <Button size="sm" onClick={() => void moveBestSourceToPilot()} disabled={loading || !bestSourceThisWeek}>
+                          В pilot cohort
+                        </Button>
+                      </div>
+                    </div>
                     {Array.isArray(ralphLoop.source_performance) && ralphLoop.source_performance.length > 0 ? (
                       <div className="space-y-2 text-sm">
                         {ralphLoop.source_performance.slice(0, 3).map((item, idx) => (
@@ -2164,6 +2247,11 @@ export const PartnershipSearchPage: React.FC = () => {
                 </SelectContent>
               </Select>
             </div>
+            {leadView === 'best_source' && preferredSourceFilter ? (
+              <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                Активен фильтр по лучшему источнику недели: {preferredSourceFilter.source_kind || 'unknown'} / {preferredSourceFilter.source_provider || 'unknown'}
+              </div>
+            ) : null}
 
             <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 mb-4">
               <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3">
