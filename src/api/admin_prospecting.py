@@ -1440,6 +1440,32 @@ def _get_prompt_from_db(prompt_type: str, fallback: str = "") -> str:
         conn.close()
 
 
+def _normalize_prompt_meta(raw_meta: Any, *, fallback_key: str, fallback_version: str, fallback_source: str) -> dict[str, str]:
+    meta = raw_meta if isinstance(raw_meta, dict) else {}
+    prompt_key = str(
+        meta.get("prompt_key")
+        or meta.get("template_key")
+        or meta.get("key")
+        or fallback_key
+    ).strip() or fallback_key
+    prompt_version = str(
+        meta.get("prompt_version")
+        or meta.get("template_version")
+        or meta.get("version")
+        or fallback_version
+    ).strip() or fallback_version
+    prompt_source = str(
+        meta.get("prompt_source")
+        or meta.get("source")
+        or fallback_source
+    ).strip() or fallback_source
+    return {
+        "prompt_key": prompt_key,
+        "prompt_version": prompt_version,
+        "prompt_source": prompt_source,
+    }
+
+
 def _extract_json_candidate(raw_text: str) -> dict[str, Any] | None:
     if not isinstance(raw_text, str):
         return None
@@ -4300,6 +4326,44 @@ def partnership_ralph_loop_summary():
                 (business_id, window_days),
             )
             edit_row = cur.fetchone()
+
+            cur.execute(
+                f"""
+                WITH leads_scope AS (
+                    SELECT l.id
+                    FROM prospectingleads l
+                    WHERE {lead_filter}
+                ),
+                latest_reaction AS (
+                    SELECT DISTINCT ON (r.queue_id)
+                        r.queue_id,
+                        COALESCE(r.human_confirmed_outcome, r.classified_outcome, '') AS final_outcome
+                    FROM outreachmessagereactions r
+                    ORDER BY r.queue_id, COALESCE(r.created_at, NOW()) DESC
+                )
+                SELECT
+                    COALESCE(d.learning_note_json->>'prompt_key', '') AS prompt_key,
+                    COALESCE(d.learning_note_json->>'prompt_version', '') AS prompt_version,
+                    COUNT(*)::INT AS drafts_total,
+                    COUNT(*) FILTER (WHERE COALESCE(d.status, '') = 'approved')::INT AS approved_total,
+                    COUNT(*) FILTER (
+                        WHERE COALESCE(d.status, '') = 'approved'
+                          AND COALESCE(d.approved_text, '') <> COALESCE(d.generated_text, '')
+                    )::INT AS edited_approved_total,
+                    COUNT(DISTINCT q.id)::INT AS sent_total,
+                    COUNT(DISTINCT q.id) FILTER (WHERE lr.final_outcome = 'positive')::INT AS positive_count
+                FROM outreachmessagedrafts d
+                JOIN leads_scope ls ON ls.id = d.lead_id
+                LEFT JOIN outreachsendqueue q ON q.draft_id = d.id
+                    AND q.created_at >= NOW() - (%s || ' days')::INTERVAL
+                LEFT JOIN latest_reaction lr ON lr.queue_id = q.id
+                WHERE COALESCE(d.updated_at, d.created_at) >= NOW() - (%s || ' days')::INTERVAL
+                GROUP BY COALESCE(d.learning_note_json->>'prompt_key', ''), COALESCE(d.learning_note_json->>'prompt_version', '')
+                ORDER BY approved_total DESC, sent_total DESC, prompt_key, prompt_version
+                """,
+                (*lead_filter_params, window_days, window_days),
+            )
+            prompt_rows = cur.fetchall() or []
         finally:
             conn.close()
 
@@ -4389,6 +4453,42 @@ def partnership_ralph_loop_summary():
                     "Операторы чаще дописывают первое письмо перед отправкой — базовому офферу не хватает конкретики."
                 )
 
+        prompt_performance = []
+        for pr in prompt_rows:
+            prd = dict(pr) if hasattr(pr, "keys") else {}
+            approved_total = int(prd.get("approved_total") or 0)
+            edited_approved_total = int(prd.get("edited_approved_total") or 0)
+            sent_for_prompt = int(prd.get("sent_total") or 0)
+            positive_for_prompt = int(prd.get("positive_count") or 0)
+            prompt_performance.append(
+                {
+                    "prompt_key": prd.get("prompt_key") or "unknown",
+                    "prompt_version": prd.get("prompt_version") or "unknown",
+                    "drafts_total": int(prd.get("drafts_total") or 0),
+                    "approved_total": approved_total,
+                    "edited_approved_total": edited_approved_total,
+                    "edited_before_accept_pct": round((edited_approved_total / approved_total * 100.0), 2) if approved_total else 0.0,
+                    "sent_total": sent_for_prompt,
+                    "positive_count": positive_for_prompt,
+                    "positive_rate_pct": round((positive_for_prompt / sent_for_prompt * 100.0), 2) if sent_for_prompt else 0.0,
+                }
+            )
+
+        if prompt_performance:
+            viable_prompt_versions = [item for item in prompt_performance if int(item.get("approved_total") or 0) >= 2]
+            if viable_prompt_versions:
+                best_prompt = sorted(
+                    viable_prompt_versions,
+                    key=lambda item: (
+                        -float(item.get("positive_rate_pct") or 0.0),
+                        float(item.get("edited_before_accept_pct") or 0.0),
+                        -int(item.get("approved_total") or 0),
+                    ),
+                )[0]
+                recommendations.append(
+                    f"Наиболее стабильный prompt недели: {best_prompt.get('prompt_key')} / v{best_prompt.get('prompt_version')}."
+                )
+
         return jsonify(
             {
                 "success": True,
@@ -4422,6 +4522,7 @@ def partnership_ralph_loop_summary():
                 },
                 "top_channels": top_channels,
                 "learning": learning,
+                "prompt_performance": prompt_performance,
                 "blockers": blockers,
                 "recommendations": recommendations,
                 "edit_insights": {
@@ -5129,6 +5230,11 @@ def partnership_draft_offer(lead_id):
                 match_json = {}
 
             draft_text: str | None = None
+            prompt_meta = {
+                "prompt_key": "partners.draft_first_offer",
+                "prompt_version": "openclaw_default",
+                "prompt_source": "openclaw",
+            }
             if _is_partnership_openclaw_enabled():
                 openclaw_result = _call_partnership_openclaw_capability(
                     "partners.draft_first_offer",
@@ -5149,6 +5255,12 @@ def partnership_draft_offer(lead_id):
                     candidate_text = str(result_blob.get("text") or result_blob.get("draft_text") or "").strip()
                     if candidate_text:
                         draft_text = candidate_text
+                    prompt_meta = _normalize_prompt_meta(
+                        result_blob,
+                        fallback_key="partners.draft_first_offer",
+                        fallback_version="openclaw_default",
+                        fallback_source="openclaw",
+                    )
 
             if not draft_text:
                 lead_name = str(lead.get("name") or "коллеги").strip()
@@ -5171,6 +5283,11 @@ def partnership_draft_offer(lead_id):
                         "Готовы обсудить удобный формат созвона/чата?",
                     ]
                 ).strip()
+                prompt_meta = {
+                    "prompt_key": "partners.draft_first_offer_fallback",
+                    "prompt_version": "local_v1",
+                    "prompt_source": "local_fallback",
+                }
 
             draft_id = str(uuid.uuid4())
             cur.execute(
@@ -5192,7 +5309,13 @@ def partnership_draft_offer(lead_id):
                     DRAFT_GENERATED,
                     draft_text,
                     draft_text,
-                    Json({"intent": "partnership_outreach", "auto_generated": True}),
+                    Json(
+                        {
+                            "intent": "partnership_outreach",
+                            "auto_generated": True,
+                            **prompt_meta,
+                        }
+                    ),
                     user_data["user_id"],
                 ),
             )
@@ -5204,7 +5327,18 @@ def partnership_draft_offer(lead_id):
                 SET offer_draft_json = EXCLUDED.offer_draft_json,
                     updated_at = NOW()
                 """,
-                (lead_id, Json({"draft_id": draft_id, "text": draft_text, "channel": channel, "tone": tone})),
+                (
+                    lead_id,
+                    Json(
+                        {
+                            "draft_id": draft_id,
+                            "text": draft_text,
+                            "channel": channel,
+                            "tone": tone,
+                            **prompt_meta,
+                        }
+                    ),
+                ),
             )
             cur.execute(
                 """
@@ -5228,9 +5362,11 @@ def partnership_draft_offer(lead_id):
                 intent="partnership_outreach",
                 user_id=user_data.get("user_id"),
                 business_id=business_id,
+                prompt_key=prompt_meta.get("prompt_key"),
+                prompt_version=prompt_meta.get("prompt_version"),
                 draft_text="",
                 final_text=draft_text[:3000],
-                metadata={"lead_id": lead_id, "draft_id": draft_id, "channel": channel},
+                metadata={"lead_id": lead_id, "draft_id": draft_id, "channel": channel, **prompt_meta},
             )
         except Exception as learning_exc:
             print(f"⚠️ partnership.draft_offer learning skipped: {learning_exc}")
@@ -5307,7 +5443,7 @@ def partnership_approve_draft(draft_id):
                 return jsonify({"error": "Business not found or access denied"}), 403
             cur.execute(
                 """
-                SELECT d.id, d.lead_id, d.generated_text, d.edited_text, d.status
+                SELECT d.id, d.lead_id, d.generated_text, d.edited_text, d.status, d.learning_note_json
                 FROM outreachmessagedrafts d
                 JOIN prospectingleads l ON l.id = d.lead_id
                 WHERE d.id = %s
@@ -5321,12 +5457,18 @@ def partnership_approve_draft(draft_id):
             if not row:
                 return jsonify({"error": "Draft not found"}), 404
             draft_row = dict(row) if hasattr(row, "keys") else {
-                "id": row[0], "lead_id": row[1], "generated_text": row[2], "edited_text": row[3], "status": row[4]
+                "id": row[0], "lead_id": row[1], "generated_text": row[2], "edited_text": row[3], "status": row[4], "learning_note_json": row[5]
             }
 
             edited_text = str(draft_row.get("edited_text") or "")
             generated_text = str(draft_row.get("generated_text") or "")
             edited_before_accept = approved_text != generated_text
+            prompt_meta = _normalize_prompt_meta(
+                draft_row.get("learning_note_json"),
+                fallback_key="partners.draft_first_offer",
+                fallback_version="unknown",
+                fallback_source="unknown",
+            )
 
             cur.execute(
                 """
@@ -5366,9 +5508,11 @@ def partnership_approve_draft(draft_id):
                 business_id=business_id,
                 accepted=True,
                 edited_before_accept=edited_before_accept,
+                prompt_key=prompt_meta.get("prompt_key"),
+                prompt_version=prompt_meta.get("prompt_version"),
                 draft_text=generated_text[:3000] if generated_text else None,
                 final_text=approved_text[:3000],
-                metadata={"draft_id": draft_id, "lead_id": draft_row["lead_id"]},
+                metadata={"draft_id": draft_id, "lead_id": draft_row["lead_id"], **prompt_meta},
                 conn=conn,
             )
             conn.commit()

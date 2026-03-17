@@ -200,6 +200,17 @@ type PartnershipRalphLoop = {
     prompt_key?: string;
     prompt_version?: string;
   }>;
+  prompt_performance?: Array<{
+    prompt_key?: string;
+    prompt_version?: string;
+    drafts_total?: number;
+    approved_total?: number;
+    edited_approved_total?: number;
+    edited_before_accept_pct?: number;
+    sent_total?: number;
+    positive_count?: number;
+    positive_rate_pct?: number;
+  }>;
   blockers?: string[];
   recommendations?: string[];
   edit_insights?: {
@@ -1656,6 +1667,38 @@ export const PartnershipSearchPage: React.FC = () => {
                   ) : (
                     <div className="text-sm text-muted-foreground">
                       Пока нет утверждённых писем с ручными правками за выбранное окно.
+                    </div>
+                  )}
+                </div>
+                <div className="rounded-lg border border-cyan-200 bg-cyan-50 p-3">
+                  <div className="text-sm font-semibold mb-2">Версии prompt для первого письма</div>
+                  {Array.isArray(ralphLoop.prompt_performance) && ralphLoop.prompt_performance.length > 0 ? (
+                    <div className="space-y-2 text-sm">
+                      {ralphLoop.prompt_performance.map((item, idx) => (
+                        <div
+                          key={`${item.prompt_key || 'prompt'}-${item.prompt_version || 'version'}-${idx}`}
+                          className="rounded-lg border border-white/80 bg-white/80 p-3"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="font-medium text-foreground">
+                              {item.prompt_key || 'unknown'} · v{item.prompt_version || 'unknown'}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              sent: {item.sent_total ?? 0} · positive: {item.positive_rate_pct ?? 0}%
+                            </div>
+                          </div>
+                          <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-muted-foreground">
+                            <div>Утверждено: {item.approved_total ?? 0}</div>
+                            <div>Правок: {item.edited_before_accept_pct ?? 0}%</div>
+                            <div>Черновиков: {item.drafts_total ?? 0}</div>
+                            <div>Positive: {item.positive_count ?? 0}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">
+                      Пока нет данных по версиям prompt. Они начнут копиться на новых первых письмах.
                     </div>
                   )}
                 </div>
