@@ -1231,6 +1231,83 @@ export const PartnershipSearchPage: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  const buildOperatorSnapshotPayload = () => ({
+    generated_at: new Date().toISOString(),
+    business_id: currentBusinessId,
+    pilot_summary: pilotSummary,
+    ralph_loop: ralphLoop,
+    blockers,
+    funnel,
+    outcomes,
+    health,
+  });
+
+  const buildOperatorSnapshotMarkdown = () => {
+    const snapshot = buildOperatorSnapshotPayload();
+    const lines: string[] = [
+      '# Partnership Operator Snapshot',
+      '',
+      `- business_id: \`${snapshot.business_id || '-'}\``,
+      `- generated_at: \`${snapshot.generated_at}\``,
+      '',
+      '## Pilot Summary',
+      `- leads_total: ${snapshot.pilot_summary?.total ?? 0}`,
+      `- parsed_completed: ${snapshot.pilot_summary?.parsed ?? 0}`,
+      `- ready_for_draft: ${snapshot.pilot_summary?.readyForDraft ?? 0}`,
+      `- waiting_approval: ${snapshot.pilot_summary?.waitingApproval ?? 0}`,
+      `- waiting_outcome: ${snapshot.pilot_summary?.waitingOutcome ?? 0}`,
+      `- positive_rate_pct: ${snapshot.pilot_summary?.acceptance ?? 0}`,
+      '',
+      '## Ralph Loop (7 days)',
+      `- sent_total: ${snapshot.ralph_loop?.summary?.sent_total ?? 0}`,
+      `- positive_count: ${snapshot.ralph_loop?.summary?.positive_count ?? 0}`,
+      `- positive_rate_pct: ${snapshot.ralph_loop?.summary?.positive_rate_pct ?? 0}`,
+      `- baseline_sent_total: ${snapshot.ralph_loop?.baseline?.sent_total ?? 0}`,
+      `- baseline_positive_rate_pct: ${snapshot.ralph_loop?.baseline?.positive_rate_pct ?? 0}`,
+      '',
+      '### Recommendations',
+    ];
+    const recommendations = Array.isArray(snapshot.ralph_loop?.recommendations) ? snapshot.ralph_loop?.recommendations || [] : [];
+    if (recommendations.length > 0) {
+      recommendations.forEach((item) => lines.push(`- ${item}`));
+    } else {
+      lines.push('- none');
+    }
+    lines.push('', '### Prompt Versions');
+    const promptPerf = Array.isArray(snapshot.ralph_loop?.prompt_performance) ? snapshot.ralph_loop?.prompt_performance || [] : [];
+    if (promptPerf.length > 0) {
+      promptPerf.slice(0, 10).forEach((item) => {
+        lines.push(
+          `- ${item.prompt_key || 'unknown'} / v${item.prompt_version || 'unknown'} | approved=${item.approved_total ?? 0} | edited=${item.edited_before_accept_pct ?? 0}% | sent=${item.sent_total ?? 0} | positive=${item.positive_rate_pct ?? 0}%`
+        );
+      });
+    } else {
+      lines.push('- none');
+    }
+    lines.push('', '### Blockers');
+    const blockerItems = Array.isArray(snapshot.ralph_loop?.blockers) ? snapshot.ralph_loop?.blockers || [] : [];
+    if (blockerItems.length > 0) {
+      blockerItems.forEach((item) => lines.push(`- ${item}`));
+    } else {
+      lines.push('- none');
+    }
+    lines.push('', '### Outcome Summary');
+    lines.push(`- positive: ${snapshot.outcomes?.summary?.positive_count ?? 0}`);
+    lines.push(`- question: ${snapshot.outcomes?.summary?.question_count ?? 0}`);
+    lines.push(`- no_response: ${snapshot.outcomes?.summary?.no_response_count ?? 0}`);
+    lines.push(`- hard_no: ${snapshot.outcomes?.summary?.hard_no_count ?? 0}`);
+    lines.push('', '### Funnel');
+    const funnelItems = Array.isArray(snapshot.funnel?.funnel) ? snapshot.funnel?.funnel || [] : [];
+    if (funnelItems.length > 0) {
+      funnelItems.forEach((item) => {
+        lines.push(`- ${item.label}: ${item.count ?? 0} (conv ${item.conversion_from_prev_pct ?? 0}%)`);
+      });
+    } else {
+      lines.push('- none');
+    }
+    return lines.join('\n');
+  };
+
   const exportPartnershipReport = async (format: 'json' | 'markdown') => {
     if (!currentBusinessId) return;
     try {
@@ -1242,12 +1319,16 @@ export const PartnershipSearchPage: React.FC = () => {
       );
       const stamp = new Date().toISOString().replace(/[:.]/g, '-');
       if (format === 'markdown') {
-        const md = String(data?.markdown_report || '');
+        const md = `${String(data?.markdown_report || '')}\n\n---\n\n${buildOperatorSnapshotMarkdown()}`;
         downloadTextFile(`partnership-export-${currentBusinessId}-${stamp}.md`, md, 'text/markdown;charset=utf-8');
       } else {
+        const payload = {
+          ...(data || {}),
+          operator_snapshot: buildOperatorSnapshotPayload(),
+        };
         downloadTextFile(
           `partnership-export-${currentBusinessId}-${stamp}.json`,
-          JSON.stringify(data || {}, null, 2),
+          JSON.stringify(payload, null, 2),
           'application/json;charset=utf-8'
         );
       }
