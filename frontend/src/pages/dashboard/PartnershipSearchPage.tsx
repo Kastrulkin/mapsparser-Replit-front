@@ -27,6 +27,12 @@ type PartnershipLead = {
   parse_updated_at?: string;
   parse_retry_after?: string;
   parse_error?: string;
+  next_best_action?: {
+    code?: string;
+    label?: string;
+    hint?: string;
+    priority?: 'low' | 'medium' | 'high';
+  };
 };
 
 type PartnershipDraft = {
@@ -1470,6 +1476,16 @@ export const PartnershipSearchPage: React.FC = () => {
                         <div className="text-xs text-muted-foreground mt-1">
                           Контакты: {item.phone || 'телефон —'} · {item.email || 'email —'} · {item.telegram_url ? 'telegram ✓' : 'telegram —'} · {item.whatsapp_url ? 'whatsapp ✓' : 'whatsapp —'}
                         </div>
+                        {item.next_best_action ? (
+                          <div className="mt-2 rounded-md border border-sky-200 bg-sky-50 px-2 py-1.5">
+                            <div className="text-xs font-medium text-sky-900">
+                              Следующее действие: {item.next_best_action.label || '—'}
+                            </div>
+                            <div className="text-[11px] text-sky-800 mt-0.5">
+                              {item.next_best_action.hint || '—'}
+                            </div>
+                          </div>
+                        ) : null}
                         {item.parse_error ? (
                           <div className="text-xs text-red-600 mt-1">{item.parse_error}</div>
                         ) : null}
@@ -1593,6 +1609,13 @@ export const PartnershipSearchPage: React.FC = () => {
 
             {selectedLead && (
               <div className="rounded-lg border border-gray-200 p-3 bg-gray-50 space-y-2">
+                {selectedLead.next_best_action ? (
+                  <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
+                    <div className="text-sm font-semibold text-foreground">Следующее лучшее действие</div>
+                    <div className="text-sm text-sky-900 mt-1">{selectedLead.next_best_action.label || '—'}</div>
+                    <div className="text-xs text-muted-foreground mt-1">{selectedLead.next_best_action.hint || '—'}</div>
+                  </div>
+                ) : null}
                 <div className="font-medium">Ручное редактирование лида</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   <Input value={leadEdit.name} onChange={(e) => setLeadEdit((p) => ({ ...p, name: e.target.value }))} placeholder="Название" />

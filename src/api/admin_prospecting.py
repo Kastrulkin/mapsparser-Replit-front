@@ -3205,7 +3205,11 @@ def partnership_list_leads():
         finally:
             conn.close()
 
-        items = [dict(r) if hasattr(r, "keys") else {} for r in rows]
+        items = []
+        for row in rows:
+            payload = dict(row) if hasattr(row, "keys") else {}
+            payload["next_best_action"] = _partnership_next_best_action(payload)
+            items.append(payload)
         return jsonify({"success": True, "count": len(items), "items": items})
     except Exception as e:
         print(f"Error listing partnership leads: {e}")
@@ -4331,6 +4335,108 @@ def _normalize_enriched_contact_fields(payload: dict[str, Any] | None) -> dict[s
         "website": website,
         "telegram_url": telegram_url,
         "whatsapp_url": whatsapp_url,
+    }
+
+
+def _partnership_next_best_action(lead: dict[str, Any]) -> dict[str, Any]:
+    stage = str(lead.get("partnership_stage") or "imported").strip().lower()
+    status = str(lead.get("status") or "").strip().lower()
+    parse_status = str(lead.get("parse_status") or "").strip().lower()
+    has_contacts = any(
+        str(lead.get(key) or "").strip()
+        for key in ("phone", "email", "telegram_url", "whatsapp_url", "website")
+    )
+    has_channel = bool(str(lead.get("selected_channel") or "").strip())
+
+    if parse_status == "captcha":
+        return {
+            "code": "resolve_captcha",
+            "label": "Пройти CAPTCHA",
+            "hint": "Парсинг остановился и ждёт human-in-the-loop.",
+            "priority": "high",
+        }
+    if parse_status == "error":
+        return {
+            "code": "inspect_parse_error",
+            "label": "Разобрать ошибку парсинга",
+            "hint": "Без исправления парсинга аудит и матчинг будут неполными.",
+            "priority": "high",
+        }
+    if parse_status in {"pending", "processing"}:
+        return {
+            "code": "wait_parse",
+            "label": "Дождаться завершения парсинга",
+            "hint": "Пока парсинг не завершён, данные по карточке ещё не полные.",
+            "priority": "medium",
+        }
+    if stage == "imported":
+        return {
+            "code": "run_parse",
+            "label": "Запустить парсинг карточки",
+            "hint": "Сначала нужно подтянуть реальные услуги, отзывы и контакты.",
+            "priority": "high",
+        }
+    if stage == "audited":
+        return {
+            "code": "run_match",
+            "label": "Запустить матчинг услуг",
+            "hint": "После аудита нужно проверить комплементарность и пересечения.",
+            "priority": "high",
+        }
+    if stage == "matched":
+        return {
+            "code": "draft_offer",
+            "label": "Сгенерировать первое письмо",
+            "hint": "Матчинг уже готов, можно переходить к офферу.",
+            "priority": "high",
+        }
+    if stage in {"proposal_draft_ready"} or status == DRAFT_GENERATED:
+        return {
+            "code": "approve_draft",
+            "label": "Утвердить черновик",
+            "hint": "Черновик уже готов и ждёт вашего решения.",
+            "priority": "high",
+        }
+    if stage in {"selected_for_outreach"} and not has_channel:
+        return {
+            "code": "choose_channel",
+            "label": "Выбрать канал отправки",
+            "hint": "Перед очередью нужно закрепить канал для первого контакта.",
+            "priority": "medium",
+        }
+    if stage in {"channel_selected"} and not has_contacts:
+        return {
+            "code": "fill_contacts",
+            "label": "Заполнить контакты",
+            "hint": "Канал выбран, но контактов для отправки пока недостаточно.",
+            "priority": "high",
+        }
+    if stage in {"channel_selected", "proposal_approved", "approved_for_send"}:
+        return {
+            "code": "queue_for_send",
+            "label": "Добавить в batch",
+            "hint": "Лид готов к постановке в очередь отправки.",
+            "priority": "medium",
+        }
+    if stage == "queued_for_send":
+        return {
+            "code": "approve_batch",
+            "label": "Утвердить batch или дождаться отправки",
+            "hint": "Лид уже в очереди, следующий шаг — подтверждение или dispatch.",
+            "priority": "medium",
+        }
+    if stage == "sent":
+        return {
+            "code": "record_outcome",
+            "label": "Зафиксировать outcome",
+            "hint": "После отправки важно сохранить реакцию: positive/question/no_response/hard_no.",
+            "priority": "medium",
+        }
+    return {
+        "code": "review_lead",
+        "label": "Проверить лид вручную",
+        "hint": "Для этого лида нужен ручной операторский просмотр перед следующим шагом.",
+        "priority": "low",
     }
 
 
