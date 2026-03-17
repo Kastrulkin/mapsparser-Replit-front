@@ -1974,6 +1974,37 @@ export const PartnershipSearchPage: React.FC = () => {
 
           <div className="rounded-xl border bg-white p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold">Быстрые действия недели</h2>
+              <div className="text-xs text-muted-foreground">
+                {bestSourceThisWeek
+                  ? `Лучший источник: ${bestSourceThisWeek.source_kind || 'unknown'} / ${bestSourceThisWeek.source_provider || 'unknown'}`
+                  : 'Лучший источник недели пока не определён'}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={exportWeeklyReview} disabled={loading}>
+                Weekly review
+              </Button>
+              <Button variant="outline" onClick={focusBestSourceLeads} disabled={loading || !bestSourceThisWeek}>
+                Показать лиды
+              </Button>
+              <Button onClick={() => void moveBestSourceToPilot()} disabled={loading || !bestSourceThisWeek}>
+                В pilot cohort
+              </Button>
+              <Button variant="outline" onClick={() => void runBestSourcePilotFlow()} disabled={loading || !bestSourceThisWeek}>
+                Pilot run
+              </Button>
+              <Button variant="outline" onClick={() => void prepareBestSourceBatch()} disabled={loading || !bestSourceThisWeek}>
+                Batch prep
+              </Button>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Это короткий операторский путь на неделю: выбрать лучший источник, прогнать pilot flow и быстро собрать batch.
+            </div>
+          </div>
+
+          <div className="rounded-xl border bg-white p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
               <h2 className="text-lg font-semibold">Ralph loop summary (7 дней)</h2>
               <Button variant="outline" onClick={() => void loadRalphLoop()} disabled={loading}>
                 Обновить
@@ -2811,7 +2842,7 @@ export const PartnershipSearchPage: React.FC = () => {
 
           <div className="rounded-xl border bg-white p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold">Черновики партнёрского оффера</h2>
+              <h2 className="text-lg font-semibold">Черновики партнёрского оффера ({visibleDrafts.length})</h2>
               <div className="flex gap-2">
                 <Select value={draftView} onValueChange={(value) => setDraftView(value as typeof draftView)}>
                   <SelectTrigger className="w-[220px]">
@@ -2848,7 +2879,9 @@ export const PartnershipSearchPage: React.FC = () => {
               </div>
             )}
             {visibleDrafts.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Черновиков пока нет.</p>
+              <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-muted-foreground">
+                Черновиков пока нет. Обычно следующий шаг здесь: выбрать лучший источник недели и запустить `Pilot run`, либо вручную нажать `Первое письмо` у нужного лида.
+              </div>
             ) : (
               <>
                 <label className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -2901,7 +2934,7 @@ export const PartnershipSearchPage: React.FC = () => {
 
           <div className="rounded-xl border bg-white p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold">Очередь отправки партнёрств</h2>
+              <h2 className="text-lg font-semibold">Очередь отправки партнёрств ({visibleBatches.length})</h2>
               <div className="flex gap-2">
                 <Select value={queueView} onValueChange={(value) => setQueueView(value as typeof queueView)}>
                   <SelectTrigger className="w-[230px]">
@@ -2951,7 +2984,9 @@ export const PartnershipSearchPage: React.FC = () => {
               </div>
             )}
             {visibleBatches.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Batch пока нет.</p>
+              <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-muted-foreground">
+                Batch пока нет. Если approved draft уже готовы, используйте `Batch prep` в weekly actions или кнопку `Создать batch` в этом блоке.
+              </div>
             ) : (
               <>
                 <label className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -3040,7 +3075,7 @@ export const PartnershipSearchPage: React.FC = () => {
 
           <div className="rounded-xl border bg-white p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold">Реакции и outcome</h2>
+              <h2 className="text-lg font-semibold">Реакции и outcome ({visibleReactions.length})</h2>
               <div className="flex gap-2">
                 <Select value={reactionView} onValueChange={(value) => setReactionView(value as typeof reactionView)}>
                   <SelectTrigger className="w-[220px]">
@@ -3060,7 +3095,9 @@ export const PartnershipSearchPage: React.FC = () => {
               </div>
             </div>
             {visibleReactions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Реакций пока нет.</p>
+              <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-muted-foreground">
+                Реакций пока нет. Они появятся после отправки сообщений и фиксации outcome по queue-элементам.
+              </div>
             ) : (
               visibleReactions.slice(0, 20).map((reaction) => (
                 <div key={reaction.id} className="rounded-lg border border-gray-200 p-3">
