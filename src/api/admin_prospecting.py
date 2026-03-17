@@ -5487,6 +5487,126 @@ def partnership_enrich_lead_contacts(lead_id):
         return jsonify({"error": str(e)}), 500
 
 
+@admin_prospecting_bp.route("/api/partnership/leads/bulk-enrich-contacts", methods=["POST"])
+def partnership_bulk_enrich_contacts():
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        lead_ids = data.get("lead_ids") or []
+        if not isinstance(lead_ids, list) or not lead_ids:
+            return jsonify({"error": "lead_ids array is required"}), 400
+        normalized_ids = [str(item).strip() for item in lead_ids if str(item or "").strip()]
+        if not normalized_ids:
+            return jsonify({"error": "lead_ids array is required"}), 400
+
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+
+            cur.execute(
+                """
+                SELECT *
+                FROM prospectingleads
+                WHERE business_id = %s
+                  AND id = ANY(%s)
+                  AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
+                ORDER BY updated_at DESC NULLS LAST, created_at DESC
+                """,
+                (business_id, normalized_ids),
+            )
+            rows = [dict(row) for row in (cur.fetchall() or [])]
+            if not rows:
+                return jsonify({"error": "Leads not found"}), 404
+
+            updated_ids: list[str] = []
+            skipped_ids: list[str] = []
+            errors: list[dict[str, Any]] = []
+
+            for lead in rows:
+                lead_id = str(lead.get("id") or "").strip()
+                lead_payload = {
+                    "lead_id": lead_id,
+                    "name": lead.get("name"),
+                    "source_url": lead.get("source_url"),
+                    "phone": lead.get("phone"),
+                    "email": lead.get("email"),
+                    "website": lead.get("website"),
+                    "telegram_url": lead.get("telegram_url"),
+                    "whatsapp_url": lead.get("whatsapp_url"),
+                }
+                try:
+                    if _is_partnership_openclaw_enabled():
+                        openclaw_result = _call_partnership_openclaw_capability(
+                            "partners.enrich_contacts",
+                            tenant_id=business_id,
+                            payload={"lead": lead_payload, "intent": "partnership_outreach", "business_id": business_id},
+                            timeout_sec=60,
+                        )
+                        if not openclaw_result.get("success"):
+                            raise RuntimeError(str(openclaw_result.get("error") or "OpenClaw contact enrich failed"))
+                        enriched_source = _extract_openclaw_result_blob(openclaw_result) or {}
+                    else:
+                        enriched_source = lead_payload
+
+                    normalized = _normalize_enriched_contact_fields(enriched_source)
+                    if not any(normalized.values()):
+                        skipped_ids.append(lead_id)
+                        continue
+
+                    cur.execute(
+                        """
+                        UPDATE prospectingleads
+                        SET
+                            phone = COALESCE(%s, phone),
+                            email = COALESCE(%s, email),
+                            website = COALESCE(%s, website),
+                            telegram_url = COALESCE(%s, telegram_url),
+                            whatsapp_url = COALESCE(%s, whatsapp_url),
+                            updated_at = NOW()
+                        WHERE id = %s
+                          AND business_id = %s
+                          AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
+                        """,
+                        (
+                            normalized.get("phone"),
+                            normalized.get("email"),
+                            normalized.get("website"),
+                            normalized.get("telegram_url"),
+                            normalized.get("whatsapp_url"),
+                            lead_id,
+                            business_id,
+                        ),
+                    )
+                    updated_ids.append(lead_id)
+                except Exception as exc:
+                    errors.append({"lead_id": lead_id, "error": str(exc)})
+
+            conn.commit()
+        finally:
+            conn.close()
+
+        return jsonify(
+            {
+                "success": True,
+                "updated_count": len(updated_ids),
+                "skipped_count": len(skipped_ids),
+                "updated_ids": updated_ids,
+                "skipped_ids": skipped_ids,
+                "errors": errors[:50],
+            }
+        )
+    except Exception as e:
+        print(f"Error partnership bulk enrich contacts: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @admin_prospecting_bp.route("/api/partnership/leads/<string:lead_id>/draft-offer", methods=["POST"])
 def partnership_draft_offer(lead_id):
     user_data, error = _require_auth()

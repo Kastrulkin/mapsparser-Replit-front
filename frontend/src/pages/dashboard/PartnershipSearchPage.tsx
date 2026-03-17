@@ -13,6 +13,15 @@ type PartnershipLead = {
   city?: string;
   category?: string;
   source_url?: string;
+  source?: string;
+  source_kind?: string;
+  source_provider?: string;
+  external_place_id?: string;
+  external_source_id?: string;
+  dedupe_key?: string;
+  lat?: number;
+  lon?: number;
+  matched_sources_json?: string[] | null;
   phone?: string;
   email?: string;
   website?: string;
@@ -942,6 +951,31 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadBatches();
     } catch (e: any) {
       setError(e.message || 'Не удалось удалить выбранные лиды');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const bulkEnrichContacts = async () => {
+    if (!currentBusinessId || selectedLeadIds.length === 0) return;
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await newAuth.makeRequest('/partnership/leads/bulk-enrich-contacts', {
+        method: 'POST',
+        body: JSON.stringify({
+          business_id: currentBusinessId,
+          lead_ids: selectedLeadIds,
+        }),
+      });
+      setMessage(
+        `Контакты обогащены: ${data.updated_count || 0}, пропущено: ${data.skipped_count || 0}${
+          Array.isArray(data.errors) && data.errors.length ? `, ошибок: ${data.errors.length}` : ''
+        }`
+      );
+      await loadLeads();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось массово обогатить контакты');
     } finally {
       setLoading(false);
     }
@@ -2043,6 +2077,9 @@ export const PartnershipSearchPage: React.FC = () => {
                   <Button variant="outline" onClick={applyBulkUpdate} disabled={loading || selectedLeadIds.length === 0}>
                     Применить к выбранным
                   </Button>
+                  <Button variant="outline" onClick={bulkEnrichContacts} disabled={loading || selectedLeadIds.length === 0}>
+                    Обогатить контакты
+                  </Button>
                   <Button variant="outline" onClick={bulkDeleteLeads} disabled={loading || selectedLeadIds.length === 0}>
                     Удалить выбранные
                   </Button>
@@ -2080,6 +2117,23 @@ export const PartnershipSearchPage: React.FC = () => {
                         <div className="font-semibold text-foreground">{item.name || 'Без названия'}</div>
                         <div className="text-sm text-muted-foreground">
                           {item.city || '—'} · {item.category || '—'} · этап: {item.partnership_stage || 'imported'} · когорта: {item.pilot_cohort || 'backlog'}
+                        </div>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {item.source_provider ? (
+                            <span className="inline-flex items-center rounded-full border border-gray-300 bg-white px-2 py-0.5 text-[11px] text-gray-700">
+                              provider: {item.source_provider}
+                            </span>
+                          ) : null}
+                          {item.source_kind ? (
+                            <span className="inline-flex items-center rounded-full border border-gray-300 bg-white px-2 py-0.5 text-[11px] text-gray-700">
+                              source: {item.source_kind}
+                            </span>
+                          ) : null}
+                          {Array.isArray(item.matched_sources_json) && item.matched_sources_json.length > 1 ? (
+                            <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700">
+                              merged: {item.matched_sources_json.length}
+                            </span>
+                          ) : null}
                         </div>
                         <div className="text-xs text-muted-foreground mt-1">
                           Парсинг: {item.parse_status || 'не запускался'}
@@ -2230,6 +2284,23 @@ export const PartnershipSearchPage: React.FC = () => {
                   </div>
                 ) : null}
                 <div className="font-medium">Ручное редактирование лида</div>
+                <div className="rounded-lg border border-gray-200 bg-white p-3">
+                  <div className="text-sm font-medium text-foreground">Источник лида</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    provider: {selectedLead.source_provider || '—'} · source: {selectedLead.source_kind || '—'}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    external_source_id: {selectedLead.external_source_id || '—'} · external_place_id: {selectedLead.external_place_id || '—'}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    coords: {selectedLead.lat ?? '—'}, {selectedLead.lon ?? '—'}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    matched_sources: {Array.isArray(selectedLead.matched_sources_json) && selectedLead.matched_sources_json.length
+                      ? selectedLead.matched_sources_json.join(', ')
+                      : '—'}
+                  </div>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   <Input value={leadEdit.name} onChange={(e) => setLeadEdit((p) => ({ ...p, name: e.target.value }))} placeholder="Название" />
                   <Input value={leadEdit.category} onChange={(e) => setLeadEdit((p) => ({ ...p, category: e.target.value }))} placeholder="Категория" />
