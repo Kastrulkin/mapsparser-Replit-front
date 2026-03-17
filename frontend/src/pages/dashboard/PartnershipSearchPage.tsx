@@ -223,6 +223,22 @@ type PartnershipRalphLoop = {
     positive_count?: number;
     positive_rate_pct?: number;
   }>;
+  source_performance?: Array<{
+    source_kind?: string;
+    source_provider?: string;
+    leads_total?: number;
+    audited_count?: number;
+    matched_count?: number;
+    draft_count?: number;
+    sent_count?: number;
+    positive_count?: number;
+    audit_rate_pct?: number;
+    match_rate_pct?: number;
+    draft_rate_pct?: number;
+    sent_rate_pct?: number;
+    positive_rate_pct?: number;
+    lead_to_positive_pct?: number;
+  }>;
   learning?: Array<{
     capability?: string;
     accepted_total?: number;
@@ -1783,6 +1799,33 @@ export const PartnershipSearchPage: React.FC = () => {
                       </div>
                     ) : (
                       <div className="text-sm text-muted-foreground">Пока нет канальной статистики.</div>
+                    )}
+                  </div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                    <div className="text-sm font-semibold mb-2">Источники недели</div>
+                    {Array.isArray(ralphLoop.source_performance) && ralphLoop.source_performance.length > 0 ? (
+                      <div className="space-y-2 text-sm">
+                        {ralphLoop.source_performance.slice(0, 3).map((item, idx) => (
+                          <div key={`${item.source_kind || 'source'}-${item.source_provider || 'provider'}-${idx}`} className="rounded-lg border border-white/80 bg-white/80 p-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-medium text-foreground">
+                                {item.source_kind || 'unknown'} / {item.source_provider || 'unknown'}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {item.lead_to_positive_pct ?? 0}% lead→positive
+                              </span>
+                            </div>
+                            <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                              <div>Лидов: {item.leads_total ?? 0}</div>
+                              <div>Sent: {item.sent_count ?? 0}</div>
+                              <div>Draft: {item.draft_rate_pct ?? 0}%</div>
+                              <div>Positive: {item.positive_rate_pct ?? 0}%</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">Пока нет статистики по источникам за неделю.</div>
                     )}
                   </div>
                   <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">

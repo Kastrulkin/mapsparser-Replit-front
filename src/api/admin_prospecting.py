@@ -4803,6 +4803,97 @@ def partnership_ralph_loop_summary():
                 }
             )
 
+        source_performance: list[dict[str, Any]] = []
+        try:
+            conn = get_db_connection()
+            try:
+                _ensure_partnership_columns(conn)
+                cur = conn.cursor()
+                source_filter_sql = [
+                    "l.business_id = %s",
+                    "COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'",
+                    "COALESCE(l.created_at, NOW()) >= NOW() - (%s || ' days')::INTERVAL",
+                ]
+                source_filter_params: list[Any] = [business_id, window_days]
+                if pilot_cohort and pilot_cohort != "all":
+                    source_filter_sql.append("COALESCE(l.pilot_cohort, 'backlog') = %s")
+                    source_filter_params.append(pilot_cohort)
+                source_filter = " AND ".join(source_filter_sql)
+                cur.execute(
+                    f"""
+                    WITH lead_scope AS (
+                        SELECT
+                            l.id,
+                            COALESCE(NULLIF(l.source_kind, ''), 'unknown') AS source_kind,
+                            COALESCE(NULLIF(l.source_provider, ''), 'unknown') AS source_provider
+                        FROM prospectingleads l
+                        WHERE {source_filter}
+                    ),
+                    sent_scope AS (
+                        SELECT DISTINCT q.id, q.lead_id
+                        FROM outreachsendqueue q
+                        WHERE q.created_at >= NOW() - (%s || ' days')::INTERVAL
+                    ),
+                    latest_reaction AS (
+                        SELECT DISTINCT ON (r.queue_id)
+                            r.queue_id,
+                            COALESCE(r.human_confirmed_outcome, r.classified_outcome, '') AS final_outcome
+                        FROM outreachmessagereactions r
+                        ORDER BY r.queue_id, COALESCE(r.created_at, NOW()) DESC
+                    )
+                    SELECT
+                        ls.source_kind,
+                        ls.source_provider,
+                        COUNT(DISTINCT ls.id)::INT AS leads_total,
+                        COUNT(DISTINCT ls.id) FILTER (WHERE COALESCE(pl.partnership_stage, '') IN ('audited', 'matched', 'proposal_draft_ready', 'selected_for_outreach', 'channel_selected', 'approved_for_send', 'sent'))::INT AS audited_count,
+                        COUNT(DISTINCT ls.id) FILTER (WHERE COALESCE(pl.partnership_stage, '') IN ('matched', 'proposal_draft_ready', 'selected_for_outreach', 'channel_selected', 'approved_for_send', 'sent'))::INT AS matched_count,
+                        COUNT(DISTINCT d.id)::INT AS draft_count,
+                        COUNT(DISTINCT q.id)::INT AS sent_count,
+                        COUNT(DISTINCT q.id) FILTER (WHERE lr.final_outcome = 'positive')::INT AS positive_count
+                    FROM lead_scope ls
+                    JOIN prospectingleads pl ON pl.id = ls.id
+                    LEFT JOIN outreachmessagedrafts d ON d.lead_id = ls.id
+                    LEFT JOIN sent_scope q ON q.lead_id = ls.id
+                    LEFT JOIN latest_reaction lr ON lr.queue_id = q.id
+                    GROUP BY ls.source_kind, ls.source_provider
+                    ORDER BY positive_count DESC, sent_count DESC, leads_total DESC, ls.source_kind, ls.source_provider
+                    """,
+                    (*source_filter_params, window_days),
+                )
+                source_rows = cur.fetchall() or []
+            finally:
+                conn.close()
+        except Exception as source_error:
+            print(f"Error partnership Ralph loop source performance: {source_error}")
+            source_rows = []
+
+        for sr in source_rows:
+            srd = dict(sr) if hasattr(sr, "keys") else {}
+            leads_total = int(srd.get("leads_total") or 0)
+            audited_count = int(srd.get("audited_count") or 0)
+            matched_count = int(srd.get("matched_count") or 0)
+            draft_count = int(srd.get("draft_count") or 0)
+            sent_for_source = int(srd.get("sent_count") or 0)
+            positive_for_source = int(srd.get("positive_count") or 0)
+            source_performance.append(
+                {
+                    "source_kind": srd.get("source_kind") or "unknown",
+                    "source_provider": srd.get("source_provider") or "unknown",
+                    "leads_total": leads_total,
+                    "audited_count": audited_count,
+                    "matched_count": matched_count,
+                    "draft_count": draft_count,
+                    "sent_count": sent_for_source,
+                    "positive_count": positive_for_source,
+                    "audit_rate_pct": round((audited_count / leads_total * 100.0), 2) if leads_total else 0.0,
+                    "match_rate_pct": round((matched_count / leads_total * 100.0), 2) if leads_total else 0.0,
+                    "draft_rate_pct": round((draft_count / leads_total * 100.0), 2) if leads_total else 0.0,
+                    "sent_rate_pct": round((sent_for_source / leads_total * 100.0), 2) if leads_total else 0.0,
+                    "positive_rate_pct": round((positive_for_source / sent_for_source * 100.0), 2) if sent_for_source else 0.0,
+                    "lead_to_positive_pct": round((positive_for_source / leads_total * 100.0), 2) if leads_total else 0.0,
+                }
+            )
+
         learning = []
         for lr in learning_rows:
             lrd = dict(lr) if hasattr(lr, "keys") else {}
@@ -4854,6 +4945,40 @@ def partnership_ralph_loop_summary():
             elif expanded_count > shortened_count:
                 recommendations.append(
                     "Операторы чаще дописывают первое письмо перед отправкой — базовому офферу не хватает конкретики."
+                )
+        if source_performance:
+            scalable_sources = [
+                item for item in source_performance if int(item.get("leads_total") or 0) >= 3 and float(item.get("lead_to_positive_pct") or 0.0) > 0.0
+            ]
+            if scalable_sources:
+                best_source = sorted(
+                    scalable_sources,
+                    key=lambda item: (
+                        -float(item.get("lead_to_positive_pct") or 0.0),
+                        -float(item.get("sent_rate_pct") or 0.0),
+                        -int(item.get("leads_total") or 0),
+                    ),
+                )[0]
+                recommendations.append(
+                    f"Источник для масштабирования: {best_source.get('source_kind') or 'unknown'} / {best_source.get('source_provider') or 'unknown'} ({best_source.get('lead_to_positive_pct') or 0}% lead→positive)."
+                )
+            noisy_sources = [
+                item for item in source_performance
+                if int(item.get("leads_total") or 0) >= 5
+                and float(item.get("lead_to_positive_pct") or 0.0) == 0.0
+                and float(item.get("draft_rate_pct") or 0.0) < 35.0
+            ]
+            if noisy_sources:
+                noisiest = sorted(
+                    noisy_sources,
+                    key=lambda item: (
+                        int(item.get("leads_total") or 0),
+                        -float(item.get("draft_rate_pct") or 0.0),
+                    ),
+                    reverse=True,
+                )[0]
+                recommendations.append(
+                    f"Источник даёт много шума: {noisiest.get('source_kind') or 'unknown'} / {noisiest.get('source_provider') or 'unknown'} — стоит ужесточить фильтры или снизить приоритет."
                 )
 
         prompt_performance = []
@@ -4926,6 +5051,7 @@ def partnership_ralph_loop_summary():
                     },
                 },
                 "top_channels": top_channels,
+                "source_performance": source_performance,
                 "learning": learning,
                 "prompt_performance": prompt_performance,
                 "recommended_prompt_version": recommended_prompt_version,
