@@ -15,6 +15,7 @@ os.environ.setdefault('GIGACHAT_SSL_VERIFY', 'false')
 from flask import Flask, request, jsonify, render_template_string, send_from_directory, Response
 from flask_cors import CORS
 from werkzeug.serving import WSGIRequestHandler
+from werkzeug.exceptions import HTTPException
 
 # Rate limiting для защиты от brute force и DDoS
 try:
@@ -368,9 +369,11 @@ def _detect_country_code() -> str:
     return 'US'
 
 
-@app.route('/')
+@app.route('/', methods=['GET', 'HEAD', 'OPTIONS', 'POST', 'PUT', 'PATCH', 'DELETE'])
 def index():
     """Главная страница - раздаём собранный SPA"""
+    if request.method not in ('GET', 'HEAD', 'OPTIONS'):
+        return ('', 405)
     try:
         return send_from_directory(FRONTEND_DIST_DIR, 'index.html')
     except Exception as e:
@@ -10401,6 +10404,11 @@ def report_status(card_id):
 @app.errorhandler(Exception)
 def handle_exception(e):
     """Глобальный обработчик исключений"""
+    if isinstance(e, HTTPException):
+        if request.path.startswith('/api/'):
+            return jsonify({"error": e.description}), e.code
+        return e
+
     import traceback
     print(f"🚨 ГЛОБАЛЬНАЯ ОШИБКА: {str(e)}")
     print(f"🚨 ТРАССИРОВКА: {traceback.format_exc()}")
@@ -10425,10 +10433,15 @@ class QuietWSGIRequestHandler(WSGIRequestHandler):
             if (
                 format.startswith("code %d, message %s")
                 and len(args) >= 2
-                and int(args[0]) == 400
+                and int(args[0]) in (400, 505)
             ):
                 message = str(args[1] or "")
-                if "Bad request syntax" in message or "Bad request version" in message:
+                if (
+                    "Bad request syntax" in message
+                    or "Bad request version" in message
+                    or "Bad HTTP/0.9 request type" in message
+                    or "Invalid HTTP version" in message
+                ):
                     return
         except Exception:
             pass
@@ -10439,7 +10452,7 @@ class QuietWSGIRequestHandler(WSGIRequestHandler):
             status_code = int(code)
         except Exception:
             status_code = -1
-        if status_code == 400:
+        if status_code in (400, 505):
             request_line = (self.requestline or "")
             if not request_line.startswith(self._HTTP_METHOD_PREFIXES):
                 return
