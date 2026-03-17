@@ -164,14 +164,98 @@ def _ensure_partnership_columns(conn) -> None:
     cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS pilot_cohort TEXT DEFAULT 'backlog'")
     cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS business_id UUID")
     cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS created_by UUID")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS source_kind TEXT")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS source_provider TEXT")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS external_place_id TEXT")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS external_source_id TEXT")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS dedupe_key TEXT")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS lon DOUBLE PRECISION")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS search_payload_json JSONB")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS matched_sources_json JSONB")
     cur.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_prospectingleads_intent_stage
         ON prospectingleads (intent, partnership_stage)
         """
     )
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_prospectingleads_intent_external_source
+        ON prospectingleads (business_id, intent, external_source_id)
+        """
+    )
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_prospectingleads_intent_phone
+        ON prospectingleads (business_id, intent, phone)
+        """
+    )
     # DDL в PostgreSQL транзакционный; без commit изменения могут откатиться при закрытии conn.
     conn.commit()
+
+
+def _get_cursor_table_columns(cur, table_name: str) -> set[str]:
+    cur.execute(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = %s
+        """,
+        (table_name,),
+    )
+    cols = set()
+    for row in cur.fetchall():
+        col = row.get("column_name") if hasattr(row, "get") else (row[0] if row else None)
+        if col:
+            cols.add(str(col))
+    return cols
+
+
+def _normalize_partnership_source_url(url: Any) -> str:
+    value = str(url or "").strip()
+    if not value:
+        return ""
+    return value.rstrip("/")
+
+
+def _normalize_partnership_phone(phone: Any) -> str:
+    normalized = normalize_phone(str(phone or "").strip())
+    return normalized or ""
+
+
+def _should_use_lead_name_for_match(name: Any) -> bool:
+    text = str(name or "").strip()
+    if not text:
+        return False
+    lowered = text.lower()
+    return lowered not in {"новый партнёр", "партнёр", "компания"}
+
+
+def _merge_source_labels(existing_value: Any, *labels: str | None) -> list[str]:
+    merged: list[str] = []
+    seen = set()
+
+    def _add(value: Any) -> None:
+        if value is None:
+            return
+        if isinstance(value, list):
+            for item in value:
+                _add(item)
+            return
+        text = str(value).strip()
+        if not text:
+            return
+        key = text.lower()
+        if key in seen:
+            return
+        seen.add(key)
+        merged.append(text)
+
+    _add(existing_value)
+    for label in labels:
+        _add(label)
+    return merged
 
 
 def _create_search_job(
@@ -392,6 +476,7 @@ def _insert_partnership_lead_if_new(
     created_by: str,
     source_url: str,
     name: str | None,
+    address: str | None,
     city: str | None,
     category: str | None,
     source: str,
@@ -402,42 +487,163 @@ def _insert_partnership_lead_if_new(
     whatsapp_url: str | None = None,
     rating: float | None = None,
     reviews_count: int | None = None,
+    source_kind: str | None = None,
+    source_provider: str | None = None,
+    external_place_id: str | None = None,
+    external_source_id: str | None = None,
+    lat: float | None = None,
+    lon: float | None = None,
+    search_payload: dict[str, Any] | None = None,
 ) -> tuple[str | None, bool]:
-    normalized_url = str(source_url or "").strip()
+    normalized_url = _normalize_partnership_source_url(source_url)
     if not normalized_url:
         return None, False
+    table_columns = _get_cursor_table_columns(cur, "prospectingleads")
+    normalized_external_source_id = str(
+        external_source_id or external_place_id or _extract_yandex_org_id_from_url(normalized_url) or ""
+    ).strip()
+    normalized_phone = _normalize_partnership_phone(phone)
+
+    exact_sql = [
+        "business_id = %s",
+        "COALESCE(intent, 'client_outreach') = 'partnership_outreach'",
+        "(",
+        "source_url = %s",
+    ]
+    exact_params: list[Any] = [business_id, normalized_url]
+    if normalized_external_source_id and "external_source_id" in table_columns:
+        exact_sql.extend(["OR external_source_id = %s"])
+        exact_params.append(normalized_external_source_id)
+    if normalized_phone:
+        exact_sql.extend(["OR phone = %s"])
+        exact_params.append(normalized_phone)
+    exact_sql.append(")")
     cur.execute(
-        """
-        SELECT id
+        f"""
+        SELECT *
         FROM prospectingleads
-        WHERE business_id = %s
-          AND source_url = %s
-          AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
+        WHERE {" ".join(exact_sql)}
+        ORDER BY updated_at DESC NULLS LAST, created_at DESC
         LIMIT 1
         """,
-        (business_id, normalized_url),
+        exact_params,
     )
     existing = cur.fetchone()
+    if not existing and _should_use_lead_name_for_match(name):
+        normalized_address = str(address or "").strip().lower()
+        name_params: list[Any] = [business_id, str(name or "").strip().lower()]
+        city_sql = "COALESCE(LOWER(city), '') = COALESCE(%s, '')"
+        address_sql = "COALESCE(LOWER(address), '') = COALESCE(%s, '')"
+        name_params.append(str(city or "").strip().lower() or "")
+        name_params.append(normalized_address)
+        cur.execute(
+            f"""
+            SELECT *
+            FROM prospectingleads
+            WHERE business_id = %s
+              AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
+              AND LOWER(COALESCE(name, '')) = %s
+              AND ({city_sql} OR {address_sql})
+            ORDER BY updated_at DESC NULLS LAST, created_at DESC
+            LIMIT 1
+            """,
+            name_params,
+        )
+        existing = cur.fetchone()
     if existing:
-        return (existing["id"] if hasattr(existing, "get") else existing[0]), False
+        existing_payload = dict(existing) if hasattr(existing, "keys") else {}
+        existing_id = str(existing_payload.get("id") or (existing[0] if existing else ""))
+        updates: list[str] = []
+        params: list[Any] = []
+
+        def _fill_if_missing(column: str, value: Any) -> None:
+            existing_value = existing_payload.get(column)
+            is_missing = existing_value in (None, "", [])
+            if value not in (None, "", []) and is_missing:
+                updates.append(f"{column} = %s")
+                params.append(value)
+
+        _fill_if_missing("address", address)
+        _fill_if_missing("name", name)
+        _fill_if_missing("city", city)
+        _fill_if_missing("category", category)
+        _fill_if_missing("phone", normalized_phone or phone)
+        _fill_if_missing("email", email)
+        _fill_if_missing("website", website)
+        _fill_if_missing("telegram_url", telegram_url)
+        _fill_if_missing("whatsapp_url", whatsapp_url)
+        _fill_if_missing("source_url", normalized_url)
+        _fill_if_missing("source", source)
+        if "source_kind" in table_columns:
+            _fill_if_missing("source_kind", source_kind)
+        if "source_provider" in table_columns:
+            _fill_if_missing("source_provider", source_provider)
+        if "external_place_id" in table_columns:
+            _fill_if_missing("external_place_id", external_place_id)
+        if "external_source_id" in table_columns:
+            _fill_if_missing("external_source_id", normalized_external_source_id)
+        if "lat" in table_columns:
+            _fill_if_missing("lat", lat)
+        if "lon" in table_columns:
+            _fill_if_missing("lon", lon)
+        if rating is not None:
+            updates.append("rating = %s")
+            params.append(rating)
+        if reviews_count is not None:
+            updates.append("reviews_count = %s")
+            params.append(reviews_count)
+        if "search_payload_json" in table_columns and search_payload:
+            updates.append("search_payload_json = %s")
+            params.append(Json(search_payload))
+        if "dedupe_key" in table_columns:
+            dedupe_key = normalized_external_source_id or normalized_phone or normalized_url
+            if dedupe_key:
+                updates.append("dedupe_key = %s")
+                params.append(dedupe_key)
+        if "matched_sources_json" in table_columns:
+            merged_sources = _merge_source_labels(
+                existing_payload.get("matched_sources_json"),
+                existing_payload.get("source"),
+                source,
+                source_provider,
+            )
+            updates.append("matched_sources_json = %s")
+            params.append(Json(merged_sources))
+        if updates:
+            updates.append("updated_at = NOW()")
+            params.append(existing_id)
+            cur.execute(
+                f"""
+                UPDATE prospectingleads
+                SET {", ".join(updates)}
+                WHERE id = %s
+                """,
+                params,
+            )
+        return existing_id, False
 
     lead_id = str(uuid.uuid4())
+    dedupe_key = normalized_external_source_id or normalized_phone or normalized_url
     cur.execute(
         """
         INSERT INTO prospectingleads (
             id, name, address, city, source_url, source, category, status,
             phone, email, website, telegram_url, whatsapp_url, rating, reviews_count,
-            intent, partnership_stage, business_id, created_by, created_at, updated_at
+            intent, partnership_stage, business_id, created_by, created_at, updated_at,
+            source_kind, source_provider, external_place_id, external_source_id, dedupe_key,
+            lat, lon, search_payload_json, matched_sources_json
         ) VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, NOW(), NOW()
+            %s, %s, %s, %s, NOW(), NOW(),
+            %s, %s, %s, %s, %s,
+            %s, %s, %s, %s
         )
         """,
         (
             lead_id,
             (name or "Новый партнёр"),
-            "",
+            address or "",
             city,
             normalized_url,
             source,
@@ -454,6 +660,15 @@ def _insert_partnership_lead_if_new(
             "imported",
             business_id,
             created_by,
+            source_kind,
+            source_provider,
+            external_place_id,
+            normalized_external_source_id or None,
+            dedupe_key or None,
+            lat,
+            lon,
+            Json(search_payload) if search_payload else None,
+            Json(_merge_source_labels([], source, source_provider)),
         ),
     )
     return lead_id, True
@@ -532,6 +747,7 @@ def _normalize_partnership_file_row(
     if not source_url:
         return None, "missing source_url/link"
 
+    address = _pick_first_value(row, ["address", "адрес", "location", "локация"])
     city = _pick_first_value(row, ["city", "город"]) or (default_city or None)
     category = _pick_first_value(row, ["category", "категория"]) or (default_category or None)
     phone = _pick_first_value(row, ["phone", "телефон"])
@@ -549,6 +765,7 @@ def _normalize_partnership_file_row(
     normalized = {
         "name": name,
         "source_url": str(source_url).strip(),
+        "address": address,
         "city": city,
         "category": category,
         "phone": phone,
@@ -2903,9 +3120,13 @@ def partnership_import_links():
                     created_by=user_data["user_id"],
                     source_url=source_url,
                     name="Новый партнёр",
+                    address=None,
                     city=default_city or None,
                     category=default_category or None,
                     source="manual_link",
+                    source_kind="manual_link",
+                    source_provider="localos_manual",
+                    external_source_id=_extract_yandex_org_id_from_url(source_url) or None,
                 )
                 if not created:
                     skipped += 1
@@ -2998,6 +3219,7 @@ def partnership_import_file():
                     created_by=user_data["user_id"],
                     source_url=normalized["source_url"],
                     name=normalized.get("name"),
+                    address=normalized.get("address"),
                     city=normalized.get("city"),
                     category=normalized.get("category"),
                     source="file_import",
@@ -3008,6 +3230,10 @@ def partnership_import_file():
                     whatsapp_url=normalized.get("whatsapp_url"),
                     rating=normalized.get("rating"),
                     reviews_count=normalized.get("reviews_count"),
+                    source_kind="file_import",
+                    source_provider="localos_file_import",
+                    external_source_id=_extract_yandex_org_id_from_url(normalized["source_url"]) or None,
+                    search_payload={"import_format": file_format, "filename": filename or None},
                 )
                 if not created:
                     skipped_count += 1
@@ -3132,11 +3358,22 @@ def partnership_geo_search():
                 lead_name = str(item.get("name") or item.get("title") or "Новый партнёр").strip()
                 lead_city = str(item.get("city") or city or "").strip() or None
                 lead_category = str(item.get("category") or category or "").strip() or None
+                lead_address = str(item.get("address") or item.get("location") or "").strip() or None
                 phone = str(item.get("phone") or "").strip() or None
                 email = str(item.get("email") or "").strip() or None
                 website = str(item.get("website") or item.get("website_url") or "").strip() or None
                 telegram_url = str(item.get("telegram_url") or "").strip() or None
                 whatsapp_url = str(item.get("whatsapp_url") or "").strip() or None
+                external_place_id = str(item.get("place_id") or item.get("external_place_id") or item.get("google_place_id") or "").strip() or None
+                external_source_id = str(item.get("source_id") or item.get("external_source_id") or external_place_id or "").strip() or None
+                try:
+                    lat = float(item.get("lat")) if item.get("lat") is not None else None
+                except Exception:
+                    lat = None
+                try:
+                    lon = float(item.get("lon")) if item.get("lon") is not None else None
+                except Exception:
+                    lon = None
                 try:
                     rating = float(item.get("rating")) if item.get("rating") is not None else None
                 except Exception:
@@ -3151,6 +3388,7 @@ def partnership_geo_search():
                     created_by=user_data["user_id"],
                     source_url=source_url,
                     name=lead_name,
+                    address=lead_address,
                     city=lead_city,
                     category=lead_category,
                     source="openclaw_google_geo" if provider in {"google", "both"} else "manual_geo",
@@ -3161,6 +3399,22 @@ def partnership_geo_search():
                     whatsapp_url=whatsapp_url,
                     rating=rating,
                     reviews_count=reviews_count,
+                    source_kind="geo_search",
+                    source_provider="openclaw_google",
+                    external_place_id=external_place_id,
+                    external_source_id=external_source_id,
+                    lat=lat,
+                    lon=lon,
+                    search_payload={
+                        "provider": provider,
+                        "city": city,
+                        "category": category,
+                        "query": query,
+                        "radius_km": radius_km,
+                        "limit": limit,
+                        "candidate_name": lead_name,
+                        "candidate_address": lead_address,
+                    },
                 )
                 if created:
                     if lead_id:
@@ -3232,6 +3486,9 @@ def partnership_list_leads():
                 f"""
                 SELECT prospectingleads.id, prospectingleads.name, prospectingleads.address, prospectingleads.city,
                        prospectingleads.category, prospectingleads.source_url, prospectingleads.source,
+                       prospectingleads.source_kind, prospectingleads.source_provider,
+                       prospectingleads.external_place_id, prospectingleads.external_source_id,
+                       prospectingleads.dedupe_key, prospectingleads.lat, prospectingleads.lon,
                        prospectingleads.phone, prospectingleads.email, prospectingleads.telegram_url,
                        prospectingleads.whatsapp_url, prospectingleads.website, prospectingleads.rating,
                        prospectingleads.reviews_count, prospectingleads.status, prospectingleads.selected_channel,
