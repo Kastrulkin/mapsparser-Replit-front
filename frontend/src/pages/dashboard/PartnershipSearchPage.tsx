@@ -485,6 +485,25 @@ export const PartnershipSearchPage: React.FC = () => {
     );
   }, [bestSourceThisWeek, lastGeoSearchSourceSummary]);
 
+  const lastGeoSearchStats = useMemo(() => {
+    const sourceLeads = items.filter((item) => lastGeoSearchLeadIds.includes(item.id));
+    if (sourceLeads.length === 0) return null;
+    const parsedCompleted = sourceLeads.filter((item) => String(item.parse_status || '').toLowerCase() === 'completed').length;
+    const withContacts = sourceLeads.filter((item) => Boolean(item.phone || item.email || item.telegram_url || item.whatsapp_url || item.website)).length;
+    const enriched = sourceLeads.filter((item) => {
+      const payload = item.enrich_payload_json;
+      return Boolean(payload?.provider || (Array.isArray(payload?.found_fields) && payload.found_fields.length > 0));
+    }).length;
+    const readyForDraft = sourceLeads.filter((item) => String(item.next_best_action?.code || '').toLowerCase() === 'draft').length;
+    return {
+      total: sourceLeads.length,
+      parsedCompleted,
+      withContacts,
+      enriched,
+      readyForDraft,
+    };
+  }, [items, lastGeoSearchLeadIds]);
+
   const visibleDrafts = useMemo(() => {
     return drafts.filter((draft) => {
       const status = String(draft.status || '').toLowerCase();
@@ -2775,6 +2794,15 @@ export const PartnershipSearchPage: React.FC = () => {
                       Источник: {lastGeoSearchSourceSummary?.source_kind || '—'} / {lastGeoSearchSourceSummary?.source_provider || '—'}
                       {lastGeoSearchMatchesBestSource ? ' · совпадает с лучшим источником недели' : ''}
                     </div>
+                    {lastGeoSearchStats ? (
+                      <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                        <span className="rounded-full border border-sky-200 bg-white px-2 py-0.5">всего {lastGeoSearchStats.total}</span>
+                        <span className="rounded-full border border-sky-200 bg-white px-2 py-0.5">parse completed {lastGeoSearchStats.parsedCompleted}</span>
+                        <span className="rounded-full border border-sky-200 bg-white px-2 py-0.5">обогащено {lastGeoSearchStats.enriched}</span>
+                        <span className="rounded-full border border-sky-200 bg-white px-2 py-0.5">с контактами {lastGeoSearchStats.withContacts}</span>
+                        <span className="rounded-full border border-sky-200 bg-white px-2 py-0.5">готовы к draft {lastGeoSearchStats.readyForDraft}</span>
+                      </div>
+                    ) : null}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button size="sm" variant="outline" onClick={() => void bulkEnrichContacts()} disabled={loading || selectedLeadIds.length === 0}>
@@ -2919,6 +2947,19 @@ export const PartnershipSearchPage: React.FC = () => {
                         </div>
                         <div className="text-xs text-muted-foreground mt-1">
                           Контакты: {item.phone || 'телефон —'} · {item.email || 'email —'} · {item.telegram_url ? 'telegram ✓' : 'telegram —'} · {item.whatsapp_url ? 'whatsapp ✓' : 'whatsapp —'}
+                        </div>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {item.enrich_payload_json?.provider ? (
+                            <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700">
+                              enrich: {item.enrich_payload_json.provider}
+                            </span>
+                          ) : null}
+                          {Array.isArray(item.enrich_payload_json?.found_fields) && item.enrich_payload_json?.found_fields?.length ? (
+                            <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700">
+                              found: {item.enrich_payload_json.found_fields.slice(0, 3).join(', ')}
+                              {item.enrich_payload_json.found_fields.length > 3 ? ` +${item.enrich_payload_json.found_fields.length - 3}` : ''}
+                            </span>
+                          ) : null}
                         </div>
                         {item.next_best_action ? (
                           <div className="mt-2 rounded-md border border-sky-200 bg-sky-50 px-2 py-1.5">
