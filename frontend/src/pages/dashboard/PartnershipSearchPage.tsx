@@ -307,6 +307,7 @@ const CHANNEL_OPTIONS = [
 const OUTCOME_OPTIONS = ['positive', 'question', 'no_response', 'hard_no'] as const;
 const LEAD_VIEW_OPTIONS = [
   { value: 'all', label: 'Все лиды' },
+  { value: 'last_geo_search', label: 'Последний geo-search' },
   { value: 'requires_action', label: 'Требуют действия' },
   { value: 'ready_next_step', label: 'Готовы к следующему шагу' },
   { value: 'parsed', label: 'Парсинг завершён' },
@@ -361,6 +362,7 @@ export const PartnershipSearchPage: React.FC = () => {
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
   const [leadView, setLeadView] = useState<(typeof LEAD_VIEW_OPTIONS)[number]['value']>('all');
+  const [lastGeoSearchLeadIds, setLastGeoSearchLeadIds] = useState<string[]>([]);
   const [preferredSourceFilter, setPreferredSourceFilter] = useState<{ source_kind?: string; source_provider?: string } | null>(null);
   const [bulkStage, setBulkStage] = useState('');
   const [bulkChannel, setBulkChannel] = useState('');
@@ -424,6 +426,9 @@ export const PartnershipSearchPage: React.FC = () => {
       if (leadView === 'requires_action') {
         return ['captcha', 'error'].includes(parseStatus) || ['parse_captcha', 'parse_error', 'fill_contacts'].includes(nextCode);
       }
+      if (leadView === 'last_geo_search') {
+        return lastGeoSearchLeadIds.includes(item.id);
+      }
       if (leadView === 'ready_next_step') {
         return ['parse', 'match', 'draft', 'approve_draft', 'queue', 'approve_batch', 'confirm_outcome'].includes(nextCode);
       }
@@ -442,7 +447,7 @@ export const PartnershipSearchPage: React.FC = () => {
       }
       return true;
     });
-  }, [items, leadView, preferredSourceFilter]);
+  }, [items, leadView, preferredSourceFilter, lastGeoSearchLeadIds]);
 
   const bestSourceThisWeek = useMemo(() => {
     if (!Array.isArray(ralphLoop?.source_performance) || ralphLoop.source_performance.length === 0) return null;
@@ -800,12 +805,24 @@ export const PartnershipSearchPage: React.FC = () => {
       const providerLabel =
         geoProvider === 'google' ? 'Google' : geoProvider === 'yandex' ? 'Яндекс' : 'Google + Яндекс';
       const baseMsg = `${providerLabel}: импортировано ${data.imported_count || 0}, пропущено ${data.skipped_count || 0}, найдено источником ${data.source_total || 0}`;
-      setMessage(data.warning ? `${baseMsg}. ${data.warning}` : baseMsg);
+      const importedLeadIds = Array.isArray(data.lead_ids) ? data.lead_ids.filter((id: unknown) => typeof id === 'string' && id) : [];
+      setLastGeoSearchLeadIds(importedLeadIds);
+      if (importedLeadIds.length > 0) {
+        setLeadView('last_geo_search');
+        setSelectedLeadIds(importedLeadIds);
+      }
+      setMessage(
+        data.warning
+          ? `${baseMsg}. ${data.warning}${importedLeadIds.length > 0 ? ` Показаны новые лиды: ${importedLeadIds.length}.` : ''}`
+          : `${baseMsg}${importedLeadIds.length > 0 ? `. Показаны новые лиды: ${importedLeadIds.length}.` : ''}`
+      );
       await loadLeads();
       await loadDrafts();
       await loadBatches();
       await loadHealth();
       await loadFunnel();
+      await loadSourceQuality();
+      await loadRalphLoop();
     } catch (e: any) {
       setError(e.message || 'Не удалось выполнить гео-поиск');
     } finally {
@@ -2508,6 +2525,23 @@ export const PartnershipSearchPage: React.FC = () => {
             {leadView === 'best_source' && preferredSourceFilter ? (
               <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
                 Активен фильтр по лучшему источнику недели: {preferredSourceFilter.source_kind || 'unknown'} / {preferredSourceFilter.source_provider || 'unknown'}
+              </div>
+            ) : null}
+            {leadView === 'last_geo_search' ? (
+              <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+                <div>Активен фильтр по последнему geo-search: {lastGeoSearchLeadIds.length} лидов.</div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setLeadView('all');
+                    setLastGeoSearchLeadIds([]);
+                    setSelectedLeadIds([]);
+                  }}
+                  disabled={loading}
+                >
+                  Сбросить фильтр
+                </Button>
               </div>
             ) : null}
 
