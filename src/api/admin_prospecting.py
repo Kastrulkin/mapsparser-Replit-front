@@ -3038,13 +3038,10 @@ def partnership_import_file():
 
 @admin_prospecting_bp.route("/api/partnership/geo-search", methods=["POST"])
 def partnership_geo_search():
-    """OpenClaw geo-search import for partnership leads (P8 baseline)."""
+    """Unified LocalOS geo-search router for partnership leads."""
     user_data, error = _require_auth()
     if error:
         return error
-
-    if not _is_partnership_openclaw_enabled():
-        return jsonify({"error": "OpenClaw partnership integration is disabled"}), 400
 
     try:
         data = request.get_json(silent=True) or {}
@@ -3052,12 +3049,15 @@ def partnership_geo_search():
         city = str(data.get("city") or "").strip()
         category = str(data.get("category") or "").strip()
         query = str(data.get("query") or "").strip()
+        provider = str(data.get("provider") or "google").strip().lower()
         radius_km = int(data.get("radius_km") or 5)
         limit = int(data.get("limit") or 25)
         radius_km = max(1, min(radius_km, 100))
         limit = max(1, min(limit, 200))
         if not city and not query:
             return jsonify({"error": "city or query is required"}), 400
+        if provider not in {"google", "yandex", "both"}:
+            return jsonify({"error": "provider must be one of: google, yandex, both"}), 400
 
         conn = get_db_connection()
         try:
@@ -3066,32 +3066,60 @@ def partnership_geo_search():
             business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
             if not business_id:
                 return jsonify({"error": "Business not found or access denied"}), 403
-            cap_payload = {
-                "query": query,
-                "city": city,
-                "category": category,
-                "radius_km": radius_km,
-                "limit": limit,
-                "intent": "partnership_outreach",
-                "business_id": business_id,
+            provider_status = {
+                "requested": provider,
+                "google": {"enabled": provider in {"google", "both"}, "executed": False, "items_count": 0},
+                "yandex": {"enabled": provider in {"yandex", "both"}, "executed": False, "items_count": 0},
             }
-            openclaw_result = _call_partnership_openclaw_capability(
-                "partners.search_geo",
-                tenant_id=business_id,
-                payload=cap_payload,
-                timeout_sec=60,
-            )
-            if not openclaw_result.get("success"):
-                return jsonify({"error": str(openclaw_result.get("error") or "OpenClaw geo-search failed")}), 502
+            warnings: list[str] = []
+            meta_blob = {}
+            candidates: list[dict[str, Any]] = []
+            openclaw_enabled = _is_partnership_openclaw_enabled()
 
-            data_blob = openclaw_result.get("data") or {}
-            result_blob = data_blob.get("result") if isinstance(data_blob, dict) else {}
-            meta_blob = result_blob.get("meta") if isinstance(result_blob, dict) else None
-            candidates = (
-                (result_blob.get("items") if isinstance(result_blob, dict) else None)
-                or (data_blob.get("items") if isinstance(data_blob, dict) else None)
-                or []
-            )
+            if provider in {"google", "both"}:
+                if not openclaw_enabled:
+                    warnings.append("Google geo-search сейчас недоступен: интеграция OpenClaw не настроена на стороне LocalOS.")
+                else:
+                    cap_payload = {
+                        "query": query,
+                        "city": city,
+                        "category": category,
+                        "radius_km": radius_km,
+                        "limit": limit,
+                        "intent": "partnership_outreach",
+                        "business_id": business_id,
+                        "provider": "google",
+                    }
+                    openclaw_result = _call_partnership_openclaw_capability(
+                        "partners.search_geo",
+                        tenant_id=business_id,
+                        payload=cap_payload,
+                        timeout_sec=60,
+                    )
+                    if not openclaw_result.get("success"):
+                        return jsonify({"error": str(openclaw_result.get("error") or "OpenClaw geo-search failed")}), 502
+
+                    data_blob = openclaw_result.get("data") or {}
+                    result_blob = data_blob.get("result") if isinstance(data_blob, dict) else {}
+                    meta_blob = result_blob.get("meta") if isinstance(result_blob, dict) else {}
+                    provider_candidates = (
+                        (result_blob.get("items") if isinstance(result_blob, dict) else None)
+                        or (data_blob.get("items") if isinstance(data_blob, dict) else None)
+                        or []
+                    )
+                    if not isinstance(provider_candidates, list):
+                        provider_candidates = []
+                    candidates.extend([item for item in provider_candidates if isinstance(item, dict)])
+                    provider_status["google"]["executed"] = True
+                    provider_status["google"]["items_count"] = len(provider_candidates)
+                    if isinstance(meta_blob, dict) and str(meta_blob.get("provider") or "").strip().lower() == "none":
+                        warnings.append("Google geo-provider в OpenClaw сейчас работает в режиме provider=none, поэтому результат может быть пустым.")
+
+            if provider in {"yandex", "both"}:
+                provider_status["yandex"]["executed"] = False
+                provider_status["yandex"]["items_count"] = 0
+                warnings.append("Yandex geo-search пока не подключён в OpenClaw. Для Яндекса используйте импорт ссылок или файла.")
+
             if not isinstance(candidates, list):
                 candidates = []
 
@@ -3125,7 +3153,7 @@ def partnership_geo_search():
                     name=lead_name,
                     city=lead_city,
                     category=lead_category,
-                    source="openclaw_geo",
+                    source="openclaw_google_geo" if provider in {"google", "both"} else "manual_geo",
                     phone=phone,
                     email=email,
                     website=website,
@@ -3151,11 +3179,9 @@ def partnership_geo_search():
                 "lead_ids": imported_ids,
                 "source_total": len(candidates),
                 "openclaw_meta": meta_blob if isinstance(meta_blob, dict) else {},
-                "warning": (
-                    "OpenClaw geo-provider сейчас работает в режиме provider=none, поэтому items может быть пустым."
-                    if isinstance(meta_blob, dict) and str(meta_blob.get("provider") or "").strip().lower() == "none"
-                    else None
-                ),
+                "provider_status": provider_status,
+                "warnings": warnings,
+                "warning": " ".join(warnings).strip() or None,
             }
         )
     except Exception as e:

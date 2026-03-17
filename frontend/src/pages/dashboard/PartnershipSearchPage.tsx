@@ -303,6 +303,7 @@ export const PartnershipSearchPage: React.FC = () => {
   const [geoCity, setGeoCity] = useState('');
   const [geoCategory, setGeoCategory] = useState('');
   const [geoQuery, setGeoQuery] = useState('');
+  const [geoProvider, setGeoProvider] = useState<'google' | 'yandex' | 'both'>('google');
   const [geoRadiusKm, setGeoRadiusKm] = useState('5');
   const [geoLimit, setGeoLimit] = useState('25');
   const [stage, setStage] = useState('all');
@@ -710,6 +711,7 @@ export const PartnershipSearchPage: React.FC = () => {
         method: 'POST',
         body: JSON.stringify({
           business_id: currentBusinessId,
+          provider: geoProvider,
           city,
           category,
           query: q,
@@ -717,7 +719,9 @@ export const PartnershipSearchPage: React.FC = () => {
           limit: Number.isFinite(limit) ? limit : 25,
         }),
       });
-      const baseMsg = `Гео-поиск: импортировано ${data.imported_count || 0}, пропущено ${data.skipped_count || 0}, найдено источником ${data.source_total || 0}`;
+      const providerLabel =
+        geoProvider === 'google' ? 'Google' : geoProvider === 'yandex' ? 'Яндекс' : 'Google + Яндекс';
+      const baseMsg = `${providerLabel}: импортировано ${data.imported_count || 0}, пропущено ${data.skipped_count || 0}, найдено источником ${data.source_total || 0}`;
       setMessage(data.warning ? `${baseMsg}. ${data.warning}` : baseMsg);
       await loadLeads();
       await loadDrafts();
@@ -1440,11 +1444,21 @@ export const PartnershipSearchPage: React.FC = () => {
           </div>
 
           <div className="rounded-xl border bg-white p-4 space-y-3">
-            <h2 className="text-lg font-semibold">Гео-поиск партнёров (OpenClaw)</h2>
+            <h2 className="text-lg font-semibold">Гео-поиск партнёров</h2>
             <p className="text-sm text-muted-foreground">
-              Поиск ближайших компаний по городу/категории/запросу с автоматическим импортом в список партнёрств.
+              Единая точка входа для поиска партнёров. Google работает через OpenClaw, для Яндекс.Карт пока используйте ссылки или импорт файла.
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-2">
+              <Select value={geoProvider} onValueChange={(value) => setGeoProvider(value as 'google' | 'yandex' | 'both')}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Источник поиска" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="google">Google Maps</SelectItem>
+                  <SelectItem value="yandex">Яндекс Карты</SelectItem>
+                  <SelectItem value="both">Оба источника</SelectItem>
+                </SelectContent>
+              </Select>
               <Input
                 value={geoCity}
                 onChange={(e) => setGeoCity(e.target.value)}
@@ -1484,6 +1498,7 @@ export const PartnershipSearchPage: React.FC = () => {
               <Button
                 variant="outline"
                 onClick={() => {
+                  setGeoProvider('google');
                   setGeoCity('');
                   setGeoCategory('');
                   setGeoQuery('');
