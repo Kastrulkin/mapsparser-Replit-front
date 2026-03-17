@@ -1216,6 +1216,89 @@ export const PartnershipSearchPage: React.FC = () => {
     }
   };
 
+  const prepareBestSourceBatch = async () => {
+    if (!currentBusinessId || !bestSourceThisWeek) return;
+    const sourceLeadIds = new Set(
+      items
+        .filter(
+          (item) =>
+            String(item.source_kind || '').toLowerCase() === String(bestSourceThisWeek.source_kind || '').toLowerCase() &&
+            String(item.source_provider || '').toLowerCase() === String(bestSourceThisWeek.source_provider || '').toLowerCase()
+        )
+        .map((item) => item.id)
+    );
+    if (sourceLeadIds.size === 0) {
+      setMessage('Для лучшего источника пока нет лидов.');
+      return;
+    }
+
+    const relatedDrafts = drafts.filter((draft) => sourceLeadIds.has(draft.lead_id));
+    if (relatedDrafts.length === 0) {
+      setMessage('Для лучшего источника пока нет черновиков для batch.');
+      return;
+    }
+
+    const draftIdsToApprove = relatedDrafts
+      .filter((draft) => {
+        const status = String(draft.status || '').toLowerCase();
+        return !status || status === 'generated' || status === 'draft';
+      })
+      .map((draft) => draft.id);
+
+    let approvedCount = 0;
+    let queuedCount = 0;
+    const errors: string[] = [];
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      for (const draftId of draftIdsToApprove) {
+        const draft = relatedDrafts.find((item) => item.id === draftId);
+        const text = draft?.approved_text || draft?.edited_text || draft?.generated_text || '';
+        try {
+          await newAuth.makeRequest(`/partnership/drafts/${draftId}/approve`, {
+            method: 'POST',
+            body: JSON.stringify({ business_id: currentBusinessId, approved_text: text }),
+          });
+          approvedCount += 1;
+        } catch (e: any) {
+          errors.push(`${draft?.lead_name || draftId}: approve — ${e?.message || 'ошибка'}`);
+        }
+      }
+
+      await loadDrafts();
+
+      const approvedDraftIds = relatedDrafts.map((draft) => draft.id);
+
+      if (approvedDraftIds.length === 0) {
+        setMessage('После подготовки у лучшего источника не осталось approved draft для batch.');
+        return;
+      }
+
+      const batchData = await newAuth.makeRequest('/partnership/send-batches', {
+        method: 'POST',
+        body: JSON.stringify({
+          business_id: currentBusinessId,
+          draft_ids: approvedDraftIds,
+        }),
+      });
+      queuedCount = Array.isArray(batchData?.batch?.items) ? batchData.batch.items.length : approvedDraftIds.length;
+      setMessage(
+        `Batch подготовлен для ${bestSourceThisWeek.source_kind || 'unknown'} / ${bestSourceThisWeek.source_provider || 'unknown'} · approve ${approvedCount} · в batch ${queuedCount}${errors.length ? ` · ошибок ${errors.length}` : ''}`
+      );
+      await loadBatches();
+      await loadLeads();
+      await loadFunnel();
+      await loadOutcomes();
+      await loadRalphLoop();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось подготовить batch для лучшего источника');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const deleteLead = async (leadId: string) => {
     if (!currentBusinessId) return;
     const ok = window.confirm('Удалить этого партнёра из списка?');
@@ -1993,6 +2076,9 @@ export const PartnershipSearchPage: React.FC = () => {
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => void runBestSourcePilotFlow()} disabled={loading || !bestSourceThisWeek}>
                           Pilot run
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => void prepareBestSourceBatch()} disabled={loading || !bestSourceThisWeek}>
+                          Batch prep
                         </Button>
                       </div>
                     </div>
