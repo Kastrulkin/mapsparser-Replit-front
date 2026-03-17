@@ -21,6 +21,14 @@ type PartnershipLead = {
   dedupe_key?: string;
   lat?: number;
   lon?: number;
+  search_payload_json?: Record<string, any> | null;
+  enrich_payload_json?: {
+    provider?: string;
+    found_fields?: string[];
+    confidence?: Record<string, number>;
+    contacts?: Record<string, string | null>;
+    raw?: Record<string, any>;
+  } | null;
   matched_sources_json?: string[] | null;
   phone?: string;
   email?: string;
@@ -453,6 +461,29 @@ export const PartnershipSearchPage: React.FC = () => {
     if (!Array.isArray(ralphLoop?.source_performance) || ralphLoop.source_performance.length === 0) return null;
     return ralphLoop.source_performance[0] || null;
   }, [ralphLoop]);
+
+  const lastGeoSearchSourceSummary = useMemo(() => {
+    const sourceLeads = items.filter((item) => lastGeoSearchLeadIds.includes(item.id));
+    if (sourceLeads.length === 0) return null;
+    const counts = new Map<string, { source_kind?: string; source_provider?: string; count: number }>();
+    sourceLeads.forEach((item) => {
+      const sourceKind = String(item.source_kind || '').trim() || undefined;
+      const sourceProvider = String(item.source_provider || '').trim() || undefined;
+      const key = `${sourceKind || 'unknown'}::${sourceProvider || 'unknown'}`;
+      const current = counts.get(key) || { source_kind: sourceKind, source_provider: sourceProvider, count: 0 };
+      current.count += 1;
+      counts.set(key, current);
+    });
+    return Array.from(counts.values()).sort((a, b) => b.count - a.count)[0] || null;
+  }, [items, lastGeoSearchLeadIds]);
+
+  const lastGeoSearchMatchesBestSource = useMemo(() => {
+    if (!bestSourceThisWeek || !lastGeoSearchSourceSummary) return false;
+    return (
+      String(bestSourceThisWeek.source_kind || '').toLowerCase() === String(lastGeoSearchSourceSummary.source_kind || '').toLowerCase() &&
+      String(bestSourceThisWeek.source_provider || '').toLowerCase() === String(lastGeoSearchSourceSummary.source_provider || '').toLowerCase()
+    );
+  }, [bestSourceThisWeek, lastGeoSearchSourceSummary]);
 
   const visibleDrafts = useMemo(() => {
     return drafts.filter((draft) => {
@@ -1062,6 +1093,81 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadLeads();
     } catch (e: any) {
       setError(e.message || 'Не удалось массово обогатить контакты');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const prepareLastGeoSearchBatch = async () => {
+    if (!currentBusinessId || lastGeoSearchLeadIds.length === 0) {
+      setMessage('Для последнего geo-search пока нет лидов для batch prep.');
+      return;
+    }
+
+    const lastGeoLeadSet = new Set(lastGeoSearchLeadIds);
+    const targetDrafts = drafts.filter((draft) => lastGeoLeadSet.has(String(draft.lead_id || '')));
+    if (targetDrafts.length === 0) {
+      setMessage('Для последнего geo-search ещё нет черновиков. Сначала запустите быстрый сценарий.');
+      return;
+    }
+
+    const draftIds: string[] = [];
+    let approvedCount = 0;
+    const errors: string[] = [];
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      for (const draft of targetDrafts) {
+        try {
+          if (String(draft.status || '').toLowerCase() !== 'approved') {
+            await newAuth.makeRequest(`/partnership/drafts/${draft.id}/approve`, {
+              method: 'POST',
+              body: JSON.stringify({ business_id: currentBusinessId }),
+            });
+            approvedCount += 1;
+          }
+          draftIds.push(draft.id);
+        } catch (e: any) {
+          errors.push(`${draft.lead_name || draft.id}: approve — ${e?.message || 'ошибка'}`);
+        }
+      }
+
+      if (draftIds.length === 0) {
+        setMessage(`Для последнего geo-search не удалось подготовить черновики.${errors.length ? ` Ошибок: ${errors.length}` : ''}`);
+        await loadDrafts();
+        return;
+      }
+
+      const batchData = await newAuth.makeRequest('/partnership/send-batches', {
+        method: 'POST',
+        body: JSON.stringify({
+          business_id: currentBusinessId,
+          draft_ids: draftIds,
+        }),
+      });
+
+      setMessage(
+        [
+          `Последний geo-search batch prep`,
+          `approve ${approvedCount}`,
+          `в batch ${batchData?.queue_count || 0}`,
+          batchData?.batch_id ? `batch ${batchData.batch_id}` : '',
+          errors.length ? `ошибок: ${errors.length}` : '',
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      );
+
+      await loadDrafts();
+      await loadBatches();
+      await loadFunnel();
+      await loadOutcomes();
+      await loadHealth();
+      await loadRalphLoop();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось подготовить batch для последнего geo-search');
     } finally {
       setLoading(false);
     }
@@ -2665,6 +2771,10 @@ export const PartnershipSearchPage: React.FC = () => {
                     <div className="mt-1 text-[11px] text-sky-800">
                       Можно сразу прогнать быстрый сценарий: enrich → audit → match → draft только по этим новым лидам.
                     </div>
+                    <div className="mt-1 text-[11px] text-sky-800">
+                      Источник: {lastGeoSearchSourceSummary?.source_kind || '—'} / {lastGeoSearchSourceSummary?.source_provider || '—'}
+                      {lastGeoSearchMatchesBestSource ? ' · совпадает с лучшим источником недели' : ''}
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button size="sm" variant="outline" onClick={() => void bulkEnrichContacts()} disabled={loading || selectedLeadIds.length === 0}>
@@ -2675,6 +2785,9 @@ export const PartnershipSearchPage: React.FC = () => {
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => void runLastGeoSearchFlow()} disabled={loading || lastGeoSearchLeadIds.length === 0}>
                       Быстрый сценарий
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => void prepareLastGeoSearchBatch()} disabled={loading || lastGeoSearchLeadIds.length === 0}>
+                      Batch prep
                     </Button>
                     <Button
                       size="sm"
@@ -2962,6 +3075,24 @@ export const PartnershipSearchPage: React.FC = () => {
                   <div className="text-xs text-muted-foreground">
                     matched_sources: {Array.isArray(selectedLead.matched_sources_json) && selectedLead.matched_sources_json.length
                       ? selectedLead.matched_sources_json.join(', ')
+                      : '—'}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                  <div className="text-sm font-medium text-foreground">Результат enrich</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    provider: {selectedLead.enrich_payload_json?.provider || '—'}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    found_fields: {Array.isArray(selectedLead.enrich_payload_json?.found_fields) && selectedLead.enrich_payload_json?.found_fields?.length
+                      ? selectedLead.enrich_payload_json?.found_fields?.join(', ')
+                      : '—'}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    confidence: {selectedLead.enrich_payload_json?.confidence && Object.keys(selectedLead.enrich_payload_json.confidence).length
+                      ? Object.entries(selectedLead.enrich_payload_json.confidence)
+                          .map(([key, value]) => `${key} ${Math.round(Number(value || 0) * 100)}%`)
+                          .join(' · ')
                       : '—'}
                   </div>
                 </div>

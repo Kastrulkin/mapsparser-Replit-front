@@ -172,6 +172,7 @@ def _ensure_partnership_columns(conn) -> None:
     cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION")
     cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS lon DOUBLE PRECISION")
     cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS search_payload_json JSONB")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS enrich_payload_json JSONB")
     cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS matched_sources_json JSONB")
     cur.execute(
         """
@@ -3489,6 +3490,7 @@ def partnership_list_leads():
                        prospectingleads.source_kind, prospectingleads.source_provider,
                        prospectingleads.external_place_id, prospectingleads.external_source_id,
                        prospectingleads.dedupe_key, prospectingleads.lat, prospectingleads.lon,
+                       prospectingleads.search_payload_json, prospectingleads.enrich_payload_json,
                        prospectingleads.phone, prospectingleads.email, prospectingleads.telegram_url,
                        prospectingleads.whatsapp_url, prospectingleads.website, prospectingleads.rating,
                        prospectingleads.reviews_count, prospectingleads.status, prospectingleads.selected_channel,
@@ -5357,6 +5359,31 @@ def _normalize_enriched_contact_fields(payload: dict[str, Any] | None) -> dict[s
     }
 
 
+def _normalize_enrich_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
+    data = payload if isinstance(payload, dict) else {}
+    confidence_raw = data.get("confidence")
+    confidence: dict[str, float] = {}
+    if isinstance(confidence_raw, dict):
+        for key, value in confidence_raw.items():
+            try:
+                confidence[str(key)] = max(0.0, min(1.0, float(value)))
+            except Exception:
+                continue
+    found_fields_raw = data.get("found_fields")
+    found_fields = []
+    if isinstance(found_fields_raw, list):
+        found_fields = [str(item).strip() for item in found_fields_raw if str(item or "").strip()]
+    provider = str(data.get("provider") or data.get("source_provider") or "").strip() or None
+    normalized_contacts = _normalize_enriched_contact_fields(data)
+    return {
+        "provider": provider,
+        "found_fields": found_fields,
+        "confidence": confidence,
+        "contacts": normalized_contacts,
+        "raw": data,
+    }
+
+
 def _partnership_next_best_action(lead: dict[str, Any]) -> dict[str, Any]:
     stage = str(lead.get("partnership_stage") or "imported").strip().lower()
     status = str(lead.get("status") or "").strip().lower()
@@ -5691,6 +5718,7 @@ def partnership_enrich_lead_contacts(lead_id):
                 enriched_source = lead_payload
 
             normalized = _normalize_enriched_contact_fields(enriched_source)
+            enrich_payload = _normalize_enrich_payload(enriched_source)
             cur.execute(
                 """
                 UPDATE prospectingleads
@@ -5700,11 +5728,12 @@ def partnership_enrich_lead_contacts(lead_id):
                     website = COALESCE(%s, website),
                     telegram_url = COALESCE(%s, telegram_url),
                     whatsapp_url = COALESCE(%s, whatsapp_url),
+                    enrich_payload_json = %s,
                     updated_at = NOW()
                 WHERE id = %s
                   AND business_id = %s
                   AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
-                RETURNING id, name, phone, email, website, telegram_url, whatsapp_url, updated_at
+                RETURNING id, name, phone, email, website, telegram_url, whatsapp_url, enrich_payload_json, updated_at
                 """,
                 (
                     normalized.get("phone"),
@@ -5712,6 +5741,7 @@ def partnership_enrich_lead_contacts(lead_id):
                     normalized.get("website"),
                     normalized.get("telegram_url"),
                     normalized.get("whatsapp_url"),
+                    Json(enrich_payload),
                     lead_id,
                     business_id,
                 ),
@@ -5726,6 +5756,7 @@ def partnership_enrich_lead_contacts(lead_id):
                 "success": True,
                 "lead": dict(updated) if updated and hasattr(updated, "keys") else {},
                 "enriched": normalized,
+                "enrich_payload": enrich_payload,
             }
         )
     except Exception as e:
@@ -5802,6 +5833,7 @@ def partnership_bulk_enrich_contacts():
                         enriched_source = lead_payload
 
                     normalized = _normalize_enriched_contact_fields(enriched_source)
+                    enrich_payload = _normalize_enrich_payload(enriched_source)
                     if not any(normalized.values()):
                         skipped_ids.append(lead_id)
                         continue
@@ -5815,6 +5847,7 @@ def partnership_bulk_enrich_contacts():
                             website = COALESCE(%s, website),
                             telegram_url = COALESCE(%s, telegram_url),
                             whatsapp_url = COALESCE(%s, whatsapp_url),
+                            enrich_payload_json = %s,
                             updated_at = NOW()
                         WHERE id = %s
                           AND business_id = %s
@@ -5826,6 +5859,7 @@ def partnership_bulk_enrich_contacts():
                             normalized.get("website"),
                             normalized.get("telegram_url"),
                             normalized.get("whatsapp_url"),
+                            Json(enrich_payload),
                             lead_id,
                             business_id,
                         ),
