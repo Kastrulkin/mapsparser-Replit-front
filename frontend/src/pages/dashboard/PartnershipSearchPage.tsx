@@ -1067,6 +1067,136 @@ export const PartnershipSearchPage: React.FC = () => {
     }
   };
 
+  const runLastGeoSearchFlow = async () => {
+    if (!currentBusinessId) return;
+    const sourceLeads = items.filter((item) => lastGeoSearchLeadIds.includes(item.id));
+    if (sourceLeads.length === 0) {
+      setMessage('Для последнего geo-search пока нет лидов.');
+      return;
+    }
+
+    const leadIds = sourceLeads.map((item) => item.id);
+    const parseReadyLeads = sourceLeads.filter((item) => String(item.parse_status || '').toLowerCase() === 'completed');
+    let enrichedCount = 0;
+    let auditedCount = 0;
+    let matchedCount = 0;
+    let draftedCount = 0;
+    const skippedParseCount = Math.max(0, sourceLeads.length - parseReadyLeads.length);
+    const errors: string[] = [];
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const enrichData = await newAuth.makeRequest('/partnership/leads/bulk-enrich-contacts', {
+          method: 'POST',
+          body: JSON.stringify({
+            business_id: currentBusinessId,
+            lead_ids: leadIds,
+          }),
+        });
+        enrichedCount = Number(enrichData?.updated_count || 0);
+      } catch (e: any) {
+        errors.push(`enrich: ${e?.message || 'ошибка'}`);
+      }
+
+      for (const lead of parseReadyLeads) {
+        try {
+          await newAuth.makeRequest(`/partnership/leads/${lead.id}/audit`, {
+            method: 'POST',
+            body: JSON.stringify({ business_id: currentBusinessId }),
+          });
+          auditedCount += 1;
+        } catch (e: any) {
+          errors.push(`${lead.name || lead.id}: audit — ${e?.message || 'ошибка'}`);
+          continue;
+        }
+
+        try {
+          await newAuth.makeRequest(`/partnership/leads/${lead.id}/match`, {
+            method: 'POST',
+            body: JSON.stringify({ business_id: currentBusinessId }),
+          });
+          matchedCount += 1;
+        } catch (e: any) {
+          errors.push(`${lead.name || lead.id}: match — ${e?.message || 'ошибка'}`);
+          continue;
+        }
+
+        try {
+          await newAuth.makeRequest(`/partnership/leads/${lead.id}/draft-offer`, {
+            method: 'POST',
+            body: JSON.stringify({
+              business_id: currentBusinessId,
+              channel: 'telegram',
+              tone: 'профессиональный',
+            }),
+          });
+          draftedCount += 1;
+        } catch (e: any) {
+          errors.push(`${lead.name || lead.id}: draft — ${e?.message || 'ошибка'}`);
+        }
+      }
+
+      setSelectedLeadIds(leadIds);
+      const summaryParts = [
+        `Последний geo-search: ${sourceLeads.length} лидов`,
+        `enrich ${enrichedCount}`,
+        `audit ${auditedCount}`,
+        `match ${matchedCount}`,
+        `draft ${draftedCount}`,
+      ];
+      if (skippedParseCount > 0) {
+        summaryParts.push(`пропущено без parse completed: ${skippedParseCount}`);
+      }
+      if (errors.length > 0) {
+        summaryParts.push(`ошибок: ${errors.length}`);
+      }
+      setMessage(summaryParts.join(' · '));
+
+      await loadLeads();
+      await loadDrafts();
+      await loadBatches();
+      await loadFunnel();
+      await loadOutcomes();
+      await loadSourceQuality();
+      await loadRalphLoop();
+      await loadHealth();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось выполнить быстрый сценарий для последнего geo-search');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const moveLastGeoSearchToPilot = async () => {
+    if (!currentBusinessId || lastGeoSearchLeadIds.length === 0) {
+      setMessage('Для последнего geo-search нет лидов для перевода в pilot cohort.');
+      return;
+    }
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await newAuth.makeRequest('/partnership/leads/bulk-update', {
+        method: 'POST',
+        body: JSON.stringify({
+          business_id: currentBusinessId,
+          lead_ids: lastGeoSearchLeadIds,
+          pilot_cohort: 'pilot',
+        }),
+      });
+      setSelectedLeadIds(lastGeoSearchLeadIds);
+      setMessage(`В pilot cohort переведено ${data.updated_count || 0} лидов из последнего geo-search`);
+      await loadLeads();
+      await loadRalphLoop();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось перевести последний geo-search в pilot cohort');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const focusBestSourceLeads = () => {
     if (!bestSourceThisWeek) return;
     setPreferredSourceFilter({
@@ -2528,20 +2658,38 @@ export const PartnershipSearchPage: React.FC = () => {
               </div>
             ) : null}
             {leadView === 'last_geo_search' ? (
-              <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
-                <div>Активен фильтр по последнему geo-search: {lastGeoSearchLeadIds.length} лидов.</div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setLeadView('all');
-                    setLastGeoSearchLeadIds([]);
-                    setSelectedLeadIds([]);
-                  }}
-                  disabled={loading}
-                >
-                  Сбросить фильтр
-                </Button>
+              <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-3 py-3 text-xs text-sky-800">
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                  <div>
+                    <div className="font-medium text-sky-900">Активен фильтр по последнему geo-search: {lastGeoSearchLeadIds.length} лидов.</div>
+                    <div className="mt-1 text-[11px] text-sky-800">
+                      Можно сразу прогнать быстрый сценарий: enrich → audit → match → draft только по этим новым лидам.
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => void bulkEnrichContacts()} disabled={loading || selectedLeadIds.length === 0}>
+                      Обогатить контакты
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => void moveLastGeoSearchToPilot()} disabled={loading || lastGeoSearchLeadIds.length === 0}>
+                      В pilot cohort
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => void runLastGeoSearchFlow()} disabled={loading || lastGeoSearchLeadIds.length === 0}>
+                      Быстрый сценарий
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setLeadView('all');
+                        setLastGeoSearchLeadIds([]);
+                        setSelectedLeadIds([]);
+                      }}
+                      disabled={loading}
+                    >
+                      Сбросить фильтр
+                    </Button>
+                  </div>
+                </div>
               </div>
             ) : null}
 
