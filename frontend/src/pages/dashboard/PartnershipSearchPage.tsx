@@ -186,7 +186,10 @@ export const PartnershipSearchPage: React.FC = () => {
   const [matchData, setMatchData] = useState<any>(null);
   const [draftText, setDraftText] = useState('');
   const [drafts, setDrafts] = useState<PartnershipDraft[]>([]);
+  const [selectedDraftIds, setSelectedDraftIds] = useState<string[]>([]);
   const [batches, setBatches] = useState<PartnershipBatch[]>([]);
+  const [selectedQueueIds, setSelectedQueueIds] = useState<string[]>([]);
+  const [bulkQueueStatus, setBulkQueueStatus] = useState('');
   const [queueReadyDrafts, setQueueReadyDrafts] = useState<PartnershipDraft[]>([]);
   const [reactions, setReactions] = useState<PartnershipReaction[]>([]);
   const [sendQueueBusy, setSendQueueBusy] = useState<Record<string, string>>({});
@@ -280,6 +283,7 @@ export const PartnershipSearchPage: React.FC = () => {
       method: 'GET',
     });
     setDrafts(Array.isArray(data.drafts) ? data.drafts : []);
+    setSelectedDraftIds((prev) => prev.filter((id) => (data.drafts || []).some((x: any) => x.id === id)));
   };
 
   const loadBatches = async () => {
@@ -288,6 +292,10 @@ export const PartnershipSearchPage: React.FC = () => {
       method: 'GET',
     });
     setBatches(Array.isArray(data.batches) ? data.batches : []);
+    const queueIds = (Array.isArray(data.batches) ? data.batches : [])
+      .flatMap((batch: any) => (Array.isArray(batch.items) ? batch.items : []))
+      .map((item: any) => item.id);
+    setSelectedQueueIds((prev) => prev.filter((id) => queueIds.includes(id)));
     setQueueReadyDrafts(Array.isArray(data.ready_drafts) ? data.ready_drafts : []);
     setReactions(Array.isArray(data.reactions) ? data.reactions : []);
   };
@@ -733,6 +741,69 @@ export const PartnershipSearchPage: React.FC = () => {
     }
   };
 
+  const toggleDraftSelection = (draftId: string, checked: boolean) => {
+    setSelectedDraftIds((prev) => {
+      if (checked) return prev.includes(draftId) ? prev : [...prev, draftId];
+      return prev.filter((id) => id !== draftId);
+    });
+  };
+
+  const toggleAllDraftSelection = (checked: boolean) => {
+    setSelectedDraftIds(checked ? drafts.map((draft) => draft.id) : []);
+  };
+
+  const bulkApproveDrafts = async () => {
+    if (!currentBusinessId || selectedDraftIds.length === 0) return;
+    try {
+      setLoading(true);
+      setError(null);
+      await Promise.all(
+        selectedDraftIds.map((draftId) => {
+          const draft = drafts.find((item) => item.id === draftId);
+          const text = draft?.approved_text || draft?.edited_text || draft?.generated_text || '';
+          return newAuth.makeRequest(`/partnership/drafts/${draftId}/approve`, {
+            method: 'POST',
+            body: JSON.stringify({ business_id: currentBusinessId, approved_text: text }),
+          });
+        })
+      );
+      setMessage(`Утверждено черновиков: ${selectedDraftIds.length}`);
+      setSelectedDraftIds([]);
+      await loadDrafts();
+      await loadBatches();
+      await loadLeads();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось массово утвердить черновики');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const bulkDeleteDrafts = async () => {
+    if (!currentBusinessId || selectedDraftIds.length === 0) return;
+    const ok = window.confirm(`Удалить выбранные черновики (${selectedDraftIds.length})?`);
+    if (!ok) return;
+    try {
+      setLoading(true);
+      setError(null);
+      await Promise.all(
+        selectedDraftIds.map((draftId) =>
+          newAuth.makeRequest(`/partnership/drafts/${draftId}?business_id=${encodeURIComponent(currentBusinessId)}`, {
+            method: 'DELETE',
+          })
+        )
+      );
+      setMessage(`Удалено черновиков: ${selectedDraftIds.length}`);
+      setSelectedDraftIds([]);
+      await loadDrafts();
+      await loadBatches();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось массово удалить черновики');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const createBatch = async () => {
     if (!currentBusinessId) return;
     try {
@@ -774,6 +845,72 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadOutcomes();
     } catch (e: any) {
       setError(e.message || 'Не удалось утвердить batch');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleQueueSelection = (queueId: string, checked: boolean) => {
+    setSelectedQueueIds((prev) => {
+      if (checked) return prev.includes(queueId) ? prev : [...prev, queueId];
+      return prev.filter((id) => id !== queueId);
+    });
+  };
+
+  const toggleAllQueueSelection = (checked: boolean) => {
+    const ids = batches.flatMap((batch) => (batch.items || []).map((item) => item.id));
+    setSelectedQueueIds(checked ? ids : []);
+  };
+
+  const bulkUpdateQueueDelivery = async () => {
+    if (!currentBusinessId || selectedQueueIds.length === 0) return;
+    if (!bulkQueueStatus) {
+      setError('Выберите delivery-статус для очереди');
+      return;
+    }
+    try {
+      setLoading(true);
+      setError(null);
+      await Promise.all(
+        selectedQueueIds.map((queueId) =>
+          newAuth.makeRequest(`/partnership/send-queue/${queueId}/delivery`, {
+            method: 'POST',
+            body: JSON.stringify({ business_id: currentBusinessId, delivery_status: bulkQueueStatus }),
+          })
+        )
+      );
+      setMessage(`Обновлено queue-элементов: ${selectedQueueIds.length}`);
+      setSelectedQueueIds([]);
+      await loadBatches();
+      await loadLeads();
+      await loadOutcomes();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось обновить очередь');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const bulkDeleteQueueItems = async () => {
+    if (!currentBusinessId || selectedQueueIds.length === 0) return;
+    const ok = window.confirm(`Удалить выбранные queue-элементы (${selectedQueueIds.length})?`);
+    if (!ok) return;
+    try {
+      setLoading(true);
+      setError(null);
+      await Promise.all(
+        selectedQueueIds.map((queueId) =>
+          newAuth.makeRequest(`/partnership/send-queue/${queueId}?business_id=${encodeURIComponent(currentBusinessId)}`, {
+            method: 'DELETE',
+          })
+        )
+      );
+      setMessage(`Удалено queue-элементов: ${selectedQueueIds.length}`);
+      setSelectedQueueIds([]);
+      await loadBatches();
+      await loadLeads();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось удалить queue-элементы');
     } finally {
       setLoading(false);
     }
@@ -1423,11 +1560,45 @@ export const PartnershipSearchPage: React.FC = () => {
                 Обновить
               </Button>
             </div>
+            {drafts.length > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                  <div className="text-xs text-muted-foreground">
+                    Выбрано черновиков: {selectedDraftIds.length}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" onClick={bulkApproveDrafts} disabled={loading || selectedDraftIds.length === 0}>
+                      Утвердить выбранные
+                    </Button>
+                    <Button variant="outline" onClick={bulkDeleteDrafts} disabled={loading || selectedDraftIds.length === 0}>
+                      Удалить выбранные
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
             {drafts.length === 0 ? (
               <p className="text-sm text-muted-foreground">Черновиков пока нет.</p>
             ) : (
-              drafts.map((draft) => (
+              <>
+                <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={drafts.length > 0 && selectedDraftIds.length === drafts.length}
+                    onChange={(e) => toggleAllDraftSelection(e.target.checked)}
+                  />
+                  Выбрать все черновики
+                </label>
+              {drafts.map((draft) => (
                 <div key={draft.id} className="rounded-lg border border-gray-200 p-3">
+                  <div className="flex items-start gap-3">
+                    <input
+                      className="mt-1"
+                      type="checkbox"
+                      checked={selectedDraftIds.includes(draft.id)}
+                      onChange={(e) => toggleDraftSelection(draft.id, e.target.checked)}
+                    />
+                    <div className="flex-1">
                   <div className="text-sm font-semibold text-foreground">{draft.lead_name || draft.lead_id}</div>
                   <div className="text-xs text-muted-foreground mb-2">
                     статус: {draft.status || '—'} · канал: {draft.channel || '—'}
@@ -1450,8 +1621,11 @@ export const PartnershipSearchPage: React.FC = () => {
                       Утвердить для отправки
                     </Button>
                   </div>
+                    </div>
+                  </div>
                 </div>
-              ))
+              ))}
+              </>
             )}
           </div>
 
@@ -1467,10 +1641,49 @@ export const PartnershipSearchPage: React.FC = () => {
                 </Button>
               </div>
             </div>
+            {batches.length > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3">
+                  <div className="text-xs text-muted-foreground">
+                    Выбрано queue-элементов: {selectedQueueIds.length}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Select value={bulkQueueStatus} onValueChange={setBulkQueueStatus}>
+                      <SelectTrigger className="w-[220px] bg-white">
+                        <SelectValue placeholder="Delivery-статус" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sent">sent</SelectItem>
+                        <SelectItem value="delivered">delivered</SelectItem>
+                        <SelectItem value="failed">failed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button variant="outline" onClick={bulkUpdateQueueDelivery} disabled={loading || selectedQueueIds.length === 0}>
+                      Обновить статус
+                    </Button>
+                    <Button variant="outline" onClick={bulkDeleteQueueItems} disabled={loading || selectedQueueIds.length === 0}>
+                      Удалить выбранные
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
             {batches.length === 0 ? (
               <p className="text-sm text-muted-foreground">Batch пока нет.</p>
             ) : (
-              batches.map((batch) => (
+              <>
+                <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={
+                      batches.flatMap((batch) => (batch.items || []).map((item) => item.id)).length > 0 &&
+                      selectedQueueIds.length === batches.flatMap((batch) => (batch.items || []).map((item) => item.id)).length
+                    }
+                    onChange={(e) => toggleAllQueueSelection(e.target.checked)}
+                  />
+                  Выбрать все queue-элементы
+                </label>
+              {batches.map((batch) => (
                 <div key={batch.id} className="rounded-lg border border-gray-200 p-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
@@ -1489,10 +1702,18 @@ export const PartnershipSearchPage: React.FC = () => {
                     <div className="mt-2 space-y-2">
                       {(batch.items || []).slice(0, 8).map((item) => (
                         <div key={item.id} className="rounded border border-gray-100 p-2 text-xs text-muted-foreground">
-                          <div>
-                            {item.lead_name || item.id} · {item.channel || '—'} · {item.delivery_status || '—'}
-                            {item.error_text ? ` · ${item.error_text}` : ''}
-                          </div>
+                          <div className="flex items-start gap-2">
+                            <input
+                              className="mt-0.5"
+                              type="checkbox"
+                              checked={selectedQueueIds.includes(item.id)}
+                              onChange={(e) => toggleQueueSelection(item.id, e.target.checked)}
+                            />
+                            <div>
+                              <div>
+                                {item.lead_name || item.id} · {item.channel || '—'} · {item.delivery_status || '—'}
+                                {item.error_text ? ` · ${item.error_text}` : ''}
+                              </div>
                           {(item.latest_human_outcome || item.latest_outcome) && (
                             <div className="mt-1 text-emerald-700">
                               outcome: {item.latest_human_outcome || item.latest_outcome}
@@ -1523,12 +1744,15 @@ export const PartnershipSearchPage: React.FC = () => {
                               ))}
                             </div>
                           )}
+                            </div>
+                          </div>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
-              ))
+              ))}
+              </>
             )}
           </div>
 

@@ -4744,6 +4744,48 @@ def partnership_approve_draft(draft_id):
         return jsonify({"error": str(e)}), 500
 
 
+@admin_prospecting_bp.route("/api/partnership/drafts/<string:draft_id>", methods=["DELETE"])
+def partnership_delete_draft(draft_id):
+    """User-level delete for partnership draft."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+
+    try:
+        requested_business_id = str(request.args.get("business_id") or "").strip() or None
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+            cur.execute(
+                """
+                SELECT 1
+                FROM outreachmessagedrafts d
+                JOIN prospectingleads l ON l.id = d.lead_id
+                WHERE d.id = %s
+                  AND l.business_id = %s
+                  AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+                LIMIT 1
+                """,
+                (draft_id, business_id),
+            )
+            if not cur.fetchone():
+                return jsonify({"error": "Draft not found"}), 404
+        finally:
+            conn.close()
+
+        deleted = _delete_outreach_draft(draft_id)
+        if not deleted:
+            return jsonify({"success": True, "already_deleted": True, "draft_id": draft_id})
+        return jsonify({"success": True, "draft": _serialize_draft(deleted)})
+    except Exception as e:
+        print(f"Error deleting partnership draft: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 def _load_partnership_send_snapshot(*, business_id: str) -> dict[str, Any]:
     conn = get_db_connection()
     try:
@@ -5055,6 +5097,76 @@ def partnership_record_queue_reaction(queue_id):
         return jsonify({"success": True, "reaction": reaction})
     except Exception as e:
         print(f"Error recording partnership reaction: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/send-queue/<string:queue_id>/delivery", methods=["POST"])
+def partnership_update_send_queue_delivery(queue_id):
+    """User-level manual delivery status update for partnership queue item."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        delivery_status = (data.get("delivery_status") or "").strip().lower()
+        if delivery_status not in {QUEUE_STATUS_SENT, QUEUE_STATUS_DELIVERED, QUEUE_STATUS_FAILED}:
+            return jsonify({"error": "delivery_status must be sent, delivered or failed"}), 400
+
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+            if not _partnership_queue_access(cur, queue_id=queue_id, business_id=business_id):
+                return jsonify({"error": "Queue item not found"}), 404
+        finally:
+            conn.close()
+
+        row = _update_send_queue_delivery(
+            queue_id,
+            delivery_status,
+            (data.get("provider_message_id") or "").strip() or None,
+            (data.get("error_text") or "").strip() or None,
+        )
+        if not row:
+            return jsonify({"error": "Queue item not found"}), 404
+        return jsonify({"success": True, "item": row})
+    except Exception as e:
+        print(f"Error updating partnership send queue delivery: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/send-queue/<string:queue_id>", methods=["DELETE"])
+def partnership_delete_send_queue_item(queue_id):
+    """User-level delete for partnership queue item."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+
+    try:
+        requested_business_id = str(request.args.get("business_id") or "").strip() or None
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+            if not _partnership_queue_access(cur, queue_id=queue_id, business_id=business_id):
+                return jsonify({"error": "Queue item not found"}), 404
+        finally:
+            conn.close()
+
+        deleted = _delete_send_queue_item(queue_id)
+        if not deleted:
+            return jsonify({"success": True, "already_deleted": True, "queue_id": queue_id})
+        return jsonify({"success": True, "item": deleted})
+    except Exception as e:
+        print(f"Error deleting partnership send queue item: {e}")
         return jsonify({"error": str(e)}), 500
 
 
