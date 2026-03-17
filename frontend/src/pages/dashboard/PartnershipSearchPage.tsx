@@ -504,6 +504,70 @@ export const PartnershipSearchPage: React.FC = () => {
     };
   }, [items, lastGeoSearchLeadIds]);
 
+  const lastGeoSearchFlowSummary = useMemo(() => {
+    const sourceLeads = items.filter((item) => lastGeoSearchLeadIds.includes(item.id));
+    if (sourceLeads.length === 0) return null;
+    const leadIds = new Set(sourceLeads.map((item) => item.id));
+    const sourceDrafts = drafts.filter((draft) => leadIds.has(String(draft.lead_id || '')));
+    const sourceQueueItems = allQueueItems.filter((item) => leadIds.has(String(item.lead_id || '')));
+    const sourceReactions = reactions.filter((item) => leadIds.has(String(item.lead_id || '')));
+
+    const audited = sourceLeads.filter((item) =>
+      ['audited', 'matched', 'proposal_draft_ready', 'proposal_approved', 'queued_for_send', 'sent'].includes(
+        String(item.partnership_stage || '').toLowerCase()
+      )
+    ).length;
+    const matched = sourceLeads.filter((item) =>
+      ['matched', 'proposal_draft_ready', 'proposal_approved', 'queued_for_send', 'sent'].includes(
+        String(item.partnership_stage || '').toLowerCase()
+      )
+    ).length;
+    const draftReady = sourceLeads.filter((item) =>
+      ['proposal_draft_ready', 'proposal_approved', 'queued_for_send', 'sent'].includes(
+        String(item.partnership_stage || '').toLowerCase()
+      )
+    ).length;
+    const draftsApproved = sourceDrafts.filter((draft) => String(draft.status || '').toLowerCase() === 'approved').length;
+    const queued = sourceQueueItems.filter((item) =>
+      ['queued', 'sending', 'retry', 'sent', 'delivered', 'failed'].includes(String(item.delivery_status || '').toLowerCase())
+    ).length;
+    const sent = sourceQueueItems.filter((item) =>
+      ['sent', 'delivered'].includes(String(item.delivery_status || '').toLowerCase())
+    ).length;
+    const positive = sourceReactions.filter((item) =>
+      String(item.human_confirmed_outcome || item.classified_outcome || '').toLowerCase() === 'positive'
+    ).length;
+
+    return {
+      total: sourceLeads.length,
+      audited,
+      matched,
+      draftReady,
+      draftsApproved,
+      queued,
+      sent,
+      positive,
+    };
+  }, [items, lastGeoSearchLeadIds, drafts, allQueueItems, reactions]);
+
+  const selectedLeadFlowStatus = useMemo(() => {
+    if (!selectedLead) return null;
+    const leadId = String(selectedLead.id || '');
+    const leadDrafts = drafts.filter((draft) => String(draft.lead_id || '') === leadId);
+    const leadQueueItems = allQueueItems.filter((item) => String(item.lead_id || '') === leadId);
+    const leadReactions = reactions.filter((item) => String(item.lead_id || '') === leadId);
+    return {
+      draftsTotal: leadDrafts.length,
+      draftsApproved: leadDrafts.filter((draft) => String(draft.status || '').toLowerCase() === 'approved').length,
+      queueTotal: leadQueueItems.length,
+      sentTotal: leadQueueItems.filter((item) => ['sent', 'delivered'].includes(String(item.delivery_status || '').toLowerCase())).length,
+      outcomeFinal:
+        leadReactions[0]?.human_confirmed_outcome ||
+        leadReactions[0]?.classified_outcome ||
+        null,
+    };
+  }, [selectedLead, drafts, allQueueItems, reactions]);
+
   const visibleDrafts = useMemo(() => {
     return drafts.filter((draft) => {
       const status = String(draft.status || '').toLowerCase();
@@ -2803,6 +2867,17 @@ export const PartnershipSearchPage: React.FC = () => {
                         <span className="rounded-full border border-sky-200 bg-white px-2 py-0.5">готовы к draft {lastGeoSearchStats.readyForDraft}</span>
                       </div>
                     ) : null}
+                    {lastGeoSearchFlowSummary ? (
+                      <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                        <span className="rounded-full border border-indigo-200 bg-white px-2 py-0.5">audited {lastGeoSearchFlowSummary.audited}</span>
+                        <span className="rounded-full border border-indigo-200 bg-white px-2 py-0.5">matched {lastGeoSearchFlowSummary.matched}</span>
+                        <span className="rounded-full border border-indigo-200 bg-white px-2 py-0.5">draft ready {lastGeoSearchFlowSummary.draftReady}</span>
+                        <span className="rounded-full border border-indigo-200 bg-white px-2 py-0.5">draft approved {lastGeoSearchFlowSummary.draftsApproved}</span>
+                        <span className="rounded-full border border-indigo-200 bg-white px-2 py-0.5">queued {lastGeoSearchFlowSummary.queued}</span>
+                        <span className="rounded-full border border-indigo-200 bg-white px-2 py-0.5">sent {lastGeoSearchFlowSummary.sent}</span>
+                        <span className="rounded-full border border-indigo-200 bg-white px-2 py-0.5">positive {lastGeoSearchFlowSummary.positive}</span>
+                      </div>
+                    ) : null}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button size="sm" variant="outline" onClick={() => void bulkEnrichContacts()} disabled={loading || selectedLeadIds.length === 0}>
@@ -3135,6 +3210,18 @@ export const PartnershipSearchPage: React.FC = () => {
                           .map(([key, value]) => `${key} ${Math.round(Number(value || 0) * 100)}%`)
                           .join(' · ')
                       : '—'}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3">
+                  <div className="text-sm font-medium text-foreground">Статус в операторском потоке</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    stage: {selectedLead.partnership_stage || 'imported'} · parse: {selectedLead.parse_status || '—'} · channel: {selectedLead.selected_channel || '—'}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    drafts: {selectedLeadFlowStatus?.draftsTotal ?? 0} · approved: {selectedLeadFlowStatus?.draftsApproved ?? 0}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    queue: {selectedLeadFlowStatus?.queueTotal ?? 0} · sent: {selectedLeadFlowStatus?.sentTotal ?? 0} · outcome: {selectedLeadFlowStatus?.outcomeFinal || '—'}
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
