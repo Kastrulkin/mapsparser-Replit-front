@@ -1109,6 +1109,113 @@ export const PartnershipSearchPage: React.FC = () => {
     }
   };
 
+  const runBestSourcePilotFlow = async () => {
+    if (!currentBusinessId || !bestSourceThisWeek) return;
+    const sourceLeads = items.filter(
+      (item) =>
+        String(item.source_kind || '').toLowerCase() === String(bestSourceThisWeek.source_kind || '').toLowerCase() &&
+        String(item.source_provider || '').toLowerCase() === String(bestSourceThisWeek.source_provider || '').toLowerCase()
+    );
+    if (sourceLeads.length === 0) {
+      setMessage('Для лучшего источника пока нет лидов.');
+      return;
+    }
+
+    const leadIds = sourceLeads.map((item) => item.id);
+    const parseReadyLeads = sourceLeads.filter((item) => String(item.parse_status || '').toLowerCase() === 'completed');
+    let enrichedCount = 0;
+    let auditedCount = 0;
+    let matchedCount = 0;
+    let draftedCount = 0;
+    let skippedParseCount = Math.max(0, sourceLeads.length - parseReadyLeads.length);
+    const errors: string[] = [];
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const enrichData = await newAuth.makeRequest('/partnership/leads/bulk-enrich-contacts', {
+          method: 'POST',
+          body: JSON.stringify({
+            business_id: currentBusinessId,
+            lead_ids: leadIds,
+          }),
+        });
+        enrichedCount = Number(enrichData?.updated_count || 0);
+      } catch (e: any) {
+        errors.push(`enrich: ${e?.message || 'ошибка'}`);
+      }
+
+      for (const lead of parseReadyLeads) {
+        try {
+          await newAuth.makeRequest(`/partnership/leads/${lead.id}/audit`, {
+            method: 'POST',
+            body: JSON.stringify({ business_id: currentBusinessId }),
+          });
+          auditedCount += 1;
+        } catch (e: any) {
+          errors.push(`${lead.name || lead.id}: audit — ${e?.message || 'ошибка'}`);
+          continue;
+        }
+
+        try {
+          await newAuth.makeRequest(`/partnership/leads/${lead.id}/match`, {
+            method: 'POST',
+            body: JSON.stringify({ business_id: currentBusinessId }),
+          });
+          matchedCount += 1;
+        } catch (e: any) {
+          errors.push(`${lead.name || lead.id}: match — ${e?.message || 'ошибка'}`);
+          continue;
+        }
+
+        try {
+          await newAuth.makeRequest(`/partnership/leads/${lead.id}/draft-offer`, {
+            method: 'POST',
+            body: JSON.stringify({
+              business_id: currentBusinessId,
+              channel: 'telegram',
+              tone: 'профессиональный',
+            }),
+          });
+          draftedCount += 1;
+        } catch (e: any) {
+          errors.push(`${lead.name || lead.id}: draft — ${e?.message || 'ошибка'}`);
+        }
+      }
+
+      setSelectedLeadIds(parseReadyLeads.map((item) => item.id));
+      const summaryParts = [
+        `Источник: ${bestSourceThisWeek.source_kind || 'unknown'} / ${bestSourceThisWeek.source_provider || 'unknown'}`,
+        `enrich ${enrichedCount}`,
+        `audit ${auditedCount}`,
+        `match ${matchedCount}`,
+        `draft ${draftedCount}`,
+      ];
+      if (skippedParseCount > 0) {
+        summaryParts.push(`пропущено без parse completed: ${skippedParseCount}`);
+      }
+      if (errors.length > 0) {
+        summaryParts.push(`ошибок: ${errors.length}`);
+      }
+      setMessage(summaryParts.join(' · '));
+
+      await loadLeads();
+      await loadDrafts();
+      await loadBatches();
+      await loadFunnel();
+      await loadOutcomes();
+      await loadSourceQuality();
+      await loadRalphLoop();
+      await loadHealth();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось выполнить pilot run для лучшего источника');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const deleteLead = async (leadId: string) => {
     if (!currentBusinessId) return;
     const ok = window.confirm('Удалить этого партнёра из списка?');
@@ -1883,6 +1990,9 @@ export const PartnershipSearchPage: React.FC = () => {
                         </Button>
                         <Button size="sm" onClick={() => void moveBestSourceToPilot()} disabled={loading || !bestSourceThisWeek}>
                           В pilot cohort
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => void runBestSourcePilotFlow()} disabled={loading || !bestSourceThisWeek}>
+                          Pilot run
                         </Button>
                       </div>
                     </div>
