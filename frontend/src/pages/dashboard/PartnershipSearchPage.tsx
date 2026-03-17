@@ -202,6 +202,14 @@ type PartnershipRalphLoop = {
   }>;
   blockers?: string[];
   recommendations?: string[];
+  edit_insights?: {
+    edited_accepts_total?: number;
+    avg_generated_len?: number;
+    avg_final_len?: number;
+    expanded_count?: number;
+    shortened_count?: number;
+    unchanged_count?: number;
+  };
 };
 
 const STAGE_OPTIONS = [
@@ -1613,6 +1621,43 @@ export const PartnershipSearchPage: React.FC = () => {
                       <div className="text-sm text-muted-foreground">Явных блокеров за период не найдено.</div>
                     )}
                   </div>
+                </div>
+                <div className="rounded-lg border border-fuchsia-200 bg-fuchsia-50 p-3">
+                  <div className="text-sm font-semibold mb-2">Как оператор правит первое письмо</div>
+                  {(ralphLoop.edit_insights?.edited_accepts_total || 0) > 0 ? (
+                    <div className="grid grid-cols-2 md:grid-cols-6 gap-2 text-sm">
+                      <div className="rounded-lg border border-white/80 bg-white/80 p-3">
+                        <div className="text-xs uppercase text-muted-foreground">Правок</div>
+                        <div className="text-lg font-semibold mt-1">{ralphLoop.edit_insights?.edited_accepts_total ?? 0}</div>
+                      </div>
+                      <div className="rounded-lg border border-white/80 bg-white/80 p-3">
+                        <div className="text-xs uppercase text-muted-foreground">Черновик</div>
+                        <div className="text-lg font-semibold mt-1">{ralphLoop.edit_insights?.avg_generated_len ?? 0}</div>
+                        <div className="text-xs text-muted-foreground mt-1">ср. длина</div>
+                      </div>
+                      <div className="rounded-lg border border-white/80 bg-white/80 p-3">
+                        <div className="text-xs uppercase text-muted-foreground">Финал</div>
+                        <div className="text-lg font-semibold mt-1">{ralphLoop.edit_insights?.avg_final_len ?? 0}</div>
+                        <div className="text-xs text-muted-foreground mt-1">ср. длина</div>
+                      </div>
+                      <div className="rounded-lg border border-white/80 bg-white/80 p-3">
+                        <div className="text-xs uppercase text-muted-foreground">Дописывают</div>
+                        <div className="text-lg font-semibold mt-1">{ralphLoop.edit_insights?.expanded_count ?? 0}</div>
+                      </div>
+                      <div className="rounded-lg border border-white/80 bg-white/80 p-3">
+                        <div className="text-xs uppercase text-muted-foreground">Сокращают</div>
+                        <div className="text-lg font-semibold mt-1">{ralphLoop.edit_insights?.shortened_count ?? 0}</div>
+                      </div>
+                      <div className="rounded-lg border border-white/80 bg-white/80 p-3">
+                        <div className="text-xs uppercase text-muted-foreground">Без изменений</div>
+                        <div className="text-lg font-semibold mt-1">{ralphLoop.edit_insights?.unchanged_count ?? 0}</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">
+                      Пока нет утверждённых писем с ручными правками за выбранное окно.
+                    </div>
+                  )}
                 </div>
               </>
             )}

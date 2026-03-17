@@ -4273,11 +4273,39 @@ def partnership_ralph_loop_summary():
                 (window_days,),
             )
             learning_rows = cur.fetchall() or []
+
+            cur.execute(
+                """
+                SELECT
+                    COUNT(*)::INT AS edited_accepts_total,
+                    COALESCE(AVG(CHAR_LENGTH(COALESCE(draft_text, ''))), 0)::FLOAT AS avg_generated_len,
+                    COALESCE(AVG(CHAR_LENGTH(COALESCE(final_text, ''))), 0)::FLOAT AS avg_final_len,
+                    COUNT(*) FILTER (
+                        WHERE CHAR_LENGTH(COALESCE(final_text, '')) > CHAR_LENGTH(COALESCE(draft_text, ''))
+                    )::INT AS expanded_count,
+                    COUNT(*) FILTER (
+                        WHERE CHAR_LENGTH(COALESCE(final_text, '')) < CHAR_LENGTH(COALESCE(draft_text, ''))
+                    )::INT AS shortened_count,
+                    COUNT(*) FILTER (
+                        WHERE CHAR_LENGTH(COALESCE(final_text, '')) = CHAR_LENGTH(COALESCE(draft_text, ''))
+                    )::INT AS unchanged_count
+                FROM ailearningevents
+                WHERE intent = 'partnership_outreach'
+                  AND capability = 'partnership.draft_offer'
+                  AND event_type = 'accepted'
+                  AND COALESCE(edited_before_accept, FALSE) = TRUE
+                  AND business_id = NULLIF(%s, '')::uuid
+                  AND created_at >= NOW() - (%s || ' days')::INTERVAL
+                """,
+                (business_id, window_days),
+            )
+            edit_row = cur.fetchone()
         finally:
             conn.close()
 
         row_dict = dict(row) if hasattr(row, "keys") else {}
         baseline_dict = dict(baseline_row) if hasattr(baseline_row, "keys") else {}
+        edit_dict = dict(edit_row) if hasattr(edit_row, "keys") else {}
         sent_total = int(row_dict.get("sent_total") or 0)
         positive_count = int(row_dict.get("positive_count") or 0)
         question_count = int(row_dict.get("question_count") or 0)
@@ -4287,6 +4315,12 @@ def partnership_ralph_loop_summary():
         baseline_sent_total = int(baseline_dict.get("sent_total") or 0)
         baseline_positive_count = int(baseline_dict.get("positive_count") or 0)
         baseline_positive_rate_pct = round((baseline_positive_count / baseline_sent_total * 100.0), 2) if baseline_sent_total else 0.0
+        edited_accepts_total = int(edit_dict.get("edited_accepts_total") or 0)
+        avg_generated_len = round(float(edit_dict.get("avg_generated_len") or 0.0), 1)
+        avg_final_len = round(float(edit_dict.get("avg_final_len") or 0.0), 1)
+        expanded_count = int(edit_dict.get("expanded_count") or 0)
+        shortened_count = int(edit_dict.get("shortened_count") or 0)
+        unchanged_count = int(edit_dict.get("unchanged_count") or 0)
 
         top_channels = []
         for ch in by_channel_rows:
@@ -4345,6 +4379,15 @@ def partnership_ralph_loop_summary():
                 recommendations.append(
                     f"Промпт {most_edited.get('capability') or 'unknown'} часто правят вручную — стоит обновить формулировки в админке."
                 )
+        if edited_accepts_total > 0:
+            if shortened_count > expanded_count:
+                recommendations.append(
+                    "Операторы чаще сокращают первое письмо перед отправкой — стоит сделать дефолтный оффер короче и плотнее."
+                )
+            elif expanded_count > shortened_count:
+                recommendations.append(
+                    "Операторы чаще дописывают первое письмо перед отправкой — базовому офферу не хватает конкретики."
+                )
 
         return jsonify(
             {
@@ -4381,6 +4424,14 @@ def partnership_ralph_loop_summary():
                 "learning": learning,
                 "blockers": blockers,
                 "recommendations": recommendations,
+                "edit_insights": {
+                    "edited_accepts_total": edited_accepts_total,
+                    "avg_generated_len": avg_generated_len,
+                    "avg_final_len": avg_final_len,
+                    "expanded_count": expanded_count,
+                    "shortened_count": shortened_count,
+                    "unchanged_count": unchanged_count,
+                },
             }
         )
     except Exception as e:
