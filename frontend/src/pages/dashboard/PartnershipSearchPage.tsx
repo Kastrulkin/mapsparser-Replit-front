@@ -918,7 +918,7 @@ export const PartnershipSearchPage: React.FC = () => {
       });
       const providerLabel =
         geoProvider === 'google' ? 'Google' : geoProvider === 'yandex' ? 'Яндекс' : 'Google + Яндекс';
-      const baseMsg = `${providerLabel}: импортировано ${data.imported_count || 0}, пропущено ${data.skipped_count || 0}, найдено источником ${data.source_total || 0}`;
+      const baseMsg = `${providerLabel}: импортировано ${data.imported_count || 0}, объединено ${data.merged_count || 0}, пропущено ${data.skipped_count || 0}, найдено источником ${data.source_total || 0}`;
       const importedLeadIds = Array.isArray(data.lead_ids) ? data.lead_ids.filter((id: unknown) => typeof id === 'string' && id) : [];
       setLastGeoSearchLeadIds(importedLeadIds);
       if (importedLeadIds.length > 0) {
@@ -939,6 +939,68 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadRalphLoop();
     } catch (e: any) {
       setError(e.message || 'Не удалось выполнить гео-поиск');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const normalizeSelectedViaOpenClaw = async () => {
+    if (!currentBusinessId || selectedLeadIds.length === 0) return;
+    const selectedLeads = items.filter((item) => selectedLeadIds.includes(item.id));
+    if (selectedLeads.length === 0) {
+      setMessage('Для нормализации не выбраны лиды.');
+      return;
+    }
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await newAuth.makeRequest('/partnership/geo-search', {
+        method: 'POST',
+        body: JSON.stringify({
+          business_id: currentBusinessId,
+          city: geoCity.trim(),
+          category: geoCategory.trim(),
+          query: geoQuery.trim(),
+          provider: 'google',
+          items: selectedLeads.map((item) => ({
+            name: item.name,
+            source_url: item.source_url,
+            city: item.city,
+            category: item.category,
+            address: item.address,
+            phone: item.phone,
+            email: item.email,
+            website: item.website,
+            telegram_url: item.telegram_url,
+            whatsapp_url: item.whatsapp_url,
+            rating: item.rating,
+            reviews_count: item.reviews_count,
+            source_kind: item.source_kind,
+            source_provider: item.source_provider,
+            lat: item.lat,
+            lon: item.lon,
+          })),
+        }),
+      });
+      const importedLeadIds = Array.isArray(data.lead_ids) ? data.lead_ids.filter((id: unknown) => typeof id === 'string' && id) : [];
+      if (importedLeadIds.length > 0) {
+        setLastGeoSearchLeadIds(importedLeadIds);
+        setLeadView('last_geo_search');
+        setSelectedLeadIds(importedLeadIds);
+      }
+      setMessage(
+        `OpenClaw нормализовал список: импортировано ${data.imported_count || 0}, объединено ${data.merged_count || 0}, пропущено ${data.skipped_count || 0}, найдено ${data.source_total || 0}.`
+      );
+      await loadLeads();
+      await loadDrafts();
+      await loadBatches();
+      await loadHealth();
+      await loadFunnel();
+      await loadOutcomes();
+      await loadSourceQuality();
+      await loadRalphLoop();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось нормализовать выбранные лиды через OpenClaw');
     } finally {
       setLoading(false);
     }
@@ -2959,6 +3021,9 @@ export const PartnershipSearchPage: React.FC = () => {
                   </Button>
                   <Button variant="outline" onClick={bulkEnrichContacts} disabled={loading || selectedLeadIds.length === 0}>
                     Обогатить контакты
+                  </Button>
+                  <Button variant="outline" onClick={normalizeSelectedViaOpenClaw} disabled={loading || selectedLeadIds.length === 0}>
+                    Нормализовать через OpenClaw
                   </Button>
                   <Button variant="outline" onClick={bulkDeleteLeads} disabled={loading || selectedLeadIds.length === 0}>
                     Удалить выбранные

@@ -3277,11 +3277,13 @@ def partnership_geo_search():
         category = str(data.get("category") or "").strip()
         query = str(data.get("query") or "").strip()
         provider = str(data.get("provider") or "google").strip().lower()
+        items_raw = data.get("items")
+        has_seed_items = isinstance(items_raw, list) and len(items_raw) > 0
         radius_km = int(data.get("radius_km") or 5)
         limit = int(data.get("limit") or 25)
         radius_km = max(1, min(radius_km, 100))
         limit = max(1, min(limit, 200))
-        if not city and not query:
+        if not has_seed_items and not city and not query:
             return jsonify({"error": "city or query is required"}), 400
         if provider not in {"google", "yandex", "both"}:
             return jsonify({"error": "provider must be one of: google, yandex, both"}), 400
@@ -3315,8 +3317,35 @@ def partnership_geo_search():
                         "limit": limit,
                         "intent": "partnership_outreach",
                         "business_id": business_id,
-                        "provider": "google",
                     }
+                    if not has_seed_items:
+                        cap_payload["provider"] = "google"
+                    else:
+                        normalized_items = []
+                        for item in items_raw:
+                            if not isinstance(item, dict):
+                                continue
+                            normalized_items.append(
+                                {
+                                    "name": item.get("name"),
+                                    "source_url": item.get("source_url") or item.get("url"),
+                                    "city": item.get("city"),
+                                    "category": item.get("category"),
+                                    "address": item.get("address"),
+                                    "phone": item.get("phone"),
+                                    "email": item.get("email"),
+                                    "website": item.get("website"),
+                                    "telegram_url": item.get("telegram_url"),
+                                    "whatsapp_url": item.get("whatsapp_url"),
+                                    "rating": item.get("rating"),
+                                    "reviews_count": item.get("reviews_count"),
+                                    "source_kind": item.get("source_kind"),
+                                    "source_provider": item.get("source_provider"),
+                                    "lat": item.get("lat"),
+                                    "lon": item.get("lon"),
+                                }
+                            )
+                        cap_payload["items"] = normalized_items
                     openclaw_result = _call_partnership_openclaw_capability(
                         "partners.search_geo",
                         tenant_id=business_id,
@@ -3339,7 +3368,9 @@ def partnership_geo_search():
                     candidates.extend([item for item in provider_candidates if isinstance(item, dict)])
                     provider_status["google"]["executed"] = True
                     provider_status["google"]["items_count"] = len(provider_candidates)
-                    if isinstance(meta_blob, dict) and str(meta_blob.get("provider") or "").strip().lower() == "none":
+                    if has_seed_items:
+                        provider_status["google"]["items_count"] = len(provider_candidates)
+                    elif isinstance(meta_blob, dict) and str(meta_blob.get("provider") or "").strip().lower() == "none":
                         warnings.append("Google geo-provider в OpenClaw сейчас работает в режиме provider=none, поэтому результат может быть пустым.")
 
             if provider in {"yandex", "both"}:
@@ -3351,6 +3382,7 @@ def partnership_geo_search():
                 candidates = []
 
             imported_ids: list[str] = []
+            merged_count = 0
             skipped = 0
             for item in candidates:
                 if not isinstance(item, dict):
@@ -3392,7 +3424,7 @@ def partnership_geo_search():
                     address=lead_address,
                     city=lead_city,
                     category=lead_category,
-                    source="openclaw_google_geo" if provider in {"google", "both"} else "manual_geo",
+                    source="openclaw_seed_geo" if has_seed_items else ("openclaw_google_geo" if provider in {"google", "both"} else "manual_geo"),
                     phone=phone,
                     email=email,
                     website=website,
@@ -3400,14 +3432,14 @@ def partnership_geo_search():
                     whatsapp_url=whatsapp_url,
                     rating=rating,
                     reviews_count=reviews_count,
-                    source_kind="geo_search",
-                    source_provider="openclaw_google",
+                    source_kind=str(item.get("source_kind") or ("geo_search_seed" if has_seed_items else "geo_search")).strip() or ("geo_search_seed" if has_seed_items else "geo_search"),
+                    source_provider=str(item.get("source_provider") or item.get("provider") or ("openclaw_seed" if has_seed_items else "openclaw_google")).strip() or ("openclaw_seed" if has_seed_items else "openclaw_google"),
                     external_place_id=external_place_id,
                     external_source_id=external_source_id,
                     lat=lat,
                     lon=lon,
                     search_payload={
-                        "provider": provider,
+                        "provider": str(meta_blob.get("provider") if isinstance(meta_blob, dict) else "") or ("seed_items" if has_seed_items else provider),
                         "city": city,
                         "category": category,
                         "query": query,
@@ -3415,13 +3447,17 @@ def partnership_geo_search():
                         "limit": limit,
                         "candidate_name": lead_name,
                         "candidate_address": lead_address,
+                        "items_mode": has_seed_items,
                     },
                 )
                 if created:
                     if lead_id:
                         imported_ids.append(lead_id)
                 else:
-                    skipped += 1
+                    if lead_id:
+                        merged_count += 1
+                    else:
+                        skipped += 1
             conn.commit()
         finally:
             conn.close()
@@ -3430,6 +3466,7 @@ def partnership_geo_search():
             {
                 "success": True,
                 "imported_count": len(imported_ids),
+                "merged_count": merged_count,
                 "skipped_count": skipped,
                 "lead_ids": imported_ids,
                 "source_total": len(candidates),
