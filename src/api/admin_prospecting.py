@@ -4474,6 +4474,7 @@ def partnership_ralph_loop_summary():
                 }
             )
 
+        recommended_prompt_version = None
         if prompt_performance:
             viable_prompt_versions = [item for item in prompt_performance if int(item.get("approved_total") or 0) >= 2]
             if viable_prompt_versions:
@@ -4485,6 +4486,7 @@ def partnership_ralph_loop_summary():
                         -int(item.get("approved_total") or 0),
                     ),
                 )[0]
+                recommended_prompt_version = best_prompt
                 recommendations.append(
                     f"Наиболее стабильный prompt недели: {best_prompt.get('prompt_key')} / v{best_prompt.get('prompt_version')}."
                 )
@@ -4523,6 +4525,7 @@ def partnership_ralph_loop_summary():
                 "top_channels": top_channels,
                 "learning": learning,
                 "prompt_performance": prompt_performance,
+                "recommended_prompt_version": recommended_prompt_version,
                 "blockers": blockers,
                 "recommendations": recommendations,
                 "edit_insights": {

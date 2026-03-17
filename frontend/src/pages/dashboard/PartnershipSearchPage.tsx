@@ -211,6 +211,17 @@ type PartnershipRalphLoop = {
     positive_count?: number;
     positive_rate_pct?: number;
   }>;
+  recommended_prompt_version?: {
+    prompt_key?: string;
+    prompt_version?: string;
+    drafts_total?: number;
+    approved_total?: number;
+    edited_approved_total?: number;
+    edited_before_accept_pct?: number;
+    sent_total?: number;
+    positive_count?: number;
+    positive_rate_pct?: number;
+  } | null;
   blockers?: string[];
   recommendations?: string[];
   edit_insights?: {
@@ -1671,7 +1682,14 @@ export const PartnershipSearchPage: React.FC = () => {
                   )}
                 </div>
                 <div className="rounded-lg border border-cyan-200 bg-cyan-50 p-3">
-                  <div className="text-sm font-semibold mb-2">Версии prompt для первого письма</div>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="text-sm font-semibold">Версии prompt для первого письма</div>
+                    {ralphLoop.recommended_prompt_version ? (
+                      <div className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                        Рекомендовано: {ralphLoop.recommended_prompt_version.prompt_key || 'unknown'} · v{ralphLoop.recommended_prompt_version.prompt_version || 'unknown'}
+                      </div>
+                    ) : null}
+                  </div>
                   {Array.isArray(ralphLoop.prompt_performance) && ralphLoop.prompt_performance.length > 0 ? (
                     <div className="space-y-2 text-sm">
                       {ralphLoop.prompt_performance.map((item, idx) => (
