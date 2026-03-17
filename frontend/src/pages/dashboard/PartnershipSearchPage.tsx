@@ -144,6 +144,22 @@ const STAGE_OPTIONS = [
   { value: 'matched', label: 'Матчинг готов' },
   { value: 'proposal_draft_ready', label: 'Черновик оффера готов' },
 ];
+const BULK_STAGE_OPTIONS = [
+  { value: 'imported', label: 'Импортировано' },
+  { value: 'audited', label: 'Аудит готов' },
+  { value: 'matched', label: 'Матчинг готов' },
+  { value: 'proposal_draft_ready', label: 'Черновик оффера готов' },
+  { value: 'selected_for_outreach', label: 'Выбрано для контакта' },
+  { value: 'channel_selected', label: 'Канал выбран' },
+  { value: 'approved_for_send', label: 'Готово к отправке' },
+  { value: 'sent', label: 'Отправлено' },
+];
+const CHANNEL_OPTIONS = [
+  { value: 'telegram', label: 'Telegram' },
+  { value: 'whatsapp', label: 'WhatsApp' },
+  { value: 'email', label: 'Email' },
+  { value: 'manual', label: 'Вручную' },
+];
 const OUTCOME_OPTIONS = ['positive', 'question', 'no_response', 'hard_no'] as const;
 
 export const PartnershipSearchPage: React.FC = () => {
@@ -163,6 +179,9 @@ export const PartnershipSearchPage: React.FC = () => {
   const [query, setQuery] = useState('');
   const [items, setItems] = useState<PartnershipLead[]>([]);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
+  const [bulkStage, setBulkStage] = useState('');
+  const [bulkChannel, setBulkChannel] = useState('');
   const [auditData, setAuditData] = useState<any>(null);
   const [matchData, setMatchData] = useState<any>(null);
   const [draftText, setDraftText] = useState('');
@@ -244,6 +263,7 @@ export const PartnershipSearchPage: React.FC = () => {
       if (query.trim()) params.set('q', query.trim());
       const data = await newAuth.makeRequest(`/partnership/leads?${params.toString()}`, { method: 'GET' });
       setItems(Array.isArray(data.items) ? data.items : []);
+      setSelectedLeadIds((prev) => prev.filter((id) => (data.items || []).some((x: any) => x.id === id)));
       if (selectedLeadId && !(data.items || []).some((x: any) => x.id === selectedLeadId)) {
         setSelectedLeadId(null);
       }
@@ -586,6 +606,78 @@ export const PartnershipSearchPage: React.FC = () => {
       await loadLeads();
     } catch (e: any) {
       setError(e.message || 'Не удалось сохранить данные лида');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleLeadSelection = (leadId: string, checked: boolean) => {
+    setSelectedLeadIds((prev) => {
+      if (checked) return prev.includes(leadId) ? prev : [...prev, leadId];
+      return prev.filter((id) => id !== leadId);
+    });
+  };
+
+  const toggleAllLeadSelection = (checked: boolean) => {
+    setSelectedLeadIds(checked ? items.map((item) => item.id) : []);
+  };
+
+  const applyBulkUpdate = async () => {
+    if (!currentBusinessId || selectedLeadIds.length === 0) return;
+    if (!bulkStage && !bulkChannel) {
+      setError('Выберите этап или канал для массового применения');
+      return;
+    }
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await newAuth.makeRequest('/partnership/leads/bulk-update', {
+        method: 'POST',
+        body: JSON.stringify({
+          business_id: currentBusinessId,
+          lead_ids: selectedLeadIds,
+          partnership_stage: bulkStage || undefined,
+          selected_channel: bulkChannel || undefined,
+        }),
+      });
+      setMessage(`Обновлено лидов: ${data.updated_count || 0}`);
+      setSelectedLeadIds([]);
+      await loadLeads();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось массово обновить лиды');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const bulkDeleteLeads = async () => {
+    if (!currentBusinessId || selectedLeadIds.length === 0) return;
+    const ok = window.confirm(`Удалить выбранные лиды (${selectedLeadIds.length})?`);
+    if (!ok) return;
+    const deletingIds = new Set(selectedLeadIds);
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await newAuth.makeRequest('/partnership/leads/bulk-delete', {
+        method: 'POST',
+        body: JSON.stringify({
+          business_id: currentBusinessId,
+          lead_ids: selectedLeadIds,
+        }),
+      });
+      if (selectedLeadId && deletingIds.has(selectedLeadId)) {
+        setSelectedLeadId(null);
+        setAuditData(null);
+        setMatchData(null);
+        setDraftText('');
+      }
+      setMessage(`Удалено лидов: ${data.deleted_count || 0}`);
+      setSelectedLeadIds([]);
+      await loadLeads();
+      await loadDrafts();
+      await loadBatches();
+    } catch (e: any) {
+      setError(e.message || 'Не удалось удалить выбранные лиды');
     } finally {
       setLoading(false);
     }
@@ -1098,17 +1190,76 @@ export const PartnershipSearchPage: React.FC = () => {
               </Button>
             </div>
 
+            <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 mb-4">
+              <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-foreground">Массовые действия</div>
+                  <div className="text-xs text-muted-foreground">
+                    Выбрано: {selectedLeadIds.length}. Можно быстро перевести лиды по этапам, назначить канал или очистить тестовые записи.
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Select value={bulkStage} onValueChange={setBulkStage}>
+                    <SelectTrigger className="w-[220px] bg-white">
+                      <SelectValue placeholder="Этап для выбранных" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {BULK_STAGE_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={bulkChannel} onValueChange={setBulkChannel}>
+                    <SelectTrigger className="w-[200px] bg-white">
+                      <SelectValue placeholder="Канал для выбранных" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CHANNEL_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button variant="outline" onClick={applyBulkUpdate} disabled={loading || selectedLeadIds.length === 0}>
+                    Применить к выбранным
+                  </Button>
+                  <Button variant="outline" onClick={bulkDeleteLeads} disabled={loading || selectedLeadIds.length === 0}>
+                    Удалить выбранные
+                  </Button>
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-3">
               {items.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Список пуст.</p>
               ) : (
-                items.map((item) => (
+                <>
+                  <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={items.length > 0 && selectedLeadIds.length === items.length}
+                      onChange={(e) => toggleAllLeadSelection(e.target.checked)}
+                    />
+                    Выбрать все на странице
+                  </label>
+                {items.map((item) => (
                   <div
                     key={item.id}
                     className={`rounded-lg border p-3 ${selectedLeadId === item.id ? 'border-primary' : 'border-gray-200'}`}
                   >
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                      <div>
+                      <div className="flex items-start gap-3">
+                        <input
+                          className="mt-1"
+                          type="checkbox"
+                          checked={selectedLeadIds.includes(item.id)}
+                          onChange={(e) => toggleLeadSelection(item.id, e.target.checked)}
+                        />
+                        <div>
                         <div className="font-semibold text-foreground">{item.name || 'Без названия'}</div>
                         <div className="text-sm text-muted-foreground">
                           {item.city || '—'} · {item.category || '—'} · этап: {item.partnership_stage || 'imported'}
@@ -1132,6 +1283,7 @@ export const PartnershipSearchPage: React.FC = () => {
                         >
                           {item.source_url}
                         </a>
+                        </div>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <Button variant="outline" size="sm" onClick={() => void runParse(item.id)} disabled={loading}>
@@ -1155,7 +1307,8 @@ export const PartnershipSearchPage: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                ))
+                ))}
+                </>
               )}
             </div>
           </div>

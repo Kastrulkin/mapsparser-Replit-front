@@ -3835,6 +3835,74 @@ def partnership_update_lead(lead_id):
         return jsonify({"error": str(e)}), 500
 
 
+@admin_prospecting_bp.route("/api/partnership/leads/bulk-update", methods=["POST"])
+def partnership_bulk_update_leads():
+    """Bulk update stage/channel/status for partnership leads."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        lead_ids_raw = data.get("lead_ids") or []
+        lead_ids = [str(item).strip() for item in lead_ids_raw if str(item).strip()]
+        lead_ids = list(dict.fromkeys(lead_ids))
+        stage = str(data.get("partnership_stage") or "").strip().lower()
+        status = str(data.get("status") or "").strip().lower()
+        selected_channel = str(data.get("selected_channel") or "").strip().lower() or None
+
+        if not lead_ids:
+            return jsonify({"error": "lead_ids is required"}), 400
+        if not stage and not status and selected_channel is None:
+            return jsonify({"error": "Nothing to update"}), 400
+        if selected_channel is not None and selected_channel not in ALLOWED_OUTREACH_CHANNELS:
+            return jsonify({"error": "Unsupported channel"}), 400
+
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+
+            assignments = ["updated_at = NOW()"]
+            params: list[Any] = []
+            if stage:
+                assignments.append("partnership_stage = %s")
+                params.append(stage)
+            if status:
+                assignments.append("status = %s")
+                params.append(status)
+            if selected_channel is not None:
+                assignments.append("selected_channel = %s")
+                params.append(selected_channel)
+
+            params.extend([lead_ids, business_id])
+            cur.execute(
+                f"""
+                UPDATE prospectingleads
+                SET {', '.join(assignments)}
+                WHERE id = ANY(%s)
+                  AND business_id = %s
+                  AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
+                RETURNING id
+                """,
+                tuple(params),
+            )
+            rows = cur.fetchall() or []
+            conn.commit()
+        finally:
+            conn.close()
+
+        updated_ids = [row["id"] if hasattr(row, "get") else row[0] for row in rows]
+        return jsonify({"success": True, "updated_count": len(updated_ids), "updated_ids": updated_ids})
+    except Exception as e:
+        print(f"Error bulk updating partnership leads: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @admin_prospecting_bp.route("/api/partnership/leads/<string:lead_id>", methods=["DELETE"])
 def partnership_delete_lead(lead_id):
     """Delete one partnership lead (with linked artifacts via FK cascade)."""
@@ -3870,6 +3938,51 @@ def partnership_delete_lead(lead_id):
         return jsonify({"success": True, "deleted_id": lead_id})
     except Exception as e:
         print(f"Error deleting partnership lead: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/leads/bulk-delete", methods=["POST"])
+def partnership_bulk_delete_leads():
+    """Bulk delete partnership leads and linked artifacts."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        lead_ids_raw = data.get("lead_ids") or []
+        lead_ids = [str(item).strip() for item in lead_ids_raw if str(item).strip()]
+        lead_ids = list(dict.fromkeys(lead_ids))
+        if not lead_ids:
+            return jsonify({"error": "lead_ids is required"}), 400
+
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            _ensure_partnership_artifacts_table(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+            cur.execute(
+                """
+                DELETE FROM prospectingleads
+                WHERE id = ANY(%s)
+                  AND business_id = %s
+                  AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
+                RETURNING id
+                """,
+                (lead_ids, business_id),
+            )
+            rows = cur.fetchall() or []
+            conn.commit()
+        finally:
+            conn.close()
+
+        deleted_ids = [row["id"] if hasattr(row, "get") else row[0] for row in rows]
+        return jsonify({"success": True, "deleted_count": len(deleted_ids), "deleted_ids": deleted_ids})
+    except Exception as e:
+        print(f"Error bulk deleting partnership leads: {e}")
         return jsonify({"error": str(e)}), 500
 
 
