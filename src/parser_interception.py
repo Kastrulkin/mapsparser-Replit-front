@@ -203,6 +203,25 @@ def _get_nested(obj: Any, path: str) -> Any:
 
 class YandexMapsInterceptionParser:
     """Парсер Яндекс.Карт через перехват сетевых запросов"""
+
+    _PRODUCT_NOISE_TERMS = (
+        "салоны красоты",
+        "хорошее место",
+        "подборка",
+        "где есть",
+        "в районе",
+        "на улице",
+        "рядом с",
+        "в петербурге",
+        "в москве",
+        "toilet",
+        "entrance",
+        "parking",
+        "банкомат",
+        "туалет",
+        "парковка",
+        "вход",
+    )
     
     def __init__(self, debug_bundle_id: Optional[str] = None):
         self.api_responses: Dict[str, Any] = {}
@@ -210,6 +229,32 @@ class YandexMapsInterceptionParser:
         self.debug_bundle_id: Optional[str] = debug_bundle_id
         _base = os.getenv("DEBUG_DIR", "/app/debug_data")
         self.debug_bundle_dir: Optional[str] = os.path.join(_base, debug_bundle_id) if debug_bundle_id else None
+
+    def _is_noisy_product(self, item: Dict[str, Any]) -> bool:
+        name = str(item.get("name") or "").strip()
+        if not name:
+            return True
+        lower_name = name.lower()
+        if any(term in lower_name for term in self._PRODUCT_NOISE_TERMS):
+            return True
+        if "http://" in lower_name or "https://" in lower_name or "yandex." in lower_name:
+            return True
+        if len(name) > 120 or len(name) < 2:
+            return True
+        price = str(item.get("price") or "").strip()
+        if not price and (":" in name or len(name.split()) >= 7):
+            return True
+        return False
+
+    def _filter_products_quality(self, products: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        clean: List[Dict[str, Any]] = []
+        for item in products or []:
+            if not isinstance(item, dict):
+                continue
+            if self._is_noisy_product(item):
+                continue
+            clean.append(item)
+        return clean
         
     def extract_org_id(self, url: str) -> Optional[str]:
         """Извлечь org_id из URL Яндекс.Карт
@@ -254,6 +299,7 @@ class YandexMapsInterceptionParser:
             t = (title or "").lower()
             return (
                 "ой!" in t or "captcha" in t or "robot" in t
+                or "вы не робот" in t
                 or "подтвердите, что вы не робот" in t
                 or "are you not a robot" in t
                 or "confirm that you" in t
@@ -277,6 +323,43 @@ class YandexMapsInterceptionParser:
 
         context = session.context
         page = session.page
+
+        def _human_pause(min_ms: int = 220, max_ms: int = 900) -> None:
+            wait_ms = random.randint(min_ms, max_ms)
+            page.wait_for_timeout(wait_ms)
+
+        def _human_move_mouse(max_hops: int = 3) -> None:
+            size = page.viewport_size or {"width": 1280, "height": 800}
+            width = max(400, int(size.get("width") or 1280))
+            height = max(300, int(size.get("height") or 800))
+            hops = random.randint(1, max_hops)
+            for _ in range(hops):
+                x = random.randint(30, max(31, width - 30))
+                y = random.randint(30, max(31, height - 30))
+                try:
+                    page.mouse.move(x, y, steps=random.randint(6, 18))
+                except Exception:
+                    pass
+                _human_pause(60, 220)
+
+        def _human_click(el, *, force: bool = True) -> bool:
+            if not el:
+                return False
+            try:
+                _human_move_mouse(max_hops=2)
+                box = el.bounding_box()
+                if box:
+                    x = box["x"] + box["width"] * random.uniform(0.25, 0.75)
+                    y = box["y"] + box["height"] * random.uniform(0.25, 0.75)
+                    page.mouse.move(x, y, steps=random.randint(8, 22))
+                    _human_pause(80, 240)
+                    page.mouse.click(x, y, delay=random.randint(40, 160))
+                else:
+                    el.click(force=force, timeout=2500)
+                _human_pause(240, 950)
+                return True
+            except Exception:
+                return False
 
         # Базовая информация для debug bundle
         initial_url = url
@@ -347,6 +430,7 @@ class YandexMapsInterceptionParser:
         # Загружаем страницу (interception зарегистрирован ДО goto — все ответы будут перехвачены)
         print("🌐 Загружаем страницу и перехватываем API запросы...")
         try:
+            _human_pause(180, 600)
             main_response = page.goto(url, wait_until="domcontentloaded", timeout=30000)
             try:
                 if main_response is not None:
@@ -402,6 +486,9 @@ class YandexMapsInterceptionParser:
         current_url = page.url
         title = page.title()
         print(f"📍 Текущий URL: {current_url}, Заголовок: {title}")
+        if "showcaptcha" in (current_url or "").lower():
+            print("⚠️ Обнаружен showcaptcha URL, возвращаем captcha_detected")
+            return {"error": "captcha_detected", "captcha_url": current_url}
 
         # Редирект на /prices/ — на странице цен нет address/rating/categories. Возвращаемся на overview.
         if "/prices/" in current_url or current_url.rstrip("/").endswith("/prices"):
@@ -485,8 +572,9 @@ class YandexMapsInterceptionParser:
         # Вспомогательная функция для прокрутки
         def scroll_page(times: int = 5) -> None:
             for _ in range(times):
-                page.mouse.wheel(0, 1000)
-                time.sleep(random.uniform(0.5, 1.0))
+                _human_move_mouse(max_hops=2)
+                page.mouse.wheel(0, random.randint(700, 1400))
+                _human_pause(320, 1150)
 
         extra_photos_count = 0
 
@@ -499,8 +587,7 @@ class YandexMapsInterceptionParser:
             reviews_tab = page.query_selector("div.tabs-select-view__title._name_reviews")
             if reviews_tab:
                 print("💬 Переходим во вкладку Отзывы...")
-                reviews_tab.click(force=True)
-                time.sleep(2)
+                _human_click(reviews_tab)
 
                 # Скроллим отзывы (очень агрессивно)
                 print("📜 Скроллим отзывы (глубокий скролл - загрузка всех)...")
@@ -510,12 +597,12 @@ class YandexMapsInterceptionParser:
                     page.mouse.wheel(0, delta)
                     page.evaluate(f"window.scrollBy(0, {delta//2})")  # JS scroll helper
 
-                    time.sleep(random.uniform(0.5, 1.2))
+                    _human_pause(320, 1200)
 
                     # Small "wobble" (scroll up slightly) to trigger intersection observers
                     if i % 5 == 0:
                         page.mouse.wheel(0, -500)
-                        time.sleep(0.5)
+                        _human_pause(200, 650)
                         page.mouse.wheel(0, 500)
 
                     # Move mouse to trigger hover events
@@ -527,8 +614,7 @@ class YandexMapsInterceptionParser:
                             "div.reviews-view__more"
                         )
                         if more_btn and more_btn.is_visible():
-                            more_btn.click()
-                            time.sleep(2)
+                            _human_click(more_btn)
                     except Exception:
                         pass
             else:
@@ -552,8 +638,7 @@ class YandexMapsInterceptionParser:
                 except Exception:
                     pass
 
-                photos_tab.click(force=True)
-                time.sleep(2)
+                _human_click(photos_tab)
                 print("📜 Скроллим фото...")
                 scroll_page(10)
             else:
@@ -566,8 +651,7 @@ class YandexMapsInterceptionParser:
             news_tab = page.query_selector("div.tabs-select-view__title._name_posts")
             if news_tab:
                 print("📰 Переходим во вкладку Новости...")
-                news_tab.click(force=True)
-                time.sleep(2)
+                _human_click(news_tab)
                 print("📜 Скроллим новости...")
                 scroll_page(10)
             else:
@@ -601,8 +685,8 @@ class YandexMapsInterceptionParser:
 
             if services_tab:
                 print("💰 Переходим во вкладку Цены/Услуги...")
-                services_tab.click(force=True)
-                time.sleep(3)  # Чуть больше времени на загрузку
+                _human_click(services_tab)
+                _human_pause(600, 2000)
                 print("📜 Скроллим услуги...")
                 scroll_page(20)  # Больше скролла
             else:
@@ -648,9 +732,9 @@ class YandexMapsInterceptionParser:
             data.get("address") or data.get("rating")
             or (data.get("categories") and len(data.get("categories", [])) > 0)
         )
-        if not has_org_api and not has_critical:
-            print("❌ Org API не перехвачен, критичных полей нет. Возвращаем org_api_not_loaded.")
-            return {"error": "org_api_not_loaded", "url": page.url}
+        org_api_missing_without_critical = (not has_org_api and not has_critical)
+        if org_api_missing_without_critical:
+            print("⚠️ Org API не перехвачен и критичных полей нет. Пробуем HTML fallback перед org_api_not_loaded.")
         if extra_photos_count > 0:
             data["photos_count"] = extra_photos_count
 
@@ -668,6 +752,7 @@ class YandexMapsInterceptionParser:
                 # Но на всякий случай проверим
                 html_products = parse_products(page)
                 if html_products:
+                    html_products = self._filter_products_quality(html_products)
                     print(f"✅ Услуги найдены через HTML: {len(html_products)}")
                     data["products"] = html_products
                     data["fallback_used"] = True  # MARKER for worker.py warning
@@ -832,6 +917,7 @@ class YandexMapsInterceptionParser:
                             print("⚠️ Не удалось импортировать parse_products")
 
                     if products_html:
+                        products_html = self._filter_products_quality(products_html)
                         print(f"✅ HTML Fallback нашел {len(products_html)} услуг")
                         current = data.get("products", [])
                         current.extend(products_html)
@@ -949,9 +1035,9 @@ class YandexMapsInterceptionParser:
                     info = self.api_responses.get(u)
                     if not info:
                         continue
-                    data = info.get("data")
+                    body_data = info.get("data")
                     try:
-                        paths = _find_paths(data, target_keys)
+                        paths = _find_paths(body_data, target_keys)
                         for key, items in paths.items():
                             bucket = found_key_paths.setdefault(key, [])
                             # лимитируем общий размер по ключу
@@ -1055,6 +1141,17 @@ class YandexMapsInterceptionParser:
         print(
             f"✅ Парсинг завершен. Найдено: название='{data.get('title', '')}', адрес='{data.get('address', '')}'"
         )
+
+        # Финальный safeguard: если org API не загрузился и после fallback всё ещё пусто по критичным полям,
+        # возвращаем явную причину для авто-ретраев/диагностики.
+        final_has_critical = bool(
+            data.get("address") or data.get("rating")
+            or (data.get("categories") and len(data.get("categories", [])) > 0)
+        )
+        if org_api_missing_without_critical and not final_has_critical:
+            print("❌ Org API не перехвачен и fallback не восстановил критичные поля. Возвращаем org_api_not_loaded.")
+            return {"error": "org_api_not_loaded", "url": page.url}
+
         return data
     
     def _extract_data_from_responses(self) -> Dict[str, Any]:
@@ -1160,8 +1257,14 @@ class YandexMapsInterceptionParser:
                 key = (p.get('name', '').strip(), p.get('price', '').strip())
                 if key not in unique_products:
                     unique_products[key] = p
-            data['products'] = list(unique_products.values())
-            print(f"✅ Уникальных услуг после дедупликации: {len(data['products'])}")
+            deduped_products = list(unique_products.values())
+            filtered_products = self._filter_products_quality(deduped_products)
+            dropped = len(deduped_products) - len(filtered_products)
+            data['products'] = filtered_products
+            print(
+                f"✅ Уникальных услуг после дедупликации: {len(deduped_products)}; "
+                f"после quality-filter: {len(filtered_products)} (dropped={dropped})"
+            )
         
         # Группируем товары по категориям (для совместимости с отчетом)
         if data.get('products'):
@@ -2078,7 +2181,7 @@ class YandexMapsInterceptionParser:
             data['photos'] = parse_photos(page)
             data['features_full'] = parse_features(page)
             data['competitors'] = parse_competitors(page)
-            data['products'] = parse_products(page)
+            data['products'] = self._filter_products_quality(parse_products(page))
             
             overview_keys = [
                 'title', 'address', 'phone', 'site', 'description',
@@ -2195,4 +2298,3 @@ if __name__ == "__main__":
     result = parse_yandex_card(test_url)
     print("\n📊 Результат парсинга:")
     print(json.dumps(result, ensure_ascii=False, indent=2))
-

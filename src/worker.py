@@ -9,6 +9,7 @@ import signal
 import sys
 import multiprocessing
 import asyncio
+import random
 from typing import Dict, List, Any, Optional
 from urllib import request as urllib_request, error as urllib_error
 from dotenv import load_dotenv
@@ -87,6 +88,266 @@ _EDITORIAL_SERVICE_PATTERNS = (
     "петергоф",
     "пушкинской карте",
 )
+
+_SERVICE_NOISE_TERMS = (
+    "вход",
+    "туалет",
+    "парковка",
+    "банкомат",
+    "этаж",
+    "лифт",
+    "остановка",
+    "подъезд",
+    "navigation",
+    "entrance",
+    "toilet",
+    "parking",
+    "atm",
+    "wc",
+    "floor",
+)
+
+_HUMAN_USER_AGENTS = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+)
+
+_HUMAN_INIT_SCRIPT = """
+Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+try { delete navigator.__proto__.webdriver; } catch (e) {}
+Object.defineProperty(navigator, 'languages', { get: () => ['ru-RU', 'ru', 'en-US'] });
+Object.defineProperty(navigator, 'platform', { get: () => 'MacIntel' });
+Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
+window.chrome = window.chrome || { runtime: {} };
+const originalQuery = window.navigator.permissions && window.navigator.permissions.query;
+if (originalQuery) {
+  window.navigator.permissions.query = (parameters) => (
+    parameters && parameters.name === 'notifications'
+      ? Promise.resolve({ state: Notification.permission })
+      : originalQuery(parameters)
+  );
+}
+"""
+
+
+def _captcha_retry_attempt_from_error(error_message: Any) -> int:
+    text = str(error_message or "")
+    match = re.search(r"captcha_auto_retry_attempt=(\d+)", text)
+    if not match:
+        return 0
+    try:
+        return max(0, int(match.group(1)))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _captcha_next_retry_delay(attempt_no: int) -> timedelta:
+    base_minutes = max(1, int(os.getenv("CAPTCHA_AUTO_RETRY_BASE_MINUTES", "5")))
+    max_minutes = max(base_minutes, int(os.getenv("CAPTCHA_AUTO_RETRY_MAX_MINUTES", "45")))
+    jitter_seconds = max(0, int(os.getenv("CAPTCHA_AUTO_RETRY_JITTER_SECONDS", "45")))
+    exp_minutes = min(max_minutes, base_minutes * (2 ** max(0, attempt_no - 1)))
+    jitter = random.randint(0, jitter_seconds) if jitter_seconds else 0
+    return timedelta(minutes=exp_minutes, seconds=jitter)
+
+
+def _is_mass_network_task(queue_dict: Dict[str, Any]) -> bool:
+    batch_id = str(queue_dict.get("batch_id") or "").strip()
+    batch_kind = str(queue_dict.get("batch_kind") or "").strip().lower()
+    return bool(batch_id and batch_kind == "network_sync")
+
+
+def _captcha_retry_delay_for_task(queue_dict: Dict[str, Any], attempt_no: int) -> timedelta:
+    if _is_mass_network_task(queue_dict):
+        pause_minutes = max(5, int(os.getenv("CAPTCHA_BATCH_PAUSE_MINUTES", "30")))
+        return timedelta(minutes=pause_minutes)
+    return _captcha_next_retry_delay(attempt_no)
+
+
+def _build_human_browser_profile() -> Dict[str, Any]:
+    width = random.randint(1366, 1920)
+    height = random.randint(768, 1200)
+    return {
+        "user_agent": random.choice(_HUMAN_USER_AGENTS),
+        "viewport": {"width": width, "height": height},
+        "launch_args": [
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-gpu",
+            "--disable-blink-features=AutomationControlled",
+            "--lang=ru-RU,ru",
+            "--window-position=0,0",
+        ],
+        "init_scripts": [_HUMAN_INIT_SCRIPT],
+    }
+
+
+def _parse_retry_after(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw)
+    except Exception:
+        return None
+
+
+def _is_empty_payload_value(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return not value.strip()
+    if isinstance(value, (list, dict)):
+        return len(value) == 0
+    return False
+
+
+def _first_nested_non_empty(node: Any, keys: List[str], max_depth: int = 6) -> Any:
+    if max_depth < 0:
+        return None
+
+    if isinstance(node, dict):
+        for key in keys:
+            value = node.get(key)
+            if not _is_empty_payload_value(value):
+                return value
+        for value in node.values():
+            nested = _first_nested_non_empty(value, keys, max_depth - 1)
+            if not _is_empty_payload_value(nested):
+                return nested
+        return None
+
+    if isinstance(node, list):
+        for value in node:
+            nested = _first_nested_non_empty(value, keys, max_depth - 1)
+            if not _is_empty_payload_value(nested):
+                return nested
+        return None
+
+    return None
+
+
+def _promote_nested_card_payload(card_data: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(card_data, dict):
+        return card_data
+
+    source_nodes: List[Dict[str, Any]] = []
+    for key in ("data", "payload", "result"):
+        value = card_data.get(key)
+        if isinstance(value, dict):
+            source_nodes.append(value)
+
+    for root in list(source_nodes):
+        for nested_key in ("data", "payload", "result", "company", "organization", "org", "card"):
+            nested = root.get(nested_key)
+            if isinstance(nested, dict):
+                source_nodes.append(nested)
+
+    promoted_fields = (
+        "title",
+        "name",
+        "address",
+        "phone",
+        "site",
+        "website",
+        "description",
+        "rating",
+        "ratings_count",
+        "reviews_count",
+        "categories",
+        "rubric",
+        "hours",
+        "hours_full",
+        "reviews",
+        "products",
+        "news",
+        "photos",
+        "page_title",
+        "og_title",
+    )
+
+    for source in source_nodes:
+        for field in promoted_fields:
+            if _is_empty_payload_value(card_data.get(field)) and not _is_empty_payload_value(source.get(field)):
+                card_data[field] = source.get(field)
+
+    overview = card_data.get("overview")
+    if not isinstance(overview, dict):
+        overview = {}
+    for source in source_nodes:
+        source_overview = source.get("overview")
+        if isinstance(source_overview, dict):
+            for key, value in source_overview.items():
+                if _is_empty_payload_value(overview.get(key)) and not _is_empty_payload_value(value):
+                    overview[key] = value
+    if overview:
+        card_data["overview"] = overview
+
+    if _is_empty_payload_value(card_data.get("title")):
+        card_data["title"] = _first_nested_non_empty(card_data, ["title", "name", "organizationName", "companyName"])
+    if _is_empty_payload_value(card_data.get("address")):
+        card_data["address"] = _first_nested_non_empty(
+            card_data,
+            ["address", "address_name", "fullAddress", "full_address", "formattedAddress"],
+        )
+    if _is_empty_payload_value(card_data.get("rating")):
+        card_data["rating"] = _first_nested_non_empty(card_data, ["rating", "score", "value"])
+    if _is_empty_payload_value(card_data.get("reviews_count")):
+        card_data["reviews_count"] = _first_nested_non_empty(
+            card_data,
+            ["reviews_count", "reviewsCount", "ratings_count", "ratingCount", "count"],
+        )
+    if _is_empty_payload_value(card_data.get("categories")):
+        card_data["categories"] = _first_nested_non_empty(
+            card_data,
+            ["categories", "rubrics", "rubric", "category", "category_name"],
+        )
+
+    if _is_empty_payload_value(card_data.get("title_or_name")):
+        og_raw = str(card_data.get("og_title") or "").strip()
+        og_clean = ""
+        if og_raw:
+            og_clean = (
+                og_raw.replace(" — Яндекс Карты", "")
+                .replace(" - Яндекс Карты", "")
+                .split("|")[0]
+                .split(",")[0]
+                .strip()
+            )
+
+        overview_title = ""
+        if isinstance(card_data.get("overview"), dict):
+            overview_title = str(card_data.get("overview", {}).get("title") or "").strip()
+
+        page_title = str(card_data.get("page_title") or "").strip()
+        if page_title:
+            page_title = (
+                page_title.replace(" — Яндекс Карты", "")
+                .replace(" - Яндекс Карты", "")
+                .split("|")[0]
+                .strip()
+            )
+
+        for candidate in (
+            str(card_data.get("title") or "").strip(),
+            str(card_data.get("name") or "").strip(),
+            overview_title,
+            page_title,
+            og_clean,
+            str(_first_nested_non_empty(card_data, ["title", "name", "organizationName", "companyName"]) or "").strip(),
+        ):
+            if candidate:
+                card_data["title_or_name"] = candidate
+                if _is_empty_payload_value(card_data.get("title")):
+                    card_data["title"] = candidate
+                if isinstance(card_data.get("overview"), dict) and _is_empty_payload_value(card_data["overview"].get("title")):
+                    card_data["overview"]["title"] = candidate
+                break
+
+    return card_data
 
 
 def _parse_yandex_card_subprocess_entry(result_queue: Any, url: str, kwargs: Dict[str, Any]) -> None:
@@ -965,52 +1226,170 @@ def _handle_worker_error(queue_id: str, error_msg: str):
             """,
             (STATUS_ERROR, error_msg, queue_id),
         )
-        try:
-            cursor.execute(
-                """
-                SELECT column_name
-                FROM information_schema.columns
-                WHERE table_schema = 'public' AND table_name = 'parsequeue'
-                """
-            )
-            parsequeue_columns = {
-                str(row.get("column_name") if hasattr(row, "get") else row[0])
-                for row in (cursor.fetchall() or [])
-                if (row.get("column_name") if hasattr(row, "get") else (row[0] if row else None))
-            }
-            if {"batch_id", "batch_kind", "paused_reason"}.issubset(parsequeue_columns):
+        if _env_bool("PAUSE_NETWORK_BATCH_ON_ERROR", False):
+            try:
                 cursor.execute(
                     """
-                    SELECT batch_id
-                    FROM parsequeue
-                    WHERE id = %s
-                    LIMIT 1
-                    """,
-                    (queue_id,),
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public' AND table_name = 'parsequeue'
+                    """
                 )
-                row = cursor.fetchone()
-                batch_id = str((row.get("batch_id") if hasattr(row, "get") else (row[0] if row else "")) or "").strip()
-                if batch_id:
+                parsequeue_columns = {
+                    str(row.get("column_name") if hasattr(row, "get") else row[0])
+                    for row in (cursor.fetchall() or [])
+                    if (row.get("column_name") if hasattr(row, "get") else (row[0] if row else None))
+                }
+                if {"batch_id", "batch_kind", "paused_reason"}.issubset(parsequeue_columns):
                     cursor.execute(
                         """
-                        UPDATE parsequeue
-                        SET status = %s,
-                            paused_reason = %s,
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE batch_id = %s
-                          AND batch_kind = 'network_sync'
-                          AND status IN (%s)
-                          AND id <> %s
+                        SELECT batch_id
+                        FROM parsequeue
+                        WHERE id = %s
+                        LIMIT 1
                         """,
-                        (STATUS_PAUSED, f"network_batch_paused_after_error:{error_msg[:400]}", batch_id, STATUS_PENDING, queue_id),
+                        (queue_id,),
                     )
-        except Exception as pause_ex:
-            print(f"⚠️ Не удалось применить pause-on-error для batch задачи {queue_id}: {pause_ex}")
+                    row = cursor.fetchone()
+                    batch_id = str((row.get("batch_id") if hasattr(row, "get") else (row[0] if row else "")) or "").strip()
+                    if batch_id:
+                        cursor.execute(
+                            """
+                            UPDATE parsequeue
+                            SET status = %s,
+                                paused_reason = %s,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE batch_id = %s
+                              AND batch_kind = 'network_sync'
+                              AND status IN (%s)
+                              AND id <> %s
+                            """,
+                            (STATUS_PAUSED, f"network_batch_paused_after_error:{error_msg[:400]}", batch_id, STATUS_PENDING, queue_id),
+                        )
+            except Exception as pause_ex:
+                print(f"⚠️ Не удалось применить pause-on-error для batch задачи {queue_id}: {pause_ex}")
         conn.commit()
         cursor.close()
         conn.close()
     except Exception as ex:
         print(f"❌ Не удалось обновить статус ошибки для {queue_id}: {ex}")
+
+
+def _pause_network_batch_for_captcha(queue_id: str, captcha_comment: str, delay: timedelta):
+    """Поставить оставшиеся pending-задачи network batch на паузу и авто-возобновить после delay."""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT batch_id
+            FROM parsequeue
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (queue_id,),
+        )
+        row = cursor.fetchone()
+        batch_id = str((row.get("batch_id") if hasattr(row, "get") else (row[0] if row else "")) or "").strip()
+        if not batch_id:
+            conn.commit()
+            return
+        resume_at = datetime.now() + delay
+        cursor.execute(
+            """
+            UPDATE parsequeue
+            SET status = %s,
+                paused_reason = %s,
+                retry_after = %s,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE batch_id = %s
+              AND batch_kind = 'network_sync'
+              AND status IN (%s)
+              AND id <> %s
+            """,
+            (
+                STATUS_PAUSED,
+                f"network_batch_paused_after_captcha_auto:{captcha_comment[:240]}",
+                resume_at.isoformat(),
+                batch_id,
+                STATUS_PENDING,
+                queue_id,
+            ),
+        )
+        print(
+            f"⏸️ CAPTCHA pause applied for batch {batch_id}: paused_rows={cursor.rowcount} "
+            f"source_queue_id={queue_id} resume_at={resume_at.isoformat()}",
+            flush=True,
+        )
+        conn.commit()
+    except Exception as ex:
+        print(f"⚠️ Не удалось применить pause-on-captcha для batch задачи {queue_id}: {ex}")
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _resume_network_batch_after_captcha(queue_id: str):
+    """После успешного CAPTCHA-resume вернуть в pending только те задачи batch, что были paused из-за CAPTCHA."""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT batch_id
+            FROM parsequeue
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (queue_id,),
+        )
+        row = cursor.fetchone()
+        batch_id = str((row.get("batch_id") if hasattr(row, "get") else (row[0] if row else "")) or "").strip()
+        if not batch_id:
+            conn.commit()
+            return
+        cursor.execute(
+            """
+            UPDATE parsequeue
+            SET status = %s,
+                paused_reason = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE batch_id = %s
+              AND batch_kind = 'network_sync'
+              AND status = %s
+              AND (
+                paused_reason LIKE 'network_batch_paused_after_captcha:%'
+                OR paused_reason LIKE 'network_batch_paused_after_captcha_auto:%'
+              )
+            """,
+            (STATUS_PENDING, batch_id, STATUS_PAUSED),
+        )
+        print(
+            f"▶️ CAPTCHA pause released for batch {batch_id}: resumed_rows={cursor.rowcount} source_queue_id={queue_id}",
+            flush=True,
+        )
+        conn.commit()
+    except Exception as ex:
+        print(f"⚠️ Не удалось снять captcha-pause для batch задачи {queue_id}: {ex}")
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 def _upsert_map_parse_from_card(
@@ -1325,6 +1704,29 @@ def process_queue():
         # Для PostgreSQL схема очереди уже задана в schema_postgres.sql,
         # поэтому проверки через sqlite_master / PRAGMA здесь не нужны.
 
+        # Восстановление застрявших processing-задач (например, после падения worker/DB).
+        # Такие задачи возвращаем в pending, чтобы очередь продолжила движение.
+        try:
+            cursor.execute(
+                """
+                UPDATE parsequeue
+                SET status = %s,
+                    updated_at = CURRENT_TIMESTAMP,
+                    error_message = COALESCE(
+                        error_message || '; stale processing recovered',
+                        'stale processing recovered'
+                    )
+                WHERE status = %s
+                  AND updated_at < (CURRENT_TIMESTAMP - INTERVAL '15 minutes')
+                """,
+                (STATUS_PENDING, STATUS_PROCESSING),
+            )
+            if cursor.rowcount:
+                print(f"♻️ Восстановлено stale processing задач: {cursor.rowcount}")
+                conn.commit()
+        except Exception as e:
+            print(f"⚠️ Ошибка восстановления stale processing: {e}")
+
         # Санитайзер "битых" captcha-записей: status='captcha' без корректного captcha_started_at
         try:
             cursor.execute(
@@ -1351,6 +1753,60 @@ def process_queue():
                 conn.commit()
         except Exception as e:
             print(f"⚠️ Ошибка санитации битых captcha-записей: {e}")
+
+        # Разморозка paused-задач батча, если активной captcha в batch уже нет.
+        # Это защищает от зависаний после старых сценариев pause-on-captcha.
+        try:
+            cursor.execute(
+                """
+                UPDATE parsequeue p
+                SET status = %s,
+                    paused_reason = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE p.status = %s
+                  AND p.batch_kind = 'network_sync'
+                  AND (
+                    p.paused_reason LIKE 'network_batch_paused_after_captcha:%%'
+                    OR p.paused_reason LIKE 'network_batch_paused_after_captcha_auto:%%'
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM parsequeue p2
+                      WHERE p2.batch_id = p.batch_id
+                        AND p2.status = %s
+                  )
+                """,
+                (STATUS_PENDING, STATUS_PAUSED, STATUS_CAPTCHA),
+            )
+            if cursor.rowcount:
+                print(f"▶️ Разморожено paused задач после captcha terminal state: {cursor.rowcount}", flush=True)
+                conn.commit()
+        except Exception as e:
+            print(f"⚠️ Ошибка разморозки paused batch-задач: {e}")
+
+        # Авто-возврат paused batch-задач после backoff окна (по retry_after),
+        # даже если часть задач всё ещё в pending/captcha.
+        try:
+            now_iso = datetime.now().isoformat()
+            cursor.execute(
+                """
+                UPDATE parsequeue
+                SET status = %s,
+                    paused_reason = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE status = %s
+                  AND batch_kind = 'network_sync'
+                  AND paused_reason LIKE 'network_batch_paused_after_captcha_auto:%%'
+                  AND retry_after IS NOT NULL
+                  AND retry_after <= %s
+                """,
+                (STATUS_PENDING, STATUS_PAUSED, now_iso),
+            )
+            if cursor.rowcount:
+                print(f"▶️ Авто-возврат paused задач после captcha backoff: {cursor.rowcount}", flush=True)
+                conn.commit()
+        except Exception as e:
+            print(f"⚠️ Ошибка авто-возврата paused batch-задач: {e}")
         
         # Получаем заявки из очереди (обрабатываем и parse_card, и sync задачи)
         now = datetime.now()
@@ -1400,12 +1856,16 @@ def process_queue():
         # Преобразуем Row в словарь (RealDictCursor в pg_db_utils)
         queue_dict = dict(queue_item)
         
-        # Обновляем статус на processing
-        cursor.execute(
-            "UPDATE parsequeue SET status = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
-            (STATUS_PROCESSING, queue_dict["id"]),
-        )
-        conn.commit()
+        selected_status = queue_dict.get("status") or STATUS_PENDING
+
+        # Переводим в processing только pending-задачи.
+        # CAPTCHA-задачи остаются в captcha до ветки resume/expired ниже.
+        if selected_status == STATUS_PENDING:
+            cursor.execute(
+                "UPDATE parsequeue SET status = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                (STATUS_PROCESSING, queue_dict["id"]),
+            )
+            conn.commit()
     finally:
         # ВАЖНО: Закрываем соединение перед долгим парсингом
         cursor.close()
@@ -1416,6 +1876,7 @@ def process_queue():
     
     status = queue_dict.get("status") or "pending"
     task_type = queue_dict.get("task_type") or "parse_card"
+    preparsed_card_data: Optional[Dict[str, Any]] = None
     
     print(f"Обрабатываю заявку: {queue_dict.get('id')}, тип: {task_type}, статус: {status}")
     
@@ -1481,9 +1942,14 @@ def process_queue():
                 )
             else:
                 # Для старых/упрощённых CAPTCHA-задач без parked session даём fresh retry.
+                browser_profile = _build_human_browser_profile()
                 card_data = _parse_yandex_card_with_playwright_fallback(
                     url,
                     keep_open_on_captcha=False,
+                    user_agent=browser_profile["user_agent"],
+                    viewport=browser_profile["viewport"],
+                    launch_args=browser_profile["launch_args"],
+                    init_scripts=browser_profile["init_scripts"],
                 )
 
             if card_data.get("error") == "captcha_session_lost":
@@ -1542,12 +2008,16 @@ def process_queue():
                 finally:
                     cursor.close()
                     conn.close()
+                if _is_mass_network_task(queue_dict):
+                    _pause_network_batch_for_captcha(task_id, captcha_comment, timedelta(minutes=max(5, CAPTCHA_TTL_MINUTES)))
                 return
 
             # Иначе — капча решена, продолжаем как обычный успешный парсинг
             print(f"✅ CAPTCHA решена для задачи {task_id}, продолжаем обработку")
             queue_dict["status"] = "processing"
             queue_dict["resume_requested"] = 0
+            queue_dict["_resume_batch_after_captcha"] = True
+            preparsed_card_data = card_data
             # Чистим captcha-поля
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -1578,9 +2048,109 @@ def process_queue():
             # card_data уже получен, можно использовать его дальше, минуя повторный вызов parse_yandex_card
             # Для простоты здесь можно пойти по "обычному" пути: переиспользуем card_data ниже.
         else:
-            # Пока ждём оператора или TTL, ничего не делаем
-            print(f"⏳ Задача {queue_dict.get('id')} в статусе CAPTCHA/waiting, действий не требуется")
-            return
+            auto_retry_enabled = _env_bool("CAPTCHA_AUTO_RETRY_ENABLED", True)
+            if not auto_retry_enabled or not url:
+                print(f"⏳ Задача {queue_dict.get('id')} в статусе CAPTCHA/waiting, действий не требуется")
+                return
+
+            retry_after_dt = _parse_retry_after(queue_dict.get("retry_after"))
+            now_dt = datetime.now()
+            if retry_after_dt and retry_after_dt > now_dt:
+                print(
+                    f"⏳ CAPTCHA auto-retry ещё не наступил для {task_id}: "
+                    f"retry_after={retry_after_dt.isoformat()}"
+                )
+                return
+
+            attempt_no = _captcha_retry_attempt_from_error(queue_dict.get("error_message")) + 1
+            print(f"🔁 CAPTCHA auto-retry attempt={attempt_no} task_id={task_id}")
+            browser_profile = _build_human_browser_profile()
+            card_data = _parse_yandex_card_with_playwright_fallback(
+                url,
+                keep_open_on_captcha=False,
+                user_agent=browser_profile["user_agent"],
+                viewport=browser_profile["viewport"],
+                launch_args=browser_profile["launch_args"],
+                init_scripts=browser_profile["init_scripts"],
+            )
+
+            if card_data.get("error") == "captcha_detected":
+                retry_delay = _captcha_retry_delay_for_task(queue_dict, attempt_no)
+                next_retry = datetime.now() + retry_delay
+                captcha_url = card_data.get("captcha_url") or url
+                captcha_comment = (
+                    f"captcha_auto_retry_attempt={attempt_no}; "
+                    f"captcha_required: {captcha_url or 'retry_scheduled'}"
+                )
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                try:
+                    cursor.execute(
+                        """
+                        UPDATE parsequeue
+                        SET captcha_status = 'delayed_auto',
+                            status = %s,
+                            retry_after = %s,
+                            captcha_url = %s,
+                            captcha_session_id = NULL,
+                            error_message = %s,
+                            resume_requested = 0,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = %s
+                        """,
+                        (
+                            STATUS_CAPTCHA,
+                            next_retry.isoformat(),
+                            captcha_url,
+                            captcha_comment,
+                            task_id,
+                        ),
+                    )
+                    conn.commit()
+                finally:
+                    cursor.close()
+                    conn.close()
+                print(
+                    f"⏱️ CAPTCHA auto-retry rescheduled task_id={task_id} "
+                    f"next_retry={next_retry.isoformat()}",
+                    flush=True,
+                )
+                if _is_mass_network_task(queue_dict):
+                    _pause_network_batch_for_captcha(task_id, captcha_comment, retry_delay)
+                return
+
+            if card_data.get("error"):
+                _handle_worker_error(task_id, f"captcha_auto_retry_failed:{card_data.get('error')}")
+                return
+
+            print(f"✅ CAPTCHA auto-retry succeeded for task_id={task_id}")
+            queue_dict["status"] = "processing"
+            queue_dict["resume_requested"] = 0
+            queue_dict["_resume_batch_after_captcha"] = True
+            preparsed_card_data = card_data
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    """
+                    UPDATE parsequeue
+                    SET captcha_status = NULL,
+                        captcha_required = 0,
+                        captcha_url = NULL,
+                        captcha_session_id = NULL,
+                        captcha_started_at = NULL,
+                        resume_requested = 0,
+                        status = 'processing',
+                        error_message = NULL,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                    """,
+                    (task_id,),
+                )
+                conn.commit()
+            finally:
+                cursor.close()
+                conn.close()
 
     # Обрабатываем в зависимости от типа задачи
     if task_type == "sync_yandex_business":
@@ -1673,23 +2243,26 @@ def process_queue():
 
         # Основной вызов парсера с защитой от Playwright Sync-in-async краша
         try:
-            card_data = _parse_yandex_card_with_playwright_fallback(
-                url,
-                keep_open_on_captcha=True,
-                session_registry=ACTIVE_CAPTCHA_SESSIONS,
-                cookies=cookies,
-                user_agent=(
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/120.0.0.0 Safari/537.36"
-                ),
-                viewport={"width": 1920, "height": 1080},
-                locale="ru-RU",
-                timezone_id="Europe/Moscow",
-                headless=True,
-                debug_bundle_id=debug_bundle_id,
-                **geolocation_kwarg,
-            )
+            if preparsed_card_data is not None:
+                card_data = preparsed_card_data
+                print("♻️ Используем уже полученные данные из CAPTCHA flow", flush=True)
+            else:
+                browser_profile = _build_human_browser_profile()
+                card_data = _parse_yandex_card_with_playwright_fallback(
+                    url,
+                    keep_open_on_captcha=True,
+                    session_registry=ACTIVE_CAPTCHA_SESSIONS,
+                    cookies=cookies,
+                    user_agent=browser_profile["user_agent"],
+                    viewport=browser_profile["viewport"],
+                    launch_args=browser_profile["launch_args"],
+                    init_scripts=browser_profile["init_scripts"],
+                    locale="ru-RU",
+                    timezone_id="Europe/Moscow",
+                    headless=True,
+                    debug_bundle_id=debug_bundle_id,
+                    **geolocation_kwarg,
+                )
 
             # Защита от некорректного возврата парсера
             if card_data is None:
@@ -1699,31 +2272,19 @@ def process_queue():
                 print(f"[FATAL] parse_yandex_card вернул {type(card_data)}", flush=True)
                 card_data = {"error": f"parser_returned_{type(card_data).__name__}", "url": url}
 
-            # Нормализация title_or_name до валидации (каскад: title → name → overview → page_title → og_title)
+            # Нормализация/распаковка payload до валидации:
+            # - поднимаем nested data/payload/result/company/org в top-level
+            # - заполняем title_or_name из доступных полей
             if isinstance(card_data, dict) and not card_data.get("error"):
-                if not card_data.get("title_or_name", "").strip():
-                    og_raw = (card_data.get("og_title") or "").strip()
-                    og_clean = og_raw.replace(" — Яндекс Карты", "").replace(" - Яндекс Карты", "").split("|")[0].split(",")[0].strip() if og_raw else ""
-                    sources = [
-                        (card_data.get("title") or "").strip(),
-                        (card_data.get("name") or "").strip(),
-                        (card_data.get("overview") or {}).get("title") if isinstance(card_data.get("overview"), dict) else "",
-                        (card_data.get("page_title") or "").replace(" — Яндекс Карты", "").replace(" - Яндекс Карты", "").strip() if card_data.get("page_title") else "",
-                        og_clean,
-                    ]
-                    fallback = next((s for s in sources if s and str(s).strip()), None)
-                    if fallback:
-                        fallback = str(fallback).strip()
-                        card_data["title_or_name"] = fallback
-                        if not card_data.get("title"):
-                            card_data["title"] = fallback
-                        overview = card_data.get("overview") or {}
-                        if isinstance(overview, dict) and not overview.get("title"):
-                            overview["title"] = fallback
-                        used_og = fallback == og_clean and og_clean
-                        print(f"[WORKER_NORMALIZE] title_or_name='{fallback[:50]}'" + (" (from og_title)" if used_og else " из title/name/overview/page_title"), flush=True)
-                    else:
-                        print("[CRITICAL] Нет источников для title_or_name", flush=True)
+                before_keys = set(card_data.keys())
+                card_data = _promote_nested_card_payload(card_data)
+                added_keys = sorted(list(set(card_data.keys()) - before_keys))
+                if added_keys:
+                    print(f"[WORKER_NORMALIZE] promoted keys: {', '.join(added_keys[:10])}", flush=True)
+                if card_data.get("title_or_name"):
+                    print(f"[WORKER_NORMALIZE] title_or_name='{str(card_data.get('title_or_name'))[:60]}'", flush=True)
+                else:
+                    print("[CRITICAL] Нет источников для title_or_name", flush=True)
         except Exception as e:
             msg = str(e)
             if _is_playwright_sync_in_async_error(msg):
@@ -1793,14 +2354,29 @@ def process_queue():
             # Собираем _meta и прикрепляем к card_data для сохранения в cards
             meta = build_parsing_meta(card_data, validation_result, source=SOURCE_YANDEX_BUSINESS)
             card_data["_meta"] = meta
-        
+
+        if isinstance(card_data, dict) and not card_data.get("error"):
+            normalized_service_rows = map_card_services(
+                card_data,
+                str(queue_dict.get("business_id") or "unknown_business"),
+                str(queue_dict.get("user_id") or "unknown_user"),
+            )
+            card_data["_service_rows"] = normalized_service_rows
+            card_data["products"] = _service_rows_to_grouped_products(normalized_service_rows)
+
         if not is_successful and business_id:
             print(f"⚠️ Парсинг неполный ({reason}). Автоматический fallback отключен.")
         
         if card_data.get("error") == "captcha_detected":
             captcha_session_id = card_data.get("captcha_session_id")
             captcha_url = card_data.get("captcha_url") or queue_dict.get("url")
-            captcha_comment = f"captcha_required: откройте ссылку и пройдите капчу: {captcha_url}" if captcha_url else "captcha_required: пройдите капчу и нажмите продолжить"
+            attempt_no = _captcha_retry_attempt_from_error(queue_dict.get("error_message")) + 1
+            retry_delay = _captcha_retry_delay_for_task(queue_dict, attempt_no)
+            retry_after = datetime.now() + retry_delay
+            captcha_comment = (
+                f"captcha_auto_retry_attempt={attempt_no}; "
+                f"captcha_required: {captcha_url or 'retry_scheduled'}"
+            )
             if captcha_session_id:
                 print(f"⚠️ Капча обнаружена, session_id={captcha_session_id} (human-in-the-loop)")
             else:
@@ -1810,7 +2386,6 @@ def process_queue():
             conn = get_db_connection()
             cursor = conn.cursor()
             try:
-                retry_after = datetime.now() + timedelta(minutes=30)
                 now_iso = datetime.now().isoformat()
                 cursor.execute(
                     """
@@ -1821,7 +2396,7 @@ def process_queue():
                         captcha_url = %s,
                         captcha_session_id = %s,
                         captcha_started_at = %s,
-                        captcha_status = 'waiting',
+                        captcha_status = 'delayed_auto',
                         error_message = %s,
                         resume_requested = 0,
                         updated_at = CURRENT_TIMESTAMP
@@ -1841,6 +2416,10 @@ def process_queue():
             finally:
                 cursor.close()
                 conn.close()
+            if _is_mass_network_task(queue_dict):
+                _pause_network_batch_for_captcha(queue_dict["id"], captcha_comment, retry_delay)
+            elif _env_bool("CAPTCHA_PAUSE_BATCH_ON_HUMAN", False):
+                _pause_network_batch_for_captcha(queue_dict["id"], captcha_comment, retry_delay)
             return
 
         # ШАГ 3: Сохраняем результаты (открываем новое соединение)
@@ -1943,10 +2522,7 @@ def process_queue():
                     if parsed_reviews_count > int(reviews_count or 0):
                         reviews_count = parsed_reviews_count
                     
-                    try:
-                        reviews_count = int(reviews_count or 0)
-                    except (ValueError, TypeError):
-                        reviews_count = 0
+                    reviews_count = _normalize_reviews_count(reviews_count)
                     photos_count = card_data.get('photos_count') or 0
                     try:
                         photos_count = int(photos_count)
@@ -1963,12 +2539,7 @@ def process_queue():
                     if not isinstance(news_list, list):
                         news_list = []
                     
-                    rating_float = None
-                    if rating not in (None, ''):
-                        try:
-                            rating_float = float(rating)
-                        except (ValueError, TypeError):
-                            pass
+                    rating_float = _normalize_rating_value(rating)
                     
                     # Готовим overview с метой парсинга
                     overview_payload = {
@@ -2029,7 +2600,9 @@ def process_queue():
                             owner_id = (db_manager.get_business_by_id(business_id) or {}).get("owner_id")
                             if owner_id and (card_data.get("products") or card_data.get("services")):
                                 try:
-                                    service_rows = map_card_services(card_data, business_id, owner_id)
+                                    service_rows = card_data.get("_service_rows")
+                                    if not isinstance(service_rows, list):
+                                        service_rows = map_card_services(card_data, business_id, owner_id)
                                     if service_rows:
                                         services_saved_count = db_manager.upsert_parsed_services(business_id, owner_id, service_rows)
                                         print(f"[Services] Saved {services_saved_count} services")
@@ -2208,7 +2781,7 @@ def process_queue():
                                     print(f"✅ Saved {len(external_reviews)} reviews to ExternalBusinessReviews")
 
                             # 2. СОХРАНЕНИЕ НОВОСТЕЙ (Posts)
-                            news_items = card_data.get('news', [])
+                            news_items = card_data.get('news') or card_data.get('posts') or []
                             if news_items:
                                 external_posts = []
                                 for item in news_items:
@@ -2355,7 +2928,7 @@ def process_queue():
                         ensure_ascii=False,
                     ),
                     json.dumps(card_data.get("products", [])),
-                    json.dumps(card_data.get("news", [])),
+                    json.dumps(card_data.get("news") or card_data.get("posts") or []),
                     json.dumps(card_data.get("photos", [])),
                     json.dumps(card_data.get("features_full", {})),
                     json.dumps(card_data.get("competitors", [])),
@@ -2455,6 +3028,9 @@ def process_queue():
                 else:
                     raise
             conn.commit()
+
+            if queue_dict.get("_resume_batch_after_captcha"):
+                _resume_network_batch_after_captcha(queue_dict["id"])
             
             print(f"✅ Заявка {queue_dict['id']} обработана и удалена из очереди.")
             signal.alarm(0)  # Отключаем таймаут при успехе
@@ -2581,13 +3157,28 @@ def map_card_services(card_data: Dict[str, Any], business_id: str, user_id: str)
 
 def _one_service_row(item: Dict[str, Any], business_id: str, user_id: str, source: str) -> Dict[str, Any]:
     """Один элемент услуги в нормализованном виде для userservices."""
-    name = (item.get("name") or "").strip() or None
+    name = re.sub(r"\s+", " ", str(item.get("name") or "")).strip() or None
     if not name:
         return {}
-    description = (item.get("description") or "").strip() or None
+    if len(name) > 120 or len(name) < 2:
+        return {}
+    lower_name = name.lower()
+    description = re.sub(r"\s+", " ", str(item.get("description") or "")).strip() or None
+    if description and len(description) > 1000:
+        description = description[:1000].rstrip()
     combined_text = f"{name} {description or ''}".lower()
     if any(pattern in combined_text for pattern in _EDITORIAL_SERVICE_PATTERNS):
         print(f"⚠️ [map_card_services] Skip editorial listing: {name}")
+        return {}
+    if any(term in lower_name for term in _SERVICE_NOISE_TERMS):
+        return {}
+    if "http://" in lower_name or "https://" in lower_name or "yandex." in lower_name:
+        print(f"⚠️ [map_card_services] Skip URL-like service title: {name}")
+        return {}
+    if "|" in name and len(name.split()) >= 6:
+        return {}
+    if re.search(r"[✅❌🔥⭐✨💥]", name) and "₽" in name and " за " in lower_name:
+        print(f"⚠️ [map_card_services] Skip promo-like noisy title: {name}")
         return {}
     if (
         (description or "").lower().startswith("рассказываем")
@@ -2604,7 +3195,7 @@ def _one_service_row(item: Dict[str, Any], business_id: str, user_id: str, sourc
     if not price_from and not price_to:
         # Доп. защита от редакционных подборок, которые иногда попадают в products API
         # и не являются услугами конкретного бизнеса.
-        if ":" in name or len(name.split()) >= 7:
+        if ":" in name or len(name.split()) >= 7 or "," in name:
             print(f"⚠️ [map_card_services] Skip long editorial-like title without price: {name}")
             return {}
     return {
@@ -2663,6 +3254,10 @@ def _extract_service_category(payload: Dict[str, Any], *, allow_name_fallback: b
     category = str(raw).strip()
     if not category:
         return ""
+    if "http://" in category.lower() or "https://" in category.lower() or "yandex." in category.lower():
+        return ""
+    if len(category) > 80:
+        return ""
     if category.lower() in {"другое", "разное", "other", "общие услуги", "без категории"}:
         return ""
     return category
@@ -2694,6 +3289,60 @@ def _parse_service_price(raw_price: Any) -> tuple[Optional[float], Optional[floa
         return float(n), float(n)
     except (ValueError, TypeError):
         return None, None
+
+
+def _normalize_rating_value(value: Any) -> Optional[float]:
+    if value in (None, ""):
+        return None
+    try:
+        rating = float(str(value).replace(",", "."))
+    except (TypeError, ValueError):
+        return None
+    if rating < 0 or rating > 5.0:
+        return None
+    return rating
+
+
+def _normalize_reviews_count(value: Any) -> int:
+    if value in (None, ""):
+        return 0
+    try:
+        count = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, count)
+
+
+def _format_service_price_text(price_from: Optional[float], price_to: Optional[float], raw_payload: Dict[str, Any]) -> str:
+    if isinstance(raw_payload, dict):
+        raw_price = raw_payload.get("price")
+        if isinstance(raw_price, str) and raw_price.strip():
+            return raw_price.strip()
+    if price_from and price_to and price_from != price_to:
+        return f"{int(price_from)}-{int(price_to)} ₽"
+    if price_from:
+        return f"{int(price_from)} ₽"
+    return ""
+
+
+def _service_rows_to_grouped_products(service_rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    grouped: Dict[str, List[Dict[str, Any]]] = {}
+    for row in service_rows or []:
+        if not isinstance(row, dict):
+            continue
+        name = str(row.get("name") or "").strip()
+        if not name:
+            continue
+        category = str(row.get("category") or "Общие услуги").strip() or "Общие услуги"
+        raw_payload = row.get("raw") if isinstance(row.get("raw"), dict) else {}
+        item_payload = {
+            "name": name,
+            "price": _format_service_price_text(row.get("price_from"), row.get("price_to"), raw_payload),
+            "description": str(row.get("description") or "").strip(),
+            "category": category,
+        }
+        grouped.setdefault(category, []).append(item_payload)
+    return [{"category": category, "items": items} for category, items in grouped.items() if items]
 
 
 def _sync_parsed_services_to_db(business_id: str, products: list, conn, owner_id: str):
