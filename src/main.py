@@ -2435,7 +2435,7 @@ def _resolve_request_business_id(user_data, *, json_data=None):
         try:
             db = DatabaseManager()
             cursor = db.conn.cursor()
-            owner_id = get_business_owner_id(cursor, normalized, include_active_check=True)
+            owner_id = get_business_owner_id(cursor, normalized, include_active_check=False)
             db.close()
             if owner_id and (owner_id == user_data.get('user_id') or user_data.get('is_superadmin')):
                 return normalized
