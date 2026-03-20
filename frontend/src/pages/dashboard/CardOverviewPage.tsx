@@ -78,8 +78,6 @@ export const CardOverviewPage = () => {
   const [servicesSearch, setServicesSearch] = useState('');
   const [servicesCategoryFilter, setServicesCategoryFilter] = useState('all');
   const [servicesSort, setServicesSort] = useState<'default' | 'name_asc' | 'name_desc' | 'updated_desc' | 'updated_asc' | 'price_asc' | 'price_desc'>('default');
-  const [editingOptimizedNameId, setEditingOptimizedNameId] = useState<string | null>(null);
-  const [editingOptimizedDescriptionId, setEditingOptimizedDescriptionId] = useState<string | null>(null);
   const [optimizedNameDrafts, setOptimizedNameDrafts] = useState<Record<string, string>>({});
   const [optimizedDescriptionDrafts, setOptimizedDescriptionDrafts] = useState<Record<string, string>>({});
 
@@ -1422,36 +1420,15 @@ export const CardOverviewPage = () => {
                                       <Sparkles className="w-3 h-3" />
                                       {t.dashboard.card.seo.proposal}
                                     </div>
-                                    {editingOptimizedNameId === service.id ? (
-                                      <textarea
-                                        value={getOptimizedNameValue(service)}
-                                        onChange={(event) => {
-                                          const value = event.target.value;
-                                          setOptimizedNameDrafts((prev) => ({ ...prev, [service.id]: value }));
-                                        }}
-                                        className="w-full min-h-[80px] rounded-md border border-indigo-200 bg-white px-2 py-1 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                                      />
-                                    ) : (
-                                      <div className="text-gray-800 leading-snug text-sm">{getOptimizedNameValue(service)}</div>
-                                    )}
+                                    <textarea
+                                      value={getOptimizedNameValue(service)}
+                                      onChange={(event) => {
+                                        const value = event.target.value;
+                                        setOptimizedNameDrafts((prev) => ({ ...prev, [service.id]: value }));
+                                      }}
+                                      className="w-full min-h-[80px] rounded-md border border-indigo-200 bg-white px-2 py-1 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                                    />
                                     <div className="flex gap-2 pt-1">
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => {
-                                          if (editingOptimizedNameId === service.id) {
-                                            setEditingOptimizedNameId(null);
-                                            return;
-                                          }
-                                          if (optimizedNameDrafts[service.id] === undefined) {
-                                            setOptimizedNameDrafts((prev) => ({ ...prev, [service.id]: service.optimized_name || '' }));
-                                          }
-                                          setEditingOptimizedNameId(service.id);
-                                        }}
-                                        className="h-6 text-xs text-indigo-600 hover:text-indigo-700 hover:bg-indigo-100"
-                                      >
-                                        {editingOptimizedNameId === service.id ? 'Готово' : 'Редактировать'}
-                                      </Button>
                                       <Button
                                         size="sm"
                                         variant="ghost"
@@ -1468,7 +1445,6 @@ export const CardOverviewPage = () => {
                                           };
                                           await updateService(service.id, payload, { reload: false, showSuccess: false });
                                           patchServiceInState(service.id, payload);
-                                          setEditingOptimizedNameId((prev) => (prev === service.id ? null : prev));
                                           setOptimizedNameDrafts((prev) => {
                                             const next = { ...prev };
                                             delete next[service.id];
@@ -1496,7 +1472,6 @@ export const CardOverviewPage = () => {
                                           };
                                           await updateService(service.id, payload, { reload: false, showSuccess: false });
                                           patchServiceInState(service.id, payload);
-                                          setEditingOptimizedNameId((prev) => (prev === service.id ? null : prev));
                                           setOptimizedNameDrafts((prev) => {
                                             const next = { ...prev };
                                             delete next[service.id];
@@ -1527,36 +1502,15 @@ export const CardOverviewPage = () => {
                                       <Sparkles className="w-3 h-3" />
                                       {t.dashboard.card.seo.proposal}
                                     </div>
-                                    {editingOptimizedDescriptionId === service.id ? (
-                                      <textarea
-                                        value={getOptimizedDescriptionValue(service)}
-                                        onChange={(event) => {
-                                          const value = event.target.value;
-                                          setOptimizedDescriptionDrafts((prev) => ({ ...prev, [service.id]: value }));
-                                        }}
-                                        className="w-full min-h-[120px] rounded-md border border-indigo-200 bg-white px-2 py-1 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                                      />
-                                    ) : (
-                                      <div className="text-gray-800 leading-relaxed text-sm">{getOptimizedDescriptionValue(service)}</div>
-                                    )}
+                                    <textarea
+                                      value={getOptimizedDescriptionValue(service)}
+                                      onChange={(event) => {
+                                        const value = event.target.value;
+                                        setOptimizedDescriptionDrafts((prev) => ({ ...prev, [service.id]: value }));
+                                      }}
+                                      className="w-full min-h-[120px] rounded-md border border-indigo-200 bg-white px-2 py-1 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                                    />
                                     <div className="flex gap-2 pt-1">
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => {
-                                          if (editingOptimizedDescriptionId === service.id) {
-                                            setEditingOptimizedDescriptionId(null);
-                                            return;
-                                          }
-                                          if (optimizedDescriptionDrafts[service.id] === undefined) {
-                                            setOptimizedDescriptionDrafts((prev) => ({ ...prev, [service.id]: service.optimized_description || '' }));
-                                          }
-                                          setEditingOptimizedDescriptionId(service.id);
-                                        }}
-                                        className="h-6 text-xs text-indigo-600 hover:text-indigo-700 hover:bg-indigo-100"
-                                      >
-                                        {editingOptimizedDescriptionId === service.id ? 'Готово' : 'Редактировать'}
-                                      </Button>
                                       <Button
                                         size="sm"
                                         variant="ghost"
@@ -1572,7 +1526,6 @@ export const CardOverviewPage = () => {
                                           };
                                           await updateService(service.id, payload, { reload: false, showSuccess: false });
                                           patchServiceInState(service.id, payload);
-                                          setEditingOptimizedDescriptionId((prev) => (prev === service.id ? null : prev));
                                           setOptimizedDescriptionDrafts((prev) => {
                                             const next = { ...prev };
                                             delete next[service.id];
@@ -1599,7 +1552,6 @@ export const CardOverviewPage = () => {
                                           };
                                           await updateService(service.id, payload, { reload: false, showSuccess: false });
                                           patchServiceInState(service.id, payload);
-                                          setEditingOptimizedDescriptionId((prev) => (prev === service.id ? null : prev));
                                           setOptimizedDescriptionDrafts((prev) => {
                                             const next = { ...prev };
                                             delete next[service.id];

@@ -2419,6 +2419,33 @@ def _table_columns(cursor, table_name: str) -> set:
     return cols
 
 
+def _resolve_request_business_id(user_data, *, json_data=None):
+    """Извлечь business_id из query/form/json, чтобы не падать на fallback к "первому бизнесу"."""
+    payload = json_data if isinstance(json_data, dict) else {}
+    candidates = [
+        request.args.get('business_id'),
+        request.form.get('business_id'),
+        payload.get('business_id'),
+        payload.get('businessId'),
+    ]
+    for candidate in candidates:
+        normalized = str(candidate or "").strip()
+        if not normalized:
+            continue
+        try:
+            db = DatabaseManager()
+            cursor = db.conn.cursor()
+            owner_id = get_business_owner_id(cursor, normalized, include_active_check=True)
+            db.close()
+            if owner_id and (owner_id == user_data.get('user_id') or user_data.get('is_superadmin')):
+                return normalized
+        except Exception as access_exc:
+            print(f"⚠️ _resolve_request_business_id access check skipped: {access_exc}")
+            return normalized
+
+    return get_business_id_from_user(user_data['user_id'], None)
+
+
 def _business_display_fields(row_dict):
     """Из row_dict (из businesses) извлечь поля для UI: name, business_type, address, working_hours (строки)."""
     if not row_dict:
@@ -2673,14 +2700,19 @@ def services_optimize():
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
 
-        tone = request.form.get('tone') or request.json.get('tone') if request.is_json else None
-        instructions = request.form.get('instructions') or (request.json.get('instructions') if request.is_json else None)
-        region = request.form.get('region') or (request.json.get('region') if request.is_json else None)
-        business_name = request.form.get('business_name') or (request.json.get('business_name') if request.is_json else None)
-        length = request.form.get('description_length') or (request.json.get('description_length') if request.is_json else 150)
+        json_payload = request.get_json(silent=True) if request.is_json else {}
+        if not isinstance(json_payload, dict):
+            json_payload = {}
+
+        tone = request.form.get('tone') or json_payload.get('tone')
+        instructions = request.form.get('instructions') or json_payload.get('instructions')
+        region = request.form.get('region') or json_payload.get('region')
+        business_name = request.form.get('business_name') or json_payload.get('business_name')
+        length = request.form.get('description_length') or json_payload.get('description_length') or 150
+        request_business_id = _resolve_request_business_id(user_data, json_data=json_payload)
 
         # Язык результата: получаем из запроса или из профиля пользователя
-        requested_language = request.form.get('language') or (request.json.get('language') if request.is_json else None)
+        requested_language = request.form.get('language') or json_payload.get('language')
         language = get_user_language(user_data['user_id'], requested_language)
         language_names = {
             'ru': 'Russian',
@@ -2778,12 +2810,11 @@ def services_optimize():
 }"""
                 
                 print(f"🔍 Анализ скриншота, размер base64: {len(image_base64)} символов")
-                business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id'))
                 result = analyze_screenshot_with_gigachat(
                     image_base64, 
                     screenshot_prompt,
                     task_type="service_optimization",
-                    business_id=business_id,
+                    business_id=request_business_id,
                     user_id=user_data['user_id']
                 )
                 print(f"🔍 Результат анализа скриншота: {type(result)}, keys: {result.keys() if isinstance(result, dict) else 'not dict'}")
@@ -2791,8 +2822,7 @@ def services_optimize():
                 # Для документов - анализ текста
                 content = file.read().decode('utf-8', errors='ignore')
         else:
-            data = request.get_json(silent=True) or {}
-            content = (data.get('text') or '').strip()
+            content = str(json_payload.get('text') or '').strip()
 
         # Если файл - изображение, результат уже получен выше
         if file and file.content_type.startswith('image/'):
@@ -2947,11 +2977,10 @@ def services_optimize():
                     .replace('{content}', str(content[:4000]))
                 )
 
-            business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id'))
             result = analyze_text_with_gigachat(
                 prompt, 
                 task_type="service_optimization",
-                business_id=business_id,
+                business_id=request_business_id,
                 user_id=user_data['user_id']
             )
         
@@ -3027,7 +3056,7 @@ def services_optimize():
             retry_raw = analyze_text_with_gigachat(
                 retry_prompt,
                 task_type="service_optimization",
-                business_id=business_id,
+                business_id=request_business_id,
                 user_id=user_data['user_id']
             )
             try:
@@ -3125,7 +3154,6 @@ def services_optimize():
         db.conn.commit()
         db.close()
 
-        business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id') if request else None)
         first_service = None
         if isinstance(result.get("services"), list) and result.get("services"):
             first_service = result.get("services")[0]
@@ -3137,7 +3165,7 @@ def services_optimize():
             event_type="generated",
             intent="operations",
             user_id=user_data['user_id'],
-            business_id=business_id,
+            business_id=request_business_id,
             prompt_key="service_optimization",
             prompt_version="v1",
             draft_text=draft_name or None,
@@ -4710,6 +4738,22 @@ def update_service(service_id):
         print(f"🔍 DEBUG update_service: columns = {columns}", flush=True)
         print(f"🔍 DEBUG update_service: optimized_name = '{optimized_name}' (type: {type(optimized_name)}, length: {len(optimized_name) if optimized_name else 0})", flush=True)
         print(f"🔍 DEBUG update_service: optimized_description = '{optimized_description[:100] if optimized_description else ''}...' (type: {type(optimized_description)}, length: {len(optimized_description) if optimized_description else 0})", flush=True)
+
+        cursor.execute(
+            """
+            SELECT name, description, optimized_name, optimized_description, business_id
+            FROM userservices
+            WHERE id = %s AND user_id = %s
+            LIMIT 1
+            """,
+            (service_id, user_id),
+        )
+        previous_row = cursor.fetchone()
+        if not previous_row:
+            db.close()
+            return jsonify({"error": "Услуга не найдена или нет прав для редактирования"}), 404
+
+        previous_data = _row_to_dict(cursor, previous_row) or {}
         
         if has_optimized_description and has_optimized_name:
             print(f"🔍 DEBUG update_service: Обновление с optimized_description и optimized_name", flush=True)
@@ -4742,7 +4786,9 @@ def update_service(service_id):
         db.conn.commit()
         db.close()
 
-        business_id = get_business_id_from_user(user_id, request.args.get('business_id'))
+        request_business_id = _resolve_request_business_id(user_data, json_data=data)
+        service_business_id = str(previous_data.get("business_id") or "").strip() or None
+        business_id = request_business_id or service_business_id
         prev_name = str(previous_data.get("name") or "")
         prev_description = str(previous_data.get("description") or "")
         prev_optimized_name = str(previous_data.get("optimized_name") or "")
