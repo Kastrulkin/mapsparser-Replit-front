@@ -12,6 +12,18 @@ export const DashboardLayout = () => {
   const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(null);
   const [currentBusiness, setCurrentBusiness] = useState<any>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const isLeadBusiness = (business: any) => {
+    const moderationStatus = String(business?.moderation_status || '').trim().toLowerCase();
+    const entityGroup = String(business?.entity_group || '').trim().toLowerCase();
+    const description = String(business?.description || '').trim().toLowerCase();
+    return (
+      business?.is_lead_business === true ||
+      moderationStatus === 'lead_outreach' ||
+      entityGroup === 'lead' ||
+      description.startsWith('lead shadow business for outreach lead')
+    );
+  };
+  const filterOutLeads = (items: any[]) => (items || []).filter((business) => !isLeadBusiness(business));
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -31,7 +43,7 @@ export const DashboardLayout = () => {
         }
 
         // Используем данные, полученные из newAuth.getCurrentUser(), вместо повторного запроса
-        const businessesData = currentUser.businesses || [];
+        const businessesData = filterOutLeads(currentUser.businesses || []);
 
         console.log('📊 Загружены данные пользователя:', {
           is_superadmin: currentUser.is_superadmin,
@@ -104,15 +116,18 @@ export const DashboardLayout = () => {
     try {
       const data = await newAuth.makeRequest('/auth/me');
 
-      if (data.businesses && Array.isArray(data.businesses) && data.businesses.length > 0) {
-        setBusinesses(data.businesses);
+      const businessesData = filterOutLeads(data.businesses || []);
+      if (Array.isArray(businessesData) && businessesData.length > 0) {
+        setBusinesses(businessesData);
         // Обновляем текущий бизнес, если он был изменен
         if (currentBusinessId) {
-          const updatedBusiness = data.businesses.find((b: any) => b.id === currentBusinessId);
+          const updatedBusiness = businessesData.find((b: any) => b.id === currentBusinessId);
           if (updatedBusiness) {
             setCurrentBusiness(updatedBusiness);
           }
         }
+      } else {
+        setBusinesses([]);
       }
     } catch (error) {
       console.error('Ошибка перезагрузки бизнесов:', error);
@@ -158,4 +173,3 @@ export const DashboardLayout = () => {
     </div>
   );
 };
-

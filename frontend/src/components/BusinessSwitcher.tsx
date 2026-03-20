@@ -10,6 +10,9 @@ interface Business {
   owner_name?: string;
   network_id?: string;
   created_at?: string;
+  moderation_status?: string;
+  entity_group?: string;
+  is_lead_business?: boolean;
 }
 
 interface BusinessSwitcherProps {
@@ -27,6 +30,21 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
+  const isLeadBusiness = (business?: Business | null) => {
+    const moderationStatus = String(business?.moderation_status || '').trim().toLowerCase();
+    const entityGroup = String(business?.entity_group || '').trim().toLowerCase();
+    const description = String(business?.description || '').trim().toLowerCase();
+    return (
+      business?.is_lead_business === true ||
+      moderationStatus === 'lead_outreach' ||
+      entityGroup === 'lead' ||
+      description.startsWith('lead shadow business for outreach lead')
+    );
+  };
+  const visibleBusinesses = React.useMemo(
+    () => businesses.filter((business) => !isLeadBusiness(business)),
+    [businesses]
+  );
 
   // Фильтруем точки сети - показываем только основные аккаунты
   // Фильтруем точки сети - показываем независимые точки ИЛИ "главную" точку сети (самую старую)
@@ -35,7 +53,7 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
     const networks: { [key: string]: Business[] } = {};
 
     // Группируем
-    for (const b of businesses) {
+    for (const b of visibleBusinesses) {
       if (!b.network_id) {
         independent.push(b);
       } else {
@@ -59,7 +77,7 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
     });
 
     return [...independent, ...networkHeads];
-  }, [businesses]);
+  }, [visibleBusinesses]);
 
   useEffect(() => {
     if (mainBusinesses.length > 0) {

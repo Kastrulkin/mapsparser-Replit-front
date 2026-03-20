@@ -203,7 +203,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
     const res = await fetch(`${window.location.origin}/api/news/approve`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ news_id: id })
+      body: JSON.stringify({ news_id: id, business_id: businessId || undefined })
     });
     const data = await res.json();
     if (data.success) await loadNews();
@@ -214,7 +214,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
     const res = await fetch(`${window.location.origin}/api/news/update`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ news_id: id, text })
+      body: JSON.stringify({ news_id: id, text, business_id: businessId || undefined })
     });
     const data = await res.json();
     if (data.success) await loadNews();
@@ -226,7 +226,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
     const res = await fetch(`${window.location.origin}/api/news/delete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ news_id: id })
+      body: JSON.stringify({ news_id: id, business_id: businessId || undefined })
     });
     const data = await res.json();
     if (data.success) await loadNews();

@@ -32,6 +32,7 @@ import WizardYandex from "./pages/WizardYandex";
 import Sprint from "./pages/Sprint";
 import ServicePhrases from "./pages/ServicePhrases";
 import CardRecommendations from "./pages/CardRecommendations";
+import PublicPartnershipOfferPage from "./pages/PublicPartnershipOfferPage";
 
 const queryClient = new QueryClient();
 
@@ -81,6 +82,7 @@ const AppContent = () => {
           <Route path="/card-recs" element={<CardRecommendations />} />
           <Route path="/set-password" element={<SetPassword />} />
           <Route path="/reset-password" element={<SetPassword />} />
+          <Route path="/:offerSlug" element={<PublicPartnershipOfferPage />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -5,6 +5,7 @@
 import os
 import json
 import uuid
+import re
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Any
 from psycopg2.extras import Json
@@ -665,14 +666,126 @@ class DatabaseManager:
         cursor = self.conn.cursor()
         saved = 0
         try:
-            parsed_sources = sorted({
-                (row.get("source") or "yandex_maps").strip() or "yandex_maps"
-                for row in service_rows
-                if isinstance(row, dict) and row.get("name")
-            })
+            parsed_sources = sorted(
+                {
+                    (row.get("source") or "yandex_maps").strip() or "yandex_maps"
+                    for row in service_rows
+                    if isinstance(row, dict) and row.get("name")
+                }
+            )
+            existing_active_counts: Dict[str, int] = {}
+            existing_total_counts: Dict[str, int] = {}
+            skipped_sources = set()
+
+            # Эффективные входные строки считаем ПОСЛЕ фильтров/дедупа.
+            # Иначе можем ошибочно деактивировать весь source, а реально сохранить 1 строку.
+            prepared_rows: List[Dict[str, Any]] = []
+            prepared_seen_keys = set()
+            effective_source_counts: Dict[str, int] = {}
+
+            rows_sorted = sorted(
+                service_rows,
+                key=lambda r: len(str((r or {}).get("description") or "").strip()),
+                reverse=True,
+            )
+            for row in rows_sorted:
+                if not row or not row.get("name"):
+                    continue
+                source = (row.get("source") or "yandex_maps").strip() or "yandex_maps"
+                name_value = (row.get("name") or "").strip()
+                lower_name = name_value.lower()
+                if re.search(r"[✅❌🔥⭐✨💥]", name_value) and "₽" in name_value and " за " in lower_name:
+                    print(
+                        f"⚠️ services_sync_guard: skip noisy parsed service for business_id={business_id} "
+                        f"name={name_value}"
+                    )
+                    continue
+
+                category_value = (row.get("category") or "Разное").strip() or "Разное"
+                price_from = row.get("price_from")
+                price_to = row.get("price_to")
+                price_str = None
+                if price_from is not None:
+                    price_str = str(price_from)
+                elif price_to is not None:
+                    price_str = str(price_to)
+
+                dedup_key = (
+                    source.lower(),
+                    name_value.lower(),
+                    category_value.lower(),
+                    str(price_from or ""),
+                    str(price_to or ""),
+                    str(price_str or ""),
+                )
+                if dedup_key in prepared_seen_keys:
+                    continue
+                prepared_seen_keys.add(dedup_key)
+                prepared_rows.append(row)
+                effective_source_counts[source] = int(effective_source_counts.get(source) or 0) + 1
+
+            if parsed_sources:
+                cursor.execute(
+                    """
+                    SELECT source, COUNT(*) AS cnt
+                    FROM userservices
+                    WHERE business_id = %s
+                      AND raw IS NOT NULL
+                      AND COALESCE(is_active, TRUE) = TRUE
+                      AND source = ANY(%s)
+                    GROUP BY source
+                    """,
+                    (business_id, parsed_sources),
+                )
+                for row in cursor.fetchall() or []:
+                    src = (row.get("source") if hasattr(row, "get") else row[0]) or "yandex_maps"
+                    cnt = row.get("cnt") if hasattr(row, "get") else row[1]
+                    try:
+                        existing_active_counts[str(src)] = int(cnt or 0)
+                    except Exception:
+                        existing_active_counts[str(src)] = 0
+
+                cursor.execute(
+                    """
+                    SELECT source, COUNT(*) AS cnt
+                    FROM userservices
+                    WHERE business_id = %s
+                      AND raw IS NOT NULL
+                      AND source = ANY(%s)
+                    GROUP BY source
+                    """,
+                    (business_id, parsed_sources),
+                )
+                for row in cursor.fetchall() or []:
+                    src = (row.get("source") if hasattr(row, "get") else row[0]) or "yandex_maps"
+                    cnt = row.get("cnt") if hasattr(row, "get") else row[1]
+                    try:
+                        existing_total_counts[str(src)] = int(cnt or 0)
+                    except Exception:
+                        existing_total_counts[str(src)] = 0
+
+                for src in parsed_sources:
+                    prev_active_count = int(existing_active_counts.get(src) or 0)
+                    prev_total_count = int(existing_total_counts.get(src) or 0)
+                    prev_count = max(prev_active_count, prev_total_count)
+                    incoming_count = int(effective_source_counts.get(src) or 0)
+                    if prev_count >= 8 and incoming_count <= 1:
+                        skipped_sources.add(src)
+                        print(
+                            f"⚠️ services_sync_guard: skip destructive replace for business_id={business_id} "
+                            f"source={src} prev_count={prev_count} incoming_count={incoming_count}"
+                        )
+                    elif prev_count >= 10 and incoming_count < max(2, int(prev_count * 0.25)):
+                        skipped_sources.add(src)
+                        print(
+                            f"⚠️ services_sync_guard: suspicious drop, skip replace for business_id={business_id} "
+                            f"source={src} prev_count={prev_count} incoming_count={incoming_count}"
+                        )
             # Перед апдейтом нового снапшота выключаем старые распарсенные строки этого source.
             # Ручные услуги не затрагиваем (у них source обычно NULL/другой, raw отсутствует).
             for src in parsed_sources:
+                if src in skipped_sources:
+                    continue
                 cursor.execute(
                     """
                     UPDATE userservices
@@ -683,21 +796,18 @@ class DatabaseManager:
                     """,
                     (business_id, src),
                 )
-
-            rows_sorted = sorted(
-                service_rows,
-                key=lambda r: len(str((r or {}).get("description") or "").strip()),
-                reverse=True,
-            )
             seen_keys = set()
-            for row in rows_sorted:
+            for row in prepared_rows:
                 if not row or not row.get("name"):
                     continue
+                source = (row.get("source") or "yandex_maps").strip() or "yandex_maps"
+                if source in skipped_sources:
+                    continue
+                name_value = (row.get("name") or "").strip()
                 sid = str(uuid.uuid4())
-                name = row.get("name", "").strip()
+                name = name_value
                 description = (row.get("description") or "").strip() or None
                 category = (row.get("category") or "Разное").strip() or "Разное"
-                source = (row.get("source") or "yandex_maps").strip() or "yandex_maps"
                 external_id = row.get("external_id")
                 if external_id is not None:
                     external_id = str(external_id).strip() or None

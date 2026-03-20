@@ -451,6 +451,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
             )}
             <div className="flex gap-2 items-center">
               <Button
+                type="button"
                 onClick={() => testCookies('yandex_business', yandexForm)}
                 disabled={testingCookies || saving || !yandexForm.external_id}
                 variant="outline"
@@ -458,12 +459,14 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                 {testingCookies ? 'Проверка...' : 'Проверить cookies'}
               </Button>
               <Button
+                type="button"
                 onClick={() => saveAccount('yandex_business', yandexForm)}
                 disabled={saving || testingCookies}
               >
                 {saving ? 'Сохранение...' : yandexAccount ? 'Обновить' : 'Сохранить'}
               </Button>
               <Button
+                type="button"
                 onClick={() => handleRunParser('yandex', 'single')}
                 disabled={parseStatus === 'processing' || !businessId || !yandexAccount}
                 variant="default"
@@ -473,6 +476,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
               </Button>
               {networkLocationsCount > 1 && (
                 <Button
+                  type="button"
                   onClick={() => handleRunParser('yandex', 'network')}
                   disabled={parseStatus === 'processing' || !businessId}
                   variant="outline"
@@ -545,14 +549,16 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
             )}
             <div className="flex gap-2 items-center">
               <Button
+                type="button"
                 onClick={() => saveAccount('2gis', twoGisForm)}
                 disabled={saving}
               >
                 {saving ? 'Сохранение...' : twoGisAccount ? 'Обновить' : 'Сохранить'}
               </Button>
               <Button
+                type="button"
                 onClick={() => handleRunParser('2gis')}
-                disabled={parseStatus === 'processing' || !businessId || !twoGisAccount}
+                disabled={parseStatus === 'processing' || !businessId}
                 variant="default"
                 className="ml-auto"
               >

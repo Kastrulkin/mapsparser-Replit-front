@@ -246,15 +246,114 @@ class YandexMapsInterceptionParser:
             return True
         return False
 
+    def _normalize_products_flat(self, products: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        normalized: List[Dict[str, Any]] = []
+        for item in products or []:
+            if not isinstance(item, dict):
+                continue
+            # Уже плоский товар/услуга
+            if item.get("name"):
+                normalized.append(item)
+                continue
+            # Группированная структура: {category, items:[...]} / {name, products:[...]}
+            parent_category = str(
+                item.get("category")
+                or item.get("name")
+                or item.get("title")
+                or "Другое"
+            ).strip()
+            nested = item.get("items") or item.get("products") or []
+            if not isinstance(nested, list):
+                continue
+            for child in nested:
+                if not isinstance(child, dict):
+                    continue
+                if not child.get("name"):
+                    continue
+                merged = dict(child)
+                if not merged.get("category") and parent_category:
+                    merged["category"] = parent_category
+                normalized.append(merged)
+        return normalized
+
     def _filter_products_quality(self, products: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         clean: List[Dict[str, Any]] = []
-        for item in products or []:
+        for item in self._normalize_products_flat(products):
             if not isinstance(item, dict):
                 continue
             if self._is_noisy_product(item):
                 continue
             clean.append(item)
         return clean
+
+    def _score_products_payload(self, products: List[Dict[str, Any]]) -> float:
+        if not products:
+            return 0.0
+        priced = 0
+        categorized = 0
+        for item in products:
+            if str(item.get("price") or "").strip():
+                priced += 1
+            if str(item.get("category") or "").strip():
+                categorized += 1
+        total = len(products)
+        # Баланс: сначала объём, затем подтверждение ценой и категорией.
+        return float(total * 2 + priced + (categorized * 0.25))
+
+    def _is_noisy_title_candidate(self, value: Any) -> bool:
+        if value is None:
+            return True
+        text = str(value).strip()
+        if not text:
+            return True
+        lower = text.lower()
+        if text in ["Санкт-Петербург", "Россия", "Яндекс Карты", "Москва"]:
+            return True
+        # Частый мусор из вложенных category/name полей.
+        if text.startswith("{") and "\"text\"" in text:
+            return True
+        if any(token in lower for token in ("хорошее место", "подборка", "navigation", "parking", "entrance")):
+            return True
+        return False
+
+    def _collect_org_id_matched_nodes(self, node: Any, target_org_id: str) -> List[Dict[str, Any]]:
+        matches: List[Dict[str, Any]] = []
+
+        def walk(value: Any) -> None:
+            if isinstance(value, dict):
+                for key in ("id", "orgId", "organizationId", "businessId"):
+                    raw = value.get(key)
+                    if raw is not None and str(raw).strip() == target_org_id:
+                        matches.append(value)
+                        break
+                for child in value.values():
+                    walk(child)
+            elif isinstance(value, list):
+                for item in value:
+                    walk(item)
+
+        walk(node)
+        return matches
+
+    def _select_best_org_node(self, candidates: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        if not candidates:
+            return None
+
+        def score(node: Dict[str, Any]) -> int:
+            points = 0
+            if any(node.get(k) for k in ("shortTitle", "name", "title", "displayName")):
+                points += 3
+            if any(node.get(k) for k in ("fullAddress", "address_name", "address")):
+                points += 3
+            if isinstance(node.get("ratingData"), dict):
+                points += 2
+            if isinstance(node.get("categories"), list) and node.get("categories"):
+                points += 1
+            if isinstance(node.get("rubrics"), list) and node.get("rubrics"):
+                points += 1
+            return points
+
+        return max(candidates, key=score)
         
     def extract_org_id(self, url: str) -> Optional[str]:
         """Извлечь org_id из URL Яндекс.Карт
@@ -361,6 +460,25 @@ class YandexMapsInterceptionParser:
             except Exception:
                 return False
 
+        def _safe_page_title(max_attempts: int = 3) -> str:
+            """
+            Безопасно получить page.title() при нестабильной навигации.
+            Playwright иногда выбрасывает "Execution context was destroyed" во время redirect.
+            """
+            for attempt in range(max_attempts):
+                try:
+                    return page.title() or ""
+                except Exception as exc:
+                    msg = str(exc).lower()
+                    if "execution context was destroyed" in msg or "navigation" in msg:
+                        try:
+                            page.wait_for_timeout(300 + attempt * 250)
+                        except Exception:
+                            pass
+                        continue
+                    return ""
+            return ""
+
         # Базовая информация для debug bundle
         initial_url = url
         main_http_status: Optional[int] = None
@@ -374,8 +492,8 @@ class YandexMapsInterceptionParser:
             try:
                 url = response.url
 
-                # Ищем API запросы Яндекс.Карт (yandex.com при редиректе региона!)
-                if any(h in url for h in ("yandex.ru", "yandex.net", "yandex.com")):
+                # Ищем API запросы Яндекс.Карт (включая региональные редиректы .com/.kz)
+                if any(h in url for h in ("yandex.ru", "yandex.net", "yandex.com", "yandex.kz")):
                     # Проверяем, это JSON ответ?
                     content_type = response.headers.get("content-type", "")
                     if "application/json" in content_type or "json" in url.lower() or "ajax=1" in url:
@@ -438,11 +556,15 @@ class YandexMapsInterceptionParser:
             except Exception:
                 main_http_status = None
 
-            # Проверяем на капчу с ожиданием решения
-            for _ in range(24):  # Ждем до 120 секунд
+            # Проверяем на капчу с ожиданием решения.
+            # Для массовых очередей слишком длинное ожидание резко просаживает throughput,
+            # поэтому время ожидания настраивается через env.
+            captcha_wait_loops = max(1, int(os.getenv("YANDEX_CAPTCHA_WAIT_LOOPS", "6") or 6))
+            captcha_wait_ms = max(1000, int(os.getenv("YANDEX_CAPTCHA_WAIT_MS", "5000") or 5000))
+            for _ in range(captcha_wait_loops):
                 try:
                     # Более точная проверка капчи (регистронезависимо + рус/англ)
-                    title = page.title()
+                    title = _safe_page_title()
                     is_captcha = (
                         _is_captcha_page(title)
                         or page.get_by_text("Подтвердите, что вы не робот").is_visible()
@@ -452,19 +574,24 @@ class YandexMapsInterceptionParser:
                     )
 
                     if is_captcha:
-                        print("⚠️ Обнаружена капча! Ждем 15 секунд... (не трогаем страницу)")
-                        page.wait_for_timeout(15000)
+                        print(
+                            f"⚠️ Обнаружена капча! Ждем {int(captcha_wait_ms/1000)} секунд... "
+                            "(не трогаем страницу)"
+                        )
+                        page.wait_for_timeout(captcha_wait_ms)
                     else:
                         break
                 except Exception:
-                    break
+                    # Транзиентные ошибки во время редиректов не должны валить цикл ожидания.
+                    page.wait_for_timeout(1200)
+                    continue
         except PlaywrightTimeoutError:
             print("⚠️ Страница не загрузилась полностью (таймаут), но продолжаем...")
         except Exception:
             print("⚠️ Страница не загрузилась полностью, но продолжаем...")
 
         # Double check if we are still stuck on Captcha
-        title = page.title()
+        title = _safe_page_title()
         if _is_captcha_page(title):
             print(f"❌ Капча не была решена за отведённое время. Заголовок: {title}")
             # Возвращаем специальную ошибку, чтобы воркер знал о капче
@@ -484,7 +611,7 @@ class YandexMapsInterceptionParser:
 
         # Проверка редиректа на главную или другую страницу
         current_url = page.url
-        title = page.title()
+        title = _safe_page_title()
         print(f"📍 Текущий URL: {current_url}, Заголовок: {title}")
         if "showcaptcha" in (current_url or "").lower():
             print("⚠️ Обнаружен showcaptcha URL, возвращаем captcha_detected")
@@ -544,7 +671,11 @@ class YandexMapsInterceptionParser:
                 except Exception:
                     pass
 
-            page.goto(url, wait_until="domcontentloaded")
+            try:
+                page.goto(url, wait_until="domcontentloaded", timeout=25000)
+            except PlaywrightTimeoutError:
+                # Не валим весь цикл: продолжаем с тем, что уже загружено.
+                print("⚠️ Повторный переход на карточку по URL дал таймаут, продолжаем текущий контекст.")
             try:
                 print("⏳ Повторное ожидание заголовка организации...")
                 page.wait_for_selector(
@@ -789,7 +920,7 @@ class YandexMapsInterceptionParser:
 
                     # title tag
                     if not meta_title:
-                        page_title = page.title()
+                        page_title = _safe_page_title()
                         if page_title:
                             meta_title = page_title.split("-")[0].strip()  # "Name - Yandex Maps" -> "Name"
                             print(f"✅ Нашли заголовок в page title: {meta_title}")
@@ -944,7 +1075,7 @@ class YandexMapsInterceptionParser:
                 final_url = page.url
                 page_title = ""
                 try:
-                    page_title = page.title()
+                    page_title = _safe_page_title()
                 except Exception:
                     pass
 
@@ -1203,7 +1334,7 @@ class YandexMapsInterceptionParser:
                     data.update(org_data)
             
             # Специальная обработка для fetchGoods/Prices API
-            elif 'fetchGoods' in url or 'prices' in url.lower() or 'goods' in url.lower() or 'product' in url.lower() or 'search' in url.lower() or 'catalog' in url.lower():
+            elif 'fetchGoods' in url or 'prices' in url.lower() or 'goods' in url.lower() or 'product' in url.lower() or 'catalog' in url.lower():
                 products = self._extract_products_from_api(json_data)
                 if products:
                     print(f"✅ Извлечено {len(products)} услуг/товаров из API запроса")
@@ -1233,21 +1364,31 @@ class YandexMapsInterceptionParser:
         # 2. Если продукты не найдены по URL, ищем во ВСЕХ ответах (Brute Force)
         if not data.get('products'):
             print("⚠️ Товары не найдены по URL фильтру, ищем во всех ответах...")
+            best_products: List[Dict[str, Any]] = []
+            best_source_url = ""
+            best_score = 0.0
             for url, response_info in self.api_responses.items():
-                # Пропускаем уже обработанные (хотя extract_products идемпотентна, лучше не дублировать логику)
-                # Но проще просто пройтись
                 try:
                     json_data = response_info['data']
                     products = self._extract_products_from_api(json_data)
                     if products:
-                        print(f"✅ Извлечено {len(products)} услуг из API (Brute Force): {url[-50:]}")
-                        current_products = data.get('products', [])
-                        current_products.extend(products)
-                        data['products'] = current_products
-                        break # Нашли - выходим, чтобы не дублировать если несколько чанков
-                except:
-                    pass
-        
+                        filtered_candidate = self._filter_products_quality(products)
+                        score = self._score_products_payload(filtered_candidate)
+                        if score > best_score:
+                            best_score = score
+                            best_products = filtered_candidate
+                            best_source_url = url
+                except Exception:
+                    continue
+            if best_products:
+                print(
+                    f"✅ Brute Force выбрал лучший набор услуг: {len(best_products)} "
+                    f"(score={best_score:.2f}) из {best_source_url[-80:]}"
+                )
+                current_products = data.get('products', [])
+                current_products.extend(best_products)
+                data['products'] = current_products
+
         # Deduplicate products by name and price
         if data.get('products'):
             unique_products = {}
@@ -1381,24 +1522,31 @@ class YandexMapsInterceptionParser:
     def _extract_location_info(self, json_data: Any) -> Dict[str, Any]:
         """Извлекает данные организации из location-info API"""
         result = {}
+
+        # Сначала стараемся работать по узлу, который явно совпал по org_id.
+        # Это уменьшает шанс взять "чужие" toponym/category данные из большого location-info ответа.
+        target_node: Optional[Dict[str, Any]] = None
+        target_org_id = str(self.org_id or "").strip()
+        if target_org_id:
+            matched_nodes = self._collect_org_id_matched_nodes(json_data, target_org_id)
+            target_node = self._select_best_org_node(matched_nodes)
         
         def extract_nested(data):
             if isinstance(data, dict):
                 # Ищем название
                 title_cand = ''
-                if 'name' in data:
+                if 'shortTitle' in data:
+                    title_cand = data['shortTitle']
+                elif 'displayName' in data:
+                    title_cand = data['displayName']
+                elif 'name' in data:
                     title_cand = data['name']
                 elif 'title' in data:
                     title_cand = data['title']
                 
-                # Filter out generic toponyms
-                if title_cand:
-                    if title_cand in ['Санкт-Петербург', 'Россия', 'Яндекс Карты', 'Москва']:
-                        # print(f"⚠️ [Parser] Ignored title '{title_cand}' (in blacklist)") 
-                        pass # Don't spam, but we skip it
-                    else:
-                        # print(f"✅ [Parser] Found title: {title_cand}")
-                        result['title'] = title_cand
+                # Filter out generic/noisy values
+                if title_cand and not self._is_noisy_title_candidate(title_cand):
+                    _set_if_empty(result, 'title', str(title_cand).strip())
                 
                 # Ищем адрес (стандартный ключ + альтернативы для разных эндпоинтов)
                 addr_val = None
@@ -1411,35 +1559,46 @@ class YandexMapsInterceptionParser:
                 if not addr_val:
                     addr_val = data.get('address_name') or data.get('fullAddress') or data.get('full_address') or ''
                 if addr_val and isinstance(addr_val, str) and len(addr_val.strip()) > 2:
-                    result['address'] = addr_val.strip()
+                    _set_if_empty(result, 'address', addr_val.strip())
                 
                 # Ищем рейтинг
                 if 'rating' in data:
                     rating = data['rating']
                     if isinstance(rating, (int, float)):
-                        result['rating'] = str(rating)
+                        _set_if_empty(result, 'rating', str(rating))
                     elif isinstance(rating, dict):
-                        result['rating'] = str(rating.get('value', rating.get('score', '')))
+                        _set_if_empty(result, 'rating', str(rating.get('value', rating.get('score', ''))))
                 
                 # Fallback rating
                 elif 'score' in data:
-                     result['rating'] = str(data['score'])
+                    _set_if_empty(result, 'rating', str(data['score']))
 
                 # Ищем рейтинг внутри ratingData (часто бывает в location-info)
                 elif 'ratingData' in data:
                     rd = data['ratingData']
                     if isinstance(rd, dict):
-                         val = rd.get('rating') or rd.get('value') or rd.get('score')
-                         if val: result['rating'] = str(val)
-                         
-                         count = rd.get('count') or rd.get('reviewCount')
-                         if count: result['reviews_count'] = int(count)
+                        val = rd.get('rating') or rd.get('ratingValue') or rd.get('value') or rd.get('score')
+                        if val:
+                            _set_if_empty(result, 'rating', str(val))
+
+                        count = rd.get('reviewCount') or rd.get('count') or rd.get('ratingCount')
+                        if isinstance(count, (int, float, str)):
+                            try:
+                                _set_if_empty(result, 'reviews_count', int(count))
+                            except (TypeError, ValueError):
+                                pass
                 
                 # Ищем количество отзывов
                 if 'reviewsCount' in data:
-                    result['reviews_count'] = int(data['reviewsCount'])
+                    try:
+                        _set_if_empty(result, 'reviews_count', int(data['reviewsCount']))
+                    except (TypeError, ValueError):
+                        pass
                 elif 'reviews_count' in data:
-                    result['reviews_count'] = int(data['reviews_count'])
+                    try:
+                        _set_if_empty(result, 'reviews_count', int(data['reviews_count']))
+                    except (TypeError, ValueError):
+                        pass
                 
                 # Ищем категории / рубрики
                 if 'rubrics' in data and isinstance(data['rubrics'], list):
@@ -1455,17 +1614,17 @@ class YandexMapsInterceptionParser:
                     cats = data['categories']
                     if isinstance(cats, list) and cats:
                         # Уже список строк или объектов
-                        result['categories'] = cats
+                        _extend_unique(result, 'categories', cats)
                     elif isinstance(cats, dict) and cats:
-                        result['categories'] = [cats]
+                        _extend_unique(result, 'categories', [cats])
                 elif 'rubric' in data:
                     rub = data['rubric']
                     if isinstance(rub, str) and rub.strip():
-                        result['categories'] = [rub.strip()]
+                        _extend_unique(result, 'categories', [rub.strip()])
                     elif isinstance(rub, dict):
                         n = rub.get('name') or rub.get('label')
                         if n:
-                            result['categories'] = [str(n)]
+                            _extend_unique(result, 'categories', [str(n)])
                 
                 # Ищем категории / рубрики
                 if 'rubrics' in data and isinstance(data['rubrics'], list):
@@ -1498,16 +1657,19 @@ class YandexMapsInterceptionParser:
                     if isinstance(phones, list) and phones:
                         phone_obj = phones[0]
                         if isinstance(phone_obj, dict):
-                            result['phone'] = phone_obj.get('formatted', '') or phone_obj.get('number', '')
+                            _set_if_empty(result, 'phone', phone_obj.get('formatted', '') or phone_obj.get('number', ''))
                         else:
-                            result['phone'] = str(phone_obj)
+                            _set_if_empty(result, 'phone', str(phone_obj))
                     elif isinstance(phones, dict):
-                        result['phone'] = phones.get('formatted', '') or phones.get('number', '')
+                        _set_if_empty(result, 'phone', phones.get('formatted', '') or phones.get('number', ''))
                 
                 # Рекурсивно обходим вложенные объекты
                 for value in data.values():
                     extract_nested(value)
-        
+
+        if target_node:
+            extract_nested(target_node)
+        # Добираем оставшиеся поля из всего ответа, но уже не перезатираем собранное.
         extract_nested(json_data)
 
         # Fallback по наиболее частым путям (payload.company.*)

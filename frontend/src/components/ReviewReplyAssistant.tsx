@@ -209,7 +209,9 @@ export default function ReviewReplyAssistant({ businessName, selectedSource = 'a
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           replyId,
-          replyText: editableReply.trim()
+          replyText: editableReply.trim(),
+          generatedText: reply,
+          business_id: currentBusinessId || undefined
         })
       });
 

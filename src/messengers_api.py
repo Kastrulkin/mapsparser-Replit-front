@@ -7,6 +7,7 @@ API endpoints для ChatGPT интеграции
 - Определение часового пояса
 """
 from flask import Blueprint, request, jsonify
+import os
 from database_manager import DatabaseManager, get_db_connection
 from auth_system import verify_session, create_session
 from subscription_manager import get_automation_block_message, has_paid_automation_access
@@ -14,6 +15,12 @@ from timezone_utils import get_timezone_from_address
 from core.telegram_token_store import (
     encode_telegram_bot_token,
     mask_telegram_bot_token,
+)
+from core.channel_router import (
+    load_business_channel_context,
+    build_channel_statuses,
+    get_routing_plan,
+    dispatch_with_routing,
 )
 import uuid
 import json
@@ -422,6 +429,131 @@ def telegram_bot_status():
     except Exception as e:
         print(f"❌ Ошибка статуса Telegram бота: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+@messengers_bp.route('/api/channels/status', methods=['GET'])
+def channels_status():
+    """Unified channel readiness status for Channel Control Center."""
+    try:
+        user_data = require_auth()
+        if not user_data:
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        business_id = (request.args.get("business_id") or "").strip()
+        if not business_id:
+            return jsonify({"error": "business_id обязателен"}), 400
+
+        preferred_provider = (request.args.get("preferred_provider") or "telegram").strip().lower()
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT id, name, owner_id FROM businesses WHERE id = %s", (business_id,))
+        business_row = cursor.fetchone()
+        if not business_row:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+
+        owner_id = _row_get(business_row, "owner_id", 2)
+        if owner_id != user_data["user_id"] and not user_data.get("is_superadmin"):
+            db.close()
+            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+        ctx = load_business_channel_context(
+            cursor,
+            business_id,
+            global_telegram_bot_token=(os.getenv("TELEGRAM_BOT_TOKEN") or "").strip(),
+        )
+        db.close()
+        if not ctx:
+            return jsonify({"error": "Бизнес не найден"}), 404
+
+        channels = build_channel_statuses(ctx)
+        route = get_routing_plan(ctx, preferred_provider=preferred_provider)
+        return jsonify(
+            {
+                "success": True,
+                "business_id": business_id,
+                "business_name": ctx.get("name") or _row_get(business_row, "name", 1) or "",
+                "channels": channels,
+                "recommended_route": route,
+            }
+        ), 200
+    except Exception as e:
+        print(f"❌ Ошибка /api/channels/status: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@messengers_bp.route('/api/channels/test-send', methods=['POST'])
+def channels_test_send():
+    """Send test message via selected channel or auto-fallback route."""
+    try:
+        user_data = require_auth()
+        if not user_data:
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        data = request.get_json(silent=True) or {}
+        business_id = str(data.get("business_id") or "").strip()
+        if not business_id:
+            return jsonify({"error": "business_id обязателен"}), 400
+
+        channel_id = str(data.get("channel_id") or "auto").strip() or "auto"
+        preferred_provider = str(data.get("preferred_provider") or "telegram").strip().lower()
+        custom_text = str(data.get("message") or "").strip()
+        message_text = custom_text or "✅ LocalOS: тест канала из Центра каналов."
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT id, name, owner_id FROM businesses WHERE id = %s", (business_id,))
+        business_row = cursor.fetchone()
+        if not business_row:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+
+        owner_id = _row_get(business_row, "owner_id", 2)
+        if owner_id != user_data["user_id"] and not user_data.get("is_superadmin"):
+            db.close()
+            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+        ctx = load_business_channel_context(
+            cursor,
+            business_id,
+            global_telegram_bot_token=(os.getenv("TELEGRAM_BOT_TOKEN") or "").strip(),
+        )
+        db.close()
+        if not ctx:
+            return jsonify({"error": "Бизнес не найден"}), 404
+
+        forced_channel = None if channel_id == "auto" else channel_id
+        result = dispatch_with_routing(
+            ctx,
+            message_text,
+            preferred_provider=preferred_provider,
+            force_channel_id=forced_channel,
+        )
+
+        if result.get("success"):
+            selected_channel = str(result.get("selected_channel_id") or "")
+            return jsonify(
+                {
+                    "success": True,
+                    "business_id": business_id,
+                    "business_name": ctx.get("name") or _row_get(business_row, "name", 1) or "",
+                    "channel_id": selected_channel,
+                    "attempts": result.get("attempts") or [],
+                }
+            ), 200
+
+        return jsonify(
+            {
+                "success": False,
+                "error": result.get("error") or "Тестовая отправка не удалась",
+                "attempts": result.get("attempts") or [],
+            }
+        ), 400
+    except Exception as e:
+        print(f"❌ Ошибка /api/channels/test-send: {e}")
+        return jsonify({"error": str(e)}), 500
+
 
 @messengers_bp.route('/api/business/whatsapp/verify', methods=['POST'])
 def verify_whatsapp():

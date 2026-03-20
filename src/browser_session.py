@@ -82,6 +82,9 @@ class BrowserSessionManager:
                 context_kwargs["locale"] = locale
             if timezone_id:
                 context_kwargs["timezone_id"] = timezone_id
+            # Для прокси-поставщиков (в т.ч. residential MITM) возможны TLS цепочки,
+            # которые Chromium считает недоверенными. Для парсинга карт это допустимо.
+            context_kwargs["ignore_https_errors"] = True
 
             context = browser.new_context(**context_kwargs)
 
@@ -187,5 +190,4 @@ def default_stealth_scripts() -> list[str]:
         Object.defineProperty(navigator, 'languages', {get: () => ['ru-RU', 'ru']});
         """
     ]
-
 

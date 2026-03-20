@@ -90,3 +90,21 @@ Legacy details remain in git history and must not be used as default runbook.
   3) detach with `Ctrl+b` then `d`
   4) reattach with `tmux attach -t deploy`
 - Do not run long operations in a plain SSH shell if connection drops are possible.
+
+## 10. Code Standards
+- Never typecast.
+- Never use `as`.
+
+## 11. Autonomous Development Trigger
+- Trigger phrase: `Автономная разработка`.
+- When this phrase appears in a user request, the agent must switch to autonomous execution mode for the current task.
+- In autonomous mode, the agent must use the canonical brief from `agents/autonomous_development_brief.md`.
+- Task-specific profiles are optional and are loaded only when relevant to the task domain:
+  - parser/network reliability: `agents/profiles/parsing_network_stability.md`
+- If the user provides task-specific constraints, treat them as higher priority than defaults in the brief.
+- Execution policy in autonomous mode:
+  1) implement a minimal fix hypothesis
+  2) run relevant checks
+  3) evaluate against DoD
+  4) iterate until success criteria are met or a hard blocker is found
+- Hard blocker policy: stop only for destructive/irreversible actions, risky DB schema/data operations, or missing required access.

@@ -37,6 +37,7 @@ from parsed_payload_validation import (
     FIELDS_CRITICAL,
     SOURCE_YANDEX_BUSINESS,
 )
+from parsing_failure_taxonomy import with_reason_code_prefix
 from core.action_orchestrator import ActionOrchestrator
 from yookassa_integration import run_due_renewals
 from api.admin_prospecting import dispatch_due_outreach_queue
@@ -176,11 +177,263 @@ def _build_human_browser_profile() -> Dict[str, Any]:
             "--disable-dev-shm-usage",
             "--disable-gpu",
             "--disable-blink-features=AutomationControlled",
+            "--ignore-certificate-errors",
+            "--allow-insecure-localhost",
             "--lang=ru-RU,ru",
             "--window-position=0,0",
         ],
         "init_scripts": [_HUMAN_INIT_SCRIPT],
     }
+
+
+def _pick_proxy_country_code() -> str:
+    """
+    Возвращает 2-буквенный country-код для BrightData (или '' для base режима).
+    Приоритет:
+      1) PROXY_COUNTRY_ROTATION (CSV: kz,am,ge,base)
+      2) PROXY_FORCE_COUNTRY
+    """
+    raw_rotation = str(os.getenv("PROXY_COUNTRY_ROTATION", "") or "").strip()
+    if raw_rotation:
+        items = [str(x).strip().lower() for x in raw_rotation.split(",")]
+        normalized: List[str] = []
+        for item in items:
+            if not item:
+                continue
+            if item in ("base", "none", "off", "auto"):
+                normalized.append("")
+                continue
+            if len(item) == 2 and item.isalpha():
+                normalized.append(item)
+        if normalized:
+            return random.choice(normalized)
+
+    forced_country = str(os.getenv("PROXY_FORCE_COUNTRY", "") or "").strip().lower()
+    if len(forced_country) == 2 and forced_country.isalpha():
+        return forced_country
+    return ""
+
+
+def _get_next_proxy_for_playwright() -> Optional[Dict[str, Any]]:
+    """
+    Возвращает активный рабочий прокси в формате Playwright:
+    {"id": "...", "host": "...", "port": 33335, "proxy": {"server": "...", "username": "...", "password": "..."}}
+    """
+    conn = None
+    cursor = None
+    try:
+        if not _env_bool("PARSING_USE_PROXY_POOL", True):
+            return None
+        min_health_score_raw = os.getenv("PROXY_MIN_HEALTH_SCORE", "0.25")
+        try:
+            min_health_score = float(min_health_score_raw)
+        except (TypeError, ValueError):
+            min_health_score = 0.25
+        min_health_score = max(0.0, min(0.99, min_health_score))
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT id, proxy_type, host, port, username, password
+            FROM proxyservers
+            WHERE is_active = TRUE AND is_working = TRUE
+              AND (
+                    (COALESCE(success_count, 0) + COALESCE(failure_count, 0)) < 8
+                 OR ((COALESCE(success_count, 0) + 1.0) / (COALESCE(success_count, 0) + COALESCE(failure_count, 0) + 2.0)) >= %s
+              )
+            ORDER BY
+                ((COALESCE(success_count, 0) + 1.0) / (COALESCE(success_count, 0) + COALESCE(failure_count, 0) + 2.0)) DESC,
+                COALESCE(success_count, 0) DESC,
+                CASE WHEN last_checked_at IS NULL THEN 1 ELSE 0 END,
+                last_checked_at DESC,
+                CASE WHEN last_used_at IS NULL THEN 0 ELSE 1 END,
+                last_used_at ASC,
+                RANDOM()
+            LIMIT 1
+            """,
+            (min_health_score,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            # Self-healing fallback: если нет "рабочих", пробуем активный прокси
+            # (часто помогает при ротируемых residential зонах).
+            cursor.execute(
+                """
+                SELECT id, proxy_type, host, port, username, password
+                FROM proxyservers
+                WHERE is_active = TRUE
+                  AND (
+                        (COALESCE(success_count, 0) + COALESCE(failure_count, 0)) < 8
+                     OR ((COALESCE(success_count, 0) + 1.0) / (COALESCE(success_count, 0) + COALESCE(failure_count, 0) + 2.0)) >= %s
+                  )
+                ORDER BY
+                    ((COALESCE(success_count, 0) + 1.0) / (COALESCE(success_count, 0) + COALESCE(failure_count, 0) + 2.0)) DESC,
+                    COALESCE(success_count, 0) DESC,
+                    CASE WHEN last_checked_at IS NULL THEN 1 ELSE 0 END,
+                    last_checked_at DESC,
+                    CASE WHEN last_used_at IS NULL THEN 0 ELSE 1 END,
+                    last_used_at ASC,
+                    RANDOM()
+                LIMIT 1
+                """,
+                (min_health_score,),
+            )
+            row = cursor.fetchone()
+        if not row:
+            # Последний fallback: если health-gate отфильтровал всех,
+            # берём любой активный прокси, чтобы не останавливать пайплайн.
+            cursor.execute(
+                """
+                SELECT id, proxy_type, host, port, username, password
+                FROM proxyservers
+                WHERE is_active = TRUE
+                ORDER BY
+                    CASE WHEN last_used_at IS NULL THEN 0 ELSE 1 END,
+                    last_used_at ASC,
+                    RANDOM()
+                LIMIT 1
+                """
+            )
+            row = cursor.fetchone()
+        if not row:
+            return None
+
+        if isinstance(row, dict):
+            proxy_id = str(row.get("id") or "").strip()
+            proxy_type = str(row.get("proxy_type") or "http").strip().lower() or "http"
+            host = str(row.get("host") or "").strip()
+            port = int(row.get("port") or 0)
+            username = str(row.get("username") or "").strip()
+            password = str(row.get("password") or "").strip()
+        else:
+            proxy_id, proxy_type, host, port, username, password = row
+            proxy_id = str(proxy_id or "").strip()
+            proxy_type = str(proxy_type or "http").strip().lower() or "http"
+            host = str(host or "").strip()
+            port = int(port or 0)
+            username = str(username or "").strip()
+            password = str(password or "").strip()
+
+        if not proxy_id or not host or not port:
+            return None
+
+        cursor.execute(
+            """
+            UPDATE proxyservers
+            SET last_used_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+            """,
+            (proxy_id,),
+        )
+        conn.commit()
+
+        proxy_payload: Dict[str, Any] = {"server": f"{proxy_type}://{host}:{port}"}
+        selected_country_code = ""
+        if username and password:
+            username_effective = username
+            # BrightData: добавляем ротацию сессии, чтобы снизить CAPTCHA/блокировки
+            # и не залипать на одном egress-IP.
+            if "brd-customer-" in username and "-session-" not in username:
+                session_suffix = f"{int(time.time())}{random.randint(100000, 999999)}"
+                username_effective = f"{username}-session-{session_suffix}"
+                country_code = _pick_proxy_country_code()
+                if country_code and f"-country-{country_code}" not in username_effective:
+                    username_effective = f"{username_effective}-country-{country_code}"
+                    selected_country_code = country_code
+                else:
+                    selected_country_code = ""
+
+            proxy_payload["username"] = username_effective
+            proxy_payload["password"] = password
+
+        return {
+            "id": proxy_id,
+            "host": host,
+            "port": port,
+            "proxy": proxy_payload,
+            "country_code": selected_country_code,
+        }
+    except Exception as e:
+        print(f"⚠️ Не удалось получить прокси из proxyservers: {e}", flush=True)
+        return None
+    finally:
+        try:
+            if cursor:
+                cursor.close()
+        except Exception:
+            pass
+        try:
+            if conn:
+                conn.close()
+        except Exception:
+            pass
+
+
+def _mark_proxy_result(proxy_id: Optional[str], *, success: bool, reason: str = "") -> None:
+    if not proxy_id:
+        return
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        if success:
+            cursor.execute(
+                """
+                UPDATE proxyservers
+                SET success_count = COALESCE(success_count, 0) + 1,
+                    is_working = TRUE,
+                    last_checked_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                """,
+                (proxy_id,),
+            )
+        else:
+            reason_lc = str(reason or "").lower()
+            fatal_proxy_reason = any(
+                token in reason_lc
+                for token in (
+                    "err_cert_authority_invalid",
+                    "proxy authentication",
+                    "net::err_tunnel_connection_failed",
+                    "net::err_proxy_connection_failed",
+                    "timeout 30000ms exceeded",
+                    "navigation timeout",
+                    "err_timed_out",
+                    "407",
+                    "forbidden",
+                )
+            )
+            cursor.execute(
+                """
+                UPDATE proxyservers
+                SET failure_count = COALESCE(failure_count, 0) + 1,
+                    is_working = CASE
+                        WHEN %s THEN FALSE
+                        ELSE is_working
+                    END,
+                    last_checked_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                """,
+                (fatal_proxy_reason, proxy_id),
+            )
+        conn.commit()
+    except Exception as e:
+        print(f"⚠️ Не удалось обновить статистику прокси {proxy_id}: {e}; reason={reason}", flush=True)
+    finally:
+        try:
+            if cursor:
+                cursor.close()
+        except Exception:
+            pass
+        try:
+            if conn:
+                conn.close()
+        except Exception:
+            pass
 
 
 def _parse_retry_after(value: Any) -> Optional[datetime]:
@@ -193,6 +446,24 @@ def _parse_retry_after(value: Any) -> Optional[datetime]:
         return datetime.fromisoformat(raw)
     except Exception:
         return None
+
+
+def _is_proxy_transport_error(message: str) -> bool:
+    text = str(message or "").lower()
+    return any(
+        token in text
+        for token in (
+            "err_cert_authority_invalid",
+            "err_tunnel_connection_failed",
+            "err_proxy_connection_failed",
+            "proxy authentication",
+            "proxyerror",
+            "proxy connection",
+            "certificate",
+            "ssl",
+            "tls",
+        )
+    )
 
 
 def _is_empty_payload_value(value: Any) -> bool:
@@ -350,6 +621,76 @@ def _promote_nested_card_payload(card_data: Dict[str, Any]) -> Dict[str, Any]:
     return card_data
 
 
+def _apply_business_identity_fallback(
+    card_data: Dict[str, Any],
+    *,
+    business_name: str,
+    business_address: str,
+) -> bool:
+    if not isinstance(card_data, dict):
+        return False
+
+    used = False
+    title_candidate = str(business_name or "").strip()
+    address_candidate = str(business_address or "").strip()
+
+    if _is_empty_payload_value(card_data.get("title_or_name")) and title_candidate:
+        card_data["title_or_name"] = title_candidate
+        used = True
+
+    if _is_empty_payload_value(card_data.get("title")) and title_candidate:
+        card_data["title"] = title_candidate
+        used = True
+
+    if _is_empty_payload_value(card_data.get("address")) and address_candidate:
+        card_data["address"] = address_candidate
+        used = True
+
+    if used:
+        warnings = card_data.get("warnings")
+        if not isinstance(warnings, list):
+            warnings = []
+            card_data["warnings"] = warnings
+        marker = "identity_fallback:business_record"
+        if marker not in warnings:
+            warnings.append(marker)
+
+    return used
+
+
+def _load_business_identity_for_fallback(business_id: Any) -> Dict[str, str]:
+    business_id_text = str(business_id or "").strip()
+    if not business_id_text:
+        return {"name": "", "address": ""}
+
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT name, address FROM businesses WHERE id = %s", (business_id_text,))
+        row = cursor.fetchone()
+        if not row:
+            return {"name": "", "address": ""}
+        if isinstance(row, (list, tuple)):
+            return {"name": str(row[0] or "").strip(), "address": str(row[1] or "").strip()}
+        return {"name": str(row.get("name") or "").strip(), "address": str(row.get("address") or "").strip()}
+    except Exception as e:
+        print(f"⚠️ Не удалось загрузить fallback identity для business_id={business_id_text}: {e}", flush=True)
+        return {"name": "", "address": ""}
+    finally:
+        try:
+            if cursor:
+                cursor.close()
+        except Exception:
+            pass
+        try:
+            if conn:
+                conn.close()
+        except Exception:
+            pass
+
+
 def _parse_yandex_card_subprocess_entry(result_queue: Any, url: str, kwargs: Dict[str, Any]) -> None:
     """Изолированный запуск sync Playwright в отдельном процессе."""
     try:
@@ -390,6 +731,16 @@ def _normalize_yandex_org_url(raw_url: str) -> str:
     return f"https://yandex.ru/maps/org/{org_id}/"
 
 
+def _detect_map_source(queue_dict: Dict[str, Any], url: str) -> str:
+    source_hint = str(queue_dict.get("source") or "").strip().lower()
+    if source_hint in {"2gis", "two_gis"}:
+        return "2gis"
+    url_lower = str(url or "").strip().lower()
+    if "2gis.ru/" in url_lower or "2gis.com/" in url_lower:
+        return "2gis"
+    return "yandex_maps"
+
+
 def _has_running_asyncio_loop() -> bool:
     try:
         asyncio.get_running_loop()
@@ -414,13 +765,13 @@ def _parse_yandex_card_with_playwright_fallback(
     в отдельном процессе. Для subprocess fallback не паркуем живую CAPTCHA-сессию.
     """
     force_subprocess = False
-    # В процессе с активным asyncio loop sync Playwright нестабилен.
-    # Для устойчивости сразу идем через subprocess fallback.
-    if _has_running_asyncio_loop():
+    # По умолчанию сначала пробуем обычный sync путь.
+    # Subprocess fallback используем только при реальной ошибке sync-in-async
+    # (или при явном флаге окружения).
+    if _env_bool("PLAYWRIGHT_FORCE_SUBPROCESS_ON_ASYNC_LOOP", False) and _has_running_asyncio_loop():
         force_subprocess = True
         if keep_open_on_captcha:
             # parked session нельзя перенести между процессами.
-            # Деградируем в fresh retry flow без сессии.
             keep_open_on_captcha = False
             session_registry = None
             session_id = None
@@ -1214,6 +1565,7 @@ def get_db_connection():
 def _handle_worker_error(queue_id: str, error_msg: str):
     """Обновить статус задачи на error с сообщением"""
     try:
+        normalized_error = with_reason_code_prefix(STATUS_ERROR, error_msg)
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
@@ -1224,7 +1576,7 @@ def _handle_worker_error(queue_id: str, error_msg: str):
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
             """,
-            (STATUS_ERROR, error_msg, queue_id),
+            (STATUS_ERROR, normalized_error, queue_id),
         )
         if _env_bool("PAUSE_NETWORK_BATCH_ON_ERROR", False):
             try:
@@ -1264,7 +1616,7 @@ def _handle_worker_error(queue_id: str, error_msg: str):
                               AND status IN (%s)
                               AND id <> %s
                             """,
-                            (STATUS_PAUSED, f"network_batch_paused_after_error:{error_msg[:400]}", batch_id, STATUS_PENDING, queue_id),
+                            (STATUS_PAUSED, f"network_batch_paused_after_error:{normalized_error[:400]}", batch_id, STATUS_PENDING, queue_id),
                         )
             except Exception as pause_ex:
                 print(f"⚠️ Не удалось применить pause-on-error для batch задачи {queue_id}: {pause_ex}")
@@ -1318,8 +1670,33 @@ def _pause_network_batch_for_captcha(queue_id: str, captcha_comment: str, delay:
                 queue_id,
             ),
         )
+        paused_rows = int(cursor.rowcount or 0)
+        if paused_rows == 0:
+            # Fallback: если batch_kind по какой-то причине не совпал/пустой,
+            # всё равно ставим pending задачи этого batch на паузу.
+            cursor.execute(
+                """
+                UPDATE parsequeue
+                SET status = %s,
+                    paused_reason = %s,
+                    retry_after = %s,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE batch_id = %s
+                  AND status = %s
+                  AND id <> %s
+                """,
+                (
+                    STATUS_PAUSED,
+                    f"network_batch_paused_after_captcha_auto:{captcha_comment[:240]}",
+                    resume_at.isoformat(),
+                    batch_id,
+                    STATUS_PENDING,
+                    queue_id,
+                ),
+            )
+            paused_rows = int(cursor.rowcount or 0)
         print(
-            f"⏸️ CAPTCHA pause applied for batch {batch_id}: paused_rows={cursor.rowcount} "
+            f"⏸️ CAPTCHA pause applied for batch {batch_id}: paused_rows={paused_rows} "
             f"source_queue_id={queue_id} resume_at={resume_at.isoformat()}",
             flush=True,
         )
@@ -1397,6 +1774,7 @@ def _upsert_map_parse_from_card(
     business_id: str,
     *,
     url: str = "",
+    map_type: str = "yandex",
     rating: float | None = None,
     reviews_count: int = 0,
     photos_count: int = 0,
@@ -1417,9 +1795,10 @@ def _upsert_map_parse_from_card(
         if not cols:
             return
         pid = str(_uuid.uuid4())
-        url_val = url or f"https://yandex.ru/maps/"
+        default_url = "https://2gis.ru/" if str(map_type or "").strip().lower() == "2gis" else "https://yandex.ru/maps/"
+        url_val = url or default_url
         fields = ["id", "business_id", "url", "map_type", "rating", "reviews_count", "news_count", "photos_count", "created_at"]
-        values = [pid, business_id, url_val, "yandex", str(rating) if rating else None, reviews_count, news_count, photos_count]
+        values = [pid, business_id, url_val, map_type or "yandex", str(rating) if rating else None, reviews_count, news_count, photos_count]
         if "services_count" in cols and products:
             s_count = sum(len(c.get("items") or []) for c in products if isinstance(c, dict))
             fields.append("services_count")
@@ -1571,7 +1950,7 @@ def _parse_date_string(date_str: str) -> datetime | None:
     except Exception:
         return None
 
-def _validate_parsing_result(card_data: dict) -> tuple:
+def _validate_parsing_result(card_data: dict, source: str = SOURCE_YANDEX_BUSINESS) -> tuple:
     """
     Проверяет результат парсинга по ключевым полям. Без подмешивания из БД —
     только то, что реально пришло из источника (Яндекс).
@@ -1583,9 +1962,14 @@ def _validate_parsing_result(card_data: dict) -> tuple:
     if card_data.get("error") == "captcha_detected":
         return False, "captcha_detected", None
     if card_data.get("error"):
-        return False, f"error: {card_data.get('error')}", None
+        error_name = str(card_data.get("error") or "").strip()
+        detail = str(card_data.get("message") or "").strip()
+        if detail:
+            detail = detail.replace("\n", " ")[:220]
+            return False, f"error: {error_name} detail={detail}", None
+        return False, f"error: {error_name}", None
 
-    validation = validate_parsed_payload(card_data, source=SOURCE_YANDEX_BUSINESS)
+    validation = validate_parsed_payload(card_data, source=source or SOURCE_YANDEX_BUSINESS)
     hard_missing = validation.get("hard_missing") or []
     quality_score = validation.get("quality_score", 0.0)
 
@@ -1608,6 +1992,116 @@ def _validate_parsing_result(card_data: dict) -> tuple:
         return False, reason, validation
 
     return True, "success", validation
+
+
+def _parse_transient_retry_attempt(error_message: Any) -> int:
+    text = str(error_message or "")
+    match = re.search(r"transient_retry_attempt=(\d+)", text)
+    if not match:
+        return 0
+    try:
+        value = int(match.group(1))
+    except Exception:
+        return 0
+    return value if value > 0 else 0
+
+
+def _transient_retry_delay_for_task(queue_dict: dict, attempt_no: int) -> timedelta:
+    attempt = max(int(attempt_no or 1), 1)
+    if _is_mass_network_task(queue_dict):
+        # Для массовой очереди держим быстрый цикл, чтобы не замораживать throughput.
+        minutes = min(5 * attempt, 30)
+    else:
+        minutes = min(10 * attempt, 40)
+    return timedelta(minutes=minutes)
+
+
+def _queue_transient_parse_retry(queue_dict: dict, reason: str, card_data: Optional[dict]) -> bool:
+    transient_errors = {
+        "parser_subprocess_exception",
+        "org_api_not_loaded",
+        "parser_returned_none",
+        "parser_returned_list",
+        "parser_returned_tuple",
+    }
+    parser_error = ""
+    if isinstance(card_data, dict):
+        parser_error = str(card_data.get("error") or "").strip()
+    parser_message = ""
+    if isinstance(card_data, dict):
+        parser_message = str(card_data.get("message") or "").strip().lower()
+
+    is_2gis_timeout = (
+        parser_error == "2gis_parse_failed"
+        and (
+            "err_timed_out" in parser_message
+            or "timeout" in parser_message
+            or "err_connection_reset" in parser_message
+            or "err_connection_closed" in parser_message
+            or "err_name_not_resolved" in parser_message
+        )
+    )
+
+    if parser_error not in transient_errors and not is_2gis_timeout:
+        return False
+
+    prev_attempt = _parse_transient_retry_attempt(queue_dict.get("error_message"))
+    attempt_no = prev_attempt + 1
+    max_attempts = int(os.getenv("TRANSIENT_PARSE_MAX_ATTEMPTS", "8") or 8)
+    if attempt_no > max_attempts:
+        return False
+
+    retry_delay = _transient_retry_delay_for_task(queue_dict, attempt_no)
+    retry_after = datetime.now() + retry_delay
+    detail = str(reason or "")[:220]
+    comment = (
+        f"transient_retry_attempt={attempt_no}; "
+        f"transient_error={parser_error}; detail={detail}"
+    )
+
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE parsequeue
+            SET status = %s,
+                retry_after = %s,
+                error_message = %s,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+            """,
+            (
+                STATUS_PENDING,
+                retry_after.isoformat(),
+                comment,
+                queue_dict["id"],
+            ),
+        )
+        conn.commit()
+        print(
+            f"🔁 Transient parse retry scheduled: queue_id={queue_dict.get('id')} "
+            f"error={parser_error} attempt={attempt_no}/{max_attempts} "
+            f"retry_after={retry_after.isoformat()}",
+            flush=True,
+        )
+        return True
+    except Exception as ex:
+        print(f"⚠️ Не удалось поставить transient retry для {queue_dict.get('id')}: {ex}", flush=True)
+        return False
+    finally:
+        try:
+            if cursor:
+                cursor.close()
+        except Exception:
+            pass
+        try:
+            if conn:
+                conn.close()
+        except Exception:
+            pass
 
 
 def _has_existing_card_snapshot(business_id: str) -> bool:
@@ -1690,6 +2184,11 @@ def _ensure_column_exists(cursor, conn, table_name, column_name, column_type="TE
 
 # Используем parser_config для автоматического выбора парсера (interception или legacy)
 from parser_config import parse_yandex_card
+try:
+    from two_gis_maps_scraper import parse_2gis_card
+except ModuleNotFoundError:
+    # В некоторых контейнерных сборках модуль доступен только как src.*
+    from src.two_gis_maps_scraper import parse_2gis_card
 from gigachat_analyzer import analyze_business_data
 
 def process_queue():
@@ -1707,6 +2206,7 @@ def process_queue():
         # Восстановление застрявших processing-задач (например, после падения worker/DB).
         # Такие задачи возвращаем в pending, чтобы очередь продолжила движение.
         try:
+            stale_processing_minutes = max(3, int(os.getenv("PROCESSING_STALE_MINUTES", "10")))
             cursor.execute(
                 """
                 UPDATE parsequeue
@@ -1717,9 +2217,9 @@ def process_queue():
                         'stale processing recovered'
                     )
                 WHERE status = %s
-                  AND updated_at < (CURRENT_TIMESTAMP - INTERVAL '15 minutes')
+                  AND updated_at < (CURRENT_TIMESTAMP - make_interval(mins => %s))
                 """,
-                (STATUS_PENDING, STATUS_PROCESSING),
+                (STATUS_PENDING, STATUS_PROCESSING, stale_processing_minutes),
             )
             if cursor.rowcount:
                 print(f"♻️ Восстановлено stale processing задач: {cursor.rowcount}")
@@ -1767,7 +2267,6 @@ def process_queue():
                   AND p.batch_kind = 'network_sync'
                   AND (
                     p.paused_reason LIKE 'network_batch_paused_after_captcha:%%'
-                    OR p.paused_reason LIKE 'network_batch_paused_after_captcha_auto:%%'
                   )
                   AND NOT EXISTS (
                       SELECT 1
@@ -1814,29 +2313,38 @@ def process_queue():
         ttl_cutoff_iso = (now - timedelta(minutes=CAPTCHA_TTL_MINUTES)).isoformat()
         cursor.execute(
             """
-            SELECT *
-            FROM parsequeue
-            WHERE 
-                (
-                    status = %s
-                    AND (retry_after IS NULL OR retry_after <= %s)
-                )
-                OR (
-                    status = %s
-                    AND (
-                        resume_requested = 1
-                        OR (retry_after IS NULL OR retry_after <= %s)
-                        OR (captcha_started_at <= %s)
+            WITH next_task AS (
+                SELECT id, status AS selected_status
+                FROM parsequeue
+                WHERE
+                    (
+                        status = %s
+                        AND (retry_after IS NULL OR retry_after <= %s)
                     )
-                )
-            ORDER BY 
-                CASE 
-                    WHEN status = %s THEN 1 
-                    WHEN status = %s THEN 2 
-                    ELSE 3 
-                END,
-                created_at ASC 
-            LIMIT 1
+                    OR (
+                        status = %s
+                        AND (
+                            resume_requested = 1
+                            OR (retry_after IS NULL OR retry_after <= %s)
+                            OR (captcha_started_at <= %s)
+                        )
+                    )
+                ORDER BY
+                    CASE
+                        WHEN status = %s THEN 1
+                        WHEN status = %s THEN 2
+                        ELSE 3
+                    END,
+                    created_at ASC
+                FOR UPDATE SKIP LOCKED
+                LIMIT 1
+            )
+            UPDATE parsequeue q
+            SET status = CASE WHEN next_task.selected_status = %s THEN %s ELSE q.status END,
+                updated_at = CURRENT_TIMESTAMP
+            FROM next_task
+            WHERE q.id = next_task.id
+            RETURNING q.*, next_task.selected_status
             """,
             (
                 STATUS_PENDING,
@@ -1846,6 +2354,8 @@ def process_queue():
                 ttl_cutoff_iso,
                 STATUS_PENDING,
                 STATUS_CAPTCHA,
+                STATUS_PENDING,
+                STATUS_PROCESSING,
             ),
         )
         queue_item = cursor.fetchone()
@@ -1853,19 +2363,12 @@ def process_queue():
         if not queue_item:
             return
         
+        conn.commit()
+
         # Преобразуем Row в словарь (RealDictCursor в pg_db_utils)
         queue_dict = dict(queue_item)
-        
-        selected_status = queue_dict.get("status") or STATUS_PENDING
-
-        # Переводим в processing только pending-задачи.
-        # CAPTCHA-задачи остаются в captcha до ветки resume/expired ниже.
-        if selected_status == STATUS_PENDING:
-            cursor.execute(
-                "UPDATE parsequeue SET status = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
-                (STATUS_PROCESSING, queue_dict["id"]),
-            )
-            conn.commit()
+        selected_status = queue_dict.get("selected_status") or queue_dict.get("status") or STATUS_PENDING
+        queue_dict["selected_status"] = selected_status
     finally:
         # ВАЖНО: Закрываем соединение перед долгим парсингом
         cursor.close()
@@ -2082,6 +2585,7 @@ def process_queue():
                     f"captcha_auto_retry_attempt={attempt_no}; "
                     f"captcha_required: {captcha_url or 'retry_scheduled'}"
                 )
+                captcha_comment = with_reason_code_prefix(STATUS_CAPTCHA, captcha_comment)
                 conn = get_db_connection()
                 cursor = conn.cursor()
                 try:
@@ -2185,9 +2689,10 @@ def process_queue():
             raise ValueError("URL не указан для задачи парсинга")
 
         url = queue_dict["url"]
+        parsed_source = _detect_map_source(queue_dict, url)
 
         # --- АВТОМАТИЧЕСКОЕ ИСПРАВЛЕНИЕ ССЫЛОК (SPRAV -> MAPS) ---
-        if '/sprav/' in url:
+        if parsed_source == "yandex_maps" and '/sprav/' in url:
             import re
             # Ищем ID организации (цифры)
             sprav_match = re.search(r'/sprav/(\d+)', url)
@@ -2202,13 +2707,14 @@ def process_queue():
 
         # Нормализуем org URL, чтобы не получать региональные/редакционные вариации .com
         # и шумные query-параметры.
-        normalized_url = _normalize_yandex_org_url(url)
-        if normalized_url and normalized_url != url:
-            print(f"🔄 URL normalized: {url} -> {normalized_url}")
-            url = normalized_url
-            queue_dict["url"] = normalized_url
+        if parsed_source == "yandex_maps":
+            normalized_url = _normalize_yandex_org_url(url)
+            if normalized_url and normalized_url != url:
+                print(f"🔄 URL normalized: {url} -> {normalized_url}")
+                url = normalized_url
+                queue_dict["url"] = normalized_url
 
-        cookies = get_yandex_cookies()
+        cookies = get_yandex_cookies() if parsed_source == "yandex_maps" else None
         business_id = queue_dict.get("business_id")
         debug_dir_root = os.getenv("DEBUG_DIR", "/app/debug_data").rstrip("/")
 
@@ -2217,7 +2723,8 @@ def process_queue():
         bundle_dir = None
         if business_id:
             ts_dbg = datetime.now().strftime("%Y%m%d_%H%M%S")
-            debug_bundle_id = f"yandex_{business_id}_{queue_dict['id']}_{ts_dbg}"
+            debug_prefix = "yandex" if parsed_source == "yandex_maps" else "2gis"
+            debug_bundle_id = f"{debug_prefix}_{business_id}_{queue_dict['id']}_{ts_dbg}"
             bundle_dir = os.path.join(debug_dir_root, debug_bundle_id)
             try:
                 os.makedirs(bundle_dir, exist_ok=True)
@@ -2236,40 +2743,69 @@ def process_queue():
                 row_geo = cur_geo.fetchone()
                 cur_geo.close()
                 conn_geo.close()
-                if row_geo and row_geo[0] is not None and row_geo[1] is not None:
-                    geolocation_kwarg = {"geolocation": {"latitude": float(row_geo[0]), "longitude": float(row_geo[1])}}
+                geo_lat = None
+                geo_lon = None
+                if isinstance(row_geo, dict):
+                    geo_lat = row_geo.get("geo_lat")
+                    geo_lon = row_geo.get("geo_lon")
+                elif row_geo:
+                    geo_lat = row_geo[0]
+                    geo_lon = row_geo[1]
+                if geo_lat is not None and geo_lon is not None:
+                    geolocation_kwarg = {"geolocation": {"latitude": float(geo_lat), "longitude": float(geo_lon)}}
             except Exception as e:
                 print(f"⚠️ Не удалось загрузить geo для business_id={business_id}: {e}")
 
         # Основной вызов парсера с защитой от Playwright Sync-in-async краша
+        active_proxy = _get_next_proxy_for_playwright()
+        proxy_id = str((active_proxy or {}).get("id") or "").strip()
+        if active_proxy:
+            proxy_country = str((active_proxy or {}).get("country_code") or "base")
+            print(
+                f"🌐 Используем proxyservers прокси: {active_proxy.get('host')}:{active_proxy.get('port')} "
+                f"(id={proxy_id}, country={proxy_country})",
+                flush=True,
+            )
+
         try:
             if preparsed_card_data is not None:
                 card_data = preparsed_card_data
                 print("♻️ Используем уже полученные данные из CAPTCHA flow", flush=True)
             else:
                 browser_profile = _build_human_browser_profile()
-                card_data = _parse_yandex_card_with_playwright_fallback(
-                    url,
-                    keep_open_on_captcha=True,
-                    session_registry=ACTIVE_CAPTCHA_SESSIONS,
-                    cookies=cookies,
-                    user_agent=browser_profile["user_agent"],
-                    viewport=browser_profile["viewport"],
-                    launch_args=browser_profile["launch_args"],
-                    init_scripts=browser_profile["init_scripts"],
-                    locale="ru-RU",
-                    timezone_id="Europe/Moscow",
-                    headless=True,
-                    debug_bundle_id=debug_bundle_id,
-                    **geolocation_kwarg,
-                )
+                if parsed_source == "2gis":
+                    card_data = parse_2gis_card(
+                        url,
+                        timeout_sec=180,
+                        headless=True,
+                        # 2GIS через внешние прокси часто падает по TLS (ERR_CERT_AUTHORITY_INVALID),
+                        # поэтому для стабильности парсим напрямую.
+                        proxy=None,
+                    )
+                else:
+                    card_data = _parse_yandex_card_with_playwright_fallback(
+                        url,
+                        keep_open_on_captcha=True,
+                        session_registry=ACTIVE_CAPTCHA_SESSIONS,
+                        cookies=cookies,
+                        user_agent=browser_profile["user_agent"],
+                        viewport=browser_profile["viewport"],
+                        launch_args=browser_profile["launch_args"],
+                        init_scripts=browser_profile["init_scripts"],
+                        locale="ru-RU",
+                        timezone_id="Europe/Moscow",
+                        proxy=(active_proxy or {}).get("proxy"),
+                        headless=True,
+                        debug_bundle_id=debug_bundle_id,
+                        **geolocation_kwarg,
+                    )
 
             # Защита от некорректного возврата парсера
             if card_data is None:
-                print("[FATAL] parse_yandex_card вернул None", flush=True)
+                print("[FATAL] parse_card вернул None", flush=True)
                 card_data = {"error": "parser_returned_none", "url": url}
             elif not isinstance(card_data, dict):
-                print(f"[FATAL] parse_yandex_card вернул {type(card_data)}", flush=True)
+                print(f"[FATAL] parse_card вернул {type(card_data)}", flush=True)
                 card_data = {"error": f"parser_returned_{type(card_data).__name__}", "url": url}
 
             # Нормализация/распаковка payload до валидации:
@@ -2285,9 +2821,57 @@ def process_queue():
                     print(f"[WORKER_NORMALIZE] title_or_name='{str(card_data.get('title_or_name'))[:60]}'", flush=True)
                 else:
                     print("[CRITICAL] Нет источников для title_or_name", flush=True)
+                    identity = _load_business_identity_for_fallback(business_id)
+                    if _apply_business_identity_fallback(
+                        card_data,
+                        business_name=identity.get("name") or "",
+                        business_address=identity.get("address") or "",
+                    ):
+                        print(
+                            f"[WORKER_NORMALIZE] title_or_name fallback from business record: "
+                            f"'{str(card_data.get('title_or_name'))[:60]}'",
+                            flush=True,
+                        )
         except Exception as e:
             msg = str(e)
-            if _is_playwright_sync_in_async_error(msg):
+            recovered_without_proxy = False
+            _mark_proxy_result(proxy_id, success=False, reason=msg[:240])
+            if active_proxy and parsed_source == "yandex_maps":
+                print(
+                    f"⚠️ Ошибка при парсинге через прокси ({proxy_id}): {msg[:160]} | retry without proxy",
+                    flush=True,
+                )
+                try:
+                    browser_profile = _build_human_browser_profile()
+                    card_data = _parse_yandex_card_with_playwright_fallback(
+                        url,
+                        keep_open_on_captcha=True,
+                        session_registry=ACTIVE_CAPTCHA_SESSIONS,
+                        cookies=cookies,
+                        user_agent=browser_profile["user_agent"],
+                        viewport=browser_profile["viewport"],
+                        launch_args=browser_profile["launch_args"],
+                        init_scripts=browser_profile["init_scripts"],
+                        locale="ru-RU",
+                        timezone_id="Europe/Moscow",
+                        proxy=None,
+                        headless=True,
+                        debug_bundle_id=debug_bundle_id,
+                        **geolocation_kwarg,
+                    )
+                    print("✅ Retry without proxy succeeded", flush=True)
+                    recovered_without_proxy = True
+                except Exception as retry_exc:
+                    retry_msg = str(retry_exc)
+                    print(f"❌ Retry without proxy failed: {retry_msg[:180]}", flush=True)
+                    if _is_playwright_sync_in_async_error(retry_msg):
+                        e = retry_exc
+                        msg = retry_msg
+                    else:
+                        raise
+            if recovered_without_proxy:
+                pass
+            elif _is_playwright_sync_in_async_error(msg):
                 # Специальный кейс: крэш Playwright Sync внутри asyncio loop.
                 # Пишем exception.txt в bundle (если можно) и помечаем задачу как error.
                 bundle_path = None
@@ -2313,10 +2897,61 @@ def process_queue():
                     print(f"❌ Не удалось обновить parsequeue для playwright-sync ошибки: {db_ex}")
                 return
             # Любая другая ошибка — пусть обрабатывается общей логикой ниже
-            raise
+            else:
+                raise
+
+        if isinstance(card_data, dict):
+            card_error = str(card_data.get("error") or "").strip()
+            if card_error == "parser_subprocess_exception":
+                sub_msg = str(card_data.get("message") or "").strip()
+                if sub_msg:
+                    print(f"⚠️ parser_subprocess_exception: {sub_msg[:240]}", flush=True)
+                sub_tb = str(card_data.get("traceback") or "").strip()
+                if sub_tb:
+                    tb_head = sub_tb.splitlines()[:5]
+                    print("⚠️ traceback head: " + " | ".join(tb_head), flush=True)
+                if active_proxy and parsed_source == "yandex_maps":
+                    print(
+                        f"⚠️ parser_subprocess_exception через proxy ({proxy_id}) -> retry without proxy",
+                        flush=True,
+                    )
+                    try:
+                        browser_profile = _build_human_browser_profile()
+                        retry_card_data = _parse_yandex_card_with_playwright_fallback(
+                            url,
+                            keep_open_on_captcha=True,
+                            session_registry=ACTIVE_CAPTCHA_SESSIONS,
+                            cookies=cookies,
+                            user_agent=browser_profile["user_agent"],
+                            viewport=browser_profile["viewport"],
+                            launch_args=browser_profile["launch_args"],
+                            init_scripts=browser_profile["init_scripts"],
+                            locale="ru-RU",
+                            timezone_id="Europe/Moscow",
+                            proxy=None,
+                            headless=True,
+                            debug_bundle_id=debug_bundle_id,
+                            **geolocation_kwarg,
+                        )
+                        if isinstance(retry_card_data, dict) and not retry_card_data.get("error"):
+                            card_data = retry_card_data
+                            card_error = ""
+                            print("✅ Retry without proxy succeeded after parser_subprocess_exception", flush=True)
+                        else:
+                            retry_err = str((retry_card_data or {}).get("error") or "unknown")
+                            print(f"❌ Retry without proxy returned error: {retry_err[:140]}", flush=True)
+                    except Exception as retry_exc:
+                        print(f"❌ Retry without proxy failed: {str(retry_exc)[:180]}", flush=True)
+            if not card_error:
+                _mark_proxy_result(proxy_id, success=True, reason="parse_ok")
+            elif "captcha" in card_error.lower():
+                _mark_proxy_result(proxy_id, success=False, reason=f"captcha:{card_error[:80]}")
+            else:
+                _mark_proxy_result(proxy_id, success=False, reason=card_error[:120])
         
         # Проверяем успешность парсинга (валидация только по данным Яндекса, без fallback из БД)
-        is_successful, reason, validation_result = _validate_parsing_result(card_data)
+        validation_source = "2gis" if parsed_source == "2gis" else SOURCE_YANDEX_BUSINESS
+        is_successful, reason, validation_result = _validate_parsing_result(card_data, source=validation_source)
 
         # пишем validation.json в bundle (если он есть)
         if bundle_dir and validation_result:
@@ -2352,7 +2987,7 @@ def process_queue():
             )
 
             # Собираем _meta и прикрепляем к card_data для сохранения в cards
-            meta = build_parsing_meta(card_data, validation_result, source=SOURCE_YANDEX_BUSINESS)
+            meta = build_parsing_meta(card_data, validation_result, source=validation_source)
             card_data["_meta"] = meta
 
         if isinstance(card_data, dict) and not card_data.get("error"):
@@ -2360,6 +2995,7 @@ def process_queue():
                 card_data,
                 str(queue_dict.get("business_id") or "unknown_business"),
                 str(queue_dict.get("user_id") or "unknown_user"),
+                source=parsed_source,
             )
             card_data["_service_rows"] = normalized_service_rows
             card_data["products"] = _service_rows_to_grouped_products(normalized_service_rows)
@@ -2377,6 +3013,7 @@ def process_queue():
                 f"captcha_auto_retry_attempt={attempt_no}; "
                 f"captcha_required: {captcha_url or 'retry_scheduled'}"
             )
+            captcha_comment = with_reason_code_prefix(STATUS_CAPTCHA, captcha_comment)
             if captcha_session_id:
                 print(f"⚠️ Капча обнаружена, session_id={captcha_session_id} (human-in-the-loop)")
             else:
@@ -2417,7 +3054,16 @@ def process_queue():
                 cursor.close()
                 conn.close()
             if _is_mass_network_task(queue_dict):
-                _pause_network_batch_for_captcha(queue_dict["id"], captcha_comment, retry_delay)
+                # Для массовых очередей по умолчанию НЕ паузим весь batch из-за одной капчи.
+                # Иначе throughput резко падает и KPI по сети недостижим.
+                if _env_bool("CAPTCHA_PAUSE_NETWORK_BATCH_ON_MASS", False):
+                    _pause_network_batch_for_captcha(queue_dict["id"], captcha_comment, retry_delay)
+                else:
+                    print(
+                        "ℹ️ Массовый batch: глобальная пауза на CAPTCHA отключена "
+                        "(CAPTCHA_PAUSE_NETWORK_BATCH_ON_MASS=false)",
+                        flush=True,
+                    )
             elif _env_bool("CAPTCHA_PAUSE_BATCH_ON_HUMAN", False):
                 _pause_network_batch_for_captcha(queue_dict["id"], captcha_comment, retry_delay)
             return
@@ -2425,6 +3071,9 @@ def process_queue():
         # ШАГ 3: Сохраняем результаты (открываем новое соединение)
         if not is_successful and card_data.get("error") != "captcha_detected":
             print(f"❌ Парсинг неуспешен: {reason}. Сохранение отменено.")
+
+            if _queue_transient_parse_retry(queue_dict, reason, card_data):
+                return
 
             # Базовая причина
             err_msg = str(reason)
@@ -2493,20 +3142,28 @@ def process_queue():
                 print(f"📊 Сохраняю результаты в cards для business_id={business_id}")
                 
                 try:
-                    from gigachat_analyzer import analyze_business_data
-                    from report import generate_html_report
-                    
-                    print(f"🤖 Запускаем GigaChat анализ для {business_id}...")
-                    analysis_result = analyze_business_data(card_data)
-                    
                     analysis_data = {
-                        'score': analysis_result.get('score', 50),
-                        'recommendations': analysis_result.get('recommendations', []),
-                        'ai_analysis': analysis_result.get('analysis', {})
+                        'score': 50,
+                        'recommendations': [],
+                        'ai_analysis': {},
                     }
-                    
-                    report_path = generate_html_report(card_data, analysis_data, {})
-                    print(f"📄 Отчет сгенерирован: {report_path}")
+                    report_path = None
+                    if _env_bool("WORKER_ENABLE_AI_ANALYSIS", False):
+                        from gigachat_analyzer import analyze_business_data
+                        from report import generate_html_report
+
+                        print(f"🤖 Запускаем GigaChat анализ для {business_id}...")
+                        analysis_result = analyze_business_data(card_data)
+                        analysis_data = {
+                            'score': analysis_result.get('score', 50),
+                            'recommendations': analysis_result.get('recommendations', []),
+                            'ai_analysis': analysis_result.get('analysis', {}),
+                        }
+
+                        report_path = generate_html_report(card_data, analysis_data, {})
+                        print(f"📄 Отчет сгенерирован: {report_path}")
+                    else:
+                        print("⏭️ AI-анализ отключен (WORKER_ENABLE_AI_ANALYSIS=false)", flush=True)
                     
                     rating = card_data.get('overview', {}).get('rating', '') or ''
                     reviews_count = card_data.get('reviews_count') or card_data.get('overview', {}).get('reviews_count') or 0
@@ -2638,6 +3295,7 @@ def process_queue():
                                 db_manager.conn,
                                 business_id,
                                 url=queue_dict["url"],
+                                map_type=("2gis" if parsed_source == "2gis" else "yandex"),
                                 rating=mpr_fields['rating'],
                                 reviews_count=mpr_fields['reviews_count'],
                                 photos_count=mpr_fields['photos_count'],
@@ -2681,6 +3339,11 @@ def process_queue():
                             # Используем DatabaseManager для работы с репозиториями
                             db_manager = DatabaseManager()
                             sync_worker = YandexBusinessSyncWorker()
+                            external_source_value = (
+                                ExternalSource.TWO_GIS
+                                if parsed_source == "2gis"
+                                else ExternalSource.YANDEX_MAPS
+                            )
                             
                             # DEBUG LOGGING
                             try:
@@ -2763,7 +3426,7 @@ def process_queue():
                                     external_review = ExternalReview(
                                         id=review_id,
                                         business_id=business_id,
-                                        source=ExternalSource.YANDEX_MAPS,
+                                        source=external_source_value,
                                         external_review_id=external_review_id,
                                         rating=r_val,
                                         author_name=review.get('author') or 'Анонимный пользователь',
@@ -2798,7 +3461,7 @@ def process_queue():
                                     ext_post = ExternalPost(
                                         id=post_id,
                                         business_id=business_id,
-                                        source=ExternalSource.YANDEX_MAPS,
+                                        source=external_source_value,
                                         external_post_id=f"html_{post_id}", # Нет реального ID в HTML
                                         title=item.get('title') or (post_text[:30] + '...'),
                                         text=post_text,
@@ -2833,7 +3496,7 @@ def process_queue():
                             # 4. СОХРАНЕНИЕ СТАТИСТИКИ (Rating History)
                             if rating and reviews_count is not None:
                                 today = datetime.now().strftime('%Y-%m-%d')
-                                stats_id = make_stats_id(business_id, ExternalSource.YANDEX_MAPS, today)
+                                stats_id = make_stats_id(business_id, external_source_value, today)
                                 
                                 try:
                                     rating_val = float(rating)
@@ -2843,7 +3506,7 @@ def process_queue():
                                 stat_point = ExternalStatsPoint(
                                     id=stats_id,
                                     business_id=business_id,
-                                    source=ExternalSource.YANDEX_MAPS,
+                                    source=external_source_value,
                                     date=today,
                                     rating=rating_val,
                                     reviews_total=reviews_count,
@@ -2941,41 +3604,44 @@ def process_queue():
                 # Но у нас нет business_id здесь, поэтому пропускаем
                 pass
                 
-                print(f"Выполняем ИИ-анализ для карточки {card_id}...")
-                
-                try:
-                    analysis_result = analyze_business_data(card_data)
-                    
-                    cursor.execute("""
-                        UPDATE cards SET
-                            ai_analysis = %s,
-                            seo_score = %s,
-                            recommendations = %s
-                        WHERE id = %s
-                    """, (
-                        json.dumps(analysis_result.get('analysis', {})),
-                        analysis_result.get('score', 50),
-                        json.dumps(analysis_result.get('recommendations', [])),
-                        card_id
-                    ))
-                    
-                    print(f"ИИ-анализ завершён для карточки {card_id}")
-                    
+                if _env_bool("WORKER_ENABLE_AI_ANALYSIS", False):
+                    print(f"Выполняем ИИ-анализ для карточки {card_id}...")
+
                     try:
-                        from report import generate_html_report
-                        analysis_data = {
-                            'score': analysis_result.get('score', 50),
-                            'recommendations': analysis_result.get('recommendations', []),
-                            'ai_analysis': analysis_result.get('analysis', {})
-                        }
-                        report_path = generate_html_report(card_data, analysis_data)
-                        print(f"HTML отчёт сгенерирован: {report_path}")
-                        cursor.execute("UPDATE cards SET report_path = %s WHERE id = %s", (report_path, card_id))
-                    except Exception as report_error:
-                        print(f"Ошибка при генерации отчёта для карточки {card_id}: {report_error}")
-                        
-                except Exception as analysis_error:
-                    print(f"Ошибка при ИИ-анализе карточки {card_id}: {analysis_error}")
+                        analysis_result = analyze_business_data(card_data)
+
+                        cursor.execute("""
+                            UPDATE cards SET
+                                ai_analysis = %s,
+                                seo_score = %s,
+                                recommendations = %s
+                            WHERE id = %s
+                        """, (
+                            json.dumps(analysis_result.get('analysis', {})),
+                            analysis_result.get('score', 50),
+                            json.dumps(analysis_result.get('recommendations', [])),
+                            card_id
+                        ))
+
+                        print(f"ИИ-анализ завершён для карточки {card_id}")
+
+                        try:
+                            from report import generate_html_report
+                            analysis_data = {
+                                'score': analysis_result.get('score', 50),
+                                'recommendations': analysis_result.get('recommendations', []),
+                                'ai_analysis': analysis_result.get('analysis', {})
+                            }
+                            report_path = generate_html_report(card_data, analysis_data)
+                            print(f"HTML отчёт сгенерирован: {report_path}")
+                            cursor.execute("UPDATE cards SET report_path = %s WHERE id = %s", (report_path, card_id))
+                        except Exception as report_error:
+                            print(f"Ошибка при генерации отчёта для карточки {card_id}: {report_error}")
+
+                    except Exception as analysis_error:
+                        print(f"Ошибка при ИИ-анализе карточки {card_id}: {analysis_error}")
+                else:
+                    print("⏭️ ИИ-анализ карточки пропущен (WORKER_ENABLE_AI_ANALYSIS=false)", flush=True)
             
             # Обновляем статус на "completed" (чтобы задача осталась в списке)
             warning_parts = []
@@ -3067,7 +3733,12 @@ def process_queue():
         except Exception as email_error:
             print(f"⚠️ Не удалось отправить email: {email_error}")
 
-def map_card_services(card_data: Dict[str, Any], business_id: str, user_id: str) -> List[Dict[str, Any]]:
+def map_card_services(
+    card_data: Dict[str, Any],
+    business_id: str,
+    user_id: str,
+    source: str = "yandex_maps",
+) -> List[Dict[str, Any]]:
     """
     Чистый маппер: из card_data (products/services) в список строк для userservices.
     Поддерживает структуру: список категорий с items или плоский список элементов.
@@ -3082,7 +3753,7 @@ def map_card_services(card_data: Dict[str, Any], business_id: str, user_id: str)
         return []
     rows = []
     seen = set()
-    source = "yandex_maps"
+    normalized_source = str(source or "yandex_maps").strip().lower() or "yandex_maps"
     for cat_block in products:
         # cat_block может быть: dict (категория), list (вложенные items), или мусор
         if isinstance(cat_block, list):
@@ -3090,7 +3761,7 @@ def map_card_services(card_data: Dict[str, Any], business_id: str, user_id: str)
             items = cat_block
             for item in items:
                 if isinstance(item, dict) and item.get("name"):
-                    row = _one_service_row(item, business_id, user_id, source)
+                    row = _one_service_row(item, business_id, user_id, normalized_source)
                     if row:
                         item_category = _extract_service_category(item)
                         if item_category:
@@ -3114,7 +3785,7 @@ def map_card_services(card_data: Dict[str, Any], business_id: str, user_id: str)
 
         # Вариант: в products пришел плоский список услуг (без items)
         if cat_block.get("name") and not (cat_block.get("items") or cat_block.get("products")):
-            row = _one_service_row(cat_block, business_id, user_id, source)
+            row = _one_service_row(cat_block, business_id, user_id, normalized_source)
             if row:
                 key = (
                     (row.get("source") or "").lower(),
@@ -3137,7 +3808,7 @@ def map_card_services(card_data: Dict[str, Any], business_id: str, user_id: str)
         for item in items:
             if not isinstance(item, dict) or not item.get("name"):
                 continue
-            row = _one_service_row(item, business_id, user_id, source)
+            row = _one_service_row(item, business_id, user_id, normalized_source)
             if row:
                 item_category = _extract_service_category(item)
                 row["category"] = item_category or category_name

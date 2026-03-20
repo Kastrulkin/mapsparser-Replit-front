@@ -426,6 +426,24 @@ export const PartnershipSearchPage: React.FC = () => {
     [items, selectedLeadId]
   );
 
+  const selectedLeadLogo = useMemo(() => {
+    if (auditData?.preview_meta?.logo_url) return String(auditData.preview_meta.logo_url);
+    if (selectedLead?.search_payload_json?.logo_url) return String(selectedLead.search_payload_json.logo_url);
+    return '';
+  }, [auditData, selectedLead]);
+
+  const selectedLeadPhotos = useMemo(() => {
+    const fromAudit = auditData?.preview_meta?.photo_urls;
+    if (Array.isArray(fromAudit) && fromAudit.length > 0) {
+      return fromAudit.map((item: unknown) => String(item || '').trim()).filter(Boolean).slice(0, 8);
+    }
+    const fromLead = selectedLead?.search_payload_json?.photos;
+    if (Array.isArray(fromLead) && fromLead.length > 0) {
+      return fromLead.map((item: unknown) => String(item || '').trim()).filter(Boolean).slice(0, 8);
+    }
+    return [];
+  }, [auditData, selectedLead]);
+
   const visibleLeads = useMemo(() => {
     return items.filter((item) => {
       const parseStatus = String(item.parse_status || '').toLowerCase();
@@ -504,6 +522,11 @@ export const PartnershipSearchPage: React.FC = () => {
     };
   }, [items, lastGeoSearchLeadIds]);
 
+  const allQueueItems = useMemo(
+    () => batches.flatMap((batch) => (batch.items || []).map((item) => ({ ...item, batch_status: batch.status, batch_id: batch.id }))),
+    [batches]
+  );
+
   const lastGeoSearchFlowSummary = useMemo(() => {
     const sourceLeads = items.filter((item) => lastGeoSearchLeadIds.includes(item.id));
     if (sourceLeads.length === 0) return null;
@@ -576,11 +599,6 @@ export const PartnershipSearchPage: React.FC = () => {
       return true;
     });
   }, [drafts, draftView]);
-
-  const allQueueItems = useMemo(
-    () => batches.flatMap((batch) => (batch.items || []).map((item) => ({ ...item, batch_status: batch.status, batch_id: batch.id }))),
-    [batches]
-  );
 
   const visibleBatches = useMemo(() => {
     return batches
@@ -3190,6 +3208,35 @@ export const PartnershipSearchPage: React.FC = () => {
                 <p className="text-sm text-muted-foreground">
                   Услуг в превью: {(auditData.services_preview || []).length || 0}
                 </p>
+                {(selectedLeadLogo || selectedLeadPhotos.length > 0) ? (
+                  <div className="mt-3 space-y-2">
+                    {selectedLeadLogo ? (
+                      <div>
+                        <div className="text-xs text-muted-foreground mb-1">Логотип</div>
+                        <img
+                          src={selectedLeadLogo}
+                          alt="Логотип лида"
+                          className="h-16 w-16 rounded-md object-cover border border-gray-200 bg-white"
+                        />
+                      </div>
+                    ) : null}
+                    {selectedLeadPhotos.length > 0 ? (
+                      <div>
+                        <div className="text-xs text-muted-foreground mb-1">Фото</div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                          {selectedLeadPhotos.map((photo, index) => (
+                            <img
+                              key={`${photo}-${index}`}
+                              src={photo}
+                              alt={`Фото лида ${index + 1}`}
+                              className="h-20 w-full rounded-md object-cover border border-gray-200 bg-white"
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             )}
 

@@ -42,6 +42,7 @@ from bookings_api import bookings_bp
 from ai_agent_webhooks import ai_webhooks_bp
 from ai_agents_api import ai_agents_api_bp
 from chats_api import chats_bp
+from messengers_api import messengers_bp
 from api.services_api import services_bp
 from api.growth_api import growth_bp
 from api.admin_growth_api import admin_growth_bp
@@ -51,6 +52,7 @@ from api.metrics_history_api import metrics_history_bp
 from api.networks_api import networks_bp
 from api.network_health_api import network_health_bp
 from api.admin_prospecting import admin_prospecting_bp
+from core.ai_learning import record_ai_learning_event
 try:
     from api.google_business_api import google_business_bp
 except ImportError as e:
@@ -139,6 +141,7 @@ app.register_blueprint(bookings_bp)
 app.register_blueprint(ai_webhooks_bp)
 app.register_blueprint(ai_agents_api_bp)
 app.register_blueprint(chats_bp)
+app.register_blueprint(messengers_bp)
 app.register_blueprint(services_bp)
 app.register_blueprint(growth_bp)
 app.register_blueprint(admin_growth_bp)
@@ -430,6 +433,16 @@ def get_token_usage_stats():
         
         db = DatabaseManager()
         cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            SELECT name, description, optimized_name, optimized_description
+            FROM userservices
+            WHERE id = %s AND user_id = %s
+            """,
+            (service_id, user_id),
+        )
+        previous_row = cursor.fetchone()
+        previous_data = _row_to_dict(cursor, previous_row) if previous_row else {}
         
         # Проверяем, существует ли таблица tokenusage (Postgres)
         cursor.execute("SELECT to_regclass('public.tokenusage')")
@@ -1204,10 +1217,8 @@ def upsert_external_account(business_id):
                     (external_id, display_name, new_active, now, account_id),
                 )
         else:
-            # Create: auth_data обязателен; после INSERT проверяем дубли (без unique constraint)
-            if not auth_data_str:
-                db.close()
-                return jsonify({"error": "При создании аккаунта auth_data обязателен", "field": "auth_data"}), 400
+            # Create: auth_data может отсутствовать для всех источников.
+            # Это позволяет сохранять "минимальную" конфигурацию и запускать публичный парсинг по map URL.
             action = "created"
             new_active = bool(is_active)
             insert_id = str(uuid.uuid4())
@@ -1757,19 +1768,19 @@ def get_external_summary(business_id):
         # metrics_card — последняя is_latest (может быть metrics_update или full)
 
         # 1) full_card: последняя полноценная карточка
+        # overview исторически хранится как TEXT/JSON, поэтому фильтруем snapshot_type в Python
         cursor.execute(
             """
             SELECT *
             FROM cards
             WHERE business_id = %s
-              AND (overview->>'snapshot_type') = 'full'
             ORDER BY created_at DESC
-            LIMIT 1
+            LIMIT 50
             """,
             (business_id,),
         )
-        raw_full = cursor.fetchone()
-        full_card = _row_to_dict(cursor, raw_full) if raw_full else None
+        raw_cards = cursor.fetchall()
+        all_cards = [_row_to_dict(cursor, row) for row in raw_cards]
 
         # 2) metrics_card: последняя is_latest (она может быть metrics_update или full)
         cursor.execute(
@@ -1784,6 +1795,19 @@ def get_external_summary(business_id):
         )
         raw_latest = cursor.fetchone()
         metrics_card = _row_to_dict(cursor, raw_latest) if raw_latest else None
+
+        def _as_dict_obj(value):
+            if isinstance(value, dict):
+                return value
+            if isinstance(value, str):
+                try:
+                    parsed = json.loads(value)
+                    return parsed if isinstance(parsed, dict) else {}
+                except Exception:
+                    return {}
+            return {}
+
+        full_card = next((card for card in all_cards if _as_dict_obj(card.get("overview")).get("snapshot_type") == "full"), None)
 
         # 3) chosen_card: источник rich-контента (предпочитаем full, иначе metrics_card)
         chosen_card = full_card or metrics_card
@@ -1801,8 +1825,9 @@ def get_external_summary(business_id):
         # 4) Fallback по метрикам:
         #   - сначала metrics_card, если это metrics_update
         #   - затем chosen_card (обычно full)
+        metrics_overview = _as_dict_obj(metrics_card.get("overview")) if metrics_card else {}
         if rating is None:
-            if metrics_card and (metrics_card.get("overview") or {}).get("snapshot_type") == "metrics_update" and metrics_card.get("rating") is not None:
+            if metrics_card and metrics_overview.get("snapshot_type") == "metrics_update" and metrics_card.get("rating") is not None:
                 try:
                     rating = float(metrics_card.get("rating"))
                 except (TypeError, ValueError):
@@ -1814,7 +1839,7 @@ def get_external_summary(business_id):
                     rating = None
 
         if reviews_total == 0:
-            if metrics_card and (metrics_card.get("overview") or {}).get("snapshot_type") == "metrics_update" and (metrics_card.get("reviews_count") or 0) != 0:
+            if metrics_card and metrics_overview.get("snapshot_type") == "metrics_update" and (metrics_card.get("reviews_count") or 0) != 0:
                 reviews_total = int(metrics_card.get("reviews_count") or 0)
             elif parse_row and (parse_row.get("reviews_count") or 0) != 0:
                 reviews_total = int(parse_row.get("reviews_count") or 0)
@@ -1869,10 +1894,12 @@ def get_external_posts(business_id):
             return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
         # Сначала пробуем externalbusinessposts (Postgres)
-        cursor.execute("SELECT to_regclass('public.externalbusinessposts')")
-        table_exists = cursor.fetchone()
+        cursor.execute("SELECT to_regclass('public.externalbusinessposts') AS table_ref")
+        table_exists_row = cursor.fetchone()
+        table_exists_data = _row_to_dict(cursor, table_exists_row) if table_exists_row else {}
+        table_ref = table_exists_data.get("table_ref")
         posts = []
-        if table_exists and (table_exists[0] if isinstance(table_exists, (list, tuple)) else table_exists) is not None:
+        if table_ref:
             cursor.execute(
                 """
                 SELECT id, source, external_post_id, title, text, published_at, created_at
@@ -1950,6 +1977,65 @@ def get_external_posts(business_id):
         err_tb = traceback.format_exc()
         print(f"❌ get_external_posts: {e}\n{err_tb}")
         payload = {"success": False, "where": "get_external_posts", "error": str(e)}
+        if getattr(app, "debug", False):
+            payload["traceback"] = err_tb
+        return jsonify(payload), 500
+
+
+@app.route("/api/business/<business_id>/competitors/manual", methods=["GET"])
+def get_manual_competitors(business_id):
+    """Возвращает конкурентов из последнего card snapshot (ручной блок UI)."""
+    try:
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(" ")[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+
+        owner_id = get_business_owner_id(cursor, business_id)
+        if not owner_id:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+        if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
+            db.close()
+            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+        cursor.execute(
+            """
+            SELECT competitors
+            FROM cards
+            WHERE business_id = %s
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (business_id,),
+        )
+        row = cursor.fetchone()
+        db.close()
+
+        competitors_raw = (_row_to_dict(cursor, row) or {}).get("competitors") if row else None
+        competitors = []
+        if isinstance(competitors_raw, list):
+            competitors = competitors_raw
+        elif isinstance(competitors_raw, str):
+            try:
+                parsed = json.loads(competitors_raw)
+                competitors = parsed if isinstance(parsed, list) else []
+            except Exception:
+                competitors = []
+
+        return jsonify({"success": True, "competitors": competitors, "count": len(competitors)})
+    except Exception as e:
+        import traceback
+        err_tb = traceback.format_exc()
+        print(f"❌ get_manual_competitors: {e}\n{err_tb}")
+        payload = {"success": False, "where": "get_manual_competitors", "error": str(e)}
         if getattr(app, "debug", False):
             payload["traceback"] = err_tb
         return jsonify(payload), 500
@@ -2312,6 +2398,26 @@ def _row_to_dict(cursor, row):
     cols = [d[0] for d in cursor.description]
     return dict(zip(cols, row))
 
+def _table_columns(cursor, table_name: str) -> set:
+    """Получить набор колонок (lowercase) для таблицы Postgres."""
+    cursor.execute(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = %s
+        """,
+        (table_name.lower(),),
+    )
+    cols = set()
+    for row in cursor.fetchall() or []:
+        if hasattr(row, "get"):
+            name = row.get("column_name")
+        else:
+            name = row[0] if row else None
+        if name:
+            cols.add(str(name).lower())
+    return cols
+
 
 def _business_display_fields(row_dict):
     """Из row_dict (из businesses) извлечь поля для UI: name, business_type, address, working_hours (строки)."""
@@ -2386,17 +2492,23 @@ def get_user_language(user_id: str, requested_language: str = None) -> str:
         cursor = db.conn.cursor()
         # Получаем первый активный бизнес пользователя
         cursor.execute("""
-            SELECT ai_agent_language 
-            FROM Businesses 
-            WHERE owner_id = ? AND (is_active = 1 OR is_active IS NULL)
+            SELECT ai_agent_language
+            FROM businesses
+            WHERE owner_id = %s AND (is_active = TRUE OR is_active IS NULL)
             ORDER BY created_at DESC
             LIMIT 1
         """, (user_id,))
         row = cursor.fetchone()
         db.close()
         
-        if row and row[0]:
-            return row[0].lower()
+        if row:
+            language_value = None
+            if isinstance(row, dict):
+                language_value = row.get("ai_agent_language")
+            else:
+                language_value = row[0] if len(row) > 0 else None
+            if language_value:
+                return str(language_value).lower()
     except Exception as e:
         print(f"⚠️ Ошибка получения языка пользователя: {e}")
     
@@ -2452,6 +2564,95 @@ def _strip_unchanged_service_suggestions(parsed_result: dict) -> dict:
                     service["seoDescription"] = ""
 
     return parsed_result
+
+
+def _extract_keywords_from_service_name(service_name: str) -> list[str]:
+    import re as _re
+    text = str(service_name or "").lower().replace("ё", "е")
+    cleaned = _re.sub(r"[^a-zа-я0-9\s-]", " ", text, flags=_re.IGNORECASE)
+    parts = [p.strip("- ") for p in cleaned.split() if p.strip("- ")]
+    stopwords = {
+        "и", "в", "на", "с", "по", "для", "или", "от", "до", "при", "без", "под",
+        "the", "and", "for", "with", "from",
+        "прием", "повторный", "первичный", "услуга",
+    }
+    keywords: list[str] = []
+    for part in parts:
+        if len(part) < 4 or part in stopwords:
+            continue
+        if part not in keywords:
+            keywords.append(part)
+        if len(keywords) >= 6:
+            break
+    return keywords
+
+
+def _normalize_low_quality_service_suggestions(parsed_result: dict, region: str | None = None) -> dict:
+    if not isinstance(parsed_result, dict):
+        return parsed_result
+    services = parsed_result.get("services")
+    if not isinstance(services, list):
+        return parsed_result
+
+    region_text = str(region or "").strip()
+    normalized: list[dict] = []
+    for item in services:
+        if not isinstance(item, dict):
+            continue
+        original_name = str(item.get("original_name") or "").strip()
+        optimized_name = str(item.get("optimized_name") or "").strip()
+        seo_description = str(item.get("seo_description") or "").strip()
+        keywords = item.get("keywords")
+        price = item.get("price")
+        category = item.get("category")
+
+        low_name = (
+            not optimized_name
+            or _normalize_text_for_semantic_compare(optimized_name) == _normalize_text_for_semantic_compare(original_name)
+            or "в вашем районе" in optimized_name.lower()
+        )
+        low_description = (
+            not seo_description
+            or seo_description.lower().startswith("описание услуги:")
+            or len(seo_description) < 80
+        )
+        low_keywords = not isinstance(keywords, list) or len([k for k in keywords if str(k).strip()]) == 0
+
+        if low_name:
+            base_name = original_name or "Услуга"
+            if region_text:
+                optimized_name = f"{base_name} — запись в {region_text}"
+            else:
+                optimized_name = f"{base_name} — запись к специалисту"
+
+        if low_description:
+            base_name = original_name or optimized_name or "Услуга"
+            seo_description = (
+                f"{base_name}. Услуга выполняется специалистом по предварительной записи. "
+                f"Уточните длительность, стоимость и рекомендации перед визитом."
+            )
+
+        if low_keywords:
+            keywords = _extract_keywords_from_service_name(original_name or optimized_name)
+
+        normalized.append({
+            "original_name": original_name or optimized_name,
+            "optimized_name": optimized_name,
+            "seo_description": seo_description,
+            "keywords": keywords,
+            "price": price if price is not None else "",
+            "category": category if category is not None else "other",
+        })
+
+    parsed_result["services"] = normalized if normalized else services
+    return parsed_result
+
+
+def _ensure_usernews_learning_columns(cursor) -> None:
+    cursor.execute("ALTER TABLE usernews ADD COLUMN IF NOT EXISTS original_generated_text TEXT")
+    cursor.execute("ALTER TABLE usernews ADD COLUMN IF NOT EXISTS edited_before_approve BOOLEAN DEFAULT FALSE")
+    cursor.execute("ALTER TABLE usernews ADD COLUMN IF NOT EXISTS prompt_key TEXT")
+    cursor.execute("ALTER TABLE usernews ADD COLUMN IF NOT EXISTS prompt_version TEXT")
 
 # ==================== СЕРВИС: ОПТИМИЗАЦИЯ УСЛУГ ====================
 @app.route('/api/services/optimize', methods=['POST', 'OPTIONS'])
@@ -2674,7 +2875,10 @@ def services_optimize():
                     cur = db.conn.cursor()
                     from core.db_helpers import ensure_user_examples_table
                     ensure_user_examples_table(cur)
-                    cur.execute("SELECT example_text FROM UserExamples WHERE user_id = ? AND example_type = 'service' ORDER BY created_at DESC LIMIT 5", (user_data['user_id'],))
+                    cur.execute(
+                        "SELECT example_text FROM userexamples WHERE user_id = %s AND example_type = 'service' ORDER BY created_at DESC LIMIT 5",
+                        (user_data['user_id'],),
+                    )
                     rows = cur.fetchall()
                     db.close()
                     examples_list = [row[0] if isinstance(row, tuple) else row['example_text'] for row in rows]
@@ -2811,6 +3015,75 @@ def services_optimize():
         else:
             parsed_result = _strip_unchanged_service_suggestions(parsed_result)
 
+        optimized_services = parsed_result.get("services") if isinstance(parsed_result, dict) else None
+        if not isinstance(optimized_services, list) or len(optimized_services) == 0:
+            # Retry once with stricter prompt if model returned empty payload (e.g. "{}")
+            retry_prompt = (
+                prompt
+                + "\n\nВАЖНО: Верни СТРОГО JSON-объект без пояснений."
+                + "\nВнутри обязательно поле services (массив минимум из 1 элемента)."
+                + "\nКаждый элемент должен содержать: original_name, optimized_name, seo_description, keywords, price."
+            )
+            retry_raw = analyze_text_with_gigachat(
+                retry_prompt,
+                task_type="service_optimization",
+                business_id=business_id,
+                user_id=user_data['user_id']
+            )
+            try:
+                if isinstance(retry_raw, str):
+                    retry_start = retry_raw.find('{')
+                    retry_end = retry_raw.rfind('}') + 1
+                    retry_json = retry_raw[retry_start:retry_end] if retry_start != -1 and retry_end > retry_start else retry_raw
+                    retry_parsed = json.loads(retry_json)
+                elif isinstance(retry_raw, dict):
+                    retry_parsed = retry_raw
+                else:
+                    retry_parsed = {}
+            except Exception:
+                retry_parsed = {}
+
+            if isinstance(retry_parsed, dict):
+                retry_parsed = _strip_unchanged_service_suggestions(retry_parsed)
+                retry_services = retry_parsed.get("services")
+                if isinstance(retry_services, list) and len(retry_services) > 0:
+                    parsed_result = retry_parsed
+                    optimized_services = retry_services
+
+        if not isinstance(optimized_services, list) or len(optimized_services) == 0:
+            # Last-resort deterministic fallback: do not fail request for operator UI
+            fallback_original_name = ""
+            fallback_description = ""
+            lines = [line.strip() for line in str(content or "").splitlines() if line.strip()]
+            if lines:
+                fallback_original_name = lines[0]
+                fallback_description = " ".join(lines[1:])[:280]
+            if not fallback_original_name:
+                fallback_original_name = "Услуга"
+            if not fallback_description:
+                fallback_description = f"Описание услуги: {fallback_original_name}"
+
+            parsed_result = {
+                "services": [
+                    {
+                        "original_name": fallback_original_name,
+                        "optimized_name": f"{fallback_original_name} в {region or 'вашем районе'}",
+                        "seo_description": fallback_description,
+                        "keywords": [],
+                        "price": "",
+                    }
+                ],
+                "general_recommendations": [
+                    "Проверьте формулировку и при необходимости отредактируйте её вручную перед сохранением."
+                ],
+                "fallback_used": True,
+            }
+        else:
+            parsed_result = _normalize_low_quality_service_suggestions(parsed_result, region=region)
+
+        # Apply quality normalization for fallback branch as well
+        parsed_result = _normalize_low_quality_service_suggestions(parsed_result, region=region)
+
         # Сохраним в БД (как оптимизацию прайса, даже для текстового режима)
         db = DatabaseManager()
         cursor = db.conn.cursor()
@@ -2852,6 +3125,25 @@ def services_optimize():
         db.conn.commit()
         db.close()
 
+        business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id') if request else None)
+        first_service = None
+        if isinstance(result.get("services"), list) and result.get("services"):
+            first_service = result.get("services")[0]
+        draft_name = ""
+        if isinstance(first_service, dict):
+            draft_name = str(first_service.get("optimized_name") or first_service.get("original_name") or "")
+        record_ai_learning_event(
+            capability="services.optimize",
+            event_type="generated",
+            intent="operations",
+            user_id=user_data['user_id'],
+            business_id=business_id,
+            prompt_key="service_optimization",
+            prompt_version="v1",
+            draft_text=draft_name or None,
+            metadata={"optimization_id": optimization_id, "services_count": services_count},
+        )
+
         return jsonify({
             "success": True,
             "optimization_id": optimization_id,
@@ -2885,16 +3177,16 @@ def user_service_examples():
         ensure_user_examples_table(cur)
 
         if request.method == 'GET':
-            cur.execute("SELECT id, example_text, created_at FROM UserExamples WHERE user_id = ? AND example_type = 'service' ORDER BY created_at DESC", (user_data['user_id'],))
+            cur.execute(
+                "SELECT id, example_text, created_at FROM userexamples WHERE user_id = %s AND example_type = 'service' ORDER BY created_at DESC",
+                (user_data['user_id'],),
+            )
             rows = cur.fetchall()
             db.close()
             examples = []
             for row in rows:
-                # row может быть tuple или Row
-                if isinstance(row, tuple):
-                    examples.append({"id": row[0], "text": row[1], "created_at": row[2]})
-                else:
-                    examples.append({"id": row['id'], "text": row['example_text'], "created_at": row['created_at']})
+                rd = _row_to_dict(cur, row) if row else {}
+                examples.append({"id": rd.get("id"), "text": rd.get("example_text"), "created_at": rd.get("created_at")})
             return jsonify({"success": True, "examples": examples})
 
         # POST
@@ -2904,13 +3196,18 @@ def user_service_examples():
             db.close()
             return jsonify({"error": "Текст примера обязателен"}), 400
         # Ограничим 5 примеров на пользователя
-        cur.execute("SELECT COUNT(*) FROM UserExamples WHERE user_id = ? AND example_type = 'service'", (user_data['user_id'],))
-        count = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) AS cnt FROM userexamples WHERE user_id = %s AND example_type = 'service'", (user_data['user_id'],))
+        count_row = cur.fetchone()
+        count_data = _row_to_dict(cur, count_row) if count_row else {}
+        count = count_data.get("cnt", 0) or 0
         if count >= 5:
             db.close()
             return jsonify({"error": "Максимум 5 примеров"}), 400
         example_id = str(uuid.uuid4())
-        cur.execute("INSERT INTO UserExamples (id, user_id, example_type, example_text) VALUES (?, ?, 'service', ?)", (example_id, user_data['user_id'], text))
+        cur.execute(
+            "INSERT INTO userexamples (id, user_id, example_type, example_text) VALUES (%s, %s, 'service', %s)",
+            (example_id, user_data['user_id'], text),
+        )
         db.conn.commit()
         db.close()
         return jsonify({"success": True, "id": example_id})
@@ -2933,7 +3230,10 @@ def delete_user_service_example(example_id: str):
 
         db = DatabaseManager()
         cur = db.conn.cursor()
-        cur.execute("DELETE FROM UserExamples WHERE id = ? AND user_id = ? AND example_type = 'service'", (example_id, user_data['user_id']))
+        cur.execute(
+            "DELETE FROM userexamples WHERE id = %s AND user_id = %s AND example_type = 'service'",
+            (example_id, user_data['user_id']),
+        )
         deleted = cur.rowcount
         db.conn.commit()
         db.close()
@@ -2962,6 +3262,9 @@ def news_generate():
         data = request.get_json(silent=True) or {}
         use_service = bool(data.get('use_service'))
         use_transaction = bool(data.get('use_transaction'))
+        content_mode = str(data.get('content_mode') or 'news').strip().lower()
+        social_format = str(data.get('social_format') or '').strip().lower()
+        ab_mode = str(data.get('ab_mode') or '').strip().lower()
         selected_service_id = data.get('service_id')
         selected_transaction_id = data.get('transaction_id')
         raw_info = (data.get('raw_info') or '').strip()
@@ -2999,20 +3302,27 @@ def news_generate():
             )
             """
         )
+        _ensure_usernews_learning_columns(cur)
 
         service_context = ''
         transaction_context = ''
         
         if use_service:
             if selected_service_id:
-                cur.execute("SELECT name, description FROM UserServices WHERE id = ? AND user_id = ?", (selected_service_id, user_data['user_id']))
+                cur.execute(
+                    "SELECT name, description FROM userservices WHERE id = %s AND user_id = %s",
+                    (selected_service_id, user_data['user_id']),
+                )
                 row = cur.fetchone()
                 if row:
                     name, desc = (row if isinstance(row, tuple) else (row['name'], row['description']))
                     service_context = f"Услуга: {name}. Описание: {desc or ''}"
             else:
                 # выбрать случайную услугу пользователя
-                cur.execute("SELECT name, description FROM UserServices WHERE user_id = ? ORDER BY RANDOM() LIMIT 1", (user_data['user_id'],))
+                cur.execute(
+                    "SELECT name, description FROM userservices WHERE user_id = %s ORDER BY RANDOM() LIMIT 1",
+                    (user_data['user_id'],),
+                )
                 row = cur.fetchone()
                 if row:
                     name, desc = (row if isinstance(row, tuple) else (row['name'], row['description']))
@@ -3024,7 +3334,7 @@ def news_generate():
                 cur.execute("""
                     SELECT transaction_date, amount, services, notes, client_type
                     FROM FinancialTransactions
-                    WHERE id = ? AND user_id = ?
+                    WHERE id = %s AND user_id = %s
                 """, (selected_transaction_id, user_data['user_id']))
                 row = cur.fetchone()
                 if row:
@@ -3044,8 +3354,8 @@ def news_generate():
                 # Выбираем последнюю транзакцию
                 cur.execute("""
                     SELECT transaction_date, amount, services, notes
-                    FROM FinancialTransactions
-                    WHERE user_id = ?
+                    FROM financialtransactions
+                    WHERE user_id = %s
                     ORDER BY transaction_date DESC, created_at DESC
                     LIMIT 1
                 """, (user_data['user_id'],))
@@ -3069,7 +3379,10 @@ def news_generate():
         try:
             from core.db_helpers import ensure_user_examples_table
             ensure_user_examples_table(cur)
-            cur.execute("SELECT example_text FROM UserExamples WHERE user_id = ? AND example_type = 'news' ORDER BY created_at DESC LIMIT 5", (user_data['user_id'],))
+            cur.execute(
+                "SELECT example_text FROM userexamples WHERE user_id = %s AND example_type = 'news' ORDER BY created_at DESC LIMIT 5",
+                (user_data['user_id'],),
+            )
             r = cur.fetchall()
             ex = [row[0] if isinstance(row, tuple) else row['example_text'] for row in r]
             if ex:
@@ -3146,7 +3459,7 @@ Write all generated text in {language_name}.
                 news_examples=str(news_examples)
         )
 
-        business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id'))
+        business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id') or data.get('business_id'))
         result = analyze_text_with_gigachat(
             prompt, 
             task_type="news_generation",
@@ -3217,15 +3530,47 @@ Write all generated text in {language_name}.
             return jsonify({"error": "Пустой результат генерации"}), 500
 
         news_id = str(uuid.uuid4())
+        prompt_key = "news_social_generation" if content_mode == "social" else "news_generation"
+        prompt_version = "v1"
         cur.execute(
             """
-            INSERT INTO UserNews (id, user_id, service_id, source_text, generated_text)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO usernews (
+                id, user_id, service_id, source_text, generated_text, original_generated_text,
+                edited_before_approve, prompt_key, prompt_version
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, FALSE, %s, %s)
             """,
-            (news_id, user_data['user_id'], selected_service_id, raw_info, generated_text)
+            (
+                news_id,
+                user_data['user_id'],
+                selected_service_id,
+                raw_info,
+                generated_text,
+                generated_text,
+                prompt_key,
+                prompt_version,
+            )
         )
         db.conn.commit()
         db.close()
+
+        business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id') or data.get('business_id'))
+        record_ai_learning_event(
+            capability="news.generate",
+            event_type="generated",
+            intent="operations",
+            user_id=user_data['user_id'],
+            business_id=business_id,
+            prompt_key=prompt_key,
+            prompt_version=prompt_version,
+            draft_text=generated_text,
+            metadata={
+                "content_mode": content_mode,
+                "social_format": social_format,
+                "ab_mode": ab_mode,
+                "news_id": news_id,
+            },
+        )
 
         return jsonify({"success": True, "news_id": news_id, "generated_text": generated_text})
     except Exception as e:
@@ -3268,12 +3613,41 @@ def news_approve():
             )
             """
         )
-        cur.execute("UPDATE UserNews SET approved = 1 WHERE id = ? AND user_id = ?", (news_id, user_data['user_id']))
+        _ensure_usernews_learning_columns(cur)
+        cur.execute(
+            """
+            SELECT id, service_id, generated_text, original_generated_text, edited_before_approve, prompt_key, prompt_version
+            FROM usernews
+            WHERE id = %s AND user_id = %s
+            """,
+            (news_id, user_data['user_id']),
+        )
+        current_row = cur.fetchone()
+        if not current_row:
+            db.close()
+            return jsonify({"error": "Новость не найдена"}), 404
+        current_data = _row_to_dict(cur, current_row)
+        cur.execute("UPDATE usernews SET approved = 1 WHERE id = %s AND user_id = %s", (news_id, user_data['user_id']))
         if cur.rowcount == 0:
             db.close()
             return jsonify({"error": "Новость не найдена"}), 404
         db.conn.commit()
         db.close()
+        business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id'))
+        record_ai_learning_event(
+            capability="news.generate",
+            event_type="accepted",
+            intent="operations",
+            user_id=user_data['user_id'],
+            business_id=business_id,
+            accepted=True,
+            edited_before_accept=bool(current_data.get("edited_before_approve")),
+            prompt_key=str(current_data.get("prompt_key") or "news_generation"),
+            prompt_version=str(current_data.get("prompt_version") or "v1"),
+            draft_text=str(current_data.get("original_generated_text") or current_data.get("generated_text") or ""),
+            final_text=str(current_data.get("generated_text") or ""),
+            metadata={"news_id": news_id},
+        )
         return jsonify({"success": True})
     except Exception as e:
         print(f"❌ Ошибка утверждения новости: {e}")
@@ -3307,7 +3681,11 @@ def news_list():
             )
             """
         )
-        cur.execute("SELECT id, service_id, source_text, generated_text, approved, created_at FROM UserNews WHERE user_id = ? ORDER BY created_at DESC", (user_data['user_id'],))
+        _ensure_usernews_learning_columns(cur)
+        cur.execute(
+            "SELECT id, service_id, source_text, generated_text, original_generated_text, edited_before_approve, approved, created_at FROM usernews WHERE user_id = %s ORDER BY created_at DESC",
+            (user_data['user_id'],),
+        )
         rows = cur.fetchall()
         db.close()
         items = []
@@ -3315,12 +3693,20 @@ def news_list():
             if isinstance(row, tuple):
                 items.append({
                     "id": row[0], "service_id": row[1], "source_text": row[2],
-                    "generated_text": row[3], "approved": bool(row[4]), "created_at": row[5]
+                    "generated_text": row[3],
+                    "original_generated_text": row[4],
+                    "edited_before_approve": bool(row[5]),
+                    "approved": bool(row[6]),
+                    "created_at": row[7]
                 })
             else:
                 items.append({
                     "id": row['id'], "service_id": row['service_id'], "source_text": row['source_text'],
-                    "generated_text": row['generated_text'], "approved": bool(row['approved']), "created_at": row['created_at']
+                    "generated_text": row['generated_text'],
+                    "original_generated_text": row.get('original_generated_text'),
+                    "edited_before_approve": bool(row.get('edited_before_approve')),
+                    "approved": bool(row['approved']),
+                    "created_at": row['created_at']
                 })
         return jsonify({"success": True, "news": items})
     except Exception as e:
@@ -3345,10 +3731,49 @@ def news_update():
         if not news_id or not text:
             return jsonify({"error": "news_id и text обязательны"}), 400
         db = DatabaseManager(); cur = db.conn.cursor()
-        cur.execute("UPDATE UserNews SET generated_text = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?", (text, news_id, user_data['user_id']))
+        _ensure_usernews_learning_columns(cur)
+        cur.execute(
+            """
+            SELECT generated_text, original_generated_text, prompt_key, prompt_version
+            FROM usernews
+            WHERE id = %s AND user_id = %s
+            """,
+            (news_id, user_data['user_id']),
+        )
+        existing_row = cur.fetchone()
+        if not existing_row:
+            db.close(); return jsonify({"error": "Новость не найдена"}), 404
+        existing = _row_to_dict(cur, existing_row)
+        original_generated_text = str(existing.get("original_generated_text") or existing.get("generated_text") or "")
+        edited_before_approve = _normalize_text_for_semantic_compare(text) != _normalize_text_for_semantic_compare(original_generated_text)
+        cur.execute(
+            """
+            UPDATE usernews
+            SET generated_text = %s,
+                edited_before_approve = %s,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s AND user_id = %s
+            """,
+            (text, edited_before_approve, news_id, user_data['user_id']),
+        )
         if cur.rowcount == 0:
             db.close(); return jsonify({"error": "Новость не найдена"}), 404
         db.conn.commit(); db.close()
+        business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id'))
+        record_ai_learning_event(
+            capability="news.generate",
+            event_type="edited",
+            intent="operations",
+            user_id=user_data['user_id'],
+            business_id=business_id,
+            accepted=None,
+            edited_before_accept=edited_before_approve,
+            prompt_key=str(existing.get("prompt_key") or "news_generation"),
+            prompt_version=str(existing.get("prompt_version") or "v1"),
+            draft_text=original_generated_text,
+            final_text=text,
+            metadata={"news_id": news_id},
+        )
         return jsonify({"success": True})
     except Exception as e:
         print(f"❌ Ошибка обновления новости: {e}")
@@ -3374,13 +3799,42 @@ def news_delete():
         
         db = DatabaseManager()
         cur = db.conn.cursor()
-        cur.execute("DELETE FROM UserNews WHERE id = ? AND user_id = ?", (news_id, user_data['user_id']))
+        _ensure_usernews_learning_columns(cur)
+        cur.execute(
+            """
+            SELECT id, approved, generated_text, original_generated_text, prompt_key, prompt_version
+            FROM usernews
+            WHERE id = %s AND user_id = %s
+            """,
+            (news_id, user_data['user_id']),
+        )
+        existing_row = cur.fetchone()
+        if not existing_row:
+            db.close()
+            return jsonify({"error": "Новость не найдена"}), 404
+        existing = _row_to_dict(cur, existing_row)
+        cur.execute("DELETE FROM usernews WHERE id = %s AND user_id = %s", (news_id, user_data['user_id']))
         deleted = cur.rowcount
         db.conn.commit()
         db.close()
-        
+
         if deleted == 0:
             return jsonify({"error": "Новость не найдена"}), 404
+        if not bool(existing.get("approved")):
+            business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id') or data.get('business_id'))
+            record_ai_learning_event(
+                capability="news.generate",
+                event_type="rejected",
+                intent="operations",
+                user_id=user_data['user_id'],
+                business_id=business_id,
+                rejected=True,
+                prompt_key=str(existing.get("prompt_key") or "news_generation"),
+                prompt_version=str(existing.get("prompt_version") or "v1"),
+                draft_text=str(existing.get("original_generated_text") or existing.get("generated_text") or ""),
+                final_text=None,
+                metadata={"news_id": news_id, "via": "delete"},
+            )
         return jsonify({"success": True})
     except Exception as e:
         print(f"❌ Ошибка удаления новости: {e}")
@@ -3405,23 +3859,32 @@ def review_examples():
         ensure_user_examples_table(cur)
 
         if request.method == 'GET':
-            cur.execute("SELECT id, example_text, created_at FROM UserExamples WHERE user_id = ? AND example_type = 'review' ORDER BY created_at DESC", (user_data['user_id'],))
+            cur.execute(
+                "SELECT id, example_text, created_at FROM userexamples WHERE user_id = %s AND example_type = 'review' ORDER BY created_at DESC",
+                (user_data['user_id'],),
+            )
             rows = cur.fetchall(); db.close()
             items = []
             for row in rows:
-                items.append({"id": (row[0] if isinstance(row, tuple) else row['id']), "text": (row[1] if isinstance(row, tuple) else row['example_text']), "created_at": (row[2] if isinstance(row, tuple) else row['created_at'])})
+                rd = _row_to_dict(cur, row) if row else {}
+                items.append({"id": rd.get("id"), "text": rd.get("example_text"), "created_at": rd.get("created_at")})
             return jsonify({"success": True, "examples": items})
 
         data = request.get_json(silent=True) or {}
         text = (data.get('text') or '').strip()
         if not text:
             db.close(); return jsonify({"error": "Текст примера обязателен"}), 400
-        cur.execute("SELECT COUNT(*) FROM UserExamples WHERE user_id = ? AND example_type = 'review'", (user_data['user_id'],))
-        cnt = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) AS cnt FROM userexamples WHERE user_id = %s AND example_type = 'review'", (user_data['user_id'],))
+        cnt_row = cur.fetchone()
+        cnt_data = _row_to_dict(cur, cnt_row) if cnt_row else {}
+        cnt = cnt_data.get("cnt", 0) or 0
         if cnt >= 5:
             db.close(); return jsonify({"error": "Максимум 5 примеров"}), 400
         ex_id = str(uuid.uuid4())
-        cur.execute("INSERT INTO UserExamples (id, user_id, example_type, example_text) VALUES (?, ?, 'review', ?)", (ex_id, user_data['user_id'], text))
+        cur.execute(
+            "INSERT INTO userexamples (id, user_id, example_type, example_text) VALUES (%s, %s, 'review', %s)",
+            (ex_id, user_data['user_id'], text),
+        )
         db.conn.commit(); db.close()
         return jsonify({"success": True, "id": ex_id})
     except Exception as e:
@@ -3441,7 +3904,10 @@ def review_examples_delete(example_id: str):
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
         db = DatabaseManager(); cur = db.conn.cursor()
-        cur.execute("DELETE FROM UserExamples WHERE id = ? AND user_id = ? AND example_type = 'review'", (example_id, user_data['user_id']))
+        cur.execute(
+            "DELETE FROM userexamples WHERE id = %s AND user_id = %s AND example_type = 'review'",
+            (example_id, user_data['user_id']),
+        )
         deleted = cur.rowcount
         db.conn.commit(); db.close()
         if deleted == 0:
@@ -3469,23 +3935,34 @@ def news_examples():
         ensure_user_examples_table(cur)
 
         if request.method == 'GET':
-            cur.execute("SELECT id, example_text, created_at FROM UserExamples WHERE user_id = ? AND example_type = 'news' ORDER BY created_at DESC", (user_data['user_id'],))
+            cur.execute(
+                "SELECT id, example_text, created_at FROM userexamples WHERE user_id = %s AND example_type = 'news' ORDER BY created_at DESC",
+                (user_data['user_id'],),
+            )
             rows = cur.fetchall(); db.close()
             items = []
             for row in rows:
-                items.append({"id": (row[0] if isinstance(row, tuple) else row['id']), "text": (row[1] if isinstance(row, tuple) else row['example_text']), "created_at": (row[2] if isinstance(row, tuple) else row['created_at'])})
+                if isinstance(row, tuple):
+                    items.append({"id": row[0], "text": row[1], "created_at": row[2]})
+                else:
+                    items.append({"id": row['id'], "text": row['example_text'], "created_at": row['created_at']})
             return jsonify({"success": True, "examples": items})
 
         data = request.get_json(silent=True) or {}
         text = (data.get('text') or '').strip()
         if not text:
             db.close(); return jsonify({"error": "Текст примера обязателен"}), 400
-        cur.execute("SELECT COUNT(*) FROM UserExamples WHERE user_id = ? AND example_type = 'news'", (user_data['user_id'],))
-        cnt = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) AS cnt FROM userexamples WHERE user_id = %s AND example_type = 'news'", (user_data['user_id'],))
+        cnt_row = cur.fetchone()
+        cnt_data = _row_to_dict(cur, cnt_row) if cnt_row else {}
+        cnt = cnt_data.get("cnt", 0) or 0
         if cnt >= 5:
             db.close(); return jsonify({"error": "Максимум 5 примеров"}), 400
         ex_id = str(uuid.uuid4())
-        cur.execute("INSERT INTO UserExamples (id, user_id, example_type, example_text) VALUES (?, ?, 'news', ?)", (ex_id, user_data['user_id'], text))
+        cur.execute(
+            "INSERT INTO userexamples (id, user_id, example_type, example_text) VALUES (%s, %s, 'news', %s)",
+            (ex_id, user_data['user_id'], text),
+        )
         db.conn.commit(); db.close()
         return jsonify({"success": True, "id": ex_id})
     except Exception as e:
@@ -3505,7 +3982,7 @@ def news_examples_delete(example_id: str):
         if not user_data:
             return jsonify({"error": "Недействительный токен"}), 401
         db = DatabaseManager(); cur = db.conn.cursor()
-        cur.execute("DELETE FROM UserExamples WHERE id = ? AND user_id = ? AND example_type = 'news'", (example_id, user_data['user_id']))
+        cur.execute("DELETE FROM userexamples WHERE id = %s AND user_id = %s AND example_type = 'news'", (example_id, user_data['user_id']))
         deleted = cur.rowcount
         db.conn.commit(); db.close()
         if deleted == 0:
@@ -3513,6 +3990,32 @@ def news_examples_delete(example_id: str):
         return jsonify({"success": True})
     except Exception as e:
         print(f"❌ Ошибка удаления примера новостей: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/news/ab-mode/availability', methods=['GET', 'OPTIONS'])
+def news_ab_mode_availability():
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        is_superadmin = bool(user_data.get("is_superadmin")) if isinstance(user_data, dict) else False
+        is_test_mode = os.getenv("NEWS_AB_TEST_MODE", "1").strip().lower() in ("1", "true", "yes", "on")
+        return jsonify({
+            "success": True,
+            "allowed": bool(is_superadmin and is_test_mode),
+            "is_superadmin": is_superadmin,
+            "test_mode": is_test_mode,
+        })
+    except Exception as e:
+        print(f"❌ Ошибка проверки доступности news AB mode: {e}")
         return jsonify({"error": str(e)}), 500
 
 # ==================== СЕРВИС: ОТВЕТЫ НА ОТЗЫВЫ ====================
@@ -3558,6 +4061,7 @@ def reviews_reply():
         language_name = language_names.get(language, 'Russian')
         if not review_text:
             return jsonify({"error": "Не передан текст отзыва"}), 400
+        business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id'))
 
         # Подтянем примеры ответов пользователя (до 5)
         # Сначала проверяем, переданы ли примеры в запросе
@@ -3574,7 +4078,10 @@ def reviews_reply():
                 cur = db.conn.cursor()
                 from core.db_helpers import ensure_user_examples_table
                 ensure_user_examples_table(cur)
-                cur.execute("SELECT example_text FROM UserExamples WHERE user_id = ? AND example_type = 'review' ORDER BY created_at DESC LIMIT 5", (user_data['user_id'],))
+                cur.execute(
+                    "SELECT example_text FROM userexamples WHERE user_id = %s AND example_type = 'review' ORDER BY created_at DESC LIMIT 5",
+                    (user_data['user_id'],),
+                )
                 rows = cur.fetchall(); db.close()
                 examples = []
                 for row in rows:
@@ -3595,6 +4102,22 @@ def reviews_reply():
             except Exception:
                 examples_text = ""
 
+        # Подтягиваем SEO-ключи (Top-10), чтобы ответы были ближе к целевому семантическому ядру
+        seo_keywords_list = []
+        seo_keywords_top10 = ""
+        if business_id:
+            try:
+                from core.seo_keywords import collect_ranked_keywords
+                db_kw = DatabaseManager()
+                cur_kw = db_kw.conn.cursor()
+                ranked = collect_ranked_keywords(cur_kw, business_id=business_id, limit=10)
+                seo_keywords_list = [str((it or {}).get("keyword", "")).strip() for it in (ranked or {}).get("items", [])]
+                seo_keywords_list = [kw for kw in seo_keywords_list if kw]
+                seo_keywords_top10 = ", ".join(seo_keywords_list[:10])
+                db_kw.close()
+            except Exception as kw_err:
+                print(f"⚠️ reviews_reply: не удалось загрузить SEO-ключи: {kw_err}", flush=True)
+
         # Получаем промпт из БД или используем дефолтный
         # ВАЖНО: default_prompt должен быть шаблоном с плейсхолдерами, а не f-string!
         default_prompt_template = """Ты - вежливый менеджер салона красоты. Сгенерируй КОРОТКИЙ (до 250 символов) ответ на отзыв клиента.
@@ -3602,6 +4125,8 @@ def reviews_reply():
 Write the reply in {language_name}.
 Если уместно, ориентируйся на стиль этих примеров (если они есть):
 {examples_text}
+SEO Wordstat ключи (если есть): {seo_keywords}
+Top-10 SEO ключей: {seo_keywords_top10}
 Верни СТРОГО JSON: {{"reply": "текст ответа"}}
 
 Отзыв клиента: {review_text}"""
@@ -3615,14 +4140,14 @@ Write the reply in {language_name}.
         # Убеждаемся, что prompt_template - это строка
         if not isinstance(prompt_template, str):
             print(f"⚠️ prompt_template не строка: {type(prompt_template)} = {prompt_template}", flush=True)
-            prompt_template = default_prompt
+            prompt_template = default_prompt_template
         else:
             # Принудительно преобразуем в строку (на случай, если это bytes или что-то еще)
             try:
                 prompt_template = str(prompt_template)
             except Exception as conv_err:
                 print(f"⚠️ Ошибка преобразования prompt_template в строку: {conv_err}", flush=True)
-                prompt_template = default_prompt
+                prompt_template = default_prompt_template
         
         # Финальная проверка
         if not isinstance(prompt_template, str):
@@ -3661,7 +4186,9 @@ Write the reply in {language_name}.
                 tone=tone_str,
                 language_name=language_name_str,
                 examples_text=examples_text_str,
-                review_text=review_text_str
+                review_text=review_text_str,
+                seo_keywords=seo_keywords_top10,
+                seo_keywords_top10=seo_keywords_top10
             )
         except (KeyError, ValueError, TypeError) as format_err:
             print(f"⚠️ Ошибка форматирования промпта: {format_err}, type: {type(format_err)}", flush=True)
@@ -3672,14 +4199,15 @@ Write the reply in {language_name}.
                 tone=tone_str,
                 language_name=language_name_str,
                 examples_text=examples_text_str,
-                review_text=review_text_str
+                review_text=review_text_str,
+                seo_keywords=seo_keywords_top10,
+                seo_keywords_top10=seo_keywords_top10
             )
         # Логируем промпт для отладки
         print(f"🔍 DEBUG reviews_reply: prompt (первые 500 символов) = {prompt[:500]}")
         print(f"🔍 DEBUG reviews_reply: review_text = {review_text[:200] if review_text else 'ПУСТО'}")
         print(f"🔍 DEBUG reviews_reply: examples_text (первые 200 символов) = {examples_text[:200] if examples_text else 'ПУСТО'}")
         
-        business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id'))
         result_text = analyze_text_with_gigachat(
             prompt, 
             task_type="review_reply",
@@ -3693,6 +4221,7 @@ Write the reply in {language_name}.
         
         # Парсим JSON из ответа GigaChat
         import json
+        reply_text = "Ошибка генерации ответа"
         
         # Проверяем тип result_text перед обработкой
         if result_text is None:
@@ -3724,12 +4253,27 @@ Write the reply in {language_name}.
                 except json.JSONDecodeError as json_err:
                     # Если не удалось распарсить JSON, используем весь текст
                     print(f"⚠️ Ошибка парсинга JSON: {json_err}")
-                    pass
+                    reply_text = result_text
+            else:
+                # Если JSON-объект не найден, возвращаем исходный текст модели
+                reply_text = result_text
         else:
             # Если другой тип - конвертируем в строку
             print(f"⚠️ Неожиданный тип result_text: {type(result_text)}")
             reply_text = str(result_text) if result_text else "Ошибка генерации ответа"
         
+        business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id') if request else None)
+        record_ai_learning_event(
+            capability="reviews.reply",
+            event_type="generated",
+            intent="operations",
+            user_id=user_data['user_id'],
+            business_id=business_id,
+            prompt_key="review_reply",
+            prompt_version="v1",
+            draft_text=reply_text,
+            metadata={"tone": tone, "language": language},
+        )
         return jsonify({"success": True, "result": {"reply": reply_text}})
     except Exception as e:
         import sys
@@ -3763,6 +4307,8 @@ def review_replies_update():
         
         reply_id = data.get('replyId') or data.get('reply_id')
         reply_text = (data.get('replyText') or data.get('reply_text') or '').strip()
+        generated_text = str(data.get('generatedText') or data.get('generated_text') or '').strip()
+        business_id = str(data.get('business_id') or '').strip()
         
         if not reply_id:
             return jsonify({"error": "ID ответа обязателен"}), 400
@@ -3773,8 +4319,9 @@ def review_replies_update():
         # Создаем таблицу для хранения ответов на отзывы, если её нет
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS UserReviewReplies (
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS userreviewreplies (
                 id TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL,
                 original_review TEXT,
@@ -3782,19 +4329,44 @@ def review_replies_update():
                 tone TEXT DEFAULT 'профессиональный',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
-        """)
-        
+            """
+        )
+
         # Обновляем или создаем запись
-        cursor.execute("""
-            INSERT OR REPLACE INTO UserReviewReplies 
-            (id, user_id, reply_text, updated_at)
-            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-        """, (reply_id, user_data['user_id'], reply_text))
+        cursor.execute(
+            """
+            INSERT INTO userreviewreplies (id, user_id, reply_text, updated_at)
+            VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+            ON CONFLICT (id) DO UPDATE
+            SET reply_text = EXCLUDED.reply_text,
+                user_id = EXCLUDED.user_id,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (reply_id, user_data['user_id'], reply_text),
+        )
         
         db.conn.commit()
         db.close()
+
+        normalized_generated = _normalize_text_for_semantic_compare(generated_text)
+        normalized_reply = _normalize_text_for_semantic_compare(reply_text)
+        edited_before_accept = bool(generated_text) and normalized_generated != normalized_reply
+        record_ai_learning_event(
+            capability="reviews.reply",
+            event_type="accepted",
+            intent="operations",
+            user_id=user_data['user_id'],
+            business_id=business_id if business_id else None,
+            accepted=True,
+            edited_before_accept=edited_before_accept,
+            prompt_key="review_reply",
+            prompt_version="v1",
+            draft_text=generated_text or None,
+            final_text=reply_text,
+            metadata={"reply_id": reply_id},
+        )
         
         return jsonify({"success": True, "message": "Ответ на отзыв сохранен"})
         
@@ -3837,20 +4409,25 @@ def add_service():
         user_id = user_data['user_id']
         service_id = str(uuid.uuid4())
 
-        # Проверяем, есть ли поле business_id в таблице UserServices
-        cursor.execute("PRAGMA table_info(UserServices)")
-        columns = [row[1] for row in cursor.fetchall()]
-        
+        # Проверяем, есть ли поле business_id в таблице userservices
+        columns = _table_columns(cursor, "userservices")
+
         if 'business_id' in columns and business_id:
-            cursor.execute("""
-                INSERT INTO UserServices (id, user_id, business_id, category, name, description, keywords, price, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            """, (service_id, user_id, business_id, category, name, description, json.dumps(keywords), price))
+            cursor.execute(
+                """
+                INSERT INTO userservices (id, user_id, business_id, category, name, description, keywords, price, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                """,
+                (service_id, user_id, business_id, category, name, description, json.dumps(keywords), price),
+            )
         else:
-            cursor.execute("""
-                INSERT INTO UserServices (id, user_id, category, name, description, keywords, price, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            """, (service_id, user_id, category, name, description, json.dumps(keywords), price))
+            cursor.execute(
+                """
+                INSERT INTO userservices (id, user_id, category, name, description, keywords, price, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                """,
+                (service_id, user_id, category, name, description, json.dumps(keywords), price),
+            )
 
         db.conn.commit()
         db.close()
@@ -3889,8 +4466,7 @@ def get_services_legacy():
             if owner_id:
                 if owner_id == user_id or user_data.get('is_superadmin'):
                     # Проверяем, есть ли поля optimized_description и optimized_name
-                    cursor.execute("PRAGMA table_info(UserServices)")
-                    columns = [col[1] for col in cursor.fetchall()]
+                    columns = _table_columns(cursor, "userservices")
                     has_optimized_desc = 'optimized_description' in columns
                     has_optimized_name = 'optimized_name' in columns
                     
@@ -3901,26 +4477,29 @@ def get_services_legacy():
                     if has_optimized_name:
                         select_fields.insert(select_fields.index('name') + 1, 'optimized_name')
                     
-                    select_sql = f"SELECT {', '.join(select_fields)} FROM UserServices WHERE business_id = ? ORDER BY created_at DESC"
+                    select_sql = f"SELECT {', '.join(select_fields)} FROM userservices WHERE business_id = %s ORDER BY created_at DESC"
                     cursor.execute(select_sql, (business_id,))
                     
                     user_services = []
                     rows = cursor.fetchall()
                     for r in rows:
+                        rd = r if hasattr(r, "keys") else None
+                        if rd is None:
+                            rd = {field: r[idx] for idx, field in enumerate(select_fields) if idx < len(r)}
                         srv = {
-                            "id": r[0], "category": r[1], "name": r[2], 
-                            "description": r[3], "keywords": r[4], 
-                            "price": r[5], "created_at": r[6],
-                            "updated_at": r[7].replace(" ", "T") if r[7] else None
+                            "id": rd.get("id"),
+                            "category": rd.get("category"),
+                            "name": rd.get("name"),
+                            "description": rd.get("description"),
+                            "keywords": rd.get("keywords"),
+                            "price": rd.get("price"),
+                            "created_at": rd.get("created_at"),
+                            "updated_at": (str(rd.get("updated_at")) if rd.get("updated_at") else None),
                         }
-                         # Если есть оптимизированные поля, добавляем их
-                        idx_offset = 0
                         if has_optimized_desc:
-                             srv["optimized_description"] = r[8]
-                             idx_offset += 1
+                            srv["optimized_description"] = rd.get("optimized_description")
                         if has_optimized_name:
-                             srv["optimized_name"] = r[8 + idx_offset]
-                        
+                            srv["optimized_name"] = rd.get("optimized_name")
                         user_services.append(srv)
 
                     # Получаем внешние услуги
@@ -3946,22 +4525,28 @@ def get_services_legacy():
                         """, (business_id,))
                         
                         for r in cursor.fetchall():
+                            rd = r if hasattr(r, "keys") else None
+                            if rd is None:
+                                rd = {
+                                    "id": r[0],
+                                    "name": r[1],
+                                    "price": r[2],
+                                    "description": r[3],
+                                    "category": r[4],
+                                    "created_at": r[5],
+                                    "updated_at": r[6] if ext_has_updated_at and len(r) > 6 else None,
+                                }
                             srv_obj = {
-                                "id": r[0],
-                                "name": r[1],
-                                "price": r[2],
-                                "description": r[3],
-                                "category": r[4],
-                                "created_at": r[5],
-                                "is_external": True
+                                "id": rd.get("id"),
+                                "name": rd.get("name"),
+                                "price": rd.get("price"),
+                                "description": rd.get("description"),
+                                "category": rd.get("category"),
+                                "created_at": rd.get("created_at"),
+                                "is_external": True,
                             }
-                            if ext_has_updated_at:
-                                val = r[6]
-                                srv_obj["updated_at"] = val.replace(" ", "T") if val else None
-                            else:
-                                val = r[5] # Fallback to created_at
-                                srv_obj["updated_at"] = val.replace(" ", "T") if val else None
-                                
+                            val = rd.get("updated_at") if ext_has_updated_at else rd.get("created_at")
+                            srv_obj["updated_at"] = str(val) if val else None
                             external_services.append(srv_obj)
 
                     db.close()
@@ -3979,8 +4564,7 @@ def get_services_legacy():
         else:
             # Старая логика для обратной совместимости
             # Проверяем, есть ли поля optimized_description и optimized_name
-            cursor.execute("PRAGMA table_info(UserServices)")
-            columns = [col[1] for col in cursor.fetchall()]
+            columns = _table_columns(cursor, "userservices")
             has_optimized_desc = 'optimized_description' in columns
             has_optimized_name = 'optimized_name' in columns
             
@@ -3991,7 +4575,7 @@ def get_services_legacy():
             if has_optimized_name:
                 select_fields.insert(select_fields.index('name') + 1, 'optimized_name')
             
-            select_sql = f"SELECT {', '.join(select_fields)} FROM UserServices WHERE user_id = ? ORDER BY created_at DESC"
+            select_sql = f"SELECT {', '.join(select_fields)} FROM userservices WHERE user_id = %s ORDER BY created_at DESC"
             print(f"🔍 DEBUG get_services: SQL запрос (старая логика) = {select_sql}", flush=True)
             print(f"🔍 DEBUG get_services: select_fields = {select_fields}", flush=True)
             # Сохраняем select_fields для использования в цикле
@@ -4014,8 +4598,7 @@ def get_services_legacy():
             # Если не установлены (старая логика), проверяем заново
             cursor_temp = db.conn.cursor() if 'db' in locals() else None
             if cursor_temp:
-                cursor_temp.execute("PRAGMA table_info(UserServices)")
-                columns = [col[1] for col in cursor_temp.fetchall()]
+                columns = _table_columns(cursor_temp, "userservices")
                 has_optimized_desc = 'optimized_description' in columns
                 has_optimized_name = 'optimized_name' in columns
                 select_fields = ['id', 'category', 'name', 'description', 'keywords', 'price', 'created_at']
@@ -4117,8 +4700,7 @@ def update_service(service_id):
         cursor = db.conn.cursor()
         
         # Проверяем, есть ли поля optimized_description и optimized_name в таблице
-        cursor.execute("PRAGMA table_info(UserServices)")
-        columns = [col[1] for col in cursor.fetchall()]
+        columns = _table_columns(cursor, "userservices")
         has_optimized_description = 'optimized_description' in columns
         has_optimized_name = 'optimized_name' in columns
         
@@ -4131,20 +4713,27 @@ def update_service(service_id):
         
         if has_optimized_description and has_optimized_name:
             print(f"🔍 DEBUG update_service: Обновление с optimized_description и optimized_name", flush=True)
-            cursor.execute("""
-                UPDATE UserServices SET
-                category = ?, name = ?, optimized_name = ?, description = ?, optimized_description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ? AND user_id = ?
-            """, (category, name, optimized_name, description, optimized_description, keywords_str, price, service_id, user_id))
+            cursor.execute(
+                """
+                UPDATE userservices SET
+                category = %s, name = %s, optimized_name = %s, description = %s,
+                optimized_description = %s, keywords = %s, price = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s AND user_id = %s
+                """,
+                (category, name, optimized_name, description, optimized_description, keywords_str, price, service_id, user_id),
+            )
             print(f"✅ DEBUG update_service: UPDATE выполнен, rowcount = {cursor.rowcount}", flush=True)
 
         else:
             print(f"🔍 DEBUG update_service: Обновление БЕЗ optimized_description/name", flush=True)
-            cursor.execute("""
-                UPDATE UserServices SET
-                category = ?, name = ?, description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ? AND user_id = ?
-            """, (category, name, description, keywords_str, price, service_id, user_id))
+            cursor.execute(
+                """
+                UPDATE userservices SET
+                category = %s, name = %s, description = %s, keywords = %s, price = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s AND user_id = %s
+                """,
+                (category, name, description, keywords_str, price, service_id, user_id),
+            )
 
         if cursor.rowcount == 0:
             db.close()
@@ -4152,6 +4741,83 @@ def update_service(service_id):
 
         db.conn.commit()
         db.close()
+
+        business_id = get_business_id_from_user(user_id, request.args.get('business_id'))
+        prev_name = str(previous_data.get("name") or "")
+        prev_description = str(previous_data.get("description") or "")
+        prev_optimized_name = str(previous_data.get("optimized_name") or "")
+        prev_optimized_description = str(previous_data.get("optimized_description") or "")
+        next_name = str(name or "")
+        next_description = str(description or "")
+        next_optimized_name = str(optimized_name or "")
+        next_optimized_description = str(optimized_description or "")
+
+        if prev_optimized_name and not next_optimized_name:
+            accepted_name = _normalize_text_for_semantic_compare(next_name) != _normalize_text_for_semantic_compare(prev_name)
+            if accepted_name:
+                edited_before_accept = _normalize_text_for_semantic_compare(next_name) != _normalize_text_for_semantic_compare(prev_optimized_name)
+                record_ai_learning_event(
+                    capability="services.optimize",
+                    event_type="accepted",
+                    intent="operations",
+                    user_id=user_id,
+                    business_id=business_id,
+                    accepted=True,
+                    edited_before_accept=edited_before_accept,
+                    prompt_key="service_optimization",
+                    prompt_version="v1",
+                    draft_text=prev_optimized_name,
+                    final_text=next_name,
+                    metadata={"field": "name", "service_id": service_id},
+                )
+            else:
+                record_ai_learning_event(
+                    capability="services.optimize",
+                    event_type="rejected",
+                    intent="operations",
+                    user_id=user_id,
+                    business_id=business_id,
+                    rejected=True,
+                    prompt_key="service_optimization",
+                    prompt_version="v1",
+                    draft_text=prev_optimized_name,
+                    final_text=prev_name,
+                    metadata={"field": "name", "service_id": service_id},
+                )
+
+        if prev_optimized_description and not next_optimized_description:
+            accepted_description = _normalize_text_for_semantic_compare(next_description) != _normalize_text_for_semantic_compare(prev_description)
+            if accepted_description:
+                edited_before_accept = _normalize_text_for_semantic_compare(next_description) != _normalize_text_for_semantic_compare(prev_optimized_description)
+                record_ai_learning_event(
+                    capability="services.optimize",
+                    event_type="accepted",
+                    intent="operations",
+                    user_id=user_id,
+                    business_id=business_id,
+                    accepted=True,
+                    edited_before_accept=edited_before_accept,
+                    prompt_key="service_optimization",
+                    prompt_version="v1",
+                    draft_text=prev_optimized_description,
+                    final_text=next_description,
+                    metadata={"field": "description", "service_id": service_id},
+                )
+            else:
+                record_ai_learning_event(
+                    capability="services.optimize",
+                    event_type="rejected",
+                    intent="operations",
+                    user_id=user_id,
+                    business_id=business_id,
+                    rejected=True,
+                    prompt_key="service_optimization",
+                    prompt_version="v1",
+                    draft_text=prev_optimized_description,
+                    final_text=prev_description,
+                    metadata={"field": "description", "service_id": service_id},
+                )
+
         return jsonify({"success": True, "message": "Услуга обновлена"})
 
     except Exception as e:
@@ -4179,7 +4845,7 @@ def delete_service(service_id):
 
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        cursor.execute("DELETE FROM UserServices WHERE id = ? AND user_id = ?", (service_id, user_id))
+        cursor.execute("DELETE FROM userservices WHERE id = %s AND user_id = %s", (service_id, user_id))
 
         if cursor.rowcount == 0:
             db.close()
@@ -4471,6 +5137,8 @@ def client_info():
             u = (url or '').lower()
             if 'yandex' in u:
                 return 'yandex'
+            if '2gis' in u:
+                return '2gis'
             if 'google' in u:
                 return 'google'
             return 'other'
@@ -5041,8 +5709,8 @@ def analyze_screenshot():
         # Сохраняем в БД
         cursor = db.conn.cursor()
         cursor.execute("""
-            INSERT INTO ScreenshotAnalyses (id, user_id, image_path, analysis_result, completeness_score, business_name, category, expires_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO screenshotanalyses (id, user_id, image_path, analysis_result, completeness_score, business_name, category, expires_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             analysis_id,
             user_data['user_id'],
@@ -5192,34 +5860,36 @@ def get_analysis(analysis_id):
         
         # Ищем анализ скриншота
         cursor.execute("""
-            SELECT * FROM ScreenshotAnalyses 
-            WHERE id = ? AND user_id = ? AND expires_at > ?
+            SELECT * FROM screenshotanalyses 
+            WHERE id = %s AND user_id = %s AND expires_at > %s
         """, (analysis_id, user_data['user_id'], datetime.now().isoformat()))
         
         analysis = cursor.fetchone()
         if analysis:
+            analysis_data = _row_to_dict(cursor, analysis) if analysis else {}
             db.close()
             return jsonify({
                 "success": True,
                 "type": "screenshot",
-                "result": json.loads(analysis['analysis_result']),
-                "created_at": analysis['created_at']
+                "result": json.loads(analysis_data.get('analysis_result') or "{}"),
+                "created_at": analysis_data.get('created_at')
             })
         
         # Ищем оптимизацию прайс-листа
         cursor.execute("""
-            SELECT * FROM PricelistOptimizations 
-            WHERE id = ? AND user_id = ? AND expires_at > ?
+            SELECT * FROM pricelistoptimizations 
+            WHERE id = %s AND user_id = %s AND expires_at > %s
         """, (analysis_id, user_data['user_id'], datetime.now().isoformat()))
         
         optimization = cursor.fetchone()
         if optimization:
+            optimization_data = _row_to_dict(cursor, optimization) if optimization else {}
             db.close()
             return jsonify({
                 "success": True,
                 "type": "pricelist",
-                "result": json.loads(optimization['optimized_data']),
-                "created_at": optimization['created_at']
+                "result": json.loads(optimization_data.get('optimized_data') or "{}"),
+                "created_at": optimization_data.get('created_at')
             })
         
         db.close()
@@ -5271,9 +5941,9 @@ def analyze_card_auto():
         expires_at = (datetime.now() + timedelta(days=7)).isoformat()
         
         cursor.execute("""
-            INSERT INTO ScreenshotAnalyses 
+            INSERT INTO screenshotanalyses 
             (id, user_id, analysis_result, completeness_score, business_name, category, expires_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (
             analysis_id,
             user_data['user_id'],
@@ -5409,39 +6079,44 @@ def add_transaction():
         transaction_id = str(uuid.uuid4())
         
         # Проверяем наличие поля master_id в таблице
-        cursor.execute("PRAGMA table_info(FinancialTransactions)")
-        columns = [row[1] for row in cursor.fetchall()]
+        columns = _table_columns(cursor, "financialtransactions")
         has_master_id = 'master_id' in columns
         
         if has_master_id:
-            cursor.execute("""
-                INSERT INTO FinancialTransactions 
+            cursor.execute(
+                """
+                INSERT INTO financialtransactions
                 (id, user_id, transaction_date, amount, client_type, services, notes, master_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                transaction_id,
-                user_data['user_id'],
-                data['transaction_date'],
-                data['amount'],
-                data['client_type'],
-                json.dumps(data.get('services', [])),
-                data.get('notes', ''),
-                data.get('master_id')
-            ))
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    transaction_id,
+                    user_data['user_id'],
+                    data['transaction_date'],
+                    data['amount'],
+                    data['client_type'],
+                    json.dumps(data.get('services', [])),
+                    data.get('notes', ''),
+                    data.get('master_id'),
+                ),
+            )
         else:
-            cursor.execute("""
-                INSERT INTO FinancialTransactions 
+            cursor.execute(
+                """
+                INSERT INTO financialtransactions
                 (id, user_id, transaction_date, amount, client_type, services, notes)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (
-                transaction_id,
-                user_data['user_id'],
-                data['transaction_date'],
-                data['amount'],
-                data['client_type'],
-                json.dumps(data.get('services', [])),
-                data.get('notes', '')
-            ))
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    transaction_id,
+                    user_data['user_id'],
+                    data['transaction_date'],
+                    data['amount'],
+                    data['client_type'],
+                    json.dumps(data.get('services', [])),
+                    data.get('notes', ''),
+                ),
+            )
         
         db.conn.commit()
         db.close()
@@ -5479,31 +6154,32 @@ def update_transaction(transaction_id):
         cursor = db.conn.cursor()
 
         # Проверяем принадлежность транзакции пользователю
-        cursor.execute("SELECT id, user_id FROM FinancialTransactions WHERE id = ? LIMIT 1", (transaction_id,))
+        cursor.execute("SELECT id, user_id FROM financialtransactions WHERE id = %s LIMIT 1", (transaction_id,))
         row = cursor.fetchone()
         if not row:
             db.close()
             return jsonify({"error": "Транзакция не найдена"}), 404
-        if row[1] != user_data['user_id']:
+        owner_id = row.get("user_id") if hasattr(row, "get") else row[1]
+        if owner_id != user_data['user_id']:
             db.close()
             return jsonify({"error": "Нет доступа к транзакции"}), 403
 
         fields = []
         params = []
         if 'transaction_date' in data:
-            fields.append("transaction_date = ?")
+            fields.append("transaction_date = %s")
             params.append(data.get('transaction_date'))
         if 'amount' in data:
-            fields.append("amount = ?")
+            fields.append("amount = %s")
             params.append(float(data.get('amount') or 0))
         if 'client_type' in data:
-            fields.append("client_type = ?")
+            fields.append("client_type = %s")
             params.append(data.get('client_type') or 'new')
         if 'services' in data:
-            fields.append("services = ?")
+            fields.append("services = %s")
             params.append(json.dumps(data.get('services') or []))
         if 'notes' in data:
-            fields.append("notes = ?")
+            fields.append("notes = %s")
             params.append(data.get('notes') or '')
 
         if not fields:
@@ -5511,7 +6187,7 @@ def update_transaction(transaction_id):
             return jsonify({"error": "Нет полей для обновления"}), 400
 
         params.append(transaction_id)
-        cursor.execute(f"UPDATE FinancialTransactions SET {', '.join(fields)} WHERE id = ?", params)
+        cursor.execute(f"UPDATE financialtransactions SET {', '.join(fields)} WHERE id = %s", params)
         db.conn.commit()
         db.close()
 
@@ -5542,16 +6218,17 @@ def delete_transaction(transaction_id):
         cursor = db.conn.cursor()
 
         # Проверяем принадлежность транзакции пользователю
-        cursor.execute("SELECT id, user_id FROM FinancialTransactions WHERE id = ? LIMIT 1", (transaction_id,))
+        cursor.execute("SELECT id, user_id FROM financialtransactions WHERE id = %s LIMIT 1", (transaction_id,))
         row = cursor.fetchone()
         if not row:
             db.close()
             return jsonify({"error": "Транзакция не найдена"}), 404
-        if row[1] != user_data['user_id']:
+        owner_id = row.get("user_id") if hasattr(row, "get") else row[1]
+        if owner_id != user_data['user_id']:
             db.close()
             return jsonify({"error": "Нет доступа к транзакции"}), 403
 
-        cursor.execute("DELETE FROM FinancialTransactions WHERE id = ?", (transaction_id,))
+        cursor.execute("DELETE FROM financialtransactions WHERE id = %s", (transaction_id,))
         db.conn.commit()
         db.close()
 
@@ -5676,8 +6353,7 @@ def upload_transaction_file():
         cursor = db.conn.cursor()
         
         # Проверяем наличие полей master_id и business_id
-        cursor.execute("PRAGMA table_info(FinancialTransactions)")
-        columns = [row[1] for row in cursor.fetchall()]
+        columns = _table_columns(cursor, "financialtransactions")
         has_master_id = 'master_id' in columns
         has_business_id = 'business_id' in columns
         
@@ -5699,16 +6375,16 @@ def upload_transaction_file():
             # Получаем business_id из текущего бизнеса пользователя
             business_id = None
             if has_business_id:
-                cursor.execute("SELECT id FROM Businesses WHERE owner_id = ? LIMIT 1", (user_data['user_id'],))
+                cursor.execute("SELECT id FROM businesses WHERE owner_id = %s LIMIT 1", (user_data['user_id'],))
                 business_row = cursor.fetchone()
                 if business_row:
-                    business_id = business_row[0]
+                    business_id = business_row.get("id") if hasattr(business_row, "get") else business_row[0]
             
             if has_master_id and has_business_id:
                 cursor.execute("""
-                    INSERT INTO FinancialTransactions 
+                    INSERT INTO financialtransactions 
                     (id, user_id, business_id, transaction_date, amount, client_type, services, notes, master_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     transaction_id,
                     user_data['user_id'],
@@ -5722,9 +6398,9 @@ def upload_transaction_file():
                 ))
             elif has_master_id:
                 cursor.execute("""
-                    INSERT INTO FinancialTransactions 
+                    INSERT INTO financialtransactions 
                     (id, user_id, transaction_date, amount, client_type, services, notes, master_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     transaction_id,
                     user_data['user_id'],
@@ -5737,9 +6413,9 @@ def upload_transaction_file():
                 ))
             elif has_business_id:
                 cursor.execute("""
-                    INSERT INTO FinancialTransactions 
+                    INSERT INTO financialtransactions 
                     (id, user_id, business_id, transaction_date, amount, client_type, services, notes)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     transaction_id,
                     user_data['user_id'],
@@ -5752,9 +6428,9 @@ def upload_transaction_file():
                 ))
             else:
                 cursor.execute("""
-                    INSERT INTO FinancialTransactions 
+                    INSERT INTO financialtransactions 
                     (id, user_id, transaction_date, amount, client_type, services, notes)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """, (
                     transaction_id,
                     user_data['user_id'],
@@ -5942,15 +6618,15 @@ def get_financial_metrics():
                 end_date = now.strftime('%Y-%m-%d')
         
         # Формируем WHERE условие с учётом business_id
-        where_clause = "transaction_date BETWEEN ? AND ?"
+        where_clause = "transaction_date BETWEEN %s AND %s"
         where_params = [start_date, end_date]
         
         if business_id:
-            where_clause = f"business_id = ? AND {where_clause}"
+            where_clause = f"business_id = %s AND {where_clause}"
             where_params = [business_id] + where_params
         else:
             # Старая логика для обратной совместимости
-            where_clause = f"user_id = ? AND {where_clause}"
+            where_clause = f"user_id = %s AND {where_clause}"
             where_params = [user_data['user_id']] + where_params
         
         # Получаем агрегированные данные
@@ -5961,16 +6637,17 @@ def get_financial_metrics():
                 AVG(amount) as average_check,
                 SUM(CASE WHEN client_type = 'new' THEN 1 ELSE 0 END) as new_clients,
                 SUM(CASE WHEN client_type = 'returning' THEN 1 ELSE 0 END) as returning_clients
-            FROM FinancialTransactions 
+            FROM financialtransactions 
             WHERE {where_clause}
         """, tuple(where_params))
         
-        metrics = cursor.fetchone()
+        raw_metrics = cursor.fetchone()
+        metrics = _row_to_dict(cursor, raw_metrics) if raw_metrics else {}
         
         # Вычисляем retention rate
         # Вычисляем retention rate
-        new_clients = metrics[3] or 0
-        returning_clients = metrics[4] or 0
+        new_clients = metrics.get("new_clients") or 0
+        returning_clients = metrics.get("returning_clients") or 0
         total_clients = new_clients + returning_clients
         retention_rate = (returning_clients / total_clients * 100) if total_clients > 0 else 0
         
@@ -5984,35 +6661,42 @@ def get_financial_metrics():
         prev_end = start_date
         
         # Формируем WHERE условие для предыдущего периода
-        prev_where_clause = "transaction_date BETWEEN ? AND ?"
+        prev_where_clause = "transaction_date BETWEEN %s AND %s"
         prev_where_params = [prev_start, prev_end]
         
         if business_id:
-            prev_where_clause = f"business_id = ? AND {prev_where_clause}"
+            prev_where_clause = f"business_id = %s AND {prev_where_clause}"
             prev_where_params = [business_id] + prev_where_params
         else:
-            prev_where_clause = f"user_id = ? AND {prev_where_clause}"
+            prev_where_clause = f"user_id = %s AND {prev_where_clause}"
             prev_where_params = [user_data['user_id']] + prev_where_params
         
         cursor.execute(f"""
             SELECT 
                 COUNT(*) as prev_orders,
                 SUM(amount) as prev_revenue
-            FROM FinancialTransactions 
+            FROM financialtransactions 
             WHERE {prev_where_clause}
         """, tuple(prev_where_params))
         
-        prev_metrics = cursor.fetchone()
+        raw_prev_metrics = cursor.fetchone()
+        prev_metrics = _row_to_dict(cursor, raw_prev_metrics) if raw_prev_metrics else {}
         
         # Вычисляем рост
         revenue_growth = 0
         orders_growth = 0
         
-        if prev_metrics[1] and prev_metrics[1] > 0:
-            revenue_growth = ((metrics[1] or 0) - prev_metrics[1]) / prev_metrics[1] * 100
+        prev_revenue = prev_metrics.get("prev_revenue")
+        prev_orders = prev_metrics.get("prev_orders")
+        total_revenue = metrics.get("total_revenue")
+        total_orders = metrics.get("total_orders")
+        average_check = metrics.get("average_check")
+
+        if prev_revenue and prev_revenue > 0:
+            revenue_growth = ((total_revenue or 0) - prev_revenue) / prev_revenue * 100
         
-        if prev_metrics[0] and prev_metrics[0] > 0:
-            orders_growth = ((metrics[0] or 0) - prev_metrics[0]) / prev_metrics[0] * 100
+        if prev_orders and prev_orders > 0:
+            orders_growth = ((total_orders or 0) - prev_orders) / prev_orders * 100
         
         db.close()
         
@@ -6024,11 +6708,11 @@ def get_financial_metrics():
                 "period_type": period
             },
             "metrics": {
-                "total_revenue": float(metrics[1] or 0),
-                "total_orders": metrics[0] or 0,
-                "average_check": float(metrics[2] or 0),
-                "new_clients": metrics[3] or 0,
-                "returning_clients": metrics[4] or 0,
+                "total_revenue": float(total_revenue or 0),
+                "total_orders": total_orders or 0,
+                "average_check": float(average_check or 0),
+                "new_clients": new_clients,
+                "returning_clients": returning_clients,
                 "retention_rate": round(retention_rate, 2)
             },
             "growth": {
@@ -6081,8 +6765,7 @@ def get_financial_breakdown():
                 end_date = now.strftime('%Y-%m-%d')
         
         # Проверяем наличие полей в таблице
-        cursor.execute("PRAGMA table_info(FinancialTransactions)")
-        columns = [row[1] for row in cursor.fetchall()]
+        columns = _table_columns(cursor, "financialtransactions")
         has_business_id = 'business_id' in columns
         has_master_id = 'master_id' in columns
         
@@ -6094,36 +6777,43 @@ def get_financial_breakdown():
             if has_master_id:
                 cursor.execute("""
                     SELECT services, amount, master_id
-                    FROM FinancialTransactions 
-                    WHERE business_id = ? AND transaction_date BETWEEN ? AND ?
+                    FROM financialtransactions 
+                    WHERE business_id = %s AND transaction_date BETWEEN %s AND %s
                 """, (current_business_id, start_date, end_date))
             else:
                 cursor.execute("""
                     SELECT services, amount, NULL as master_id
-                    FROM FinancialTransactions 
-                    WHERE business_id = ? AND transaction_date BETWEEN ? AND ?
+                    FROM financialtransactions 
+                    WHERE business_id = %s AND transaction_date BETWEEN %s AND %s
                 """, (current_business_id, start_date, end_date))
         else:
             if has_master_id:
                 cursor.execute("""
                     SELECT services, amount, master_id
-                    FROM FinancialTransactions 
-                    WHERE user_id = ? AND transaction_date BETWEEN ? AND ?
+                    FROM financialtransactions 
+                    WHERE user_id = %s AND transaction_date BETWEEN %s AND %s
                 """, (user_data['user_id'], start_date, end_date))
             else:
                 cursor.execute("""
                     SELECT services, amount, NULL as master_id
-                    FROM FinancialTransactions 
-                    WHERE user_id = ? AND transaction_date BETWEEN ? AND ?
+                    FROM financialtransactions 
+                    WHERE user_id = %s AND transaction_date BETWEEN %s AND %s
                 """, (user_data['user_id'], start_date, end_date))
         
         transactions = cursor.fetchall()
         
         # Агрегируем по услугам
+        def _row_val(row, idx, key):
+            if isinstance(row, dict):
+                return row.get(key)
+            if row is None:
+                return None
+            return row[idx] if len(row) > idx else None
+
         services_revenue = {}
         for row in transactions:
-            services_json = row[0]  # services (JSON)
-            amount = float(row[1] or 0)
+            services_json = _row_val(row, 0, "services")  # services (JSON)
+            amount = float(_row_val(row, 1, "amount") or 0)
             
             if services_json:
                 try:
@@ -6141,8 +6831,8 @@ def get_financial_breakdown():
         # Агрегируем по мастерам
         masters_revenue = {}
         for row in transactions:
-            master_id = row[2] if len(row) > 2 else None  # master_id (может отсутствовать)
-            amount = float(row[1] or 0)
+            master_id = _row_val(row, 2, "master_id")
+            amount = float(_row_val(row, 1, "amount") or 0)
             
             if master_id:
                 # Проверяем наличие таблицы Masters
@@ -6152,7 +6842,8 @@ def get_financial_breakdown():
                 if masters_table_exists:
                     cursor.execute("SELECT name FROM masters WHERE id = %s", (master_id,))
                     master_row = cursor.fetchone()
-                    master_name = master_row[0] if master_row else f"Мастер {master_id[:8]}"
+                    master_dict = _row_to_dict(cursor, master_row) if master_row else None
+                    master_name = master_dict.get("name") if master_dict else f"Мастер {master_id[:8]}"
                 else:
                     master_name = f"Мастер {master_id[:8]}"
                 
@@ -6204,33 +6895,35 @@ def get_network_locations_by_network_id(network_id):
         cursor = db.conn.cursor()
         
         # Проверяем, что пользователь имеет доступ к сети
-        cursor.execute("SELECT owner_id FROM Networks WHERE id = ?", (network_id,))
-        network = cursor.fetchone()
+        cursor.execute("SELECT owner_id FROM networks WHERE id = %s", (network_id,))
+        raw_network = cursor.fetchone()
+        network = _row_to_dict(cursor, raw_network) if raw_network else None
         
         if not network:
             db.close()
             return jsonify({"error": "Сеть не найдена"}), 404
         
         # Проверяем права доступа (владелец или суперадмин)
-        if network[0] != user_data['user_id'] and not user_data.get('is_superadmin'):
+        if network.get("owner_id") != user_data['user_id'] and not user_data.get('is_superadmin'):
             db.close()
             return jsonify({"error": "Нет доступа к этой сети"}), 403
         
         # Получаем точки сети
         cursor.execute("""
             SELECT id, name, address, description 
-            FROM Businesses 
-            WHERE network_id = ? 
+            FROM businesses 
+            WHERE network_id = %s 
             ORDER BY name
         """, (network_id,))
         
         locations = []
         for row in cursor.fetchall():
+            row_data = _row_to_dict(cursor, row) if row else {}
             locations.append({
-                "id": row[0],
-                "name": row[1],
-                "address": row[2],
-                "description": row[3]
+                "id": row_data.get("id"),
+                "name": row_data.get("name"),
+                "address": row_data.get("address"),
+                "description": row_data.get("description")
             })
         
         db.close()
@@ -6264,21 +6957,23 @@ def get_network_stats(network_id):
         cursor = db.conn.cursor()
         
         # Проверяем доступ к сети
-        cursor.execute("SELECT owner_id FROM Networks WHERE id = ?", (network_id,))
-        network = cursor.fetchone()
+        cursor.execute("SELECT owner_id FROM networks WHERE id = %s", (network_id,))
+        raw_network = cursor.fetchone()
+        network = _row_to_dict(cursor, raw_network) if raw_network else None
         
         if not network:
             db.close()
             return jsonify({"error": "Сеть не найдена"}), 404
         
-        if network[0] != user_data['user_id'] and not user_data.get('is_superadmin'):
+        if network.get("owner_id") != user_data['user_id'] and not user_data.get('is_superadmin'):
             db.close()
             return jsonify({"error": "Нет доступа к этой сети"}), 403
         
         # Получаем точки сети
-        cursor.execute("SELECT id, name FROM Businesses WHERE network_id = ?", (network_id,))
-        locations = cursor.fetchall()
-        location_ids = [loc[0] for loc in locations]
+        cursor.execute("SELECT id, name FROM businesses WHERE network_id = %s", (network_id,))
+        raw_locations = cursor.fetchall()
+        locations = [_row_to_dict(cursor, row) for row in raw_locations]
+        location_ids = [loc.get("id") for loc in locations if loc.get("id")]
         
         if not location_ids:
             db.close()
@@ -6316,37 +7011,37 @@ def get_network_stats(network_id):
         
         # Получаем транзакции всех точек сети
         # Проверяем наличие поля business_id
-        cursor.execute("PRAGMA table_info(FinancialTransactions)")
-        columns = [row[1] for row in cursor.fetchall()]
+        columns = _table_columns(cursor, "financialtransactions")
         has_business_id = 'business_id' in columns
         
         if has_business_id and location_ids:
-            placeholders = ','.join(['?'] * len(location_ids))
+            placeholders = ','.join(['%s'] * len(location_ids))
             cursor.execute(f"""
                 SELECT services, amount, master_id, business_id
-                FROM FinancialTransactions 
-                WHERE business_id IN ({placeholders}) AND transaction_date BETWEEN ? AND ?
-            """, location_ids + [start_date, end_date])
+                FROM financialtransactions 
+                WHERE business_id IN ({placeholders}) AND transaction_date BETWEEN %s AND %s
+            """, tuple(location_ids + [start_date, end_date]))
         else:
             # Если business_id нет, получаем через user_id владельца сети
             cursor.execute("""
                 SELECT services, amount, master_id, NULL as business_id
-                FROM FinancialTransactions 
-                WHERE user_id = ? AND transaction_date BETWEEN ? AND ?
-            """, (network[0], start_date, end_date))
+                FROM financialtransactions 
+                WHERE user_id = %s AND transaction_date BETWEEN %s AND %s
+            """, (network.get("owner_id"), start_date, end_date))
         
         transactions = cursor.fetchall()
         
         # Агрегируем данные
         services_revenue = {}
         masters_revenue = {}
-        locations_revenue = {loc[1]: 0 for loc in locations}
+        locations_revenue = {(loc.get("name") or "Неизвестно"): 0 for loc in locations}
         
         for row in transactions:
-            services_json = row[0]
-            amount = float(row[1] or 0)
-            master_id = row[2]
-            business_id = row[3]
+            row_data = _row_to_dict(cursor, row) if row else {}
+            services_json = row_data.get("services")
+            amount = float(row_data.get("amount") or 0)
+            master_id = row_data.get("master_id")
+            business_id = row_data.get("business_id")
             
             # По услугам
             if services_json:
@@ -6363,13 +7058,14 @@ def get_network_stats(network_id):
             
             # По мастерам
             if master_id:
-                cursor.execute("SELECT name FROM Masters WHERE id = ?", (master_id,))
+                cursor.execute("SELECT name FROM masters WHERE id = %s", (master_id,))
                 master_row = cursor.fetchone()
-                master_name = master_row[0] if master_row else f"Мастер {master_id[:8]}"
+                master_dict = _row_to_dict(cursor, master_row) if master_row else None
+                master_name = master_dict.get("name") if master_dict else f"Мастер {master_id[:8]}"
                 masters_revenue[master_name] = masters_revenue.get(master_name, 0) + amount
             
             # По точкам
-            location_name = next((loc[1] for loc in locations if loc[0] == business_id), "Неизвестно")
+            location_name = next((loc.get("name") for loc in locations if loc.get("id") == business_id), "Неизвестно")
             locations_revenue[location_name] = locations_revenue.get(location_name, 0) + amount
         
         # Преобразуем в массивы
@@ -6387,20 +7083,21 @@ def get_network_stats(network_id):
             cursor.execute(
                 """
                 SELECT id, name, yandex_rating, yandex_reviews_total, yandex_reviews_30d, yandex_last_sync
-                FROM Businesses
-                WHERE network_id = ? AND is_active = 1
+                FROM businesses
+                WHERE network_id = %s AND (is_active = TRUE OR is_active = 1 OR is_active IS NULL)
                 """,
                 (network_id,),
             )
             for row in cursor.fetchall():
+                row_data = _row_to_dict(cursor, row) if row else {}
                 ratings.append(
                     {
-                        "business_id": row[0],
-                        "name": row[1],
-                        "rating": row[2],
-                        "reviews_total": row[3],
-                        "reviews_30d": row[4],
-                        "last_sync": row[5],
+                        "business_id": row_data.get("id"),
+                        "name": row_data.get("name"),
+                        "rating": row_data.get("yandex_rating"),
+                        "reviews_total": row_data.get("yandex_reviews_total"),
+                        "reviews_30d": row_data.get("yandex_reviews_30d"),
+                        "last_sync": row_data.get("yandex_last_sync"),
                     }
                 )
         except Exception:
@@ -6447,14 +7144,15 @@ def admin_sync_network_yandex(network_id):
         db = DatabaseManager()
         cursor = db.conn.cursor()
 
-        cursor.execute("SELECT owner_id FROM Networks WHERE id = ?", (network_id,))
-        network = cursor.fetchone()
+        cursor.execute("SELECT owner_id FROM networks WHERE id = %s", (network_id,))
+        raw_network = cursor.fetchone()
+        network = _row_to_dict(cursor, raw_network) if raw_network else None
 
         if not network:
             db.close()
             return jsonify({"error": "Сеть не найдена"}), 404
 
-        if network[0] != user_data["user_id"] and not user_data.get("is_superadmin"):
+        if network.get("owner_id") != user_data["user_id"] and not user_data.get("is_superadmin"):
             db.close()
             return jsonify({"error": "Нет доступа к этой сети"}), 403
 
@@ -6598,13 +7296,131 @@ def admin_sync_business_yandex(business_id):
 @app.route('/api/admin/2gis/sync/business/<string:business_id>', methods=['POST'])
 def admin_sync_business_2gis(business_id):
     """
-    Stub: 2ГИС синхронизация пока не реализована. Возвращает 501 JSON (без 404/HTML).
+    Ручной запуск синхронизации/парсинга 2ГИС для одного бизнеса.
+    Приоритет:
+      1) Если есть ссылка на 2ГИС в businessmaplinks -> task_type=parse_card, source=2gis
+      2) Иначе, если есть активный external account 2gis -> task_type=sync_2gis
     """
-    return jsonify({
-        "success": False,
-        "message": "2ГИС синк пока не реализован",
-        "where": "admin_sync_business_2gis"
-    }), 501
+    import traceback
+    print(f"🔄 Запрос на синхронизацию 2ГИС бизнеса {business_id}")
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+
+        cursor.execute("SELECT owner_id, name FROM businesses WHERE id = %s", (business_id,))
+        raw_business = cursor.fetchone()
+        business = _row_to_dict(cursor, raw_business) if raw_business else None
+
+        if not business:
+            db.close()
+            return jsonify({"error": "Бизнес не найден"}), 404
+
+        business_owner_id = business.get("owner_id")
+        if business_owner_id != user_data["user_id"] and not user_data.get("is_superadmin"):
+            db.close()
+            return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
+
+        cursor.execute(
+            """
+            SELECT id, auth_data_encrypted, external_id
+            FROM externalbusinessaccounts
+            WHERE business_id = %s AND source = '2gis' AND is_active = TRUE
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (business_id,),
+        )
+        raw_account = cursor.fetchone()
+        account_row = _row_to_dict(cursor, raw_account) if raw_account else None
+        account_id = account_row.get("id") if account_row else None
+
+        cursor.execute(
+            """
+            SELECT url
+            FROM businessmaplinks
+            WHERE business_id = %s
+              AND (
+                map_type = '2gis'
+                OR LOWER(url) LIKE '%%2gis.ru/%%'
+                OR LOWER(url) LIKE '%%2gis.com/%%'
+              )
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (business_id,),
+        )
+        raw_map = cursor.fetchone()
+        map_row = _row_to_dict(cursor, raw_map) if raw_map else None
+        map_url = (map_row.get("url") if map_row else None) or ""
+        map_url = str(map_url).strip()
+
+        if not map_url and not account_id:
+            db.close()
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "Не найден источник данных 2ГИС",
+                    "message": "Добавьте ссылку на 2ГИС в Профиле или подключите аккаунт 2ГИС в интеграциях",
+                }
+            ), 400
+
+        task_id = str(uuid.uuid4())
+        user_id = user_data["user_id"]
+
+        if map_url:
+            task_type = "parse_card"
+            source = "2gis"
+            target_url = map_url
+            message = "Запущен парсинг 2ГИС карточки"
+        else:
+            task_type = "sync_2gis"
+            source = "2gis"
+            target_url = ""
+            message = "Запущена синхронизация 2ГИС через API"
+
+        cursor.execute(
+            """
+            INSERT INTO parsequeue (
+                id, business_id, account_id, task_type, source,
+                status, user_id, url, created_at, updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s, 'pending', %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            """,
+            (task_id, business_id, account_id, task_type, source, user_id, target_url),
+        )
+        db.conn.commit()
+        db.close()
+
+        print(f"✅ Задача {task_type} (2GIS) добавлена в очередь: {task_id}")
+        return jsonify(
+            {
+                "success": True,
+                "message": message,
+                "sync_id": task_id,
+                "task_type": task_type,
+                "source": source,
+            }
+        )
+    except Exception as e:
+        error_details = traceback.format_exc()
+        print(f"❌ admin_sync_business_2gis: {e}\n{error_details}")
+        payload = {
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__,
+        }
+        if getattr(app, "debug", False):
+            payload["traceback"] = error_details
+        return jsonify(payload), 500
 
 
 def _sync_yandex_business_sync_task(sync_id, business_id, account_id):
@@ -6980,17 +7796,18 @@ def get_user_networks():
         # Получаем сети пользователя
         cursor.execute("""
             SELECT id, name, description 
-            FROM Networks 
-            WHERE owner_id = ? 
+            FROM networks 
+            WHERE owner_id = %s 
             ORDER BY name
         """, (user_data['user_id'],))
         
         networks = []
         for row in cursor.fetchall():
+            row_data = _row_to_dict(cursor, row) if row else {}
             networks.append({
-                "id": row[0],
-                "name": row[1],
-                "description": row[2]
+                "id": row_data.get("id"),
+                "name": row_data.get("name"),
+                "description": row_data.get("description")
             })
         
         db.close()
@@ -7064,14 +7881,15 @@ def add_business_to_network(network_id):
         cursor = db.conn.cursor()
         
         # Проверяем права доступа к сети
-        cursor.execute("SELECT owner_id FROM Networks WHERE id = ?", (network_id,))
-        network = cursor.fetchone()
+        cursor.execute("SELECT owner_id FROM networks WHERE id = %s", (network_id,))
+        raw_network = cursor.fetchone()
+        network = _row_to_dict(cursor, raw_network) if raw_network else None
         
         if not network:
             db.close()
             return jsonify({"error": "Сеть не найдена"}), 404
         
-        if network[0] != user_data['user_id'] and not user_data.get('is_superadmin'):
+        if network.get("owner_id") != user_data['user_id'] and not user_data.get('is_superadmin'):
             db.close()
             return jsonify({"error": "Нет доступа к этой сети"}), 403
         
@@ -7742,17 +8560,18 @@ def get_proxies():
         
         proxies = []
         for row in cursor.fetchall():
+            row_get = row.get if hasattr(row, "get") else None
             proxies.append({
-                "id": row[0],
-                "type": row[1],
-                "host": row[2],
-                "port": row[3],
-                "is_active": bool(row[4]),
-                "is_working": bool(row[5]),
-                "success_count": row[6],
-                "failure_count": row[7],
-                "last_used_at": row[8],
-                "last_checked_at": row[9]
+                "id": (row_get("id") if row_get else row[0]),
+                "type": (row_get("proxy_type") if row_get else row[1]),
+                "host": (row_get("host") if row_get else row[2]),
+                "port": (row_get("port") if row_get else row[3]),
+                "is_active": bool(row_get("is_active") if row_get else row[4]),
+                "is_working": bool(row_get("is_working") if row_get else row[5]),
+                "success_count": (row_get("success_count") if row_get else row[6]),
+                "failure_count": (row_get("failure_count") if row_get else row[7]),
+                "last_used_at": (row_get("last_used_at") if row_get else row[8]),
+                "last_checked_at": (row_get("last_checked_at") if row_get else row[9]),
             })
         
         db.close()
@@ -7790,7 +8609,7 @@ def add_proxy():
                 id, proxy_type, host, port, username, password,
                 is_active, is_working, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            VALUES (%s, %s, %s, %s, %s, %s, TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         """, (
             proxy_id,
             data.get('type', 'http'),
@@ -7828,7 +8647,7 @@ def delete_proxy(proxy_id):
             return jsonify({"error": "Недостаточно прав"}), 403
         
         cursor = db.conn.cursor()
-        cursor.execute("DELETE FROM ProxyServers WHERE id = ?", (proxy_id,))
+        cursor.execute("DELETE FROM ProxyServers WHERE id = %s", (proxy_id,))
         db.conn.commit()
         db.close()
         
@@ -7859,17 +8678,18 @@ def toggle_proxy(proxy_id):
         
         cursor = db.conn.cursor()
         # Получаем текущий статус
-        cursor.execute("SELECT is_active FROM ProxyServers WHERE id = ?", (proxy_id,))
+        cursor.execute("SELECT is_active FROM ProxyServers WHERE id = %s", (proxy_id,))
         row = cursor.fetchone()
         if not row:
             db.close()
             return jsonify({"error": "Прокси не найден"}), 404
         
-        new_status = 0 if row[0] else 1
+        current_status = row.get("is_active") if hasattr(row, "get") else row[0]
+        new_status = False if bool(current_status) else True
         cursor.execute("""
             UPDATE ProxyServers 
-            SET is_active = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            SET is_active = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
         """, (new_status, proxy_id))
         db.conn.commit()
         db.close()
@@ -7905,7 +8725,7 @@ def get_prompts():
         cursor = db.conn.cursor()
         # Проверяем, существует ли таблица, если нет - создаём
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS AIPrompts (
+            CREATE TABLE IF NOT EXISTS aiprompts (
                 id TEXT PRIMARY KEY,
                 prompt_type TEXT UNIQUE NOT NULL,
                 prompt_text TEXT NOT NULL,
@@ -7917,7 +8737,7 @@ def get_prompts():
         """)
         db.conn.commit()
         
-        cursor.execute("SELECT prompt_type, prompt_text, description, updated_at, updated_by FROM AIPrompts ORDER BY prompt_type")
+        cursor.execute("SELECT prompt_type, prompt_text, description, updated_at, updated_by FROM aiprompts ORDER BY prompt_type")
         rows = cursor.fetchall()
         
         # Если таблица пустая, инициализируем дефолтные промпты
@@ -7978,24 +8798,29 @@ Write all generated text in {language_name}.
             ]
             
             for prompt_type, prompt_text, description in default_prompts:
-                cursor.execute("""
-                    INSERT OR IGNORE INTO AIPrompts (id, prompt_type, prompt_text, description)
-                    VALUES (?, ?, ?, ?)
-                """, (f"prompt_{prompt_type}", prompt_type, prompt_text, description))
+                cursor.execute(
+                    """
+                    INSERT INTO aiprompts (id, prompt_type, prompt_text, description)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (id) DO NOTHING
+                    """,
+                    (f"prompt_{prompt_type}", prompt_type, prompt_text, description),
+                )
             
             db.conn.commit()
             # Перечитываем после вставки
-            cursor.execute("SELECT prompt_type, prompt_text, description, updated_at, updated_by FROM AIPrompts ORDER BY prompt_type")
+            cursor.execute("SELECT prompt_type, prompt_text, description, updated_at, updated_by FROM aiprompts ORDER BY prompt_type")
             rows = cursor.fetchall()
         
         prompts = []
         for row in rows:
+            row_data = _row_to_dict(cursor, row) if row else {}
             prompts.append({
-                'type': row[0],
-                'text': row[1],
-                'description': row[2],
-                'updated_at': row[3],
-                'updated_by': row[4]
+                'type': row_data.get('prompt_type'),
+                'text': row_data.get('prompt_text'),
+                'description': row_data.get('description'),
+                'updated_at': row_data.get('updated_at'),
+                'updated_by': row_data.get('updated_by')
             })
         
         db.close()
@@ -8035,16 +8860,16 @@ def update_prompt(prompt_type):
         
         cursor = db.conn.cursor()
         cursor.execute("""
-            UPDATE AIPrompts 
-            SET prompt_text = ?, description = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ?
-            WHERE prompt_type = ?
+            UPDATE aiprompts 
+            SET prompt_text = %s, description = %s, updated_at = CURRENT_TIMESTAMP, updated_by = %s
+            WHERE prompt_type = %s
         """, (prompt_text, description, user_data['user_id'], prompt_type))
         
         if cursor.rowcount == 0:
             # Если промпта нет, создаём его
             cursor.execute("""
-                INSERT INTO AIPrompts (id, prompt_type, prompt_text, description, updated_by)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO aiprompts (id, prompt_type, prompt_text, description, updated_by)
+                VALUES (%s, %s, %s, %s, %s)
             """, (f"prompt_{prompt_type}", prompt_type, prompt_text, description, user_data['user_id']))
         
         db.conn.commit()
@@ -8063,7 +8888,7 @@ def get_prompt_from_db(prompt_type: str, fallback: str = None) -> str:
     try:
         db = DatabaseManager()
         cursor = db.conn.cursor()
-        cursor.execute("SELECT prompt_text FROM AIPrompts WHERE prompt_type = ?", (prompt_type,))
+        cursor.execute("SELECT prompt_text FROM aiprompts WHERE prompt_type = %s", (prompt_type,))
         row = cursor.fetchone()
         db.close()
         
@@ -8139,9 +8964,10 @@ def get_business_types_public():
         
         types = []
         for row in rows:
+            row_data = _row_to_dict(cursor, row) if row else {}
             types.append({
-                'type_key': row[0],
-                'label': row[1]
+                'type_key': row_data.get('type_key'),
+                'label': row_data.get('label')
             })
         
         db.close()
@@ -8173,17 +8999,20 @@ def get_business_types():
             return jsonify({"error": "Недостаточно прав"}), 403
         
         cursor = db.conn.cursor()
-        cursor.execute("SELECT id, type_key, label, description, is_active FROM BusinessTypes ORDER BY label")
+        cursor.execute("SELECT id, type_key, label, description, is_active FROM businesstypes ORDER BY label")
         rows = cursor.fetchall()
         
         types = []
         for row in rows:
+            row_data = _row_to_dict(cursor, row) if row else {}
+            is_active_raw = row_data.get('is_active')
+            is_active_bool = str(is_active_raw).lower() in ('1', 'true', 't') if is_active_raw is not None else True
             types.append({
-                'id': row[0],
-                'type_key': row[1],
-                'label': row[2],
-                'description': row[3],
-                'is_active': bool(row[4])
+                'id': row_data.get('id'),
+                'type_key': row_data.get('type_key'),
+                'label': row_data.get('label'),
+                'description': row_data.get('description'),
+                'is_active': is_active_bool
             })
         
         db.close()
@@ -8228,8 +9057,8 @@ def create_business_type():
         
         cursor = db.conn.cursor()
         cursor.execute("""
-            INSERT INTO BusinessTypes (id, type_key, label, description)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO businesstypes (id, type_key, label, description)
+            VALUES (%s, %s, %s, %s)
         """, (type_id, type_key, label, description))
         
         db.conn.commit()
@@ -8247,8 +9076,6 @@ def create_business_type():
 def update_or_delete_business_type(type_id):
     """Обновить или удалить тип бизнеса (только для суперадмина)"""
     try:
-        if request.method == 'OPTIONS':
-            return ('', 204)
         if request.method == 'OPTIONS':
             return ('', 204)
         
@@ -8283,10 +9110,10 @@ def update_or_delete_business_type(type_id):
             return jsonify({"error": "label обязателен"}), 400
         
         cursor.execute("""
-            UPDATE BusinessTypes 
-            SET label = ?, description = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        """, (label, description, 1 if is_active else 0, type_id))
+            UPDATE businesstypes 
+            SET label = %s, description = %s, is_active = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        """, (label, description, bool(is_active), type_id))
         
         db.conn.commit()
         db.close()
@@ -9978,40 +10805,26 @@ def generate_telegram_bind_token():
         bind_token = secrets.token_urlsafe(32)
         expires_at = datetime.now() + timedelta(minutes=5)  # Токен действует 5 минут
         
-        # Проверяем наличие поля business_id в таблице TelegramBindTokens
-        cursor.execute("PRAGMA table_info(TelegramBindTokens)")
-        columns = [row[1] for row in cursor.fetchall()]
-        has_business_id = 'business_id' in columns
-        
-        # Если поля нет, добавляем его
-        if not has_business_id:
-            cursor.execute("ALTER TABLE TelegramBindTokens ADD COLUMN business_id TEXT")
-            db.conn.commit()
-        
         # Удаляем старые неиспользованные токены для этого бизнеса
-        if has_business_id or 'business_id' in [row[1] for row in cursor.execute("PRAGMA table_info(TelegramBindTokens)").fetchall()]:
-            cursor.execute("""
-                DELETE FROM TelegramBindTokens 
-                WHERE business_id = ? AND used = 0 AND expires_at < ?
-            """, (business_id, datetime.now().isoformat()))
-        else:
-            cursor.execute("""
-                DELETE FROM TelegramBindTokens 
-                WHERE user_id = ? AND used = 0 AND expires_at < ?
-            """, (user_data['user_id'], datetime.now().isoformat()))
-        
+        cursor.execute(
+            """
+            DELETE FROM telegrambindtokens
+            WHERE business_id = %s
+              AND used = 0
+              AND expires_at < %s
+            """,
+            (business_id, datetime.now()),
+        )
+
         # Создаем новый токен
         token_id = str(uuid.uuid4())
-        if has_business_id or 'business_id' in [row[1] for row in cursor.execute("PRAGMA table_info(TelegramBindTokens)").fetchall()]:
-            cursor.execute("""
-                INSERT INTO TelegramBindTokens (id, user_id, business_id, token, expires_at, used, created_at)
-                VALUES (?, ?, ?, ?, ?, 0, ?)
-            """, (token_id, user_data['user_id'], business_id, bind_token, expires_at.isoformat(), datetime.now().isoformat()))
-        else:
-            cursor.execute("""
-                INSERT INTO TelegramBindTokens (id, user_id, token, expires_at, used, created_at)
-                VALUES (?, ?, ?, ?, 0, ?)
-            """, (token_id, user_data['user_id'], bind_token, expires_at.isoformat(), datetime.now().isoformat()))
+        cursor.execute(
+            """
+            INSERT INTO telegrambindtokens (id, user_id, business_id, token, expires_at, used, created_at)
+            VALUES (%s, %s, %s, %s, %s, 0, %s)
+            """,
+            (token_id, user_data['user_id'], business_id, bind_token, expires_at, datetime.now()),
+        )
         
         db.conn.commit()
         db.close()
@@ -10020,7 +10833,7 @@ def generate_telegram_bind_token():
             "success": True,
             "token": bind_token,
             "expires_at": expires_at.isoformat(),
-            "qr_data": f"https://t.me/BeautyBotPro_bot?start={bind_token}"
+            "qr_data": f"https://t.me/LocalOspro_bot?start={bind_token}"
         }), 200
         
     except Exception as e:
@@ -10057,51 +10870,41 @@ def get_telegram_bind_status():
             db.close()
             return jsonify({"error": "Бизнес не найден или не принадлежит вам"}), 403
         
-        # Проверяем наличие поля business_id в таблице TelegramBindTokens
-        cursor.execute("PRAGMA table_info(TelegramBindTokens)")
-        columns = [row[1] for row in cursor.fetchall()]
-        has_business_id = 'business_id' in columns
-        
         # Проверяем, привязан ли Telegram для этого бизнеса
-        is_linked = False
-        user_row = None
-        
-        if has_business_id:
-            # Проверяем, есть ли использованный токен для ЭТОГО КОНКРЕТНОГО бизнеса
-            # Важно: проверяем только токены с business_id = текущему бизнесу
-            # Токены с business_id = NULL или другим бизнесом не учитываются
-            cursor.execute("""
-                SELECT COUNT(*) as count FROM TelegramBindTokens 
-                WHERE business_id = ? AND used = 1 AND user_id = ?
-            """, (business_id, user_data['user_id']))
-            result = cursor.fetchone()
-            has_used_token_for_this_business = result[0] > 0 if result else False
-            
-            print(f"🔍 Проверка статуса Telegram для бизнеса {business_id}: has_used_token_for_this_business={has_used_token_for_this_business}")
-            
-            if has_used_token_for_this_business:
-                # Проверяем, что у пользователя есть telegram_id
-                cursor.execute("SELECT telegram_id FROM users WHERE id = %s", (user_data['user_id'],))
-                user_row = cursor.fetchone()
-                is_linked = user_row and user_row[0] is not None and user_row[0] != 'None' and user_row[0] != ''
-                print(f"🔍 Telegram ID пользователя: {user_row[0] if user_row else None}, is_linked={is_linked}")
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM telegrambindtokens
+            WHERE business_id = %s
+              AND used = 1
+              AND user_id = %s
+            """,
+            (business_id, user_data['user_id']),
+        )
+        result = cursor.fetchone()
+        count_value = 0
+        if result:
+            if hasattr(result, "get"):
+                count_value = int(result.get("count") or 0)
             else:
-                # Нет использованного токена для этого бизнеса - не подключен
-                is_linked = False
-                user_row = None
-                print(f"🔍 Нет использованного токена для бизнеса {business_id} - не подключен")
+                count_value = int(result[0] or 0)
+        has_used_token_for_this_business = count_value > 0
+
+        cursor.execute("SELECT telegram_id FROM users WHERE id = %s", (user_data['user_id'],))
+        user_row = cursor.fetchone()
+        if user_row and hasattr(user_row, "get"):
+            telegram_id = user_row.get("telegram_id")
         else:
-            # Старая логика: проверяем только привязку к пользователю
-            cursor.execute("SELECT telegram_id FROM Users WHERE id = ?", (user_data['user_id'],))
-            user_row = cursor.fetchone()
-            is_linked = user_row and user_row[0] is not None and user_row[0] != 'None'
+            telegram_id = user_row[0] if user_row else None
+        telegram_id = str(telegram_id or "").strip()
+        is_linked = bool(has_used_token_for_this_business and telegram_id and telegram_id.lower() != "none")
         
         db.close()
         
         return jsonify({
             "success": True,
             "is_linked": is_linked,
-            "telegram_id": user_row[0] if is_linked and user_row else None
+            "telegram_id": telegram_id if is_linked else None
         }), 200
         
     except Exception as e:
@@ -10125,34 +10928,17 @@ def verify_telegram_bind_token():
         db = DatabaseManager()
         cursor = db.conn.cursor()
         
-        # Проверяем токен (включая business_id)
-        cursor.execute("PRAGMA table_info(TelegramBindTokens)")
-        columns = [row[1] for row in cursor.fetchall()]
-        has_business_id = 'business_id' in columns
-        
-        if has_business_id:
-            cursor.execute("""
-                SELECT id, user_id, business_id, expires_at, used
-                FROM TelegramBindTokens
-                WHERE token = ?
-            """, (bind_token,))
-            token_row = cursor.fetchone()
-            if token_row:
-                token_id, user_id, business_id_from_token, expires_at, used = token_row
-            else:
-                token_row = None
-        else:
-            cursor.execute("""
-                SELECT id, user_id, expires_at, used
-                FROM TelegramBindTokens
-                WHERE token = ?
-            """, (bind_token,))
-            token_row = cursor.fetchone()
-            if token_row:
-                token_id, user_id, expires_at, used = token_row
-                business_id_from_token = None
-            else:
-                token_row = None
+        cursor.execute(
+            """
+            SELECT id, user_id, business_id, expires_at, used
+            FROM telegrambindtokens
+            WHERE token = %s
+            """,
+            (bind_token,),
+        )
+        token_row = cursor.fetchone()
+        if token_row:
+            token_id, user_id, business_id_from_token, expires_at, used = token_row
         
         if not token_row:
             db.close()
@@ -10160,7 +10946,10 @@ def verify_telegram_bind_token():
         
         # Проверяем срок действия
         from datetime import datetime
-        if datetime.fromisoformat(expires_at) < datetime.now():
+        expires_dt = expires_at
+        if isinstance(expires_at, str):
+            expires_dt = datetime.fromisoformat(expires_at)
+        if expires_dt < datetime.now(expires_dt.tzinfo) if getattr(expires_dt, "tzinfo", None) else datetime.now():
             db.close()
             return jsonify({"error": "Токен истек"}), 400
         
@@ -10170,7 +10959,7 @@ def verify_telegram_bind_token():
             return jsonify({"error": "Токен уже использован"}), 400
         
         # Проверяем, не привязан ли уже этот Telegram к другому аккаунту
-        cursor.execute("SELECT id FROM Users WHERE telegram_id = ? AND id != ?", (telegram_id, user_id))
+        cursor.execute("SELECT id FROM users WHERE telegram_id = %s AND id != %s", (telegram_id, user_id))
         existing_user = cursor.fetchone()
         if existing_user:
             db.close()
@@ -10178,25 +10967,21 @@ def verify_telegram_bind_token():
         
         # Привязываем Telegram к аккаунту
         cursor.execute("""
-            UPDATE Users 
-            SET telegram_id = ?, updated_at = ?
-            WHERE id = ?
-        """, (telegram_id, datetime.now().isoformat(), user_id))
+            UPDATE users
+            SET telegram_id = %s, updated_at = %s
+            WHERE id = %s
+        """, (telegram_id, datetime.now(), user_id))
         
         # Помечаем токен как использованный
-        # Если у токена был business_id, сохраняем его при обновлении
-        if has_business_id and business_id_from_token:
-            cursor.execute("""
-                UPDATE TelegramBindTokens
-                SET used = 1, business_id = ?
-                WHERE id = ?
-            """, (business_id_from_token, token_id))
-        else:
-            cursor.execute("""
-                UPDATE TelegramBindTokens
-                SET used = 1
-                WHERE id = ?
-            """, (token_id,))
+        cursor.execute(
+            """
+            UPDATE telegrambindtokens
+            SET used = 1,
+                business_id = COALESCE(%s, business_id)
+            WHERE id = %s
+            """,
+            (business_id_from_token, token_id),
+        )
         
         db.conn.commit()
         

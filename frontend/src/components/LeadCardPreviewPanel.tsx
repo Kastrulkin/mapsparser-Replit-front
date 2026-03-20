@@ -103,10 +103,13 @@ interface LeadCardPreviewPanelProps {
   loading?: boolean;
   error?: string | null;
   generateBusy?: boolean;
+  generateAuditPageBusy?: boolean;
+  generatedAuditPageUrl?: string | null;
   contactsBusy?: boolean;
   parseBusy?: boolean;
   parseAutoRefreshing?: boolean;
   onGenerateFromAudit?: () => void;
+  onGenerateAuditPage?: () => void;
   onSaveContacts?: (payload: { telegram_url: string; whatsapp_url: string; email: string }) => void;
   onRunLiveParse?: () => void;
   onRefreshPreview?: () => void;
@@ -165,10 +168,13 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
   loading,
   error,
   generateBusy = false,
+  generateAuditPageBusy = false,
+  generatedAuditPageUrl = null,
   contactsBusy = false,
   parseBusy = false,
   parseAutoRefreshing = false,
   onGenerateFromAudit,
+  onGenerateAuditPage,
   onSaveContacts,
   onRunLiveParse,
   onRefreshPreview,
@@ -244,6 +250,17 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
                 Сгенерировать письмо из аудита
               </Button>
             )}
+            {onGenerateAuditPage && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onGenerateAuditPage}
+                disabled={loading || generateAuditPageBusy}
+              >
+                {generateAuditPageBusy && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                Сгенерировать страницу аудита
+              </Button>
+            )}
             {onRunLiveParse && (
               <Button
                 variant="outline"
@@ -311,6 +328,15 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
         {!loading && error && (
           <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             Не удалось загрузить демо-аудит: {error}
+          </div>
+        )}
+
+        {!loading && !error && generatedAuditPageUrl && (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+            Страница аудита готова:{' '}
+            <a href={generatedAuditPageUrl} target="_blank" rel="noreferrer" className="underline font-medium">
+              {generatedAuditPageUrl}
+            </a>
           </div>
         )}
 

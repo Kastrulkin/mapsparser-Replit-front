@@ -82,3 +82,19 @@ def test_captcha_retry_delay_for_mass_batch_is_fixed_30_min_default():
     queue_dict = {"batch_id": "batch-1", "batch_kind": "network_sync"}
     delay = worker._captcha_retry_delay_for_task(queue_dict, attempt_no=4)
     assert int(delay.total_seconds()) == 30 * 60
+
+
+def test_apply_business_identity_fallback_populates_missing_identity():
+    card_data = {"rating": 4.5, "reviews_count": 10}
+
+    used = worker._apply_business_identity_fallback(
+        card_data,
+        business_name="Кебаб 24",
+        business_address="Санкт-Петербург, Липовая аллея, 14А",
+    )
+
+    assert used is True
+    assert card_data.get("title_or_name") == "Кебаб 24"
+    assert card_data.get("title") == "Кебаб 24"
+    assert card_data.get("address") == "Санкт-Петербург, Липовая аллея, 14А"
+    assert "identity_fallback:business_record" in (card_data.get("warnings") or [])

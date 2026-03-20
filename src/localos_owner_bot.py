@@ -15,6 +15,7 @@ TELEGRAM_BOT_TOKEN = (os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
 API_BASE_URL = (os.getenv("API_BASE_URL") or "http://app:8000").strip().rstrip("/")
 POLL_TIMEOUT_SEC = int(os.getenv("TELEGRAM_POLL_TIMEOUT_SEC", "25"))
 RETRY_SLEEP_SEC = float(os.getenv("TELEGRAM_RETRY_SLEEP_SEC", "2"))
+RETRY_SLEEP_MAX_SEC = float(os.getenv("TELEGRAM_RETRY_SLEEP_MAX_SEC", "60"))
 
 
 def _api_url(method: str) -> str:
@@ -107,6 +108,8 @@ def poll_loop() -> None:
 
     print("🤖 LocalOS owner bot started (long polling)")
     offset = None
+    backoff_sec = max(RETRY_SLEEP_SEC, 1.0)
+    session = requests.Session()
     while True:
         try:
             payload = {
@@ -115,12 +118,30 @@ def poll_loop() -> None:
             }
             if offset is not None:
                 payload["offset"] = offset
-            resp = requests.get(_api_url("getUpdates"), params=payload, timeout=POLL_TIMEOUT_SEC + 10)
+            resp = session.get(_api_url("getUpdates"), params=payload, timeout=POLL_TIMEOUT_SEC + 15)
             data = resp.json() if resp.content else {}
+            if resp.status_code == 429:
+                retry_after = 5
+                try:
+                    retry_after = int((data.get("parameters") or {}).get("retry_after") or 5)
+                except Exception:
+                    retry_after = 5
+                sleep_for = max(float(retry_after), backoff_sec)
+                print(f"⚠️ getUpdates rate limited (429), retry_after={retry_after}s, sleep={sleep_for:.1f}s")
+                time.sleep(min(sleep_for, RETRY_SLEEP_MAX_SEC))
+                backoff_sec = min(max(backoff_sec * 1.5, RETRY_SLEEP_SEC), RETRY_SLEEP_MAX_SEC)
+                continue
+            if resp.status_code >= 500:
+                print(f"⚠️ getUpdates HTTP {resp.status_code}, sleep={backoff_sec:.1f}s")
+                time.sleep(backoff_sec)
+                backoff_sec = min(max(backoff_sec * 1.5, RETRY_SLEEP_SEC), RETRY_SLEEP_MAX_SEC)
+                continue
             if not data.get("ok"):
                 print(f"⚠️ getUpdates not ok: {data}")
-                time.sleep(RETRY_SLEEP_SEC)
+                time.sleep(backoff_sec)
+                backoff_sec = min(max(backoff_sec * 1.3, RETRY_SLEEP_SEC), RETRY_SLEEP_MAX_SEC)
                 continue
+            backoff_sec = max(RETRY_SLEEP_SEC, 1.0)
             for update in data.get("result") or []:
                 update_id = update.get("update_id")
                 if isinstance(update_id, int):
@@ -130,7 +151,8 @@ def poll_loop() -> None:
                     handle_message(msg)
         except Exception as exc:
             print(f"⚠️ polling error: {exc}")
-            time.sleep(RETRY_SLEEP_SEC)
+            time.sleep(backoff_sec)
+            backoff_sec = min(max(backoff_sec * 1.5, RETRY_SLEEP_SEC), RETRY_SLEEP_MAX_SEC)
 
 
 if __name__ == "__main__":

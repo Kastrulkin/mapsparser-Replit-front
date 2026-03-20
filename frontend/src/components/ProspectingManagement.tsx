@@ -416,6 +416,8 @@ export const ProspectingManagement: React.FC = () => {
     const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null);
     const [previewError, setPreviewError] = useState<string | null>(null);
     const [previewGenerateBusy, setPreviewGenerateBusy] = useState(false);
+    const [previewAuditPageBusy, setPreviewAuditPageBusy] = useState(false);
+    const [previewAuditPageUrl, setPreviewAuditPageUrl] = useState<string | null>(null);
     const [previewContactsBusy, setPreviewContactsBusy] = useState(false);
     const [previewParseBusy, setPreviewParseBusy] = useState(false);
     const [previewAutoRefreshing, setPreviewAutoRefreshing] = useState(false);
@@ -1308,6 +1310,7 @@ export const ProspectingManagement: React.FC = () => {
         setPreviewLead(null);
         setPreviewSnapshot(null);
         setPreviewError(null);
+        setPreviewAuditPageUrl(null);
         setPreviewLoadingId(null);
     };
 
@@ -1346,6 +1349,7 @@ export const ProspectingManagement: React.FC = () => {
         setPreviewLead(lead);
         setPreviewSnapshot(null);
         setPreviewError(null);
+        setPreviewAuditPageUrl(null);
         await fetchLeadPreview(lead.id);
     };
 
@@ -1363,6 +1367,27 @@ export const ProspectingManagement: React.FC = () => {
             setPreviewError(error?.message || 'Не удалось сгенерировать письмо из аудита');
         } finally {
             setPreviewGenerateBusy(false);
+        }
+    };
+
+    const generateAuditPageFromLeadPreview = async () => {
+        if (!previewLead?.id) {
+            return;
+        }
+        setPreviewAuditPageBusy(true);
+        setPreviewError(null);
+        setPreviewAuditPageUrl(null);
+        try {
+            const response = await api.post(`/admin/prospecting/lead/${previewLead.id}/offer-page`);
+            const url = String(response.data?.public_url || '');
+            setPreviewAuditPageUrl(url || null);
+            if (url) {
+                window.open(url, '_blank', 'noopener,noreferrer');
+            }
+        } catch (error: any) {
+            setPreviewError(error?.message || 'Не удалось сгенерировать страницу аудита');
+        } finally {
+            setPreviewAuditPageBusy(false);
         }
     };
 
@@ -1583,10 +1608,13 @@ export const ProspectingManagement: React.FC = () => {
                     loading={previewLoadingId === previewLead.id}
                     error={previewError}
                     generateBusy={previewGenerateBusy}
+                    generateAuditPageBusy={previewAuditPageBusy}
+                    generatedAuditPageUrl={previewAuditPageUrl}
                     contactsBusy={previewContactsBusy}
                     parseBusy={previewParseBusy}
                     parseAutoRefreshing={previewAutoRefreshing}
                     onGenerateFromAudit={generateDraftFromLeadPreview}
+                    onGenerateAuditPage={generateAuditPageFromLeadPreview}
                     onSaveContacts={saveLeadContactsFromPreview}
                     onRunLiveParse={runLiveParseFromPreview}
                     onRefreshPreview={refreshPreviewStatus}

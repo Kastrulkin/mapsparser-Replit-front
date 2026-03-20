@@ -250,6 +250,80 @@ def _extract_services_from_products_payload(products_payload: Any, *, limit: int
     return rows[: max(1, limit)]
 
 
+def _extract_lead_import_payload(lead: Dict[str, Any]) -> Dict[str, Any]:
+    payload = _safe_json(lead.get("search_payload_json")) or {}
+    if not isinstance(payload, dict):
+        return {
+            "logo_url": None,
+            "photos": [],
+            "services_preview": [],
+            "reviews_preview": [],
+            "news_preview": [],
+            "reviews_count": None,
+            "social_links": [],
+        }
+    logo_url = str(payload.get("logo_url") or "").strip() or None
+    photos_raw = payload.get("photos")
+    photos: List[str] = []
+    if isinstance(photos_raw, list):
+        for item in photos_raw:
+            value = str(item or "").strip()
+            if value:
+                photos.append(value)
+    services_preview: List[Dict[str, Any]] = []
+    menu_preview = payload.get("menu_preview")
+    if isinstance(menu_preview, list):
+        for item in menu_preview[:8]:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("title") or item.get("name") or "").strip()
+            if not name:
+                continue
+            description = str(item.get("description") or "").strip() or None
+            price = str(item.get("price") or "").strip()
+            category = str(item.get("category") or "").strip()
+            note_parts = []
+            if price:
+                note_parts.append(f"Цена: {price}")
+            if category:
+                note_parts.append(f"Источник: {category}")
+            services_preview.append(
+                {
+                    "current_name": name,
+                    "suggested_name": name,
+                    "note": " • ".join(note_parts) if note_parts else "Импорт Apify",
+                    "description": description,
+                }
+            )
+    reviews_preview: List[Dict[str, Any]] = []
+    imported_reviews = payload.get("reviews_preview")
+    if isinstance(imported_reviews, list):
+        for item in imported_reviews[:6]:
+            if not isinstance(item, dict):
+                continue
+            text = str(item.get("review") or item.get("text") or "").strip()
+            if not text:
+                continue
+            rating = item.get("rating")
+            suffix = f" (оценка: {rating})" if rating not in (None, "") else ""
+            reviews_preview.append(
+                {
+                    "review": f"{text}{suffix}",
+                    "reply_preview": str(item.get("business_comment") or item.get("response_text") or "Ответа пока нет").strip(),
+                }
+            )
+    social_links = payload.get("social_links") if isinstance(payload.get("social_links"), list) else []
+    return {
+        "logo_url": logo_url,
+        "photos": photos,
+        "services_preview": services_preview,
+        "reviews_preview": reviews_preview,
+        "news_preview": [],
+        "reviews_count": _extract_numeric(payload.get("reviews_count")),
+        "social_links": social_links,
+    }
+
+
 def _resolve_lead_business_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
     """
     Try to resolve an existing LocalOS business for a lead and enrich preview metrics.
@@ -763,11 +837,16 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
     business_type = str(lead.get("category") or lead.get("business_type") or "").strip() or "Локальный бизнес"
     city = str(lead.get("city") or "").strip()
     snapshot = _resolve_lead_business_snapshot(lead)
+    lead_import_payload = _extract_lead_import_payload(lead)
     business = snapshot.get("business") or {}
 
     rating_raw = snapshot.get("rating") if snapshot.get("rating") is not None else lead.get("rating")
     rating = float(rating_raw) if rating_raw is not None else None
-    reviews_count = int(snapshot.get("reviews_count") if snapshot.get("reviews_count") is not None else (lead.get("reviews_count") or 0))
+    reviews_count = int(
+        snapshot.get("reviews_count")
+        if snapshot.get("reviews_count") is not None
+        else (lead_import_payload.get("reviews_count") or lead.get("reviews_count") or 0)
+    )
     parsed_contacts = snapshot.get("parsed_contacts") or {}
     has_website = bool(str(lead.get("website") or parsed_contacts.get("website") or business.get("website") or "").strip())
     has_phone = bool(str(lead.get("phone") or parsed_contacts.get("phone") or business.get("phone") or "").strip())
@@ -777,12 +856,15 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         or str(lead.get("whatsapp_url") or parsed_contacts.get("whatsapp_url") or "").strip()
         or _safe_json(lead.get("messenger_links_json"))
         or parsed_contacts.get("social_links")
+        or lead_import_payload.get("social_links")
     )
 
-    services_count = int(snapshot.get("services_count") or 0)
+    imported_services_preview = lead_import_payload.get("services_preview") if isinstance(lead_import_payload.get("services_preview"), list) else []
+    services_count = int(snapshot.get("services_count") or len(imported_services_preview) or 0)
     priced_services_count = int(snapshot.get("priced_services_count") or 0)
     unanswered_reviews_count = int(snapshot.get("unanswered_reviews_count") or 0)
-    photos_count = int(snapshot.get("photos_count") or 0)
+    imported_photos = lead_import_payload.get("photos") if isinstance(lead_import_payload.get("photos"), list) else []
+    photos_count = int(snapshot.get("photos_count") or len(imported_photos) or 0)
     news_count = int(snapshot.get("news_count") or 0)
     has_recent_activity = bool(snapshot.get("has_recent_activity"))
 
@@ -925,8 +1007,8 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             "description": "Проверьте контакты, сайт и базовое наполнение карточки — это быстрые улучшения с ощутимым эффектом.",
         },
     ]
-    services_preview = snapshot.get("services_preview") or _lead_demo_services_preview(business_type)
-    reviews_preview = snapshot.get("reviews_preview") or _lead_demo_reviews_preview(lead_name, business_type, rating, reviews_count)
+    services_preview = snapshot.get("services_preview") or imported_services_preview or _lead_demo_services_preview(business_type)
+    reviews_preview = snapshot.get("reviews_preview") or (lead_import_payload.get("reviews_preview") if isinstance(lead_import_payload.get("reviews_preview"), list) else None) or _lead_demo_reviews_preview(lead_name, business_type, rating, reviews_count)
     news_preview = snapshot.get("news_preview") or _lead_demo_news_preview(business_type)
     last_parse_status = snapshot.get("last_parse_status") or "lead_preview"
     no_new_services_found = bool(
@@ -982,6 +1064,8 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             "has_messenger": has_messenger,
             "source": lead.get("source"),
             "source_url": snapshot.get("source_url") or lead.get("source_url"),
+            "logo_url": lead_import_payload.get("logo_url"),
+            "photo_urls": imported_photos[:8],
         },
     }
 

@@ -120,7 +120,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 };
 
 export const AdminPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'businesses' | 'agents' | 'tokens' | 'growth' | 'prompts' | 'proxies' | 'parsing' | 'prospecting'>('businesses');
+  const [activeTab, setActiveTab] = useState<'businesses' | 'leads' | 'agents' | 'tokens' | 'growth' | 'prompts' | 'proxies' | 'parsing' | 'prospecting'>('businesses');
   const [users, setUsers] = useState<UserWithBusinesses[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedNetworks, setExpandedNetworks] = useState<Set<string>>(new Set());
@@ -457,6 +457,7 @@ export const AdminPage: React.FC = () => {
 
   const tabs = [
     { id: 'businesses' as const, label: 'Пользователи и бизнесы', icon: User },
+    { id: 'leads' as const, label: 'Лиды', icon: Building2 },
     { id: 'agents' as const, label: 'ИИ агенты', icon: Bot },
     { id: 'tokens' as const, label: 'Статистика кредитов', icon: BarChart3 },
     { id: 'growth' as const, label: 'Схема роста', icon: TrendingUp },
@@ -523,41 +524,67 @@ export const AdminPage: React.FC = () => {
           <ProspectingManagement />
         ) : (
           <>
+            {(() => {
+              const isLeadsTab = activeTab === 'leads';
+              const usersToRender = isLeadsTab
+                ? users.filter((user) => {
+                    const directBusinesses = user.direct_businesses || [];
+                    const networkBusinesses = (user.networks || []).flatMap((network) => network.businesses || []);
+                    const all = [...directBusinesses, ...networkBusinesses];
+                    return all.some((business) => isLeadBusiness(business));
+                  })
+                : users;
+              return (
+                <>
             {/* Action Bar */}
             <div className="mb-6 flex items-center justify-between">
               <div className="text-sm text-muted-foreground">
-                Всего пользователей: <span className="font-semibold text-foreground">{users.length}</span>
+                {isLeadsTab ? (
+                  <>
+                    Пользователи с лидами: <span className="font-semibold text-foreground">{usersToRender.length}</span>
+                  </>
+                ) : (
+                  <>
+                    Всего пользователей: <span className="font-semibold text-foreground">{users.length}</span>
+                  </>
+                )}
               </div>
-              <Button
-                onClick={() => setShowCreateModal(true)}
-                className="shadow-md hover:shadow-lg transition-shadow duration-200"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Создать аккаунт
-              </Button>
+              {!isLeadsTab && (
+                <Button
+                  onClick={() => setShowCreateModal(true)}
+                  className="shadow-md hover:shadow-lg transition-shadow duration-200"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Создать аккаунт
+                </Button>
+              )}
             </div>
 
             {/* Modern Card-based Layout */}
             <div className="space-y-6">
-              {users.length === 0 ? (
+              {usersToRender.length === 0 ? (
                 <Card className="border-dashed">
                   <CardContent className="flex flex-col items-center justify-center py-16">
                     <div className="p-4 rounded-full bg-muted mb-4">
                       <User className="w-8 h-8 text-muted-foreground" />
                     </div>
-                    <p className="text-muted-foreground font-medium">Пользователи не найдены</p>
-                    <Button
-                      onClick={() => setShowCreateModal(true)}
-                      variant="outline"
-                      className="mt-4"
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      Создать первого пользователя
-                    </Button>
+                    <p className="text-muted-foreground font-medium">
+                      {isLeadsTab ? 'Лиды не найдены' : 'Пользователи не найдены'}
+                    </p>
+                    {!isLeadsTab && (
+                      <Button
+                        onClick={() => setShowCreateModal(true)}
+                        variant="outline"
+                        className="mt-4"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Создать первого пользователя
+                      </Button>
+                    )}
                   </CardContent>
                 </Card>
               ) : (
-                users.map((user) => {
+                usersToRender.map((user) => {
                   const allBusinesses: BusinessListItem[] = [];
 
                   // Добавляем прямые бизнесы (включая заблокированные)
@@ -592,6 +619,10 @@ export const AdminPage: React.FC = () => {
 
                   const regularBusinesses = allBusinesses.filter((item) => !isLeadBusiness(item.business));
                   const leadBusinesses = allBusinesses.filter((item) => isLeadBusiness(item.business));
+                  const visibleBusinesses = isLeadsTab ? leadBusinesses : regularBusinesses;
+                  if (visibleBusinesses.length === 0) {
+                    return null;
+                  }
 
                   const renderBusinessItems = (items: BusinessListItem[]) => items.map((item, index) => (
                     <div
@@ -722,7 +753,7 @@ export const AdminPage: React.FC = () => {
                           </div>
                           <div className="flex items-center gap-2">
                             <div className="text-xs text-muted-foreground">
-                              {allBusinesses.length} {allBusinesses.length === 1 ? 'бизнес' : 'бизнесов'}
+                              {visibleBusinesses.length} {visibleBusinesses.length === 1 ? 'бизнес' : 'бизнесов'}
                             </div>
                             <div className="flex items-center gap-1 opacity-100">
                               <Button
@@ -759,20 +790,7 @@ export const AdminPage: React.FC = () => {
                       </CardHeader>
                       <CardContent className="pt-6">
                         <div className="space-y-4">
-                          {regularBusinesses.length > 0 && renderBusinessItems(regularBusinesses)}
-
-                          {leadBusinesses.length > 0 && (
-                            <div className="space-y-3 pt-2">
-                              <div className="flex items-center gap-2 px-1">
-                                <div className="h-px flex-1 bg-border/70" />
-                                <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-amber-700">
-                                  Лиды
-                                </span>
-                                <div className="h-px flex-1 bg-border/70" />
-                              </div>
-                              {renderBusinessItems(leadBusinesses)}
-                            </div>
-                          )}
+                          {renderBusinessItems(visibleBusinesses)}
                         </div>
                       </CardContent>
                     </Card>
@@ -780,6 +798,9 @@ export const AdminPage: React.FC = () => {
                 })
               )}
             </div>
+                </>
+              );
+            })()}
           </>
         )}
       </div>

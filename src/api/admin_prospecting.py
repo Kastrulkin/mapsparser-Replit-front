@@ -6,6 +6,7 @@ import csv
 import io
 import threading
 import uuid
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -723,13 +724,86 @@ def _normalize_contact_url(raw: str | None) -> str | None:
     return value
 
 
+def _extract_first_phone_from_raw(raw_phone: Any) -> str | None:
+    if raw_phone is None:
+        return None
+    if isinstance(raw_phone, str):
+        value = raw_phone.strip()
+        return value or None
+    if isinstance(raw_phone, list):
+        for item in raw_phone:
+            if isinstance(item, str) and item.strip():
+                return item.strip()
+            if isinstance(item, dict):
+                for key in ("phone", "number", "formatted", "value"):
+                    candidate = str(item.get(key) or "").strip()
+                    if candidate:
+                        return candidate
+    if isinstance(raw_phone, dict):
+        for key in ("phone", "number", "formatted", "value"):
+            candidate = str(raw_phone.get(key) or "").strip()
+            if candidate:
+                return candidate
+    return None
+
+
+def _extract_contact_from_social_links(raw_links: Any) -> tuple[str | None, str | None]:
+    telegram_url = None
+    whatsapp_url = None
+    if not isinstance(raw_links, list):
+        return telegram_url, whatsapp_url
+    for item in raw_links:
+        candidate = ""
+        if isinstance(item, str):
+            candidate = item.strip()
+        elif isinstance(item, dict):
+            candidate = str(item.get("url") or item.get("href") or item.get("link") or "").strip()
+        if not candidate:
+            continue
+        low = candidate.lower()
+        if not telegram_url and ("t.me/" in low or "telegram.me/" in low):
+            telegram_url = _normalize_contact_url(candidate)
+        if not whatsapp_url and ("wa.me/" in low or "whatsapp.com/" in low or "api.whatsapp.com/" in low):
+            whatsapp_url = _normalize_contact_url(candidate)
+    return telegram_url, whatsapp_url
+
+
+def _extract_apify_menu_preview(raw_menu: Any, limit: int = 20) -> list[dict[str, Any]]:
+    if not isinstance(raw_menu, dict):
+        return []
+    raw_items = raw_menu.get("items")
+    if not isinstance(raw_items, list):
+        return []
+    result: list[dict[str, Any]] = []
+    for item in raw_items[: max(1, limit)]:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or item.get("name") or "").strip()
+        if not title:
+            continue
+        result.append(
+            {
+                "title": title,
+                "description": str(item.get("description") or "").strip() or None,
+                "price": str(item.get("price") or "").strip() or None,
+                "currency": str(item.get("currency") or "").strip() or None,
+                "category": str(item.get("category") or "").strip() or None,
+                "photo_url": str(item.get("photoUrl") or "").strip() or None,
+            }
+        )
+    return result
+
+
 def _normalize_partnership_file_row(
     row: dict[str, Any],
     *,
     default_city: str | None,
     default_category: str | None,
 ) -> tuple[dict[str, Any] | None, str | None]:
-    name = _pick_first_value(row, ["name", "company", "company_name", "название", "компания"]) or "Новый партнёр"
+    name = _pick_first_value(
+        row,
+        ["name", "title", "shortTitle", "company", "company_name", "название", "компания"],
+    ) or "Новый партнёр"
     source_url = _pick_first_value(
         row,
         [
@@ -748,20 +822,69 @@ def _normalize_partnership_file_row(
     if not source_url:
         return None, "missing source_url/link"
 
-    address = _pick_first_value(row, ["address", "адрес", "location", "локация"])
+    address = _pick_first_value(row, ["address", "additionalAddress", "адрес", "location", "локация"])
     city = _pick_first_value(row, ["city", "город"]) or (default_city or None)
-    category = _pick_first_value(row, ["category", "категория"]) or (default_category or None)
-    phone = _pick_first_value(row, ["phone", "телефон"])
+    category = _pick_first_value(row, ["category", "категория"]) or (
+        row.get("categories")[0] if isinstance(row.get("categories"), list) and row.get("categories") else None
+    ) or (default_category or None)
+    phone = _pick_first_value(row, ["phone", "телефон"]) or _extract_first_phone_from_raw(row.get("phones"))
     email = _pick_first_value(row, ["email", "почта", "e-mail"])
-    website = _pick_first_value(row, ["website", "site", "сайт"])
+    website = _pick_first_value(row, ["website", "websiteUrl", "site", "сайт"])
     telegram_url = _normalize_contact_url(
         _pick_first_value(row, ["telegram_url", "telegram", "tg", "tg_url", "телеграм"])
     )
     whatsapp_url = _normalize_contact_url(
         _pick_first_value(row, ["whatsapp_url", "whatsapp", "wa", "wa_url", "ватсап"])
     )
+    social_telegram, social_whatsapp = _extract_contact_from_social_links(row.get("socialLinks"))
+    if not telegram_url:
+        telegram_url = social_telegram
+    if not whatsapp_url:
+        whatsapp_url = social_whatsapp
+
     rating = _safe_float(_pick_first_value(row, ["rating", "рейтинг"]))
-    reviews_count = _safe_int(_pick_first_value(row, ["reviews_count", "reviews", "отзывов", "количество_отзывов"]))
+    reviews_count = _safe_int(
+        _pick_first_value(
+            row,
+            ["reviews_count", "reviewCount", "ratingsCount", "reviews", "отзывов", "количество_отзывов"],
+        )
+    )
+
+    logo_url = _pick_first_value(row, ["logo_url", "logoUrl", "logo", "avatar"])
+    photos_raw = row.get("photos")
+    photos: list[str] = []
+    if isinstance(photos_raw, list):
+        for item in photos_raw:
+            if isinstance(item, str) and item.strip():
+                photos.append(item.strip())
+            elif isinstance(item, dict):
+                photo_url = str(item.get("url") or item.get("src") or item.get("photoUrl") or "").strip()
+                if photo_url:
+                    photos.append(photo_url)
+    if not photos:
+        photo_template = str(row.get("photoUrlTemplate") or "").strip()
+        if photo_template:
+            photos.append(photo_template.replace("{size}", "XXL"))
+
+    menu_preview = _extract_apify_menu_preview(row.get("menu"))
+    reviews_raw = row.get("reviews")
+    reviews_preview: list[dict[str, Any]] = []
+    if isinstance(reviews_raw, list):
+        for item in reviews_raw[:20]:
+            if not isinstance(item, dict):
+                continue
+            review_text = str(item.get("text") or "").strip()
+            if not review_text:
+                continue
+            reviews_preview.append(
+                {
+                    "review": review_text,
+                    "rating": item.get("rating"),
+                    "author": item.get("authorName"),
+                    "business_comment": item.get("businessComment"),
+                    "date": item.get("date"),
+                }
+            )
 
     normalized = {
         "name": name,
@@ -776,6 +899,16 @@ def _normalize_partnership_file_row(
         "whatsapp_url": whatsapp_url,
         "rating": rating,
         "reviews_count": reviews_count,
+        "search_payload": {
+            "import_format": "apify_yandex_json" if ("logoUrl" in row or "menu" in row or "reviewCount" in row) else "file_row",
+            "logo_url": logo_url,
+            "photos": photos[:20],
+            "menu_preview": menu_preview,
+            "reviews_preview": reviews_preview,
+            "social_links": row.get("socialLinks") if isinstance(row.get("socialLinks"), list) else [],
+            "source_row_url": row.get("url"),
+            "source_business_id": row.get("businessId"),
+        },
     }
     return normalized, None
 
@@ -3234,7 +3367,11 @@ def partnership_import_file():
                     source_kind="file_import",
                     source_provider="localos_file_import",
                     external_source_id=_extract_yandex_org_id_from_url(normalized["source_url"]) or None,
-                    search_payload={"import_format": file_format, "filename": filename or None},
+                    search_payload={
+                        "import_format": file_format,
+                        "filename": filename or None,
+                        **(normalized.get("search_payload") if isinstance(normalized.get("search_payload"), dict) else {}),
+                    },
                 )
                 if not created:
                     skipped_count += 1
@@ -5209,6 +5346,197 @@ def _ensure_partnership_artifacts_table(conn) -> None:
     )
 
 
+_RU_LAT_MAP = {
+    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "e", "ж": "zh",
+    "з": "z", "и": "i", "й": "y", "к": "k", "л": "l", "м": "m", "н": "n", "о": "o",
+    "п": "p", "р": "r", "с": "s", "т": "t", "у": "u", "ф": "f", "х": "h", "ц": "ts",
+    "ч": "ch", "ш": "sh", "щ": "sch", "ъ": "", "ы": "y", "ь": "", "э": "e", "ю": "yu", "я": "ya",
+}
+
+
+def _slugify_company_name(name: str) -> str:
+    source = str(name or "").strip().lower()
+    if not source:
+        return f"lead-{uuid.uuid4().hex[:8]}"
+    converted = []
+    for ch in source:
+        if "a" <= ch <= "z" or "0" <= ch <= "9":
+            converted.append(ch)
+            continue
+        if ch in _RU_LAT_MAP:
+            converted.append(_RU_LAT_MAP[ch])
+            continue
+        if ch in {" ", "-", "_", ".", ",", "/", "|", ":"}:
+            converted.append("-")
+            continue
+    slug = re.sub(r"-{2,}", "-", "".join(converted)).strip("-")
+    return slug or f"lead-{uuid.uuid4().hex[:8]}"
+
+
+def _ensure_partnership_public_offers_table(conn) -> None:
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS partnershippublicoffers (
+            lead_id TEXT PRIMARY KEY REFERENCES prospectingleads(id) ON DELETE CASCADE,
+            business_id UUID NOT NULL,
+            slug TEXT NOT NULL UNIQUE,
+            page_json JSONB NOT NULL,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_by UUID,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_partnershippublicoffers_business_id
+        ON partnershippublicoffers (business_id)
+        """
+    )
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_partnershippublicoffers_is_active
+        ON partnershippublicoffers (is_active)
+        """
+    )
+
+
+def _ensure_admin_prospecting_public_offers_table(conn) -> None:
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS adminprospectingleadpublicoffers (
+            lead_id TEXT PRIMARY KEY REFERENCES prospectingleads(id) ON DELETE CASCADE,
+            slug TEXT NOT NULL UNIQUE,
+            page_json JSONB NOT NULL,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_by UUID,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_adminprospectingleadpublicoffers_is_active
+        ON adminprospectingleadpublicoffers (is_active)
+        """
+    )
+
+
+def _build_admin_lead_offer_payload(
+    *,
+    lead: dict[str, Any],
+    preview: dict[str, Any],
+) -> dict[str, Any]:
+    lead_name = str(lead.get("name") or "Компания").strip() or "Компания"
+    preview_meta = preview.get("preview_meta") if isinstance(preview, dict) else {}
+    if not isinstance(preview_meta, dict):
+        preview_meta = {}
+    current_state = preview.get("current_state") if isinstance(preview, dict) else {}
+    if not isinstance(current_state, dict):
+        current_state = {}
+    return {
+        "lead_id": str(lead.get("id") or ""),
+        "name": lead_name,
+        "category": lead.get("category"),
+        "city": lead.get("city"),
+        "address": lead.get("address"),
+        "source_url": lead.get("source_url"),
+        "logo_url": preview_meta.get("logo_url"),
+        "photo_urls": preview_meta.get("photo_urls") if isinstance(preview_meta.get("photo_urls"), list) else [],
+        "audit": {
+            "summary_score": preview.get("summary_score"),
+            "health_label": preview.get("health_label"),
+            "summary_text": preview.get("summary_text"),
+            "findings": preview.get("findings") if isinstance(preview.get("findings"), list) else [],
+            "recommended_actions": preview.get("recommended_actions") if isinstance(preview.get("recommended_actions"), list) else [],
+            "services_preview": preview.get("services_preview") if isinstance(preview.get("services_preview"), list) else [],
+            "rating": current_state.get("rating"),
+            "reviews_count": current_state.get("reviews_count"),
+        },
+        "cta": {
+            "telegram_url": lead.get("telegram_url"),
+            "whatsapp_url": lead.get("whatsapp_url"),
+            "email": lead.get("email"),
+            "website": lead.get("website"),
+        },
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def _build_partnership_offer_payload(
+    *,
+    lead: dict[str, Any],
+    audit_json: dict[str, Any] | None,
+    match_json: dict[str, Any] | None,
+    offer_draft_json: dict[str, Any] | None,
+) -> dict[str, Any]:
+    lead_name = str(lead.get("name") or "Партнёр").strip() or "Партнёр"
+    source_url = str(lead.get("source_url") or "").strip()
+    source_payload = lead.get("search_payload_json")
+    if not isinstance(source_payload, dict):
+        source_payload = {}
+    logo_url = str(source_payload.get("logo_url") or "").strip() or None
+    photos = source_payload.get("photos")
+    photo_urls: list[str] = []
+    if isinstance(photos, list):
+        for item in photos:
+            value = str(item or "").strip()
+            if value:
+                photo_urls.append(value)
+    cta = {
+        "telegram_url": str(lead.get("telegram_url") or "").strip() or None,
+        "whatsapp_url": str(lead.get("whatsapp_url") or "").strip() or None,
+        "email": str(lead.get("email") or "").strip() or None,
+        "website": str(lead.get("website") or "").strip() or None,
+    }
+    audit = audit_json if isinstance(audit_json, dict) else {}
+    match = match_json if isinstance(match_json, dict) else {}
+    draft = offer_draft_json if isinstance(offer_draft_json, dict) else {}
+    message = (
+        str(draft.get("approved_text") or "").strip()
+        or str(draft.get("edited_text") or "").strip()
+        or str(draft.get("generated_text") or "").strip()
+    )
+
+    return {
+        "lead_id": str(lead.get("id") or ""),
+        "name": lead_name,
+        "category": lead.get("category"),
+        "city": lead.get("city"),
+        "address": lead.get("address"),
+        "source_url": source_url,
+        "logo_url": logo_url,
+        "photo_urls": photo_urls[:8],
+        "audit": {
+            "summary_score": audit.get("summary_score"),
+            "health_label": audit.get("health_label"),
+            "summary_text": audit.get("summary_text"),
+            "findings": audit.get("findings") if isinstance(audit.get("findings"), list) else [],
+            "recommended_actions": audit.get("recommended_actions") if isinstance(audit.get("recommended_actions"), list) else [],
+            "services_preview": audit.get("services_preview") if isinstance(audit.get("services_preview"), list) else [],
+        },
+        "match": {
+            "match_score": match.get("match_score"),
+            "score_explanation": match.get("score_explanation"),
+            "offer_angles": match.get("offer_angles") if isinstance(match.get("offer_angles"), list) else [],
+        },
+        "message": message or None,
+        "cta": cta,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def _make_public_offer_url(slug: str) -> str:
+    frontend_base = str(os.environ.get("FRONTEND_BASE_URL") or "").strip().rstrip("/")
+    if frontend_base:
+        return f"{frontend_base}/{slug}"
+    return f"/{slug}"
+
+
 def _load_partnership_lead(cur, *, lead_id: str, business_id: str):
     cur.execute(
         """
@@ -5707,6 +6035,150 @@ def partnership_match_lead(lead_id):
         return jsonify({"success": True, "result": match_result})
     except Exception as e:
         print(f"Error partnership match lead: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/leads/<string:lead_id>/offer-page", methods=["POST"])
+def partnership_generate_offer_page(lead_id):
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            _ensure_partnership_artifacts_table(conn)
+            _ensure_partnership_public_offers_table(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+            lead = _load_partnership_lead(cur, lead_id=lead_id, business_id=business_id)
+            if not lead:
+                return jsonify({"error": "Lead not found"}), 404
+
+            cur.execute(
+                """
+                SELECT audit_json, match_json, offer_draft_json
+                FROM partnershipleadartifacts
+                WHERE lead_id = %s
+                """,
+                (lead_id,),
+            )
+            artifact = cur.fetchone()
+            artifact_dict = dict(artifact) if artifact and hasattr(artifact, "keys") else {}
+            audit_json = artifact_dict.get("audit_json") if isinstance(artifact_dict.get("audit_json"), dict) else {}
+            match_json = artifact_dict.get("match_json") if isinstance(artifact_dict.get("match_json"), dict) else {}
+            offer_draft_json = artifact_dict.get("offer_draft_json") if isinstance(artifact_dict.get("offer_draft_json"), dict) else {}
+
+            if not audit_json:
+                audit_json = build_lead_card_preview_snapshot(lead)
+
+            base_slug = _slugify_company_name(str(lead.get("name") or "partner"))
+            slug = base_slug
+            suffix = 1
+            while True:
+                cur.execute(
+                    """
+                    SELECT lead_id
+                    FROM partnershippublicoffers
+                    WHERE slug = %s
+                    LIMIT 1
+                    """,
+                    (slug,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    break
+                existing_lead_id = row.get("lead_id") if hasattr(row, "get") else (row[0] if row else None)
+                if str(existing_lead_id or "") == str(lead_id):
+                    break
+                suffix += 1
+                slug = f"{base_slug}-{suffix}"
+
+            page_json = _build_partnership_offer_payload(
+                lead=lead,
+                audit_json=audit_json,
+                match_json=match_json,
+                offer_draft_json=offer_draft_json,
+            )
+            cur.execute(
+                """
+                INSERT INTO partnershippublicoffers (
+                    lead_id, business_id, slug, page_json, is_active, created_by, created_at, updated_at
+                ) VALUES (%s, %s, %s, %s, TRUE, %s, NOW(), NOW())
+                ON CONFLICT (lead_id) DO UPDATE
+                SET slug = EXCLUDED.slug,
+                    page_json = EXCLUDED.page_json,
+                    is_active = TRUE,
+                    updated_at = NOW()
+                """,
+                (lead_id, business_id, slug, Json(page_json), user_data.get("user_id")),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        return jsonify(
+            {
+                "success": True,
+                "slug": slug,
+                "public_url": _make_public_offer_url(slug),
+                "page": page_json,
+            }
+        )
+    except Exception as e:
+        print(f"Error partnership generate offer page: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/public/offer/<string:slug>", methods=["GET"])
+def partnership_public_offer_page(slug):
+    try:
+        normalized_slug = _slugify_company_name(slug)
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_public_offers_table(conn)
+            _ensure_admin_prospecting_public_offers_table(conn)
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT slug, page_json, updated_at
+                FROM partnershippublicoffers
+                WHERE slug = %s
+                  AND is_active = TRUE
+                LIMIT 1
+                """,
+                (normalized_slug,),
+            )
+            row = cur.fetchone()
+            if not row:
+                cur.execute(
+                    """
+                    SELECT slug, page_json, updated_at
+                    FROM adminprospectingleadpublicoffers
+                    WHERE slug = %s
+                      AND is_active = TRUE
+                    LIMIT 1
+                    """,
+                    (normalized_slug,),
+                )
+                row = cur.fetchone()
+            if not row:
+                return jsonify({"error": "Offer page not found"}), 404
+            page_json = row.get("page_json") if hasattr(row, "get") else (row[1] if isinstance(row, (list, tuple)) and len(row) > 1 else {})
+            updated_at = row.get("updated_at") if hasattr(row, "get") else (row[2] if isinstance(row, (list, tuple)) and len(row) > 2 else None)
+            payload = page_json if isinstance(page_json, dict) else {}
+            payload["slug"] = normalized_slug
+            payload["public_url"] = _make_public_offer_url(normalized_slug)
+            payload["updated_at"] = updated_at.isoformat() if hasattr(updated_at, "isoformat") else payload.get("updated_at")
+            return jsonify({"success": True, "page": payload})
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"Error loading partnership public offer page: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -7755,6 +8227,83 @@ def preview_lead_card(lead_id):
         return jsonify({"success": True, "lead": display_lead, "preview": preview})
     except Exception as e:
         print(f"Error building outreach lead preview: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/lead/<string:lead_id>/offer-page", methods=["POST"])
+def generate_admin_prospecting_offer_page(lead_id):
+    """Create/update public audit page for an outreach lead. Superadmin only."""
+    user_data, error = _require_superadmin()
+    if error:
+        return error
+    try:
+        with DatabaseManager() as db:
+            lead = db.get_lead_by_id(lead_id)
+        if not lead:
+            return jsonify({"error": "Lead not found"}), 404
+
+        lead = _sync_lead_business_link_from_parse_history(dict(lead))
+        lead = _sync_lead_contacts_from_parsed_data(dict(lead))
+        display_lead = _normalize_lead_for_display(dict(lead))
+        if not display_lead:
+            return jsonify({"error": "Lead is not available for public page"}), 404
+
+        preview = build_lead_card_preview_snapshot(display_lead)
+        page_json = _build_admin_lead_offer_payload(lead=display_lead, preview=preview)
+
+        conn = get_db_connection()
+        try:
+            _ensure_admin_prospecting_public_offers_table(conn)
+            cur = conn.cursor()
+            base_slug = _slugify_company_name(str(display_lead.get("name") or "lead"))
+            slug = base_slug
+            suffix = 1
+            while True:
+                cur.execute(
+                    """
+                    SELECT lead_id
+                    FROM adminprospectingleadpublicoffers
+                    WHERE slug = %s
+                    LIMIT 1
+                    """,
+                    (slug,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    break
+                existing_lead_id = row.get("lead_id") if hasattr(row, "get") else (row[0] if row else None)
+                if str(existing_lead_id or "") == str(lead_id):
+                    break
+                suffix += 1
+                slug = f"{base_slug}-{suffix}"
+
+            cur.execute(
+                """
+                INSERT INTO adminprospectingleadpublicoffers (
+                    lead_id, slug, page_json, is_active, created_by, created_at, updated_at
+                ) VALUES (%s, %s, %s, TRUE, %s, NOW(), NOW())
+                ON CONFLICT (lead_id) DO UPDATE
+                SET slug = EXCLUDED.slug,
+                    page_json = EXCLUDED.page_json,
+                    is_active = TRUE,
+                    updated_at = NOW()
+                """,
+                (lead_id, slug, Json(page_json), user_data.get("user_id")),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        return jsonify(
+            {
+                "success": True,
+                "slug": slug,
+                "public_url": _make_public_offer_url(slug),
+                "page": page_json,
+            }
+        )
+    except Exception as e:
+        print(f"Error generating admin prospecting offer page: {e}")
         return jsonify({"error": str(e)}), 500
 
 
