@@ -108,3 +108,14 @@ Legacy details remain in git history and must not be used as default runbook.
   3) evaluate against DoD
   4) iterate until success criteria are met or a hard blocker is found
 - Hard blocker policy: stop only for destructive/irreversible actions, risky DB schema/data operations, or missing required access.
+
+## 12. Curated Subagent Profiles
+- Curated third-party profiles are stored in `agents/subagents/`.
+- Source snapshot used: `Kastrulkin/awesome-codex-subagents`.
+- Current curated groups:
+  - `agents/subagents/core-dev/` (frontend/fullstack/ui/qa/refactoring)
+  - `agents/subagents/data-ai/` (postgres/prompt/seo/payments)
+  - `agents/subagents/business/` (product/project/sales/ux)
+  - `agents/subagents/meta/` (installer/coordinator/performance/workflow)
+- Usage guidance is documented in `agents/subagents/README.md`.
+- If adding new upstream profiles, prefer curation over bulk import and document rationale in the README.
