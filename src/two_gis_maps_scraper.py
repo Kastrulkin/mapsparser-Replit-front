@@ -1,4 +1,5 @@
 import json
+import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -410,8 +411,27 @@ def _looks_like_captcha_text(value: str) -> bool:
     return False
 
 
-def _parse_2gis_http_fallback(urls: List[str], timeout_sec: int) -> Dict[str, Any]:
-    timeout = max(20, int(timeout_sec or 120))
+def _requests_proxy_from_playwright_proxy(proxy: Optional[Dict[str, Any]]) -> Dict[str, str]:
+    payload = proxy or {}
+    server = str(payload.get("server") or "").strip()
+    if not server:
+        return {}
+    if "://" not in server:
+        server = f"http://{server}"
+    username = str(payload.get("username") or "").strip()
+    password = str(payload.get("password") or "").strip()
+    if username:
+        protocol, rest = server.split("://", 1)
+        if "@" not in rest:
+            creds = f"{username}:{password}" if password else username
+            server = f"{protocol}://{creds}@{rest}"
+    return {"http": server, "https": server}
+
+
+def _parse_2gis_http_fallback(urls: List[str], timeout_sec: int, proxy: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    timeout_total = min(15, max(6, int(timeout_sec or 20)))
+    connect_timeout = min(5, timeout_total)
+    read_timeout = max(6, min(10, timeout_total))
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -420,15 +440,20 @@ def _parse_2gis_http_fallback(urls: List[str], timeout_sec: int) -> Dict[str, An
         "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
     }
     last_error = ""
+    proxies = _requests_proxy_from_playwright_proxy(proxy)
+    session = requests.Session()
+    session.trust_env = False
 
-    for target_url in urls:
+    targets = list(urls or [])[:3]
+    for target_url in targets:
         try:
-            response = requests.get(
+            response = session.get(
                 target_url,
                 headers=headers,
-                timeout=timeout,
+                timeout=(connect_timeout, read_timeout),
                 verify=False,
                 allow_redirects=True,
+                proxies=proxies if proxies else None,
             )
             if response.status_code >= 400:
                 last_error = f"http_status={response.status_code}"
@@ -505,7 +530,11 @@ def _parse_2gis_http_fallback(urls: List[str], timeout_sec: int) -> Dict[str, An
             last_error = str(exc)
             continue
 
-    return {"error": "2gis_http_fallback_failed", "message": last_error or "unknown_http_fallback_error"}
+    return {
+        "error": "2gis_http_fallback_failed",
+        "message": last_error or "unknown_http_fallback_error",
+        "used_proxy": bool(proxies),
+    }
 
 
 def parse_2gis_card(url: str, timeout_sec: int = 120, headless: bool = True, proxy: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
@@ -521,9 +550,29 @@ def parse_2gis_card(url: str, timeout_sec: int = 120, headless: bool = True, pro
 
     candidate_urls = _candidate_2gis_urls(url)
 
-    http_prefetch = _parse_2gis_http_fallback(candidate_urls, timeout_sec=timeout_sec)
+    http_prefetch = _parse_2gis_http_fallback(candidate_urls, timeout_sec=timeout_sec, proxy=proxy)
     if not http_prefetch.get("error"):
         return http_prefetch
+    # Proxy path can be temporarily degraded; retry direct HTTP once.
+    if proxy:
+        http_direct = _parse_2gis_http_fallback(candidate_urls, timeout_sec=timeout_sec, proxy=None)
+        if not http_direct.get("error"):
+            return http_direct
+
+    # Stabilization mode for production queues: do not enter heavy Playwright path
+    # when HTTP fallback already failed. This prevents long "processing" hangs.
+    disable_playwright = str(os.getenv("TWO_GIS_DISABLE_PLAYWRIGHT", "1")).strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+    if disable_playwright:
+        return {
+            "error": "2gis_parse_failed",
+            "message": f"http_prefetch_failed:{http_prefetch.get('message') or 'unknown'}",
+            "url": url,
+        }
 
     try:
         with sync_playwright() as playwright:
@@ -587,9 +636,13 @@ def parse_2gis_card(url: str, timeout_sec: int = 120, headless: bool = True, pro
             if not nav_success:
                 context.close()
                 browser.close()
-                http_result = _parse_2gis_http_fallback(candidate_urls, timeout_sec=timeout_sec)
+                http_result = _parse_2gis_http_fallback(candidate_urls, timeout_sec=timeout_sec, proxy=proxy)
                 if not http_result.get("error"):
                     return http_result
+                if proxy:
+                    http_result_direct = _parse_2gis_http_fallback(candidate_urls, timeout_sec=timeout_sec, proxy=None)
+                    if not http_result_direct.get("error"):
+                        return http_result_direct
                 return {
                     "error": "2gis_parse_failed",
                     "message": f"playwright_nav_failed: {last_nav_error or 'unknown'}",
@@ -638,9 +691,13 @@ def parse_2gis_card(url: str, timeout_sec: int = 120, headless: bool = True, pro
             context.close()
             browser.close()
     except Exception as exc:
-        http_result = _parse_2gis_http_fallback(candidate_urls, timeout_sec=timeout_sec)
+        http_result = _parse_2gis_http_fallback(candidate_urls, timeout_sec=timeout_sec, proxy=proxy)
         if not http_result.get("error"):
             return http_result
+        if proxy:
+            http_result_direct = _parse_2gis_http_fallback(candidate_urls, timeout_sec=timeout_sec, proxy=None)
+            if not http_result_direct.get("error"):
+                return http_result_direct
         return {"error": "2gis_parse_failed", "message": str(exc), "url": url}
 
     schema_objects = _extract_json_ld_objects(dom_snapshot.get("ldJson") or [])
