@@ -3,6 +3,8 @@ from parsing_failure_taxonomy import (
     REASON_EMPTY_PAYLOAD,
     REASON_PROXY_TRANSPORT,
     REASON_QUALITY_GATE_FAIL,
+    REASON_RETRY_EXHAUSTED,
+    REASON_TASK_TTL_EXCEEDED,
     classify_failure_reason,
     with_reason_code_prefix,
 )
@@ -33,3 +35,10 @@ def test_reason_code_prefix_idempotent():
     assert msg.startswith("reason_code=captcha;")
     same = with_reason_code_prefix("captcha", msg)
     assert same == msg
+
+
+def test_classify_dlq_reasons():
+    ttl_msg = "reason_code=unknown; dlq_reason=task_ttl_exceeded; task_age_hours=77"
+    retry_msg = "reason_code=unknown; dlq_reason=captcha_retry_exhausted; attempt=5"
+    assert classify_failure_reason("error", ttl_msg) == REASON_TASK_TTL_EXCEEDED
+    assert classify_failure_reason("error", retry_msg) == REASON_RETRY_EXHAUSTED

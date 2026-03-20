@@ -165,6 +165,83 @@ def _captcha_retry_delay_for_task(queue_dict: Dict[str, Any], attempt_no: int) -
     return _captcha_next_retry_delay(attempt_no)
 
 
+def _to_datetime(value: Any) -> Optional[datetime]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text)
+    except Exception:
+        return None
+
+
+def _task_age_hours(queue_dict: Dict[str, Any]) -> float:
+    created_at_dt = _to_datetime(queue_dict.get("created_at"))
+    if not created_at_dt:
+        return 0.0
+    age_seconds = (datetime.now() - created_at_dt).total_seconds()
+    if age_seconds <= 0:
+        return 0.0
+    return age_seconds / 3600.0
+
+
+def _move_task_to_dlq(task_id: str, dlq_reason: str, details: str, *, clear_captcha_fields: bool = False) -> None:
+    base_message = f"dlq_reason={dlq_reason}; {details}"
+    normalized_message = with_reason_code_prefix(STATUS_ERROR, base_message)
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        if clear_captcha_fields:
+            cursor.execute(
+                """
+                UPDATE parsequeue
+                SET status = %s,
+                    error_message = %s,
+                    retry_after = NULL,
+                    captcha_required = 0,
+                    captcha_url = NULL,
+                    captcha_session_id = NULL,
+                    captcha_started_at = NULL,
+                    resume_requested = 0,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                """,
+                (STATUS_ERROR, normalized_message, task_id),
+            )
+        else:
+            cursor.execute(
+                """
+                UPDATE parsequeue
+                SET status = %s,
+                    error_message = %s,
+                    retry_after = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                """,
+                (STATUS_ERROR, normalized_message, task_id),
+            )
+        conn.commit()
+    except Exception as e:
+        print(f"⚠️ Не удалось перевести задачу {task_id} в DLQ: {e}", flush=True)
+    finally:
+        try:
+            if cursor:
+                cursor.close()
+        except Exception:
+            pass
+        try:
+            if conn:
+                conn.close()
+        except Exception:
+            pass
+
+
 def _build_human_browser_profile() -> Dict[str, Any]:
     width = random.randint(1366, 1920)
     height = random.randint(768, 1200)
@@ -2227,6 +2304,95 @@ def process_queue():
         except Exception as e:
             print(f"⚠️ Ошибка восстановления stale processing: {e}")
 
+        # Global TTL guardrail: старые задачи уходят в DLQ, чтобы не зацикливать очередь.
+        try:
+            parse_task_ttl_hours = max(1, int(os.getenv("PARSE_TASK_TTL_HOURS", "48")))
+            ttl_msg = with_reason_code_prefix(
+                STATUS_ERROR,
+                f"dlq_reason=task_ttl_exceeded; source=global_guard; ttl_hours={parse_task_ttl_hours}",
+            )
+            cursor.execute(
+                """
+                UPDATE parsequeue
+                SET status = %s,
+                    error_message = %s,
+                    retry_after = NULL,
+                    captcha_required = 0,
+                    captcha_url = NULL,
+                    captcha_session_id = NULL,
+                    captcha_started_at = NULL,
+                    resume_requested = 0,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE status IN (%s, %s, %s, %s)
+                  AND created_at IS NOT NULL
+                  AND created_at < (CURRENT_TIMESTAMP - make_interval(hours => %s))
+                """,
+                (
+                    STATUS_ERROR,
+                    ttl_msg,
+                    STATUS_PENDING,
+                    STATUS_CAPTCHA,
+                    STATUS_PROCESSING,
+                    STATUS_PAUSED,
+                    parse_task_ttl_hours,
+                ),
+            )
+            if cursor.rowcount:
+                print(f"🛑 Global TTL guard moved to DLQ: {cursor.rowcount}", flush=True)
+                conn.commit()
+        except Exception as e:
+            print(f"⚠️ Ошибка global TTL guardrail: {e}")
+
+        # Global retry-attempt guard: капча попытки сверх лимита отправляем в DLQ.
+        try:
+            max_captcha_attempts = max(1, int(os.getenv("CAPTCHA_AUTO_RETRY_MAX_ATTEMPTS", "4")))
+            cursor.execute(
+                """
+                SELECT id, status, error_message
+                FROM parsequeue
+                WHERE status IN (%s, %s)
+                  AND error_message LIKE '%%captcha_auto_retry_attempt=%%'
+                LIMIT 500
+                """,
+                (STATUS_PENDING, STATUS_CAPTCHA),
+            )
+            rows = cursor.fetchall() or []
+            moved = 0
+            for row in rows:
+                row_id = str(row.get("id") if isinstance(row, dict) else row[0])
+                row_status = row.get("status") if isinstance(row, dict) else row[1]
+                row_error = row.get("error_message") if isinstance(row, dict) else row[2]
+                attempt_no = _captcha_retry_attempt_from_error(row_error)
+                if attempt_no < max_captcha_attempts:
+                    continue
+                dlq_message = with_reason_code_prefix(
+                    STATUS_ERROR,
+                    f"dlq_reason=captcha_retry_exhausted; source=global_guard; attempt={attempt_no}; max_attempts={max_captcha_attempts}",
+                )
+                cursor.execute(
+                    """
+                    UPDATE parsequeue
+                    SET status = %s,
+                        error_message = %s,
+                        retry_after = NULL,
+                        captcha_required = 0,
+                        captcha_url = NULL,
+                        captcha_session_id = NULL,
+                        captcha_started_at = NULL,
+                        resume_requested = 0,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                      AND status = %s
+                    """,
+                    (STATUS_ERROR, dlq_message, row_id, row_status),
+                )
+                moved += int(cursor.rowcount or 0)
+            if moved:
+                print(f"🛑 Global captcha-attempt guard moved to DLQ: {moved}", flush=True)
+                conn.commit()
+        except Exception as e:
+            print(f"⚠️ Ошибка global captcha-attempt guardrail: {e}")
+
         # Санитайзер "битых" captcha-записей: status='captcha' без корректного captcha_started_at
         try:
             cursor.execute(
@@ -2380,6 +2546,29 @@ def process_queue():
     status = queue_dict.get("status") or "pending"
     task_type = queue_dict.get("task_type") or "parse_card"
     preparsed_card_data: Optional[Dict[str, Any]] = None
+
+    task_age_h = _task_age_hours(queue_dict)
+    task_age_warn_h = max(1, int(os.getenv("TASK_AGE_WARN_HOURS", "12")))
+    task_ttl_h = max(task_age_warn_h, int(os.getenv("PARSE_TASK_TTL_HOURS", "48")))
+    if task_age_h >= float(task_age_warn_h):
+        print(
+            f"⏱️ Task age warn: task_id={queue_dict.get('id')} age_hours={task_age_h:.2f} "
+            f"status={status} ttl_hours={task_ttl_h}",
+            flush=True,
+        )
+    if task_age_h > float(task_ttl_h):
+        print(
+            f"🛑 Task TTL exceeded: task_id={queue_dict.get('id')} age_hours={task_age_h:.2f} "
+            f"ttl_hours={task_ttl_h}. Moving to DLQ.",
+            flush=True,
+        )
+        _move_task_to_dlq(
+            str(queue_dict.get("id")),
+            "task_ttl_exceeded",
+            f"task_age_hours={task_age_h:.2f}; ttl_hours={task_ttl_h}",
+            clear_captcha_fields=True,
+        )
+        return
     
     print(f"Обрабатываю заявку: {queue_dict.get('id')}, тип: {task_type}, статус: {status}")
     
@@ -2460,6 +2649,7 @@ def process_queue():
                 conn = get_db_connection()
                 cursor = conn.cursor()
                 try:
+                    session_lost_msg = with_reason_code_prefix(STATUS_ERROR, "captcha session lost")
                     cursor.execute(
                         """
                         UPDATE parsequeue
@@ -2474,7 +2664,7 @@ def process_queue():
                             error_message = %s
                         WHERE id = %s
                         """,
-                        ("captcha session lost", task_id),
+                        (session_lost_msg, task_id),
                     )
                     conn.commit()
                 finally:
@@ -2488,6 +2678,7 @@ def process_queue():
                 new_session_id = card_data.get("captcha_session_id") or captcha_session_id
                 captcha_url = card_data.get("captcha_url") or url
                 captcha_comment = f"captcha_required: откройте ссылку и пройдите капчу: {captcha_url}" if captcha_url else "captcha_required: пройдите капчу и нажмите продолжить"
+                captcha_comment = with_reason_code_prefix(STATUS_CAPTCHA, captcha_comment)
                 print(f"⚠️ Капча всё ещё активна для задачи {task_id}, session_id={new_session_id}")
                 conn = get_db_connection()
                 cursor = conn.cursor()
@@ -2566,6 +2757,20 @@ def process_queue():
                 return
 
             attempt_no = _captcha_retry_attempt_from_error(queue_dict.get("error_message")) + 1
+            max_captcha_attempts = max(1, int(os.getenv("CAPTCHA_AUTO_RETRY_MAX_ATTEMPTS", "4")))
+            if attempt_no > max_captcha_attempts:
+                print(
+                    f"🛑 CAPTCHA retry exhausted in captcha-state: task_id={task_id} "
+                    f"attempt={attempt_no} max={max_captcha_attempts}. Moving to DLQ.",
+                    flush=True,
+                )
+                _move_task_to_dlq(
+                    str(task_id),
+                    "captcha_retry_exhausted",
+                    f"attempt={attempt_no}; max_attempts={max_captcha_attempts}; source=captcha_status",
+                    clear_captcha_fields=True,
+                )
+                return
             print(f"🔁 CAPTCHA auto-retry attempt={attempt_no} task_id={task_id}")
             browser_profile = _build_human_browser_profile()
             card_data = _parse_yandex_card_with_playwright_fallback(
@@ -3007,6 +3212,20 @@ def process_queue():
             captcha_session_id = card_data.get("captcha_session_id")
             captcha_url = card_data.get("captcha_url") or queue_dict.get("url")
             attempt_no = _captcha_retry_attempt_from_error(queue_dict.get("error_message")) + 1
+            max_captcha_attempts = max(1, int(os.getenv("CAPTCHA_AUTO_RETRY_MAX_ATTEMPTS", "4")))
+            if attempt_no > max_captcha_attempts:
+                print(
+                    f"🛑 CAPTCHA retry exhausted in parse flow: task_id={queue_dict.get('id')} "
+                    f"attempt={attempt_no} max={max_captcha_attempts}. Moving to DLQ.",
+                    flush=True,
+                )
+                _move_task_to_dlq(
+                    str(queue_dict.get("id")),
+                    "captcha_retry_exhausted",
+                    f"attempt={attempt_no}; max_attempts={max_captcha_attempts}; source=parse_flow",
+                    clear_captcha_fields=True,
+                )
+                return
             retry_delay = _captcha_retry_delay_for_task(queue_dict, attempt_no)
             retry_after = datetime.now() + retry_delay
             captcha_comment = (

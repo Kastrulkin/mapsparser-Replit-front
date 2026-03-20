@@ -9,6 +9,8 @@ REASON_TIMEOUT = "timeout"
 REASON_BLOCKED_SESSION = "blocked_session"
 REASON_INVALID_ORG_URL = "invalid_org_url"
 REASON_QUALITY_GATE_FAIL = "quality_gate_fail"
+REASON_RETRY_EXHAUSTED = "retry_exhausted"
+REASON_TASK_TTL_EXCEEDED = "task_ttl_exceeded"
 REASON_UNKNOWN = "unknown"
 
 
@@ -23,6 +25,11 @@ def classify_failure_reason(status: Any, error_message: Any) -> str:
 
     if "invalid_org_url" in text or "invalid org url" in text:
         return REASON_INVALID_ORG_URL
+
+    if "dlq_reason=task_ttl_exceeded" in text:
+        return REASON_TASK_TTL_EXCEEDED
+    if "dlq_reason=captcha_retry_exhausted" in text:
+        return REASON_RETRY_EXHAUSTED
 
     if "blocked session" in text or "session lost" in text or "captcha_session_lost" in text:
         return REASON_BLOCKED_SESSION
