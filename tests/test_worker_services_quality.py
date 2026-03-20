@@ -98,3 +98,30 @@ def test_apply_business_identity_fallback_populates_missing_identity():
     assert card_data.get("title") == "Кебаб 24"
     assert card_data.get("address") == "Санкт-Петербург, Липовая аллея, 14А"
     assert "identity_fallback:business_record" in (card_data.get("warnings") or [])
+
+
+def test_map_card_services_infers_specific_category_when_source_sends_other():
+    card_data = {
+        "products": [
+            {
+                "category": "Другое",
+                "items": [
+                    {
+                        "name": "Консультация врача-косметолога",
+                        "description": "Диагностика кожи и подбор ухода",
+                        "price": "2500 ₽",
+                    }
+                ],
+            }
+        ]
+    }
+
+    rows = worker.map_card_services(card_data, "biz_1", "user_1")
+    assert len(rows) == 1
+    assert rows[0]["category"] != "Другое"
+    assert "космет" in str(rows[0]["category"]).lower()
+
+
+def test_extract_service_category_skips_editorial_category_labels():
+    value = worker._extract_service_category({"category": "Бары и пабы с наградой «Хорошее место 2026»"})
+    assert value == ""
