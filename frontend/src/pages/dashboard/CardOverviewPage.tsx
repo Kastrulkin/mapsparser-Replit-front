@@ -554,7 +554,8 @@ export const CardOverviewPage = () => {
         },
         body: JSON.stringify({
           text: service.name + (service.description ? '\n' + service.description : ''),
-          business_id: currentBusinessId
+          business_id: currentBusinessId,
+          service_category: service.category || ''
         })
       });
 

@@ -108,6 +108,17 @@ _SERVICE_NOISE_TERMS = (
     "floor",
 )
 
+_GENERIC_SERVICE_CATEGORIES = {
+    "другое",
+    "разное",
+    "other",
+    "общие услуги",
+    "без категории",
+    "услуги",
+    "товары",
+    "категория",
+}
+
 _HUMAN_USER_AGENTS = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -2981,11 +2992,9 @@ def process_queue():
                 if parsed_source == "2gis":
                     card_data = parse_2gis_card(
                         url,
-                        timeout_sec=180,
+                        timeout_sec=60,
                         headless=True,
-                        # 2GIS через внешние прокси часто падает по TLS (ERR_CERT_AUTHORITY_INVALID),
-                        # поэтому для стабильности парсим напрямую.
-                        proxy=None,
+                        proxy=(active_proxy or {}).get("proxy"),
                     )
                 else:
                     card_data = _parse_yandex_card_with_playwright_fallback(
@@ -4019,7 +4028,7 @@ def map_card_services(
             continue
 
         # Стандартная структура: dict с category/group/name и items
-        category_name = _extract_service_category(cat_block, allow_name_fallback=True) or "Общие услуги"
+        category_name = _extract_service_category(cat_block, allow_name_fallback=False) or ""
         items = cat_block.get("items") or cat_block.get("products") or []
         if not isinstance(items, list):
             continue
@@ -4030,7 +4039,11 @@ def map_card_services(
             row = _one_service_row(item, business_id, user_id, normalized_source)
             if row:
                 item_category = _extract_service_category(item)
-                row["category"] = item_category or category_name
+                inferred_category = _infer_service_category(str(row.get("name") or ""), str(row.get("description") or ""))
+                effective_category = item_category or category_name or inferred_category or "Общие услуги"
+                if _is_editorial_category_name(effective_category):
+                    effective_category = inferred_category or "Общие услуги"
+                row["category"] = effective_category
                 key = (
                     (row.get("source") or "").lower(),
                     (row.get("name") or "").strip().lower(),
@@ -4088,12 +4101,13 @@ def _one_service_row(item: Dict[str, Any], business_id: str, user_id: str, sourc
         if ":" in name or len(name.split()) >= 7 or "," in name:
             print(f"⚠️ [map_card_services] Skip long editorial-like title without price: {name}")
             return {}
+    inferred_category = _extract_service_category(item) or _infer_service_category(name, description or "")
     return {
         "business_id": business_id,
         "user_id": user_id,
         "name": name,
         "description": description,
-        "category": _extract_service_category(item) or "Общие услуги",
+        "category": inferred_category or "Общие услуги",
         "source": source,
         "external_id": external_id,
         "price_from": price_from,
@@ -4144,13 +4158,54 @@ def _extract_service_category(payload: Dict[str, Any], *, allow_name_fallback: b
     category = str(raw).strip()
     if not category:
         return ""
+    category_lower = category.lower()
     if "http://" in category.lower() or "https://" in category.lower() or "yandex." in category.lower():
         return ""
     if len(category) > 80:
         return ""
-    if category.lower() in {"другое", "разное", "other", "общие услуги", "без категории"}:
+    if category_lower in _GENERIC_SERVICE_CATEGORIES:
+        return ""
+    if _is_editorial_category_name(category):
         return ""
     return category
+
+
+def _is_editorial_category_name(value: str) -> bool:
+    text = str(value or "").strip().lower()
+    if not text:
+        return False
+    if len(text) > 70:
+        return True
+    if any(pattern in text for pattern in _EDITORIAL_SERVICE_PATTERNS):
+        return True
+    if "с наградой" in text or "хорошее место" in text:
+        return True
+    if "суши" in text or "бар" in text or "паб" in text:
+        return True
+    if text.startswith("где ") or text.startswith("лучшие "):
+        return True
+    return False
+
+
+def _infer_service_category(name: str, description: str = "") -> str:
+    text = f"{name or ''} {description or ''}".lower()
+    if not text.strip():
+        return ""
+
+    rules = (
+        ("Косметология", ("косметолог", "чистк", "пилинг", "ботокс", "биорев", "мезотерап", "контурн", "филлер")),
+        ("Инъекционные процедуры", ("инъекц", "биорев", "мезотерап", "ботокс", "диспорт", "филлер")),
+        ("Эпиляция", ("эпиляц", "лазерн", "шугаринг", "воск")),
+        ("Массаж", ("массаж", "лимфодренаж", "релакс", "спа")),
+        ("Маникюр и педикюр", ("маникюр", "педикюр", "ногт", "гель", "шеллак")),
+        ("Брови и ресницы", ("бров", "ресниц", "ламин", "микроблейд", "татуаж")),
+        ("Парикмахерские услуги", ("стрижк", "окрашив", "укладк", "волос", "прическ", "барбер")),
+        ("Консультации", ("консультац", "прием", "диагност", "осмотр")),
+    )
+    for category, tokens in rules:
+        if any(token in text for token in tokens):
+            return category
+    return ""
 
 
 def _parse_service_price(raw_price: Any) -> tuple[Optional[float], Optional[float]]:

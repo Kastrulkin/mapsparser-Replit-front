@@ -1351,11 +1351,20 @@ def test_external_account_cookies(business_id):
         auth_data = (data.get("auth_data") or "").strip()
         external_id = (data.get("external_id") or "").strip() or None
 
-        if not source or not auth_data:
-            return jsonify({"error": "source и auth_data обязательны"}), 400
+        if not source:
+            return jsonify({"error": "source обязателен"}), 400
 
         if source not in ("yandex_business", "2gis"):
             return jsonify({"error": "Некорректный source"}), 400
+
+        if source == "yandex_business" and not auth_data:
+            return jsonify({"error": "source и auth_data обязательны"}), 400
+        if source == "2gis" and not auth_data:
+            return jsonify({
+                "success": True,
+                "message": "auth_data не указан: для 2ГИС будет использован публичный парсинг по ссылке/ID",
+                "mode": "public_parse",
+            }), 200
 
         db = DatabaseManager()
         cursor = db.conn.cursor()
@@ -2614,7 +2623,22 @@ def _extract_keywords_from_service_name(service_name: str) -> list[str]:
     return keywords
 
 
-def _normalize_low_quality_service_suggestions(parsed_result: dict, region: str | None = None) -> dict:
+def _normalize_service_category_value(raw_category: object, fallback: str | None = None) -> str:
+    category = str(raw_category or "").strip()
+    fallback_category = str(fallback or "").strip()
+    generic_categories = {"other", "другое", "разное", "без категории", "общие услуги", "услуги", "категория"}
+    if category and category.lower() not in generic_categories:
+        return category
+    if fallback_category and fallback_category.lower() not in generic_categories:
+        return fallback_category
+    return "Общие услуги"
+
+
+def _normalize_low_quality_service_suggestions(
+    parsed_result: dict,
+    region: str | None = None,
+    preferred_category: str | None = None,
+) -> dict:
     if not isinstance(parsed_result, dict):
         return parsed_result
     services = parsed_result.get("services")
@@ -2668,7 +2692,7 @@ def _normalize_low_quality_service_suggestions(parsed_result: dict, region: str 
             "seo_description": seo_description,
             "keywords": keywords,
             "price": price if price is not None else "",
-            "category": category if category is not None else "other",
+            "category": _normalize_service_category_value(category, fallback=preferred_category),
         })
 
     parsed_result["services"] = normalized if normalized else services
@@ -2708,6 +2732,12 @@ def services_optimize():
         instructions = request.form.get('instructions') or json_payload.get('instructions')
         region = request.form.get('region') or json_payload.get('region')
         business_name = request.form.get('business_name') or json_payload.get('business_name')
+        requested_service_category = (
+            request.form.get('service_category')
+            or request.form.get('category')
+            or json_payload.get('service_category')
+            or json_payload.get('category')
+        )
         length = request.form.get('description_length') or json_payload.get('description_length') or 150
         request_business_id = _resolve_request_business_id(user_data, json_data=json_payload)
 
@@ -2977,6 +3007,13 @@ def services_optimize():
                     .replace('{content}', str(content[:4000]))
                 )
 
+            if requested_service_category:
+                prompt += (
+                    f"\n\nКРИТИЧНО: Категория услуги: {requested_service_category}."
+                    "\nВерни релевантную категорию в поле category и учитывай её при формулировках."
+                    "\nНе используй other/другое, если категория задана."
+                )
+
             result = analyze_text_with_gigachat(
                 prompt, 
                 task_type="service_optimization",
@@ -3051,7 +3088,7 @@ def services_optimize():
                 prompt
                 + "\n\nВАЖНО: Верни СТРОГО JSON-объект без пояснений."
                 + "\nВнутри обязательно поле services (массив минимум из 1 элемента)."
-                + "\nКаждый элемент должен содержать: original_name, optimized_name, seo_description, keywords, price."
+                + "\nКаждый элемент должен содержать: original_name, optimized_name, seo_description, keywords, price, category."
             )
             retry_raw = analyze_text_with_gigachat(
                 retry_prompt,
@@ -3100,6 +3137,7 @@ def services_optimize():
                         "seo_description": fallback_description,
                         "keywords": [],
                         "price": "",
+                        "category": _normalize_service_category_value(requested_service_category),
                     }
                 ],
                 "general_recommendations": [
@@ -3108,10 +3146,18 @@ def services_optimize():
                 "fallback_used": True,
             }
         else:
-            parsed_result = _normalize_low_quality_service_suggestions(parsed_result, region=region)
+            parsed_result = _normalize_low_quality_service_suggestions(
+                parsed_result,
+                region=region,
+                preferred_category=requested_service_category,
+            )
 
         # Apply quality normalization for fallback branch as well
-        parsed_result = _normalize_low_quality_service_suggestions(parsed_result, region=region)
+        parsed_result = _normalize_low_quality_service_suggestions(
+            parsed_result,
+            region=region,
+            preferred_category=requested_service_category,
+        )
 
         # Сохраним в БД (как оптимизацию прайса, даже для текстового режима)
         db = DatabaseManager()
