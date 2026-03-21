@@ -1773,6 +1773,100 @@ class DatabaseManager:
     def save_lead(self, lead_data: Dict[str, Any]) -> str:
         """Сохранить лид (если уже есть google_id - обновить)"""
         cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'prospectingleads'
+            """
+        )
+        table_columns = set()
+        for row in cursor.fetchall():
+            column_name = None
+            if hasattr(row, "get"):
+                column_name = row.get("column_name")
+            elif row:
+                column_name = row[0]
+            if column_name:
+                table_columns.add(str(column_name))
+
+        def _to_json_param(value: Any) -> Optional[str]:
+            if value is None:
+                return None
+            return json.dumps(value, ensure_ascii=False)
+
+        def _update_existing_lead(existing_id: str) -> None:
+            updates: Dict[str, Any] = {}
+
+            scalar_fields = (
+                "name",
+                "address",
+                "phone",
+                "website",
+                "email",
+                "source_url",
+                "category",
+                "status",
+                "source",
+                "source_external_id",
+                "google_id",
+                "telegram_url",
+                "whatsapp_url",
+                "logo_url",
+                "description",
+            )
+            for field in scalar_fields:
+                if field not in table_columns:
+                    continue
+                value = lead_data.get(field)
+                if value not in (None, ""):
+                    updates[field] = value
+
+            for field in ("rating", "reviews_count"):
+                if field in table_columns:
+                    value = lead_data.get(field)
+                    if value is not None:
+                        updates[field] = value
+
+            if "location" in table_columns and lead_data.get("location") is not None:
+                updates["location"] = _to_json_param(lead_data.get("location"))
+
+            if "messenger_links_json" in table_columns:
+                messenger_links = lead_data.get("messenger_links")
+                if messenger_links is not None:
+                    updates["messenger_links_json"] = json.dumps(messenger_links, ensure_ascii=False)
+
+            optional_json_columns = (
+                "search_payload_json",
+                "enrich_payload_json",
+                "matched_sources_json",
+                "photos_json",
+                "services_json",
+                "reviews_json",
+                "raw_payload_json",
+            )
+            for column_name in optional_json_columns:
+                if column_name not in table_columns:
+                    continue
+                value = lead_data.get(column_name)
+                if value is not None:
+                    updates[column_name] = _to_json_param(value)
+
+            if not updates:
+                return
+
+            assignments = ", ".join([f"{field} = %s" for field in updates.keys()])
+            params = list(updates.values()) + [existing_id]
+            cursor.execute(
+                f"""
+                UPDATE prospectingleads
+                SET {assignments},
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                """,
+                params,
+            )
+            self.conn.commit()
 
         source_external_id = lead_data.get('source_external_id') or lead_data.get('google_id')
         if source_external_id:
@@ -1783,7 +1877,9 @@ class DatabaseManager:
                 )
                 existing = cursor.fetchone()
                 if existing:
-                    return existing[0]
+                    existing_id = existing.get("id") if hasattr(existing, "get") else existing[0]
+                    _update_existing_lead(existing_id)
+                    return existing_id
             except Exception:
                 self.conn.rollback()
 
@@ -1792,9 +1888,15 @@ class DatabaseManager:
             cursor.execute("SELECT id FROM prospectingleads WHERE google_id = %s", (google_id,))
             existing = cursor.fetchone()
             if existing:
-                return existing[0]
+                existing_id = existing.get("id") if hasattr(existing, "get") else existing[0]
+                _update_existing_lead(existing_id)
+                return existing_id
 
         lead_id = str(uuid.uuid4())
+
+        location_value = lead_data.get("location")
+        location_param = _to_json_param(location_value) if location_value is not None else None
+
         fields = [
             'id', 'name', 'address', 'phone', 'website', 'rating', 'reviews_count',
             'source_url', 'google_id', 'category', 'location', 'status',
@@ -1811,7 +1913,7 @@ class DatabaseManager:
             lead_data.get('source_url'),
             lead_data.get('google_id'),
             lead_data.get('category'),
-            lead_data.get('location'),
+            location_param,
             lead_data.get('status'),
             lead_data.get('source') or 'apify_yandex',
             source_external_id,
@@ -1820,6 +1922,31 @@ class DatabaseManager:
             lead_data.get('whatsapp_url'),
             json.dumps(lead_data.get('messenger_links') or [], ensure_ascii=False),
         ]
+
+        optional_json_columns = {
+            "search_payload_json": lead_data.get("search_payload_json"),
+            "enrich_payload_json": lead_data.get("enrich_payload_json"),
+            "matched_sources_json": lead_data.get("matched_sources_json"),
+            "photos_json": lead_data.get("photos_json"),
+            "services_json": lead_data.get("services_json"),
+            "reviews_json": lead_data.get("reviews_json"),
+            "raw_payload_json": lead_data.get("raw_payload_json"),
+        }
+        optional_text_columns = {
+            "logo_url": lead_data.get("logo_url"),
+            "description": lead_data.get("description"),
+        }
+
+        for column_name, value in optional_json_columns.items():
+            if column_name in table_columns and value is not None:
+                fields.append(column_name)
+                values.append(_to_json_param(value))
+
+        for column_name, value in optional_text_columns.items():
+            if column_name in table_columns and value not in (None, ""):
+                fields.append(column_name)
+                values.append(value)
+
         placeholders = ', '.join(['%s' for _ in values])
 
         try:
@@ -1833,7 +1960,10 @@ class DatabaseManager:
                              'source_url', 'google_id', 'category', 'location', 'status']
             legacy_values = [lead_id]
             for field in legacy_fields[1:]:
-                legacy_values.append(lead_data.get(field))
+                if field == "location":
+                    legacy_values.append(location_param)
+                else:
+                    legacy_values.append(lead_data.get(field))
             legacy_placeholders = ', '.join(['%s' for _ in legacy_values])
             cursor.execute(f"""
                 INSERT INTO prospectingleads ({', '.join(legacy_fields)}, created_at, updated_at)

@@ -136,7 +136,10 @@ export const CardOverviewPage = () => {
     setLoadingServices(true);
     try {
       const token = localStorage.getItem('auth_token');
-      const qs = currentBusinessId ? `?business_id=${currentBusinessId}` : '';
+      const params = new URLSearchParams();
+      if (currentBusinessId) params.set('business_id', currentBusinessId);
+      if (selectedSource && selectedSource !== 'all') params.set('source', selectedSource);
+      const qs = params.toString() ? `?${params.toString()}` : '';
       const response = await fetch(`${window.location.origin}/api/services/list${qs}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -346,7 +349,7 @@ export const CardOverviewPage = () => {
       checkIfNetworkMaster();
       loadOperationsLearning();
     }
-  }, [currentBusinessId, context]);
+  }, [currentBusinessId, context, selectedSource]);
 
   useEffect(() => {
     setServicesCurrentPage(1);
@@ -362,8 +365,18 @@ export const CardOverviewPage = () => {
   }, [userServices, language]);
 
   const filteredServices = useMemo(() => {
+    const sourceMatches = (service: any) => {
+      if (selectedSource === 'all') return true;
+      const source = String(service?.source || '').trim().toLowerCase();
+      if (selectedSource === '2gis') return source === '2gis';
+      if (selectedSource === 'yandex') return source === 'yandex_maps' || source === 'yandex_business';
+      if (selectedSource === 'google') return source === 'google_maps' || source === 'google_business';
+      return source.includes(selectedSource);
+    };
+
     const query = servicesSearch.trim().toLowerCase();
     const list = userServices.filter((service) => {
+      if (!sourceMatches(service)) return false;
       if (servicesCategoryFilter !== 'all' && (service?.category || '') !== servicesCategoryFilter) {
         return false;
       }
@@ -411,7 +424,7 @@ export const CardOverviewPage = () => {
       }
     });
     return sorted;
-  }, [userServices, servicesSearch, servicesCategoryFilter, servicesSort, language]);
+  }, [userServices, servicesSearch, servicesCategoryFilter, servicesSort, language, selectedSource]);
 
   const pagedServices = useMemo(
     () => filteredServices.slice((servicesCurrentPage - 1) * servicesItemsPerPage, servicesCurrentPage * servicesItemsPerPage),

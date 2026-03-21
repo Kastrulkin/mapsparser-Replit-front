@@ -367,6 +367,7 @@ const LeadMetaSummary: React.FC<{ lead: Lead; showChannel?: boolean }> = ({ lead
 export const ProspectingManagement: React.FC = () => {
     const [query, setQuery] = useState('');
     const [location, setLocation] = useState('');
+    const [searchSource, setSearchSource] = useState<'apify_yandex' | 'apify_2gis'>('apify_yandex');
     const [limit, setLimit] = useState(20);
     const [manualLeadUrl, setManualLeadUrl] = useState('');
     const [manualLeadName, setManualLeadName] = useState('');
@@ -558,6 +559,7 @@ export const ProspectingManagement: React.FC = () => {
             const response = await api.post('/admin/prospecting/search', {
                 query,
                 location,
+                source: searchSource,
                 limit: Number(limit)
             });
             setResults([]);
@@ -1635,10 +1637,22 @@ export const ProspectingManagement: React.FC = () => {
                     <Card>
                         <CardHeader>
                             <CardTitle>Источники и сбор</CardTitle>
-                            <CardDescription>Поиск компаний в Яндекс Картах через Apify actor и сохранение в лиды.</CardDescription>
+                            <CardDescription>Поиск компаний через Apify (Яндекс Карты / 2GIS) и сохранение в лиды.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={handleSearch} className="flex flex-wrap gap-4 items-end">
+                                <div className="grid w-56 items-center gap-1.5">
+                                    <label htmlFor="search-source">Источник</label>
+                                    <select
+                                        id="search-source"
+                                        value={searchSource}
+                                        onChange={(e) => setSearchSource(e.target.value === 'apify_2gis' ? 'apify_2gis' : 'apify_yandex')}
+                                        className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                                    >
+                                        <option value="apify_yandex">Apify Yandex</option>
+                                        <option value="apify_2gis">Apify 2GIS</option>
+                                    </select>
+                                </div>
                                 <div className="grid w-full max-w-sm items-center gap-1.5">
                                     <label htmlFor="query">Категория / запрос</label>
                                     <Input

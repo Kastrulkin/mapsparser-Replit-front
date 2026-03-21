@@ -96,6 +96,7 @@ def get_services():
 
         # Получаем business_id из query параметров
         business_id = request.args.get('business_id')
+        source_filter_raw = str(request.args.get('source') or '').strip().lower()
 
         # PostgreSQL: список колонок таблицы userservices
         cursor.execute("""
@@ -109,6 +110,8 @@ def get_services():
         has_price_from = 'price_from' in columns
 
         select_fields = ['id', 'category', 'name', 'description', 'keywords', 'price', 'created_at', 'updated_at']
+        if 'source' in columns:
+            select_fields.append('source')
         if has_optimized_desc:
             select_fields.insert(select_fields.index('description') + 1, 'optimized_description')
         if has_optimized_name:
@@ -116,6 +119,16 @@ def get_services():
         if has_price_from:
             select_fields.append('price_from')
             select_fields.append('price_to')
+
+        def _service_source_condition(alias: str = ''):
+            prefix = f"{alias}." if alias else ""
+            if source_filter_raw in ('2gis', 'two_gis'):
+                return f"LOWER(COALESCE({prefix}source, '')) = '2gis'", []
+            if source_filter_raw in ('yandex', 'yandex_maps', 'yandex_business'):
+                return f"LOWER(COALESCE({prefix}source, '')) IN ('yandex_maps', 'yandex_business')", []
+            if source_filter_raw in ('google', 'google_maps', 'google_business'):
+                return f"LOWER(COALESCE({prefix}source, '')) IN ('google_maps', 'google_business')", []
+            return None, []
 
         # Если передан business_id — фильтруем по нему и is_active, иначе по user_id
         if business_id:
@@ -132,21 +145,70 @@ def get_services():
                 order_by += ", price_from NULLS LAST"
             order_by += ", updated_at DESC NULLS LAST"
 
+            where_parts = [
+                "business_id = %s",
+                "(is_active IS TRUE OR is_active IS NULL)",
+            ]
+            params = [business_id]
+            source_condition, source_params = _service_source_condition()
+            if source_condition:
+                where_parts.append(source_condition)
+                params.extend(source_params)
+
             select_sql = (
                 f"SELECT {', '.join(select_fields)} FROM userservices "
-                "WHERE business_id = %s AND (is_active IS TRUE OR is_active IS NULL) "
+                f"WHERE {' AND '.join(where_parts)} "
                 f"{order_by}"
             )
-            cursor.execute(select_sql, (business_id,))
+            cursor.execute(select_sql, tuple(params))
         else:
+            where_parts = ["user_id = %s"]
+            params = [user_id]
+            source_condition, source_params = _service_source_condition()
+            if source_condition:
+                where_parts.append(source_condition)
+                params.extend(source_params)
+
             select_sql = (
                 f"SELECT {', '.join(select_fields)} FROM userservices "
-                "WHERE user_id = %s ORDER BY created_at DESC NULLS LAST"
+                f"WHERE {' AND '.join(where_parts)} ORDER BY created_at DESC NULLS LAST"
             )
-            cursor.execute(select_sql, (user_id,))
+            cursor.execute(select_sql, tuple(params))
 
         services_rows = cursor.fetchall()
         col_names = [d[0] for d in cursor.description] if cursor.description else select_fields
+        last_parse_date = None
+        no_new_services_found = False
+        if business_id:
+            try:
+                parse_where = [
+                    "business_id = %s",
+                    "status IN ('completed', 'done')",
+                    "task_type = 'parse_card'",
+                ]
+                parse_params = [business_id]
+                if source_filter_raw in ('2gis', 'two_gis'):
+                    parse_where.append("source = '2gis'")
+                elif source_filter_raw in ('yandex', 'yandex_maps', 'yandex_business'):
+                    parse_where.append("source IN ('yandex_maps', 'yandex_business')")
+                elif source_filter_raw in ('google', 'google_maps', 'google_business'):
+                    parse_where.append("source IN ('google_maps', 'google_business')")
+                cursor.execute(
+                    f"""
+                    SELECT MAX(COALESCE(updated_at, created_at)) AS ts
+                    FROM parsequeue
+                    WHERE {' AND '.join(parse_where)}
+                    """,
+                    tuple(parse_params),
+                )
+                row = cursor.fetchone()
+                if isinstance(row, dict):
+                    last_parse_date = row.get('ts')
+                elif row:
+                    last_parse_date = row[0]
+            except Exception:
+                last_parse_date = None
+
         db.close()
 
         services = []
@@ -172,7 +234,12 @@ def get_services():
             service_dict['keywords'] = parsed_kw
             services.append(service_dict)
 
-        return jsonify({"success": True, "services": services})
+        return jsonify({
+            "success": True,
+            "services": services,
+            "last_parse_date": last_parse_date,
+            "no_new_services_found": no_new_services_found,
+        })
     
     except Exception as e:
         print(f"❌ Ошибка получения услуг: {e}")
@@ -359,4 +426,3 @@ def delete_service(service_id):
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
-

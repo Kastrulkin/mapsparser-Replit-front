@@ -7,7 +7,7 @@ import io
 import threading
 import uuid
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import requests
@@ -57,6 +57,23 @@ def _normalize_learning_intent(raw_intent: str | None) -> str:
     value = str(raw_intent or "client_outreach").strip().lower()
     allowed = {"client_outreach", "partnership_outreach", "operations"}
     return value if value in allowed else "client_outreach"
+
+
+def _to_json_compatible(value: Any) -> Any:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, dict):
+        normalized: dict[str, Any] = {}
+        for key, inner in value.items():
+            normalized[str(key)] = _to_json_compatible(inner)
+        return normalized
+    if isinstance(value, list):
+        return [_to_json_compatible(item) for item in value]
+    if isinstance(value, tuple):
+        return [_to_json_compatible(item) for item in value]
+    return value
 
 
 def _resolve_lead_intent(cur, lead_id: str) -> str:
@@ -262,6 +279,7 @@ def _merge_source_labels(existing_value: Any, *labels: str | None) -> list[str]:
 
 def _create_search_job(
     *,
+    source: str,
     query: str,
     location: str,
     search_limit: int,
@@ -280,7 +298,7 @@ def _create_search_job(
                 %s, %s, %s, %s, %s, %s, 'queued', %s
             )
             """,
-            (job_id, "apify_yandex", actor_id, query, location, search_limit, user_id),
+            (job_id, source, actor_id, query, location, search_limit, user_id),
         )
         conn.commit()
         return job_id
@@ -951,10 +969,10 @@ def _parse_partnership_file_content(file_format: str, content: str) -> list[dict
     raise ValueError("unsupported format; use csv/json/jsonl")
 
 
-def _run_search_job(job_id: str, query: str, location: str, search_limit: int) -> None:
+def _run_search_job(job_id: str, source: str, actor_id: str, query: str, location: str, search_limit: int) -> None:
     _update_search_job(job_id, status="running", error_text=None)
     try:
-        service = ProspectingService()
+        service = ProspectingService(source=source, actor_id_override=actor_id)
         run_meta = service.start_search_run(query, location, search_limit)
         _update_search_job(
             job_id,
@@ -997,7 +1015,9 @@ def _refresh_search_job_from_apify(row: dict[str, Any]) -> dict[str, Any]:
     dataset_id = apify_meta.get("dataset_id")
     if not run_id:
         try:
-            service = ProspectingService()
+            source = str(row.get("source") or "apify_yandex").strip().lower()
+            actor_id = str(row.get("actor_id") or "").strip() or None
+            service = ProspectingService(source=source, actor_id_override=actor_id)
             run_meta = service.start_search_run(
                 row.get("query") or "",
                 row.get("location") or "",
@@ -1033,7 +1053,9 @@ def _refresh_search_job_from_apify(row: dict[str, Any]) -> dict[str, Any]:
             return dict(refreshed) if refreshed else {**row, "status": "failed", "error_text": str(exc)}
 
     try:
-        service = ProspectingService()
+        source = str(row.get("source") or "apify_yandex").strip().lower()
+        actor_id = str(row.get("actor_id") or "").strip() or None
+        service = ProspectingService(source=source, actor_id_override=actor_id)
         run_info = service.get_run(run_id)
         run_status = (run_info.get("status") or "").strip().upper()
         dataset_id = run_info.get("defaultDatasetId") or dataset_id
@@ -3010,7 +3032,7 @@ def _confirm_reaction(reaction_id: str, outcome: str, note: str | None, user_id:
 
 @admin_prospecting_bp.route("/api/admin/prospecting/search", methods=["POST"])
 def search_businesses():
-    """Queue Yandex prospecting search via Apify."""
+    """Queue prospecting search via Apify (Yandex / 2GIS)."""
     user_data, error = _require_superadmin()
     if error:
         return error
@@ -3019,7 +3041,11 @@ def search_businesses():
     data = request.get_json(silent=True) or {}
     query = (data.get("query") or "").strip()
     location = (data.get("location") or "").strip()
+    source = str(data.get("source") or "apify_yandex").strip().lower()
     search_limit = int(data.get("limit", 50) or 50)
+
+    if source not in {"apify_yandex", "apify_2gis"}:
+        return jsonify({"error": "Unsupported source"}), 400
 
     if not query or not location:
         return jsonify({"error": "Query and location are required"}), 400
@@ -3027,12 +3053,13 @@ def search_businesses():
         return jsonify({"error": "Limit must be positive"}), 400
     search_limit = min(search_limit, 200)
 
-    service = ProspectingService()
+    service = ProspectingService(source=source)
     if not service.client:
         return jsonify({"error": "APIFY_TOKEN is not configured"}), 500
 
     try:
         job_id = _create_search_job(
+            source=source,
             query=query,
             location=location,
             search_limit=search_limit,
@@ -3041,7 +3068,7 @@ def search_businesses():
         )
         worker = threading.Thread(
             target=_run_search_job,
-            args=(job_id, query, location, search_limit),
+            args=(job_id, source, service.actor_id, query, location, search_limit),
             daemon=True,
             name=f"outreach-search-{job_id}",
         )
@@ -3052,7 +3079,7 @@ def search_businesses():
                     "success": True,
                     "job_id": job_id,
                     "status": "queued",
-                    "source": "apify_yandex",
+                    "source": source,
                     "actor_id": service.actor_id,
                 }
             ),
@@ -5449,6 +5476,7 @@ def _build_admin_lead_offer_payload(
         "photo_urls": preview_meta.get("photo_urls") if isinstance(preview_meta.get("photo_urls"), list) else [],
         "audit": {
             "summary_score": preview.get("summary_score"),
+            "health_level": preview.get("health_level"),
             "health_label": preview.get("health_label"),
             "summary_text": preview.get("summary_text"),
             "findings": preview.get("findings") if isinstance(preview.get("findings"), list) else [],
@@ -5456,7 +5484,14 @@ def _build_admin_lead_offer_payload(
             "services_preview": preview.get("services_preview") if isinstance(preview.get("services_preview"), list) else [],
             "rating": current_state.get("rating"),
             "reviews_count": current_state.get("reviews_count"),
+            "subscores": preview.get("subscores") if isinstance(preview.get("subscores"), dict) else {},
+            "current_state": current_state,
+            "parse_context": preview.get("parse_context") if isinstance(preview.get("parse_context"), dict) else {},
+            "revenue_potential": preview.get("revenue_potential") if isinstance(preview.get("revenue_potential"), dict) else {},
+            "reviews_preview": preview.get("reviews_preview") if isinstance(preview.get("reviews_preview"), list) else [],
+            "news_preview": preview.get("news_preview") if isinstance(preview.get("news_preview"), list) else [],
         },
+        "audit_full": preview if isinstance(preview, dict) else {},
         "cta": {
             "telegram_url": lead.get("telegram_url"),
             "whatsapp_url": lead.get("whatsapp_url"),
@@ -5513,12 +5548,20 @@ def _build_partnership_offer_payload(
         "photo_urls": photo_urls[:8],
         "audit": {
             "summary_score": audit.get("summary_score"),
+            "health_level": audit.get("health_level"),
             "health_label": audit.get("health_label"),
             "summary_text": audit.get("summary_text"),
             "findings": audit.get("findings") if isinstance(audit.get("findings"), list) else [],
             "recommended_actions": audit.get("recommended_actions") if isinstance(audit.get("recommended_actions"), list) else [],
             "services_preview": audit.get("services_preview") if isinstance(audit.get("services_preview"), list) else [],
+            "subscores": audit.get("subscores") if isinstance(audit.get("subscores"), dict) else {},
+            "current_state": audit.get("current_state") if isinstance(audit.get("current_state"), dict) else {},
+            "parse_context": audit.get("parse_context") if isinstance(audit.get("parse_context"), dict) else {},
+            "revenue_potential": audit.get("revenue_potential") if isinstance(audit.get("revenue_potential"), dict) else {},
+            "reviews_preview": audit.get("reviews_preview") if isinstance(audit.get("reviews_preview"), list) else [],
+            "news_preview": audit.get("news_preview") if isinstance(audit.get("news_preview"), list) else [],
         },
+        "audit_full": audit if isinstance(audit, dict) else {},
         "match": {
             "match_score": match.get("match_score"),
             "score_explanation": match.get("score_explanation"),
@@ -6098,12 +6141,12 @@ def partnership_generate_offer_page(lead_id):
                 suffix += 1
                 slug = f"{base_slug}-{suffix}"
 
-            page_json = _build_partnership_offer_payload(
+            page_json = _to_json_compatible(_build_partnership_offer_payload(
                 lead=lead,
                 audit_json=audit_json,
                 match_json=match_json,
                 offer_draft_json=offer_draft_json,
-            )
+            ))
             cur.execute(
                 """
                 INSERT INTO partnershippublicoffers (
@@ -6170,7 +6213,7 @@ def partnership_public_offer_page(slug):
                 return jsonify({"error": "Offer page not found"}), 404
             page_json = row.get("page_json") if hasattr(row, "get") else (row[1] if isinstance(row, (list, tuple)) and len(row) > 1 else {})
             updated_at = row.get("updated_at") if hasattr(row, "get") else (row[2] if isinstance(row, (list, tuple)) and len(row) > 2 else None)
-            payload = page_json if isinstance(page_json, dict) else {}
+            payload = _to_json_compatible(page_json) if isinstance(page_json, dict) else {}
             payload["slug"] = normalized_slug
             payload["public_url"] = _make_public_offer_url(normalized_slug)
             payload["updated_at"] = updated_at.isoformat() if hasattr(updated_at, "isoformat") else payload.get("updated_at")
@@ -8249,7 +8292,7 @@ def generate_admin_prospecting_offer_page(lead_id):
             return jsonify({"error": "Lead is not available for public page"}), 404
 
         preview = build_lead_card_preview_snapshot(display_lead)
-        page_json = _build_admin_lead_offer_payload(lead=display_lead, preview=preview)
+        page_json = _to_json_compatible(_build_admin_lead_offer_payload(lead=display_lead, preview=preview))
 
         conn = get_db_connection()
         try:
