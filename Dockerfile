@@ -31,10 +31,12 @@ WORKDIR /app
 # Python-зависимости (слой кешируется отдельно)
 COPY requirements.txt .
 RUN set -eux; \
-    python -m pip install --no-cache-dir --upgrade pip setuptools wheel; \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PIP_DEFAULT_TIMEOUT=60 \
-    pip install --no-cache-dir --retries 5 --index-url https://pypi.org/simple -r requirements.txt
+    PIP_DEFAULT_TIMEOUT=30 \
+    pip install --no-cache-dir --retries 3 \
+    --index-url https://mirrors.aliyun.com/pypi/simple \
+    --extra-index-url https://pypi.org/simple \
+    -r requirements.txt
 
 # Playwright: браузер Chromium + системные зависимости (worker/парсинг)
 # apt-get update нужен заново — выше списки пакетов удалены; после install чистим кеш
