@@ -17,7 +17,9 @@ services:
       retries: 5
 
   app:
-    build: .
+    build:
+      context: .
+      network: host
     environment:
       DEBUG_DIR: /app/debug_data
       DATABASE_URL: postgresql://${POSTGRES_USER:-beautybot}:${POSTGRES_PASSWORD:-beautybot}@postgres:5432/${POSTGRES_DB:-beautybot}
@@ -52,7 +54,9 @@ services:
     command: ["python", "src/main.py"]
 
   worker:
-    build: .
+    build:
+      context: .
+      network: host
     environment:
       DEBUG_DIR: /app/debug_data
       DATABASE_URL: postgresql://${POSTGRES_USER:-beautybot}:${POSTGRES_PASSWORD:-beautybot}@postgres:5432/${POSTGRES_DB:-beautybot}
