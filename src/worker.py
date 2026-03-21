@@ -844,8 +844,10 @@ def _normalize_yandex_org_url(raw_url: str) -> str:
 
 def _detect_map_source(queue_dict: Dict[str, Any], url: str) -> str:
     source_hint = str(queue_dict.get("source") or "").strip().lower()
-    if source_hint in {"2gis", "two_gis"}:
+    if source_hint in {"2gis", "two_gis", "apify_2gis"}:
         return "2gis"
+    if source_hint == "apify_yandex":
+        return "yandex_maps"
     url_lower = str(url or "").strip().lower()
     if "2gis.ru/" in url_lower or "2gis.com/" in url_lower:
         return "2gis"
@@ -858,6 +860,110 @@ def _has_running_asyncio_loop() -> bool:
         return True
     except RuntimeError:
         return False
+
+
+def _group_apify_services(services_preview: Any) -> List[Dict[str, Any]]:
+    grouped: Dict[str, List[Dict[str, Any]]] = {}
+    if not isinstance(services_preview, list):
+        return []
+    for raw_item in services_preview:
+        if not isinstance(raw_item, dict):
+            continue
+        name = str(raw_item.get("name") or raw_item.get("title") or "").strip()
+        if not name:
+            continue
+        category = str(raw_item.get("category") or "Общие услуги").strip() or "Общие услуги"
+        item_payload = {
+            "name": name,
+            "price": str(raw_item.get("price") or "").strip(),
+            "description": str(raw_item.get("description") or "").strip(),
+            "category": category,
+        }
+        grouped.setdefault(category, []).append(item_payload)
+    return [{"category": category, "items": items} for category, items in grouped.items() if items]
+
+
+def _extract_apify_news(raw_payload: Any) -> List[Dict[str, Any]]:
+    if not isinstance(raw_payload, dict):
+        return []
+    candidates = raw_payload.get("posts")
+    if not isinstance(candidates, list):
+        candidates = raw_payload.get("news")
+    if not isinstance(candidates, list):
+        return []
+    out: List[Dict[str, Any]] = []
+    for entry in candidates:
+        if not isinstance(entry, dict):
+            continue
+        title = str(entry.get("title") or entry.get("name") or "").strip()
+        body = str(entry.get("text") or entry.get("description") or "").strip()
+        if not title and not body:
+            continue
+        out.append(
+            {
+                "title": title or (body[:80] if body else ""),
+                "text": body,
+                "published_at": entry.get("published_at") or entry.get("date") or entry.get("createdAt"),
+                "url": entry.get("url") or entry.get("link"),
+                "raw_payload": entry,
+            }
+        )
+    return out
+
+
+def _parse_card_via_apify(
+    url: str,
+    *,
+    parsed_source: str,
+    source_hint: str,
+) -> Dict[str, Any]:
+    source = "apify_2gis" if source_hint == "apify_2gis" or parsed_source == "2gis" else "apify_yandex"
+    try:
+        from services.prospecting_service import ProspectingService
+    except Exception:
+        from src.services.prospecting_service import ProspectingService
+
+    service = ProspectingService(source=source)
+    result = service.run_business_by_map_url(url, limit=1, timeout_sec=300)
+    items = result.get("items") if isinstance(result, dict) else []
+    if not isinstance(items, list) or not items:
+        raise RuntimeError("Apify returned empty dataset for business card parsing")
+
+    item = items[0] if isinstance(items[0], dict) else {}
+    raw_payload = item.get("raw_payload_json") if isinstance(item, dict) else {}
+    services_preview = item.get("services_json") if isinstance(item, dict) else []
+    reviews_preview = item.get("reviews_json") if isinstance(item, dict) else []
+    photos = item.get("photos_json") if isinstance(item, dict) else []
+    if not isinstance(photos, list):
+        photos = []
+
+    card_data: Dict[str, Any] = {
+        "name": str(item.get("name") or "").strip(),
+        "title": str(item.get("name") or "").strip(),
+        "title_or_name": str(item.get("name") or "").strip(),
+        "address": str(item.get("address") or "").strip(),
+        "phone": str(item.get("phone") or "").strip(),
+        "site": str(item.get("website") or "").strip(),
+        "website": str(item.get("website") or "").strip(),
+        "description": str(item.get("description") or "").strip(),
+        "categories": item.get("category"),
+        "rating": item.get("rating"),
+        "reviews_count": item.get("reviews_count") or 0,
+        "reviews": reviews_preview if isinstance(reviews_preview, list) else [],
+        "products": _group_apify_services(services_preview),
+        "news": _extract_apify_news(raw_payload),
+        "posts": _extract_apify_news(raw_payload),
+        "photos": photos,
+        "photos_count": len(photos),
+        "logo_url": item.get("logo_url"),
+        "overview": {
+            "rating": item.get("rating"),
+            "reviews_count": item.get("reviews_count") or 0,
+            "description": str(item.get("description") or "").strip(),
+        },
+        "raw_payload_json": raw_payload if isinstance(raw_payload, dict) else {},
+    }
+    return card_data
 
 
 def _parse_yandex_card_with_playwright_fallback(
@@ -3048,6 +3154,7 @@ def process_queue():
 
         url = queue_dict["url"]
         parsed_source = _detect_map_source(queue_dict, url)
+        source_hint = str(queue_dict.get("source") or "").strip().lower()
 
         # --- АВТОМАТИЧЕСКОЕ ИСПРАВЛЕНИЕ ССЫЛОК (SPRAV -> MAPS) ---
         if parsed_source == "yandex_maps" and '/sprav/' in url:
@@ -3115,7 +3222,8 @@ def process_queue():
                 print(f"⚠️ Не удалось загрузить geo для business_id={business_id}: {e}")
 
         # Основной вызов парсера с защитой от Playwright Sync-in-async краша
-        active_proxy = _get_next_proxy_for_playwright()
+        use_apify_parser = source_hint in {"apify_yandex", "apify_2gis"}
+        active_proxy = None if use_apify_parser else _get_next_proxy_for_playwright()
         if parsed_source == "2gis":
             active_proxy = None
         proxy_id = str((active_proxy or {}).get("id") or "").strip()
@@ -3131,6 +3239,13 @@ def process_queue():
             if preparsed_card_data is not None:
                 card_data = preparsed_card_data
                 print("♻️ Используем уже полученные данные из CAPTCHA flow", flush=True)
+            elif use_apify_parser:
+                print(f"🌐 Парсинг через Apify source={source_hint or 'apify_yandex'}", flush=True)
+                card_data = _parse_card_via_apify(
+                    url,
+                    parsed_source=parsed_source,
+                    source_hint=source_hint,
+                )
             else:
                 browser_profile = _build_human_browser_profile()
                 if parsed_source == "2gis":

@@ -104,6 +104,32 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
     }
   };
 
+  const handleRunApifyParser = async (source: 'apify_yandex' | 'apify_2gis') => {
+    if (!businessId) return;
+
+    setParseStatus('processing');
+    try {
+      const data = await newAuth.makeRequest('/admin/prospecting/business-parse-apify', {
+        method: 'POST',
+        body: JSON.stringify({ source, business_id: businessId }),
+      });
+      toast({
+        title: 'Успешно',
+        description: data.message || 'Apify-парсинг запущен',
+      });
+      await loadAccounts();
+    } catch (error: any) {
+      console.error('Ошибка Apify-парсинга:', error);
+      toast({
+        title: 'Ошибка',
+        description: error.message || 'Не удалось запустить Apify-парсинг',
+        variant: 'destructive',
+      });
+    } finally {
+      setParseStatus('idle');
+    }
+  };
+
   const loadAccounts = async () => {
     if (!businessId) {
       setLoading(false);
@@ -474,6 +500,14 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
               >
                 {parseStatus === 'processing' ? 'Синхронизация...' : 'Запустить парсер'}
               </Button>
+              <Button
+                type="button"
+                onClick={() => handleRunApifyParser('apify_yandex')}
+                disabled={parseStatus === 'processing' || !businessId}
+                variant="outline"
+              >
+                {parseStatus === 'processing' ? 'Запуск...' : 'Парсинг Apify'}
+              </Button>
               {networkLocationsCount > 1 && (
                 <Button
                   type="button"
@@ -563,6 +597,14 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                 className="ml-auto"
               >
                 {parseStatus === 'processing' ? 'Синхронизация...' : 'Запустить парсер'}
+              </Button>
+              <Button
+                type="button"
+                onClick={() => handleRunApifyParser('apify_2gis')}
+                disabled={parseStatus === 'processing' || !businessId}
+                variant="outline"
+              >
+                {parseStatus === 'processing' ? 'Запуск...' : 'Парсинг Apify'}
               </Button>
             </div>
           </div>

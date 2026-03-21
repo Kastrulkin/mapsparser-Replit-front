@@ -3090,6 +3090,97 @@ def search_businesses():
         return jsonify({"error": str(e)}), 500
 
 
+@admin_prospecting_bp.route("/api/admin/prospecting/business-parse-apify", methods=["POST"])
+def queue_business_parse_apify():
+    """Queue single business card parsing through Apify actor (Yandex / 2GIS)."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+
+    data = request.get_json(silent=True) or {}
+    source = str(data.get("source") or "apify_yandex").strip().lower()
+    if source not in {"apify_yandex", "apify_2gis"}:
+        return jsonify({"error": "Unsupported source"}), 400
+
+    service = ProspectingService(source=source)
+    if not service.client:
+        return jsonify({"error": "APIFY_TOKEN is not configured"}), 500
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        business_id = _resolve_business_for_user(cur, user_data, str(data.get("business_id") or "").strip())
+        if not business_id:
+            return jsonify({"error": "Business not found or access denied"}), 404
+
+        if source == "apify_2gis":
+            cur.execute(
+                """
+                SELECT url
+                FROM businessmaplinks
+                WHERE business_id = %s
+                  AND (
+                    map_type = '2gis'
+                    OR LOWER(url) LIKE '%%2gis.ru/%%'
+                    OR LOWER(url) LIKE '%%2gis.com/%%'
+                  )
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (business_id,),
+            )
+        else:
+            cur.execute(
+                """
+                SELECT url
+                FROM businessmaplinks
+                WHERE business_id = %s
+                  AND (
+                    map_type = 'yandex'
+                    OR LOWER(url) LIKE '%%yandex.ru/maps/%%'
+                    OR LOWER(url) LIKE '%%yandex.com/maps/%%'
+                  )
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (business_id,),
+            )
+
+        row = cur.fetchone()
+        map_url = ""
+        if row:
+            map_url = str(row.get("url") if hasattr(row, "get") else row[0]).strip()
+        if not map_url:
+            return jsonify({"error": "Map link is not configured for this business"}), 400
+
+        task_id = str(uuid.uuid4())
+        cur.execute(
+            """
+            INSERT INTO parsequeue (
+                id, business_id, account_id, task_type, source,
+                status, user_id, url, created_at, updated_at
+            )
+            VALUES (%s, %s, NULL, 'parse_card', %s, 'pending', %s, %s, NOW(), NOW())
+            """,
+            (task_id, business_id, source, str(user_data.get("user_id") or ""), map_url),
+        )
+        conn.commit()
+        return jsonify(
+            {
+                "success": True,
+                "task_id": task_id,
+                "source": source,
+                "message": "Apify-парсинг добавлен в очередь",
+            }
+        )
+    except Exception as e:
+        conn.rollback()
+        print(f"Error queueing business Apify parse: {e}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
+
 @admin_prospecting_bp.route("/api/admin/prospecting/search-job/<string:job_id>", methods=["GET"])
 def get_search_job_status(job_id):
     """Get async search job status and results."""

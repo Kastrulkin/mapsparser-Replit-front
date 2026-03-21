@@ -93,3 +93,9 @@ services:
 
 volumes:
   pgdata:
+
+networks:
+  default:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: "${DOCKER_NETWORK_MTU:-1450}"

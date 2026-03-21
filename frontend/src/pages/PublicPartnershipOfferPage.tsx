@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { newAuth } from '@/lib/auth_new';
@@ -141,33 +141,31 @@ const PublicPartnershipOfferPage: React.FC = () => {
   const score = Number(page.audit?.summary_score || 0);
   const canContact = Boolean(page.cta?.telegram_url || page.cta?.whatsapp_url || page.cta?.email || page.cta?.website);
 
-  const quickState = useMemo(() => {
-    return [
-      {
-        label: 'Услуги в карточке',
-        ok: Number(state.services_count || 0) > 0,
-        hint: Number(state.services_count || 0) > 0 ? `${state.services_count} найдено` : 'Не заполнены или не распознаны',
-      },
-      {
-        label: 'Сайт',
-        ok: Boolean(state.has_website),
-        hint: state.has_website ? 'Есть ссылка на сайт' : 'Сайт не указан',
-      },
-      {
-        label: 'Работа с отзывами',
-        ok: Number(state.unanswered_reviews_count || 0) <= 3,
-        hint:
-          Number(state.unanswered_reviews_count || 0) > 0
-            ? `Без ответа: ${state.unanswered_reviews_count}`
-            : 'Ответы на отзывы есть',
-      },
-      {
-        label: 'Активность карточки',
-        ok: Boolean(state.has_recent_activity),
-        hint: state.has_recent_activity ? 'Есть свежие обновления' : 'Нужны новости/обновления',
-      },
-    ];
-  }, [state]);
+  const quickState = [
+    {
+      label: 'Услуги в карточке',
+      ok: Number(state.services_count || 0) > 0,
+      hint: Number(state.services_count || 0) > 0 ? `${state.services_count} найдено` : 'Не заполнены или не распознаны',
+    },
+    {
+      label: 'Сайт',
+      ok: Boolean(state.has_website),
+      hint: state.has_website ? 'Есть ссылка на сайт' : 'Сайт не указан',
+    },
+    {
+      label: 'Работа с отзывами',
+      ok: Number(state.unanswered_reviews_count || 0) <= 3,
+      hint:
+        Number(state.unanswered_reviews_count || 0) > 0
+          ? `Без ответа: ${state.unanswered_reviews_count}`
+          : 'Ответы на отзывы есть',
+    },
+    {
+      label: 'Активность карточки',
+      ok: Boolean(state.has_recent_activity),
+      hint: state.has_recent_activity ? 'Есть свежие обновления' : 'Нужны новости/обновления',
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_top_right,_rgba(56,189,248,0.18),_transparent_45%),radial-gradient(ellipse_at_bottom_left,_rgba(14,165,233,0.16),_transparent_40%),linear-gradient(to_bottom,_#f8fafc,_#ffffff)]">

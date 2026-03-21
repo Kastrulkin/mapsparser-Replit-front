@@ -1,4 +1,6 @@
 import os
+import re
+import time
 from decimal import Decimal
 import requests
 import urllib3
@@ -475,6 +477,86 @@ class ProspectingService:
             },
         }
 
+    @staticmethod
+    def _extract_map_business_id(map_url: str, source: str) -> Optional[str]:
+        value = str(map_url or "").strip()
+        if not value:
+            return None
+        if source == "apify_2gis":
+            match = re.search(r"/firm/(\d+)", value)
+            if match:
+                return match.group(1)
+            return None
+        match = re.search(r"/org/(?:[^/?]+/)?(\d+)", value)
+        if match:
+            return match.group(1)
+        return None
+
+    def _build_run_input_for_map_url(self, map_url: str, limit: int = 1) -> Dict[str, Any]:
+        map_url_text = str(map_url or "").strip()
+        if not map_url_text:
+            raise ValueError("map_url is required")
+
+        proxy_groups_raw = str(os.environ.get("APIFY_PROXY_GROUPS", "RESIDENTIAL") or "").strip()
+        proxy_groups = [grp.strip() for grp in proxy_groups_raw.split(",") if grp.strip()]
+        if not proxy_groups:
+            proxy_groups = ["RESIDENTIAL"]
+
+        if self.source == "apify_2gis":
+            return {
+                "query": map_url_text,
+                "maxItems": max(1, int(limit or 1)),
+                "startUrls": [{"url": map_url_text}],
+                "proxyConfiguration": {
+                    "useApifyProxy": True,
+                    "apifyProxyGroups": proxy_groups,
+                },
+            }
+
+        business_id = self._extract_map_business_id(map_url_text, self.source)
+        business_ids = [business_id] if business_id else []
+        return {
+            "query": [map_url_text],
+            "location": "",
+            "category": "",
+            "maxResults": max(1, int(limit or 1)),
+            "language": "ru",
+            "enrichBusinessData": True,
+            "maxPhotos": 20,
+            "maxPosts": 20,
+            "startUrls": [{"url": map_url_text}],
+            "businessIds": business_ids,
+            "coordinates": "",
+            "viewportSpan": "",
+            "filterRating": "",
+            "filterOpenNow": False,
+            "filterOpen24h": False,
+            "filterDelivery": False,
+            "filterTakeaway": False,
+            "filterWifi": False,
+            "filterCardPayment": False,
+            "filterParking": False,
+            "filterPetFriendly": False,
+            "filterWheelchairAccess": False,
+            "filterGoodPlace": False,
+            "filterMichelin": False,
+            "filterBusinessLunch": False,
+            "filterSummerTerrace": False,
+            "filterCuisine": [],
+            "filterPriceCategory": [],
+            "filterPriceMin": None,
+            "filterPriceMax": None,
+            "filterCategoryId": [],
+            "filterChainId": [],
+            "customFilters": [],
+            "sortBy": "",
+            "sortOrigin": "",
+            "proxyConfiguration": {
+                "useApifyProxy": True,
+                "apifyProxyGroups": proxy_groups,
+            },
+        }
+
     def _load_proxy_from_db(self) -> Optional[Dict[str, Any]]:
         """
         Pick one active/working proxy from ProxyServers for outgoing Apify API calls.
@@ -640,6 +722,12 @@ class ProspectingService:
             raise ValueError("APIFY_TOKEN is not set")
 
         run_input = self._build_run_input(query, location, limit)
+        return self._start_run_with_input(run_input)
+
+    def _start_run_with_input(self, run_input: Dict[str, Any]) -> Dict[str, Any]:
+        if not self.api_token:
+            raise ValueError("APIFY_TOKEN is not set")
+
         # Use raw REST start instead of apify_client.start() because the client
         # library uses a shorter default HTTP timeout and can still block before
         # returning a run id on slow API responses.
@@ -672,6 +760,44 @@ class ProspectingService:
             "run_id": payload.get("id"),
             "dataset_id": payload.get("defaultDatasetId"),
             "status": payload.get("status"),
+            "run_input": run_input,
+        }
+
+    def run_business_by_map_url(
+        self,
+        map_url: str,
+        *,
+        limit: int = 1,
+        timeout_sec: int = 300,
+    ) -> Dict[str, Any]:
+        run_input = self._build_run_input_for_map_url(map_url, limit=limit)
+        run_meta = self._start_run_with_input(run_input)
+        run_id = str(run_meta.get("run_id") or "").strip()
+        if not run_id:
+            raise RuntimeError("Apify run did not start")
+
+        started_at = datetime.datetime.utcnow()
+        final_status = str(run_meta.get("status") or "").strip().upper() or "RUNNING"
+        dataset_id = str(run_meta.get("dataset_id") or "").strip()
+
+        while final_status in {"READY", "RUNNING", "TIMING-OUT", "ABORTING"}:
+            elapsed = (datetime.datetime.utcnow() - started_at).total_seconds()
+            if elapsed > max(30, int(timeout_sec or 300)):
+                raise TimeoutError(f"Apify actor did not finish within {int(timeout_sec or 300)} seconds")
+            time.sleep(4)
+            run_data = self.get_run(run_id)
+            final_status = str(run_data.get("status") or "").strip().upper() or final_status
+            dataset_id = str(run_data.get("defaultDatasetId") or dataset_id or "").strip()
+
+        if final_status != "SUCCEEDED":
+            raise RuntimeError(f"Apify run finished with status={final_status}")
+
+        items = self.fetch_dataset_items(dataset_id)
+        return {
+            "run_id": run_id,
+            "dataset_id": dataset_id,
+            "status": final_status,
+            "items": items,
             "run_input": run_input,
         }
 

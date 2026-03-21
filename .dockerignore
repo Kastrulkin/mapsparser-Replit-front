@@ -29,8 +29,8 @@ db_backups
 *.swo
 
 # Фронтенд (в этом образе только backend/worker; при необходимости соберите отдельно)
-# frontend/node_modules
-# frontend/dist
+frontend/node_modules
+frontend/dist
 
 # Отладочные данные и архив. Не исключать scripts/ (migrate_sqlite_to_postgres.py, smoke) и tests/
 debug_data
