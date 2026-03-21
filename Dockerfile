@@ -12,7 +12,14 @@ RUN npm run build
 FROM python:3.11-bookworm
 
 # Системные зависимости: psycopg2 + postgresql-client для pg_isready в entrypoint
-RUN apt-get -o Acquire::Retries=5 -o Acquire::ForceIPv4=true update \
+RUN set -eux; \
+    if [ -f /etc/apt/sources.list ]; then \
+      sed -i "s|http://deb.debian.org/debian|http://mirror.yandex.ru/debian|g; s|http://deb.debian.org/debian-security|http://mirror.yandex.ru/debian-security|g" /etc/apt/sources.list; \
+    fi; \
+    if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
+      sed -i "s|http://deb.debian.org/debian|http://mirror.yandex.ru/debian|g; s|http://deb.debian.org/debian-security|http://mirror.yandex.ru/debian-security|g" /etc/apt/sources.list.d/debian.sources; \
+    fi; \
+    apt-get -o Acquire::Retries=5 -o Acquire::ForceIPv4=true update \
     && apt-get -o Acquire::Retries=5 -o Acquire::ForceIPv4=true install -y --no-install-recommends \
     libpq-dev \
     gcc \
