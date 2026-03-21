@@ -802,6 +802,29 @@ def _parse_yandex_card_subprocess_entry(result_queue: Any, url: str, kwargs: Dic
         )
 
 
+def _parse_2gis_card_subprocess_entry(result_queue: Any, url: str, kwargs: Dict[str, Any]) -> None:
+    """Изолированный запуск 2GIS sync Playwright/HTTP в отдельном процессе."""
+    try:
+        from two_gis_maps_scraper import parse_2gis_card as subprocess_parse_2gis_card
+
+        result = subprocess_parse_2gis_card(url, **kwargs)
+        if result is None:
+            result_queue.put({"error": "parser_returned_none", "url": url})
+        elif not isinstance(result, dict):
+            result_queue.put({"error": f"parser_returned_{type(result).__name__}", "url": url})
+        else:
+            result_queue.put(result)
+    except Exception as exc:
+        result_queue.put(
+            {
+                "error": "parser_subprocess_exception",
+                "message": str(exc),
+                "traceback": traceback.format_exc(),
+                "url": url,
+            }
+        )
+
+
 def _is_playwright_sync_in_async_error(message: str) -> bool:
     msg = (message or "").strip().lower()
     return "playwright sync api inside the asyncio loop" in msg
@@ -908,6 +931,65 @@ def _parse_yandex_card_with_playwright_fallback(
             return {
                 "error": "parser_subprocess_no_result",
                 "message": "parse_yandex_card subprocess finished without payload",
+                "url": url,
+            }
+
+        result = result_queue.get()
+        if isinstance(result, dict):
+            result.setdefault("_playwright_fallback", "subprocess")
+            return result
+        return {"error": "parser_subprocess_invalid_result", "url": url}
+
+
+def _parse_2gis_card_with_playwright_fallback(
+    url: str,
+    *,
+    timeout_sec: int = 120,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    """
+    Вызов 2GIS парсера с fallback в subprocess при sync-in-async ошибке Playwright.
+    """
+    try:
+        result = parse_2gis_card(url, timeout_sec=timeout_sec, **kwargs)
+        if isinstance(result, dict):
+            parser_error = str(result.get("error") or "").strip().lower()
+            parser_message = str(result.get("message") or "").strip()
+            # 2GIS parser may swallow sync-in-async as plain error payload.
+            # Treat this exactly as exception branch and run subprocess fallback.
+            if parser_error == "2gis_parse_failed" and _is_playwright_sync_in_async_error(parser_message):
+                raise RuntimeError(parser_message)
+        return result
+    except Exception as exc:
+        msg = str(exc)
+        if not _is_playwright_sync_in_async_error(msg):
+            raise
+
+        subprocess_kwargs = dict(kwargs)
+        subprocess_kwargs["timeout_sec"] = timeout_sec
+        ctx = multiprocessing.get_context("fork")
+        result_queue = ctx.Queue(maxsize=1)
+        proc = ctx.Process(
+            target=_parse_2gis_card_subprocess_entry,
+            args=(result_queue, url, subprocess_kwargs),
+            daemon=True,
+        )
+        proc.start()
+        proc.join(timeout_sec)
+
+        if proc.is_alive():
+            proc.terminate()
+            proc.join(timeout=5)
+            return {
+                "error": "parser_subprocess_timeout",
+                "message": f"parse_2gis_card subprocess timeout after {timeout_sec}s",
+                "url": url,
+            }
+
+        if result_queue.empty():
+            return {
+                "error": "parser_subprocess_no_result",
+                "message": "parse_2gis_card subprocess finished without payload",
                 "url": url,
             }
 
@@ -2079,6 +2161,57 @@ def _validate_parsing_result(card_data: dict, source: str = SOURCE_YANDEX_BUSINE
             reason = f"{reason} missing={','.join(critical_list)}"
         return False, reason, validation
 
+    # 2GIS-specific guard:
+    # if parse returned only sparse shell (title/address etc.) without any rich content,
+    # do not treat it as a successful snapshot, otherwise UI may look "emptied".
+    if str(source or "").strip().lower() == "2gis":
+        has_rich_lists = any(
+            isinstance(card_data.get(key), list) and len(card_data.get(key) or []) > 0
+            for key in ("products", "news", "reviews", "photos")
+        )
+        raw_reviews_count = card_data.get("reviews_count")
+        normalized_reviews_count = _normalize_reviews_count(raw_reviews_count)
+
+        if normalized_reviews_count <= 0 and isinstance(raw_reviews_count, dict):
+            for key in (
+                "general_review_count",
+                "org_review_count",
+                "general_review_count_with_stars",
+                "org_review_count_with_stars",
+                "count",
+            ):
+                candidate = _normalize_reviews_count(raw_reviews_count.get(key))
+                if candidate > normalized_reviews_count:
+                    normalized_reviews_count = candidate
+
+        raw_reviews = card_data.get("reviews")
+        if normalized_reviews_count <= 0 and isinstance(raw_reviews, dict):
+            for key in (
+                "general_review_count",
+                "org_review_count",
+                "general_review_count_with_stars",
+                "org_review_count_with_stars",
+                "count",
+            ):
+                candidate = _normalize_reviews_count(raw_reviews.get(key))
+                if candidate > normalized_reviews_count:
+                    normalized_reviews_count = candidate
+
+        overview = card_data.get("overview")
+        if normalized_reviews_count <= 0 and isinstance(overview, dict):
+            candidate = _normalize_reviews_count(overview.get("reviews_count"))
+            if candidate > normalized_reviews_count:
+                normalized_reviews_count = candidate
+
+        has_reviews_count = normalized_reviews_count > 0
+        if not has_reviews_count:
+            raw_text = str(raw_reviews_count or "").strip().lower()
+            has_reviews_count = bool(
+                raw_text and raw_text not in ("0", "0.0", "none", "null", "{}", "[]")
+            )
+        if not has_rich_lists and not has_reviews_count:
+            return False, "low_quality_payload:2gis_sparse_payload", validation
+
     return True, "success", validation
 
 
@@ -2783,15 +2916,24 @@ def process_queue():
                 )
                 return
             print(f"🔁 CAPTCHA auto-retry attempt={attempt_no} task_id={task_id}")
-            browser_profile = _build_human_browser_profile()
-            card_data = _parse_yandex_card_with_playwright_fallback(
-                url,
-                keep_open_on_captcha=False,
-                user_agent=browser_profile["user_agent"],
-                viewport=browser_profile["viewport"],
-                launch_args=browser_profile["launch_args"],
-                init_scripts=browser_profile["init_scripts"],
-            )
+            retry_source = _detect_map_source(queue_dict, url)
+            if retry_source == "2gis":
+                card_data = _parse_2gis_card_with_playwright_fallback(
+                    url,
+                    timeout_sec=60,
+                    headless=True,
+                    proxy=None,
+                )
+            else:
+                browser_profile = _build_human_browser_profile()
+                card_data = _parse_yandex_card_with_playwright_fallback(
+                    url,
+                    keep_open_on_captcha=False,
+                    user_agent=browser_profile["user_agent"],
+                    viewport=browser_profile["viewport"],
+                    launch_args=browser_profile["launch_args"],
+                    init_scripts=browser_profile["init_scripts"],
+                )
 
             if card_data.get("error") == "captcha_detected":
                 retry_delay = _captcha_retry_delay_for_task(queue_dict, attempt_no)
@@ -2974,6 +3116,8 @@ def process_queue():
 
         # Основной вызов парсера с защитой от Playwright Sync-in-async краша
         active_proxy = _get_next_proxy_for_playwright()
+        if parsed_source == "2gis":
+            active_proxy = None
         proxy_id = str((active_proxy or {}).get("id") or "").strip()
         if active_proxy:
             proxy_country = str((active_proxy or {}).get("country_code") or "base")
@@ -2990,7 +3134,7 @@ def process_queue():
             else:
                 browser_profile = _build_human_browser_profile()
                 if parsed_source == "2gis":
-                    card_data = parse_2gis_card(
+                    card_data = _parse_2gis_card_with_playwright_fallback(
                         url,
                         timeout_sec=60,
                         headless=True,

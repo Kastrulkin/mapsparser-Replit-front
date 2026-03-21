@@ -13,6 +13,13 @@ _LD_JSON_PATTERN = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 _META_CONTENT_PATTERN_TEMPLATE = r'<meta[^>]+property=["\']{property_name}["\'][^>]+content=["\'](.*?)["\']'
+_WEB_API_KEY_PATTERNS = (
+    re.compile(r'"webApiOutsourceKey"\s*:\s*"([^"]+)"', re.IGNORECASE),
+    re.compile(r'"webApiKey"\s*:\s*"([^"]+)"', re.IGNORECASE),
+)
+_DEFAULT_CATALOG_KEYS = (
+    "292d0592-6e9a-4882-b2c6-5979d678ddea",
+)
 
 
 def _safe_float(value: Any) -> Optional[float]:
@@ -394,6 +401,225 @@ def _extract_meta_content(html: str, property_name: str) -> str:
     return str(match.group(1) or "").strip()
 
 
+def _extract_2gis_web_api_keys(html: str) -> List[str]:
+    keys: List[str] = []
+    source = str(html or "")
+    for pattern in _WEB_API_KEY_PATTERNS:
+        for match in pattern.findall(source):
+            value = str(match or "").strip()
+            if value:
+                keys.append(value)
+    return _unique_preserve_order(keys)
+
+
+def _load_fallback_catalog_keys() -> List[str]:
+    env_value = str(os.getenv("TWO_GIS_CATALOG_KEYS", "") or "").strip()
+    env_keys = [part.strip() for part in env_value.split(",") if part.strip()]
+    combined = list(env_keys) + list(_DEFAULT_CATALOG_KEYS)
+    return _unique_preserve_order(combined)
+
+
+def _extract_contact_fields(contact_groups: Any) -> Tuple[str, str]:
+    phone = ""
+    site = ""
+    if not isinstance(contact_groups, list):
+        return phone, site
+    for group in contact_groups:
+        if not isinstance(group, dict):
+            continue
+        for contact in group.get("contacts") or []:
+            if not isinstance(contact, dict):
+                continue
+            ctype = str(contact.get("type") or "").strip().lower()
+            text = str(contact.get("text") or "").strip()
+            if not text:
+                continue
+            if not phone and ctype == "phone":
+                phone = text
+            elif not site and ctype in ("website", "site", "url"):
+                site = text
+    return phone, site
+
+
+def _extract_reviews_from_catalog_item(item: Dict[str, Any]) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    raw_reviews = item.get("reviews")
+    reviews_iterable: List[Any] = []
+
+    if isinstance(raw_reviews, list):
+        reviews_iterable = raw_reviews
+    elif isinstance(raw_reviews, dict):
+        # 2GIS often returns reviews as object:
+        # {"general_review_count": ..., "general_rating": ..., "items": [...]}
+        # where items may be stubs. We still try to parse full reviews if present.
+        items = raw_reviews.get("items")
+        if isinstance(items, list):
+            reviews_iterable = items
+        else:
+            # Fallback: in some payload variants review dicts can be nested under other keys.
+            for value in raw_reviews.values():
+                if isinstance(value, list):
+                    reviews_iterable.extend(value)
+
+    for review in reviews_iterable:
+        if not isinstance(review, dict):
+            continue
+        text = str(review.get("text") or "").strip()
+        if not text:
+            continue
+        rows.append(
+            {
+                "id": review.get("id"),
+                "author": review.get("user_name") or review.get("author") or "",
+                "text": text,
+                "score": _safe_int(review.get("rating") or review.get("mark")),
+                "date": review.get("created_at") or review.get("date") or None,
+                "org_reply": review.get("response_text") or review.get("reply_text") or None,
+            }
+        )
+    return rows[:120]
+
+
+def _build_result_from_catalog_item(item: Dict[str, Any], final_url: str) -> Dict[str, Any]:
+    reviews = _extract_reviews_from_catalog_item(item)
+    raw_reviews_obj = item.get("reviews")
+    categories = []
+    for rubric in item.get("rubrics") or []:
+        if not isinstance(rubric, dict):
+            continue
+        name = str(rubric.get("name") or "").strip()
+        if name:
+            categories.append(name)
+    categories = _unique_preserve_order(categories)[:20]
+
+    phone, site = _extract_contact_fields(item.get("contact_groups") or [])
+    title = str(item.get("name") or "").strip()
+    address = str(item.get("full_address_name") or item.get("address_name") or "").strip()
+    reviews_count = len(reviews)
+    if reviews_count == 0:
+        if isinstance(raw_reviews_obj, list):
+            reviews_count = len(raw_reviews_obj)
+        elif isinstance(raw_reviews_obj, dict):
+            for key in (
+                "general_review_count",
+                "org_review_count",
+                "general_review_count_with_stars",
+                "org_review_count_with_stars",
+            ):
+                value = _safe_int(raw_reviews_obj.get(key))
+                if value and value > 0:
+                    reviews_count = value
+                    break
+    rating = None
+    if reviews:
+        weighted = 0.0
+        count = 0
+        for review in reviews:
+            value = _safe_float(review.get("score"))
+            if value is None:
+                continue
+            weighted += value
+            count += 1
+        if count > 0:
+            rating = round(weighted / count, 2)
+    if rating is None:
+        if isinstance(raw_reviews_obj, dict):
+            rating = _safe_float(raw_reviews_obj.get("general_rating"))
+            if rating is None:
+                rating = _safe_float(raw_reviews_obj.get("org_rating"))
+        if rating is None:
+            rating = 0.0
+
+    return {
+        "source": "2gis",
+        "url": final_url,
+        "title": title,
+        "title_or_name": title,
+        "name": title,
+        "address": address,
+        "phone": phone,
+        "site": site,
+        "rating": rating,
+        "reviews_count": reviews_count,
+        "categories": categories,
+        "products": [],
+        "news": [],
+        "reviews": reviews,
+        "photos": [],
+        "overview": {
+            "rating": rating,
+            "reviews_count": reviews_count,
+            "photos_count": 0,
+            "news_count": 0,
+            "title": title,
+        },
+    }
+
+
+def _query_catalog_item_byid(
+    firm_id: str,
+    keys: List[str],
+    timeout_sec: int,
+    proxy: Optional[Dict[str, Any]] = None,
+) -> Optional[Dict[str, Any]]:
+    if not firm_id:
+        return None
+    timeout_total = min(15, max(6, int(timeout_sec or 20)))
+    connect_timeout = min(5, timeout_total)
+    read_timeout = max(6, min(10, timeout_total))
+    proxies = _requests_proxy_from_playwright_proxy(proxy)
+    session = requests.Session()
+    session.trust_env = False
+    fields = (
+        "items.name,items.address_name,items.full_address_name,items.point,"
+        "items.rubrics,items.reviews,items.contact_groups,items.schedule,items.type"
+    )
+    for key in keys[:5]:
+        api_url = (
+            "https://catalog.api.2gis.com/3.0/items/byid"
+            f"?id={firm_id}&fields={fields}&key={key}"
+        )
+        for use_proxies in (True, False):
+            try:
+                request_proxies = proxies if (use_proxies and proxies) else None
+                response = session.get(
+                    api_url,
+                    timeout=(connect_timeout, read_timeout),
+                    verify=False,
+                    proxies=request_proxies,
+                )
+                payload = response.json() if response.content else {}
+                meta = payload.get("meta") if isinstance(payload, dict) else {}
+                if not isinstance(meta, dict) or int(meta.get("code") or 0) != 200:
+                    continue
+                result = payload.get("result") if isinstance(payload, dict) else {}
+                items = result.get("items") if isinstance(result, dict) else []
+                if not isinstance(items, list) or not items:
+                    continue
+                item = items[0] if isinstance(items[0], dict) else None
+                if item:
+                    return item
+            except Exception:
+                continue
+    return None
+
+
+def _parse_2gis_catalog_api(html: str, final_url: str, timeout_sec: int, proxy: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    firm_id = _extract_firm_id(final_url)
+    if not firm_id:
+        return {"error": "2gis_catalog_missing_firm_id"}
+    keys = _extract_2gis_web_api_keys(html)
+    fallback_keys = _load_fallback_catalog_keys()
+    keys = _unique_preserve_order(keys + fallback_keys)
+    if not keys:
+        return {"error": "2gis_catalog_missing_api_key"}
+
+    item = _query_catalog_item_byid(firm_id, keys, timeout_sec, proxy=proxy)
+    if item:
+        return _build_result_from_catalog_item(item, final_url=final_url)
+    return {"error": "2gis_catalog_api_failed"}
+
+
 def _looks_like_captcha_text(value: str) -> bool:
     text = str(value or "").strip().lower()
     if not text:
@@ -462,6 +688,15 @@ def _parse_2gis_http_fallback(urls: List[str], timeout_sec: int, proxy: Optional
             if not html:
                 last_error = "empty_html"
                 continue
+
+            catalog_result = _parse_2gis_catalog_api(
+                html=html,
+                final_url=str(response.url or target_url).strip(),
+                timeout_sec=timeout_sec,
+                proxy=proxy,
+            )
+            if not catalog_result.get("error") and _has_rich_content(catalog_result):
+                return catalog_result
 
             ld_json_raw_items = _LD_JSON_PATTERN.findall(html)
             schema_objects = _extract_json_ld_objects(ld_json_raw_items)
@@ -537,6 +772,21 @@ def _parse_2gis_http_fallback(urls: List[str], timeout_sec: int, proxy: Optional
     }
 
 
+def _has_rich_content(result: Dict[str, Any]) -> bool:
+    if not isinstance(result, dict):
+        return False
+    for key in ("products", "news", "reviews", "photos"):
+        value = result.get(key)
+        if isinstance(value, list) and len(value) > 0:
+            return True
+    try:
+        if int(result.get("reviews_count") or 0) > 0:
+            return True
+    except Exception:
+        return False
+    return False
+
+
 def parse_2gis_card(url: str, timeout_sec: int = 120, headless: bool = True, proxy: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     if not url:
         return {"error": "empty_url"}
@@ -549,15 +799,30 @@ def parse_2gis_card(url: str, timeout_sec: int = 120, headless: bool = True, pro
     timeout_ms = max(30, int(timeout_sec)) * 1000
 
     candidate_urls = _candidate_2gis_urls(url)
+    firm_id = _extract_firm_id(url)
+    if firm_id:
+        direct_item = _query_catalog_item_byid(
+            firm_id=firm_id,
+            keys=_load_fallback_catalog_keys(),
+            timeout_sec=timeout_sec,
+            proxy=proxy,
+        )
+        if direct_item:
+            return _build_result_from_catalog_item(direct_item, final_url=url)
 
     http_prefetch = _parse_2gis_http_fallback(candidate_urls, timeout_sec=timeout_sec, proxy=proxy)
+    prefetch_seed: Optional[Dict[str, Any]] = None
     if not http_prefetch.get("error"):
-        return http_prefetch
+        if _has_rich_content(http_prefetch):
+            return http_prefetch
+        prefetch_seed = http_prefetch
     # Proxy path can be temporarily degraded; retry direct HTTP once.
     if proxy:
         http_direct = _parse_2gis_http_fallback(candidate_urls, timeout_sec=timeout_sec, proxy=None)
         if not http_direct.get("error"):
-            return http_direct
+            if _has_rich_content(http_direct):
+                return http_direct
+            prefetch_seed = http_direct
 
     # Stabilization mode for production queues: do not enter heavy Playwright path
     # when HTTP fallback already failed. This prevents long "processing" hangs.
@@ -568,6 +833,12 @@ def parse_2gis_card(url: str, timeout_sec: int = 120, headless: bool = True, pro
         "on",
     )
     if disable_playwright:
+        if prefetch_seed and not prefetch_seed.get("error"):
+            return {
+                "error": "2gis_parse_failed",
+                "message": "sparse_http_prefetch_only",
+                "url": prefetch_seed.get("url") or url,
+            }
         return {
             "error": "2gis_parse_failed",
             "message": f"http_prefetch_failed:{http_prefetch.get('message') or 'unknown'}",
@@ -706,6 +977,8 @@ def parse_2gis_card(url: str, timeout_sec: int = 120, headless: bool = True, pro
     title = str(dom_snapshot.get("title") or "").strip()
     if not title and local_business_schema:
         title = str(local_business_schema.get("name") or "").strip()
+    if not title and prefetch_seed:
+        title = str(prefetch_seed.get("title") or "").strip()
     if not title:
         title = str(dom_snapshot.get("pageTitle") or "").replace(" — 2ГИС", "").strip()
 
@@ -715,16 +988,22 @@ def parse_2gis_card(url: str, timeout_sec: int = 120, headless: bool = True, pro
             address = str(local_business_schema.get("address", {}).get("streetAddress") or "").strip()
         elif local_business_schema.get("address"):
             address = str(local_business_schema.get("address") or "").strip()
+    if not address and prefetch_seed:
+        address = str(prefetch_seed.get("address") or "").strip()
 
     site = str(dom_snapshot.get("siteLink") or "").strip()
     if not site and local_business_schema:
         site = str(local_business_schema.get("url") or "").strip()
         if site and "2gis." in site.lower():
             site = ""
+    if not site and prefetch_seed:
+        site = str(prefetch_seed.get("site") or "").strip()
 
     phone = str(dom_snapshot.get("phoneText") or "").strip()
     if not phone and local_business_schema:
         phone = str(local_business_schema.get("telephone") or "").strip()
+    if not phone and prefetch_seed:
+        phone = str(prefetch_seed.get("phone") or "").strip()
 
     rating = None
     reviews_count = None
@@ -734,8 +1013,12 @@ def parse_2gis_card(url: str, timeout_sec: int = 120, headless: bool = True, pro
         reviews_count = _safe_int(agg.get("reviewCount"))
     if rating is None:
         rating = _safe_float(dom_snapshot.get("ratingText"))
+    if rating is None and prefetch_seed:
+        rating = _safe_float(prefetch_seed.get("rating"))
     if reviews_count is None:
         reviews_count = _safe_int(dom_snapshot.get("reviewsCountText"))
+    if reviews_count is None and prefetch_seed:
+        reviews_count = _safe_int(prefetch_seed.get("reviews_count"))
 
     products = _extract_products_from_payloads(payloads)
     news = _extract_news_from_payloads(payloads)
