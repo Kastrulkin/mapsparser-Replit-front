@@ -1626,17 +1626,42 @@ def get_external_reviews(business_id):
             db.close()
             return jsonify({"success": True, "reviews": [], "total": 0, "with_response": 0, "without_response": 0})
 
-        # Читаем из externalbusinessreviews (lowercase для Postgres)
+        requested_scope = str(request.args.get("scope") or "").strip().lower()
         cursor.execute(
             """
-            SELECT id, source, external_review_id, rating, author_name, text,
-                   response_text, response_at, published_at, created_at
-            FROM externalbusinessreviews
-            WHERE business_id = %s
-            ORDER BY COALESCE(published_at, created_at) DESC, created_at DESC
+            SELECT id, name, address, network_id
+            FROM businesses
+            WHERE id = %s
+            LIMIT 1
             """,
             (business_id,),
         )
+        raw_business = cursor.fetchone()
+        business_row = _row_to_dict(cursor, raw_business) if raw_business else None
+        network_id = business_row.get("network_id") if business_row else None
+        aggregate_network = bool(network_id) and requested_scope == "network"
+
+        review_query = """
+            SELECT r.id, r.source, r.external_review_id, r.rating, r.author_name, r.text,
+                   r.response_text, r.response_at, r.published_at, r.created_at,
+                   b.id AS location_business_id, b.name AS location_name, b.address AS location_address
+            FROM externalbusinessreviews r
+            LEFT JOIN businesses b ON b.id = r.business_id
+        """
+        review_params = []
+        if aggregate_network:
+            review_query += """
+            WHERE r.business_id IN (
+                SELECT id FROM businesses WHERE network_id = %s
+            )
+            """
+            review_params.append(network_id)
+        else:
+            review_query += " WHERE r.business_id = %s "
+            review_params.append(business_id)
+
+        review_query += " ORDER BY COALESCE(r.published_at, r.created_at) DESC, r.created_at DESC "
+        cursor.execute(review_query, tuple(review_params))
         rows = cursor.fetchall()
         db.close()
 
@@ -1658,6 +1683,9 @@ def get_external_reviews(business_id):
                 "published_at": rd.get("published_at"),
                 "created_at": rd.get("created_at"),
                 "has_response": bool(resp_text),
+                "location_business_id": rd.get("location_business_id"),
+                "location_name": rd.get("location_name"),
+                "location_address": rd.get("location_address"),
             })
 
         return jsonify({
@@ -1666,6 +1694,8 @@ def get_external_reviews(business_id):
             "total": len(reviews),
             "with_response": sum(1 for x in reviews if x["has_response"]),
             "without_response": sum(1 for x in reviews if not x["has_response"]),
+            "scope": "network" if aggregate_network else "business",
+            "network_id": network_id if aggregate_network else None,
         })
 
     except Exception as e:
@@ -1743,32 +1773,108 @@ def get_external_summary(business_id):
                 "last_sync_date": None,
                 "last_parse_date": last_parse_date,
                 "competitors": competitors,
+                "scope": "business",
+                "network_id": None,
             })
 
-        # Статистика из externalbusinessstats (Postgres)
+        requested_scope = str(request.args.get("scope") or "").strip().lower()
         cursor.execute(
             """
-            SELECT rating, reviews_total, date
-            FROM externalbusinessstats
-            WHERE business_id = %s AND source = 'yandex_business'
-            ORDER BY date DESC
+            SELECT id, name, address, network_id
+            FROM businesses
+            WHERE id = %s
             LIMIT 1
             """,
             (business_id,),
         )
-        raw_stats = cursor.fetchone()
-        stats_row = _row_to_dict(cursor, raw_stats) if raw_stats else None
+        raw_business = cursor.fetchone()
+        business_row = _row_to_dict(cursor, raw_business) if raw_business else None
+        network_id = business_row.get("network_id") if business_row else None
+        aggregate_network = bool(network_id) and requested_scope == "network"
 
-        cursor.execute(
+        stats_query = """
+            SELECT business_id, rating, reviews_total, date
+            FROM externalbusinessstats
+            WHERE source = 'yandex_business'
+        """
+        stats_params = []
+        if aggregate_network:
+            stats_query += """
+              AND business_id IN (
+                  SELECT id FROM businesses WHERE network_id = %s
+              )
+            ORDER BY business_id, date DESC
             """
+            stats_params.append(network_id)
+        else:
+            stats_query += """
+              AND business_id = %s
+            ORDER BY date DESC
+            LIMIT 1
+            """
+            stats_params.append(business_id)
+
+        cursor.execute(stats_query, tuple(stats_params))
+        stats_rows = cursor.fetchall()
+        stats_dicts = [_row_to_dict(cursor, row) for row in stats_rows]
+        if aggregate_network:
+            latest_by_business = {}
+            filtered_stats = []
+            for item in stats_dicts:
+                business_stat_id = str(item.get("business_id") or "").strip()
+                if business_stat_id and business_stat_id not in latest_by_business:
+                    latest_by_business[business_stat_id] = True
+                    filtered_stats.append(item)
+            stats_dicts = filtered_stats
+        stats_row = stats_dicts[0] if stats_dicts else None
+
+        if aggregate_network and stats_dicts:
+            weighted_sum = 0.0
+            weighted_count = 0
+            latest_sync_date = None
+            for item in stats_dicts:
+                item_rating = item.get("rating")
+                item_reviews_total = item.get("reviews_total")
+                item_date = item.get("date")
+                if latest_sync_date is None or (item_date and item_date > latest_sync_date):
+                    latest_sync_date = item_date
+                try:
+                    rating_value = float(item_rating) if item_rating is not None else None
+                except (TypeError, ValueError):
+                    rating_value = None
+                reviews_value = int(item_reviews_total or 0)
+                if rating_value is not None and reviews_value > 0:
+                    weighted_sum += rating_value * reviews_value
+                    weighted_count += reviews_value
+            aggregated_rating = None
+            if weighted_count > 0:
+                aggregated_rating = weighted_sum / weighted_count
+            stats_row = {
+                "rating": aggregated_rating,
+                "reviews_total": weighted_count,
+                "date": latest_sync_date,
+            }
+
+        reviews_summary_query = """
             SELECT COUNT(*) AS total,
                    SUM(CASE WHEN response_text IS NOT NULL AND response_text != '' THEN 1 ELSE 0 END) AS with_response,
                    SUM(CASE WHEN response_text IS NULL OR response_text = '' THEN 1 ELSE 0 END) AS without_response
             FROM externalbusinessreviews
-            WHERE business_id = %s AND source = 'yandex_business'
-            """,
-            (business_id,),
-        )
+            WHERE source = 'yandex_business'
+        """
+        reviews_summary_params = []
+        if aggregate_network:
+            reviews_summary_query += """
+              AND business_id IN (
+                  SELECT id FROM businesses WHERE network_id = %s
+              )
+            """
+            reviews_summary_params.append(network_id)
+        else:
+            reviews_summary_query += " AND business_id = %s "
+            reviews_summary_params.append(business_id)
+
+        cursor.execute(reviews_summary_query, tuple(reviews_summary_params))
         raw_reviews = cursor.fetchone()
         reviews_row = _row_to_dict(cursor, raw_reviews) if raw_reviews else None
 
@@ -1861,7 +1967,9 @@ def get_external_summary(business_id):
             "reviews_without_response": reviews_without_response,
             "last_sync_date": stats_row.get("date") if stats_row else None,
             "last_parse_date": last_parse_date,
-            "competitors": parse_row.get("competitors") if parse_row else None
+            "competitors": parse_row.get("competitors") if parse_row else None,
+            "scope": "network" if aggregate_network else "business",
+            "network_id": network_id if aggregate_network else None,
         })
 
     except Exception as e:

@@ -32,7 +32,7 @@ import { getAutomationAccessForBusiness } from '@/lib/subscriptionAccess';
 
 export const CardOverviewPage = () => {
   const context = useOutletContext<any>();
-  const { user, currentBusinessId, currentBusiness } = context || {};
+  const { user, currentBusinessId, currentBusiness, businesses, onBusinessChange } = context || {};
   const { t, language } = useLanguage();
   const automationAccess = getAutomationAccessForBusiness(currentBusiness);
   const automationLockedMessage = automationAccess.message || 'Автоматизация доступна только после оплаты тарифа.';
@@ -91,13 +91,40 @@ export const CardOverviewPage = () => {
   const [isNetworkMaster, setIsNetworkMaster] = useState(false);
   const [operationsLearning, setOperationsLearning] = useState<Record<string, any>>({});
 
+  const isNetworkRepresentative = useMemo(() => {
+    const businessId = String(currentBusinessId || '').trim();
+    const networkId = String(currentBusiness?.network_id || '').trim();
+    if (!businessId || !networkId || !Array.isArray(businesses)) {
+      return false;
+    }
+
+    const sameNetworkBusinesses = businesses.filter((item: any) => String(item?.network_id || '').trim() === networkId);
+    if (sameNetworkBusinesses.length === 0) {
+      return false;
+    }
+
+    const explicitParent = sameNetworkBusinesses.find((item: any) => String(item?.id || '').trim() === networkId);
+    if (explicitParent) {
+      return String(explicitParent.id || '').trim() === businessId;
+    }
+
+    const sorted = [...sameNetworkBusinesses].sort((left: any, right: any) => {
+      const leftCreated = String(left?.created_at || '');
+      const rightCreated = String(right?.created_at || '');
+      return leftCreated.localeCompare(rightCreated);
+    });
+
+    return String(sorted[0]?.id || '').trim() === businessId;
+  }, [businesses, currentBusiness, currentBusinessId]);
+
   // Загрузка сводки (рейтинг, количество отзывов)
   const loadSummary = async () => {
     if (!currentBusinessId) return;
     setLoadingSummary(true);
     try {
       const token = localStorage.getItem('auth_token');
-      const res = await fetch(`${window.location.origin}/api/business/${currentBusinessId}/external/summary`, {
+      const scopeQuery = isNetworkRepresentative ? '?scope=network' : '';
+      const res = await fetch(`${window.location.origin}/api/business/${currentBusinessId}/external/summary${scopeQuery}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -349,7 +376,7 @@ export const CardOverviewPage = () => {
       checkIfNetworkMaster();
       loadOperationsLearning();
     }
-  }, [currentBusinessId, context, selectedSource]);
+  }, [currentBusinessId, context, selectedSource, isNetworkRepresentative]);
 
   useEffect(() => {
     setServicesCurrentPage(1);
@@ -1653,6 +1680,8 @@ export const CardOverviewPage = () => {
               <ReviewReplyAssistant
                 businessName={currentBusiness?.name}
                 selectedSource={selectedSource}
+                aggregateScope={isNetworkRepresentative ? 'network' : 'business'}
+                onOpenLocation={onBusinessChange}
               />
             )}
           </TabsContent>

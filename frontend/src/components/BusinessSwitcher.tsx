@@ -46,6 +46,48 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
     [businesses]
   );
 
+  const networkRepresentativeIds = React.useMemo(() => {
+    const groups: Record<string, Business[]> = {};
+    const ids: Record<string, boolean> = {};
+
+    for (const business of visibleBusinesses) {
+      const networkId = String(business.network_id || '').trim();
+      if (!networkId) continue;
+      if (!groups[networkId]) {
+        groups[networkId] = [];
+      }
+      groups[networkId].push(business);
+    }
+
+    for (const networkId of Object.keys(groups)) {
+      const group = groups[networkId] || [];
+      const explicitParent = group.find((item) => String(item.id) === networkId);
+      if (explicitParent) {
+        ids[explicitParent.id] = true;
+        continue;
+      }
+      const sortedGroup = [...group].sort((left, right) => {
+        const leftCreated = String(left.created_at || '');
+        const rightCreated = String(right.created_at || '');
+        return leftCreated.localeCompare(rightCreated);
+      });
+      const head = sortedGroup[0];
+      if (head?.id) {
+        ids[head.id] = true;
+      }
+    }
+
+    return ids;
+  }, [visibleBusinesses]);
+
+  const getBusinessDisplayName = (business: Business) => {
+    const baseName = String(business.name || '').trim() || 'Без названия';
+    if (networkRepresentativeIds[business.id]) {
+      return `${baseName} (материнская)`;
+    }
+    return baseName;
+  };
+
   // Фильтруем точки сети - показываем только основные аккаунты
   // Фильтруем точки сети - показываем независимые точки ИЛИ "главную" точку сети (самую старую)
   const mainBusinesses = React.useMemo(() => {
@@ -65,14 +107,15 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
     }
 
     // Выбираем "главные" точки из сетей (сортировка по дате создания, если есть, или просто первый)
-    const networkHeads = Object.values(networks).map((group: any[]) => {
-      // Сортируем по created_at (по возрастанию - старые первые), если поля нет, оставляем как есть
-      // Предполагаем, что created_at приходит строкой ISO
-      return group.sort((a, b) => {
-        if (a.created_at && b.created_at) {
-          return a.created_at.localeCompare(b.created_at);
-        }
-        return 0;
+    const networkHeads = Object.entries(networks).map(([networkId, group]) => {
+      const explicitParent = group.find((business) => String(business.id) === String(networkId));
+      if (explicitParent) {
+        return explicitParent;
+      }
+      return [...group].sort((a, b) => {
+        const leftCreated = String(a.created_at || '');
+        const rightCreated = String(b.created_at || '');
+        return leftCreated.localeCompare(rightCreated);
       })[0];
     });
 
@@ -119,7 +162,7 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
         <Building2 className="w-4 h-4 text-gray-600" />
         <div className="text-left">
           <div className="text-sm font-medium text-gray-900">
-            {selectedBusiness?.name || 'Выберите бизнес'}
+            {selectedBusiness ? getBusinessDisplayName(selectedBusiness) : 'Выберите бизнес'}
           </div>
           {isSuperadmin && selectedBusiness?.owner_name && (
             <div className="text-xs text-gray-500">
@@ -143,7 +186,7 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
                 <Building2 className="w-4 h-4 text-gray-600 mt-0.5" />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-gray-900 truncate">
-                    {business.name}
+                    {getBusinessDisplayName(business)}
                   </div>
                   {business.description && (
                     <div className="text-xs text-gray-500 mt-1 line-clamp-2">

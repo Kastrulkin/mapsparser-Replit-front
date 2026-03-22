@@ -20,6 +20,7 @@ import {
   Globe,
   Settings2,
   Calendar,
+  MapPin,
   User,
   Star,
   Quote
@@ -40,9 +41,24 @@ interface ExternalReview {
   response_text: string | null;
   published_at: string | null;
   has_response: boolean;
+  location_business_id?: string | null;
+  location_name?: string | null;
+  location_address?: string | null;
 }
 
-export default function ReviewReplyAssistant({ businessName, selectedSource = 'all' }: { businessName?: string, selectedSource?: string }) {
+interface ReviewReplyAssistantProps {
+  businessName?: string;
+  selectedSource?: string;
+  aggregateScope?: 'business' | 'network';
+  onOpenLocation?: (businessId: string) => void;
+}
+
+export default function ReviewReplyAssistant({
+  businessName,
+  selectedSource = 'all',
+  aggregateScope = 'business',
+  onOpenLocation,
+}: ReviewReplyAssistantProps) {
   const { currentBusinessId } = useOutletContext<any>();
   const { language: interfaceLanguage, t } = useLanguage();
   const [tone, setTone] = useState<Tone>('professional');
@@ -87,7 +103,8 @@ export default function ReviewReplyAssistant({ businessName, selectedSource = 'a
     if (!currentBusinessId) return;
     setLoadingReviews(true);
     try {
-      const data = await newAuth.makeRequest(`/business/${currentBusinessId}/external/reviews`);
+      const query = aggregateScope === 'network' ? '?scope=network' : '';
+      const data = await newAuth.makeRequest(`/business/${currentBusinessId}/external/reviews${query}`);
       if (data.success) {
         setExternalReviews(data.reviews || []);
       }
@@ -101,7 +118,7 @@ export default function ReviewReplyAssistant({ businessName, selectedSource = 'a
   useEffect(() => {
     loadExamples();
     loadExternalReviews();
-  }, [currentBusinessId]);
+  }, [currentBusinessId, aggregateScope]);
 
   const addExample = async () => {
     const text = exampleInput.trim();
@@ -254,6 +271,11 @@ export default function ReviewReplyAssistant({ businessName, selectedSource = 'a
             {t.dashboard.card.reviewReply.title}
           </h3>
           <p className="text-gray-600 mt-1">{t.dashboard.card.reviewReply.subtitle}</p>
+          {aggregateScope === 'network' && (
+            <p className="text-sm text-indigo-600 mt-2">
+              Показываем отзывы по всем точкам сети подряд. У каждого отзыва видно, к какой точке он относится.
+            </p>
+          )}
         </div>
       </div>
 
@@ -462,6 +484,12 @@ export default function ReviewReplyAssistant({ businessName, selectedSource = 'a
                       <div>
                         <div className="font-semibold text-gray-900">{reviewItem.author_name || t.dashboard.card.reviewReply.anonymous}</div>
                         <div className="flex items-center gap-2 text-xs text-gray-500">
+                          {aggregateScope === 'network' && reviewItem.location_name && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-700 border border-indigo-100">
+                              <MapPin className="w-3 h-3" />
+                              {reviewItem.location_name}
+                            </span>
+                          )}
                           {reviewItem.published_at && (
                             <span className="flex items-center gap-1">
                               <Calendar className="w-3 h-3" />
@@ -472,10 +500,23 @@ export default function ReviewReplyAssistant({ businessName, selectedSource = 'a
                       </div>
                     </div>
                     {reviewItem.rating && (
-                      <div className="flex items-center gap-1 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100">
+                      <div className="flex items-center gap-2">
+                        {aggregateScope === 'network' && reviewItem.location_business_id && reviewItem.location_business_id !== currentBusinessId && onOpenLocation && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-8 rounded-lg border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                            onClick={() => onOpenLocation(reviewItem.location_business_id || '')}
+                          >
+                            Открыть точку
+                          </Button>
+                        )}
+                        <div className="flex items-center gap-1 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100">
                         {[...Array(5)].map((_, i) => (
                           <Star key={i} className={cn("w-3.5 h-3.5", i < reviewItem.rating! ? "text-amber-500 fill-amber-500" : "text-gray-200 fill-gray-200")} />
                         ))}
+                        </div>
                       </div>
                     )}
                   </div>
