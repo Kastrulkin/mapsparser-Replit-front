@@ -916,6 +916,7 @@ def _parse_card_via_apify(
     *,
     parsed_source: str,
     source_hint: str,
+    city: str = "",
 ) -> Dict[str, Any]:
     source = "apify_2gis" if source_hint == "apify_2gis" or parsed_source == "2gis" else "apify_yandex"
     try:
@@ -924,7 +925,7 @@ def _parse_card_via_apify(
         from src.services.prospecting_service import ProspectingService
 
     service = ProspectingService(source=source)
-    result = service.run_business_by_map_url(url, limit=1, timeout_sec=300)
+    result = service.run_business_by_map_url(url, limit=1, timeout_sec=300, city=city)
     items = result.get("items") if isinstance(result, dict) else []
     if not isinstance(items, list) or not items:
         raise RuntimeError("Apify returned empty dataset for business card parsing")
@@ -3241,10 +3242,26 @@ def process_queue():
                 print("♻️ Используем уже полученные данные из CAPTCHA flow", flush=True)
             elif use_apify_parser:
                 print(f"🌐 Парсинг через Apify source={source_hint or 'apify_yandex'}", flush=True)
+                business_city = ""
+                if business_id:
+                    try:
+                        conn_city = get_db_connection()
+                        cur_city = conn_city.cursor()
+                        cur_city.execute("SELECT city FROM businesses WHERE id = %s", (business_id,))
+                        row_city = cur_city.fetchone()
+                        cur_city.close()
+                        conn_city.close()
+                        if isinstance(row_city, dict):
+                            business_city = str(row_city.get("city") or "").strip()
+                        elif row_city:
+                            business_city = str(row_city[0] or "").strip()
+                    except Exception as e:
+                        print(f"⚠️ Не удалось загрузить city для business_id={business_id}: {e}")
                 card_data = _parse_card_via_apify(
                     url,
                     parsed_source=parsed_source,
                     source_hint=source_hint,
+                    city=business_city,
                 )
             else:
                 browser_profile = _build_human_browser_profile()

@@ -425,7 +425,7 @@ class ProspectingService:
 
         if self.source == "apify_2gis":
             return {
-                "query": query_text,
+                "query": [query_text],
                 "city": location_text,
                 "maxItems": limit,
                 "proxyConfiguration": {
@@ -492,7 +492,24 @@ class ProspectingService:
             return match.group(1)
         return None
 
-    def _build_run_input_for_map_url(self, map_url: str, limit: int = 1) -> Dict[str, Any]:
+    @staticmethod
+    def _extract_2gis_city_hint(map_url: str) -> str:
+        value = str(map_url or "").strip()
+        if not value:
+            return ""
+        match = re.search(r"https?://2gis\\.ru/([^/]+)/", value)
+        slug = str(match.group(1) if match else "").strip().lower()
+        city_map = {
+            "spb": "Санкт-Петербург",
+            "saint_petersburg": "Санкт-Петербург",
+            "moscow": "Москва",
+            "kazan": "Казань",
+            "novosibirsk": "Новосибирск",
+            "ekaterinburg": "Екатеринбург",
+        }
+        return city_map.get(slug, "")
+
+    def _build_run_input_for_map_url(self, map_url: str, limit: int = 1, city: str = "") -> Dict[str, Any]:
         map_url_text = str(map_url or "").strip()
         if not map_url_text:
             raise ValueError("map_url is required")
@@ -503,54 +520,22 @@ class ProspectingService:
             proxy_groups = ["RESIDENTIAL"]
 
         if self.source == "apify_2gis":
+            city_text = str(city or "").strip() or self._extract_2gis_city_hint(map_url_text)
             return {
-                "query": map_url_text,
+                "query": [map_url_text],
+                "city": city_text,
                 "maxItems": max(1, int(limit or 1)),
-                "startUrls": [{"url": map_url_text}],
                 "proxyConfiguration": {
                     "useApifyProxy": True,
                     "apifyProxyGroups": proxy_groups,
                 },
             }
 
-        business_id = self._extract_map_business_id(map_url_text, self.source)
-        business_ids = [business_id] if business_id else []
+        # Minimal input for map-url runs to avoid actor schema mismatch (400).
         return {
-            "query": [map_url_text],
-            "location": "",
-            "category": "",
-            "maxResults": max(1, int(limit or 1)),
-            "language": "ru",
-            "enrichBusinessData": True,
-            "maxPhotos": 20,
-            "maxPosts": 20,
             "startUrls": [{"url": map_url_text}],
-            "businessIds": business_ids,
-            "coordinates": "",
-            "viewportSpan": "",
-            "filterRating": "",
-            "filterOpenNow": False,
-            "filterOpen24h": False,
-            "filterDelivery": False,
-            "filterTakeaway": False,
-            "filterWifi": False,
-            "filterCardPayment": False,
-            "filterParking": False,
-            "filterPetFriendly": False,
-            "filterWheelchairAccess": False,
-            "filterGoodPlace": False,
-            "filterMichelin": False,
-            "filterBusinessLunch": False,
-            "filterSummerTerrace": False,
-            "filterCuisine": [],
-            "filterPriceCategory": [],
-            "filterPriceMin": None,
-            "filterPriceMax": None,
-            "filterCategoryId": [],
-            "filterChainId": [],
-            "customFilters": [],
-            "sortBy": "",
-            "sortOrigin": "",
+            "maxItems": max(1, int(limit or 1)),
+            "language": "ru",
             "proxyConfiguration": {
                 "useApifyProxy": True,
                 "apifyProxyGroups": proxy_groups,
@@ -691,7 +676,12 @@ class ProspectingService:
             return
 
     def _apify_request(self, method: str, url: str, **kwargs: Any) -> Response:
-        proxy_payload = self._resolve_apify_proxy()
+        # Never proxy Apify API itself. Residential proxies break api.apify.com
+        # and return "Residential Failed (bad_endpoint)".
+        if url.startswith("https://api.apify.com/"):
+            proxy_payload: Dict[str, Any] = {}
+        else:
+            proxy_payload = self._resolve_apify_proxy()
         proxy_id = str(proxy_payload.get("id") or "").strip() or None
         proxies = None
         if proxy_payload.get("http") or proxy_payload.get("https"):
@@ -752,6 +742,14 @@ class ProspectingService:
             if last_exc:
                 raise last_exc
             raise RuntimeError("Apify run start request failed without response")
+        if response.status_code >= 400:
+            try:
+                print(
+                    f"❌ Apify start error status={response.status_code} body={response.text}",
+                    flush=True,
+                )
+            except Exception:
+                pass
         response.raise_for_status()
         payload = response.json().get("data") or {}
         if not payload.get("id"):
@@ -769,8 +767,9 @@ class ProspectingService:
         *,
         limit: int = 1,
         timeout_sec: int = 300,
+        city: str = "",
     ) -> Dict[str, Any]:
-        run_input = self._build_run_input_for_map_url(map_url, limit=limit)
+        run_input = self._build_run_input_for_map_url(map_url, limit=limit, city=city)
         run_meta = self._start_run_with_input(run_input)
         run_id = str(run_meta.get("run_id") or "").strip()
         if not run_id:
