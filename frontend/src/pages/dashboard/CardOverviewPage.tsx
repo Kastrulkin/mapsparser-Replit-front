@@ -29,6 +29,7 @@ import NewsGenerator from "@/components/NewsGenerator";
 import SEOKeywordsTab from "@/components/SEOKeywordsTab";
 import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
 import { getAutomationAccessForBusiness } from '@/lib/subscriptionAccess';
+import { pickNetworkRepresentative } from '@/lib/networkRepresentative';
 
 export const CardOverviewPage = () => {
   const context = useOutletContext<any>();
@@ -103,18 +104,8 @@ export const CardOverviewPage = () => {
       return false;
     }
 
-    const explicitParent = sameNetworkBusinesses.find((item: any) => String(item?.id || '').trim() === networkId);
-    if (explicitParent) {
-      return String(explicitParent.id || '').trim() === businessId;
-    }
-
-    const sorted = [...sameNetworkBusinesses].sort((left: any, right: any) => {
-      const leftCreated = String(left?.created_at || '');
-      const rightCreated = String(right?.created_at || '');
-      return leftCreated.localeCompare(rightCreated);
-    });
-
-    return String(sorted[0]?.id || '').trim() === businessId;
+    const representative = pickNetworkRepresentative(sameNetworkBusinesses, networkId);
+    return String(representative?.id || '').trim() === businessId;
   }, [businesses, currentBusiness, currentBusinessId]);
 
   // Загрузка сводки (рейтинг, количество отзывов)
@@ -327,6 +318,7 @@ export const CardOverviewPage = () => {
           if (url.includes('yandex')) sources.add('yandex');
           else if (url.includes('2gis')) sources.add('2gis');
           else if (url.includes('google')) sources.add('google');
+          else if (url.includes('apple')) sources.add('apple');
         });
       }
 
@@ -398,6 +390,7 @@ export const CardOverviewPage = () => {
       if (selectedSource === '2gis') return source === '2gis';
       if (selectedSource === 'yandex') return source === 'yandex_maps' || source === 'yandex_business';
       if (selectedSource === 'google') return source === 'google_maps' || source === 'google_business';
+      if (selectedSource === 'apple') return source === 'apple_maps' || source === 'apple_business';
       return source.includes(selectedSource);
     };
 
@@ -464,9 +457,20 @@ export const CardOverviewPage = () => {
     if (source === 'yandex_maps') return 'Яндекс Карты';
     if (source === 'yandex_business') return 'Яндекс Бизнес';
     if (source === '2gis') return '2ГИС';
+    if (source === 'google_maps' || source === 'google_business') return 'Google Maps';
+    if (source === 'apple_maps' || source === 'apple_business') return 'Apple Maps';
     if (source === 'external') return 'Внешняя';
     if (source === 'file_import') return 'Из файла';
     return source.replace(/_/g, ' ');
+  };
+
+  const formatMapSourceTab = (source: string) => {
+    const normalized = String(source || '').trim().toLowerCase();
+    if (normalized === 'yandex') return 'Яндекс';
+    if (normalized === '2gis') return '2ГИС';
+    if (normalized === 'google') return 'Google';
+    if (normalized === 'apple') return 'Apple';
+    return source;
   };
 
   const getDisplayedServiceUpdatedAt = (service: any) => {
@@ -921,7 +925,7 @@ export const CardOverviewPage = () => {
                     : "text-gray-500 hover:text-gray-900 hover:bg-gray-200/50"
                 )}
               >
-                {source}
+                {formatMapSourceTab(source)}
               </button>
             ))}
           </div>

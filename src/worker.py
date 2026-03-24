@@ -39,6 +39,7 @@ from parsed_payload_validation import (
 )
 from parsing_failure_taxonomy import with_reason_code_prefix
 from core.action_orchestrator import ActionOrchestrator
+from core.parsing_runtime_config import get_use_apify_map_parsing, resolve_map_source_for_queue
 from yookassa_integration import run_due_renewals
 from api.admin_prospecting import dispatch_due_outreach_queue
 
@@ -846,11 +847,19 @@ def _detect_map_source(queue_dict: Dict[str, Any], url: str) -> str:
     source_hint = str(queue_dict.get("source") or "").strip().lower()
     if source_hint in {"2gis", "two_gis", "apify_2gis"}:
         return "2gis"
+    if source_hint in {"google", "google_maps", "google_business", "apify_google"}:
+        return "google_maps"
+    if source_hint in {"apple", "apple_maps", "apify_apple"}:
+        return "apple_maps"
     if source_hint == "apify_yandex":
         return "yandex_maps"
     url_lower = str(url or "").strip().lower()
     if "2gis.ru/" in url_lower or "2gis.com/" in url_lower:
         return "2gis"
+    if "maps.apple.com/" in url_lower:
+        return "apple_maps"
+    if "google.com/maps/" in url_lower or "maps.app.goo.gl/" in url_lower:
+        return "google_maps"
     return "yandex_maps"
 
 
@@ -918,7 +927,15 @@ def _parse_card_via_apify(
     source_hint: str,
     city: str = "",
 ) -> Dict[str, Any]:
-    source = "apify_2gis" if source_hint == "apify_2gis" or parsed_source == "2gis" else "apify_yandex"
+    normalized_hint = str(source_hint or "").strip().lower()
+    if normalized_hint in {"apify_2gis", "2gis", "two_gis"} or parsed_source == "2gis":
+        source = "apify_2gis"
+    elif normalized_hint in {"apify_google", "google", "google_maps", "google_business"} or parsed_source == "google_maps":
+        source = "apify_google"
+    elif normalized_hint in {"apify_apple", "apple", "apple_maps"} or parsed_source == "apple_maps":
+        source = "apify_apple"
+    else:
+        source = "apify_yandex"
     try:
         from services.prospecting_service import ProspectingService
     except Exception:
@@ -2351,6 +2368,7 @@ def _queue_transient_parse_retry(queue_dict: dict, reason: str, card_data: Optio
         "parser_returned_none",
         "parser_returned_list",
         "parser_returned_tuple",
+        "apify_empty_dataset",
     }
     parser_error = ""
     if isinstance(card_data, dict):
@@ -2369,8 +2387,18 @@ def _queue_transient_parse_retry(queue_dict: dict, reason: str, card_data: Optio
             or "err_name_not_resolved" in parser_message
         )
     )
+    reason_text = str(reason or "").lower()
+    is_apify_empty_dataset = (
+        parser_error == "apify_empty_dataset"
+        or "apify returned empty dataset" in reason_text
+        or "empty dataset for business card parsing" in reason_text
+        or (
+            "apify" in parser_message
+            and "empty dataset" in parser_message
+        )
+    )
 
-    if parser_error not in transient_errors and not is_2gis_timeout:
+    if parser_error not in transient_errors and not is_2gis_timeout and not is_apify_empty_dataset:
         return False
 
     prev_attempt = _parse_transient_retry_attempt(queue_dict.get("error_message"))
@@ -2384,8 +2412,8 @@ def _queue_transient_parse_retry(queue_dict: dict, reason: str, card_data: Optio
     detail = str(reason or "")[:220]
     comment = (
         f"transient_retry_attempt={attempt_no}; "
-        f"transient_error={parser_error}; detail={detail}"
-    )
+            f"transient_error={parser_error or 'unknown'}; detail={detail}"
+        )
 
     conn = None
     cursor = None
@@ -3156,6 +3184,15 @@ def process_queue():
         url = queue_dict["url"]
         parsed_source = _detect_map_source(queue_dict, url)
         source_hint = str(queue_dict.get("source") or "").strip().lower()
+        try:
+            conn_runtime = get_db_connection()
+            try:
+                runtime_use_apify = bool(get_use_apify_map_parsing(conn_runtime))
+            finally:
+                conn_runtime.close()
+            source_hint = str(resolve_map_source_for_queue(source_hint, runtime_use_apify) or source_hint).strip().lower()
+        except Exception as runtime_config_error:
+            print(f"⚠️ Не удалось прочитать runtime-настройку парсинга: {runtime_config_error}", flush=True)
 
         # --- АВТОМАТИЧЕСКОЕ ИСПРАВЛЕНИЕ ССЫЛОК (SPRAV -> MAPS) ---
         if parsed_source == "yandex_maps" and '/sprav/' in url:
@@ -3223,7 +3260,7 @@ def process_queue():
                 print(f"⚠️ Не удалось загрузить geo для business_id={business_id}: {e}")
 
         # Основной вызов парсера с защитой от Playwright Sync-in-async краша
-        use_apify_parser = source_hint in {"apify_yandex", "apify_2gis"}
+        use_apify_parser = source_hint in {"apify_yandex", "apify_2gis", "apify_google", "apify_apple"}
         active_proxy = None if use_apify_parser else _get_next_proxy_for_playwright()
         if parsed_source == "2gis":
             active_proxy = None
@@ -3386,6 +3423,17 @@ def process_queue():
                 except Exception as db_ex:
                     print(f"❌ Не удалось обновить parsequeue для playwright-sync ошибки: {db_ex}")
                 return
+            elif "apify returned empty dataset" in msg.lower() or "empty dataset for business card parsing" in msg.lower():
+                print(
+                    f"⚠️ Apify empty dataset for queue_id={queue_dict.get('id')} -> schedule transient retry",
+                    flush=True,
+                )
+                card_data = {
+                    "error": "apify_empty_dataset",
+                    "message": msg,
+                    "url": url,
+                    "warnings": ["apify_empty_dataset"],
+                }
             # Любая другая ошибка — пусть обрабатывается общей логикой ниже
             else:
                 raise
@@ -3440,7 +3488,13 @@ def process_queue():
                 _mark_proxy_result(proxy_id, success=False, reason=card_error[:120])
         
         # Проверяем успешность парсинга (валидация только по данным Яндекса, без fallback из БД)
-        validation_source = "2gis" if parsed_source == "2gis" else SOURCE_YANDEX_BUSINESS
+        validation_source = SOURCE_YANDEX_BUSINESS
+        if parsed_source == "2gis":
+            validation_source = "2gis"
+        elif parsed_source == "google_maps":
+            validation_source = "google_business"
+        elif parsed_source == "apple_maps":
+            validation_source = "apple_maps"
         is_successful, reason, validation_result = _validate_parsing_result(card_data, source=validation_source)
 
         # пишем validation.json в bundle (если он есть)
@@ -3795,11 +3849,18 @@ def process_queue():
                                 'news_count': len(news_list or []),
                             }
                             print(f"[METRICS_SAVE] {business_id} | rating={mpr_fields['rating']} | reviews={mpr_fields['reviews_count']} | photos={mpr_fields['photos_count']} | news={mpr_fields['news_count']}")
+                            map_type = "yandex"
+                            if parsed_source == "2gis":
+                                map_type = "2gis"
+                            elif parsed_source == "google_maps":
+                                map_type = "google"
+                            elif parsed_source == "apple_maps":
+                                map_type = "apple"
                             _upsert_map_parse_from_card(
                                 db_manager.conn,
                                 business_id,
                                 url=queue_dict["url"],
-                                map_type=("2gis" if parsed_source == "2gis" else "yandex"),
+                                map_type=map_type,
                                 rating=mpr_fields['rating'],
                                 reviews_count=mpr_fields['reviews_count'],
                                 photos_count=mpr_fields['photos_count'],
@@ -3843,11 +3904,14 @@ def process_queue():
                             # Используем DatabaseManager для работы с репозиториями
                             db_manager = DatabaseManager()
                             sync_worker = YandexBusinessSyncWorker()
-                            external_source_value = (
-                                ExternalSource.TWO_GIS
-                                if parsed_source == "2gis"
-                                else ExternalSource.YANDEX_MAPS
-                            )
+                            if parsed_source == "2gis":
+                                external_source_value = ExternalSource.TWO_GIS
+                            elif parsed_source == "google_maps":
+                                external_source_value = "google_maps"
+                            elif parsed_source == "apple_maps":
+                                external_source_value = "apple_maps"
+                            else:
+                                external_source_value = ExternalSource.YANDEX_MAPS
                             
                             # DEBUG LOGGING
                             try:

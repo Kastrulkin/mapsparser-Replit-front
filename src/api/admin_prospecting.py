@@ -7,6 +7,7 @@ import io
 import threading
 import uuid
 import re
+from urllib.parse import unquote
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
@@ -19,6 +20,7 @@ from core.channel_delivery import normalize_phone, send_maton_bridge_message
 from core.card_audit import build_lead_card_preview_snapshot
 from core.ai_learning import ensure_ai_learning_events_table, record_ai_learning_event
 from core.helpers import get_business_id_from_user
+from core.parsing_runtime_config import get_use_apify_map_parsing, resolve_map_source_for_queue
 from database_manager import DatabaseManager
 from pg_db_utils import get_db_connection
 from services.gigachat_client import analyze_text_with_gigachat
@@ -181,6 +183,7 @@ def _ensure_partnership_columns(conn) -> None:
     cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS partnership_stage TEXT DEFAULT 'imported'")
     cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS pilot_cohort TEXT DEFAULT 'backlog'")
     cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS business_id UUID")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS parse_business_id UUID")
     cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS created_by UUID")
     cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS source_kind TEXT")
     cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS source_provider TEXT")
@@ -249,6 +252,23 @@ def _should_use_lead_name_for_match(name: Any) -> bool:
         return False
     lowered = text.lower()
     return lowered not in {"новый партнёр", "партнёр", "компания"}
+
+
+def _derive_name_from_source_url(source_url: Any) -> str | None:
+    url = str(source_url or "").strip()
+    if not url:
+        return None
+    match = re.search(r"/org/([^/]+)/", url)
+    if not match:
+        return None
+    slug = unquote(str(match.group(1) or "").strip())
+    if not slug:
+        return None
+    parts = [part for part in re.split(r"[_\\-]+", slug) if part]
+    if not parts:
+        return None
+    name = " ".join(parts).strip()
+    return name[:255] if name else None
 
 
 def _merge_source_labels(existing_value: Any, *labels: str | None) -> list[str]:
@@ -526,8 +546,9 @@ def _insert_partnership_lead_if_new(
 
     exact_sql = [
         "business_id = %s",
+        "AND",
         "COALESCE(intent, 'client_outreach') = 'partnership_outreach'",
-        "(",
+        "AND (",
         "source_url = %s",
     ]
     exact_params: list[Any] = [business_id, normalized_url]
@@ -742,6 +763,21 @@ def _normalize_contact_url(raw: str | None) -> str | None:
     return value
 
 
+def _normalize_media_url(raw: Any) -> str | None:
+    value = str(raw or "").strip()
+    if not value:
+        return None
+    if value.startswith("//"):
+        value = f"https:{value}"
+    if "{size}" in value:
+        value = value.replace("{size}", "XXXL")
+    if "/%s" in value:
+        value = value.replace("/%s", "/XXXL")
+    elif "%s" in value:
+        value = value.replace("%s", "XXXL")
+    return value
+
+
 def _extract_first_phone_from_raw(raw_phone: Any) -> str | None:
     if raw_phone is None:
         return None
@@ -868,21 +904,23 @@ def _normalize_partnership_file_row(
         )
     )
 
-    logo_url = _pick_first_value(row, ["logo_url", "logoUrl", "logo", "avatar"])
+    logo_url = _normalize_media_url(_pick_first_value(row, ["logo_url", "logoUrl", "logo", "avatar"]))
     photos_raw = row.get("photos")
     photos: list[str] = []
     if isinstance(photos_raw, list):
         for item in photos_raw:
             if isinstance(item, str) and item.strip():
-                photos.append(item.strip())
+                normalized_photo = _normalize_media_url(item.strip())
+                if normalized_photo:
+                    photos.append(normalized_photo)
             elif isinstance(item, dict):
-                photo_url = str(item.get("url") or item.get("src") or item.get("photoUrl") or "").strip()
+                photo_url = _normalize_media_url(item.get("url") or item.get("src") or item.get("photoUrl"))
                 if photo_url:
                     photos.append(photo_url)
     if not photos:
-        photo_template = str(row.get("photoUrlTemplate") or "").strip()
+        photo_template = _normalize_media_url(row.get("photoUrlTemplate"))
         if photo_template:
-            photos.append(photo_template.replace("{size}", "XXL"))
+            photos.append(photo_template)
 
     menu_preview = _extract_apify_menu_preview(row.get("menu"))
     reviews_raw = row.get("reviews")
@@ -1566,7 +1604,7 @@ def _find_existing_business_for_lead(lead: dict[str, Any]) -> dict[str, Any] | N
             row = cursor.fetchone()
             business = dict(row) if row else None
 
-        if not business and lead_name:
+        if not business and lead_name and _should_use_lead_name_for_match(lead_name):
             cursor.execute(
                 """
                 SELECT *
@@ -1671,6 +1709,197 @@ def _ensure_parse_business_for_lead(lead: dict[str, Any], user_id: str) -> tuple
     return created, True
 
 
+def _ensure_parse_business_for_partnership_lead(lead: dict[str, Any], user_id: str) -> tuple[dict[str, Any], bool]:
+    """Resolve shadow business for partnership parse without binding to tenant business_id."""
+    detached = dict(lead)
+    detached["business_id"] = None
+    existing = _find_existing_business_for_lead(detached)
+    if existing:
+        return existing, False
+    created = _create_shadow_business_for_lead(detached, user_id)
+    return created, True
+
+
+def _extract_card_profile_fields(card_row: dict[str, Any]) -> dict[str, Any]:
+    overview = card_row.get("overview")
+    if isinstance(overview, str):
+        try:
+            overview = json.loads(overview)
+        except Exception:
+            overview = {}
+    if not isinstance(overview, dict):
+        overview = {}
+
+    def _pick_text(*keys: str) -> str | None:
+        for key in keys:
+            value = overview.get(key)
+            text = str(value or "").strip()
+            if text and not _is_placeholder_like(text):
+                return text
+        return None
+
+    parsed_contacts = _extract_parsed_contacts(overview)
+    website_value = str(card_row.get("site") or "").strip()
+
+    return {
+        "name": _pick_text("name", "title", "company_name", "organization_name", "org_name"),
+        "address": _pick_text("address", "full_address", "short_address", "location"),
+        "city": _pick_text("city", "locality", "settlement"),
+        "category": _pick_text("category", "rubric", "type", "business_type"),
+        "phone": str(card_row.get("phone") or "").strip() or None,
+        "website": website_value or None,
+        "email": parsed_contacts.get("email"),
+        "telegram_url": parsed_contacts.get("telegram_url"),
+        "whatsapp_url": parsed_contacts.get("whatsapp_url"),
+        "social_links": parsed_contacts.get("social_links") if isinstance(parsed_contacts.get("social_links"), list) else [],
+        "rating": card_row.get("rating"),
+        "reviews_count": card_row.get("reviews_count"),
+    }
+
+
+def _sync_partnership_lead_from_parsed_data(lead: dict[str, Any]) -> dict[str, Any]:
+    lead_id = str(lead.get("id") or "").strip()
+    parse_business_id = str(lead.get("parse_business_id") or "").strip()
+    source_url = str(lead.get("source_url") or "").strip()
+    if not lead_id:
+        return lead
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        if not parse_business_id and source_url:
+            cur.execute(
+                """
+                SELECT business_id
+                FROM parsequeue
+                WHERE task_type IN ('parse_card', 'sync_yandex_business')
+                  AND status IN ('completed', 'done')
+                  AND url = %s
+                ORDER BY COALESCE(updated_at, created_at) DESC
+                LIMIT 1
+                """,
+                (source_url,),
+            )
+            pq_row = cur.fetchone()
+            if pq_row:
+                parse_business_id = str(
+                    pq_row.get("business_id") if hasattr(pq_row, "get") else (pq_row[0] if pq_row else "")
+                ).strip()
+                if parse_business_id:
+                    cur.execute(
+                        """
+                        UPDATE prospectingleads
+                        SET parse_business_id = %s,
+                            updated_at = NOW()
+                        WHERE id = %s
+                        """,
+                        (parse_business_id, lead_id),
+                    )
+                    conn.commit()
+
+        if not parse_business_id:
+            return lead
+
+        source_org_id = _extract_yandex_org_id_from_url(source_url)
+        cur.execute(
+            """
+            SELECT phone, site, overview, rating, reviews_count
+            FROM cards
+            WHERE business_id = %s
+              AND (
+                    (%s <> '' AND url = %s)
+                    OR (%s <> '' AND url ILIKE %s)
+                  )
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (
+                parse_business_id,
+                source_url,
+                source_url,
+                source_org_id or "",
+                f"%{source_org_id}%" if source_org_id else "",
+            ),
+        )
+        row = cur.fetchone()
+        if not row:
+            cur.execute(
+                """
+                SELECT phone, site, overview, rating, reviews_count
+                FROM cards
+                WHERE business_id = %s
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (parse_business_id,),
+            )
+            row = cur.fetchone()
+        if not row:
+            return lead
+        card = dict(row)
+        parsed = _extract_card_profile_fields(card)
+
+        updates: dict[str, Any] = {}
+        raw_name = str(lead.get("name") or "").strip()
+        if not raw_name or raw_name.lower() in {"новый партнёр", "партнёр", "компания"}:
+            parsed_name = str(parsed.get("name") or "").strip()
+            fallback_name = _derive_name_from_source_url(source_url)
+            if parsed_name and not _is_placeholder_like(parsed_name):
+                updates["name"] = parsed_name
+            elif fallback_name:
+                updates["name"] = fallback_name
+        if not str(lead.get("address") or "").strip() and parsed.get("address"):
+            updates["address"] = parsed.get("address")
+        if not str(lead.get("city") or "").strip() and parsed.get("city"):
+            updates["city"] = parsed.get("city")
+        if not str(lead.get("category") or "").strip() and parsed.get("category"):
+            updates["category"] = parsed.get("category")
+        if not str(lead.get("phone") or "").strip() and parsed.get("phone"):
+            updates["phone"] = parsed.get("phone")
+        if not str(lead.get("website") or "").strip() and parsed.get("website"):
+            updates["website"] = parsed.get("website")
+        if not str(lead.get("email") or "").strip() and parsed.get("email"):
+            updates["email"] = parsed.get("email")
+        if not str(lead.get("telegram_url") or "").strip() and parsed.get("telegram_url"):
+            updates["telegram_url"] = parsed.get("telegram_url")
+        if not str(lead.get("whatsapp_url") or "").strip() and parsed.get("whatsapp_url"):
+            updates["whatsapp_url"] = parsed.get("whatsapp_url")
+        if (lead.get("rating") is None or str(lead.get("rating") or "").strip() == "") and parsed.get("rating") is not None:
+            updates["rating"] = parsed.get("rating")
+        if (lead.get("reviews_count") is None or int(lead.get("reviews_count") or 0) == 0) and parsed.get("reviews_count") is not None:
+            updates["reviews_count"] = int(parsed.get("reviews_count") or 0)
+        if parsed.get("social_links"):
+            updates["messenger_links_json"] = Json(parsed.get("social_links"))
+
+        if not updates:
+            return lead
+
+        assignments: list[str] = []
+        values: list[Any] = []
+        for field, value in updates.items():
+            assignments.append(f"{field} = %s")
+            values.append(value)
+        assignments.append("updated_at = NOW()")
+        values.append(lead_id)
+
+        cur.execute(
+            f"""
+            UPDATE prospectingleads
+            SET {', '.join(assignments)}
+            WHERE id = %s
+            RETURNING *
+            """,
+            values,
+        )
+        updated = cur.fetchone()
+        if updated:
+            conn.commit()
+            return dict(updated)
+        return lead
+    finally:
+        conn.close()
+
+
 def _enqueue_parse_task_for_business(business_id: str, user_id: str, source_url: str) -> dict[str, Any]:
     conn = get_db_connection()
     try:
@@ -1694,15 +1923,24 @@ def _enqueue_parse_task_for_business(business_id: str, user_id: str, source_url:
             return payload
 
         task_id = str(uuid.uuid4())
+        normalized_url = str(source_url or "").strip().lower()
+        source_hint = "yandex_maps"
+        if "2gis.ru/" in normalized_url or "2gis.com/" in normalized_url:
+            source_hint = "2gis"
+        elif "maps.apple.com/" in normalized_url:
+            source_hint = "apple_maps"
+        elif "google.com/maps/" in normalized_url or "maps.app.goo.gl/" in normalized_url:
+            source_hint = "google_maps"
+        parse_source = resolve_map_source_for_queue(source_hint, bool(get_use_apify_map_parsing(conn)))
         cur.execute(
             """
             INSERT INTO parsequeue (
                 id, business_id, task_type, source, status, user_id, url, created_at, updated_at
             )
-            VALUES (%s, %s, 'parse_card', 'yandex_maps', 'pending', %s, %s, NOW(), NOW())
+            VALUES (%s, %s, 'parse_card', %s, 'pending', %s, %s, NOW(), NOW())
             RETURNING id, status, task_type, source, updated_at, retry_after
             """,
-            (task_id, business_id, user_id, source_url),
+            (task_id, business_id, parse_source, user_id, source_url),
         )
         created = dict(cur.fetchone())
         created["existing"] = False
@@ -3032,7 +3270,7 @@ def _confirm_reaction(reaction_id: str, outcome: str, note: str | None, user_id:
 
 @admin_prospecting_bp.route("/api/admin/prospecting/search", methods=["POST"])
 def search_businesses():
-    """Queue prospecting search via Apify (Yandex / 2GIS)."""
+    """Queue prospecting search via Apify (Yandex / 2GIS / Google / Apple)."""
     user_data, error = _require_superadmin()
     if error:
         return error
@@ -3044,7 +3282,7 @@ def search_businesses():
     source = str(data.get("source") or "apify_yandex").strip().lower()
     search_limit = int(data.get("limit", 50) or 50)
 
-    if source not in {"apify_yandex", "apify_2gis"}:
+    if source not in {"apify_yandex", "apify_2gis", "apify_google", "apify_apple"}:
         return jsonify({"error": "Unsupported source"}), 400
 
     if not query or not location:
@@ -3092,14 +3330,14 @@ def search_businesses():
 
 @admin_prospecting_bp.route("/api/admin/prospecting/business-parse-apify", methods=["POST"])
 def queue_business_parse_apify():
-    """Queue single business card parsing through Apify actor (Yandex / 2GIS)."""
+    """Queue single business card parsing through Apify actor (Yandex / 2GIS / Google / Apple)."""
     user_data, error = _require_auth()
     if error:
         return error
 
     data = request.get_json(silent=True) or {}
     source = str(data.get("source") or "apify_yandex").strip().lower()
-    if source not in {"apify_yandex", "apify_2gis"}:
+    if source not in {"apify_yandex", "apify_2gis", "apify_google", "apify_apple"}:
         return jsonify({"error": "Unsupported source"}), 400
 
     service = ProspectingService(source=source)
@@ -3123,6 +3361,37 @@ def queue_business_parse_apify():
                     map_type = '2gis'
                     OR LOWER(url) LIKE '%%2gis.ru/%%'
                     OR LOWER(url) LIKE '%%2gis.com/%%'
+                  )
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (business_id,),
+            )
+        elif source == "apify_google":
+            cur.execute(
+                """
+                SELECT url
+                FROM businessmaplinks
+                WHERE business_id = %s
+                  AND (
+                    map_type = 'google'
+                    OR LOWER(url) LIKE '%%google.com/maps/%%'
+                    OR LOWER(url) LIKE '%%maps.app.goo.gl/%%'
+                  )
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (business_id,),
+            )
+        elif source == "apify_apple":
+            cur.execute(
+                """
+                SELECT url
+                FROM businessmaplinks
+                WHERE business_id = %s
+                  AND (
+                    map_type = 'apple'
+                    OR LOWER(url) LIKE '%%maps.apple.com/%%'
                   )
                 ORDER BY created_at DESC
                 LIMIT 1
@@ -3543,6 +3812,8 @@ def partnership_geo_search():
         if provider not in {"google", "yandex", "both"}:
             return jsonify({"error": "provider must be one of: google, yandex, both"}), 400
 
+        yandex_query = " ".join(part for part in [category, query] if part).strip() or query or category
+
         conn = get_db_connection()
         try:
             _ensure_partnership_columns(conn)
@@ -3629,9 +3900,21 @@ def partnership_geo_search():
                         warnings.append("Google geo-provider в OpenClaw сейчас работает в режиме provider=none, поэтому результат может быть пустым.")
 
             if provider in {"yandex", "both"}:
-                provider_status["yandex"]["executed"] = False
-                provider_status["yandex"]["items_count"] = 0
-                warnings.append("Yandex geo-search пока не подключён в OpenClaw. Для Яндекса используйте импорт ссылок или файла.")
+                yandex_service = ProspectingService(source="apify_yandex")
+                if not yandex_service.client:
+                    if provider == "yandex":
+                        return jsonify({"error": "APIFY_TOKEN is not configured"}), 500
+                    warnings.append("Yandex geo-search недоступен: APIFY_TOKEN не настроен на стороне LocalOS.")
+                elif not yandex_query:
+                    warnings.append("Для поиска по Яндекс.Картам укажите категорию или поисковый запрос.")
+                else:
+                    yandex_results = yandex_service.run_search(yandex_query, city, limit=limit, timeout_sec=180)
+                    yandex_candidates = yandex_results.get("items") or []
+                    if not isinstance(yandex_candidates, list):
+                        yandex_candidates = []
+                    candidates.extend([item for item in yandex_candidates if isinstance(item, dict)])
+                    provider_status["yandex"]["executed"] = True
+                    provider_status["yandex"]["items_count"] = len(yandex_candidates)
 
             if not isinstance(candidates, list):
                 candidates = []
@@ -3786,7 +4069,8 @@ def partnership_list_leads():
                        prospectingleads.phone, prospectingleads.email, prospectingleads.telegram_url,
                        prospectingleads.whatsapp_url, prospectingleads.website, prospectingleads.rating,
                        prospectingleads.reviews_count, prospectingleads.status, prospectingleads.selected_channel,
-                       prospectingleads.intent, prospectingleads.partnership_stage, prospectingleads.pilot_cohort, prospectingleads.updated_at,
+                       prospectingleads.intent, prospectingleads.partnership_stage, prospectingleads.pilot_cohort,
+                       prospectingleads.parse_business_id, prospectingleads.updated_at,
                        prospectingleads.created_at,
                        pq_last.id AS parse_task_id,
                        pq_last.status AS parse_status,
@@ -3798,7 +4082,15 @@ def partnership_list_leads():
                     SELECT
                         pq.id, pq.status, pq.updated_at, pq.created_at, pq.retry_after, pq.error_message
                     FROM parsequeue pq
-                    WHERE pq.business_id = prospectingleads.business_id
+                    WHERE (
+                            (prospectingleads.parse_business_id IS NOT NULL AND pq.business_id = prospectingleads.parse_business_id)
+                            OR (
+                                prospectingleads.parse_business_id IS NULL
+                                AND prospectingleads.source_url IS NOT NULL
+                                AND prospectingleads.source_url <> ''
+                                AND pq.url = prospectingleads.source_url
+                            )
+                          )
                       AND pq.task_type IN ('parse_card', 'sync_yandex_business')
                     ORDER BY COALESCE(pq.updated_at, pq.created_at) DESC
                     LIMIT 1
@@ -3816,6 +4108,9 @@ def partnership_list_leads():
         items = []
         for row in rows:
             payload = dict(row) if hasattr(row, "keys") else {}
+            parse_status = str(payload.get("parse_status") or "").strip().lower()
+            if parse_status in {"completed", "done"}:
+                payload = _sync_partnership_lead_from_parsed_data(payload)
             payload["next_best_action"] = _partnership_next_best_action(payload)
             items.append(payload)
         return jsonify({"success": True, "count": len(items), "items": items})
@@ -4564,12 +4859,26 @@ def partnership_parse_lead(lead_id):
         if not display_lead:
             return jsonify({"error": "Lead is not available for parsing"}), 400
 
-        business, business_created = _ensure_parse_business_for_lead(display_lead, str(user_data["user_id"]))
+        business, business_created = _ensure_parse_business_for_partnership_lead(display_lead, str(user_data["user_id"]))
         parse_business_id = str(business.get("id") or "").strip()
         if not parse_business_id:
             return jsonify({"error": "Failed to resolve business for lead"}), 500
 
-        _update_lead_business_link(lead_id, parse_business_id)
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                UPDATE prospectingleads
+                SET parse_business_id = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                """,
+                (parse_business_id, lead_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
         source_url = str(business.get("yandex_url") or display_lead.get("source_url") or "").strip()
         if not source_url:
             return jsonify({"error": "У лида нет ссылки на Яндекс Карты для запуска парсинга"}), 400
@@ -4599,6 +4908,120 @@ def partnership_parse_lead(lead_id):
         )
     except Exception as e:
         print(f"Error partnership parse lead: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/partnership/leads/bulk-parse", methods=["POST"])
+def partnership_bulk_parse_leads():
+    """Bulk parse enqueue for selected partnership leads."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        lead_ids = data.get("lead_ids") or []
+        if not isinstance(lead_ids, list) or len(lead_ids) == 0:
+            return jsonify({"error": "lead_ids must be a non-empty list"}), 400
+        normalized_ids = [str(lead_id or "").strip() for lead_id in lead_ids]
+        normalized_ids = [lead_id for lead_id in normalized_ids if lead_id]
+        if not normalized_ids:
+            return jsonify({"error": "lead_ids must contain valid ids"}), 400
+
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+        finally:
+            conn.close()
+
+        queued_count = 0
+        existing_count = 0
+        skipped_count = 0
+        tasks: list[dict[str, Any]] = []
+        errors: list[dict[str, Any]] = []
+
+        for lead_id in normalized_ids:
+            try:
+                conn = get_db_connection()
+                try:
+                    cur = conn.cursor()
+                    lead = _load_partnership_lead(cur, lead_id=lead_id, business_id=business_id)
+                finally:
+                    conn.close()
+                if not lead:
+                    skipped_count += 1
+                    errors.append({"lead_id": lead_id, "error": "Lead not found"})
+                    continue
+
+                display_lead = _normalize_lead_for_display(dict(lead))
+                if not display_lead:
+                    skipped_count += 1
+                    errors.append({"lead_id": lead_id, "error": "Lead is not available for parsing"})
+                    continue
+
+                business, _business_created = _ensure_parse_business_for_partnership_lead(display_lead, str(user_data["user_id"]))
+                parse_business_id = str(business.get("id") or "").strip()
+                if not parse_business_id:
+                    skipped_count += 1
+                    errors.append({"lead_id": lead_id, "error": "Failed to resolve business for lead"})
+                    continue
+
+                conn = get_db_connection()
+                try:
+                    cur = conn.cursor()
+                    cur.execute(
+                        """
+                        UPDATE prospectingleads
+                        SET parse_business_id = %s,
+                            updated_at = NOW()
+                        WHERE id = %s
+                        """,
+                        (parse_business_id, lead_id),
+                    )
+                    conn.commit()
+                finally:
+                    conn.close()
+                source_url = str(business.get("yandex_url") or display_lead.get("source_url") or "").strip()
+                if not source_url:
+                    skipped_count += 1
+                    errors.append({"lead_id": lead_id, "error": "Missing map url"})
+                    continue
+
+                task = _enqueue_parse_task_for_business(parse_business_id, user_data["user_id"], source_url)
+                if bool(task.get("existing")):
+                    existing_count += 1
+                else:
+                    queued_count += 1
+                tasks.append(
+                    {
+                        "lead_id": lead_id,
+                        "task_id": task.get("id"),
+                        "status": task.get("status"),
+                        "source": task.get("source"),
+                        "existing": bool(task.get("existing")),
+                    }
+                )
+            except Exception as lead_exc:
+                skipped_count += 1
+                errors.append({"lead_id": lead_id, "error": str(lead_exc)})
+
+        return jsonify(
+            {
+                "success": True,
+                "queued_count": queued_count,
+                "existing_count": existing_count,
+                "skipped_count": skipped_count,
+                "tasks": tasks,
+                "errors": errors,
+            }
+        )
+    except Exception as e:
+        print(f"Error partnership bulk parse leads: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -5556,11 +5979,21 @@ def _build_admin_lead_offer_payload(
     current_state = preview.get("current_state") if isinstance(preview, dict) else {}
     if not isinstance(current_state, dict):
         current_state = {}
+    business_preview = preview.get("business") if isinstance(preview, dict) else {}
+    if not isinstance(business_preview, dict):
+        business_preview = {}
+    lead_city = str(lead.get("city") or "").strip()
+    lead_address = str(lead.get("address") or "").strip()
+    resolved_city = (
+        lead_city
+        or str(business_preview.get("city") or "").strip()
+        or str(lead_address.split(",", 1)[0] if lead_address else "").strip()
+    )
     return {
         "lead_id": str(lead.get("id") or ""),
         "name": lead_name,
         "category": lead.get("category"),
-        "city": lead.get("city"),
+        "city": resolved_city or None,
         "address": lead.get("address"),
         "source_url": lead.get("source_url"),
         "logo_url": preview_meta.get("logo_url"),
@@ -5605,12 +6038,12 @@ def _build_partnership_offer_payload(
     source_payload = lead.get("search_payload_json")
     if not isinstance(source_payload, dict):
         source_payload = {}
-    logo_url = str(source_payload.get("logo_url") or "").strip() or None
+    logo_url = _normalize_media_url(source_payload.get("logo_url"))
     photos = source_payload.get("photos")
     photo_urls: list[str] = []
     if isinstance(photos, list):
         for item in photos:
-            value = str(item or "").strip()
+            value = _normalize_media_url(item) or ""
             if value:
                 photo_urls.append(value)
     cta = {
@@ -5914,6 +6347,13 @@ def _partnership_next_best_action(lead: dict[str, Any]) -> dict[str, Any]:
             "hint": "Пока парсинг не завершён, данные по карточке ещё не полные.",
             "priority": "medium",
         }
+    if parse_status in {"completed", "done"} and stage == "imported":
+        return {
+            "code": "run_audit",
+            "label": "Запустить аудит",
+            "hint": "Парсинг завершён, можно переходить к аудиту карточки.",
+            "priority": "high",
+        }
     if stage == "imported":
         return {
             "code": "run_parse",
@@ -6025,6 +6465,7 @@ def partnership_audit_lead(lead_id):
                         snapshot = candidate_snapshot
             if not snapshot:
                 snapshot = build_lead_card_preview_snapshot(lead)
+            snapshot = _to_json_compatible(snapshot)
             cur.execute(
                 """
                 INSERT INTO partnershipleadartifacts (lead_id, audit_json, updated_at)

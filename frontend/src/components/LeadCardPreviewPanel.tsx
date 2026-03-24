@@ -153,6 +153,12 @@ const sourceLabel = (value?: string) => {
       return 'Внешний импорт';
     case 'apify_yandex':
       return 'Apify Yandex';
+    case 'apify_2gis':
+      return 'Apify 2GIS';
+    case 'apify_google':
+      return 'Apify Google';
+    case 'apify_apple':
+      return 'Apify Apple';
     case 'openclaw':
       return 'OpenClaw';
     case 'manual':

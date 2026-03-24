@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
+import { Switch } from './ui/switch';
 import { RefreshCw, Play, Trash2, AlertTriangle, ArrowLeftRight, Copy, Loader2, ExternalLink, CircleSlash, X } from 'lucide-react';
 import { newAuth } from '../lib/auth_new';
 import { useToast } from '../hooks/use-toast';
@@ -180,12 +181,74 @@ export const ParsingManagement: React.FC = () => {
   const [onlyActionRequired, setOnlyActionRequired] = useState(false);
   const [onlyStuckTasks, setOnlyStuckTasks] = useState(false);
   const [pendingCaptchaResumeTaskId, setPendingCaptchaResumeTaskId] = useState<string | null>(null);
+  const [useApifyMapParsing, setUseApifyMapParsing] = useState<boolean>(false);
+  const [parsingSettingsLoading, setParsingSettingsLoading] = useState(false);
+  const [parsingSettingsSaving, setParsingSettingsSaving] = useState(false);
   const [filters, setFilters] = useState({
     status: '',
     task_type: '',
     source: ''
   });
   const { toast } = useToast();
+  const loadParsingRuntimeSettings = useCallback(async () => {
+    setParsingSettingsLoading(true);
+    try {
+      const token = await newAuth.getToken();
+      if (!token) return;
+      const res = await fetch('/api/admin/parsing/runtime-settings', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Ошибка загрузки настроек парсинга');
+      }
+      setUseApifyMapParsing(Boolean(data.settings?.use_apify_map_parsing));
+    } catch (e: any) {
+      toast({
+        title: t.common.error,
+        description: e.message || 'Не удалось загрузить настройки парсинга',
+        variant: 'destructive',
+      });
+    } finally {
+      setParsingSettingsLoading(false);
+    }
+  }, [t.common.error, toast]);
+
+  const handleToggleApifyMapParsing = useCallback(async (nextValue: boolean) => {
+    setParsingSettingsSaving(true);
+    try {
+      const token = await newAuth.getToken();
+      if (!token) return;
+      const res = await fetch('/api/admin/parsing/runtime-settings', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ use_apify_map_parsing: nextValue }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Ошибка сохранения настроек парсинга');
+      }
+      setUseApifyMapParsing(Boolean(data.settings?.use_apify_map_parsing));
+      toast({
+        title: t.common.success,
+        description: nextValue
+          ? 'По умолчанию включён парсинг через Apify для Яндекс.Карт и 2ГИС.'
+          : 'По умолчанию включён нативный парсинг (Playwright).',
+      });
+    } catch (e: any) {
+      toast({
+        title: t.common.error,
+        description: e.message || 'Не удалось сохранить настройки парсинга',
+        variant: 'destructive',
+      });
+    } finally {
+      setParsingSettingsSaving(false);
+    }
+  }, [t.common.error, t.common.success, toast]);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -271,7 +334,8 @@ export const ParsingManagement: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, [loadData]);
+    loadParsingRuntimeSettings();
+  }, [loadData, loadParsingRuntimeSettings]);
 
   useEffect(() => {
     if (!pendingCaptchaResumeTaskId) return;
@@ -749,6 +813,39 @@ export const ParsingManagement: React.FC = () => {
         </div>
       )}
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Режим парсинга карт по умолчанию</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Переключатель для контроля затрат: при включении новые задачи парсинга Яндекс.Карт и 2ГИС идут через Apify.
+          </p>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <div className="text-sm font-medium text-foreground">
+              {useApifyMapParsing ? 'Apify (рекомендуется для стабильности)' : 'Нативный парсинг (Playwright)'}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {useApifyMapParsing
+                ? 'Новые parse_card задачи автоматически получают source apify_yandex/apify_2gis/apify_google/apify_apple.'
+                : 'Новые parse_card задачи запускаются как yandex_maps/2gis.'}
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground">{parsingSettingsLoading ? 'Загрузка...' : 'Apify по умолчанию'}</span>
+            <Switch
+              checked={useApifyMapParsing}
+              disabled={parsingSettingsLoading || parsingSettingsSaving}
+              onCheckedChange={(checked) => {
+                if (checked === useApifyMapParsing) return;
+                void handleToggleApifyMapParsing(Boolean(checked));
+              }}
+            />
+            {parsingSettingsSaving ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null}
+          </div>
+        </CardContent>
+      </Card>
+
       {stats && summaryCards.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           {summaryCards.map((item) => (
@@ -1135,6 +1232,10 @@ export const ParsingManagement: React.FC = () => {
                 <option value="yandex_business">{t.dashboard.parsing.source.yandex_business}</option>
                 <option value="google_business">{t.dashboard.parsing.source.google_business}</option>
                 <option value="2gis">{t.dashboard.parsing.source['2gis']}</option>
+                <option value="apify_yandex">Apify Yandex</option>
+                <option value="apify_2gis">Apify 2GIS</option>
+                <option value="apify_google">Apify Google</option>
+                <option value="apify_apple">Apify Apple</option>
               </select>
             </div>
           </div>

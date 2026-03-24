@@ -3,8 +3,7 @@ import re
 import time
 from decimal import Decimal
 import requests
-import urllib3
-from urllib.parse import quote
+from urllib.parse import quote, urlparse, parse_qs
 from requests import Response
 try:
     from apify_client import ApifyClient
@@ -19,6 +18,7 @@ import datetime
 
 APIFY_SEARCH_TIMEOUT_SEC = int(os.environ.get("APIFY_SEARCH_TIMEOUT_SEC", "180"))
 APIFY_SEARCH_MAX_CHARGE_USD = Decimal(os.environ.get("APIFY_SEARCH_MAX_CHARGE_USD", "1.0"))
+SUPPORTED_APIFY_SOURCES = {"apify_yandex", "apify_2gis", "apify_google", "apify_apple"}
 
 class ProspectingService:
     def __init__(
@@ -30,7 +30,7 @@ class ProspectingService:
     ):
         self.api_token = api_token or os.environ.get('APIFY_TOKEN')
         normalized_source = str(source or "apify_yandex").strip().lower()
-        if normalized_source not in {"apify_yandex", "apify_2gis"}:
+        if normalized_source not in SUPPORTED_APIFY_SOURCES:
             normalized_source = "apify_yandex"
         self.source = normalized_source
 
@@ -44,7 +44,21 @@ class ProspectingService:
             or os.environ.get("APIFY_TWOGIS_ACTOR_ID")
             or yandex_actor
         )
-        source_actor = twogis_actor if self.source == "apify_2gis" else yandex_actor
+        google_actor = (
+            os.environ.get("APIFY_GOOGLE_ACTOR_ID")
+            or "0SHtjFyh3L6V8fLDT"
+        )
+        apple_actor = (
+            os.environ.get("APIFY_APPLE_ACTOR_ID")
+            or "5bSvAQKSK3LPq9OXb"
+        )
+        source_actor_map = {
+            "apify_yandex": yandex_actor,
+            "apify_2gis": twogis_actor,
+            "apify_google": google_actor,
+            "apify_apple": apple_actor,
+        }
+        source_actor = source_actor_map.get(self.source) or yandex_actor
         self.actor_id = str(actor_id_override or source_actor or "").strip()
         if not APIFY_AVAILABLE:
             print("Warning: apify_client not available. Prospecting service disabled.")
@@ -54,18 +68,23 @@ class ProspectingService:
             self.client = None
         else:
             self.client = ApifyClient(self.api_token)
-        self._apify_proxy_strict = str(os.environ.get("APIFY_PROXY_STRICT", "") or "").strip().lower() in {
-            "1",
-            "true",
-            "yes",
-            "on",
-        }
-        self._apify_proxy_insecure = str(os.environ.get("APIFY_PROXY_INSECURE", "true") or "").strip().lower() in {
-            "1",
-            "true",
-            "yes",
-            "on",
-        }
+
+    @staticmethod
+    def _apify_actor_proxy_config() -> Dict[str, Any]:
+        """
+        Apify actor-side proxy config (runs inside Apify platform).
+        We do not force residential groups by default to avoid 402 on plans
+        without RESIDENTIAL access.
+        """
+        config: Dict[str, Any] = {"useApifyProxy": True}
+        proxy_groups_raw = str(os.environ.get("APIFY_ACTOR_PROXY_GROUPS", "") or "").strip()
+        proxy_groups = [grp.strip() for grp in proxy_groups_raw.split(",") if grp.strip()]
+        if proxy_groups:
+            config["apifyProxyGroups"] = proxy_groups
+        country = str(os.environ.get("APIFY_ACTOR_PROXY_COUNTRY", "") or "").strip().upper()
+        if country:
+            config["apifyProxyCountry"] = country
+        return config
 
     def _actor_path_id(self) -> str:
         """
@@ -86,6 +105,20 @@ class ProspectingService:
             if key in item and item.get(key) not in (None, ""):
                 return item.get(key)
         return None
+
+    @classmethod
+    def _strip_none_values(cls, value: Any) -> Any:
+        if isinstance(value, dict):
+            cleaned: Dict[str, Any] = {}
+            for key, nested in value.items():
+                if nested is None:
+                    continue
+                normalized = cls._strip_none_values(nested)
+                cleaned[key] = normalized
+            return cleaned
+        if isinstance(value, list):
+            return [cls._strip_none_values(item) for item in value if item is not None]
+        return value
 
     @staticmethod
     def _collect_nested_strings(value: Any) -> List[str]:
@@ -140,6 +173,21 @@ class ProspectingService:
             return len(value)
         return None
 
+    @staticmethod
+    def _normalize_media_url(value: Any) -> Optional[str]:
+        text = str(value or "").strip()
+        if not text:
+            return None
+        if text.startswith("//"):
+            text = f"https:{text}"
+        if "{size}" in text:
+            text = text.replace("{size}", "XXXL")
+        if "/%s" in text:
+            text = text.replace("/%s", "/XXXL")
+        elif "%s" in text:
+            text = text.replace("%s", "XXXL")
+        return text
+
     @classmethod
     def _extract_photos(cls, item: Dict[str, Any], limit: int = 20) -> List[str]:
         raw_photos = item.get("photos")
@@ -147,16 +195,16 @@ class ProspectingService:
         if isinstance(raw_photos, list):
             for entry in raw_photos:
                 if isinstance(entry, str):
-                    value = entry.strip()
+                    value = cls._normalize_media_url(entry) or ""
                     if value:
                         photos.append(value)
                 elif isinstance(entry, dict):
                     for key in ("url", "imageUrl", "src", "originalUrl"):
-                        candidate = cls._coerce_scalar_text(entry.get(key))
+                        candidate = cls._normalize_media_url(entry.get(key)) or cls._coerce_scalar_text(entry.get(key))
                         if candidate:
                             photos.append(candidate)
                             break
-        main_photo = cls._coerce_scalar_text(item.get("photoUrlTemplate"))
+        main_photo = cls._normalize_media_url(item.get("photoUrlTemplate")) or cls._coerce_scalar_text(item.get("photoUrlTemplate"))
         if main_photo:
             photos.insert(0, main_photo)
 
@@ -418,20 +466,38 @@ class ProspectingService:
     def _build_run_input(self, query: str, location: str, limit: int) -> Dict[str, Any]:
         query_text = query.strip()
         location_text = location.strip()
-        proxy_groups_raw = str(os.environ.get("APIFY_PROXY_GROUPS", "RESIDENTIAL") or "").strip()
-        proxy_groups = [grp.strip() for grp in proxy_groups_raw.split(",") if grp.strip()]
-        if not proxy_groups:
-            proxy_groups = ["RESIDENTIAL"]
+        proxy_configuration = self._apify_actor_proxy_config()
+
+        if self.source == "apify_google":
+            return {
+                "search_term": query_text,
+                "location": location_text,
+                "language": str(os.environ.get("APIFY_GOOGLE_LANGUAGE", "English") or "English"),
+                "max_results": max(1, int(limit or 1)),
+                "reviews": 0,
+                "photos": 0,
+            }
+
+        if self.source == "apify_apple":
+            return {
+                "searchQueries": [
+                    {
+                        "query": query_text,
+                        "location": location_text,
+                    }
+                ],
+                "maxResults": max(1, int(limit or 1)),
+                "countryCode": str(os.environ.get("APIFY_APPLE_COUNTRY_CODE", "RU") or "RU"),
+                "language": str(os.environ.get("APIFY_APPLE_LANGUAGE", "ru-RU") or "ru-RU"),
+                "proxyConfiguration": proxy_configuration,
+            }
 
         if self.source == "apify_2gis":
             return {
                 "query": [query_text],
                 "city": location_text,
                 "maxItems": limit,
-                "proxyConfiguration": {
-                    "useApifyProxy": True,
-                    "apifyProxyGroups": proxy_groups,
-                },
+                "proxyConfiguration": proxy_configuration,
             }
 
         # fRSgBvgbsRB4o7t30 (zen-studio/yandex-maps-scraper) concrete input schema.
@@ -471,10 +537,7 @@ class ProspectingService:
             "customFilters": [],
             "sortBy": "",
             "sortOrigin": "",
-            "proxyConfiguration": {
-                "useApifyProxy": True,
-                "apifyProxyGroups": proxy_groups,
-            },
+            "proxyConfiguration": proxy_configuration,
         }
 
     @staticmethod
@@ -491,6 +554,49 @@ class ProspectingService:
         if match:
             return match.group(1)
         return None
+
+    @staticmethod
+    def _extract_google_place_id(map_url: str) -> Optional[str]:
+        value = str(map_url or "").strip()
+        if not value:
+            return None
+        patterns = [
+            r"cid=(\d+)",
+            r"!1s(0x[0-9a-f]+:0x[0-9a-f]+)",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, value, flags=re.IGNORECASE)
+            if match:
+                return str(match.group(1)).strip()
+        return None
+
+    @staticmethod
+    def _extract_query_from_map_url(map_url: str) -> str:
+        value = str(map_url or "").strip()
+        if not value:
+            return ""
+        try:
+            parsed = urlparse(value)
+            params = parse_qs(parsed.query)
+            for key in ("q", "query"):
+                values = params.get(key) or []
+                if values:
+                    text = str(values[0]).replace("+", " ").strip()
+                    if text:
+                        return text
+        except Exception:
+            pass
+        match = re.search(r"/org/([^/?#]+)/", value)
+        if match:
+            slug = str(match.group(1)).replace("_", " ").replace("-", " ").strip()
+            if slug:
+                return slug
+        match = re.search(r"/place/([^/?#]+)", value)
+        if match:
+            slug = str(match.group(1)).replace("+", " ").replace("%20", " ").strip()
+            if slug:
+                return slug
+        return ""
 
     @staticmethod
     def _extract_2gis_city_hint(map_url: str) -> str:
@@ -513,11 +619,40 @@ class ProspectingService:
         map_url_text = str(map_url or "").strip()
         if not map_url_text:
             raise ValueError("map_url is required")
+        proxy_configuration = self._apify_actor_proxy_config()
 
-        proxy_groups_raw = str(os.environ.get("APIFY_PROXY_GROUPS", "RESIDENTIAL") or "").strip()
-        proxy_groups = [grp.strip() for grp in proxy_groups_raw.split(",") if grp.strip()]
-        if not proxy_groups:
-            proxy_groups = ["RESIDENTIAL"]
+        if self.source == "apify_google":
+            place_id = self._extract_google_place_id(map_url_text)
+            query_text = self._extract_query_from_map_url(map_url_text) or map_url_text
+            payload = {
+                "search_term": query_text,
+                "location": str(city or "").strip(),
+                "language": str(os.environ.get("APIFY_GOOGLE_LANGUAGE", "English") or "English"),
+                "max_results": max(1, int(limit or 1)),
+                "reviews": 30,
+                "photos": 20,
+                "startUrls": [map_url_text],
+            }
+            if place_id:
+                payload["placeIds"] = [place_id]
+            return payload
+
+        if self.source == "apify_apple":
+            query_text = self._extract_query_from_map_url(map_url_text)
+            city_text = str(city or "").strip()
+            search_queries = []
+            if query_text:
+                search_queries.append({"query": query_text, "location": city_text})
+            payload = {
+                "searchQueries": search_queries or [{"query": map_url_text, "location": city_text}],
+                "placeUrls": [map_url_text],
+                "searchUrls": [map_url_text],
+                "maxResults": max(1, int(limit or 1)),
+                "countryCode": str(os.environ.get("APIFY_APPLE_COUNTRY_CODE", "RU") or "RU"),
+                "language": str(os.environ.get("APIFY_APPLE_LANGUAGE", "ru-RU") or "ru-RU"),
+                "proxyConfiguration": proxy_configuration,
+            }
+            return payload
 
         if self.source == "apify_2gis":
             city_text = str(city or "").strip() or self._extract_2gis_city_hint(map_url_text)
@@ -525,10 +660,7 @@ class ProspectingService:
                 "query": [map_url_text],
                 "city": city_text,
                 "maxItems": max(1, int(limit or 1)),
-                "proxyConfiguration": {
-                    "useApifyProxy": True,
-                    "apifyProxyGroups": proxy_groups,
-                },
+                "proxyConfiguration": proxy_configuration,
             }
 
         # Minimal input for map-url runs to avoid actor schema mismatch (400).
@@ -536,183 +668,21 @@ class ProspectingService:
             "startUrls": [{"url": map_url_text}],
             "maxItems": max(1, int(limit or 1)),
             "language": "ru",
-            "proxyConfiguration": {
-                "useApifyProxy": True,
-                "apifyProxyGroups": proxy_groups,
-            },
+            "proxyConfiguration": proxy_configuration,
         }
 
-    def _load_proxy_from_db(self) -> Optional[Dict[str, Any]]:
-        """
-        Pick one active/working proxy from ProxyServers for outgoing Apify API calls.
-        Safe fallback: return None if DB/table is unavailable.
-        """
-        try:
-            from database_manager import get_db_connection
-
-            conn = get_db_connection()
-            cur = conn.cursor()
-            try:
-                cur.execute(
-                    """
-                    SELECT id, proxy_type, host, port, username, password
-                    FROM proxyservers
-                    WHERE is_active IS TRUE AND is_working IS TRUE
-                    ORDER BY last_used_at ASC NULLS FIRST, RANDOM()
-                    LIMIT 1
-                    """
-                )
-                row = cur.fetchone()
-                if not row:
-                    return None
-
-                if hasattr(row, "get"):
-                    proxy_id = str(row.get("id") or "").strip()
-                    proxy_type = str(row.get("proxy_type") or "http").strip().lower() or "http"
-                    host = str(row.get("host") or "").strip()
-                    port = row.get("port")
-                    username = str(row.get("username") or "").strip()
-                    password = str(row.get("password") or "").strip()
-                else:
-                    proxy_id, proxy_type, host, port, username, password = row
-                    proxy_id = str(proxy_id or "").strip()
-                    proxy_type = str(proxy_type or "http").strip().lower() or "http"
-                    host = str(host or "").strip()
-                    username = str(username or "").strip()
-                    password = str(password or "").strip()
-
-                if not host or not port:
-                    return None
-
-                cur.execute(
-                    """
-                    UPDATE proxyservers
-                    SET last_used_at = CURRENT_TIMESTAMP,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE id = %s
-                    """,
-                    (proxy_id,),
-                )
-                conn.commit()
-
-                scheme = proxy_type if proxy_type in {"http", "https", "socks5"} else "http"
-                if username and password:
-                    proxy_url = f"{scheme}://{username}:{password}@{host}:{port}"
-                else:
-                    proxy_url = f"{scheme}://{host}:{port}"
-                return {"id": proxy_id, "url": proxy_url}
-            finally:
-                try:
-                    cur.close()
-                except Exception:
-                    pass
-                conn.close()
-        except Exception:
-            return None
-
-    def _resolve_apify_proxy(self) -> Dict[str, Any]:
-        """
-        Resolve proxy for Apify HTTP API calls.
-        Priority:
-        1) APIFY_PROXY_URL / APIFY_HTTP_PROXY / APIFY_HTTPS_PROXY
-        2) ProxyServers table (active + working).
-        """
-        explicit_url = str(os.environ.get("APIFY_PROXY_URL", "") or "").strip()
-        if explicit_url:
-            return {"id": "env", "url": explicit_url}
-
-        explicit_http = str(os.environ.get("APIFY_HTTP_PROXY", "") or "").strip()
-        explicit_https = str(os.environ.get("APIFY_HTTPS_PROXY", "") or "").strip()
-        if explicit_http or explicit_https:
-            return {"id": "env", "http": explicit_http, "https": explicit_https}
-
-        db_proxy = self._load_proxy_from_db()
-        if db_proxy and db_proxy.get("url"):
-            return {
-                "id": db_proxy.get("id"),
-                "http": db_proxy.get("url"),
-                "https": db_proxy.get("url"),
-            }
-        return {}
-
-    def _mark_apify_proxy_result(self, proxy_id: Optional[str], *, success: bool) -> None:
-        if not proxy_id or proxy_id == "env":
-            return
-        try:
-            from database_manager import get_db_connection
-
-            conn = get_db_connection()
-            cur = conn.cursor()
-            try:
-                if success:
-                    cur.execute(
-                        """
-                        UPDATE proxyservers
-                        SET success_count = COALESCE(success_count, 0) + 1,
-                            is_working = TRUE,
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE id = %s
-                        """,
-                        (proxy_id,),
-                    )
-                else:
-                    cur.execute(
-                        """
-                        UPDATE proxyservers
-                        SET failure_count = COALESCE(failure_count, 0) + 1,
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE id = %s
-                        """,
-                        (proxy_id,),
-                    )
-                conn.commit()
-            finally:
-                try:
-                    cur.close()
-                except Exception:
-                    pass
-                conn.close()
-        except Exception:
-            return
-
     def _apify_request(self, method: str, url: str, **kwargs: Any) -> Response:
-        # Never proxy Apify API itself. Residential proxies break api.apify.com
-        # and return "Residential Failed (bad_endpoint)".
-        if url.startswith("https://api.apify.com/"):
-            proxy_payload: Dict[str, Any] = {}
-        else:
-            proxy_payload = self._resolve_apify_proxy()
-        proxy_id = str(proxy_payload.get("id") or "").strip() or None
-        proxies = None
-        if proxy_payload.get("http") or proxy_payload.get("https"):
-            proxies = {
-                "http": proxy_payload.get("http") or proxy_payload.get("https"),
-                "https": proxy_payload.get("https") or proxy_payload.get("http"),
-            }
-            print(f"🌐 Apify API via proxy id={proxy_id}", flush=True)
-            if self._apify_proxy_insecure and "verify" not in kwargs:
-                # Some proxy providers MITM TLS; allow insecure verify only for proxied Apify calls.
-                kwargs = dict(kwargs)
-                kwargs["verify"] = False
-                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-        try:
-            response = requests.request(method=method, url=url, proxies=proxies, **kwargs)
-            self._mark_apify_proxy_result(proxy_id, success=True)
-            return response
-        except requests.RequestException:
-            self._mark_apify_proxy_result(proxy_id, success=False)
-            if proxies and not self._apify_proxy_strict:
-                print("⚠️ Apify proxy request failed, retrying direct", flush=True)
-                return requests.request(method=method, url=url, **kwargs)
-            raise
+        # Split proxy policy:
+        # - Apify API calls are always direct from LocalOS infra.
+        # - Proxying/rotation for target sites is handled inside Apify actor via proxyConfiguration.
+        return requests.request(method=method, url=url, **kwargs)
 
     def start_search_run(self, query: str, location: str, limit: int = 50) -> Dict[str, Any]:
         if not self.api_token:
             raise ValueError("APIFY_TOKEN is not set")
 
         run_input = self._build_run_input(query, location, limit)
-        return self._start_run_with_input(run_input)
+        return self._start_run_with_input(self._strip_none_values(run_input))
 
     def _start_run_with_input(self, run_input: Dict[str, Any]) -> Dict[str, Any]:
         if not self.api_token:
@@ -770,7 +740,59 @@ class ProspectingService:
         city: str = "",
     ) -> Dict[str, Any]:
         run_input = self._build_run_input_for_map_url(map_url, limit=limit, city=city)
-        run_meta = self._start_run_with_input(run_input)
+        run_input_candidates = [self._strip_none_values(run_input)]
+        if self.source == "apify_google":
+            run_input_candidates.append(
+                self._strip_none_values(
+                    {
+                        "search_term": self._extract_query_from_map_url(map_url) or str(map_url or "").strip(),
+                        "location": str(city or "").strip(),
+                        "language": str(os.environ.get("APIFY_GOOGLE_LANGUAGE", "English") or "English"),
+                        "max_results": max(1, int(limit or 1)),
+                        "reviews": 30,
+                        "photos": 20,
+                    }
+                )
+            )
+        elif self.source == "apify_apple":
+            run_input_candidates.append(
+                self._strip_none_values(
+                    {
+                        "searchQueries": [
+                            {
+                                "query": self._extract_query_from_map_url(map_url) or str(map_url or "").strip(),
+                                "location": str(city or "").strip(),
+                            }
+                        ],
+                        "maxResults": max(1, int(limit or 1)),
+                        "countryCode": str(os.environ.get("APIFY_APPLE_COUNTRY_CODE", "RU") or "RU"),
+                        "language": str(os.environ.get("APIFY_APPLE_LANGUAGE", "ru-RU") or "ru-RU"),
+                    }
+                )
+            )
+
+        run_meta: Dict[str, Any] = {}
+        last_error: Optional[Exception] = None
+        for candidate in run_input_candidates:
+            if not candidate:
+                continue
+            try:
+                run_meta = self._start_run_with_input(candidate)
+                run_input = candidate
+                break
+            except requests.exceptions.HTTPError as exc:
+                response = getattr(exc, "response", None)
+                if response is not None and int(response.status_code or 0) == 400:
+                    last_error = exc
+                    continue
+                raise
+            except Exception as exc:
+                last_error = exc
+                break
+        if not run_meta:
+            if last_error:
+                raise last_error
+            raise RuntimeError("Apify run did not start")
         run_id = str(run_meta.get("run_id") or "").strip()
         if not run_id:
             raise RuntimeError("Apify run did not start")
@@ -798,6 +820,44 @@ class ProspectingService:
             "status": final_status,
             "items": items,
             "run_input": run_input,
+        }
+
+    def run_search(
+        self,
+        query: str,
+        location: str,
+        *,
+        limit: int = 50,
+        timeout_sec: int = 300,
+    ) -> Dict[str, Any]:
+        run_meta = self.start_search_run(query, location, limit)
+        run_id = str(run_meta.get("run_id") or "").strip()
+        if not run_id:
+            raise RuntimeError("Apify search run did not start")
+
+        started_at = datetime.datetime.utcnow()
+        final_status = str(run_meta.get("status") or "").strip().upper() or "RUNNING"
+        dataset_id = str(run_meta.get("dataset_id") or "").strip()
+
+        while final_status in {"READY", "RUNNING", "TIMING-OUT", "ABORTING"}:
+            elapsed = (datetime.datetime.utcnow() - started_at).total_seconds()
+            if elapsed > max(30, int(timeout_sec or 300)):
+                raise TimeoutError(f"Apify search did not finish within {int(timeout_sec or 300)} seconds")
+            time.sleep(4)
+            run_data = self.get_run(run_id)
+            final_status = str(run_data.get("status") or "").strip().upper() or final_status
+            dataset_id = str(run_data.get("defaultDatasetId") or dataset_id or "").strip()
+
+        if final_status != "SUCCEEDED":
+            raise RuntimeError(f"Apify run finished with status={final_status}")
+
+        items = self.fetch_dataset_items(dataset_id)
+        return {
+            "run_id": run_id,
+            "dataset_id": dataset_id,
+            "status": final_status,
+            "items": items,
+            "run_input": run_meta.get("run_input") or {},
         }
 
     def get_run(self, run_id: str) -> Dict[str, Any]:

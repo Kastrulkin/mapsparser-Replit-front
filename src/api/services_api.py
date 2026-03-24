@@ -128,6 +128,8 @@ def get_services():
                 return f"LOWER(COALESCE({prefix}source, '')) IN ('yandex_maps', 'yandex_business')", []
             if source_filter_raw in ('google', 'google_maps', 'google_business'):
                 return f"LOWER(COALESCE({prefix}source, '')) IN ('google_maps', 'google_business')", []
+            if source_filter_raw in ('apple', 'apple_maps', 'apple_business'):
+                return f"LOWER(COALESCE({prefix}source, '')) IN ('apple_maps', 'apple_business')", []
             return None, []
 
         # Если передан business_id — фильтруем по нему и is_active, иначе по user_id
@@ -193,6 +195,8 @@ def get_services():
                     parse_where.append("source IN ('yandex_maps', 'yandex_business')")
                 elif source_filter_raw in ('google', 'google_maps', 'google_business'):
                     parse_where.append("source IN ('google_maps', 'google_business')")
+                elif source_filter_raw in ('apple', 'apple_maps', 'apple_business'):
+                    parse_where.append("source IN ('apple_maps', 'apple_business')")
                 cursor.execute(
                     f"""
                     SELECT MAX(COALESCE(updated_at, created_at)) AS ts

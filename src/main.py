@@ -8,7 +8,10 @@ import sqlite3
 import uuid
 import base64
 import random
+import re
+import threading
 from datetime import datetime, timedelta
+from typing import Any
 
 # Устанавливаем переменную окружения для отключения SSL проверки GigaChat
 os.environ.setdefault('GIGACHAT_SSL_VERIFY', 'false')
@@ -52,7 +55,14 @@ from api.metrics_history_api import metrics_history_bp
 from api.networks_api import networks_bp
 from api.network_health_api import network_health_bp
 from api.admin_prospecting import admin_prospecting_bp
+from services.prospecting_service import ProspectingService
+from core.card_audit import build_lead_card_preview_snapshot
 from core.ai_learning import record_ai_learning_event
+from core.parsing_runtime_config import (
+    get_use_apify_map_parsing,
+    resolve_map_source_for_queue,
+    set_use_apify_map_parsing,
+)
 try:
     from api.google_business_api import google_business_bp
 except ImportError as e:
@@ -141,7 +151,8 @@ app.register_blueprint(bookings_bp)
 app.register_blueprint(ai_webhooks_bp)
 app.register_blueprint(ai_agents_api_bp)
 app.register_blueprint(chats_bp)
-app.register_blueprint(messengers_bp)
+if "messengers" not in app.blueprints:
+    app.register_blueprint(messengers_bp)
 app.register_blueprint(services_bp)
 app.register_blueprint(growth_bp)
 app.register_blueprint(admin_growth_bp)
@@ -1265,6 +1276,76 @@ def upsert_external_account(business_id):
         import traceback
 
         traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/admin/parsing/runtime-settings', methods=['GET'])
+def get_parsing_runtime_settings():
+    """Получить runtime-настройки парсинга (только superadmin)."""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        if not user_data.get('is_superadmin'):
+            return jsonify({"error": "Требуются права администратора"}), 403
+
+        conn = get_db_connection()
+        try:
+            enabled = bool(get_use_apify_map_parsing(conn))
+        finally:
+            conn.close()
+
+        return jsonify({
+            "success": True,
+            "settings": {
+                "use_apify_map_parsing": enabled
+            }
+        })
+    except Exception as e:
+        print(f"❌ Ошибка чтения runtime-настроек парсинга: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/admin/parsing/runtime-settings', methods=['POST'])
+def update_parsing_runtime_settings():
+    """Обновить runtime-настройки парсинга (только superadmin)."""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+        if not user_data.get('is_superadmin'):
+            return jsonify({"error": "Требуются права администратора"}), 403
+
+        payload = request.get_json(silent=True) or {}
+        if "use_apify_map_parsing" not in payload:
+            return jsonify({"error": "Поле use_apify_map_parsing обязательно"}), 400
+        enabled = bool(payload.get("use_apify_map_parsing"))
+
+        conn = get_db_connection()
+        try:
+            set_use_apify_map_parsing(conn, enabled)
+            current = bool(get_use_apify_map_parsing(conn))
+        finally:
+            conn.close()
+
+        return jsonify({
+            "success": True,
+            "settings": {
+                "use_apify_map_parsing": current
+            }
+        })
+    except Exception as e:
+        print(f"❌ Ошибка обновления runtime-настроек парсинга: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -5339,8 +5420,10 @@ def client_info():
                 return 'yandex'
             if '2gis' in u:
                 return '2gis'
-            if 'google' in u:
+            if 'google.com/maps' in u or 'maps.app.goo.gl' in u:
                 return 'google'
+            if 'maps.apple.com' in u:
+                return 'apple'
             return 'other'
 
         # Парсер больше не запускается автоматически при сохранении ссылок
@@ -7452,9 +7535,10 @@ def admin_sync_business_yandex(business_id):
 
         if map_url:
             task_type = 'parse_card'
-            source = 'yandex_maps'
+            use_apify_map_parsing = bool(get_use_apify_map_parsing(db.conn))
+            source = resolve_map_source_for_queue('yandex_maps', use_apify_map_parsing)
             target_url = map_url
-            message = "Запущен парсинг карт"
+            message = "Запущен парсинг карт (Apify)" if source == "apify_yandex" else "Запущен парсинг карт"
         else:
             task_type = 'sync_yandex_business'
             source = 'yandex_business'
@@ -7578,9 +7662,10 @@ def admin_sync_business_2gis(business_id):
 
         if map_url:
             task_type = "parse_card"
-            source = "2gis"
+            use_apify_map_parsing = bool(get_use_apify_map_parsing(db.conn))
+            source = resolve_map_source_for_queue("2gis", use_apify_map_parsing)
             target_url = map_url
-            message = "Запущен парсинг 2ГИС карточки"
+            message = "Запущен парсинг 2ГИС карточки (Apify)" if source == "apify_2gis" else "Запущен парсинг 2ГИС карточки"
         else:
             task_type = "sync_2gis"
             source = "2gis"
@@ -10141,12 +10226,55 @@ def get_network_locations(business_id):
             return out
 
         normalized_locations = [_norm_loc(loc) for loc in locations]
+        representative_id = None
+        if normalized_locations:
+            def _normalized_name(value):
+                return " ".join(
+                    re.sub(r"[^\w\s]+", " ", str(value or "").lower().replace("ё", "е")).split()
+                )
+
+            name_counts = {}
+            for loc in normalized_locations:
+                name_key = _normalized_name(loc.get("name"))
+                if not name_key:
+                    continue
+                name_counts[name_key] = int(name_counts.get(name_key) or 0) + 1
+
+            explicit_parent = next((loc for loc in normalized_locations if str(loc.get("id") or "") == str(network_id)), None)
+            representative = explicit_parent
+            if representative is None:
+                unique_candidates = []
+                for loc in normalized_locations:
+                    normalized_name = _normalized_name(loc.get("name"))
+                    if normalized_name and int(name_counts.get(normalized_name) or 0) == 1:
+                        unique_candidates.append(loc)
+                if unique_candidates:
+                    unique_candidates.sort(
+                        key=lambda loc: (
+                            -len(_normalized_name(loc.get("name")).split()),
+                            -len(str(loc.get("name") or "")),
+                            str(loc.get("created_at") or ""),
+                        )
+                    )
+                    representative = unique_candidates[0]
+                else:
+                    representative = sorted(
+                        normalized_locations,
+                        key=lambda loc: (
+                            str(loc.get("created_at") or ""),
+                            str(loc.get("name") or ""),
+                        ),
+                    )[0]
+            representative_id = str(representative.get("id") or "") if representative else None
+            for loc in normalized_locations:
+                loc["is_network_parent"] = bool(representative_id) and str(loc.get("id") or "") == representative_id
         db.close()
 
         return jsonify({
             "success": True,
             "is_network": (business_id == network_id),
-            "locations": normalized_locations
+            "locations": normalized_locations,
+            "parent_business_id": representative_id,
         })
         
     except Exception as e:
@@ -10674,7 +10802,7 @@ def update_business_profile(business_id):
         return jsonify({"error": str(e)}), 500
 
 
-def send_email(to_email, subject, body, from_name="BeautyBot"):
+def send_email(to_email, subject, body, from_name="LocalOS"):
     """Универсальная функция для отправки email"""
     try:
         import smtplib
@@ -10684,7 +10812,7 @@ def send_email(to_email, subject, body, from_name="BeautyBot"):
         # Настройки SMTP из .env
         smtp_server = os.getenv("SMTP_SERVER", "mail.hosting.reg.ru")
         smtp_port = int(os.getenv("SMTP_PORT", "587"))
-        smtp_username = os.getenv("SMTP_USERNAME", "info@beautybot.pro")
+        smtp_username = os.getenv("SMTP_USERNAME", "info@localos.pro")
         smtp_password = os.getenv("SMTP_PASSWORD")
         
         if not smtp_password:
@@ -10715,11 +10843,11 @@ def send_email(to_email, subject, body, from_name="BeautyBot"):
 
 def send_contact_email(name, email, phone, message):
     """Отправка email с сообщением обратной связи"""
-    contact_email = os.getenv("CONTACT_EMAIL", "info@beautybot.pro")
+    contact_email = os.getenv("CONTACT_EMAIL", "info@localos.pro")
     
-    subject = f"Новое сообщение с сайта BeautyBot от {name}"
+    subject = f"Новое сообщение с сайта LocalOS от {name}"
     body = f"""
-Новое сообщение с сайта BeautyBot
+Новое сообщение с сайта LocalOS
 
 Имя: {name}
 Email: {email}
@@ -10729,7 +10857,7 @@ Email: {email}
 {message}
 
 ---
-Отправлено с сайта beautybot.pro
+Отправлено с сайта localos.pro
     """
     
     return send_email(contact_email, subject, body)
@@ -10775,20 +10903,20 @@ def reset_password():
         print(f"⏰ Действителен до: {expires_at}")
         
         # Отправляем реальное письмо
-        subject = "Восстановление пароля BeautyBot"
+        subject = "Восстановление пароля LocalOS"
         body = f"""
-Восстановление пароля для BeautyBot
+Восстановление пароля для LocalOS
 
 Ваш токен восстановления: {reset_token}
 Действителен до: {expires_at.strftime('%d.%m.%Y %H:%M')}
 
 Для сброса пароля перейдите по ссылке:
-https://beautybot.pro/reset-password?token={reset_token}&email={email}
+https://localos.pro/reset-password?token={reset_token}&email={email}
 
 Если вы не запрашивали восстановление пароля, проигнорируйте это письмо.
 
 ---
-BeautyBot
+LocalOS
         """
         
         email_sent = send_email(email, subject, body)
@@ -10863,7 +10991,7 @@ def confirm_reset():
 @app.route('/api/public/request-report', methods=['POST', 'OPTIONS'])
 def public_request_report():
     """Публичная заявка на отчёт без авторизации.
-    Принимает email и url, отправляет email на info@beautybot.pro о новой заявке.
+    Создаёт публичную страницу аудита, запускает фоновый парсинг карты и возвращает ссылку на отчёт.
     """
     try:
         if request.method == 'OPTIONS':
@@ -10878,18 +11006,57 @@ def public_request_report():
         
         if not email or not url:
             return jsonify({"error": "Email и URL обязательны"}), 400
+
+        source = _detect_public_map_source(url)
+        normalized_slug = _slugify_public_report_name(
+            re.sub(r"https?://", "", url).split("/", 1)[-1].replace("/", "-")
+        )
+        pending_page = _build_public_pending_page(email=email, map_url=url)
+
+        conn = get_db_connection()
+        try:
+            _ensure_public_report_requests_table(conn)
+            cur = conn.cursor()
+            suffix = 0
+            slug = normalized_slug
+            while True:
+                cur.execute("SELECT slug FROM publicreportrequests WHERE slug = %s LIMIT 1", (slug,))
+                existing = cur.fetchone()
+                if not existing:
+                    break
+                suffix += 1
+                slug = f"{normalized_slug}-{suffix}"
+
+            cur.execute(
+                """
+                INSERT INTO publicreportrequests (slug, email, source_url, source, status, page_json, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s::jsonb, NOW(), NOW())
+                """,
+                (slug, email, url, source, "queued", json.dumps(pending_page, ensure_ascii=False)),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        # Асинхронный запуск: сразу возвращаем ссылку на страницу, а данные подтянутся после парсинга.
+        thread = threading.Thread(target=_run_public_report_pipeline, args=(slug,), daemon=True)
+        thread.start()
+
+        frontend_base = str(os.getenv("FRONTEND_BASE_URL") or "").strip().rstrip("/")
+        public_url = f"{frontend_base}/{slug}" if frontend_base else f"/{slug}"
         
-        # Отправляем email на info@beautybot.pro о новой заявке
-        contact_email = os.getenv("CONTACT_EMAIL", "info@beautybot.pro")
-        subject = f"Новая заявка с сайта BeautyBot от {email}"
+        # Отправляем email на info@localos.pro о новой заявке
+        contact_email = os.getenv("CONTACT_EMAIL", "info@localos.pro")
+        subject = f"Новая заявка с сайта LocalOS от {email}"
         body = f"""
-Новая заявка с сайта BeautyBot
+Новая заявка с сайта LocalOS
 
 Email клиента: {email}
 Ссылка на бизнес: {url}
+Публичная страница отчёта: {public_url}
 
 ---
-Отправлено с сайта beautybot.pro
+Отправлено с сайта localos.pro
         """
         
         email_sent = send_email(contact_email, subject, body)
@@ -10899,11 +11066,14 @@ Email клиента: {email}
         # Логирование в консоль
         print(f"📧 НОВАЯ ЗАЯВКА ОТ {email}:")
         print(f"🔗 URL: {url}")
+        print(f"📄 Публичная страница: {public_url}")
         print("-" * 50)
         
         return jsonify({
             "success": True,
-            "message": "Заявка принята. Мы свяжемся с вами в ближайшее время."
+            "message": "Заявка принята. Формируем отчёт.",
+            "slug": slug,
+            "public_url": public_url,
         }), 200
         
     except Exception as e:
@@ -10913,7 +11083,7 @@ Email клиента: {email}
 @app.route('/api/public/request-registration', methods=['POST', 'OPTIONS'])
 def public_request_registration():
     """Публичная заявка на регистрацию без авторизации.
-    Принимает данные регистрации, отправляет email на info@beautybot.pro о новой заявке.
+    Принимает данные регистрации, отправляет email на info@localos.pro о новой заявке.
     """
     try:
         if request.method == 'OPTIONS':
@@ -10931,11 +11101,11 @@ def public_request_registration():
         if not email:
             return jsonify({"error": "Email обязателен"}), 400
         
-        # Отправляем email на info@beautybot.pro о новой заявке на регистрацию
-        contact_email = os.getenv("CONTACT_EMAIL", "info@beautybot.pro")
+        # Отправляем email на info@localos.pro о новой заявке на регистрацию
+        contact_email = os.getenv("CONTACT_EMAIL", "info@localos.pro")
         subject = f"Новая заявка на регистрацию от {email}"
         body = f"""
-Новая заявка на регистрацию с сайта BeautyBot
+Новая заявка на регистрацию с сайта LocalOS
 
 Имя: {name or 'Не указано'}
 Email: {email}
@@ -10943,7 +11113,7 @@ Email: {email}
 Ссылка на Яндекс.Карты: {yandex_url or 'Не указана'}
 
 ---
-Отправлено с сайта beautybot.pro
+Отправлено с сайта localos.pro
         """
         
         email_sent = send_email(contact_email, subject, body)
@@ -11232,7 +11402,8 @@ def public_contact():
         # Отправка email
         email_sent = send_contact_email(name, email, phone, message)
         if not email_sent:
-            print("⚠️ Не удалось отправить email, но сообщение сохранено в логах")
+            print("⚠️ Не удалось отправить email с формы обратной связи")
+            return jsonify({"error": "Не удалось отправить сообщение. Попробуйте позже."}), 503
         
         return jsonify({"success": True, "message": "Сообщение отправлено"})
         
@@ -11383,6 +11554,342 @@ def report_status(card_id):
             "report_path": card_data['report_path']
         })
         
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+_RU_LAT = {
+    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "e", "ж": "zh", "з": "z",
+    "и": "i", "й": "i", "к": "k", "л": "l", "м": "m", "н": "n", "о": "o", "п": "p", "р": "r",
+    "с": "s", "т": "t", "у": "u", "ф": "f", "х": "h", "ц": "ts", "ч": "ch", "ш": "sh", "щ": "sch",
+    "ы": "y", "э": "e", "ю": "yu", "я": "ya",
+}
+
+
+def _slugify_public_report_name(name: str) -> str:
+    raw = str(name or "").strip().lower()
+    converted: list[str] = []
+    for ch in raw:
+        if "a" <= ch <= "z" or "0" <= ch <= "9":
+            converted.append(ch)
+            continue
+        if "а" <= ch <= "я" or ch == "ё":
+            converted.append(_RU_LAT.get(ch, ""))
+            continue
+        if ch in {" ", "-", "_", ".", ",", "/", "|", ":"}:
+            converted.append("-")
+    slug = re.sub(r"-{2,}", "-", "".join(converted)).strip("-")
+    return slug or f"report-{uuid.uuid4().hex[:8]}"
+
+
+def _detect_public_map_source(url: str) -> str:
+    value = str(url or "").lower()
+    if "2gis." in value:
+        return "apify_2gis"
+    if "google.com/maps/" in value or "maps.app.goo.gl/" in value:
+        return "apify_google"
+    if "maps.apple.com/" in value:
+        return "apify_apple"
+    return "apify_yandex"
+
+
+def _normalize_public_media_url(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if text.startswith("//"):
+        text = f"https:{text}"
+    if "{size}" in text:
+        text = text.replace("{size}", "XXXL")
+    if "/%s" in text:
+        text = text.replace("/%s", "/XXXL")
+    elif "%s" in text:
+        text = text.replace("%s", "XXXL")
+    return text
+
+
+def _to_json_compatible(value: Any) -> Any:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, dict):
+        normalized: dict[str, Any] = {}
+        for key, inner in value.items():
+            normalized[str(key)] = _to_json_compatible(inner)
+        return normalized
+    if isinstance(value, (list, tuple, set)):
+        return [_to_json_compatible(item) for item in value]
+    return value
+
+
+def _build_public_pending_page(*, email: str, map_url: str) -> dict[str, Any]:
+    return {
+        "processing": True,
+        "processing_message": "Здесь появится ваш отчёт, как только он будет готов.",
+        "name": "Ваш отчёт готовится",
+        "category": "Аудит карточки на картах",
+        "source_url": map_url,
+        "audit": {
+            "summary_score": 0,
+            "health_level": "processing",
+            "health_label": "Готовим отчёт",
+            "summary_text": "Мы уже парсим карточку и собираем данные. Обычно это занимает 1–3 минуты.",
+            "findings": [],
+            "recommended_actions": [
+                {
+                    "title": "Собираем фактические данные карточки",
+                    "description": "Подтягиваем услуги, отзывы, рейтинг, фото и контакты из карты.",
+                },
+                {
+                    "title": "Формируем персональный аудит",
+                    "description": "После парсинга покажем конкретные шаги роста именно для вашей карточки.",
+                },
+            ],
+            "services_preview": [],
+            "reviews_preview": [],
+            "news_preview": [],
+            "subscores": {},
+            "current_state": {
+                "rating": None,
+                "reviews_count": 0,
+                "unanswered_reviews_count": 0,
+                "services_count": 0,
+                "services_with_price_count": 0,
+                "has_website": False,
+                "has_recent_activity": False,
+                "photos_state": "unknown",
+            },
+            "revenue_potential": {},
+            "cadence": {
+                "news_posts_per_month_min": 4,
+                "photos_per_month_min": 8,
+                "reviews_response_hours_max": 48,
+            },
+        },
+        "cta": {
+            "email": email,
+            "telegram_url": None,
+            "whatsapp_url": None,
+            "website": None,
+        },
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+
+
+def _ensure_public_report_requests_table(conn) -> None:
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS publicreportrequests (
+            slug TEXT PRIMARY KEY,
+            email TEXT NOT NULL,
+            source_url TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'apify_yandex',
+            status TEXT NOT NULL DEFAULT 'queued',
+            page_json JSONB NOT NULL,
+            result_json JSONB,
+            error_text TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    conn.commit()
+
+
+def _run_public_report_pipeline(slug: str) -> None:
+    conn = None
+    try:
+        conn = get_db_connection()
+        _ensure_public_report_requests_table(conn)
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT slug, email, source_url, source
+            FROM publicreportrequests
+            WHERE slug = %s
+            LIMIT 1
+            """,
+            (slug,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return
+        payload = dict(row) if hasattr(row, "keys") else {
+            "slug": row[0],
+            "email": row[1],
+            "source_url": row[2],
+            "source": row[3],
+        }
+        source_url = str(payload.get("source_url") or "").strip()
+        source = str(payload.get("source") or "apify_yandex").strip().lower()
+        email = str(payload.get("email") or "").strip()
+
+        cur.execute(
+            "UPDATE publicreportrequests SET status = %s, updated_at = NOW() WHERE slug = %s",
+            ("processing", slug),
+        )
+        conn.commit()
+
+        service = ProspectingService(source=source)
+        run_result = service.run_business_by_map_url(source_url, limit=1, timeout_sec=320)
+        items = run_result.get("items") if isinstance(run_result, dict) else []
+        first_item = items[0] if isinstance(items, list) and items else {}
+        if not isinstance(first_item, dict) or not first_item:
+            raise RuntimeError("Парсер не вернул данные по карточке")
+
+        lead_like = {
+            "id": f"public-{slug}",
+            "name": first_item.get("name"),
+            "category": first_item.get("category"),
+            "city": first_item.get("city"),
+            "address": first_item.get("address"),
+            "website": first_item.get("website"),
+            "phone": first_item.get("phone"),
+            "email": first_item.get("email") or email,
+            "rating": first_item.get("rating"),
+            "reviews_count": first_item.get("reviews_count"),
+            "source_url": first_item.get("source_url") or source_url,
+            "telegram_url": first_item.get("telegram_url"),
+            "whatsapp_url": first_item.get("whatsapp_url"),
+            "search_payload_json": first_item.get("search_payload_json"),
+            "reviews_json": first_item.get("reviews_json"),
+            "services_json": first_item.get("services_json"),
+            "created_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.utcnow().isoformat(),
+        }
+
+        snapshot = _to_json_compatible(build_lead_card_preview_snapshot(lead_like))
+        preview_meta = snapshot.get("preview_meta") if isinstance(snapshot.get("preview_meta"), dict) else {}
+        logo_url = _normalize_public_media_url(preview_meta.get("logo_url") if isinstance(preview_meta, dict) else "")
+        photo_urls = []
+        photo_values = preview_meta.get("photo_urls") if isinstance(preview_meta, dict) else []
+        if isinstance(photo_values, list):
+            for item in photo_values:
+                media_url = _normalize_public_media_url(item)
+                if media_url:
+                    photo_urls.append(media_url)
+
+        page_json = {
+            "processing": False,
+            "name": lead_like.get("name") or "Компания",
+            "category": lead_like.get("category"),
+            "city": lead_like.get("city"),
+            "address": lead_like.get("address"),
+            "source_url": lead_like.get("source_url"),
+            "logo_url": logo_url or None,
+            "photo_urls": photo_urls[:8],
+            "audit": {
+                "summary_score": snapshot.get("summary_score"),
+                "health_level": snapshot.get("health_level"),
+                "health_label": snapshot.get("health_label"),
+                "summary_text": snapshot.get("summary_text"),
+                "findings": snapshot.get("findings") if isinstance(snapshot.get("findings"), list) else [],
+                "recommended_actions": snapshot.get("recommended_actions") if isinstance(snapshot.get("recommended_actions"), list) else [],
+                "services_preview": snapshot.get("services_preview") if isinstance(snapshot.get("services_preview"), list) else [],
+                "subscores": snapshot.get("subscores") if isinstance(snapshot.get("subscores"), dict) else {},
+                "current_state": snapshot.get("current_state") if isinstance(snapshot.get("current_state"), dict) else {},
+                "parse_context": snapshot.get("parse_context") if isinstance(snapshot.get("parse_context"), dict) else {},
+                "revenue_potential": snapshot.get("revenue_potential") if isinstance(snapshot.get("revenue_potential"), dict) else {},
+                "reviews_preview": snapshot.get("reviews_preview") if isinstance(snapshot.get("reviews_preview"), list) else [],
+                "news_preview": snapshot.get("news_preview") if isinstance(snapshot.get("news_preview"), list) else [],
+                "cadence": {
+                    "news_posts_per_month_min": 4,
+                    "photos_per_month_min": 8,
+                    "reviews_response_hours_max": 48,
+                },
+            },
+            "cta": {
+                "email": lead_like.get("email") or email,
+                "telegram_url": lead_like.get("telegram_url"),
+                "whatsapp_url": lead_like.get("whatsapp_url"),
+                "website": lead_like.get("website"),
+            },
+            "updated_at": datetime.utcnow().isoformat(),
+        }
+
+        cur.execute(
+            """
+            UPDATE publicreportrequests
+            SET status = %s,
+                page_json = %s::jsonb,
+                result_json = %s::jsonb,
+                error_text = NULL,
+                updated_at = NOW()
+            WHERE slug = %s
+            """,
+            (
+                "completed",
+                json.dumps(page_json, ensure_ascii=False),
+                json.dumps(_to_json_compatible(run_result), ensure_ascii=False),
+                slug,
+            ),
+        )
+        conn.commit()
+    except Exception as e:
+        try:
+            if conn:
+                cur = conn.cursor()
+                cur.execute(
+                    """
+                    UPDATE publicreportrequests
+                    SET status = %s,
+                        error_text = %s,
+                        updated_at = NOW()
+                    WHERE slug = %s
+                    """,
+                    ("error", str(e), slug),
+                )
+                conn.commit()
+        except Exception:
+            pass
+        print(f"Error running public report pipeline for slug={slug}: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route('/api/public/report-offer/<slug>', methods=['GET'])
+def get_public_report_offer(slug):
+    try:
+        normalized_slug = _slugify_public_report_name(slug)
+        conn = get_db_connection()
+        try:
+            _ensure_public_report_requests_table(conn)
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT slug, status, page_json, error_text, updated_at
+                FROM publicreportrequests
+                WHERE slug = %s
+                LIMIT 1
+                """,
+                (normalized_slug,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return jsonify({"error": "Not found"}), 404
+            payload = dict(row) if hasattr(row, "keys") else {
+                "slug": row[0],
+                "status": row[1],
+                "page_json": row[2],
+                "error_text": row[3],
+                "updated_at": row[4],
+            }
+            page_json = payload.get("page_json")
+            if isinstance(page_json, str):
+                try:
+                    page_json = json.loads(page_json)
+                except Exception:
+                    page_json = {}
+            if not isinstance(page_json, dict):
+                page_json = {}
+            page_json["updated_at"] = str(payload.get("updated_at") or page_json.get("updated_at") or "")
+            if str(payload.get("status") or "") == "error":
+                page_json["processing"] = True
+                page_json["processing_message"] = "Отчёт готовится дольше обычного. Мы продолжаем обработку данных."
+            return jsonify({"success": True, "status": payload.get("status"), "page": page_json})
+        finally:
+            conn.close()
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

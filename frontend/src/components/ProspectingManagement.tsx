@@ -208,8 +208,12 @@ const sourceLabel = (source?: string) => {
             return 'Внешний импорт';
         case 'apify_yandex':
             return 'Apify Yandex';
+        case 'apify_2gis':
+            return 'Apify 2GIS';
         case 'apify_google':
             return 'Apify Google';
+        case 'apify_apple':
+            return 'Apify Apple';
         case 'manual':
             return 'Ручной ввод';
         case 'openclaw':
@@ -367,7 +371,7 @@ const LeadMetaSummary: React.FC<{ lead: Lead; showChannel?: boolean }> = ({ lead
 export const ProspectingManagement: React.FC = () => {
     const [query, setQuery] = useState('');
     const [location, setLocation] = useState('');
-    const [searchSource, setSearchSource] = useState<'apify_yandex' | 'apify_2gis'>('apify_yandex');
+    const [searchSource, setSearchSource] = useState<'apify_yandex' | 'apify_2gis' | 'apify_google' | 'apify_apple'>('apify_yandex');
     const [limit, setLimit] = useState(20);
     const [manualLeadUrl, setManualLeadUrl] = useState('');
     const [manualLeadName, setManualLeadName] = useState('');
@@ -422,6 +426,42 @@ export const ProspectingManagement: React.FC = () => {
     const [previewContactsBusy, setPreviewContactsBusy] = useState(false);
     const [previewParseBusy, setPreviewParseBusy] = useState(false);
     const [previewAutoRefreshing, setPreviewAutoRefreshing] = useState(false);
+
+    const lastSearchSummary = useMemo(() => {
+        if (loading && !searchJob) {
+            return {
+                title: 'Идёт запуск поиска',
+                hint: 'Ждём постановки задачи и первого статуса от Apify.',
+                tone: 'border-sky-200 bg-sky-50 text-sky-900',
+            };
+        }
+        if (searchJob) {
+            if (searchJob.status === 'failed') {
+                return {
+                    title: 'Последний запуск завершился с ошибкой',
+                    hint: searchJob.error_text || 'Не удалось завершить поиск.',
+                    tone: 'border-red-200 bg-red-50 text-red-900',
+                };
+            }
+            if (searchJob.status === 'completed') {
+                return {
+                    title: 'Последний запуск завершён',
+                    hint: `Найдено ${searchJob.result_count || 0} компаний${searchJob.result_count ? '. Можно сразу сохранять релевантные записи в shortlist.' : '. Попробуйте сузить запрос или изменить формулировку.'}`,
+                    tone: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+                };
+            }
+            return {
+                title: 'Поиск выполняется',
+                hint: searchPollError || 'Apify ещё собирает выдачу. Обновление результатов произойдёт автоматически.',
+                tone: 'border-sky-200 bg-sky-50 text-sky-900',
+            };
+        }
+        return {
+            title: 'Последний запуск ещё не выполнялся',
+            hint: 'Сначала задайте источник, запрос и город. После запуска здесь появится статус и краткий итог.',
+            tone: 'border-gray-200 bg-gray-50 text-gray-800',
+        };
+    }, [loading, searchJob, searchPollError]);
 
     const activeFilters = useMemo(() => {
         const params: Record<string, string> = {};
@@ -1598,8 +1638,57 @@ export const ProspectingManagement: React.FC = () => {
                 <div>
                     <h2 className="text-3xl font-bold tracking-tight">Поиск клиентов</h2>
                     <p className="text-muted-foreground">
-                        Yandex-first поиск потенциальных клиентов через Apify с ручным shortlist-отбором.
+                        Один операторский поток: найти компании, отобрать shortlist, выбрать канал, утвердить первое письмо и собрать очередь отправки.
                     </p>
+                </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-5">
+                <div className="rounded-xl border border-sky-200 bg-sky-50 p-4">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">1. Сбор</div>
+                    <div className="mt-1 text-base font-semibold text-sky-950">Поиск или импорт</div>
+                    <div className="mt-1 text-sm text-sky-800">Apify или ручная ссылка. Цель этапа — быстро собрать сырой список.</div>
+                </div>
+                <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-violet-700">2. Отбор</div>
+                    <div className="mt-1 text-base font-semibold text-violet-950">Кандидаты и shortlist</div>
+                    <div className="mt-1 text-sm text-violet-800">Оставляем только релевантные компании, не смешивая этот шаг с рассылкой.</div>
+                </div>
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-amber-700">3. Контакт</div>
+                    <div className="mt-1 text-base font-semibold text-amber-950">Выбор канала</div>
+                    <div className="mt-1 text-sm text-amber-800">Подтверждаем, куда писать первым: Telegram, WhatsApp, email или вручную.</div>
+                </div>
+                <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-indigo-700">4. Письмо</div>
+                    <div className="mt-1 text-base font-semibold text-indigo-950">Черновик</div>
+                    <div className="mt-1 text-sm text-indigo-800">Сначала формулируем и редактируем, только потом утверждаем.</div>
+                </div>
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">5. Отправка</div>
+                    <div className="mt-1 text-base font-semibold text-emerald-950">Очередь и batch</div>
+                    <div className="mt-1 text-sm text-emerald-800">Управляем отправкой и статусами отдельно, не перегружая предыдущие шаги.</div>
+                </div>
+            </div>
+
+            <div className={`rounded-xl border p-4 ${lastSearchSummary.tone}`}>
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide opacity-80">Результат последнего запуска</div>
+                        <div className="mt-1 text-base font-semibold">{lastSearchSummary.title}</div>
+                        <div className="mt-1 text-sm opacity-90">{lastSearchSummary.hint}</div>
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-xs">
+                        <span className="rounded-full border border-current/15 bg-white/60 px-3 py-1">
+                            Найдено в выдаче: {results.length}
+                        </span>
+                        <span className="rounded-full border border-current/15 bg-white/60 px-3 py-1">
+                            Кандидатов: {savedLeads.length}
+                        </span>
+                        <span className="rounded-full border border-current/15 bg-white/60 px-3 py-1">
+                            В очереди на контакт: {outreachLeads.length}
+                        </span>
+                    </div>
                 </div>
             </div>
 
@@ -1626,18 +1715,18 @@ export const ProspectingManagement: React.FC = () => {
 
             <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'search' | 'leads' | 'outreach' | 'drafts' | 'queue')} className="w-full">
                 <TabsList>
-                    <TabsTrigger value="search">Поиск</TabsTrigger>
-                    <TabsTrigger value="leads">Кандидаты и shortlist ({savedLeads.length})</TabsTrigger>
-                    <TabsTrigger value="outreach">Отбор для контакта ({outreachLeads.length})</TabsTrigger>
-                    <TabsTrigger value="drafts">Черновики ({drafts.length})</TabsTrigger>
-                    <TabsTrigger value="queue">Очередь отправки ({sendBatches.length})</TabsTrigger>
+                    <TabsTrigger value="search">1. Сбор</TabsTrigger>
+                    <TabsTrigger value="leads">2. Shortlist ({savedLeads.length})</TabsTrigger>
+                    <TabsTrigger value="outreach">3. Контакт ({outreachLeads.length})</TabsTrigger>
+                    <TabsTrigger value="drafts">4. Черновики ({drafts.length})</TabsTrigger>
+                    <TabsTrigger value="queue">5. Отправка ({sendBatches.length})</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="search" className="space-y-4">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Источники и сбор</CardTitle>
-                            <CardDescription>Поиск компаний через Apify (Яндекс Карты / 2GIS) и сохранение в лиды.</CardDescription>
+                            <CardTitle>Шаг 1. Найти компании</CardTitle>
+                            <CardDescription>Запускайте поиск через Apify или добавляйте точечные компании вручную. На этом шаге мы только собираем кандидатов.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={handleSearch} className="flex flex-wrap gap-4 items-end">
@@ -1646,11 +1735,28 @@ export const ProspectingManagement: React.FC = () => {
                                     <select
                                         id="search-source"
                                         value={searchSource}
-                                        onChange={(e) => setSearchSource(e.target.value === 'apify_2gis' ? 'apify_2gis' : 'apify_yandex')}
+                                        onChange={(e) => {
+                                            const nextValue = String(e.target.value || '').trim().toLowerCase();
+                                            if (nextValue === 'apify_2gis') {
+                                                setSearchSource('apify_2gis');
+                                                return;
+                                            }
+                                            if (nextValue === 'apify_google') {
+                                                setSearchSource('apify_google');
+                                                return;
+                                            }
+                                            if (nextValue === 'apify_apple') {
+                                                setSearchSource('apify_apple');
+                                                return;
+                                            }
+                                            setSearchSource('apify_yandex');
+                                        }}
                                         className="h-10 rounded-md border border-input bg-background px-3 text-sm"
                                     >
                                         <option value="apify_yandex">Apify Yandex</option>
                                         <option value="apify_2gis">Apify 2GIS</option>
+                                        <option value="apify_google">Apify Google</option>
+                                        <option value="apify_apple">Apify Apple</option>
                                     </select>
                                 </div>
                                 <div className="grid w-full max-w-sm items-center gap-1.5">
@@ -1751,7 +1857,7 @@ export const ProspectingManagement: React.FC = () => {
 
                     <Card>
                         <CardHeader>
-                            <CardTitle>Внешний импорт лидов</CardTitle>
+                            <CardTitle>Шаг 1б. Загрузить свой список</CardTitle>
                             <CardDescription>
                                 Используйте этот путь, если запускаете поиск в Apify вручную. Поддерживается JSON-массив items или объект с полем <code>items</code>.
                             </CardDescription>
@@ -1880,8 +1986,8 @@ export const ProspectingManagement: React.FC = () => {
                 <TabsContent value="leads" className="space-y-4">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Фильтры кандидатов</CardTitle>
-                            <CardDescription>Подготовьте shortlist: отберите релевантные компании и отсекайте лишние.</CardDescription>
+                            <CardTitle>Шаг 2. Подготовить shortlist</CardTitle>
+                            <CardDescription>Фильтруйте поток и подтверждайте только те компании, которые действительно стоит вести дальше.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
@@ -1891,6 +1997,9 @@ export const ProspectingManagement: React.FC = () => {
                                     <option value="">Источник: любой</option>
                                     <option value="external_import">Внешний импорт</option>
                                     <option value="apify_yandex">Apify Yandex</option>
+                                    <option value="apify_2gis">Apify 2GIS</option>
+                                    <option value="apify_google">Apify Google</option>
+                                    <option value="apify_apple">Apify Apple</option>
                                     <option value="openclaw">OpenClaw</option>
                                     <option value="manual">Ручной ввод</option>
                                 </select>
@@ -1930,8 +2039,8 @@ export const ProspectingManagement: React.FC = () => {
 
                     <Card>
                         <CardHeader>
-                            <CardTitle>Ручной shortlist</CardTitle>
-                            <CardDescription>Первый ручной этап: подтверждайте только подходящие компании.</CardDescription>
+                            <CardTitle>Список кандидатов</CardTitle>
+                            <CardDescription>Это ручной контроль качества перед выбором канала и генерацией первого письма.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <Tabs value={leadTab} onValueChange={(value) => setLeadTab(value as 'candidates' | 'shortlist' | 'rejected')}>
@@ -1976,7 +2085,7 @@ export const ProspectingManagement: React.FC = () => {
                 <TabsContent value="outreach" className="space-y-4">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Отбор для контакта</CardTitle>
+                            <CardTitle>Шаг 3. Подготовить первый контакт</CardTitle>
                             <CardDescription>
                                 Переводите лиды из shortlist в контактную работу и вручную подтверждайте первый канал касания.
                             </CardDescription>

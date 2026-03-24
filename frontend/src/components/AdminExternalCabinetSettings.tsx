@@ -104,7 +104,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
     }
   };
 
-  const handleRunApifyParser = async (source: 'apify_yandex' | 'apify_2gis') => {
+  const handleRunApifyParser = async (source: 'apify_yandex' | 'apify_2gis' | 'apify_google' | 'apify_apple') => {
     if (!businessId) return;
 
     setParseStatus('processing');
@@ -506,7 +506,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                 disabled={parseStatus === 'processing' || !businessId}
                 variant="outline"
               >
-                {parseStatus === 'processing' ? 'Запуск...' : 'Парсинг Apify'}
+                {parseStatus === 'processing' ? 'Запуск...' : 'Парсинг Apify (Яндекс)'}
               </Button>
               {networkLocationsCount > 1 && (
                 <Button
@@ -604,9 +604,35 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                 disabled={parseStatus === 'processing' || !businessId}
                 variant="outline"
               >
-                {parseStatus === 'processing' ? 'Запуск...' : 'Парсинг Apify'}
+                {parseStatus === 'processing' ? 'Запуск...' : 'Парсинг Apify (2ГИС)'}
               </Button>
             </div>
+          </div>
+        </div>
+
+        {/* Google / Apple через Apify */}
+        <div className="border rounded-lg p-4">
+          <h3 className="text-lg font-semibold mb-2">Google / Apple Maps</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Запуск Apify-парсинга по ссылкам Google Maps и Apple Maps, добавленным в профиль бизнеса.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              onClick={() => handleRunApifyParser('apify_google')}
+              disabled={parseStatus === 'processing' || !businessId}
+              variant="outline"
+            >
+              {parseStatus === 'processing' ? 'Запуск...' : 'Парсинг Apify (Google)'}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => handleRunApifyParser('apify_apple')}
+              disabled={parseStatus === 'processing' || !businessId}
+              variant="outline"
+            >
+              {parseStatus === 'processing' ? 'Запуск...' : 'Парсинг Apify (Apple)'}
+            </Button>
           </div>
         </div>
       </CardContent>

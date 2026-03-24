@@ -795,7 +795,8 @@ export const ProfilePage = () => {
                 if (!url) return 'other';
                 if (url.includes('yandex.ru') || url.includes('yandex.com')) return 'yandex';
                 if (url.includes('2gis.ru') || url.includes('2gis.com')) return '2gis';
-                if (url.includes('google.com/maps') || url.includes('goo.gl')) return 'google';
+                if (url.includes('google.com/maps') || url.includes('maps.app.goo.gl')) return 'google';
+                if (url.includes('maps.apple.com')) return 'apple';
                 return 'other';
               };
 
