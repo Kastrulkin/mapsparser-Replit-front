@@ -32,6 +32,11 @@ type Lead = {
     location?: any;
     status: string;
     created_at?: string;
+    partnership_stage?: string;
+    public_audit_slug?: string;
+    public_audit_url?: string;
+    public_audit_updated_at?: string;
+    has_public_audit?: boolean;
 };
 
 type SearchJob = {
@@ -77,6 +82,9 @@ type OutreachQueueItem = {
     latest_reaction_at?: string | null;
 };
 
+const ACTIVE_SEARCH_JOB_STORAGE_KEY = 'prospecting_active_search_job_id';
+const LAST_SEARCH_JOB_STORAGE_KEY = 'prospecting_last_search_job';
+
 type OutreachBatch = {
     id: string;
     batch_date: string;
@@ -120,6 +128,41 @@ type LeadFilters = {
     hasMessengers: string;
 };
 
+const inferLeadAuditLanguage = (lead: Lead | null): string => {
+    const context = [
+        lead?.city || '',
+        lead?.address || '',
+        lead?.source_url || '',
+        lead?.name || '',
+    ].join(' ').toLowerCase();
+    if (context.includes('türkiye') || context.includes('turkey') || context.includes('istanbul') || context.includes('fethiye') || context.includes('ölüdeniz')) {
+        return 'tr';
+    }
+    if (context.includes('cyprus') || context.includes('paphos') || context.includes('πάφος')) {
+        return 'en';
+    }
+    return 'en';
+};
+
+const ensureAuditLanguages = (primaryLanguage: string, enabledLanguages?: string[]): string[] => {
+    const normalizedPrimary = String(primaryLanguage || 'en').trim().toLowerCase() || 'en';
+    const result: string[] = [];
+    const source = Array.isArray(enabledLanguages) ? enabledLanguages : [];
+    source.forEach((item) => {
+        const value = String(item || '').trim().toLowerCase();
+        if (!value) {
+            return;
+        }
+        if (!result.includes(value)) {
+            result.push(value);
+        }
+    });
+    if (!result.includes(normalizedPrimary)) {
+        result.unshift(normalizedPrimary);
+    }
+    return result.length > 0 ? result : [normalizedPrimary];
+};
+
 const emptyFilters: LeadFilters = {
     category: '',
     city: '',
@@ -136,6 +179,7 @@ const emptyFilters: LeadFilters = {
 
 const shortlistApproved = 'shortlist_approved';
 const shortlistRejected = 'shortlist_rejected';
+const deferredLead = 'deferred';
 const selectedForOutreach = 'selected_for_outreach';
 const channelSelected = 'channel_selected';
 
@@ -143,8 +187,11 @@ const badgeVariantForStatus = (status: string) => {
     if (status === shortlistApproved) {
         return 'default';
     }
-    if (status === shortlistRejected) {
+    if (status === shortlistRejected || status === 'rejected') {
         return 'destructive';
+    }
+    if (status === deferredLead) {
+        return 'outline';
     }
     return 'secondary';
 };
@@ -154,21 +201,29 @@ const statusLabel = (status: string) => {
         case shortlistApproved:
             return 'В shortlist';
         case shortlistRejected:
-            return 'Отклонён';
+            return 'Отбракован';
+        case deferredLead:
+            return 'Отложен';
         case 'new':
-            return 'Новый';
+            return 'Кандидат';
         case 'contacted':
             return 'Контакт';
         case selectedForOutreach:
-            return 'Выбран для контакта';
+            return 'Контакт';
         case channelSelected:
-            return 'Канал подтверждён';
+            return 'Черновик';
+        case 'sent':
+            return 'Отправлено';
+        case 'delivered':
+            return 'Доставлено';
+        case 'responded':
+            return 'Есть реакция';
         case 'qualified':
             return 'Квалифицирован';
         case 'converted':
             return 'Конвертирован';
         case 'rejected':
-            return 'Отклонён';
+            return 'Отбракован';
         default:
             return status || 'Без статуса';
     }
@@ -177,26 +232,28 @@ const statusLabel = (status: string) => {
 const workflowStatusLabel = (status: string) => {
     switch (status) {
         case 'new':
-            return '1. Новый кандидат';
+            return '1. Сбор';
         case shortlistApproved:
-            return '2. В shortlist';
+            return '2. Shortlist';
         case selectedForOutreach:
-            return '3. Выбран для контакта';
+            return '3. Контакт';
         case channelSelected:
-            return '4. Канал подтверждён';
+            return '4. Черновик';
         case 'queued_for_send':
-            return '5. В очереди на отправку';
+            return '5. Отправка';
+        case deferredLead:
+            return 'Отложен на будущее';
         case 'sent':
             return '6. Отправлено';
         case 'delivered':
-            return '6. Доставлено';
+            return '6. Отправлено';
         case 'responded':
-            return '7. Есть реакция';
+            return '6. Отправлено';
         case 'converted':
-            return '8. Конвертирован';
+            return '6. Отправлено';
         case shortlistRejected:
         case 'rejected':
-            return 'Отклонён';
+            return 'Отбракован';
         default:
             return statusLabel(status);
     }
@@ -365,6 +422,13 @@ const LeadMetaSummary: React.FC<{ lead: Lead; showChannel?: boolean }> = ({ lead
             </span>
         </div>
         <ContactStack lead={lead} />
+        {lead.public_audit_url && (
+            <div className="text-sm">
+                <a href={lead.public_audit_url} target="_blank" rel="noreferrer" className="underline text-primary">
+                    Открыть созданный аудит
+                </a>
+            </div>
+        )}
     </div>
 );
 
@@ -377,7 +441,7 @@ export const ProspectingManagement: React.FC = () => {
     const [manualLeadName, setManualLeadName] = useState('');
     const [manualLeadCategory, setManualLeadCategory] = useState('');
     const [manualLeadBusy, setManualLeadBusy] = useState(false);
-    const [activeTab, setActiveTab] = useState<'search' | 'leads' | 'outreach' | 'drafts' | 'queue'>('search');
+    const [activeTab, setActiveTab] = useState<'search' | 'leads' | 'outreach' | 'drafts' | 'queue' | 'sent'>('search');
     const [results, setResults] = useState<Lead[]>([]);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState<Record<string, boolean>>({});
@@ -386,7 +450,8 @@ export const ProspectingManagement: React.FC = () => {
     const [searchJobId, setSearchJobId] = useState<string | null>(null);
     const [searchJob, setSearchJob] = useState<SearchJob | null>(null);
     const [filters, setFilters] = useState<LeadFilters>(emptyFilters);
-    const [leadTab, setLeadTab] = useState<'candidates' | 'shortlist' | 'rejected'>('candidates');
+    const [collectTab, setCollectTab] = useState<'candidates' | 'rejected'>('candidates');
+    const [shortlistTab, setShortlistTab] = useState<'shortlist' | 'deferred'>('shortlist');
     const [shortlistLoading, setShortlistLoading] = useState<Record<string, string>>({});
     const [selectionLoading, setSelectionLoading] = useState<Record<string, string>>({});
     const [bulkParseBusy, setBulkParseBusy] = useState(false);
@@ -402,6 +467,7 @@ export const ProspectingManagement: React.FC = () => {
     const [reactions, setReactions] = useState<OutreachReaction[]>([]);
     const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
     const [reactionBusy, setReactionBusy] = useState<Record<string, string>>({});
+    const [followUpDrafts, setFollowUpDrafts] = useState<Record<string, string>>({});
     const [searchPollError, setSearchPollError] = useState<string | null>(null);
     const [importJson, setImportJson] = useState('');
     const [importBusy, setImportBusy] = useState(false);
@@ -423,6 +489,8 @@ export const ProspectingManagement: React.FC = () => {
     const [previewGenerateBusy, setPreviewGenerateBusy] = useState(false);
     const [previewAuditPageBusy, setPreviewAuditPageBusy] = useState(false);
     const [previewAuditPageUrl, setPreviewAuditPageUrl] = useState<string | null>(null);
+    const [previewAuditPageLanguage, setPreviewAuditPageLanguage] = useState('en');
+    const [previewAuditPageEnabledLanguages, setPreviewAuditPageEnabledLanguages] = useState<string[]>(['en']);
     const [previewContactsBusy, setPreviewContactsBusy] = useState(false);
     const [previewParseBusy, setPreviewParseBusy] = useState(false);
     const [previewAutoRefreshing, setPreviewAutoRefreshing] = useState(false);
@@ -446,12 +514,12 @@ export const ProspectingManagement: React.FC = () => {
             if (searchJob.status === 'completed') {
                 return {
                     title: 'Последний запуск завершён',
-                    hint: `Найдено ${searchJob.result_count || 0} компаний${searchJob.result_count ? '. Можно сразу сохранять релевантные записи в shortlist.' : '. Попробуйте сузить запрос или изменить формулировку.'}`,
+                    hint: `Найдено ${searchJob.result_count || 0} компаний${searchJob.result_count ? '. Сохраняйте релевантных кандидатов и отбраковывайте лишнее.' : '. Попробуйте сузить запрос или изменить формулировку.'}`,
                     tone: 'border-emerald-200 bg-emerald-50 text-emerald-900',
                 };
             }
             return {
-                title: 'Поиск выполняется',
+                title: 'Поиск продолжается',
                 hint: searchPollError || 'Apify ещё собирает выдачу. Обновление результатов произойдёт автоматически.',
                 tone: 'border-sky-200 bg-sky-50 text-sky-900',
             };
@@ -462,6 +530,16 @@ export const ProspectingManagement: React.FC = () => {
             tone: 'border-gray-200 bg-gray-50 text-gray-800',
         };
     }, [loading, searchJob, searchPollError]);
+
+    const displayedSearchResults = useMemo(() => {
+        if (Array.isArray(results) && results.length > 0) {
+            return results;
+        }
+        if (searchJob?.status === 'completed' && Array.isArray(searchJob.results) && searchJob.results.length > 0) {
+            return searchJob.results.map((item) => ({ ...item, status: item.status || 'new' }));
+        }
+        return [];
+    }, [results, searchJob]);
 
     const activeFilters = useMemo(() => {
         const params: Record<string, string> = {};
@@ -497,11 +575,77 @@ export const ProspectingManagement: React.FC = () => {
     }, []);
 
     useEffect(() => {
+        let cancelled = false;
+        const hydrateLatestSearchJob = async () => {
+            try {
+                const storedActiveJobId = window.localStorage.getItem(ACTIVE_SEARCH_JOB_STORAGE_KEY);
+                const storedLastJobRaw = window.localStorage.getItem(LAST_SEARCH_JOB_STORAGE_KEY);
+                if (storedLastJobRaw) {
+                    try {
+                        const storedLastJob = JSON.parse(storedLastJobRaw) as SearchJob;
+                        if (!cancelled && storedLastJob?.id) {
+                            setSearchJob(storedLastJob);
+                            if (storedLastJob.status === 'completed') {
+                                const storedResults = (storedLastJob.results || []).map((r: any) => ({ ...r, status: r.status || 'new' }));
+                                setResults(storedResults);
+                            }
+                        }
+                    } catch (error) {
+                        console.warn('Could not parse last stored search job:', error);
+                    }
+                }
+
+                const response = await api.get('/admin/prospecting/search-job/latest');
+                const latestJob = (response.data?.job || null) as SearchJob | null;
+                if (cancelled || !latestJob?.id) {
+                    if (!cancelled && storedActiveJobId) {
+                        setSearchJobId(storedActiveJobId);
+                        setLoading(true);
+                    }
+                    return;
+                }
+
+                setSearchJob(latestJob);
+                window.localStorage.setItem(LAST_SEARCH_JOB_STORAGE_KEY, JSON.stringify(latestJob));
+
+                if (latestJob.status === 'completed') {
+                    const newResults = (latestJob.results || []).map((r: any) => ({ ...r, status: r.status || 'new' }));
+                    setResults(newResults);
+                    setLoading(false);
+                    setSearchJobId(null);
+                    window.localStorage.removeItem(ACTIVE_SEARCH_JOB_STORAGE_KEY);
+                    return;
+                }
+
+                if (latestJob.status === 'failed') {
+                    setLoading(false);
+                    setSearchJobId(null);
+                    window.localStorage.removeItem(ACTIVE_SEARCH_JOB_STORAGE_KEY);
+                    return;
+                }
+
+                setLoading(true);
+                setSearchJobId(latestJob.id);
+                window.localStorage.setItem(ACTIVE_SEARCH_JOB_STORAGE_KEY, latestJob.id);
+            } catch (error) {
+                console.error('Error hydrating latest prospecting search job:', error);
+            }
+        };
+
+        hydrateLatestSearchJob();
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    useEffect(() => {
         if (!searchJobId) {
             return;
         }
 
         let cancelled = false;
+        let consecutivePollFailures = 0;
         const poll = async () => {
             try {
                 const response = await api.get(`/admin/prospecting/search-job/${searchJobId}`);
@@ -509,23 +653,32 @@ export const ProspectingManagement: React.FC = () => {
                 if (cancelled || !job) {
                     return;
                 }
+                consecutivePollFailures = 0;
                 setSearchPollError(null);
                 setSearchJob(job);
+                window.localStorage.setItem(LAST_SEARCH_JOB_STORAGE_KEY, JSON.stringify(job));
                 if (job.status === 'completed') {
                     const newResults = (job.results || []).map((r: any) => ({ ...r, status: r.status || 'new' }));
                     setResults(newResults);
                     setLoading(false);
+                    setSearchJobId(null);
+                    window.localStorage.removeItem(ACTIVE_SEARCH_JOB_STORAGE_KEY);
                     return;
                 }
                 if (job.status === 'failed') {
                     setLoading(false);
+                    setSearchJobId(null);
+                    window.localStorage.removeItem(ACTIVE_SEARCH_JOB_STORAGE_KEY);
                     return;
                 }
                 window.setTimeout(poll, 2000);
             } catch (error) {
                 console.error('Error polling prospecting job:', error);
                 if (!cancelled) {
-                    setSearchPollError('Связь с сервером прервалась. Повторяем опрос...');
+                    consecutivePollFailures += 1;
+                    if (consecutivePollFailures >= 3) {
+                        setSearchPollError('Есть временные проблемы со связью. Поиск продолжается, повторяем опрос...');
+                    }
                     window.setTimeout(poll, 3000);
                 }
             }
@@ -595,6 +748,7 @@ export const ProspectingManagement: React.FC = () => {
         setSearchJob(null);
         setSearchJobId(null);
         setSearchPollError(null);
+        window.localStorage.removeItem(ACTIVE_SEARCH_JOB_STORAGE_KEY);
         try {
             const response = await api.post('/admin/prospecting/search', {
                 query,
@@ -603,7 +757,11 @@ export const ProspectingManagement: React.FC = () => {
                 limit: Number(limit)
             });
             setResults([]);
-            setSearchJobId(response.data.job_id);
+            const jobId = String(response.data.job_id || '');
+            setSearchJobId(jobId);
+            if (jobId) {
+                window.localStorage.setItem(ACTIVE_SEARCH_JOB_STORAGE_KEY, jobId);
+            }
         } catch (error) {
             console.error('Error searching:', error);
             alert('Ошибка поиска. Проверьте консоль.');
@@ -643,11 +801,11 @@ export const ProspectingManagement: React.FC = () => {
         }
     };
 
-    const saveLead = async (lead: Lead) => {
+    const saveLead = async (lead: Lead, targetStatus: string = 'new') => {
         const key = lead.source_external_id || lead.google_id || lead.name;
         setSaving(prev => ({ ...prev, [key]: true }));
         try {
-            await api.post('/admin/prospecting/save', { lead });
+            await api.post('/admin/prospecting/save', { lead: { ...lead, status: targetStatus } });
             await fetchSavedLeads();
         } catch (error) {
             console.error('Error saving lead:', error);
@@ -746,7 +904,7 @@ export const ProspectingManagement: React.FC = () => {
     };
 
     const bulkSelectForOutreach = async () => {
-        const leadIds = shortlistLeads
+        const leadIds = step3ReadyLeads
             .filter((lead) => lead.id && selectedShortlistLeadIds.includes(lead.id))
             .map((lead) => lead.id as string);
         if (leadIds.length === 0) return;
@@ -768,7 +926,7 @@ export const ProspectingManagement: React.FC = () => {
     };
 
     const bulkAssignOutreachChannel = async () => {
-        const leadIds = outreachLeads
+        const leadIds = contactLeads
             .filter((lead) => lead.id && selectedOutreachLeadIds.includes(lead.id))
             .map((lead) => lead.id as string);
         if (leadIds.length === 0) return;
@@ -813,7 +971,7 @@ export const ProspectingManagement: React.FC = () => {
     };
 
     const bulkDeleteShortlistLeads = async () => {
-        const leadIds = shortlistLeads
+        const leadIds = step3ReadyLeads
             .filter((lead) => lead.id && selectedShortlistLeadIds.includes(lead.id))
             .map((lead) => lead.id as string);
         if (leadIds.length === 0) return;
@@ -834,7 +992,7 @@ export const ProspectingManagement: React.FC = () => {
     };
 
     const bulkDeleteOutreachLeads = async () => {
-        const leadIds = outreachLeads
+        const leadIds = contactLeads
             .filter((lead) => lead.id && selectedOutreachLeadIds.includes(lead.id))
             .map((lead) => lead.id as string);
         if (leadIds.length === 0) return;
@@ -1211,16 +1369,32 @@ export const ProspectingManagement: React.FC = () => {
         () => sourceFilteredLeads.filter((lead) => lead.status === shortlistApproved),
         [sourceFilteredLeads]
     );
+    const step3ReadyLeads = useMemo(
+        () => sourceFilteredLeads.filter((lead) => lead.status === shortlistApproved),
+        [sourceFilteredLeads]
+    );
     const rejectedLeads = useMemo(
-        () => sourceFilteredLeads.filter((lead) => lead.status === shortlistRejected),
+        () => sourceFilteredLeads.filter((lead) => lead.status === shortlistRejected || lead.status === 'rejected'),
+        [sourceFilteredLeads]
+    );
+    const deferredLeads = useMemo(
+        () => sourceFilteredLeads.filter((lead) => lead.status === deferredLead),
         [sourceFilteredLeads]
     );
     const candidateLeads = useMemo(
-        () => sourceFilteredLeads.filter((lead) => ![shortlistApproved, shortlistRejected, selectedForOutreach, channelSelected].includes(lead.status)),
+        () =>
+            sourceFilteredLeads.filter((lead) => {
+                const status = String(lead.status || '').trim();
+                return !status || status === 'new';
+            }),
         [sourceFilteredLeads]
     );
-    const outreachLeads = useMemo(
-        () => sourceFilteredLeads.filter((lead) => lead.status === selectedForOutreach || lead.status === channelSelected),
+    const contactLeads = useMemo(
+        () => sourceFilteredLeads.filter((lead) => lead.status === selectedForOutreach),
+        [sourceFilteredLeads]
+    );
+    const sentLeads = useMemo(
+        () => sourceFilteredLeads.filter((lead) => ['sent', 'delivered', 'responded', 'converted'].includes(String(lead.status || '').trim())),
         [sourceFilteredLeads]
     );
     const draftReadyLeads = useMemo(
@@ -1331,22 +1505,16 @@ export const ProspectingManagement: React.FC = () => {
     }, [filteredSendReadyDrafts]);
 
     useEffect(() => {
-        setSelectedShortlistLeadIds((prev) => prev.filter((id) => shortlistLeads.some((lead) => lead.id === id)));
-    }, [shortlistLeads]);
+        setSelectedShortlistLeadIds((prev) => prev.filter((id) => step3ReadyLeads.some((lead) => lead.id === id)));
+    }, [step3ReadyLeads]);
 
     useEffect(() => {
-        setSelectedOutreachLeadIds((prev) => prev.filter((id) => outreachLeads.some((lead) => lead.id === id)));
-    }, [outreachLeads]);
+        setSelectedOutreachLeadIds((prev) => prev.filter((id) => contactLeads.some((lead) => lead.id === id)));
+    }, [contactLeads]);
 
     useEffect(() => {
         setSelectedQueueItemIds((prev) => prev.filter((id) => visibleQueueItems.some((item) => item.id === id)));
     }, [visibleQueueItems]);
-
-    const visibleLeads = leadTab === 'shortlist'
-        ? shortlistLeads
-        : leadTab === 'rejected'
-            ? rejectedLeads
-            : candidateLeads;
 
     const closeLeadPreview = () => {
         setPreviewLead(null);
@@ -1389,9 +1557,12 @@ export const ProspectingManagement: React.FC = () => {
         }
 
         setPreviewLead(lead);
+        const inferredLanguage = inferLeadAuditLanguage(lead);
+        setPreviewAuditPageLanguage(inferredLanguage);
+        setPreviewAuditPageEnabledLanguages([inferredLanguage]);
         setPreviewSnapshot(null);
         setPreviewError(null);
-        setPreviewAuditPageUrl(null);
+        setPreviewAuditPageUrl(lead.public_audit_url || null);
         await fetchLeadPreview(lead.id);
     };
 
@@ -1418,11 +1589,19 @@ export const ProspectingManagement: React.FC = () => {
         }
         setPreviewAuditPageBusy(true);
         setPreviewError(null);
-        setPreviewAuditPageUrl(null);
         try {
-            const response = await api.post(`/admin/prospecting/lead/${previewLead.id}/offer-page`);
+            const response = await api.post(`/admin/prospecting/lead/${previewLead.id}/offer-page`, {
+                primary_language: previewAuditPageLanguage,
+                enabled_languages: ensureAuditLanguages(previewAuditPageLanguage, previewAuditPageEnabledLanguages),
+            });
             const url = String(response.data?.public_url || '');
             setPreviewAuditPageUrl(url || null);
+            const updatedLead = (response.data?.lead as Lead) || null;
+            if (updatedLead) {
+                setPreviewLead(updatedLead);
+            }
+            await fetchSavedLeads();
+            await fetchLeadPreview(previewLead.id, { silent: true });
             if (url) {
                 window.open(url, '_blank', 'noopener,noreferrer');
             }
@@ -1501,7 +1680,7 @@ export const ProspectingManagement: React.FC = () => {
     }, [previewLead?.id, previewSnapshot?.parse_context?.last_parse_status, fetchLeadPreview]);
 
     const bulkParseShortlist = async () => {
-        const leadIds = shortlistLeads
+        const leadIds = step3ReadyLeads
             .filter((lead) => lead.id && selectedShortlistLeadIds.includes(lead.id))
             .map((lead) => lead.id as string);
         if (leadIds.length === 0) {
@@ -1518,7 +1697,7 @@ export const ProspectingManagement: React.FC = () => {
         }
     };
 
-    const renderLeadRow = (lead: Lead) => {
+    const renderLeadRow = (lead: Lead, context: 'candidates' | 'shortlist' | 'deferred' | 'rejected' | 'sent') => {
         const isBusy = Boolean(lead.id && shortlistLoading[lead.id]);
         const busyDecision = lead.id ? shortlistLoading[lead.id] : '';
 
@@ -1561,18 +1740,17 @@ export const ProspectingManagement: React.FC = () => {
                 </TableCell>
                 <TableCell className="min-w-[220px]">
                     <div className="flex flex-wrap gap-2">
-                        {lead.id && (
-                            <Button
-                                size="sm"
-                                variant="secondary"
-                                onClick={() => openLeadPreview(lead)}
-                                disabled={previewLoadingId === lead.id}
+                        {context === 'sent' && lead.public_audit_url && (
+                            <a
+                                href={lead.public_audit_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex h-9 items-center rounded-md border border-input bg-secondary px-3 text-sm font-medium text-secondary-foreground hover:bg-secondary/80"
                             >
-                                {previewLoadingId === lead.id && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                Аудит карточки
-                            </Button>
+                                Открыть аудит
+                            </a>
                         )}
-                        {leadTab !== 'shortlist' && leadTab !== 'rejected' && lead.id && (
+                        {context === 'candidates' && lead.id && (
                             <>
                                 <Button
                                     size="sm"
@@ -1589,30 +1767,61 @@ export const ProspectingManagement: React.FC = () => {
                                     disabled={isBusy}
                                 >
                                     {busyDecision === 'rejected' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                    Отклонить
+                                    Отбраковать
                                 </Button>
                             </>
                         )}
-                        {leadTab === 'shortlist' && lead.id && (
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => reviewShortlist(lead.id!, 'rejected')}
-                                disabled={isBusy}
-                            >
-                                {busyDecision === 'rejected' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                Убрать
-                            </Button>
+                        {context === 'shortlist' && lead.id && (
+                            <>
+                                <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={() => api.post(`/admin/prospecting/lead/${lead.id!}/status`, { status: deferredLead }).then(fetchSavedLeads)}
+                                    disabled={isBusy}
+                                >
+                                    Отложить
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => reviewShortlist(lead.id!, 'rejected')}
+                                    disabled={isBusy}
+                                >
+                                    {busyDecision === 'rejected' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                    Отбраковать
+                                </Button>
+                            </>
                         )}
-                        {leadTab === 'rejected' && lead.id && (
+                        {context === 'deferred' && lead.id && (
+                            <>
+                                <Button
+                                    size="sm"
+                                    onClick={() => reviewShortlist(lead.id!, 'approved')}
+                                    disabled={isBusy}
+                                >
+                                    {busyDecision === 'approved' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                    Вернуть в shortlist
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => reviewShortlist(lead.id!, 'rejected')}
+                                    disabled={isBusy}
+                                >
+                                    {busyDecision === 'rejected' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                    Отбраковать
+                                </Button>
+                            </>
+                        )}
+                        {context === 'rejected' && lead.id && (
                             <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => reviewShortlist(lead.id!, 'approved')}
+                                onClick={() => api.post(`/admin/prospecting/lead/${lead.id!}/status`, { status: 'new' }).then(fetchSavedLeads)}
                                 disabled={isBusy}
                             >
                                 {busyDecision === 'approved' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                Вернуть
+                                Вернуть в сбор
                             </Button>
                         )}
                         {lead.id && (
@@ -1632,42 +1841,78 @@ export const ProspectingManagement: React.FC = () => {
         );
     };
 
+    const renderLeadsTable = (items: Lead[], context: 'candidates' | 'shortlist' | 'deferred' | 'rejected' | 'sent') => {
+        if (loadingLeads) {
+            return <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+        }
+
+        return (
+            <Table enableStickyScrollbar className="min-w-[1400px]">
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Компания</TableHead>
+                        <TableHead>Адрес</TableHead>
+                        <TableHead>Контакты</TableHead>
+                        <TableHead>Рейтинг</TableHead>
+                        <TableHead>Статус</TableHead>
+                        <TableHead>Действие</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {items.map((lead) => renderLeadRow(lead, context))}
+                    {items.length === 0 && (
+                        <TableRow>
+                            <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                                Для текущего набора фильтров здесь пока нет лидов.
+                            </TableCell>
+                        </TableRow>
+                    )}
+                </TableBody>
+            </Table>
+        );
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <div>
                     <h2 className="text-3xl font-bold tracking-tight">Поиск клиентов</h2>
                     <p className="text-muted-foreground">
-                        Один операторский поток: найти компании, отобрать shortlist, выбрать канал, утвердить первое письмо и собрать очередь отправки.
+                        Единый поток: сбор → shortlist → контакт → черновик → отправка → follow-up.
                     </p>
                 </div>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-5">
+            <div className="grid gap-3 md:grid-cols-6">
                 <div className="rounded-xl border border-sky-200 bg-sky-50 p-4">
                     <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">1. Сбор</div>
                     <div className="mt-1 text-base font-semibold text-sky-950">Поиск или импорт</div>
-                    <div className="mt-1 text-sm text-sky-800">Apify или ручная ссылка. Цель этапа — быстро собрать сырой список.</div>
+                    <div className="mt-1 text-sm text-sky-800">Ищем контакты, сохраняем кандидатов и сразу отбраковываем нерелевантных.</div>
                 </div>
                 <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-violet-700">2. Отбор</div>
-                    <div className="mt-1 text-base font-semibold text-violet-950">Кандидаты и shortlist</div>
-                    <div className="mt-1 text-sm text-violet-800">Оставляем только релевантные компании, не смешивая этот шаг с рассылкой.</div>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-violet-700">2. Shortlist</div>
+                    <div className="mt-1 text-base font-semibold text-violet-950">Проверка сохранённых лидов</div>
+                    <div className="mt-1 text-sm text-violet-800">Отделяем тех, кто идёт в рассылку сейчас, от отложенных на потом.</div>
                 </div>
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
                     <div className="text-xs font-semibold uppercase tracking-wide text-amber-700">3. Контакт</div>
-                    <div className="mt-1 text-base font-semibold text-amber-950">Выбор канала</div>
-                    <div className="mt-1 text-sm text-amber-800">Подтверждаем, куда писать первым: Telegram, WhatsApp, email или вручную.</div>
+                    <div className="mt-1 text-base font-semibold text-amber-950">Аудит и готовность</div>
+                    <div className="mt-1 text-sm text-amber-800">Создаём страницу аудита и переводим лид в контактную работу.</div>
                 </div>
                 <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
                     <div className="text-xs font-semibold uppercase tracking-wide text-indigo-700">4. Письмо</div>
                     <div className="mt-1 text-base font-semibold text-indigo-950">Черновик</div>
-                    <div className="mt-1 text-sm text-indigo-800">Сначала формулируем и редактируем, только потом утверждаем.</div>
+                    <div className="mt-1 text-sm text-indigo-800">Готовим первое сообщение и фиксируем итоговый текст.</div>
                 </div>
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
                     <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">5. Отправка</div>
                     <div className="mt-1 text-base font-semibold text-emerald-950">Очередь и batch</div>
-                    <div className="mt-1 text-sm text-emerald-800">Управляем отправкой и статусами отдельно, не перегружая предыдущие шаги.</div>
+                    <div className="mt-1 text-sm text-emerald-800">Перепроверяем канал и запускаем рассылку.</div>
+                </div>
+                <div className="rounded-xl border border-teal-200 bg-teal-50 p-4">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-teal-700">6. Отправлено</div>
+                    <div className="mt-1 text-base font-semibold text-teal-950">Follow-up</div>
+                    <div className="mt-1 text-sm text-teal-800">Отслеживаем реакции и готовим follow-up сообщения.</div>
                 </div>
             </div>
 
@@ -1680,13 +1925,13 @@ export const ProspectingManagement: React.FC = () => {
                     </div>
                     <div className="flex flex-wrap gap-2 text-xs">
                         <span className="rounded-full border border-current/15 bg-white/60 px-3 py-1">
-                            Найдено в выдаче: {results.length}
+                            Найдено в выдаче: {displayedSearchResults.length}
                         </span>
                         <span className="rounded-full border border-current/15 bg-white/60 px-3 py-1">
                             Кандидатов: {savedLeads.length}
                         </span>
                         <span className="rounded-full border border-current/15 bg-white/60 px-3 py-1">
-                            В очереди на контакт: {outreachLeads.length}
+                            В контакте: {contactLeads.length}
                         </span>
                     </div>
                 </div>
@@ -1701,11 +1946,15 @@ export const ProspectingManagement: React.FC = () => {
                     generateBusy={previewGenerateBusy}
                     generateAuditPageBusy={previewAuditPageBusy}
                     generatedAuditPageUrl={previewAuditPageUrl}
+                    auditPageLanguage={previewAuditPageLanguage}
+                    auditPageEnabledLanguages={previewAuditPageEnabledLanguages}
                     contactsBusy={previewContactsBusy}
                     parseBusy={previewParseBusy}
                     parseAutoRefreshing={previewAutoRefreshing}
                     onGenerateFromAudit={generateDraftFromLeadPreview}
                     onGenerateAuditPage={generateAuditPageFromLeadPreview}
+                    onAuditPageLanguageChange={setPreviewAuditPageLanguage}
+                    onAuditPageEnabledLanguagesChange={setPreviewAuditPageEnabledLanguages}
                     onSaveContacts={saveLeadContactsFromPreview}
                     onRunLiveParse={runLiveParseFromPreview}
                     onRefreshPreview={refreshPreviewStatus}
@@ -1713,20 +1962,25 @@ export const ProspectingManagement: React.FC = () => {
                 />
             )}
 
-            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'search' | 'leads' | 'outreach' | 'drafts' | 'queue')} className="w-full">
+            <Tabs value={activeTab} onValueChange={(value) => {
+                if (value === 'search' || value === 'leads' || value === 'outreach' || value === 'drafts' || value === 'queue' || value === 'sent') {
+                    setActiveTab(value);
+                }
+            }} className="w-full">
                 <TabsList>
                     <TabsTrigger value="search">1. Сбор</TabsTrigger>
-                    <TabsTrigger value="leads">2. Shortlist ({savedLeads.length})</TabsTrigger>
-                    <TabsTrigger value="outreach">3. Контакт ({outreachLeads.length})</TabsTrigger>
+                    <TabsTrigger value="leads">2. Shortlist ({shortlistLeads.length})</TabsTrigger>
+                    <TabsTrigger value="outreach">3. Контакт ({contactLeads.length})</TabsTrigger>
                     <TabsTrigger value="drafts">4. Черновики ({drafts.length})</TabsTrigger>
                     <TabsTrigger value="queue">5. Отправка ({sendBatches.length})</TabsTrigger>
+                    <TabsTrigger value="sent">6. Отправлено ({sentLeads.length})</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="search" className="space-y-4">
                     <Card>
                         <CardHeader>
                             <CardTitle>Шаг 1. Найти компании</CardTitle>
-                            <CardDescription>Запускайте поиск через Apify или добавляйте точечные компании вручную. На этом шаге мы только собираем кандидатов.</CardDescription>
+                            <CardDescription>Запускайте поиск через Apify или добавляйте точечные компании вручную. На этом шаге вы находите компании, сохраняете кандидатов и отбраковываете нерелевантных.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={handleSearch} className="flex flex-wrap gap-4 items-end">
@@ -1836,6 +2090,11 @@ export const ProspectingManagement: React.FC = () => {
                                             searchJob.status === 'completed' ? 'завершён' : 'ошибка'}
                                     </div>
                                     <div className="text-muted-foreground">Найдено: {searchJob.result_count || 0}</div>
+                                    {searchJob.status === 'running' && (
+                                        <div className="mt-2 text-muted-foreground">
+                                            Поиск продолжается. Результаты подтянутся автоматически сразу после завершения.
+                                        </div>
+                                    )}
                                     {searchJob.status === 'running' && searchJob.apify_status === 'START_PENDING' && (
                                         <div className="mt-2 text-muted-foreground">
                                             Ожидаем подтверждение запуска от Apify. Это может занять больше обычного.
@@ -1911,12 +2170,12 @@ export const ProspectingManagement: React.FC = () => {
                         </CardContent>
                     </Card>
 
-                    {results.length > 0 && (
+                    {displayedSearchResults.length > 0 && (
                         <Card>
-                            <CardHeader>
-                                <CardTitle>Найденные компании ({results.length})</CardTitle>
-                                <CardDescription>На этом шаге вы сохраняете только релевантные компании в базу кандидатов.</CardDescription>
-                            </CardHeader>
+                        <CardHeader>
+                            <CardTitle>Найденные компании ({displayedSearchResults.length})</CardTitle>
+                            <CardDescription>Это сырой результат поиска. Сохраняйте подходящих в кандидаты и отбраковывайте явно неподходящие.</CardDescription>
+                        </CardHeader>
                             <CardContent>
                                 <Table>
                                     <TableHeader>
@@ -1929,7 +2188,7 @@ export const ProspectingManagement: React.FC = () => {
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {results.map((lead, index) => {
+                                        {displayedSearchResults.map((lead, index) => {
                                             const isSaved = savedLeads.some((saved) =>
                                                 (saved.source_external_id && saved.source_external_id === lead.source_external_id) ||
                                                 (saved.google_id && saved.google_id === lead.google_id)
@@ -1963,15 +2222,25 @@ export const ProspectingManagement: React.FC = () => {
                                                         </div>
                                                     </TableCell>
                                                     <TableCell className="min-w-[140px]">
-                                                        <Button
-                                                            size="sm"
-                                                            variant={isSaved ? "secondary" : "default"}
-                                                            onClick={() => saveLead(lead)}
-                                                            disabled={isSaved || saving[key]}
-                                                        >
-                                                            {saving[key] ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : <Save className="mr-2 h-3 w-3" />}
-                                                            {isSaved ? "Сохранён" : "Сохранить"}
-                                                        </Button>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            <Button
+                                                                size="sm"
+                                                                variant={isSaved ? "secondary" : "default"}
+                                                                onClick={() => saveLead(lead, 'new')}
+                                                                disabled={isSaved || saving[key]}
+                                                            >
+                                                                {saving[key] ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : <Save className="mr-2 h-3 w-3" />}
+                                                                {isSaved ? "Уже сохранён" : "В кандидаты"}
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => saveLead(lead, shortlistRejected)}
+                                                                disabled={isSaved || saving[key]}
+                                                            >
+                                                                Отбраковать
+                                                            </Button>
+                                                        </div>
                                                     </TableCell>
                                                 </TableRow>
                                             );
@@ -1981,13 +2250,38 @@ export const ProspectingManagement: React.FC = () => {
                             </CardContent>
                         </Card>
                     )}
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Кандидаты и отбракованные</CardTitle>
+                            <CardDescription>Собранные кандидаты остаются здесь до отбора в shortlist. Отбракованные фиксируются отдельно.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Tabs value={collectTab} onValueChange={(value) => {
+                                if (value === 'candidates' || value === 'rejected') {
+                                    setCollectTab(value);
+                                }
+                            }}>
+                                <TabsList>
+                                    <TabsTrigger value="candidates">Кандидаты ({candidateLeads.length})</TabsTrigger>
+                                    <TabsTrigger value="rejected">Отбракованные ({rejectedLeads.length})</TabsTrigger>
+                                </TabsList>
+                                <TabsContent value="candidates" className="mt-4">
+                                    {renderLeadsTable(candidateLeads, 'candidates')}
+                                </TabsContent>
+                                <TabsContent value="rejected" className="mt-4">
+                                    {renderLeadsTable(rejectedLeads, 'rejected')}
+                                </TabsContent>
+                            </Tabs>
+                        </CardContent>
+                    </Card>
                 </TabsContent>
 
                 <TabsContent value="leads" className="space-y-4">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Шаг 2. Подготовить shortlist</CardTitle>
-                            <CardDescription>Фильтруйте поток и подтверждайте только те компании, которые действительно стоит вести дальше.</CardDescription>
+                            <CardTitle>Шаг 2. Shortlist</CardTitle>
+                            <CardDescription>На этом шаге вы решаете, кого берём в рассылку сейчас, а кого откладываем на потом.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
@@ -2030,52 +2324,34 @@ export const ProspectingManagement: React.FC = () => {
                             </div>
                             <div className="flex flex-wrap gap-2">
                                 <Button variant="outline" onClick={resetFilters}>Сбросить фильтры</Button>
-                                <Badge variant="secondary">Кандидаты: {candidateLeads.length}</Badge>
                                 <Badge variant="default">Shortlist: {shortlistLeads.length}</Badge>
-                                <Badge variant="destructive">Отклонено: {rejectedLeads.length}</Badge>
+                                <Badge variant="outline">Отложенные: {deferredLeads.length}</Badge>
+                                <Badge variant="secondary">Кандидаты в сборе: {candidateLeads.length}</Badge>
+                                <Badge variant="destructive">Отбракованные: {rejectedLeads.length}</Badge>
                             </div>
                         </CardContent>
                     </Card>
 
                     <Card>
                         <CardHeader>
-                            <CardTitle>Список кандидатов</CardTitle>
-                            <CardDescription>Это ручной контроль качества перед выбором канала и генерацией первого письма.</CardDescription>
+                            <CardTitle>Shortlist и отложенные</CardTitle>
+                            <CardDescription>Shortlist идёт в работу сейчас. Отложенные остаются на следующий раунд.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <Tabs value={leadTab} onValueChange={(value) => setLeadTab(value as 'candidates' | 'shortlist' | 'rejected')}>
+                            <Tabs value={shortlistTab} onValueChange={(value) => {
+                                if (value === 'shortlist' || value === 'deferred') {
+                                    setShortlistTab(value);
+                                }
+                            }}>
                                 <TabsList>
-                                    <TabsTrigger value="candidates">Кандидаты ({candidateLeads.length})</TabsTrigger>
                                     <TabsTrigger value="shortlist">Shortlist ({shortlistLeads.length})</TabsTrigger>
-                                    <TabsTrigger value="rejected">Отклонённые ({rejectedLeads.length})</TabsTrigger>
+                                    <TabsTrigger value="deferred">Отложенные ({deferredLeads.length})</TabsTrigger>
                                 </TabsList>
-                                <TabsContent value={leadTab} className="mt-4">
-                                    {loadingLeads ? (
-                                        <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>
-                                    ) : (
-                                        <Table>
-                                            <TableHeader>
-                                                <TableRow>
-                                                    <TableHead>Компания</TableHead>
-                                                    <TableHead>Адрес</TableHead>
-                                                    <TableHead>Контакты</TableHead>
-                                                    <TableHead>Рейтинг</TableHead>
-                                                    <TableHead>Статус</TableHead>
-                                                    <TableHead>Действие</TableHead>
-                                                </TableRow>
-                                            </TableHeader>
-                                            <TableBody>
-                                                {visibleLeads.map(renderLeadRow)}
-                                                {visibleLeads.length === 0 && (
-                                                    <TableRow>
-                                                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                                                            Для текущего набора фильтров здесь пока нет лидов.
-                                                        </TableCell>
-                                                    </TableRow>
-                                                )}
-                                            </TableBody>
-                                        </Table>
-                                    )}
+                                <TabsContent value="shortlist" className="mt-4">
+                                    {renderLeadsTable(shortlistLeads, 'shortlist')}
+                                </TabsContent>
+                                <TabsContent value="deferred" className="mt-4">
+                                    {renderLeadsTable(deferredLeads, 'deferred')}
                                 </TabsContent>
                             </Tabs>
                         </CardContent>
@@ -2085,34 +2361,34 @@ export const ProspectingManagement: React.FC = () => {
                 <TabsContent value="outreach" className="space-y-4">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Шаг 3. Подготовить первый контакт</CardTitle>
+                            <CardTitle>Шаг 3. Контакт</CardTitle>
                             <CardDescription>
-                                Переводите лиды из shortlist в контактную работу и вручную подтверждайте первый канал касания.
+                                Создавайте аудит и переводите выбранные компании в контактную работу.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
                             <div className="rounded-lg border p-4">
                                 <div className="mb-3 flex items-center justify-between gap-3">
                                     <div>
-                                        <h3 className="font-semibold">Shortlist, готовые к выбору</h3>
-                                        <p className="text-sm text-muted-foreground">Следующий шаг после shortlist: пометить лид как выбранный для аутрича.</p>
+                                        <h3 className="font-semibold">Shortlist → Контакт</h3>
+                                        <p className="text-sm text-muted-foreground">Проверяем аудит, создаём страницу и переводим лид в контактный этап.</p>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <Badge variant="secondary">{shortlistLeads.length}</Badge>
+                                        <Badge variant="secondary">{step3ReadyLeads.length}</Badge>
                                         <Badge variant="outline">Выбрано: {selectedShortlistLeadIds.length}</Badge>
                                         <Button
                                             size="sm"
                                             variant="outline"
                                             onClick={() =>
                                                 setSelectedShortlistLeadIds(
-                                                    selectedShortlistLeadIds.length === shortlistLeads.length
+                                                    selectedShortlistLeadIds.length === step3ReadyLeads.length
                                                         ? []
-                                                        : shortlistLeads.map((lead) => lead.id).filter(Boolean) as string[]
+                                                        : step3ReadyLeads.map((lead) => lead.id).filter(Boolean) as string[]
                                                 )
                                             }
-                                            disabled={shortlistLeads.length === 0}
+                                            disabled={step3ReadyLeads.length === 0}
                                         >
-                                            {selectedShortlistLeadIds.length === shortlistLeads.length && shortlistLeads.length > 0 ? 'Снять всё' : 'Выбрать всё'}
+                                            {selectedShortlistLeadIds.length === step3ReadyLeads.length && step3ReadyLeads.length > 0 ? 'Снять всё' : 'Выбрать всё'}
                                         </Button>
                                         <Button
                                             size="sm"
@@ -2143,10 +2419,10 @@ export const ProspectingManagement: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="space-y-3">
-                                    {shortlistLeads.length === 0 && (
-                                        <div className="text-sm text-muted-foreground">Нет лидов в shortlist для следующего шага.</div>
+                                    {step3ReadyLeads.length === 0 && (
+                                        <div className="text-sm text-muted-foreground">Нет лидов, готовых к первому контакту.</div>
                                     )}
-                                    {shortlistLeads.map((lead) => {
+                                    {step3ReadyLeads.map((lead) => {
                                         const pending = selectionLoading[lead.id || ''];
                                         return (
                                             <div key={lead.id} className="flex flex-col gap-3 rounded-md border p-3 md:flex-row md:items-center md:justify-between">
@@ -2175,7 +2451,7 @@ export const ProspectingManagement: React.FC = () => {
                                                             disabled={previewLoadingId === lead.id}
                                                         >
                                                             {previewLoadingId === lead.id && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                                            Аудит карточки
+                                                            Карточка лида
                                                         </Button>
                                                     )}
                                                     <Button onClick={() => lead.id && selectForOutreach(lead.id)} disabled={!lead.id || Boolean(pending)}>
@@ -2200,43 +2476,25 @@ export const ProspectingManagement: React.FC = () => {
                             <div className="rounded-lg border p-4">
                                 <div className="mb-3 flex items-center justify-between gap-3">
                                     <div>
-                                        <h3 className="font-semibold">Выбранные для аутрича</h3>
-                                        <p className="text-sm text-muted-foreground">Подтвердите первый канал: Telegram, WhatsApp, Email или ручное касание.</p>
+                                        <h3 className="font-semibold">Выбранные для контакта</h3>
+                                        <p className="text-sm text-muted-foreground">Эти лиды уже готовы к переходу в черновики.</p>
                                     </div>
                                     <div className="flex flex-wrap items-center gap-2">
-                                        <Badge variant="secondary">{outreachLeads.length}</Badge>
+                                        <Badge variant="secondary">{contactLeads.length}</Badge>
                                         <Badge variant="outline">Выбрано: {selectedOutreachLeadIds.length}</Badge>
-                                        <select
-                                            className="border rounded-md px-3 py-2 bg-background text-sm"
-                                            value={bulkOutreachChannel}
-                                            onChange={(e) => setBulkOutreachChannel(e.target.value as 'telegram' | 'whatsapp' | 'email' | 'manual')}
-                                        >
-                                            <option value="telegram">Telegram</option>
-                                            <option value="whatsapp">WhatsApp</option>
-                                            <option value="email">Email</option>
-                                            <option value="manual">Manual</option>
-                                        </select>
                                         <Button
                                             size="sm"
                                             variant="outline"
                                             onClick={() =>
                                                 setSelectedOutreachLeadIds(
-                                                    selectedOutreachLeadIds.length === outreachLeads.length
+                                                    selectedOutreachLeadIds.length === contactLeads.length
                                                         ? []
-                                                        : outreachLeads.map((lead) => lead.id).filter(Boolean) as string[]
+                                                        : contactLeads.map((lead) => lead.id).filter(Boolean) as string[]
                                                 )
                                             }
-                                            disabled={outreachLeads.length === 0}
+                                            disabled={contactLeads.length === 0}
                                         >
-                                            {selectedOutreachLeadIds.length === outreachLeads.length && outreachLeads.length > 0 ? 'Снять всё' : 'Выбрать всё'}
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            onClick={bulkAssignOutreachChannel}
-                                            disabled={selectedOutreachLeadIds.length === 0 || selectionLoading.bulkChannel === bulkOutreachChannel}
-                                        >
-                                            {selectionLoading.bulkChannel === bulkOutreachChannel && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                            Назначить канал выбранным
+                                            {selectedOutreachLeadIds.length === contactLeads.length && contactLeads.length > 0 ? 'Снять всё' : 'Выбрать всё'}
                                         </Button>
                                         <Button
                                             size="sm"
@@ -2250,10 +2508,10 @@ export const ProspectingManagement: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="space-y-3">
-                                    {outreachLeads.length === 0 && (
+                                    {contactLeads.length === 0 && (
                                         <div className="text-sm text-muted-foreground">Пока нет выбранных лидов для контакта.</div>
                                     )}
-                                    {outreachLeads.map((lead) => {
+                                    {contactLeads.map((lead) => {
                                         const pending = selectionLoading[lead.id || ''];
                                         return (
                                             <div key={lead.id} className="rounded-md border p-3">
@@ -2273,7 +2531,7 @@ export const ProspectingManagement: React.FC = () => {
                                                             Отметить для массового назначения канала
                                                         </label>
                                                         <div className="font-medium">{lead.name}</div>
-                                                        <LeadMetaSummary lead={lead} showChannel />
+                                                        <LeadMetaSummary lead={lead} />
                                                         <div className="flex items-center gap-2">
                                                             <Badge variant={badgeVariantForStatus(lead.status)}>{statusLabel(lead.status)}</Badge>
                                                             <Badge variant="outline">{workflowStatusLabel(lead.status)}</Badge>
@@ -2289,21 +2547,9 @@ export const ProspectingManagement: React.FC = () => {
                                                             disabled={previewLoadingId === lead.id}
                                                         >
                                                             {previewLoadingId === lead.id && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                                            Аудит карточки
+                                                            Карточка лида
                                                         </Button>
                                                     )}
-                                                    {(['telegram', 'whatsapp', 'email', 'manual'] as const).map((channel) => (
-                                                        <Button
-                                                            key={channel}
-                                                            size="sm"
-                                                            variant={lead.selected_channel === channel ? 'default' : 'outline'}
-                                                            onClick={() => lead.id && chooseChannel(lead.id, channel)}
-                                                            disabled={!lead.id || Boolean(pending)}
-                                                        >
-                                                            {pending === channel && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                                            {channel === 'telegram' ? 'Telegram' : channel === 'whatsapp' ? 'WhatsApp' : channel === 'email' ? 'Email' : 'Manual'}
-                                                        </Button>
-                                                    ))}
                                                     <Button
                                                         size="sm"
                                                         variant="destructive"
@@ -2449,7 +2695,7 @@ export const ProspectingManagement: React.FC = () => {
                                                                     disabled={previewLoadingId === lead.id}
                                                                 >
                                                                     {previewLoadingId === lead.id && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                                                    Аудит карточки
+                                                                    Карточка лида
                                                                 </Button>
                                                             );
                                                         })()}
@@ -2526,6 +2772,107 @@ export const ProspectingManagement: React.FC = () => {
                                 <Badge variant="secondary">Готовы к queue: {filteredSendReadyDrafts.length}</Badge>
                                 <Badge variant="outline">Batch-групп: {groupedSendBatches.length}</Badge>
                                 <Badge variant="outline">Выбрано в очереди: {selectedQueueItemIds.length}</Badge>
+                            </div>
+
+                            <div className="rounded-lg border p-4">
+                                <div className="mb-3 flex items-center justify-between gap-3">
+                                    <div>
+                                        <h3 className="font-semibold">Шаг 5. Выбор канала</h3>
+                                        <p className="text-sm text-muted-foreground">Сначала выберите канал контакта, затем лид появится в черновиках.</p>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Badge variant="secondary">{contactLeads.length}</Badge>
+                                        <Badge variant="outline">Выбрано: {selectedOutreachLeadIds.length}</Badge>
+                                        <select
+                                            className="border rounded-md px-3 py-2 bg-background text-sm"
+                                            value={bulkOutreachChannel}
+                                            onChange={(e) => setBulkOutreachChannel(e.target.value as 'telegram' | 'whatsapp' | 'email' | 'manual')}
+                                        >
+                                            <option value="telegram">Telegram</option>
+                                            <option value="whatsapp">WhatsApp</option>
+                                            <option value="email">Email</option>
+                                            <option value="manual">Manual</option>
+                                        </select>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() =>
+                                                setSelectedOutreachLeadIds(
+                                                    selectedOutreachLeadIds.length === contactLeads.length
+                                                        ? []
+                                                        : contactLeads.map((lead) => lead.id).filter(Boolean) as string[]
+                                                )
+                                            }
+                                            disabled={contactLeads.length === 0}
+                                        >
+                                            {selectedOutreachLeadIds.length === contactLeads.length && contactLeads.length > 0 ? 'Снять всё' : 'Выбрать всё'}
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            onClick={bulkAssignOutreachChannel}
+                                            disabled={selectedOutreachLeadIds.length === 0 || selectionLoading.bulkChannel === bulkOutreachChannel}
+                                        >
+                                            {selectionLoading.bulkChannel === bulkOutreachChannel && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                            Назначить канал выбранным
+                                        </Button>
+                                    </div>
+                                </div>
+                                <div className="space-y-3">
+                                    {contactLeads.length === 0 && (
+                                        <div className="text-sm text-muted-foreground">Все лиды уже прошли выбор канала или отсутствуют.</div>
+                                    )}
+                                    {contactLeads.map((lead) => {
+                                        const pending = selectionLoading[lead.id || ''];
+                                        return (
+                                            <div key={lead.id} className="rounded-md border p-3">
+                                                <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                                                    <div className="space-y-2">
+                                                        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={!!lead.id && selectedOutreachLeadIds.includes(lead.id)}
+                                                                onChange={(e) =>
+                                                                    lead.id &&
+                                                                    setSelectedOutreachLeadIds((prev) =>
+                                                                        e.target.checked ? [...prev, lead.id as string] : prev.filter((id) => id !== lead.id)
+                                                                    )
+                                                                }
+                                                            />
+                                                            Отметить для массового выбора
+                                                        </label>
+                                                        <div className="font-medium">{lead.name}</div>
+                                                        <LeadMetaSummary lead={lead} />
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {lead.id && (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="secondary"
+                                                            onClick={() => openLeadPreview(lead)}
+                                                            disabled={previewLoadingId === lead.id}
+                                                        >
+                                                            {previewLoadingId === lead.id && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                                            Карточка лида
+                                                        </Button>
+                                                    )}
+                                                    {(['telegram', 'whatsapp', 'email', 'manual'] as const).map((channel) => (
+                                                        <Button
+                                                            key={channel}
+                                                            size="sm"
+                                                            variant={lead.selected_channel === channel ? 'default' : 'outline'}
+                                                            onClick={() => lead.id && chooseChannel(lead.id, channel)}
+                                                            disabled={!lead.id || Boolean(pending)}
+                                                        >
+                                                            {pending === channel && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                                            {channel === 'telegram' ? 'Telegram' : channel === 'whatsapp' ? 'WhatsApp' : channel === 'email' ? 'Email' : 'Manual'}
+                                                        </Button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
                             <div className="rounded-lg border p-4">
                                 <div className="mb-3 flex items-center justify-between gap-3">
@@ -2966,6 +3313,73 @@ export const ProspectingManagement: React.FC = () => {
                                     ))}
                                 </div>
                             </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+                <TabsContent value="sent" className="space-y-4">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Отправлено</CardTitle>
+                            <CardDescription>
+                                Лиды, по которым уже была отправка или получена реакция. Здесь удобно держать отправленные страницы аудита и возвращаться к ним без поиска по очереди.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            {renderLeadsTable(sentLeads, 'sent')}
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Follow-up сообщения</CardTitle>
+                            <CardDescription>
+                                Второе касание после отправки: здесь удобно подготовить текст и быстро перейти к карточке или аудиту.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            {sentLeads.length === 0 && (
+                                <div className="text-sm text-muted-foreground">Нет лидов, готовых для follow-up.</div>
+                            )}
+                            {sentLeads.map((lead) => (
+                                <div key={`followup-${lead.id}`} className="rounded-md border p-3 space-y-3">
+                                    <div className="flex flex-wrap items-center justify-between gap-3">
+                                        <div className="font-medium">{lead.name}</div>
+                                        <div className="flex flex-wrap gap-2">
+                                            <Button
+                                                size="sm"
+                                                variant="secondary"
+                                                onClick={() => openLeadPreview(lead)}
+                                                disabled={previewLoadingId === lead.id}
+                                            >
+                                                {previewLoadingId === lead.id && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                                Карточка лида
+                                            </Button>
+                                            {lead.public_audit_url && (
+                                                <a
+                                                    href={lead.public_audit_url}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className="inline-flex h-9 items-center rounded-md border border-input bg-secondary px-3 text-sm font-medium text-secondary-foreground hover:bg-secondary/80"
+                                                >
+                                                    Открыть аудит
+                                                </a>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <textarea
+                                        className="min-h-[110px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                        placeholder="Текст follow-up сообщения"
+                                        value={followUpDrafts[lead.id || ''] ?? ''}
+                                        onChange={(e) => {
+                                            const leadId = lead.id || '';
+                                            setFollowUpDrafts((prev) => ({ ...prev, [leadId]: e.target.value }));
+                                        }}
+                                    />
+                                    <div className="text-xs text-muted-foreground">
+                                        Текст сохраняется локально в интерфейсе и готов к ручной отправке через выбранный канал.
+                                    </div>
+                                </div>
+                            ))}
                         </CardContent>
                     </Card>
                 </TabsContent>

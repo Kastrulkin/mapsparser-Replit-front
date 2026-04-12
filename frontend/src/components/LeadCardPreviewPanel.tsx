@@ -19,6 +19,7 @@ export type LeadPreviewLead = {
   telegram_url?: string;
   whatsapp_url?: string;
   email?: string;
+  public_audit_url?: string;
 };
 
 export type LeadCardPreview = {
@@ -32,6 +33,38 @@ export type LeadCardPreview = {
     title: string;
     description: string;
   }>;
+  issue_blocks?: Array<{
+    id?: string;
+    section?: string;
+    priority?: 'critical' | 'high' | 'medium' | 'low' | string;
+    title?: string;
+    problem?: string;
+    evidence?: string;
+    impact?: string;
+    fix?: string;
+  }>;
+  top_3_issues?: Array<{
+    id?: string;
+    title?: string;
+    priority?: string;
+    problem?: string;
+  }>;
+  action_plan?: {
+    next_24h?: string[];
+    next_7d?: string[];
+    ongoing?: string[];
+  };
+  audit_profile?: string;
+  audit_profile_label?: string;
+  best_fit_customer_profile?: string[];
+  weak_fit_customer_profile?: string[];
+  best_fit_guest_profile?: string[];
+  weak_fit_guest_profile?: string[];
+  search_intents_to_target?: string[];
+  photo_shots_missing?: string[];
+  positioning_focus?: string[];
+  strength_themes?: string[];
+  objection_themes?: string[];
   subscores: {
     profile: number;
     reputation: number;
@@ -105,11 +138,15 @@ interface LeadCardPreviewPanelProps {
   generateBusy?: boolean;
   generateAuditPageBusy?: boolean;
   generatedAuditPageUrl?: string | null;
+  auditPageLanguage?: string;
+  auditPageEnabledLanguages?: string[];
   contactsBusy?: boolean;
   parseBusy?: boolean;
   parseAutoRefreshing?: boolean;
   onGenerateFromAudit?: () => void;
   onGenerateAuditPage?: () => void;
+  onAuditPageLanguageChange?: (language: string) => void;
+  onAuditPageEnabledLanguagesChange?: (languages: string[]) => void;
   onSaveContacts?: (payload: { telegram_url: string; whatsapp_url: string; email: string }) => void;
   onRunLiveParse?: () => void;
   onRefreshPreview?: () => void;
@@ -123,15 +160,36 @@ const healthClasses: Record<string, string> = {
 };
 
 const severityClasses: Record<string, string> = {
+  critical: 'border-red-200 bg-red-50 text-red-800',
   high: 'border-orange-200 bg-orange-50 text-orange-800',
   medium: 'border-amber-200 bg-amber-50 text-amber-800',
   low: 'border-slate-200 bg-slate-50 text-slate-800',
 };
 
 const priorityClasses: Record<string, string> = {
+  critical: 'bg-red-200 text-red-900',
   high: 'bg-red-100 text-red-800',
   medium: 'bg-amber-100 text-amber-800',
   low: 'bg-slate-100 text-slate-700',
+};
+
+const catalogSectionTitle = (auditProfile?: string) => {
+  switch (String(auditProfile || '').trim()) {
+    case 'food':
+      return 'Меню и позиции в карточке';
+    case 'fitness':
+      return 'Направления и абонементы';
+    case 'medical':
+      return 'Услуги и медицинские направления';
+    case 'wellness':
+      return 'Услуги и процедуры';
+    case 'beauty':
+      return 'Услуги и beauty-направления';
+    case 'hospitality':
+      return 'Что видно в карточке';
+    default:
+      return 'Услуги: что есть и что улучшить';
+  }
 };
 
 const subscoreCards = [
@@ -168,6 +226,13 @@ const sourceLabel = (value?: string) => {
   }
 };
 
+const auditLanguageOptions = [
+  { value: 'en', label: 'English' },
+  { value: 'tr', label: 'Türkçe' },
+  { value: 'ru', label: 'Русский' },
+  { value: 'el', label: 'Ελληνικά' },
+];
+
 const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
   lead,
   preview,
@@ -176,11 +241,15 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
   generateBusy = false,
   generateAuditPageBusy = false,
   generatedAuditPageUrl = null,
+  auditPageLanguage = 'en',
+  auditPageEnabledLanguages = ['en'],
   contactsBusy = false,
   parseBusy = false,
   parseAutoRefreshing = false,
   onGenerateFromAudit,
   onGenerateAuditPage,
+  onAuditPageLanguageChange,
+  onAuditPageEnabledLanguagesChange,
   onSaveContacts,
   onRunLiveParse,
   onRefreshPreview,
@@ -234,18 +303,20 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
   };
 
   const parseInProgress = ['pending', 'queued', 'processing', 'running'].includes(parseStatus);
+  const showInlineAudit = false;
 
   return (
     <Card>
       <CardHeader>
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div>
-            <CardTitle>Аудит карточки лида</CardTitle>
-            <CardDescription>
-              Демо-экран для разговора: текущее состояние карточки, потенциал роста и конкретные точки улучшения.
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
+          <div className="min-w-0">
+            <CardTitle>Карточка лида</CardTitle>
+            <CardDescription className="mt-1 max-w-3xl break-words leading-6">
+              Управление лидом: статус, контакты, запуск парсинга и генерация публичной страницы аудита.
             </CardDescription>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="min-w-0 w-full xl:w-auto">
+            <div className="flex flex-wrap items-center gap-2 xl:justify-end">
             {onGenerateFromAudit && (
               <Button
                 size="sm"
@@ -257,15 +328,72 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
               </Button>
             )}
             {onGenerateAuditPage && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={onGenerateAuditPage}
-                disabled={loading || generateAuditPageBusy}
-              >
-                {generateAuditPageBusy && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                Сгенерировать страницу аудита
-              </Button>
+              <>
+                <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                  <div className="flex items-center gap-2">
+                    <span>Основной язык</span>
+                    <select
+                      className="bg-transparent text-sm font-medium text-slate-900 outline-none"
+                      value={auditPageLanguage}
+                      onChange={(e) => {
+                        const nextLanguage = e.target.value;
+                        if (onAuditPageLanguageChange) {
+                          onAuditPageLanguageChange(nextLanguage);
+                        }
+                        if (onAuditPageEnabledLanguagesChange) {
+                          const nextLanguages = auditPageEnabledLanguages.filter((item) => item !== nextLanguage);
+                          onAuditPageEnabledLanguagesChange([nextLanguage, ...nextLanguages]);
+                        }
+                      }}
+                      disabled={loading || generateAuditPageBusy}
+                    >
+                      {auditLanguageOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {auditLanguageOptions.map((option) => {
+                      const checked = auditPageEnabledLanguages.includes(option.value);
+                      const disabled = option.value === auditPageLanguage;
+                      return (
+                        <label key={option.value} className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-2.5 py-1 text-xs text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={disabled || loading || generateAuditPageBusy}
+                            onChange={(e) => {
+                              if (!onAuditPageEnabledLanguagesChange) {
+                                return;
+                              }
+                              if (e.target.checked) {
+                                onAuditPageEnabledLanguagesChange([...auditPageEnabledLanguages, option.value].filter((item, index, items) => items.indexOf(item) === index));
+                                return;
+                              }
+                              onAuditPageEnabledLanguagesChange(auditPageEnabledLanguages.filter((item) => item !== option.value));
+                            }}
+                          />
+                          <span>{option.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-2 text-[11px] leading-5 text-slate-500">
+                    Будут созданы только выбранные языковые версии аудита.
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={onGenerateAuditPage}
+                  disabled={loading || generateAuditPageBusy}
+                >
+                  {generateAuditPageBusy && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                  {generatedAuditPageUrl ? 'Пересоздать страницу аудита' : 'Сгенерировать страницу аудита'}
+                </Button>
+              </>
             )}
             {onRunLiveParse && (
               <Button
@@ -292,6 +420,7 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
             <Button variant="outline" size="sm" onClick={onClose}>
               Закрыть
             </Button>
+            </div>
           </div>
         </div>
       </CardHeader>
@@ -308,6 +437,17 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">{sourceLabel(lead.source)}</Badge>
               {lead.selected_channel && <Badge variant="secondary">Канал: {lead.selected_channel}</Badge>}
+              {(lead.public_audit_url || generatedAuditPageUrl) && (
+                <a
+                  href={lead.public_audit_url || generatedAuditPageUrl || '#'}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700"
+                >
+                  <Globe className="h-3 w-3" />
+                  Открыть страницу аудита
+                </a>
+              )}
               {(lead.source_url || preview?.preview_meta?.source_url) && (
                 <a
                   href={lead.source_url || preview?.preview_meta?.source_url || '#'}
@@ -333,21 +473,39 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
 
         {!loading && error && (
           <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            Не удалось загрузить демо-аудит: {error}
-          </div>
-        )}
-
-        {!loading && !error && generatedAuditPageUrl && (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
-            Страница аудита готова:{' '}
-            <a href={generatedAuditPageUrl} target="_blank" rel="noreferrer" className="underline font-medium">
-              {generatedAuditPageUrl}
-            </a>
+            Не удалось загрузить карточку лида: {error}
           </div>
         )}
 
         {!loading && !error && preview && (
           <>
+            <div className="rounded-2xl border border-slate-200 bg-white p-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <div className="text-sm font-medium text-slate-500">Краткий статус</div>
+                  <div className="mt-2 text-2xl font-semibold text-slate-900">{preview.health_label}</div>
+                  <div className="mt-1 text-sm text-slate-600">{preview.summary_text}</div>
+                </div>
+                <div className="flex flex-col gap-2 text-sm text-slate-700">
+                  <div>Рейтинг: {preview.current_state.rating ?? '—'}</div>
+                  <div>Отзывы: {preview.current_state.reviews_count ?? 0}</div>
+                  <div>Услуги: {preview.current_state.services_count ?? 0}</div>
+                  <div>Фото: {preview.current_state.photos_state || '—'}</div>
+                </div>
+                <div className="flex flex-col gap-2 text-xs text-slate-600">
+                  <div>Последний расчёт: {formatDate(preview.parse_context.last_parse_at || null)}</div>
+                  <div className={`inline-flex items-center rounded-md border px-2 py-1 font-semibold ${parseStatusBadgeClass()}`}>
+                    {(parseInProgress || parseAutoRefreshing) && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                    {parseStatusLabel()}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-3 text-xs text-slate-500">
+                Детальный аудит формируется на отдельной странице и доступен по ссылке «Открыть страницу аудита».
+              </div>
+            </div>
+
+            {showInlineAudit && (
             <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
               <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -468,22 +626,37 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
                     Ключевые точки роста
                   </div>
                   <div className="space-y-3">
-                    {preview.findings.length === 0 && (
+                    {(preview.issue_blocks || []).length === 0 && preview.findings.length === 0 && (
                       <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
                         Критичных проблем не найдено. Карточка выглядит стабильно.
                       </div>
                     )}
-                    {preview.findings.map((finding) => (
-                      <div key={finding.code} className={`rounded-xl border p-4 ${severityClasses[finding.severity] || severityClasses.low}`}>
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="font-semibold">{finding.title}</div>
-                          <Badge variant="outline" className="border-current/30 bg-white/60">
-                            {finding.severity}
-                          </Badge>
-                        </div>
-                        <p className="mt-2 text-sm leading-6">{finding.description}</p>
-                      </div>
-                    ))}
+                    {(preview.issue_blocks || []).length > 0
+                      ? (preview.issue_blocks || []).map((issue, idx) => (
+                          <div key={`${issue.id || issue.title || 'issue'}-${idx}`} className={`rounded-xl border p-4 ${severityClasses[(issue.priority || 'medium').toLowerCase()] || severityClasses.low}`}>
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="font-semibold">{issue.title || 'Проблема карточки'}</div>
+                              <Badge variant="outline" className="border-current/30 bg-white/60">
+                                {(issue.priority || 'medium').toString().toUpperCase()}
+                              </Badge>
+                            </div>
+                            <p className="mt-2 text-sm leading-6"><span className="font-medium">Проблема:</span> {issue.problem || 'Не указана'}</p>
+                            {issue.evidence ? <p className="mt-1 text-sm leading-6"><span className="font-medium">Факт:</span> {issue.evidence}</p> : null}
+                            {issue.impact ? <p className="mt-1 text-sm leading-6"><span className="font-medium">Влияние:</span> {issue.impact}</p> : null}
+                            {issue.fix ? <p className="mt-1 text-sm leading-6"><span className="font-medium">Что сделать:</span> {issue.fix}</p> : null}
+                          </div>
+                        ))
+                      : preview.findings.map((finding) => (
+                          <div key={finding.code} className={`rounded-xl border p-4 ${severityClasses[finding.severity] || severityClasses.low}`}>
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="font-semibold">{finding.title}</div>
+                              <Badge variant="outline" className="border-current/30 bg-white/60">
+                                {finding.severity}
+                              </Badge>
+                            </div>
+                            <p className="mt-2 text-sm leading-6">{finding.description}</p>
+                          </div>
+                        ))}
                   </div>
                 </div>
 
@@ -493,6 +666,23 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
                     Что сделать дальше
                   </div>
                   <div className="space-y-3">
+                    {preview.action_plan && (
+                      <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
+                        <div className="font-semibold text-slate-900">План действий</div>
+                        <div className="mt-2">
+                          <div className="font-medium text-slate-900">За 24 часа</div>
+                          {(preview.action_plan.next_24h || []).slice(0, 3).map((line, idx) => <div key={`d1-${idx}`}>• {line}</div>)}
+                        </div>
+                        <div className="mt-2">
+                          <div className="font-medium text-slate-900">За 7 дней</div>
+                          {(preview.action_plan.next_7d || []).slice(0, 3).map((line, idx) => <div key={`d7-${idx}`}>• {line}</div>)}
+                        </div>
+                        <div className="mt-2">
+                          <div className="font-medium text-slate-900">Регулярно</div>
+                          {(preview.action_plan.ongoing || []).slice(0, 3).map((line, idx) => <div key={`og-${idx}`}>• {line}</div>)}
+                        </div>
+                      </div>
+                    )}
                     {preview.recommended_actions.map((action, idx) => (
                       <div key={`${action.title}-${idx}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -544,6 +734,105 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
                     </div>
                   </div>
                 </div>
+
+                {(
+                  (preview.best_fit_customer_profile && preview.best_fit_customer_profile.length > 0) ||
+                  (preview.best_fit_guest_profile && preview.best_fit_guest_profile.length > 0) ||
+                  (preview.weak_fit_customer_profile && preview.weak_fit_customer_profile.length > 0) ||
+                  (preview.weak_fit_guest_profile && preview.weak_fit_guest_profile.length > 0) ||
+                  (preview.search_intents_to_target && preview.search_intents_to_target.length > 0) ||
+                  (preview.photo_shots_missing && preview.photo_shots_missing.length > 0) ||
+                  (preview.positioning_focus && preview.positioning_focus.length > 0) ||
+                  (preview.strength_themes && preview.strength_themes.length > 0) ||
+                  (preview.objection_themes && preview.objection_themes.length > 0)
+                ) && (
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div className="text-base font-semibold text-slate-900">Позиционирование и сценарии поиска</div>
+                      {preview.audit_profile_label ? (
+                        <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-700">
+                          {preview.audit_profile_label}
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <div className="space-y-4 text-sm">
+                      {(preview.positioning_focus && preview.positioning_focus.length > 0) && (
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                          <div className="font-semibold text-slate-900">Как лучше перепаковать карточку</div>
+                          <div className="mt-2 space-y-2 text-slate-700">
+                            {preview.positioning_focus.slice(0, 4).map((line, idx) => <div key={`position-${idx}`}>• {line}</div>)}
+                          </div>
+                        </div>
+                      )}
+                      {((preview.best_fit_customer_profile && preview.best_fit_customer_profile.length > 0)
+                        || (preview.best_fit_guest_profile && preview.best_fit_guest_profile.length > 0)) && (
+                        <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+                          <div className="font-semibold text-slate-900">Кому карточка подходит лучше всего</div>
+                          <div className="mt-2 space-y-2 text-slate-700">
+                            {((preview.best_fit_customer_profile && preview.best_fit_customer_profile.length > 0)
+                              ? preview.best_fit_customer_profile
+                              : preview.best_fit_guest_profile || []).map((line, idx) => <div key={`fit-${idx}`}>• {line}</div>)}
+                          </div>
+                        </div>
+                      )}
+                      {((preview.weak_fit_customer_profile && preview.weak_fit_customer_profile.length > 0)
+                        || (preview.weak_fit_guest_profile && preview.weak_fit_guest_profile.length > 0)) && (
+                        <div className="rounded-xl border border-rose-200 bg-rose-50/60 p-4">
+                          <div className="font-semibold text-slate-900">Где ожидания чаще всего расходятся</div>
+                          <div className="mt-2 space-y-2 text-slate-700">
+                            {((preview.weak_fit_customer_profile && preview.weak_fit_customer_profile.length > 0)
+                              ? preview.weak_fit_customer_profile
+                              : preview.weak_fit_guest_profile || []).map((line, idx) => <div key={`weak-${idx}`}>• {line}</div>)}
+                          </div>
+                        </div>
+                      )}
+                      {(preview.search_intents_to_target && preview.search_intents_to_target.length > 0) && (
+                        <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-4">
+                          <div className="font-semibold text-slate-900">Какие сценарии поиска надо закрыть</div>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {preview.search_intents_to_target.map((line, idx) => (
+                              <div key={`intent-${idx}`} className="rounded-full border border-sky-200 bg-white px-3 py-1 text-xs text-slate-700">
+                                {line}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {(preview.photo_shots_missing && preview.photo_shots_missing.length > 0) && (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+                          <div className="font-semibold text-slate-900">Каких фото обычно не хватает</div>
+                          <div className="mt-2 space-y-2 text-slate-700">
+                            {preview.photo_shots_missing.map((line, idx) => <div key={`photo-${idx}`}>• {line}</div>)}
+                          </div>
+                        </div>
+                      )}
+                      {(preview.strength_themes && preview.strength_themes.length > 0) && (
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                          <div className="font-semibold text-slate-900">Что уже работает</div>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {preview.strength_themes.map((line, idx) => (
+                              <div key={`strength-${idx}`} className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs text-slate-700">
+                                {line}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {(preview.objection_themes && preview.objection_themes.length > 0) && (
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                          <div className="font-semibold text-slate-900">Какие возражения надо снять заранее</div>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {preview.objection_themes.map((line, idx) => (
+                              <div key={`objection-${idx}`} className="rounded-full border border-rose-200 bg-white px-3 py-1 text-xs text-slate-700">
+                                {line}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -551,7 +840,7 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
               <div className="rounded-2xl border border-slate-200 bg-white p-5">
                 <div className="mb-4 flex items-center gap-2 text-base font-semibold text-slate-900">
                   <TrendingUp className="h-5 w-5 text-violet-500" />
-                  Услуги: что есть и что улучшить
+                  {catalogSectionTitle(preview.audit_profile)}
                 </div>
                 <div className="space-y-3">
                   {(preview.services_preview || []).map((item, idx) => (
@@ -610,9 +899,12 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
                       Для этой карточки пока нет подготовленных примеров новостей.
                     </div>
                   )}
+                  </div>
                 </div>
               </div>
+
             </div>
+            )}
 
             <div className="rounded-2xl border border-slate-200 bg-white p-5">
               <div className="mb-3 text-base font-semibold text-slate-900">Контакты лида (ручное заполнение)</div>
