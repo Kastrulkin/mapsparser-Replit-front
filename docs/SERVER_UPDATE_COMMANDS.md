@@ -1,122 +1,113 @@
 # Команды для обновления проекта на сервере
 
-## 📍 Путь к проекту на сервере
+## Текущий production runbook
 
-**Директория проекта:** `/root/mapsparser-Replit-front`
+Для `localos.pro` канонический путь проекта на сервере:
 
-## Обновление через SSH
-
-### Шаг 1: Подключиться к серверу
 ```bash
-ssh root@80.78.242.105
+/opt/seo-app
 ```
 
-### Шаг 2: Перейти в директорию проекта
-```bash
-cd /root/mapsparser-Replit-front
-```
+Текущий runtime:
 
-### Шаг 3: Обновить проект
-```bash
-# Если есть локальные изменения в dist файлах - отменить их
-git checkout -- frontend/dist/index.html 2>/dev/null || true
+- `docker compose`
+- `postgres`, `app`, `worker`
+- frontend раздаётся Flask из `/app/frontend/dist`
 
-# Обновить из GitHub
+Старые non-Docker команды и внешний web-root больше не использовать.
+
+## Базовое обновление кода на сервере
+
+```bash
+cd /opt/seo-app
 git pull origin main
+docker compose ps
+docker compose logs --since 10m app | tail -n 120
+curl -I http://localhost:8000
 ```
 
-### Шаг 4: Перезапустить сервер
+## Frontend-only hotfix
 
-**Вариант А: Через systemd (рекомендуется)**
+Собирать фронтенд лучше локально, затем выкладывать канонический `frontend/dist`.
+
 ```bash
-systemctl restart seo-worker
+cd /opt/seo-app
+bash scripts/deploy_frontend_dist.sh --build
 ```
 
-**Вариант Б: Вручную (если systemd не используется)**
+Подробный runbook:
+
+- `docs/FRONTEND_DEPLOY_RUNBOOK.md`
+
+Важно:
+
+- не использовать временный `tar + docker cp` как основной путь;
+- не удалять старые asset-файлы перед выкладкой;
+- канонический скрипт сам синхронизирует оба runtime-пути:
+  - `/app/frontend/dist`
+  - `/app/dist`
+
+Проверка:
+
 ```bash
-# Найти процесс Flask
-ps aux | grep "python.*main.py"
-
-# Остановить старый процесс
-pkill -f "python.*main.py"
-
-# Запустить новый
-source venv/bin/activate
-nohup python src/main.py > /tmp/seo_main.out 2>&1 &
+cd /opt/seo-app
+docker compose ps
+docker compose logs --since 10m app | tail -n 120
+curl -I http://localhost:8000
 ```
 
-### Шаг 5: Проверить запуск
+## Backend-only hotfix
+
+После синхронизации `src/` на сервер:
+
 ```bash
-# Проверить статус воркера (если используется systemd)
-systemctl status seo-worker
-
-# Проверить порт Flask
-lsof -iTCP:8000 -sTCP:LISTEN
-
-# Проверить логи
-tail -20 /tmp/seo_main.out
-# или
-journalctl -u seo-worker -f
+cd /opt/seo-app
+docker compose restart app worker
+docker compose ps
+docker compose logs --since 10m app | tail -n 120
+curl -I http://localhost:8000
 ```
 
-## Быстрая команда (одной строкой)
+Если изменение касается только API, достаточно:
 
-### Через systemd:
 ```bash
-ssh root@80.78.242.105 "cd /root/mapsparser-Replit-front && git checkout -- frontend/dist/index.html 2>/dev/null || true && git pull origin main && systemctl restart seo-worker"
+cd /opt/seo-app
+docker compose restart app
 ```
 
-### Вручную (Flask сервер):
+## Полезные one-liners
+
+### Проверить прод
+
 ```bash
-ssh root@80.78.242.105 "cd /root/mapsparser-Replit-front && git pull origin main && pkill -f 'python.*main.py' && source venv/bin/activate && nohup python src/main.py > /tmp/seo_main.out 2>&1 &"
+ssh root@80.78.242.105 "cd /opt/seo-app && docker compose ps && docker compose logs --since 10m app | tail -n 80 && curl -I http://localhost:8000"
 ```
 
-## Обновление через веб-консоль хостинга
+### Перезапустить только app
 
-Если SSH не работает, используйте веб-консоль в панели управления хостингом:
-
-1. Зайдите в панель управления
-2. Откройте веб-консоль/терминал
-3. Выполните команды:
 ```bash
-cd /root/mapsparser-Replit-front
-git pull origin main
-systemctl restart seo-worker
+ssh root@80.78.242.105 "cd /opt/seo-app && docker compose restart app && docker compose ps"
 ```
 
-## Если проект не найден - клонировать заново
+### Проверить, какой frontend реально раздаётся
 
 ```bash
-cd /root
-git clone https://github.com/Kastrulkin/mapsparser-Replit-front.git
-cd mapsparser-Replit-front
-
-# Установить зависимости
-source venv/bin/activate
-pip install -r requirements.txt
-
-# Установить Playwright браузеры (если нужно)
-python -m playwright install chromium
-
-# Запустить
-nohup python src/main.py > /tmp/seo_main.out 2>&1 &
+ssh root@80.78.242.105 "cd /opt/seo-app && docker compose exec -T app sh -lc 'grep -n \"/assets/index-\" /app/frontend/dist/index.html'"
 ```
 
-## Что обновлено в последнем коммите
-
-- ✅ Network Interception парсер (`src/parser_interception.py`)
-- ✅ Конфигурация парсера (`src/parser_config.py`)
-- ✅ Интеграция в worker.py
-- ✅ Документация по парсеру
-
-## Проверка после обновления
+## Если нужно восстановить frontend runtime
 
 ```bash
-# Проверить, что новый парсер доступен
-cd /root/mapsparser-Replit-front
-source venv/bin/activate
-python -c "from parser_interception import parse_yandex_card; print('✅ Парсер работает')"
+cd /opt/seo-app
+bash scripts/verify_frontend_dist_integrity.sh frontend/dist
+docker compose exec -T app sh -lc 'grep -n "/assets/index-" /app/frontend/dist/index.html'
+```
 
-# Проверить логи на ошибки
-tail -50 /tmp/seo_main.out | grep -i error
+## Стандарт проверки после любого hotfix
+
+```bash
+cd /opt/seo-app
+docker compose ps
+docker compose logs --since 10m app | tail -n 120
+curl -I http://localhost:8000
 ```

@@ -4,6 +4,7 @@
 services:
   postgres:
     image: postgres:16
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-beautybot}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-beautybot}
@@ -20,10 +21,13 @@ services:
     build:
       context: .
       network: host
+    restart: unless-stopped
     environment:
       DEBUG_DIR: /app/debug_data
       DATABASE_URL: postgresql://${POSTGRES_USER:-beautybot}:${POSTGRES_PASSWORD:-beautybot}@postgres:5432/${POSTGRES_DB:-beautybot}
       FLASK_APP: src.main:app
+      FRONTEND_DIST_DIR: /app/frontend/dist
+      PUBLIC_FRONTEND_DIST_DIR: /app/frontend/public-dist
       POSTGRES_USER: ${POSTGRES_USER:-beautybot}
       POSTGRES_DB: ${POSTGRES_DB:-beautybot}
       PYTHONPATH: /app:/app/src
@@ -40,10 +44,28 @@ services:
       APIFY_HTTPS_PROXY: ${APIFY_HTTPS_PROXY:-}
       APIFY_PROXY_GROUPS: ${APIFY_PROXY_GROUPS:-RESIDENTIAL}
       APIFY_PROXY_STRICT: ${APIFY_PROXY_STRICT:-false}
+      TELEGRAM_USERBOT_PROXY: ${TELEGRAM_USERBOT_PROXY:-}
+      TELEGRAM_USERBOT_MTPROXY_HOST: ${TELEGRAM_USERBOT_MTPROXY_HOST:-}
+      TELEGRAM_USERBOT_MTPROXY_PORT: ${TELEGRAM_USERBOT_MTPROXY_PORT:-}
+      TELEGRAM_USERBOT_MTPROXY_SECRET: ${TELEGRAM_USERBOT_MTPROXY_SECRET:-}
+      TELEGRAM_USERBOT_MTPROXY_MODE: ${TELEGRAM_USERBOT_MTPROXY_MODE:-randomized}
+      SMTP_SERVER: ${SMTP_SERVER:-mail.hosting.reg.ru}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-info@localos.pro}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      CONTACT_EMAIL: ${CONTACT_EMAIL:-info@localos.pro}
+      GIGACHAT_KEYS: ${GIGACHAT_KEYS:-}
+      GIGACHAT_CLIENT_ID: ${GIGACHAT_CLIENT_ID:-}
+      GIGACHAT_CLIENT_SECRET: ${GIGACHAT_CLIENT_SECRET:-}
+      GIGACHAT_SSL_VERIFY: ${GIGACHAT_SSL_VERIFY:-false}
+      GIGACHAT_CA_BUNDLE: ${GIGACHAT_CA_BUNDLE:-}
+      REQUESTS_CA_BUNDLE: ${REQUESTS_CA_BUNDLE:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./data/legacy.sqlite:/app/legacy.sqlite:ro
       - ./debug_data:/app/debug_data
+      - ./frontend/dist:/app/frontend/dist
+      - ./frontend/public-dist:/app/frontend/public-dist
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -57,6 +79,7 @@ services:
     build:
       context: .
       network: host
+    restart: unless-stopped
     environment:
       DEBUG_DIR: /app/debug_data
       DATABASE_URL: postgresql://${POSTGRES_USER:-beautybot}:${POSTGRES_PASSWORD:-beautybot}@postgres:5432/${POSTGRES_DB:-beautybot}
@@ -88,6 +111,22 @@ services:
       APIFY_HTTPS_PROXY: ${APIFY_HTTPS_PROXY:-}
       APIFY_PROXY_GROUPS: ${APIFY_PROXY_GROUPS:-RESIDENTIAL}
       APIFY_PROXY_STRICT: ${APIFY_PROXY_STRICT:-false}
+      TELEGRAM_USERBOT_PROXY: ${TELEGRAM_USERBOT_PROXY:-}
+      TELEGRAM_USERBOT_MTPROXY_HOST: ${TELEGRAM_USERBOT_MTPROXY_HOST:-}
+      TELEGRAM_USERBOT_MTPROXY_PORT: ${TELEGRAM_USERBOT_MTPROXY_PORT:-}
+      TELEGRAM_USERBOT_MTPROXY_SECRET: ${TELEGRAM_USERBOT_MTPROXY_SECRET:-}
+      TELEGRAM_USERBOT_MTPROXY_MODE: ${TELEGRAM_USERBOT_MTPROXY_MODE:-randomized}
+      SMTP_SERVER: ${SMTP_SERVER:-mail.hosting.reg.ru}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-info@localos.pro}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      CONTACT_EMAIL: ${CONTACT_EMAIL:-info@localos.pro}
+      GIGACHAT_KEYS: ${GIGACHAT_KEYS:-}
+      GIGACHAT_CLIENT_ID: ${GIGACHAT_CLIENT_ID:-}
+      GIGACHAT_CLIENT_SECRET: ${GIGACHAT_CLIENT_SECRET:-}
+      GIGACHAT_SSL_VERIFY: ${GIGACHAT_SSL_VERIFY:-false}
+      GIGACHAT_CA_BUNDLE: ${GIGACHAT_CA_BUNDLE:-}
+      REQUESTS_CA_BUNDLE: ${REQUESTS_CA_BUNDLE:-}
     volumes:
       - ./debug_data:/app/debug_data
     depends_on:
