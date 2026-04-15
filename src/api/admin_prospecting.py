@@ -1687,6 +1687,60 @@ def _generate_audit_first_message_draft(
     )
 
 
+def _deterministic_issue_hint_from_preview(preview: dict[str, Any]) -> str:
+    findings = preview.get("findings") if isinstance(preview.get("findings"), list) else []
+    titles = [str(item.get("title") or "").strip() for item in findings if isinstance(item, dict)]
+    titles = [item for item in titles if item]
+    joined = " ".join(titles).lower()
+
+    if "опис" in joined and "услуг" in joined and "поиск" in joined:
+        return "описание не всех услуг попадает в поиск."
+    if "опис" in joined and "услуг" in joined:
+        return "описание услуг не полностью работает на поисковый спрос."
+    if "опис" in joined:
+        return "описание карточки не доносит до клиента ключевые услуги и сценарии записи."
+    if "фото" in joined:
+        return "фото не показывают ключевые услуги, результаты и атмосферу."
+    if "отзыв" in joined:
+        return "отзывы не усиливают доверие и не помогают карточке конвертировать в запись."
+    if "сайт" in joined or "контакт" in joined:
+        return "в карточке не хватает контактных сигналов, которые влияют на конверсию."
+    if titles:
+        hint = re.sub(r"\s+", " ", titles[0]).strip(" .")
+        if hint:
+            return hint[:1].lower() + hint[1:] + "."
+    return "описание и структура карточки не полностью работают на поиск и запись."
+
+
+def _generate_superadmin_deterministic_first_message(
+    lead: dict[str, Any],
+    preview: dict[str, Any],
+) -> dict[str, str]:
+    public_audit_url = str(lead.get("public_audit_url") or "").strip()
+    issue_hint = _deterministic_issue_hint_from_preview(preview)
+    message_lines = [
+        "Здравствуйте!",
+        "",
+        "Нашёл вас на картах - вижу, что часть клиентов теряется.",
+        "",
+        f"Например, {issue_hint}",
+        "",
+        "Разобрал вашу карточку и показал конкретные причины и шаги, как исправить самостоятельно:",
+        public_audit_url or "https://localos.pro",
+        "Это обычно даёт +30-80% к обращениям без рекламы.",
+        "",
+        "Или, хотите, сделаю все настройки, которые дадут результат?",
+    ]
+    return {
+        "angle_type": "audit_preview",
+        "tone": "professional",
+        "generated_text": "\n".join(message_lines).strip(),
+        "prompt_key": "outreach_first_message",
+        "prompt_version": "deterministic_v1",
+        "prompt_source": "deterministic",
+    }
+
+
 def _serialize_draft(row: dict[str, Any] | None) -> dict[str, Any] | None:
     if not row:
         return None

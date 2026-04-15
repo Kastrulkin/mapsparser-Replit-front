@@ -2,6 +2,7 @@ from src.api import admin_prospecting
 from src.api.admin_prospecting import (
     _build_admin_lead_offer_payload,
     _build_compact_outreach_payload,
+    _generate_superadmin_deterministic_first_message,
     _generate_lead_audit_enrichment,
     _generate_audit_first_message_draft,
     _resolve_outreach_language,
@@ -170,6 +171,26 @@ def test_generate_audit_first_message_draft_does_not_include_money_hint() -> Non
     assert "33 600" not in text
     assert "₽" not in text
     assert "По нашей модели" not in text
+
+
+def test_generate_superadmin_deterministic_first_message_uses_requested_template_shape() -> None:
+    payload = _generate_superadmin_deterministic_first_message(
+        {
+            "name": "Апельсин",
+            "public_audit_url": "https://localos.pro/apelsin-kremenchugskaya-ulitsa",
+        },
+        {
+            "findings": [{"title": "Описание не всех услуг попадает в поиск"}],
+        },
+    )
+
+    text = payload["generated_text"]
+    assert "Здравствуйте!" in text
+    assert "Нашёл вас на картах - вижу, что часть клиентов теряется." in text
+    assert "Например, описание не всех услуг попадает в поиск." in text
+    assert "https://localos.pro/apelsin-kremenchugskaya-ulitsa" in text
+    assert "+30-80% к обращениям без рекламы." in text
+    assert payload["prompt_source"] == "deterministic"
 
 
 def test_resolve_outreach_language_defaults_to_russian_for_cyrillic_lead() -> None:
