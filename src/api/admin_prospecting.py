@@ -7,21 +7,26 @@ import io
 import threading
 import uuid
 import re
+from difflib import SequenceMatcher
 from urllib.parse import unquote
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import requests
 from flask import Blueprint, jsonify, request
-from psycopg2.extras import Json
+from psycopg2.extras import Json, RealDictCursor
 
 from auth_system import verify_session
 from core.channel_delivery import normalize_phone, send_maton_bridge_message
 from core.card_audit import build_lead_card_preview_snapshot
 from core.ai_learning import ensure_ai_learning_events_table, record_ai_learning_event
 from core.helpers import get_business_id_from_user
+from core.map_url_normalizer import normalize_map_url
 from core.parsing_runtime_config import get_use_apify_map_parsing, resolve_map_source_for_queue
-from database_manager import DatabaseManager
+try:
+    from src.database_manager import DatabaseManager
+except ImportError:
+    from database_manager import DatabaseManager
 from pg_db_utils import get_db_connection
 from services.gigachat_client import analyze_text_with_gigachat
 from services.prospecting_service import ProspectingService
@@ -53,6 +58,7 @@ SEARCH_JOB_TIMEOUT_SEC = int(os.environ.get("APIFY_SEARCH_TIMEOUT_SEC", "180"))
 OUTREACH_SEND_MAX_ATTEMPTS = int(os.environ.get("OUTREACH_SEND_MAX_ATTEMPTS", "3"))
 OUTREACH_RETRY_DELAY_DAYS = (1, 2)  # D1, D3 относительно D0
 LEAD_OUTREACH_MODERATION_STATUS = "lead_outreach"
+PUBLIC_AUDIT_LANGUAGES = ("ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr")
 
 
 def _normalize_learning_intent(raw_intent: str | None) -> str:
@@ -76,6 +82,26 @@ def _to_json_compatible(value: Any) -> Any:
     if isinstance(value, tuple):
         return [_to_json_compatible(item) for item in value]
     return value
+
+
+def _normalize_public_audit_languages(primary_language: str | None, enabled_languages: Any) -> tuple[str, list[str]]:
+    requested_primary = str(primary_language or "").strip().lower()
+    primary = requested_primary if requested_primary in PUBLIC_AUDIT_LANGUAGES else "en"
+
+    normalized_enabled: list[str] = []
+    if isinstance(enabled_languages, (list, tuple)):
+        for item in enabled_languages:
+            value = str(item or "").strip().lower()
+            if value in PUBLIC_AUDIT_LANGUAGES and value not in normalized_enabled:
+                normalized_enabled.append(value)
+
+    if primary not in normalized_enabled:
+        normalized_enabled.insert(0, primary)
+
+    if not normalized_enabled:
+        normalized_enabled = [primary]
+
+    return primary, normalized_enabled
 
 
 def _resolve_lead_intent(cur, lead_id: str) -> str:
@@ -195,6 +221,10 @@ def _ensure_partnership_columns(conn) -> None:
     cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS search_payload_json JSONB")
     cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS enrich_payload_json JSONB")
     cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS matched_sources_json JSONB")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS deferred_reason TEXT")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS deferred_until DATE")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS preferred_language TEXT")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS enabled_languages JSONB")
     cur.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_prospectingleads_intent_stage
@@ -238,7 +268,7 @@ def _normalize_partnership_source_url(url: Any) -> str:
     value = str(url or "").strip()
     if not value:
         return ""
-    return value.rstrip("/")
+    return normalize_map_url(value)
 
 
 def _normalize_partnership_phone(phone: Any) -> str:
@@ -351,6 +381,116 @@ def _update_search_job(job_id: str, **updates: Any) -> None:
         conn.close()
 
 
+def _compact_search_result_for_storage(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "name": str(item.get("name") or "").strip() or "Новый лид",
+        "source": str(item.get("source") or "apify_yandex").strip() or "apify_yandex",
+        "address": str(item.get("address") or "").strip() or None,
+        "city": str(item.get("city") or "").strip() or None,
+        "phone": str(item.get("phone") or "").strip() or None,
+        "website": str(item.get("website") or "").strip() or None,
+        "email": str(item.get("email") or "").strip() or None,
+        "telegram_url": str(item.get("telegram_url") or "").strip() or None,
+        "whatsapp_url": str(item.get("whatsapp_url") or "").strip() or None,
+        "messenger_links_json": item.get("messenger_links") if isinstance(item.get("messenger_links"), list) else [],
+        "rating": _safe_float(item.get("rating")),
+        "reviews_count": _safe_int(item.get("reviews_count")),
+        "source_url": str(item.get("source_url") or "").strip() or None,
+        "source_external_id": str(
+            item.get("source_external_id") or item.get("google_id") or item.get("business_id") or ""
+        ).strip()
+        or None,
+        "google_id": str(item.get("google_id") or "").strip() or None,
+        "category": str(item.get("category") or "").strip() or None,
+        "status": "new",
+    }
+
+
+def _compact_search_results_for_storage(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    compacted: list[dict[str, Any]] = []
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        compacted.append(_compact_search_result_for_storage(item))
+    return compacted
+
+
+def _import_search_results_into_leads(
+    *,
+    job_row: dict[str, Any],
+    results: list[dict[str, Any]],
+) -> dict[str, int | str | None]:
+    created_by = str(job_row.get("created_by") or "").strip()
+    if not created_by:
+        return {"imported_count": 0, "merged_count": 0, "business_id": None}
+
+    conn = get_db_connection()
+    try:
+        _ensure_partnership_columns(conn)
+        cur = conn.cursor()
+        business_id = get_business_id_from_user(created_by, None)
+        if not business_id:
+            return {"imported_count": 0, "merged_count": 0, "business_id": None}
+
+        imported_count = 0
+        merged_count = 0
+        for item in results:
+            if not isinstance(item, dict):
+                continue
+            source_url = _normalize_partnership_source_url(str(item.get("source_url") or "").strip())
+            if not source_url:
+                continue
+
+            phone = str(item.get("phone") or "").strip() or None
+            source = str(item.get("source") or job_row.get("source") or "apify_yandex").strip() or "apify_yandex"
+            external_source_id = str(
+                item.get("source_external_id") or item.get("google_id") or _extract_yandex_org_id_from_url(source_url) or ""
+            ).strip() or None
+            lead_id, created = _insert_partnership_lead_if_new(
+                cur,
+                business_id=business_id,
+                created_by=created_by,
+                source_url=source_url,
+                name=str(item.get("name") or "").strip() or "Новый лид",
+                address=str(item.get("address") or "").strip() or None,
+                city=str(item.get("city") or "").strip() or None,
+                category=str(item.get("category") or "").strip() or None,
+                source=source,
+                phone=phone,
+                email=str(item.get("email") or "").strip() or None,
+                website=str(item.get("website") or "").strip() or None,
+                telegram_url=str(item.get("telegram_url") or "").strip() or None,
+                whatsapp_url=str(item.get("whatsapp_url") or "").strip() or None,
+                rating=_safe_float(item.get("rating")),
+                reviews_count=_safe_int(item.get("reviews_count")),
+                source_kind="apify_search",
+                source_provider=source,
+                external_source_id=external_source_id,
+                search_payload={
+                    "job_id": str(job_row.get("id") or "").strip() or None,
+                    "query": str(job_row.get("query") or "").strip() or None,
+                    "location": str(job_row.get("location") or "").strip() or None,
+                    "search_limit": _safe_int(job_row.get("search_limit")),
+                    "source": source,
+                },
+            )
+            if created and lead_id:
+                imported_count += 1
+            elif lead_id:
+                merged_count += 1
+        conn.commit()
+        return {
+            "imported_count": imported_count,
+            "merged_count": merged_count,
+            "business_id": business_id,
+        }
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def _get_search_job(job_id: str):
     conn = get_db_connection()
     try:
@@ -366,6 +506,41 @@ def _get_search_job(job_id: str):
             """,
             (job_id,),
         )
+        return cur.fetchone()
+    finally:
+        conn.close()
+
+
+def _get_latest_search_job(created_by: str | None = None):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        if created_by:
+            cur.execute(
+                """
+                SELECT
+                    id, source, actor_id, query, location, search_limit, status,
+                    result_count, created_by, error_text, results_json,
+                    created_at, updated_at, completed_at
+                FROM outreachsearchjobs
+                WHERE created_by = %s
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (created_by,),
+            )
+        else:
+            cur.execute(
+                """
+                SELECT
+                    id, source, actor_id, query, location, search_limit, status,
+                    result_count, created_by, error_text, results_json,
+                    created_at, updated_at, completed_at
+                FROM outreachsearchjobs
+                ORDER BY created_at DESC
+                LIMIT 1
+                """
+            )
         return cur.fetchone()
     finally:
         conn.close()
@@ -431,6 +606,13 @@ def _normalize_lead_for_display(lead: dict[str, Any]) -> dict[str, Any] | None:
     for field in ("rating", "reviews_count"):
         if _is_placeholder_like(normalized.get(field)):
             normalized[field] = None
+
+    enabled_languages = normalized.get("enabled_languages")
+    if isinstance(enabled_languages, str) and enabled_languages:
+        try:
+            normalized["enabled_languages"] = json.loads(enabled_languages)
+        except Exception:
+            normalized["enabled_languages"] = None
 
     if not normalized.get("name"):
         return None
@@ -1099,14 +1281,24 @@ def _refresh_search_job_from_apify(row: dict[str, Any]) -> dict[str, Any]:
         dataset_id = run_info.get("defaultDatasetId") or dataset_id
 
         if run_status in {"SUCCEEDED"}:
-            results = service.fetch_dataset_items(dataset_id)
+            results = service.fetch_dataset_items(dataset_id, compact=True)
+            compact_results = _compact_search_results_for_storage(results)
+            import_meta = _import_search_results_into_leads(job_row=row, results=compact_results)
             _update_search_job(
                 row["id"],
                 status="completed",
-                result_count=len(results),
-                results_json=results,
+                result_count=len(compact_results),
+                results_json=compact_results,
                 error_text=None,
             )
+            refreshed = _get_search_job(row["id"])
+            refreshed_row = dict(refreshed) if refreshed else row
+            if isinstance(refreshed_row.get("results_json"), list):
+                refreshed_row["results_json"] = refreshed_row["results_json"]
+            refreshed_row["imported_count"] = int(import_meta.get("imported_count") or 0)
+            refreshed_row["merged_count"] = int(import_meta.get("merged_count") or 0)
+            refreshed_row["import_business_id"] = import_meta.get("business_id")
+            return refreshed_row
         elif run_status in {"FAILED", "ABORTED", "TIMED-OUT"}:
             status_message = (
                 run_info.get("statusMessage")
@@ -1196,6 +1388,7 @@ def _expire_stale_search_jobs() -> None:
 
 
 def _generate_first_message_draft(lead: dict[str, Any], channel: str) -> dict[str, str]:
+    language = _resolve_outreach_language(lead)
     company_name = (lead.get("name") or "вашей компании").strip()
     category = (lead.get("category") or "локального бизнеса").strip()
     city = (lead.get("city") or "").strip()
@@ -1216,28 +1409,88 @@ def _generate_first_message_draft(lead: dict[str, Any], channel: str) -> dict[st
 
     angle = f"обратили внимание, что у {company_name} в Яндекс.Картах {', '.join(weak_points[:2])}"
     money_hint = "По нашей модели это может стоить бизнесу части входящих обращений каждый месяц."
+    if language == "en":
+        angle = f"noticed that {company_name} has {', '.join(weak_points[:2])} in Google/Maps listings"
+        money_hint = "In our model this can cost a business part of its inbound requests each month."
+    elif language == "tr":
+        angle = f"{company_name} için harita kartında {', '.join(weak_points[:2])} olduğunu fark ettik"
+        money_hint = "Modelimize göre bu, aylık gelen taleplerin bir kısmına mal olabilir."
+    elif language == "el":
+        angle = f"παρατηρήσαμε ότι για {company_name} υπάρχουν {', '.join(weak_points[:2])} στην κάρτα χαρτών"
+        money_hint = "Στο μοντέλο μας αυτό μπορεί να κοστίζει μέρος των εισερχόμενων αιτημάτων κάθε μήνα."
 
-    if channel == "telegram":
-        opening = f"Здравствуйте. Посмотрели карточку {company_name}"
-        cta = "Если хотите, пришлю короткий разбор и покажу, что можно быстро улучшить."
-    elif channel == "whatsapp":
-        opening = f"Здравствуйте! Посмотрели карточку {company_name}"
-        cta = "Могу отправить короткий разбор с конкретными точками роста, если это актуально."
-    elif channel == "email":
-        opening = f"Здравствуйте! Мы посмотрели карточку {company_name} в Яндекс.Картах."
-        cta = "Если интересно, отправим короткий разбор с конкретными доработками и прогнозом эффекта."
+    if language == "en":
+        if channel == "telegram":
+            opening = f"Hi! We reviewed {company_name}'s listing"
+            cta = "If you'd like, I can share a short audit with quick wins."
+        elif channel == "whatsapp":
+            opening = f"Hi! We reviewed {company_name}'s listing"
+            cta = "I can send a short audit with concrete growth points if that's relevant."
+        elif channel == "email":
+            opening = f"Hello! We reviewed {company_name}'s listing."
+            cta = "If useful, we can share a short audit with concrete fixes and expected impact."
+        else:
+            opening = f"Hello. We reviewed {company_name}'s listing."
+            cta = "If helpful, I can share a short audit and explain the highest-impact fixes."
+        location_line = f" We see you in \"{category}\"{f' in {city}' if city else ''}."
+    elif language == "tr":
+        if channel == "telegram":
+            opening = f"Merhaba! {company_name} kartını inceledik"
+            cta = "İsterseniz kısa bir denetim ve hızlı kazanımlar gönderebilirim."
+        elif channel == "whatsapp":
+            opening = f"Merhaba! {company_name} kartını inceledik"
+            cta = "Uygunsa net öneriler içeren kısa bir analiz paylaşabilirim."
+        elif channel == "email":
+            opening = f"Merhaba! {company_name} kartını inceledik."
+            cta = "İsterseniz kısa bir analiz ve etkisini paylaşabiliriz."
+        else:
+            opening = f"Merhaba. {company_name} kartını inceledik."
+            cta = "Uygunsa kısa bir analiz ve yüksek etkili düzeltmeleri paylaşabilirim."
+        location_line = f" \"{category}\"{f' ({city})' if city else ''} alanında görünüyor."
+    elif language == "el":
+        if channel == "telegram":
+            opening = f"Γεια σας! Ελέγξαμε την καταχώριση του {company_name}"
+            cta = "Αν θέλετε, μπορώ να στείλω μια σύντομη ανάλυση με άμεσες βελτιώσεις."
+        elif channel == "whatsapp":
+            opening = f"Γεια σας! Ελέγξαμε την καταχώριση του {company_name}"
+            cta = "Αν είναι σχετικό, μπορώ να στείλω μια σύντομη ανάλυση με συγκεκριμένα σημεία."
+        elif channel == "email":
+            opening = f"Γεια σας! Ελέγξαμε την καταχώριση του {company_name}."
+            cta = "Αν σας ενδιαφέρει, μπορώ να στείλω μια σύντομη ανάλυση με προτεραιότητες."
+        else:
+            opening = f"Γεια σας. Ελέγξαμε την καταχώριση του {company_name}."
+            cta = "Αν σας βολεύει, μπορώ να στείλω μια σύντομη ανάλυση και τις πιο σημαντικές βελτιώσεις."
+        location_line = f" Σας βλέπουμε στην κατηγορία «{category}»{f' στο {city}' if city else ''}."
     else:
-        opening = f"Здравствуйте. Изучили карточку {company_name}."
-        cta = "Если удобно, покажу короткий разбор и объясню, какие доработки дадут эффект."
+        if channel == "telegram":
+            opening = f"Здравствуйте. Посмотрели карточку {company_name}"
+            cta = "Если хотите, пришлю короткий разбор и покажу, что можно быстро улучшить."
+        elif channel == "whatsapp":
+            opening = f"Здравствуйте! Посмотрели карточку {company_name}"
+            cta = "Могу отправить короткий разбор с конкретными точками роста, если это актуально."
+        elif channel == "email":
+            opening = f"Здравствуйте! Мы посмотрели карточку {company_name} в Яндекс.Картах."
+            cta = "Если интересно, отправим короткий разбор с конкретными доработками и прогнозом эффекта."
+        else:
+            opening = f"Здравствуйте. Изучили карточку {company_name}."
+            cta = "Если удобно, покажу короткий разбор и объясню, какие доработки дадут эффект."
+        location_line = f" Видим вас по направлению «{category}»{f' в {city}' if city else ''}."
 
-    location_line = f" Видим вас по направлению «{category}»{f' в {city}' if city else ''}."
     draft_text = f"{opening}:{location_line} {angle}. {money_hint} {cta}".strip()
 
-    return {
-        "angle_type": "maps_growth",
-        "tone": "professional",
-        "generated_text": draft_text,
-    }
+    return _generate_outreach_message_ai(
+        lead=lead,
+        preview={
+            "summary_text": angle,
+            "findings": [{"title": item} for item in weak_points[:3]],
+            "recommended_actions": [],
+            "revenue_potential": {},
+        },
+        channel=channel,
+        fallback_message=draft_text,
+        fallback_angle_type="maps_growth",
+        fallback_tone="professional",
+    )
 
 
 def _generate_audit_first_message_draft(
@@ -1245,15 +1498,14 @@ def _generate_audit_first_message_draft(
     preview: dict[str, Any],
     channel: str,
 ) -> dict[str, str]:
+    language = _resolve_outreach_language(lead)
     company_name = (lead.get("name") or "вашей компании").strip()
     category = (lead.get("category") or "локального бизнеса").strip()
     city = (lead.get("city") or "").strip()
 
     findings = preview.get("findings") or []
     recommended_actions = preview.get("recommended_actions") or []
-    revenue = preview.get("revenue_potential") or {}
-    total_min = revenue.get("total_min")
-    total_max = revenue.get("total_max")
+    public_audit_url = str(lead.get("public_audit_url") or "").strip()
 
     top_findings = [str(item.get("title") or "").strip() for item in findings if isinstance(item, dict)]
     top_findings = [item for item in top_findings if item][:2]
@@ -1268,37 +1520,171 @@ def _generate_audit_first_message_draft(
     if not top_action:
         top_action = "быстрое усиление карточки по услугам и контенту"
 
-    money_hint = "потери по карте не оценены"
-    if isinstance(total_min, (int, float)) and isinstance(total_max, (int, float)):
-        min_value = int(round(float(total_min)))
-        max_value = int(round(float(total_max)))
-        money_hint = f"потенциал роста оценивается в {min_value:,}–{max_value:,} ₽/мес".replace(",", " ")
-
-    location_line = f"по направлению «{category}»{f' в {city}' if city else ''}"
-    message_core = (
-        f"Посмотрели карточку {company_name} ({location_line}) и видим, что {key_issue}. "
-        f"По нашей модели {money_hint}. "
-        f"Первый шаг, который даст эффект: {top_action.lower()}."
-    )
-
-    if channel == "telegram":
-        opening = "Здравствуйте!"
-        closing = "Если хотите, отправлю краткий аудит с конкретными шагами в ответ."
-    elif channel == "whatsapp":
-        opening = "Здравствуйте!"
-        closing = "Готов отправить короткий аудит и 3 приоритетных шага, если актуально."
-    elif channel == "email":
-        opening = "Здравствуйте."
-        closing = "Если это актуально, направим короткий аудит и план действий на ближайшие 2 недели."
+    if language == "en":
+        if channel == "telegram":
+            message_lines = [
+                f"Hi! {company_name} is likely missing customers from maps.",
+                f"We reviewed the listing and see {key_issue.lower()}.",
+            ]
+            if public_audit_url:
+                message_lines.append(f"Short audit: {public_audit_url}")
+            message_lines.append("If relevant, we can implement the fixes and help grow map traffic.")
+            message_lines.append("Would you like me to send the key steps here?")
+        elif channel == "whatsapp":
+            message_lines = [
+                f"Hi! {company_name} is likely missing customers from maps.",
+                f"We reviewed the listing and see {key_issue.lower()}.",
+            ]
+            if public_audit_url:
+                message_lines.append(f"Short audit: {public_audit_url}")
+            message_lines.append("If relevant, we can implement the fixes and help grow map traffic.")
+            message_lines.append("Would this be interesting?")
+        elif channel == "email":
+            message_lines = [
+                f"Hello! {company_name} is likely missing customers from maps.",
+                f"We reviewed the listing and see {key_issue.lower()}.",
+            ]
+            if public_audit_url:
+                message_lines.append(f"I made a short audit with the main fixes: {public_audit_url}")
+            else:
+                message_lines.append("I made a short audit with the main fixes.")
+            message_lines.append("We can implement this for you and help bring more customers from maps.")
+            message_lines.append("Would that be relevant?")
+        else:
+            message_lines = [
+                f"Hello! {company_name} is likely missing customers from maps.",
+                f"We reviewed the listing and see {key_issue.lower()}.",
+            ]
+            if public_audit_url:
+                message_lines.append(f"Short audit: {public_audit_url}")
+            message_lines.append("We can implement the fixes and help grow map traffic.")
+            message_lines.append("Would that be relevant?")
+    elif language == "tr":
+        if channel == "telegram":
+            message_lines = [
+                f"Merhaba! {company_name} haritalardan müşteri kaçırıyor olabilir.",
+                f"Kartı inceledik ve {key_issue.lower()} gördük.",
+            ]
+            if public_audit_url:
+                message_lines.append(f"Kısa denetim: {public_audit_url}")
+            message_lines.append("İsterseniz bunu sizin için uygulayıp haritalardan daha fazla müşteri getirebiliriz.")
+            message_lines.append("İlgilenir misiniz?")
+        elif channel == "whatsapp":
+            message_lines = [
+                f"Merhaba! {company_name} haritalardan müşteri kaçırıyor olabilir.",
+                f"Kartı inceledik ve {key_issue.lower()} gördük.",
+            ]
+            if public_audit_url:
+                message_lines.append(f"Kısa denetim: {public_audit_url}")
+            message_lines.append("İsterseniz bunu sizin için uygulayıp haritalardan daha fazla müşteri getirebiliriz.")
+            message_lines.append("Uygun olur mu?")
+        elif channel == "email":
+            message_lines = [
+                f"Merhaba! {company_name} haritalardan müşteri kaçırıyor olabilir.",
+                f"Kartı inceledik ve {key_issue.lower()} gördük.",
+            ]
+            if public_audit_url:
+                message_lines.append(f"Ana düzeltmeleri içeren kısa bir denetim hazırladım: {public_audit_url}")
+            else:
+                message_lines.append("Ana düzeltmeleri içeren kısa bir denetim hazırladım.")
+            message_lines.append("İsterseniz bunu sizin için uygulayıp haritalardan daha fazla müşteri getirebiliriz.")
+            message_lines.append("İlginizi çeker mi?")
+        else:
+            message_lines = [
+                f"Merhaba! {company_name} haritalardan müşteri kaçırıyor olabilir.",
+                f"Kartı inceledik ve {key_issue.lower()} gördük.",
+            ]
+            if public_audit_url:
+                message_lines.append(f"Kısa denetim: {public_audit_url}")
+            message_lines.append("İsterseniz bunu sizin için uygulayıp haritalardan daha fazla müşteri getirebiliriz.")
+            message_lines.append("İlginizi çeker mi?")
+    elif language == "el":
+        if channel == "telegram":
+            message_lines = [
+                f"Γεια σας! Το {company_name} μάλλον χάνει πελάτες από τους χάρτες.",
+                f"Ελέγξαμε την καταχώριση και βλέπουμε {key_issue.lower()}.",
+            ]
+            if public_audit_url:
+                message_lines.append(f"Σύντομος έλεγχος: {public_audit_url}")
+            message_lines.append("Αν θέλετε, μπορούμε να το υλοποιήσουμε για εσάς και να αυξήσουμε την κίνηση από τους χάρτες.")
+            message_lines.append("Θα σας ενδιέφερε;")
+        elif channel == "whatsapp":
+            message_lines = [
+                f"Γεια σας! Το {company_name} μάλλον χάνει πελάτες από τους χάρτες.",
+                f"Ελέγξαμε την καταχώριση και βλέπουμε {key_issue.lower()}.",
+            ]
+            if public_audit_url:
+                message_lines.append(f"Σύντομος έλεγχος: {public_audit_url}")
+            message_lines.append("Αν θέλετε, μπορούμε να το υλοποιήσουμε για εσάς και να αυξήσουμε την κίνηση από τους χάρτες.")
+            message_lines.append("Σας ενδιαφέρει;")
+        elif channel == "email":
+            message_lines = [
+                f"Γεια σας! Το {company_name} μάλλον χάνει πελάτες από τους χάρτες.",
+                f"Ελέγξαμε την καταχώριση και βλέπουμε {key_issue.lower()}.",
+            ]
+            if public_audit_url:
+                message_lines.append(f"Έφτιαξα έναν σύντομο έλεγχο με τις βασικές διορθώσεις: {public_audit_url}")
+            else:
+                message_lines.append("Έφτιαξα έναν σύντομο έλεγχο με τις βασικές διορθώσεις.")
+            message_lines.append("Μπορούμε να το εφαρμόσουμε για εσάς και να αυξήσουμε την κίνηση από τους χάρτες.")
+            message_lines.append("Θα είχε ενδιαφέρον;")
+        else:
+            message_lines = [
+                f"Γεια σας! Το {company_name} μάλλον χάνει πελάτες από τους χάρτες.",
+                f"Ελέγξαμε την καταχώριση και βλέπουμε {key_issue.lower()}.",
+            ]
+            if public_audit_url:
+                message_lines.append(f"Σύντομος έλεγχος: {public_audit_url}")
+            message_lines.append("Μπορούμε να το εφαρμόσουμε για εσάς και να αυξήσουμε την κίνηση από τους χάρτες.")
+            message_lines.append("Θα σας ενδιέφερε;")
     else:
-        opening = "Здравствуйте."
-        closing = "Если удобно, отправлю краткий аудит и приоритетные доработки."
+        if channel == "telegram":
+            message_lines = [
+                "Здравствуйте! Вы сейчас недополучаете клиентов с карт.",
+                f"Посмотрели карточку {company_name} и видим: {key_issue.lower()}.",
+            ]
+            if public_audit_url:
+                message_lines.append(f"Сделал короткий разбор: {public_audit_url}")
+            message_lines.append("Можем внедрить это под ключ и привести больше клиентов с карт.")
+            message_lines.append("Вам может быть это интересно?")
+        elif channel == "whatsapp":
+            message_lines = [
+                "Здравствуйте! Вы сейчас недополучаете клиентов с карт.",
+                f"Посмотрели карточку {company_name} и видим: {key_issue.lower()}.",
+            ]
+            if public_audit_url:
+                message_lines.append(f"Короткий разбор здесь: {public_audit_url}")
+            message_lines.append("Можем внедрить это под ключ и привести больше клиентов с карт.")
+            message_lines.append("Это может быть актуально?")
+        elif channel == "email":
+            message_lines = [
+                "Здравствуйте! Вы сейчас недополучаете клиентов с карт.",
+                f"Посмотрели карточку {company_name} и видим: {key_issue.lower()}.",
+            ]
+            if public_audit_url:
+                message_lines.append(f"Сделал короткий разбор, как это исправить: {public_audit_url}")
+            else:
+                message_lines.append("Сделал короткий разбор, как это исправить.")
+            message_lines.append("Можем внедрить это под ключ и привести больше клиентов с карт.")
+            message_lines.append("Вам может быть это интересно?")
+        else:
+            message_lines = [
+                "Здравствуйте! Вы сейчас недополучаете клиентов с карт.",
+                f"Посмотрели карточку {company_name} и видим: {key_issue.lower()}.",
+            ]
+            if public_audit_url:
+                message_lines.append(f"Короткий разбор: {public_audit_url}")
+            message_lines.append("Можем внедрить это под ключ и привести больше клиентов с карт.")
+            message_lines.append("Вам может быть это интересно?")
 
-    return {
-        "angle_type": "audit_preview",
-        "tone": "professional",
-        "generated_text": f"{opening} {message_core} {closing}".strip(),
-    }
+    return _generate_outreach_message_ai(
+        lead=lead,
+        preview=preview,
+        channel=channel,
+        fallback_message="\n".join(message_lines).strip(),
+        fallback_angle_type="audit_preview",
+        fallback_tone="professional",
+    )
 
 
 def _serialize_draft(row: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -1364,6 +1750,95 @@ def _extract_yandex_org_id_from_url(url: Any) -> str:
         return ""
     match = re.search(r"/org/(?:[^/]+/)?(\d+)", text)
     return match.group(1) if match else ""
+
+
+def _extract_google_place_id_from_url(url: Any) -> str:
+    text = str(url or "").strip()
+    if not text:
+        return ""
+    patterns = (
+        r"cid=(\d+)",
+        r"!1s(0x[0-9a-f]+:0x[0-9a-f]+)",
+        r"query_place_id=([^&]+)",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            return str(match.group(1) or "").strip()
+    return ""
+
+
+def _normalize_identity_text(value: Any) -> str:
+    text = str(value or "").strip().lower().replace("ё", "е")
+    text = unquote(text)
+    text = re.sub(r"https?://", "", text)
+    text = re.sub(r"[^a-z0-9а-я]+", " ", text, flags=re.IGNORECASE)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _identity_similarity(left: Any, right: Any) -> float:
+    left_text = _normalize_identity_text(left)
+    right_text = _normalize_identity_text(right)
+    if not left_text or not right_text:
+        return 0.0
+    if left_text == right_text:
+        return 1.0
+    return SequenceMatcher(None, left_text, right_text).ratio()
+
+
+def _lead_expected_external_id(lead: dict[str, Any]) -> str:
+    source_url = str(lead.get("source_url") or "").strip()
+    source_url_lower = source_url.lower()
+    return str(
+        lead.get("external_source_id")
+        or lead.get("source_external_id")
+        or lead.get("external_place_id")
+        or lead.get("google_id")
+        or (_extract_google_place_id_from_url(source_url) if "google." in source_url_lower or "maps.app.goo.gl" in source_url_lower else "")
+        or _extract_yandex_org_id_from_url(source_url)
+        or ""
+    ).strip()
+
+
+def _lead_identity_matches_candidate(
+    lead: dict[str, Any],
+    *,
+    candidate_name: Any,
+    candidate_city: Any,
+    candidate_source_url: Any = None,
+    candidate_external_id: Any = None,
+) -> bool:
+    expected_external_id = _lead_expected_external_id(lead)
+    strong_expected_id = len(expected_external_id) >= 6
+    candidate_external = str(candidate_external_id or "").strip()
+    if strong_expected_id and candidate_external and expected_external_id.lower() != candidate_external.lower():
+        return False
+
+    lead_city = _normalize_identity_text(lead.get("city") or lead.get("address"))
+    candidate_city_text = _normalize_identity_text(candidate_city)
+    if (
+        lead_city
+        and candidate_city_text
+        and lead_city not in candidate_city_text
+        and candidate_city_text not in lead_city
+        and not (strong_expected_id and candidate_external)
+    ):
+        return False
+
+    lead_name = str(lead.get("name") or "").strip()
+    candidate_name_text = str(candidate_name or "").strip()
+    if lead_name and candidate_name_text and _identity_similarity(lead_name, candidate_name_text) < 0.42:
+        return False
+
+    source_url = normalize_map_url(str(lead.get("source_url") or "").strip())
+    candidate_url = normalize_map_url(str(candidate_source_url or "").strip())
+    if source_url and candidate_url and "yandex." in source_url and "yandex." in candidate_url:
+        expected_org_id = _extract_yandex_org_id_from_url(source_url)
+        candidate_org_id = _extract_yandex_org_id_from_url(candidate_url)
+        if expected_org_id and candidate_org_id and expected_org_id != candidate_org_id:
+            return False
+
+    return True
 
 
 def _extract_links_recursive(value: Any) -> list[str]:
@@ -1473,6 +1948,18 @@ def _sync_lead_business_link_from_parse_history(lead: dict[str, Any]) -> dict[st
             for row in (cur.fetchall() or [])
             if (row.get("column_name") if hasattr(row, "get") else (row[0] if row else None))
         }
+        cur.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'businesses'
+            """
+        )
+        business_columns = {
+            str(row.get("column_name") if hasattr(row, "get") else row[0])
+            for row in (cur.fetchall() or [])
+            if (row.get("column_name") if hasattr(row, "get") else (row[0] if row else None))
+        }
 
         if current_business_id:
             cur.execute("SELECT 1 FROM businesses WHERE id = %s LIMIT 1", (current_business_id,))
@@ -1515,6 +2002,31 @@ def _sync_lead_business_link_from_parse_history(lead: dict[str, Any]) -> dict[st
             return lead
 
         if matched_business_id == current_business_id:
+            return lead
+
+        business_select_fields = ["id", "name", "city"]
+        if "yandex_url" in business_columns:
+            business_select_fields.append("yandex_url")
+        if "yandex_org_id" in business_columns:
+            business_select_fields.append("yandex_org_id")
+        cur.execute(
+            f"""
+            SELECT {", ".join(business_select_fields)}
+            FROM businesses
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (matched_business_id,),
+        )
+        business_row = cur.fetchone()
+        candidate_business = dict(business_row) if business_row else {}
+        if candidate_business and not _lead_identity_matches_candidate(
+            lead,
+            candidate_name=candidate_business.get("name"),
+            candidate_city=candidate_business.get("city"),
+            candidate_source_url=candidate_business.get("yandex_url"),
+            candidate_external_id=candidate_business.get("yandex_org_id"),
+        ):
             return lead
 
         cur.execute(
@@ -1572,11 +2084,27 @@ def _find_existing_business_for_lead(lead: dict[str, Any]) -> dict[str, Any] | N
             cursor.execute("SELECT * FROM businesses WHERE id = %s LIMIT 1", (explicit_business_id,))
             row = cursor.fetchone()
             business = dict(row) if row else None
+            if business and not _lead_identity_matches_candidate(
+                lead,
+                candidate_name=business.get("name"),
+                candidate_city=business.get("city") or business.get("address"),
+                candidate_source_url=business.get("yandex_url"),
+                candidate_external_id=None,
+            ):
+                business = None
 
         if not business and source_external_id and "yandex_org_id" in business_columns:
             cursor.execute("SELECT * FROM businesses WHERE yandex_org_id = %s LIMIT 1", (source_external_id,))
             row = cursor.fetchone()
             business = dict(row) if row else None
+            if business and not _lead_identity_matches_candidate(
+                lead,
+                candidate_name=business.get("name"),
+                candidate_city=business.get("city") or business.get("address"),
+                candidate_source_url=business.get("yandex_url"),
+                candidate_external_id=source_external_id,
+            ):
+                business = None
 
         if not business and source_url and "yandex_url" in business_columns:
             if source_external_id:
@@ -1603,6 +2131,14 @@ def _find_existing_business_for_lead(lead: dict[str, Any]) -> dict[str, Any] | N
                 )
             row = cursor.fetchone()
             business = dict(row) if row else None
+            if business and not _lead_identity_matches_candidate(
+                lead,
+                candidate_name=business.get("name"),
+                candidate_city=business.get("city") or business.get("address"),
+                candidate_source_url=business.get("yandex_url"),
+                candidate_external_id=source_external_id,
+            ):
+                business = None
 
         if not business and lead_name and _should_use_lead_name_for_match(lead_name):
             cursor.execute(
@@ -1618,12 +2154,61 @@ def _find_existing_business_for_lead(lead: dict[str, Any]) -> dict[str, Any] | N
             )
             row = cursor.fetchone()
             business = dict(row) if row else None
+            if business and not _lead_identity_matches_candidate(
+                lead,
+                candidate_name=business.get("name"),
+                candidate_city=business.get("city") or business.get("address"),
+                candidate_source_url=business.get("yandex_url"),
+                candidate_external_id=None,
+            ):
+                business = None
 
         if business:
             return business
         return None
     finally:
         db.close()
+
+
+def _drop_mismatched_explicit_business_link(lead: dict[str, Any]) -> dict[str, Any]:
+    lead_id = str(lead.get("id") or "").strip()
+    explicit_business_id = str(lead.get("business_id") or "").strip()
+    if not lead_id or not explicit_business_id:
+        return lead
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM businesses WHERE id = %s LIMIT 1", (explicit_business_id,))
+        row = cur.fetchone()
+        business = dict(row) if row and hasattr(row, "keys") else None
+        if not business:
+            return lead
+        if _lead_identity_matches_candidate(
+            lead,
+            candidate_name=business.get("name"),
+            candidate_city=business.get("city") or business.get("address"),
+            candidate_source_url=business.get("yandex_url"),
+            candidate_external_id=None,
+        ):
+            return lead
+        cur.execute(
+            """
+            UPDATE prospectingleads
+            SET business_id = NULL,
+                updated_at = NOW()
+            WHERE id = %s
+              AND business_id = %s
+            """,
+            (lead_id, explicit_business_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    sanitized = dict(lead)
+    sanitized["business_id"] = None
+    return sanitized
 
 
 def _create_shadow_business_for_lead(lead: dict[str, Any], user_id: str) -> dict[str, Any]:
@@ -1838,6 +2423,14 @@ def _sync_partnership_lead_from_parsed_data(lead: dict[str, Any]) -> dict[str, A
             return lead
         card = dict(row)
         parsed = _extract_card_profile_fields(card)
+        if not _lead_identity_matches_candidate(
+            lead,
+            candidate_name=parsed.get("name"),
+            candidate_city=parsed.get("city") or parsed.get("address"),
+            candidate_source_url=source_url,
+            candidate_external_id=source_org_id,
+        ):
+            return lead
 
         updates: dict[str, Any] = {}
         raw_name = str(lead.get("name") or "").strip()
@@ -2030,8 +2623,9 @@ def _sync_lead_contacts_from_parsed_data(lead: dict[str, Any]) -> dict[str, Any]
 
 
 def _get_prompt_from_db(prompt_type: str, fallback: str = "") -> str:
-    conn = get_db_connection()
+    conn = None
     try:
+        conn = get_db_connection()
         cur = conn.cursor()
         cur.execute("SELECT prompt_text FROM AIPrompts WHERE prompt_type = %s", (prompt_type,))
         row = cur.fetchone()
@@ -2048,7 +2642,8 @@ def _get_prompt_from_db(prompt_type: str, fallback: str = "") -> str:
     except Exception:
         return fallback
     finally:
-        conn.close()
+        if conn is not None:
+            conn.close()
 
 
 def _normalize_prompt_meta(raw_meta: Any, *, fallback_key: str, fallback_version: str, fallback_source: str) -> dict[str, str]:
@@ -2083,6 +2678,9 @@ def _extract_json_candidate(raw_text: str) -> dict[str, Any] | None:
     text = raw_text.strip()
     if not text:
         return None
+    fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, flags=re.DOTALL | re.IGNORECASE)
+    if fence_match:
+        text = fence_match.group(1).strip()
     try:
         parsed = json.loads(text)
         if isinstance(parsed, dict):
@@ -2092,13 +2690,473 @@ def _extract_json_candidate(raw_text: str) -> dict[str, Any] | None:
     start = text.find("{")
     end = text.rfind("}") + 1
     if start != -1 and end > start:
+        candidate = text[start:end]
+        cleaned = (
+            candidate
+            .replace("“", "\"")
+            .replace("”", "\"")
+            .replace("’", "'")
+            .replace("‘", "'")
+        )
+        cleaned = re.sub(r",(\s*[}\]])", r"\1", cleaned)
         try:
-            parsed = json.loads(text[start:end])
+            parsed = json.loads(cleaned)
             if isinstance(parsed, dict):
                 return parsed
         except Exception:
             return None
     return None
+
+
+def _language_label(language: str) -> str:
+    labels = {
+        "ru": "Русский",
+        "en": "English",
+        "tr": "Türkçe",
+        "el": "Ελληνικά",
+        "fr": "Français",
+        "es": "Español",
+        "de": "Deutsch",
+        "th": "ไทย",
+        "ar": "العربية",
+        "ha": "Hausa",
+    }
+    return labels.get(language, "English")
+
+
+def _prompt_json(value: Any) -> str:
+    try:
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    except Exception:
+        return str(value)
+
+
+def _render_prompt_template(template: str, variables: dict[str, Any]) -> str:
+    rendered = str(template or "")
+    for key, value in variables.items():
+        rendered = rendered.replace("{" + str(key) + "}", str(value))
+    return rendered
+
+
+def _normalize_recommended_actions(items: Any) -> list[dict[str, str]]:
+    normalized: list[dict[str, str]] = []
+    if isinstance(items, list):
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title") or "").strip()
+            description = str(item.get("description") or "").strip()
+            if title:
+                normalized.append({"title": title, "description": description})
+    return normalized
+
+
+def _truncate_text(value: Any, limit: int) -> str:
+    text = str(value or "").strip()
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 1)].rstrip() + "…"
+
+
+def _compact_findings_payload(items: Any, limit: int = 5) -> list[dict[str, str]]:
+    compact: list[dict[str, str]] = []
+    if not isinstance(items, list):
+        return compact
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        title = _truncate_text(item.get("title"), 160)
+        severity = str(item.get("severity") or "").strip()
+        if title:
+            compact.append(
+                {
+                    "title": title,
+                    "severity": severity,
+                }
+            )
+        if len(compact) >= limit:
+            break
+    return compact
+
+
+def _compact_actions_payload(items: Any, limit: int = 3) -> list[dict[str, str]]:
+    compact: list[dict[str, str]] = []
+    if not isinstance(items, list):
+        return compact
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        title = _truncate_text(item.get("title"), 140)
+        description = _truncate_text(item.get("description"), 220)
+        if title:
+            compact.append(
+                {
+                    "title": title,
+                    "description": description,
+                }
+            )
+        if len(compact) >= limit:
+            break
+    return compact
+
+
+def _contains_quality_red_flags(text: Any, language: str) -> bool:
+    normalized = str(text or "").strip().lower()
+    if not normalized:
+        return False
+    generic_markers = [
+        "высокий потенциал",
+        "стратегическ",
+        "онлайн-присутств",
+        "обладает высоким",
+        "имеет хороший рейтинг",
+        "имеет хорошие отзывы",
+        "already has a strong base",
+        "solid base",
+        "high level of customer satisfaction",
+        "online presence",
+        "high potential",
+        "strategic improvement",
+    ]
+    if any(marker in normalized for marker in generic_markers):
+        return True
+    if language == "ru" and re.search(r"\b(on|the|and|despite|currently|solid|base)\b", normalized):
+        return True
+    return False
+
+
+def _needs_dense_audit_retry(summary_text: str, why_now: str, language: str) -> bool:
+    summary = str(summary_text or "").strip()
+    why = str(why_now or "").strip()
+    if not summary:
+        return True
+    if len(summary) > 420 or len(why) > 220:
+        return True
+    if _contains_quality_red_flags(summary, language) or _contains_quality_red_flags(why, language):
+        return True
+    lowered = summary.lower()
+    if language == "ru":
+        praise_openers = (
+            "ваш салон",
+            "салон ",
+            "ваш бизнес",
+            "бизнес ",
+            "театр ",
+            "у салона ",
+        )
+        if lowered.startswith(praise_openers) and (
+            "имеет " in lowered[:80] or "обладает " in lowered[:80]
+        ):
+            return True
+    return False
+
+
+def _needs_outreach_retry(message: str) -> bool:
+    text = str(message or "").strip()
+    if not text:
+        return True
+    line_count = len([line for line in text.splitlines() if line.strip()])
+    lowered = text.lower()
+    old_style_markers = (
+        "выявлены основные недостатки",
+        "предварительное исследование",
+        "по нашей модели",
+        "по нашей оценке",
+        "оценили карточку",
+        "выявили ключевые проблемы",
+        "выявили два",
+        "основные проблемы:",
+        "проблемы:",
+        "подробный разбор ситуации",
+        "подробности и исправления",
+    )
+    if any(marker in lowered for marker in old_style_markers):
+        return True
+    return line_count > 5 or len(text) > 420
+
+
+def _build_compact_audit_enrichment_payload(
+    lead: dict[str, Any],
+    factual_audit: dict[str, Any],
+) -> dict[str, Any]:
+    scorecard = factual_audit.get("scorecard") if isinstance(factual_audit.get("scorecard"), dict) else {}
+    current_state = factual_audit.get("current_state") if isinstance(factual_audit.get("current_state"), dict) else {}
+    revenue = factual_audit.get("revenue_potential") if isinstance(factual_audit.get("revenue_potential"), dict) else {}
+    profile_contacts = factual_audit.get("profile_contacts") if isinstance(factual_audit.get("profile_contacts"), dict) else {}
+    return {
+        "business": {
+            "name": str(lead.get("name") or "").strip(),
+            "category": str(lead.get("category") or "").strip(),
+            "city": str(lead.get("city") or "").strip(),
+            "address": str(lead.get("address") or "").strip(),
+        },
+        "current_state": {
+            "rating": current_state.get("rating"),
+            "reviews_count": current_state.get("reviews_count"),
+            "services_count": current_state.get("services_count"),
+            "priced_services_count": current_state.get("priced_services_count"),
+            "photos_count": current_state.get("photos_count"),
+            "has_recent_activity": current_state.get("has_recent_activity"),
+            "has_website": current_state.get("has_website"),
+            "has_phone": current_state.get("has_phone"),
+        },
+        "scorecard": {
+            "profile_completeness": scorecard.get("profile_completeness"),
+            "services_quality": scorecard.get("services_quality"),
+            "reviews_reputation": scorecard.get("reviews_reputation"),
+            "content_activity": scorecard.get("content_activity"),
+            "visual_trust": scorecard.get("visual_trust"),
+            "seo_relevance": scorecard.get("seo_relevance"),
+        },
+        "revenue_potential": {
+            "total_min": revenue.get("total_min"),
+            "total_max": revenue.get("total_max"),
+            "baseline_value": revenue.get("baseline_value"),
+            "baseline_source": revenue.get("baseline_source"),
+        },
+        "contacts": {
+            "has_website": profile_contacts.get("has_website"),
+            "has_phone": profile_contacts.get("has_phone"),
+            "has_whatsapp": profile_contacts.get("has_whatsapp"),
+            "has_telegram": profile_contacts.get("has_telegram"),
+        },
+        "top_findings": _compact_findings_payload(factual_audit.get("findings")),
+        "top_actions": _compact_actions_payload(factual_audit.get("recommended_actions")),
+    }
+
+
+def _build_compact_outreach_payload(
+    lead: dict[str, Any],
+    preview: dict[str, Any] | None,
+) -> dict[str, Any]:
+    preview_payload = preview if isinstance(preview, dict) else {}
+    revenue = preview_payload.get("revenue_potential") if isinstance(preview_payload.get("revenue_potential"), dict) else {}
+    current_state = preview_payload.get("current_state") if isinstance(preview_payload.get("current_state"), dict) else {}
+    return {
+        "business": {
+            "name": str(lead.get("name") or "").strip(),
+            "category": str(lead.get("category") or "").strip(),
+            "city": str(lead.get("city") or "").strip(),
+        },
+        "current_state": {
+            "rating": current_state.get("rating", lead.get("rating")),
+            "reviews_count": current_state.get("reviews_count", lead.get("reviews_count")),
+            "services_count": current_state.get("services_count", lead.get("services_count")),
+        },
+        "summary_text": _truncate_text(preview_payload.get("summary_text"), 240),
+        "top_findings": _compact_findings_payload(preview_payload.get("findings"), limit=2),
+        "top_actions": _compact_actions_payload(preview_payload.get("recommended_actions"), limit=2),
+        "revenue_potential": {
+            "total_min": revenue.get("total_min"),
+            "total_max": revenue.get("total_max"),
+        },
+    }
+
+
+def _generate_lead_audit_enrichment(
+    lead: dict[str, Any],
+    preview: dict[str, Any],
+    preferred_language: str | None,
+) -> dict[str, Any]:
+    language = str(preferred_language or "").strip().lower()
+    if language not in PUBLIC_AUDIT_LANGUAGES:
+        language = _resolve_outreach_language(lead)
+
+    fallback_summary = str(preview.get("summary_text") or "").strip()
+    fallback_actions = _normalize_recommended_actions(preview.get("recommended_actions"))
+    fallback = {
+        "summary_text": fallback_summary,
+        "recommended_actions": fallback_actions,
+        "why_now": "",
+        "meta": {
+            "source": "deterministic",
+            "prompt_key": "lead_audit_enrichment",
+            "prompt_version": "fallback_v1",
+            "prompt_source": "local_fallback",
+        },
+    }
+
+    factual_payload = _to_json_compatible(
+        _build_admin_lead_offer_payload(
+            lead=lead,
+            preview=preview,
+            preferred_language=language,
+            enabled_languages=[language],
+        )
+    )
+    factual_audit = factual_payload.get("audit") if isinstance(factual_payload, dict) else {}
+    if not isinstance(factual_audit, dict):
+        factual_audit = {}
+
+    compact_payload = _build_compact_audit_enrichment_payload(lead, factual_audit)
+    fallback_prompt = (
+        "Ты усиливаешь factual-аудит карточки локального бизнеса.\n"
+        "Не меняй факты, цифры, названия, город, адрес, рейтинг, количество отзывов, услуг и ссылки.\n"
+        "Нельзя придумывать новые услуги, контакты, проблемы или выгоду.\n"
+        "Верни только один JSON-объект без markdown, без пролога, без code fence.\n"
+        "Язык ответа: {language_name}\n"
+        "Название бизнеса: {company_name}\n"
+        "Категория: {category}\n"
+        "Город: {city}\n"
+        "Compact factual JSON: {factual_json}\n"
+        "summary_text должен опираться на конкретные проблемы из top_findings или current_state, а не на общие фразы.\n"
+        "Начинай summary_text с конкретного недостатка карточки, а не с похвалы бизнесу.\n"
+        "Не начинай с фраз вроде 'у вас хороший рейтинг', 'высокий потенциал', 'сильная база'.\n"
+        "Не используй пустые формулировки вроде 'высокий потенциал', 'стратегическое улучшение', 'онлайн-присутствие' без привязки к фактам.\n"
+        "recommended_actions максимум 3.\n"
+        "summary_text 2-3 предложения, максимум 420 символов.\n"
+        "why_now одно короткое предложение, максимум 180 символов.\n"
+        "Каждый recommended_action должен быть привязан к одному из top_findings или current_state.\n"
+        "Формат ответа:\n"
+        "{\"summary_text\":\"...\",\"recommended_actions\":[{\"title\":\"...\",\"description\":\"...\"}],\"why_now\":\"...\"}"
+    )
+    prompt_template = _get_prompt_from_db("lead_audit_enrichment", fallback_prompt)
+    prompt = _render_prompt_template(
+        prompt_template,
+        {
+            "language_name": _language_label(language),
+            "company_name": str(lead.get("name") or "").strip(),
+            "category": str(lead.get("category") or "").strip(),
+            "city": str(lead.get("city") or "").strip(),
+            "factual_json": _prompt_json(compact_payload),
+        },
+    )
+    try:
+        result_text = analyze_text_with_gigachat(prompt, task_type="ai_agent_marketing")
+        parsed = _extract_json_candidate(result_text)
+        if not parsed:
+            raise ValueError("AI audit enrichment did not return JSON")
+        summary_text = str(parsed.get("summary_text") or "").strip()
+        recommended_actions = _normalize_recommended_actions(parsed.get("recommended_actions"))
+        why_now = str(parsed.get("why_now") or "").strip()
+        if _needs_dense_audit_retry(summary_text, why_now, language):
+            retry_prompt = (
+                prompt
+                + "\nОтвет отклонён как слишком общий или языково нечистый."
+                + "\nПерепиши короче и плотнее по сути."
+                + "\nНачни с конкретного недостатка карточки."
+                + "\nЗапрещены фразы: высокий потенциал, strategic improvement, online presence, solid base."
+                + "\nНужны 1-2 конкретные проблемы из top_findings/current_state и короткое business consequence."
+            )
+            result_text = analyze_text_with_gigachat(retry_prompt, task_type="ai_agent_marketing")
+            parsed = _extract_json_candidate(result_text)
+            if not parsed:
+                raise ValueError("AI audit enrichment retry did not return JSON")
+            summary_text = str(parsed.get("summary_text") or "").strip()
+            recommended_actions = _normalize_recommended_actions(parsed.get("recommended_actions"))
+            why_now = str(parsed.get("why_now") or "").strip()
+        if not summary_text:
+            raise ValueError("AI audit enrichment returned empty summary_text")
+        if not recommended_actions:
+            recommended_actions = fallback_actions
+        return {
+            "summary_text": summary_text,
+            "recommended_actions": recommended_actions,
+            "why_now": why_now,
+            "meta": {
+                "source": "gigachat",
+                "prompt_key": "lead_audit_enrichment",
+                "prompt_version": "v1",
+                "prompt_source": "gigachat",
+                "raw_response": str(result_text or "")[:4000],
+            },
+        }
+    except Exception as exc:
+        print(f"Lead audit AI enrichment fallback: {exc}")
+        return fallback
+
+
+def _generate_outreach_message_ai(
+    *,
+    lead: dict[str, Any],
+    preview: dict[str, Any] | None,
+    channel: str,
+    fallback_message: str,
+    fallback_angle_type: str,
+    fallback_tone: str,
+) -> dict[str, str]:
+    language = _resolve_outreach_language(lead)
+    factual_payload = _build_compact_outreach_payload(lead, preview)
+    fallback_prompt = (
+        "Ты пишешь первое короткое сообщение владельцу локального бизнеса после аудита карточки.\n"
+        "Верни строго JSON без markdown.\n"
+        "Язык: {language_name}\n"
+        "Канал: {channel}\n"
+        "Бизнес: {company_name}\n"
+        "Категория: {category}\n"
+        "Город: {city}\n"
+        "URL аудита: {public_audit_url}\n"
+        "Factual JSON: {factual_json}\n"
+        "Deterministic fallback: {fallback_message}\n"
+        "Возьми из Factual JSON только 1-2 самых конкретных проблемы и не повторяй длинный summary целиком.\n"
+        "Не используй общие фразы вроде 'улучшить онлайн-присутствие' или 'раскрыть потенциал', если можно назвать конкретный недостаток.\n"
+        "Не пиши как мини-аудит и не используй формулировки: 'выявлены основные недостатки', 'по нашей модели', 'по нашей оценке', 'основные проблемы'.\n"
+        "Не упоминай денежный диапазон или месячную выгоду.\n"
+        "Сообщение должно быть коротким, прямым и выглядеть как первое касание человека.\n"
+        "Желаемая структура для email на русском:\n"
+        "1) Вы сейчас недополучаете клиентов с карт.\n"
+        "2) Один короткий факт о 1-2 проблемах карточки.\n"
+        "3) Ссылка на короткий аудит.\n"
+        "4) Можем внедрить это под ключ.\n"
+        "5) Короткий CTA-вопрос.\n"
+        "Максимум 5 коротких строк.\n"
+        "Формат ответа:\n"
+        "{\"message\":\"...\",\"angle_type\":\"audit_preview\",\"tone\":\"professional\"}"
+    )
+    prompt_template = _get_prompt_from_db("outreach_first_message", fallback_prompt)
+    prompt = _render_prompt_template(
+        prompt_template,
+        {
+            "language_name": _language_label(language),
+            "channel": channel,
+            "company_name": str(lead.get("name") or "").strip(),
+            "category": str(lead.get("category") or "").strip(),
+            "city": str(lead.get("city") or "").strip(),
+            "public_audit_url": str(lead.get("public_audit_url") or "").strip(),
+            "factual_json": _prompt_json(factual_payload),
+            "fallback_message": fallback_message,
+        },
+    )
+    try:
+        result_text = analyze_text_with_gigachat(prompt, task_type="ai_agent_marketing")
+        parsed = _extract_json_candidate(result_text)
+        if not parsed:
+            raise ValueError("AI outreach draft did not return JSON")
+        message = str(parsed.get("message") or parsed.get("text") or "").strip()
+        if _needs_outreach_retry(message):
+            retry_prompt = (
+                prompt
+                + "\nОтвет отклонён как слишком длинный или звучит как мини-аудит."
+                + "\nСократи до 5 коротких строк максимум."
+                + "\nНе используй денежный диапазон."
+                + "\nУбери фразы: 'выявлены основные недостатки', 'по нашей модели', 'основные проблемы'."
+                + "\nНазови 1-2 конкретные проблемы и дай ссылку на аудит."
+            )
+            result_text = analyze_text_with_gigachat(retry_prompt, task_type="ai_agent_marketing")
+            parsed = _extract_json_candidate(result_text)
+            if not parsed:
+                raise ValueError("AI outreach retry did not return JSON")
+            message = str(parsed.get("message") or parsed.get("text") or "").strip()
+        if not message:
+            raise ValueError("AI outreach draft returned empty message")
+        return {
+            "angle_type": str(parsed.get("angle_type") or fallback_angle_type).strip() or fallback_angle_type,
+            "tone": str(parsed.get("tone") or fallback_tone).strip() or fallback_tone,
+            "generated_text": message,
+            "prompt_key": "outreach_first_message",
+            "prompt_version": "v1",
+            "prompt_source": "gigachat",
+        }
+    except Exception as exc:
+        print(f"AI outreach first-message fallback: {exc}")
+        return {
+            "angle_type": fallback_angle_type,
+            "tone": fallback_tone,
+            "generated_text": fallback_message,
+            "prompt_key": "outreach_first_message",
+            "prompt_version": "fallback_v1",
+            "prompt_source": "local_fallback",
+        }
 
 
 def _classify_reply_outcome(raw_reply: str) -> tuple[str, float]:
@@ -3289,7 +4347,6 @@ def search_businesses():
         return jsonify({"error": "Query and location are required"}), 400
     if search_limit < 1:
         return jsonify({"error": "Limit must be positive"}), 400
-    search_limit = min(search_limit, 200)
 
     service = ProspectingService(source=source)
     if not service.client:
@@ -3495,6 +4552,52 @@ def get_search_job_status(job_id):
         return jsonify({"error": str(e)}), 500
 
 
+@admin_prospecting_bp.route("/api/admin/prospecting/search-job/latest", methods=["GET"])
+def get_latest_search_job_status():
+    """Get latest async search job for current superadmin."""
+    user_data, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        user_id = str(user_data.get("user_id") or "").strip() or None
+        row = _get_latest_search_job(user_id)
+        if not row:
+            return jsonify({"success": True, "job": None})
+        row = _mark_search_job_failed_if_stale(dict(row))
+        raw_results = row.get("results_json")
+        apify_status = None
+        results_payload = []
+        if isinstance(raw_results, list):
+            results_payload = raw_results
+        elif isinstance(raw_results, dict):
+            apify_status = ((raw_results.get("_apify") or {}).get("status") if isinstance(raw_results.get("_apify"), dict) else None)
+        return jsonify(
+            {
+                "success": True,
+                "job": {
+                    "id": row.get("id"),
+                    "source": row.get("source"),
+                    "actor_id": row.get("actor_id"),
+                    "query": row.get("query"),
+                    "location": row.get("location"),
+                    "limit": row.get("search_limit"),
+                    "status": row.get("status"),
+                    "result_count": row.get("result_count") or 0,
+                    "apify_status": apify_status,
+                    "error_text": row.get("error_text"),
+                    "results": results_payload,
+                    "created_at": row.get("created_at"),
+                    "updated_at": row.get("updated_at"),
+                    "completed_at": row.get("completed_at"),
+                },
+            }
+        )
+    except Exception as e:
+        print(f"Error getting latest prospecting search job: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @admin_prospecting_bp.route("/api/admin/prospecting/leads", methods=["GET"])
 def get_leads():
     """Get all saved leads."""
@@ -3518,14 +4621,45 @@ def get_leads():
         }
         with DatabaseManager() as db:
             leads = db.get_all_leads()
+        offer_by_lead_id = {}
+        conn = get_db_connection()
+        try:
+            _ensure_admin_prospecting_public_offers_table(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute(
+                """
+                SELECT lead_id, slug, is_active, updated_at, page_json
+                FROM adminprospectingleadpublicoffers
+                """
+            )
+            for row in cur.fetchall() or []:
+                lead_id = str(row.get("lead_id") or "").strip()
+                if lead_id:
+                    offer_by_lead_id[lead_id] = row
+        finally:
+            conn.close()
         normalized = []
         for lead in leads:
             display_lead = _normalize_lead_for_display(lead)
             if not display_lead:
                 continue
+            offer = offer_by_lead_id.get(str(display_lead.get("id") or "").strip())
+            slug = str((offer or {}).get("slug") or "").strip()
+            if offer and bool(offer.get("is_active")) and slug:
+                page_json = offer.get("page_json") if isinstance(offer.get("page_json"), dict) else {}
+                primary_language, enabled_languages = _normalize_public_audit_languages(
+                    page_json.get("preferred_language"),
+                    page_json.get("enabled_languages"),
+                )
+                display_lead["public_audit_slug"] = slug
+                display_lead["public_audit_url"] = _make_public_offer_url(slug)
+                display_lead["has_public_audit"] = True
+                display_lead["public_audit_updated_at"] = offer.get("updated_at")
+                display_lead["preferred_language"] = primary_language
+                display_lead["enabled_languages"] = enabled_languages
             normalized.append(display_lead)
         filtered = [lead for lead in normalized if _lead_matches_filters(lead, filters)]
-        return jsonify({"leads": filtered, "count": len(filtered)})
+        return jsonify(_to_json_compatible({"leads": filtered, "count": len(filtered)}))
     except Exception as e:
         print(f"Error getting leads: {e}")
         return jsonify({"error": str(e)}), 500
@@ -3806,7 +4940,7 @@ def partnership_geo_search():
         radius_km = int(data.get("radius_km") or 5)
         limit = int(data.get("limit") or 25)
         radius_km = max(1, min(radius_km, 100))
-        limit = max(1, min(limit, 200))
+        limit = max(1, limit)
         if not has_seed_items and not city and not query:
             return jsonify({"error": "city or query is required"}), 400
         if provider not in {"google", "yandex", "both"}:
@@ -4066,6 +5200,7 @@ def partnership_list_leads():
                        prospectingleads.external_place_id, prospectingleads.external_source_id,
                        prospectingleads.dedupe_key, prospectingleads.lat, prospectingleads.lon,
                        prospectingleads.search_payload_json, prospectingleads.enrich_payload_json,
+                       prospectingleads.deferred_reason, prospectingleads.deferred_until,
                        prospectingleads.phone, prospectingleads.email, prospectingleads.telegram_url,
                        prospectingleads.whatsapp_url, prospectingleads.website, prospectingleads.rating,
                        prospectingleads.reviews_count, prospectingleads.status, prospectingleads.selected_channel,
@@ -4855,6 +5990,7 @@ def partnership_parse_lead(lead_id):
         finally:
             conn.close()
 
+        lead = _drop_mismatched_explicit_business_link(dict(lead))
         display_lead = _normalize_lead_for_display(dict(lead))
         if not display_lead:
             return jsonify({"error": "Lead is not available for parsing"}), 400
@@ -5039,6 +6175,11 @@ def partnership_update_lead(lead_id):
         status = str(data.get("status") or "").strip().lower()
         selected_channel = str(data.get("selected_channel") or "").strip().lower() or None
         pilot_cohort = str(data.get("pilot_cohort") or "").strip().lower() or None
+        deferred_reason_present = "deferred_reason" in data
+        deferred_reason = str(data.get("deferred_reason") or "").strip() if deferred_reason_present else None
+        deferred_until_present = "deferred_until" in data
+        deferred_until_raw = str(data.get("deferred_until") or "").strip() if deferred_until_present else None
+        deferred_until = deferred_until_raw or None
         name = str(data.get("name") or "").strip() or None
         city = str(data.get("city") or "").strip() or None
         category = str(data.get("category") or "").strip() or None
@@ -5053,6 +6194,8 @@ def partnership_update_lead(lead_id):
             and not status
             and selected_channel is None
             and pilot_cohort is None
+            and not deferred_reason_present
+            and not deferred_until_present
             and name is None
             and city is None
             and category is None
@@ -5087,6 +6230,12 @@ def partnership_update_lead(lead_id):
             if pilot_cohort is not None:
                 assignments.append("pilot_cohort = %s")
                 params.append(pilot_cohort)
+            if deferred_reason_present:
+                assignments.append("deferred_reason = %s")
+                params.append(deferred_reason)
+            if deferred_until_present:
+                assignments.append("deferred_until = %s")
+                params.append(deferred_until)
             if name is not None:
                 assignments.append("name = %s")
                 params.append(name)
@@ -5124,7 +6273,7 @@ def partnership_update_lead(lead_id):
                   AND business_id = %s
                   AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
                 RETURNING id, name, source_url, status, selected_channel, partnership_stage, pilot_cohort,
-                          phone, email, website, telegram_url, whatsapp_url, city, category, address, updated_at
+                          deferred_reason, deferred_until, phone, email, website, telegram_url, whatsapp_url, city, category, address, updated_at
                 """,
                 tuple(params),
             )
@@ -5158,10 +6307,15 @@ def partnership_bulk_update_leads():
         status = str(data.get("status") or "").strip().lower()
         selected_channel = str(data.get("selected_channel") or "").strip().lower() or None
         pilot_cohort = str(data.get("pilot_cohort") or "").strip().lower() or None
+        deferred_reason_present = "deferred_reason" in data
+        deferred_reason = str(data.get("deferred_reason") or "").strip() if deferred_reason_present else None
+        deferred_until_present = "deferred_until" in data
+        deferred_until_raw = str(data.get("deferred_until") or "").strip() if deferred_until_present else None
+        deferred_until = deferred_until_raw or None
 
         if not lead_ids:
             return jsonify({"error": "lead_ids is required"}), 400
-        if not stage and not status and selected_channel is None and pilot_cohort is None:
+        if not stage and not status and selected_channel is None and pilot_cohort is None and not deferred_reason_present and not deferred_until_present:
             return jsonify({"error": "Nothing to update"}), 400
         if selected_channel is not None and selected_channel not in ALLOWED_OUTREACH_CHANNELS:
             return jsonify({"error": "Unsupported channel"}), 400
@@ -5188,6 +6342,12 @@ def partnership_bulk_update_leads():
             if pilot_cohort is not None:
                 assignments.append("pilot_cohort = %s")
                 params.append(pilot_cohort)
+            if deferred_reason_present:
+                assignments.append("deferred_reason = %s")
+                params.append(deferred_reason)
+            if deferred_until_present:
+                assignments.append("deferred_until = %s")
+                params.append(deferred_until)
 
             params.extend([lead_ids, business_id])
             cur.execute(
@@ -5894,11 +7054,27 @@ _RU_LAT_MAP = {
     "ч": "ch", "ш": "sh", "щ": "sch", "ъ": "", "ы": "y", "ь": "", "э": "e", "ю": "yu", "я": "ya",
 }
 
+_SLUG_PART_ALIASES = {
+    "санкт-петербург": "saint-petersburg",
+    "санкт петербург": "saint-petersburg",
+    "saint petersburg": "saint-petersburg",
+    "st petersburg": "saint-petersburg",
+    "подковырова": "podkovirova",
+}
 
-def _slugify_company_name(name: str) -> str:
-    source = str(name or "").strip().lower()
+_STREET_PREFIX_PATTERN = re.compile(
+    r"^(ulitsa|ulitsa\.|ul\.|street|st\.|st|prospekt|pr\.|pr|pereulok|per\.|per|naberezhnaya|nab\.|nab|bulvar|boulevard|bulevard|shosse|sh\.)\s+",
+    re.IGNORECASE,
+)
+
+
+def _slugify_text(value: str) -> str:
+    source = str(value or "").strip().lower()
     if not source:
-        return f"lead-{uuid.uuid4().hex[:8]}"
+        return ""
+    aliased = _SLUG_PART_ALIASES.get(source)
+    if aliased:
+        return aliased
     converted = []
     for ch in source:
         if "a" <= ch <= "z" or "0" <= ch <= "9":
@@ -5911,6 +7087,62 @@ def _slugify_company_name(name: str) -> str:
             converted.append("-")
             continue
     slug = re.sub(r"-{2,}", "-", "".join(converted)).strip("-")
+    return _SLUG_PART_ALIASES.get(slug, slug)
+
+
+def _extract_address_street_name(address: str | None) -> str:
+    text = str(address or "").strip()
+    if not text:
+        return ""
+    parts = [part.strip() for part in text.split(",") if str(part or "").strip()]
+    if not parts:
+        return ""
+    street_candidate = ""
+    for part in parts:
+        lower = part.lower()
+        if any(token in lower for token in ("улиц", "ул.", "street", "st ", "st.", "просп", "наб", "шоссе", "бульвар", "переул", "коса", "sok", "cad", "mah")):
+            street_candidate = part
+            break
+    if not street_candidate:
+        street_candidate = parts[1] if len(parts) > 1 else parts[0]
+    street_candidate = re.sub(r"\b\d+[a-zа-я\-\/]*\b", "", street_candidate, flags=re.IGNORECASE).strip(" ,.-")
+    lower_candidate = street_candidate.lower()
+    for prefix in (
+        "улица ",
+        "ул. ",
+        "ул ",
+        "проспект ",
+        "пр. ",
+        "переулок ",
+        "пер. ",
+        "набережная ",
+        "наб. ",
+        "шоссе ",
+        "бульвар ",
+    ):
+        if lower_candidate.startswith(prefix):
+            street_candidate = street_candidate[len(prefix):].strip()
+            break
+    street_candidate = _STREET_PREFIX_PATTERN.sub("", street_candidate).strip()
+    return street_candidate
+
+
+def _build_offer_slug(name: str | None, city: str | None = None, address: str | None = None) -> str:
+    parts: list[str] = []
+    for value in (
+        _slugify_text(str(name or "").strip()),
+        _slugify_text(str(city or "").strip()),
+        _slugify_text(_extract_address_street_name(address)),
+    ):
+        if value and value not in parts:
+            parts.append(value)
+    if not parts:
+        return f"lead-{uuid.uuid4().hex[:8]}"
+    return "-".join(parts)
+
+
+def _slugify_company_name(name: str) -> str:
+    slug = _slugify_text(name)
     return slug or f"lead-{uuid.uuid4().hex[:8]}"
 
 
@@ -5971,6 +7203,8 @@ def _build_admin_lead_offer_payload(
     *,
     lead: dict[str, Any],
     preview: dict[str, Any],
+    preferred_language: str | None = None,
+    enabled_languages: list[str] | None = None,
 ) -> dict[str, Any]:
     lead_name = str(lead.get("name") or "Компания").strip() or "Компания"
     preview_meta = preview.get("preview_meta") if isinstance(preview, dict) else {}
@@ -5989,15 +7223,26 @@ def _build_admin_lead_offer_payload(
         or str(business_preview.get("city") or "").strip()
         or str(lead_address.split(",", 1)[0] if lead_address else "").strip()
     )
+    primary_language, selected_languages = _normalize_public_audit_languages(preferred_language, enabled_languages)
     return {
         "lead_id": str(lead.get("id") or ""),
         "name": lead_name,
+        "preferred_language": primary_language,
+        "primary_language": primary_language,
+        "enabled_languages": selected_languages,
+        "available_languages": list(PUBLIC_AUDIT_LANGUAGES),
         "category": lead.get("category"),
         "city": resolved_city or None,
         "address": lead.get("address"),
         "source_url": lead.get("source_url"),
         "logo_url": preview_meta.get("logo_url"),
         "photo_urls": preview_meta.get("photo_urls") if isinstance(preview_meta.get("photo_urls"), list) else [],
+        "rating": current_state.get("rating"),
+        "reviews_count": current_state.get("reviews_count"),
+        "services_count": current_state.get("services_count"),
+        "photos_state": current_state.get("photos_state"),
+        "has_website": current_state.get("has_website"),
+        "has_recent_activity": current_state.get("has_recent_activity"),
         "audit": {
             "summary_score": preview.get("summary_score"),
             "health_level": preview.get("health_level"),
@@ -6005,6 +7250,19 @@ def _build_admin_lead_offer_payload(
             "summary_text": preview.get("summary_text"),
             "findings": preview.get("findings") if isinstance(preview.get("findings"), list) else [],
             "recommended_actions": preview.get("recommended_actions") if isinstance(preview.get("recommended_actions"), list) else [],
+            "issue_blocks": preview.get("issue_blocks") if isinstance(preview.get("issue_blocks"), list) else [],
+            "top_3_issues": preview.get("top_3_issues") if isinstance(preview.get("top_3_issues"), list) else [],
+            "action_plan": preview.get("action_plan") if isinstance(preview.get("action_plan"), dict) else {},
+            "audit_profile": preview.get("audit_profile"),
+            "audit_profile_label": preview.get("audit_profile_label"),
+            "best_fit_customer_profile": preview.get("best_fit_customer_profile") if isinstance(preview.get("best_fit_customer_profile"), list) else [],
+            "weak_fit_customer_profile": preview.get("weak_fit_customer_profile") if isinstance(preview.get("weak_fit_customer_profile"), list) else [],
+            "best_fit_guest_profile": preview.get("best_fit_guest_profile") if isinstance(preview.get("best_fit_guest_profile"), list) else [],
+            "weak_fit_guest_profile": preview.get("weak_fit_guest_profile") if isinstance(preview.get("weak_fit_guest_profile"), list) else [],
+            "search_intents_to_target": preview.get("search_intents_to_target") if isinstance(preview.get("search_intents_to_target"), list) else [],
+            "photo_shots_missing": preview.get("photo_shots_missing") if isinstance(preview.get("photo_shots_missing"), list) else [],
+            "positioning_focus": preview.get("positioning_focus") if isinstance(preview.get("positioning_focus"), list) else [],
+            "cadence": preview.get("cadence") if isinstance(preview.get("cadence"), dict) else {},
             "services_preview": preview.get("services_preview") if isinstance(preview.get("services_preview"), list) else [],
             "rating": current_state.get("rating"),
             "reviews_count": current_state.get("reviews_count"),
@@ -6032,6 +7290,8 @@ def _build_partnership_offer_payload(
     audit_json: dict[str, Any] | None,
     match_json: dict[str, Any] | None,
     offer_draft_json: dict[str, Any] | None,
+    preferred_language: str | None = None,
+    enabled_languages: list[str] | None = None,
 ) -> dict[str, Any]:
     lead_name = str(lead.get("name") or "Партнёр").strip() or "Партнёр"
     source_url = str(lead.get("source_url") or "").strip()
@@ -6061,9 +7321,14 @@ def _build_partnership_offer_payload(
         or str(draft.get("generated_text") or "").strip()
     )
 
+    primary_language, selected_languages = _normalize_public_audit_languages(preferred_language, enabled_languages)
     return {
         "lead_id": str(lead.get("id") or ""),
         "name": lead_name,
+        "preferred_language": primary_language,
+        "primary_language": primary_language,
+        "enabled_languages": selected_languages,
+        "available_languages": list(PUBLIC_AUDIT_LANGUAGES),
         "category": lead.get("category"),
         "city": lead.get("city"),
         "address": lead.get("address"),
@@ -6077,6 +7342,19 @@ def _build_partnership_offer_payload(
             "summary_text": audit.get("summary_text"),
             "findings": audit.get("findings") if isinstance(audit.get("findings"), list) else [],
             "recommended_actions": audit.get("recommended_actions") if isinstance(audit.get("recommended_actions"), list) else [],
+            "issue_blocks": audit.get("issue_blocks") if isinstance(audit.get("issue_blocks"), list) else [],
+            "top_3_issues": audit.get("top_3_issues") if isinstance(audit.get("top_3_issues"), list) else [],
+            "action_plan": audit.get("action_plan") if isinstance(audit.get("action_plan"), dict) else {},
+            "audit_profile": audit.get("audit_profile"),
+            "audit_profile_label": audit.get("audit_profile_label"),
+            "best_fit_customer_profile": audit.get("best_fit_customer_profile") if isinstance(audit.get("best_fit_customer_profile"), list) else [],
+            "weak_fit_customer_profile": audit.get("weak_fit_customer_profile") if isinstance(audit.get("weak_fit_customer_profile"), list) else [],
+            "best_fit_guest_profile": audit.get("best_fit_guest_profile") if isinstance(audit.get("best_fit_guest_profile"), list) else [],
+            "weak_fit_guest_profile": audit.get("weak_fit_guest_profile") if isinstance(audit.get("weak_fit_guest_profile"), list) else [],
+            "search_intents_to_target": audit.get("search_intents_to_target") if isinstance(audit.get("search_intents_to_target"), list) else [],
+            "photo_shots_missing": audit.get("photo_shots_missing") if isinstance(audit.get("photo_shots_missing"), list) else [],
+            "positioning_focus": audit.get("positioning_focus") if isinstance(audit.get("positioning_focus"), list) else [],
+            "cadence": audit.get("cadence") if isinstance(audit.get("cadence"), dict) else {},
             "services_preview": audit.get("services_preview") if isinstance(audit.get("services_preview"), list) else [],
             "subscores": audit.get("subscores") if isinstance(audit.get("subscores"), dict) else {},
             "current_state": audit.get("current_state") if isinstance(audit.get("current_state"), dict) else {},
@@ -6099,9 +7377,74 @@ def _build_partnership_offer_payload(
 
 def _make_public_offer_url(slug: str) -> str:
     frontend_base = str(os.environ.get("FRONTEND_BASE_URL") or "").strip().rstrip("/")
-    if frontend_base:
-        return f"{frontend_base}/{slug}"
-    return f"/{slug}"
+    if not frontend_base:
+        frontend_base = "https://localos.pro"
+    return f"{frontend_base}/{slug}"
+
+
+def _resolve_outreach_language(lead: dict[str, Any]) -> str:
+    language = str(lead.get("preferred_language") or "").strip().lower()
+    text_candidates = [
+        str(lead.get("name") or ""),
+        str(lead.get("category") or ""),
+        str(lead.get("city") or ""),
+        str(lead.get("address") or ""),
+    ]
+    joined = " ".join(text_candidates)
+    has_cyrillic = bool(re.search(r"[А-Яа-яЁё]", joined))
+    if has_cyrillic:
+        return "ru"
+    if language in PUBLIC_AUDIT_LANGUAGES:
+        return language
+    return "en"
+
+
+def _attach_admin_prospecting_public_offer_metadata(conn, lead: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(lead or {})
+    lead_id = str(payload.get("id") or "").strip()
+    if not lead_id:
+        return payload
+
+    _ensure_admin_prospecting_public_offers_table(conn)
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute(
+        """
+        SELECT slug, is_active, updated_at, page_json
+        FROM adminprospectingleadpublicoffers
+        WHERE lead_id = %s
+        LIMIT 1
+        """,
+        (lead_id,),
+    )
+    offer = cur.fetchone()
+    if offer and bool(offer.get("is_active")) and str(offer.get("slug") or "").strip():
+        slug = str(offer.get("slug") or "").strip()
+        page_json = offer.get("page_json") if isinstance(offer.get("page_json"), dict) else {}
+        primary_language, enabled_languages = _normalize_public_audit_languages(
+            page_json.get("preferred_language"),
+            page_json.get("enabled_languages"),
+        )
+        payload["public_audit_slug"] = slug
+        payload["public_audit_url"] = _make_public_offer_url(slug)
+        payload["has_public_audit"] = True
+        payload["public_audit_updated_at"] = offer.get("updated_at")
+        payload["preferred_language"] = primary_language
+        payload["enabled_languages"] = enabled_languages
+        return payload
+
+    payload.pop("public_audit_slug", None)
+    payload.pop("public_audit_url", None)
+    payload.pop("has_public_audit", None)
+    payload.pop("public_audit_updated_at", None)
+    return payload
+
+
+def _append_public_offer_language(url: str, language: str | None) -> str:
+    normalized_language = str(language or "").strip().lower()
+    if normalized_language not in set(PUBLIC_AUDIT_LANGUAGES):
+        return url
+    delimiter = "&" if "?" in url else "?"
+    return f"{url}{delimiter}lang={normalized_language}"
 
 
 def _load_partnership_lead(cur, *, lead_id: str, business_id: str):
@@ -6425,6 +7768,76 @@ def _partnership_next_best_action(lead: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _compute_partnership_match_result(
+    cur,
+    *,
+    business_id: str,
+    lead_id: str,
+    audit_json: dict[str, Any],
+) -> dict[str, Any]:
+    own_services = _collect_business_service_names(cur, business_id)
+    partner_services = _extract_partner_service_names_from_snapshot(audit_json)
+    match_result: dict[str, Any] | None = None
+
+    if _is_partnership_openclaw_enabled():
+        openclaw_result = _call_partnership_openclaw_capability(
+            "partners.match_services",
+            tenant_id=business_id,
+            payload={
+                "business_id": business_id,
+                "lead_id": lead_id,
+                "intent": "partnership_outreach",
+                "our_services": own_services,
+                "partner_services": partner_services,
+                "audit_snapshot": audit_json,
+            },
+            timeout_sec=40,
+        )
+        if openclaw_result.get("success"):
+            result_blob = _extract_openclaw_result_blob(openclaw_result)
+            candidate_match = result_blob.get("match")
+            if isinstance(candidate_match, dict) and candidate_match:
+                match_result = candidate_match
+
+    if not match_result:
+        own_tokens = _tokenize_match_text(" ".join(own_services))
+        partner_tokens = _tokenize_match_text(" ".join(partner_services))
+        overlap_tokens = sorted(list(own_tokens & partner_tokens))
+        own_unique = sorted(list(own_tokens - partner_tokens))
+        partner_unique = sorted(list(partner_tokens - own_tokens))
+
+        denominator = max(1, len(own_tokens | partner_tokens))
+        score = int(round((len(overlap_tokens) / denominator) * 100))
+        match_result = {
+            "match_score": score,
+            "overlap": overlap_tokens[:30],
+            "complement": {
+                "our_strength_tokens": own_unique[:30],
+                "partner_strength_tokens": partner_unique[:30],
+            },
+            "risks": [
+                "Низкая точность, если у партнёра мало структурированных услуг."
+                if not partner_services
+                else "Проверьте каннибализацию по пересекающимся услугам."
+            ],
+            "offer_angles": [
+                "Кросс-рекомендации по непересекающимся услугам",
+                "Пакетные предложения с взаимной скидкой",
+                "Совместный контент/новости для карт и соцсетей",
+            ],
+            "source_counts": {
+                "our_services": len(own_services),
+                "partner_services": len(partner_services),
+            },
+        }
+
+    return _normalize_match_result(
+        match_result,
+        own_services_count=len(own_services),
+        partner_services_count=len(partner_services),
+    )
+
+
 @admin_prospecting_bp.route("/api/partnership/leads/<string:lead_id>/audit", methods=["POST"])
 def partnership_audit_lead(lead_id):
     user_data, error = _require_auth()
@@ -6522,65 +7935,12 @@ def partnership_match_lead(lead_id):
                 audit_json = artifact_row["audit_json"] if hasattr(artifact_row, "get") else artifact_row[0]
             if not isinstance(audit_json, dict) or not audit_json:
                 audit_json = build_lead_card_preview_snapshot(lead)
-
-            own_services = _collect_business_service_names(cur, business_id)
-            partner_services = _extract_partner_service_names_from_snapshot(audit_json)
-            match_result: dict[str, Any] | None = None
-            if _is_partnership_openclaw_enabled():
-                openclaw_result = _call_partnership_openclaw_capability(
-                    "partners.match_services",
-                    tenant_id=business_id,
-                    payload={
-                        "business_id": business_id,
-                        "lead_id": lead_id,
-                        "intent": "partnership_outreach",
-                        "our_services": own_services,
-                        "partner_services": partner_services,
-                        "audit_snapshot": audit_json,
-                    },
-                    timeout_sec=40,
-                )
-                if openclaw_result.get("success"):
-                    result_blob = _extract_openclaw_result_blob(openclaw_result)
-                    candidate_match = result_blob.get("match")
-                    if isinstance(candidate_match, dict) and candidate_match:
-                        match_result = candidate_match
-
-            if not match_result:
-                own_tokens = _tokenize_match_text(" ".join(own_services))
-                partner_tokens = _tokenize_match_text(" ".join(partner_services))
-                overlap_tokens = sorted(list(own_tokens & partner_tokens))
-                own_unique = sorted(list(own_tokens - partner_tokens))
-                partner_unique = sorted(list(partner_tokens - own_tokens))
-
-                denominator = max(1, len(own_tokens | partner_tokens))
-                score = int(round((len(overlap_tokens) / denominator) * 100))
-                match_result = {
-                    "match_score": score,
-                    "overlap": overlap_tokens[:30],
-                    "complement": {
-                        "our_strength_tokens": own_unique[:30],
-                        "partner_strength_tokens": partner_unique[:30],
-                    },
-                    "risks": [
-                        "Низкая точность, если у партнёра мало структурированных услуг."
-                        if not partner_services
-                        else "Проверьте каннибализацию по пересекающимся услугам."
-                    ],
-                    "offer_angles": [
-                        "Кросс-рекомендации по непересекающимся услугам",
-                        "Пакетные предложения с взаимной скидкой",
-                        "Совместный контент/новости для карт и соцсетей",
-                    ],
-                    "source_counts": {
-                        "our_services": len(own_services),
-                        "partner_services": len(partner_services),
-                    },
-                }
-            match_result = _normalize_match_result(
-                match_result,
-                own_services_count=len(own_services),
-                partner_services_count=len(partner_services),
+            audit_json = _to_json_compatible(audit_json)
+            match_result = _compute_partnership_match_result(
+                cur,
+                business_id=business_id,
+                lead_id=lead_id,
+                audit_json=audit_json,
             )
 
             cur.execute(
@@ -6613,6 +7973,110 @@ def partnership_match_lead(lead_id):
         return jsonify({"error": str(e)}), 500
 
 
+@admin_prospecting_bp.route("/api/partnership/leads/bulk-match", methods=["POST"])
+def partnership_bulk_match_leads():
+    """Bulk match for selected partnership leads."""
+    user_data, error = _require_auth()
+    if error:
+        return error
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_business_id = str(data.get("business_id") or "").strip() or None
+        lead_ids = data.get("lead_ids") or []
+        if not isinstance(lead_ids, list) or len(lead_ids) == 0:
+            return jsonify({"error": "lead_ids must be a non-empty list"}), 400
+        normalized_ids = [str(lead_id or "").strip() for lead_id in lead_ids]
+        normalized_ids = [lead_id for lead_id in normalized_ids if lead_id]
+        if not normalized_ids:
+            return jsonify({"error": "lead_ids must contain valid ids"}), 400
+
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            _ensure_partnership_artifacts_table(conn)
+            cur = conn.cursor()
+            business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
+            if not business_id:
+                return jsonify({"error": "Business not found or access denied"}), 403
+
+            matched_count = 0
+            skipped_count = 0
+            results: list[dict[str, Any]] = []
+            errors: list[dict[str, Any]] = []
+
+            for lead_id in normalized_ids:
+                lead = _load_partnership_lead(cur, lead_id=lead_id, business_id=business_id)
+                if not lead:
+                    skipped_count += 1
+                    errors.append({"lead_id": lead_id, "error": "Lead not found"})
+                    continue
+
+                cur.execute("SELECT audit_json FROM partnershipleadartifacts WHERE lead_id = %s", (lead_id,))
+                artifact_row = cur.fetchone()
+                audit_json = {}
+                if artifact_row:
+                    audit_json = artifact_row["audit_json"] if hasattr(artifact_row, "get") else artifact_row[0]
+                if not isinstance(audit_json, dict) or not audit_json:
+                    audit_json = build_lead_card_preview_snapshot(lead)
+                audit_json = _to_json_compatible(audit_json)
+
+                try:
+                    match_result = _compute_partnership_match_result(
+                        cur,
+                        business_id=business_id,
+                        lead_id=lead_id,
+                        audit_json=audit_json,
+                    )
+                    cur.execute(
+                        """
+                        INSERT INTO partnershipleadartifacts (lead_id, audit_json, match_json, updated_at)
+                        VALUES (%s, %s, %s, NOW())
+                        ON CONFLICT (lead_id) DO UPDATE
+                        SET audit_json = EXCLUDED.audit_json,
+                            match_json = EXCLUDED.match_json,
+                            updated_at = NOW()
+                        """,
+                        (lead_id, Json(audit_json), Json(match_result)),
+                    )
+                    cur.execute(
+                        """
+                        UPDATE prospectingleads
+                        SET partnership_stage = %s,
+                            status = %s,
+                            updated_at = NOW()
+                        WHERE id = %s
+                        """,
+                        ("matched", "matched", lead_id),
+                    )
+                    matched_count += 1
+                    results.append(
+                        {
+                            "lead_id": lead_id,
+                            "match_score": match_result.get("match_score"),
+                            "reason_codes": match_result.get("reason_codes"),
+                        }
+                    )
+                except Exception as lead_exc:
+                    skipped_count += 1
+                    errors.append({"lead_id": lead_id, "error": str(lead_exc)})
+
+            conn.commit()
+            return jsonify(
+                {
+                    "success": True,
+                    "matched_count": matched_count,
+                    "skipped_count": skipped_count,
+                    "results": results,
+                    "errors": errors,
+                }
+            )
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"Error partnership bulk match leads: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @admin_prospecting_bp.route("/api/partnership/leads/<string:lead_id>/offer-page", methods=["POST"])
 def partnership_generate_offer_page(lead_id):
     user_data, error = _require_auth()
@@ -6621,6 +8085,8 @@ def partnership_generate_offer_page(lead_id):
     try:
         data = request.get_json(silent=True) or {}
         requested_business_id = str(data.get("business_id") or "").strip() or None
+        requested_language = str(data.get("primary_language") or data.get("language") or "en").strip().lower() or "en"
+        primary_language, enabled_languages = _normalize_public_audit_languages(requested_language, data.get("enabled_languages"))
         conn = get_db_connection()
         try:
             _ensure_partnership_columns(conn)
@@ -6651,7 +8117,11 @@ def partnership_generate_offer_page(lead_id):
             if not audit_json:
                 audit_json = build_lead_card_preview_snapshot(lead)
 
-            base_slug = _slugify_company_name(str(lead.get("name") or "partner"))
+            base_slug = _build_offer_slug(
+                str(lead.get("name") or "partner"),
+                str(lead.get("city") or ""),
+                str(lead.get("address") or ""),
+            )
             slug = base_slug
             suffix = 1
             while True:
@@ -6678,6 +8148,8 @@ def partnership_generate_offer_page(lead_id):
                 audit_json=audit_json,
                 match_json=match_json,
                 offer_draft_json=offer_draft_json,
+                preferred_language=primary_language,
+                enabled_languages=enabled_languages,
             ))
             cur.execute(
                 """
@@ -6700,7 +8172,7 @@ def partnership_generate_offer_page(lead_id):
             {
                 "success": True,
                 "slug": slug,
-                "public_url": _make_public_offer_url(slug),
+                "public_url": _append_public_offer_language(_make_public_offer_url(slug), primary_language),
                 "page": page_json,
             }
         )
@@ -7932,6 +9404,47 @@ def update_lead_contacts(lead_id):
         return jsonify({"error": str(e)}), 500
 
 
+@admin_prospecting_bp.route("/api/admin/prospecting/lead/<string:lead_id>/language", methods=["POST"])
+def update_lead_language(lead_id):
+    """Update lead preferred language and enabled languages."""
+    _, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        data = request.get_json(silent=True) or {}
+        requested_language = str(data.get("preferred_language") or data.get("language") or "").strip().lower()
+        primary_language, enabled_languages = _normalize_public_audit_languages(requested_language, data.get("enabled_languages"))
+
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            cur = conn.cursor()
+            cur.execute(
+                """
+                UPDATE prospectingleads
+                SET preferred_language = %s,
+                    enabled_languages = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                RETURNING *
+                """,
+                (primary_language, json.dumps(enabled_languages, ensure_ascii=False), lead_id),
+            )
+            row = cur.fetchone()
+            if not row:
+                return jsonify({"error": "Lead not found"}), 404
+            conn.commit()
+            lead = dict(row)
+        finally:
+            conn.close()
+
+        return jsonify({"success": True, "lead": _normalize_lead_for_display(lead)})
+    except Exception as e:
+        print(f"Error updating lead language: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @admin_prospecting_bp.route("/api/admin/prospecting/drafts", methods=["GET"])
 def get_outreach_drafts():
     """List outreach message drafts."""
@@ -8212,9 +9725,9 @@ def generate_outreach_draft(lead_id):
                 """
                 INSERT INTO outreachmessagedrafts (
                     id, lead_id, channel, angle_type, tone, status,
-                    generated_text, created_by
+                    generated_text, learning_note_json, created_by
                 ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s
                 )
                 RETURNING id, lead_id, channel, angle_type, tone, status,
                           generated_text, edited_text, approved_text,
@@ -8228,10 +9741,28 @@ def generate_outreach_draft(lead_id):
                     draft_payload["tone"],
                     DRAFT_GENERATED,
                     draft_payload["generated_text"],
+                    Json(
+                        {
+                            "source": draft_payload.get("prompt_source") or "local_fallback",
+                            "prompt_key": draft_payload.get("prompt_key"),
+                            "prompt_version": draft_payload.get("prompt_version"),
+                        }
+                    ),
                     user_data["user_id"],
                 ),
             )
             draft = dict(cur.fetchone())
+            record_ai_learning_event(
+                capability="outreach.draft_first_message",
+                event_type="generated",
+                intent="client_outreach",
+                user_id=user_data.get("user_id"),
+                prompt_key=str(draft_payload.get("prompt_key") or ""),
+                prompt_version=str(draft_payload.get("prompt_version") or ""),
+                final_text=str(draft_payload.get("generated_text") or "")[:3000],
+                metadata={"lead_id": lead_id, "channel": channel, "source": draft_payload.get("prompt_source")},
+                conn=conn,
+            )
             conn.commit()
         finally:
             conn.close()
@@ -8266,6 +9797,7 @@ def generate_outreach_draft_from_audit(lead_id):
             display_lead = _normalize_lead_for_display(dict(lead_dict))
             if not display_lead:
                 return jsonify({"error": "Lead is not available for preview"}), 404
+            display_lead = _attach_admin_prospecting_public_offer_metadata(conn, display_lead)
             preview = build_lead_card_preview_snapshot(display_lead)
 
             cur.execute(
@@ -8280,6 +9812,7 @@ def generate_outreach_draft_from_audit(lead_id):
                 (CHANNEL_SELECTED, channel, lead_id),
             )
             updated_lead = dict(cur.fetchone())
+            updated_lead = _attach_admin_prospecting_public_offer_metadata(conn, updated_lead)
 
             draft_payload = _generate_audit_first_message_draft(updated_lead, preview, channel)
             draft_id = str(uuid.uuid4())
@@ -8304,11 +9837,28 @@ def generate_outreach_draft_from_audit(lead_id):
                     DRAFT_GENERATED,
                     draft_payload["generated_text"],
                     draft_payload["generated_text"],
-                    Json({"source": "lead_preview_audit"}),
+                    Json(
+                        {
+                            "source": draft_payload.get("prompt_source") or "lead_preview_audit",
+                            "prompt_key": draft_payload.get("prompt_key"),
+                            "prompt_version": draft_payload.get("prompt_version"),
+                        }
+                    ),
                     user_data["user_id"],
                 ),
             )
             draft = dict(cur.fetchone())
+            record_ai_learning_event(
+                capability="outreach.draft_first_message",
+                event_type="generated",
+                intent="client_outreach",
+                user_id=user_data.get("user_id"),
+                prompt_key=str(draft_payload.get("prompt_key") or ""),
+                prompt_version=str(draft_payload.get("prompt_version") or ""),
+                final_text=str(draft_payload.get("generated_text") or "")[:3000],
+                metadata={"lead_id": lead_id, "channel": channel, "source": draft_payload.get("prompt_source")},
+                conn=conn,
+            )
             conn.commit()
         finally:
             conn.close()
@@ -8792,14 +10342,20 @@ def preview_lead_card(lead_id):
         if not lead:
             return jsonify({"error": "Lead not found"}), 404
 
+        lead = _drop_mismatched_explicit_business_link(dict(lead))
         lead = _sync_lead_business_link_from_parse_history(dict(lead))
         lead = _sync_lead_contacts_from_parsed_data(dict(lead))
         display_lead = _normalize_lead_for_display(dict(lead))
         if not display_lead:
             return jsonify({"error": "Lead is not available for preview"}), 404
+        conn = get_db_connection()
+        try:
+            display_lead = _attach_admin_prospecting_public_offer_metadata(conn, display_lead)
+        finally:
+            conn.close()
 
         preview = build_lead_card_preview_snapshot(display_lead)
-        return jsonify({"success": True, "lead": display_lead, "preview": preview})
+        return jsonify(_to_json_compatible({"success": True, "lead": display_lead, "preview": preview}))
     except Exception as e:
         print(f"Error building outreach lead preview: {e}")
         return jsonify({"error": str(e)}), 500
@@ -8812,11 +10368,17 @@ def generate_admin_prospecting_offer_page(lead_id):
     if error:
         return error
     try:
+        data = request.get_json(silent=True) or {}
+        requested_language = str(data.get("primary_language") or data.get("language") or "en").strip().lower() or "en"
+        requested_languages = data.get("enabled_languages")
+        primary_language, enabled_languages = _normalize_public_audit_languages(requested_language, requested_languages)
+
         with DatabaseManager() as db:
             lead = db.get_lead_by_id(lead_id)
         if not lead:
             return jsonify({"error": "Lead not found"}), 404
 
+        lead = _drop_mismatched_explicit_business_link(dict(lead))
         lead = _sync_lead_business_link_from_parse_history(dict(lead))
         lead = _sync_lead_contacts_from_parsed_data(dict(lead))
         display_lead = _normalize_lead_for_display(dict(lead))
@@ -8824,13 +10386,39 @@ def generate_admin_prospecting_offer_page(lead_id):
             return jsonify({"error": "Lead is not available for public page"}), 404
 
         preview = build_lead_card_preview_snapshot(display_lead)
-        page_json = _to_json_compatible(_build_admin_lead_offer_payload(lead=display_lead, preview=preview))
+        page_json = _to_json_compatible(
+            _build_admin_lead_offer_payload(
+                lead=display_lead,
+                preview=preview,
+                preferred_language=primary_language,
+                enabled_languages=enabled_languages,
+            )
+        )
+        ai_enrichment = _generate_lead_audit_enrichment(display_lead, preview, primary_language)
+        audit_payload = page_json.get("audit") if isinstance(page_json.get("audit"), dict) else {}
+        if audit_payload:
+            enriched_summary = str(ai_enrichment.get("summary_text") or "").strip()
+            enriched_actions = _normalize_recommended_actions(ai_enrichment.get("recommended_actions"))
+            if enriched_summary:
+                audit_payload["summary_text"] = enriched_summary
+            if enriched_actions:
+                audit_payload["recommended_actions"] = enriched_actions
+            why_now = str(ai_enrichment.get("why_now") or "").strip()
+            if why_now:
+                audit_payload["why_now"] = why_now
+            audit_payload["ai_enrichment"] = ai_enrichment.get("meta") if isinstance(ai_enrichment.get("meta"), dict) else {}
+            page_json["audit"] = audit_payload
+        page_json["ai_enrichment"] = ai_enrichment.get("meta") if isinstance(ai_enrichment.get("meta"), dict) else {}
 
         conn = get_db_connection()
         try:
             _ensure_admin_prospecting_public_offers_table(conn)
             cur = conn.cursor()
-            base_slug = _slugify_company_name(str(display_lead.get("name") or "lead"))
+            base_slug = _build_offer_slug(
+                str(display_lead.get("name") or "lead"),
+                str(display_lead.get("city") or ""),
+                str(display_lead.get("address") or ""),
+            )
             slug = base_slug
             suffix = 1
             while True:
@@ -8866,16 +10454,33 @@ def generate_admin_prospecting_offer_page(lead_id):
                 (lead_id, slug, Json(page_json), user_data.get("user_id")),
             )
             conn.commit()
+            display_lead = _attach_admin_prospecting_public_offer_metadata(conn, display_lead)
+            record_ai_learning_event(
+                capability="lead.audit_enrichment",
+                event_type="generated",
+                intent="client_outreach",
+                user_id=user_data.get("user_id"),
+                prompt_key=str(page_json.get("ai_enrichment", {}).get("prompt_key") or ""),
+                prompt_version=str(page_json.get("ai_enrichment", {}).get("prompt_version") or ""),
+                final_text=str(audit_payload.get("summary_text") or "")[:3000] if isinstance(audit_payload, dict) else None,
+                metadata={
+                    "lead_id": lead_id,
+                    "source": str(page_json.get("ai_enrichment", {}).get("source") or ""),
+                },
+                conn=conn,
+            )
+            conn.commit()
         finally:
             conn.close()
 
         return jsonify(
-            {
+            _to_json_compatible({
                 "success": True,
                 "slug": slug,
-                "public_url": _make_public_offer_url(slug),
+                "public_url": _append_public_offer_language(_make_public_offer_url(slug), primary_language),
                 "page": page_json,
-            }
+                "lead": display_lead,
+            })
         )
     except Exception as e:
         print(f"Error generating admin prospecting offer page: {e}")
