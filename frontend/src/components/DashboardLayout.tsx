@@ -12,6 +12,12 @@ export const DashboardLayout = () => {
   const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(null);
   const [currentBusiness, setCurrentBusiness] = useState<any>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+    return window.localStorage.getItem('dashboard_sidebar_collapsed') === 'true';
+  });
   const isLeadBusiness = (business: any) => {
     const moderationStatus = String(business?.moderation_status || '').trim().toLowerCase();
     const entityGroup = String(business?.entity_group || '').trim().toLowerCase();
@@ -88,6 +94,13 @@ export const DashboardLayout = () => {
     fetchUser();
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    window.localStorage.setItem('dashboard_sidebar_collapsed', sidebarCollapsed ? 'true' : 'false');
+  }, [sidebarCollapsed]);
+
   const handleBusinessChange = async (businessId: string) => {
     const business = businesses.find(b => b.id === businessId);
     if (business) {
@@ -151,8 +164,8 @@ export const DashboardLayout = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <DashboardSidebar isMobile={false} />
-      <div className="md:pl-72 flex flex-col min-h-screen transition-all duration-300">
+      <DashboardSidebar isMobile={false} collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)} />
+      <div className={`flex flex-col min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'md:pl-24' : 'md:pl-72'}`}>
         <DashboardHeader
           businesses={businesses}
           currentBusinessId={currentBusinessId}

@@ -9,6 +9,8 @@ import {
   MessageSquare,
   Menu,
   X,
+  PanelLeftClose,
+  PanelLeftOpen,
   Sparkles,
   Handshake
 } from 'lucide-react';
@@ -18,18 +20,23 @@ import { useLanguage } from '../i18n/LanguageContext';
 import logo from '../assets/images/logo.png';
 import { cn } from '../lib/utils';
 import { DESIGN_TOKENS } from '../lib/design-tokens';
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 
 interface DashboardSidebarProps {
   isMobile?: boolean;
   onClose?: () => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   isMobile = false,
-  onClose
+  onClose,
+  collapsed = false,
+  onToggleCollapse,
 }) => {
   const location = useLocation();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
 
   const menuItems = [
@@ -38,54 +45,81 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       label: t.dashboard.sidebar.profile,
       icon: User,
       path: '/dashboard/profile',
+      tooltip: language === 'ru'
+        ? 'Заполните данные бизнеса, добавьте ссылку на карты и запустите первый аудит.'
+        : 'Fill in business details, add the map link, and start the first audit.',
     },
     {
       id: 'card',
       label: t.dashboard.sidebar.card,
       icon: FileText,
       path: '/dashboard/card',
+      tooltip: language === 'ru'
+        ? 'Управляйте данными карточки на картах, услугами, отзывами и запуском обновления.'
+        : 'Manage listing data, services, reviews, and start data refresh.',
     },
     {
       id: 'progress',
       label: t.dashboard.sidebar.progress,
       icon: TrendingUp,
       path: '/dashboard/progress',
+      tooltip: language === 'ru'
+        ? 'Здесь появляется аудит карточки, статистика и история изменений после сбора данных.'
+        : 'This is where the listing audit, metrics, and change history appear after data collection.',
     },
     {
       id: 'bookings',
       label: t.dashboard.sidebar.bookings,
       icon: Calendar,
       path: '/dashboard/bookings',
+      tooltip: language === 'ru'
+        ? 'Смотрите входящие записи и их текущий статус.'
+        : 'View incoming bookings and their current status.',
     },
     {
       id: 'chats',
       label: t.dashboard.sidebar.chats,
       icon: MessageSquare,
       path: '/dashboard/chats',
+      tooltip: language === 'ru'
+        ? 'Здесь собраны клиентские диалоги и ответы по каналам связи.'
+        : 'This section contains customer conversations and replies across channels.',
     },
     {
       id: 'partnerships',
-      label: 'Поиск партнёров',
+      label: t.dashboard.sidebar.partnerships || (language === 'ru' ? 'Поиск партнёров' : 'Partner Search'),
       icon: Handshake,
       path: '/dashboard/partnerships',
+      tooltip: language === 'ru'
+        ? 'Ищите потенциальных партнёров и работайте с собранными лидами.'
+        : 'Find potential partners and work with collected leads.',
     },
     {
       id: 'finance',
       label: t.dashboard.sidebar.finance,
       icon: DollarSign,
       path: '/dashboard/finance',
+      tooltip: language === 'ru'
+        ? 'Финансовые показатели бизнеса и рабочая экономика.'
+        : 'Business financial metrics and operating economics.',
     },
     {
       id: 'ai-chat-promotion',
       label: t.dashboard.sidebar.aiChatPromotion,
       icon: Sparkles,
       path: '/dashboard/ai-chat-promotion',
+      tooltip: language === 'ru'
+        ? 'Настройка AI-коммуникаций и сценариев продвижения.'
+        : 'Configure AI communication and promotion workflows.',
     },
     {
       id: 'settings',
       label: t.dashboard.sidebar.settings,
       icon: Settings,
       path: '/dashboard/settings',
+      tooltip: language === 'ru'
+        ? 'Общие настройки аккаунта, интеграций и рабочих режимов.'
+        : 'General account, integration, and workflow settings.',
     },
   ];
 
@@ -110,7 +144,8 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
     )}>
       {/* Logo Area */}
       <div className="p-6 border-b border-gray-100/50 backdrop-blur-lg">
-        <div className="flex items-center gap-3">
+        <div className={cn("flex items-center gap-3", collapsed && !isMobile ? "justify-center" : "justify-between")}>
+          <div className="flex items-center gap-3 min-w-0">
           <div className="relative">
             <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full" />
             <img
@@ -119,10 +154,39 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
               className="h-10 w-auto relative z-10 drop-shadow-sm transition-transform hover:scale-105 duration-300"
             />
           </div>
-          <span className="font-bold text-xl bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 hidden lg:block">
+          <span className={cn(
+            "font-bold text-xl bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 hidden lg:block",
+            collapsed && !isMobile && "hidden"
+          )}>
             LocalOS
           </span>
         </div>
+          {!isMobile && onToggleCollapse ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={cn("shrink-0", collapsed && "hidden")}
+              onClick={onToggleCollapse}
+              aria-label={collapsed ? 'Развернуть меню' : 'Свернуть меню'}
+            >
+              {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+            </Button>
+          ) : null}
+        </div>
+        {!isMobile && collapsed && onToggleCollapse ? (
+          <div className="mt-3 flex justify-center">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onToggleCollapse}
+              aria-label="Развернуть меню"
+            >
+              <PanelLeftOpen className="h-4 w-4" />
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       {/* Navigation */}
@@ -131,42 +195,50 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
           const Icon = item.icon;
           const active = isActive(item.path);
           return (
-            <Link
-              key={item.id}
-              to={item.path}
-              onClick={handleLinkClick}
-              className={cn(
-                "group flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300",
-                "hover:translate-x-1",
-                active
-                  ? "bg-gradient-to-r from-blue-600/10 to-blue-500/5 text-blue-700 shadow-sm ring-1 ring-blue-600/20"
-                  : "text-gray-600 hover:bg-gray-50/80 hover:text-gray-900"
-              )}
-            >
-              <div className={cn(
-                "p-2 rounded-lg transition-colors duration-300",
-                active ? "bg-white shadow-sm text-blue-600" : "bg-transparent text-gray-500 group-hover:text-gray-700 group-hover:bg-gray-100"
-              )}>
-                <Icon className={cn("w-5 h-5", active && "animate-pulse-slow")} />
-              </div>
-              <span className="tracking-wide">{item.label}</span>
+            <Tooltip key={item.id}>
+              <TooltipTrigger asChild>
+                <Link
+                  to={item.path}
+                  onClick={handleLinkClick}
+                  className={cn(
+                    "group relative flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-300",
+                    collapsed && !isMobile ? "justify-center px-2 py-3 hover:translate-x-0" : "px-4 py-3 hover:translate-x-1",
+                    active
+                      ? "bg-gradient-to-r from-blue-600/10 to-blue-500/5 text-blue-700 shadow-sm ring-1 ring-blue-600/20"
+                      : "text-gray-600 hover:bg-gray-50/80 hover:text-gray-900"
+                  )}
+                >
+                  <div className={cn(
+                    "p-2 rounded-lg transition-colors duration-300",
+                    active ? "bg-white shadow-sm text-blue-600" : "bg-transparent text-gray-500 group-hover:text-gray-700 group-hover:bg-gray-100"
+                  )}>
+                    <Icon className={cn("w-5 h-5", active && "animate-pulse-slow")} />
+                  </div>
+                  <span className={cn("tracking-wide", collapsed && !isMobile && "hidden")}>{item.label}</span>
 
-              {/* Active Indicator Line */}
-              {active && (
-                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-600 rounded-l-full shadow-[0_0_8px_rgba(37,99,235,0.5)]" />
-              )}
-            </Link>
+                  {active && (
+                    <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-600 rounded-l-full shadow-[0_0_8px_rgba(37,99,235,0.5)]" />
+                  )}
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="max-w-xs text-xs leading-5">
+                {item.tooltip}
+              </TooltipContent>
+            </Tooltip>
           );
         })}
       </nav>
 
       {/* Pro Badge (Decorative) */}
-      <div className="p-4 m-4 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/20">
+      <div className={cn(
+        "p-4 m-4 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/20",
+        collapsed && !isMobile && "mx-3 px-2 py-3"
+      )}>
         <div className="flex items-center gap-2 mb-2">
           <Sparkles className="w-4 h-4 text-yellow-200" />
-          <span className="text-xs font-bold uppercase tracking-wider text-white/90">Pro Max</span>
+          <span className={cn("text-xs font-bold uppercase tracking-wider text-white/90", collapsed && !isMobile && "hidden")}>Pro Max</span>
         </div>
-        <p className="text-xs text-white/80 leading-relaxed">
+        <p className={cn("text-xs text-white/80 leading-relaxed", collapsed && !isMobile && "hidden")}>
           {t.dashboard.sidebar.greeting}
         </p>
       </div>
@@ -203,7 +275,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   }
 
   return (
-    <div className="hidden md:flex md:w-72 md:flex-col md:fixed md:inset-y-0 md:left-0 z-30">
+    <div className={cn("hidden md:flex md:flex-col md:fixed md:inset-y-0 md:left-0 z-30", collapsed ? "md:w-24" : "md:w-72")}>
       {sidebarContent}
     </div>
   );

@@ -1,13 +1,28 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Badge } from "./ui/badge";
-import { Loader2, MapPin, Phone, Globe, Star, Mail, MessageCircle, Save } from "lucide-react";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "./ui/sheet";
+import { Loader2, MapPin, Phone, Globe, Star, Mail, MessageCircle, Save, Search, SlidersHorizontal, Plus, LayoutGrid, List, ExternalLink, TriangleAlert, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { api } from "@/services/api";
-import LeadCardPreviewPanel, { type LeadCardPreview } from "./LeadCardPreviewPanel";
+import { ContactPresenceBadges, StatusSummaryCard, WorkflowActionRow } from "./prospecting/LeadWorkflowBlocks";
+import { AnalyticsMetricGrid, AnalyticsSection, AnalyticsSummaryGrid, AnalyticsWindowGrid } from "./prospecting/ProspectingAnalyticsBlocks";
+import {
+    ErrorSummary,
+    LeadList,
+    LeadListItem,
+    StickyBulkActionBar,
+} from "./prospecting/OutreachWorkspaceBlocks";
+import { DraftDetailPanel, QueueDetailPanel, SentDetailPanel } from "./prospecting/OutreachDetailPanes";
+import { ProspectingIntakePanel, ProspectingPipelineHeader, ProspectingWorkspaceTabs } from "./prospecting/ProspectingWorkspaceChrome";
+import { getRequestErrorMessage, withBusyState } from "./prospecting/prospectingAsync";
+import type { LeadCardPreview } from "./LeadCardPreviewPanel";
+import { toast } from "sonner";
+
+const LeadCardPreviewPanel = lazy(() => import("./LeadCardPreviewPanel"));
 
 type Lead = {
     id?: string;
@@ -37,6 +52,13 @@ type Lead = {
     public_audit_url?: string;
     public_audit_updated_at?: string;
     has_public_audit?: boolean;
+    parse_status?: string | null;
+    parse_updated_at?: string | null;
+    parse_retry_after?: string | null;
+    parse_error?: string | null;
+    parse_task_id?: string | null;
+    preferred_language?: string | null;
+    enabled_languages?: string[] | null;
 };
 
 type SearchJob = {
@@ -69,6 +91,10 @@ type OutreachQueueItem = {
     channel: string;
     delivery_status: string;
     provider_message_id?: string | null;
+    provider_name?: string | null;
+    provider_account_id?: string | null;
+    recipient_kind?: string | null;
+    recipient_value?: string | null;
     error_text?: string | null;
     sent_at?: string | null;
     created_at?: string;
@@ -84,12 +110,25 @@ type OutreachQueueItem = {
 
 const ACTIVE_SEARCH_JOB_STORAGE_KEY = 'prospecting_active_search_job_id';
 const LAST_SEARCH_JOB_STORAGE_KEY = 'prospecting_last_search_job';
+const LAST_SEARCH_RESULTS_STORAGE_KEY = 'prospecting_last_search_results';
 
 type OutreachBatch = {
     id: string;
     batch_date: string;
     daily_limit: number;
     status: string;
+    runtime_status?: string;
+    queue_summary?: {
+        total?: number;
+        queued?: number;
+        sending?: number;
+        sent?: number;
+        delivered?: number;
+        retry?: number;
+        failed?: number;
+        dlq?: number;
+        with_reaction?: number;
+    };
     created_by?: string | null;
     approved_by?: string | null;
     created_at?: string;
@@ -112,6 +151,26 @@ type OutreachReaction = {
     batch_id?: string;
     channel?: string;
     delivery_status?: string;
+    provider_name?: string | null;
+    provider_account_id?: string | null;
+    provider_message_id?: string | null;
+    reply_created_at?: string | null;
+};
+
+type TelegramAppStatus = {
+    configured: boolean;
+    authorized: boolean;
+    phone?: string | null;
+    account_id?: string | null;
+    status?: string | null;
+};
+
+type TelegramReplySyncSummary = {
+    picked: number;
+    imported: number;
+    duplicates: number;
+    noops: number;
+    failed: number;
 };
 
 type LeadFilters = {
@@ -126,9 +185,44 @@ type LeadFilters = {
     hasPhone: string;
     hasEmail: string;
     hasMessengers: string;
+    hasTelegram: string;
+    hasWhatsApp: string;
+    hasVk: string;
+    hasMax: string;
 };
 
+type KanbanColumnId = 'new' | 'shortlist' | 'in_progress' | 'contacted' | 'closed';
+type WorkspaceTab = 'raw' | 'pipeline' | 'outreach' | 'analytics';
+const toOutreachContactFilter = (value: string): OutreachContactFilter => {
+    if (value === 'telegram' || value === 'whatsapp' || value === 'max' || value === 'email' || value === 'vk') {
+        return value;
+    }
+    return '';
+};
+
+const toWorkspaceTab = (value: string): WorkspaceTab => {
+    if (value === 'pipeline' || value === 'outreach' || value === 'analytics') {
+        return value;
+    }
+    return 'raw';
+};
+
+const toOutreachTab = (value: string): OutreachTab => {
+    if (value === 'queue' || value === 'sent') {
+        return value;
+    }
+    return 'drafts';
+};
+type OutreachTab = 'drafts' | 'queue' | 'sent';
+type PipelineViewMode = 'kanban' | 'list';
+type PipelineQuickFilter = 'all' | 'without_audit' | 'with_audit' | 'priority';
+type PipelineBoardColumnId = 'new' | 'in_progress' | 'contacted' | 'closed';
+
 const inferLeadAuditLanguage = (lead: Lead | null): string => {
+    const preferred = String(lead?.preferred_language || '').trim().toLowerCase();
+    if (preferred) {
+        return preferred;
+    }
     const context = [
         lead?.city || '',
         lead?.address || '',
@@ -163,6 +257,184 @@ const ensureAuditLanguages = (primaryLanguage: string, enabledLanguages?: string
     return result.length > 0 ? result : [normalizedPrimary];
 };
 
+const AUDIT_LANGUAGE_OPTIONS = [
+    { value: 'en', label: 'English' },
+    { value: 'ru', label: 'Русский' },
+    { value: 'es', label: 'Español' },
+    { value: 'de', label: 'Deutsch' },
+    { value: 'fr', label: 'Français' },
+    { value: 'el', label: 'Ελληνικά' },
+    { value: 'th', label: 'ไทย' },
+    { value: 'tr', label: 'Türkçe' },
+    { value: 'ar', label: 'العربية' },
+    { value: 'ha', label: 'Hausa' },
+];
+
+const formatLanguageLabel = (language: string) => {
+    const normalized = String(language || '').trim().toLowerCase();
+    const match = AUDIT_LANGUAGE_OPTIONS.find((item) => item.value === normalized);
+    return match?.label || normalized || '—';
+};
+
+const formatConversion = (current: number, previous: number) => {
+    if (!previous || previous <= 0) {
+        return '—';
+    }
+    return `${Math.round((current / previous) * 100)}%`;
+};
+
+const formatDropOff = (current: number, previous: number) => {
+    if (!previous || previous <= 0) {
+        return '—';
+    }
+    return `${Math.max(previous - current, 0)}`;
+};
+
+const normalizeLeadIdentityText = (value: unknown) =>
+    String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/ё/g, 'е')
+        .replace(/https?:\/\//g, '')
+        .replace(/[^a-z0-9а-я]+/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+const normalizeLeadIdentityUrl = (value: unknown) => {
+    const raw = String(value || '').trim();
+    if (!raw) {
+        return '';
+    }
+    try {
+        const url = new URL(raw);
+        url.hash = '';
+        const host = url.hostname.toLowerCase();
+        const normalizedHost = host.replace(/^www\./, '');
+        if (normalizedHost.includes('yandex.')) {
+            url.hostname = 'yandex.com';
+            url.search = '';
+            url.pathname = url.pathname.replace(/\/+$/, '');
+        } else if (normalizedHost.includes('google.')) {
+            url.hostname = 'www.google.com';
+            if (url.pathname.startsWith('/maps/place/')) {
+                url.search = '';
+            }
+            url.pathname = url.pathname.replace(/\/+$/, '');
+        } else {
+            url.pathname = url.pathname.replace(/\/+$/, '');
+        }
+        return url.toString();
+    } catch {
+        return raw.replace(/\/+$/, '');
+    }
+};
+
+const extractLeadIdentityIdsFromUrl = (value: unknown) => {
+    const url = String(value || '').trim();
+    if (!url) {
+        return [];
+    }
+    const ids: string[] = [];
+    const push = (prefix: string, rawId?: string | null) => {
+        const normalized = String(rawId || '').trim().toLowerCase();
+        if (!normalized) {
+            return;
+        }
+        const key = `${prefix}:${normalized}`;
+        if (!ids.includes(key)) {
+            ids.push(key);
+        }
+    };
+    const yandexMatch = url.match(/\/org\/(?:[^/]+\/)?(\d+)/i);
+    if (yandexMatch?.[1]) {
+        push('source_external_id', yandexMatch[1]);
+        push('google_id', yandexMatch[1]);
+    }
+    const cidMatch = url.match(/[?&]cid=(\d+)/i);
+    if (cidMatch?.[1]) {
+        push('source_external_id', cidMatch[1]);
+        push('google_id', cidMatch[1]);
+    }
+    const googlePlaceMatch = url.match(/!1s(0x[0-9a-f]+:0x[0-9a-f]+)/i);
+    if (googlePlaceMatch?.[1]) {
+        push('source_external_id', googlePlaceMatch[1]);
+        push('google_id', googlePlaceMatch[1]);
+    }
+    return ids;
+};
+
+const buildLeadIdentityKeys = (lead: Partial<Lead>) => {
+    const keys: string[] = [];
+    const push = (prefix: string, value: unknown) => {
+        const normalized = String(value || '').trim().toLowerCase();
+        if (!normalized) {
+            return;
+        }
+        const nextKey = `${prefix}:${normalized}`;
+        if (!keys.includes(nextKey)) {
+            keys.push(nextKey);
+        }
+    };
+
+    push('source_external_id', lead.source_external_id);
+    push('google_id', lead.google_id);
+    push('source_url', lead.source_url);
+    push('name', lead.name);
+    const normalizedSourceUrl = normalizeLeadIdentityUrl(lead.source_url);
+    if (normalizedSourceUrl) {
+        push('source_url_normalized', normalizedSourceUrl);
+        extractLeadIdentityIdsFromUrl(normalizedSourceUrl).forEach((key) => {
+            if (!keys.includes(key)) {
+                keys.push(key);
+            }
+        });
+    }
+    const cityNameKey = [normalizeLeadIdentityText(lead.name), normalizeLeadIdentityText(lead.city)]
+        .filter(Boolean)
+        .join(' | ');
+    if (cityNameKey) {
+        push('name_city', cityNameKey);
+    }
+
+    return keys;
+};
+
+const isWithinLastDays = (value?: string, days?: number) => {
+    if (!value || !days) {
+        return false;
+    }
+    const timestamp = Date.parse(value);
+    if (Number.isNaN(timestamp)) {
+        return false;
+    }
+    const now = Date.now();
+    const diff = now - timestamp;
+    return diff >= 0 && diff <= days * 24 * 60 * 60 * 1000;
+};
+
+const buildLeadAuditLanguageLinks = (lead: Lead) => {
+    const baseUrl = String(lead.public_audit_url || '').trim();
+    if (!baseUrl) {
+        return [];
+    }
+    const enabled = Array.isArray(lead.enabled_languages) && lead.enabled_languages.length > 0
+        ? lead.enabled_languages
+        : [String(lead.preferred_language || inferLeadAuditLanguage(lead)).trim().toLowerCase() || 'en'];
+
+    return enabled
+        .map((item) => String(item || '').trim().toLowerCase())
+        .filter(Boolean)
+        .map((language) => {
+            const url = new URL(baseUrl, window.location.origin);
+            url.searchParams.set('lang', language);
+            return {
+                language,
+                href: url.toString(),
+                label: formatLanguageLabel(language),
+            };
+        });
+};
+
 const emptyFilters: LeadFilters = {
     category: '',
     city: '',
@@ -175,6 +447,10 @@ const emptyFilters: LeadFilters = {
     hasPhone: '',
     hasEmail: '',
     hasMessengers: '',
+    hasTelegram: '',
+    hasWhatsApp: '',
+    hasVk: '',
+    hasMax: '',
 };
 
 const shortlistApproved = 'shortlist_approved';
@@ -259,6 +535,111 @@ const workflowStatusLabel = (status: string) => {
     }
 };
 
+const kanbanColumnOrder: KanbanColumnId[] = ['new', 'shortlist', 'in_progress', 'contacted', 'closed'];
+
+const kanbanColumnMeta: Record<KanbanColumnId, { label: string; description: string; statusToSet: string }> = {
+    new: {
+        label: 'Новые',
+        description: 'Свежие лиды из поиска и ручного ввода.',
+        statusToSet: 'new',
+    },
+    shortlist: {
+        label: 'Отобранные',
+        description: 'Потенциально подходят для первого контакта.',
+        statusToSet: shortlistApproved,
+    },
+    in_progress: {
+        label: 'В работе',
+        description: 'Аудит и подготовка первого контакта.',
+        statusToSet: selectedForOutreach,
+    },
+    contacted: {
+        label: 'Контактированы',
+        description: 'Сообщение отправлено или в процессе.',
+        statusToSet: 'sent',
+    },
+    closed: {
+        label: 'Отложенные',
+        description: 'Лиды, которые вернём в работу позже или не берём сейчас.',
+        statusToSet: deferredLead,
+    },
+};
+
+const leadToKanbanColumn = (lead: Lead): KanbanColumnId => {
+    const status = String(lead.status || '').trim().toLowerCase();
+    if (!status || status === 'new') {
+        return 'new';
+    }
+    if (status === shortlistApproved) {
+        return 'shortlist';
+    }
+    if ([selectedForOutreach, channelSelected, 'draft_ready'].includes(status)) {
+        return 'in_progress';
+    }
+    if (['queued_for_send', 'sent', 'delivered', 'responded', 'converted'].includes(status)) {
+        return 'contacted';
+    }
+    if ([deferredLead, shortlistRejected, 'rejected', 'closed'].includes(status)) {
+        return 'closed';
+    }
+    return 'new';
+};
+
+const nextKanbanColumn = (columnId: KanbanColumnId): KanbanColumnId | null => {
+    const idx = kanbanColumnOrder.indexOf(columnId);
+    if (idx === -1 || idx >= kanbanColumnOrder.length - 1) {
+        return null;
+    }
+    return kanbanColumnOrder[idx + 1];
+};
+
+const pipelineBoardColumnOrder: PipelineBoardColumnId[] = ['new', 'in_progress', 'contacted', 'closed'];
+
+const pipelineBoardColumnMeta: Record<PipelineBoardColumnId, { label: string; description: string; statusToSet: string }> = {
+    new: {
+        label: 'Новые',
+        description: 'Свежие и приоритетные лиды, которые ждут первого рабочего шага.',
+        statusToSet: 'new',
+    },
+    in_progress: {
+        label: 'В работе',
+        description: 'Аудит, проверка контактов и подготовка первого касания.',
+        statusToSet: selectedForOutreach,
+    },
+    contacted: {
+        label: 'Контактированы',
+        description: 'Сообщение уже ушло или лид находится в доставке и обработке.',
+        statusToSet: 'sent',
+    },
+    closed: {
+        label: 'Отложенные',
+        description: 'Лиды, к которым вернёмся позже или не берём в текущую волну.',
+        statusToSet: deferredLead,
+    },
+};
+
+const leadToPipelineBoardColumn = (lead: Lead): PipelineBoardColumnId => {
+    const status = String(lead.status || '').trim().toLowerCase();
+    if (!status || status === 'new' || status === shortlistApproved) {
+        return 'new';
+    }
+    if ([selectedForOutreach, channelSelected, 'draft_ready'].includes(status)) {
+        return 'in_progress';
+    }
+    if (['queued_for_send', 'sent', 'delivered', 'responded', 'converted'].includes(status)) {
+        return 'contacted';
+    }
+    return 'closed';
+};
+
+const nextPipelineBoardColumn = (columnId: PipelineBoardColumnId): PipelineBoardColumnId | null => {
+    const idx = pipelineBoardColumnOrder.indexOf(columnId);
+    if (idx === -1 || idx >= pipelineBoardColumnOrder.length - 1) {
+        return null;
+    }
+    return pipelineBoardColumnOrder[idx + 1];
+};
+
 const sourceLabel = (source?: string) => {
     switch (source) {
         case 'external_import':
@@ -295,6 +676,8 @@ const formatLeadChannel = (channel?: string) => {
             return 'Telegram';
         case 'whatsapp':
             return 'WhatsApp';
+        case 'max':
+            return 'Max';
         case 'email':
             return 'Email';
         case 'manual':
@@ -304,7 +687,204 @@ const formatLeadChannel = (channel?: string) => {
     }
 };
 
+const formatQueueProvider = (providerName?: string | null) => {
+    const normalized = String(providerName || '').trim().toLowerCase();
+    if (normalized === 'telegram_app') return 'Telegram app';
+    if (normalized === 'openclaw') return 'OpenClaw';
+    if (normalized === 'maton') return 'Maton';
+    if (normalized === 'manual') return 'Manual';
+    if (normalized === 'email') return 'Email';
+    if (normalized === 'max') return 'Max';
+    return normalized || '—';
+};
+
+const buildLeadFallbackFromQueueItem = (item: OutreachQueueItem): Lead => ({
+    id: item.lead_id,
+    name: item.lead_name || item.lead_id,
+    selected_channel: item.channel,
+    status:
+        item.delivery_status === 'sent' || item.delivery_status === 'delivered'
+            ? 'sent'
+            : item.delivery_status === 'failed' || item.delivery_status === 'dlq'
+                ? 'queued_for_send'
+                : 'queued_for_send',
+});
+
+const queueItemMatchesContactFilter = (
+    item: OutreachQueueItem,
+    lead: Lead | undefined,
+    contactFilter: OutreachContactFilter
+) => {
+    if (!contactFilter) {
+        return true;
+    }
+    if (lead) {
+        return leadMatchesOutreachContactFilter(lead, contactFilter);
+    }
+    if (contactFilter === 'vk') {
+        return false;
+    }
+    return item.channel === contactFilter;
+};
+
+const summarizeBatchFromItems = (batch: OutreachBatch) => {
+    const base = batch.queue_summary || {};
+    const items = Array.isArray(batch.items) ? batch.items : [];
+    const fallback = {
+        total: items.length,
+        queued: 0,
+        sending: 0,
+        sent: 0,
+        delivered: 0,
+        retry: 0,
+        failed: 0,
+        dlq: 0,
+        with_reaction: 0,
+    };
+    items.forEach((item) => {
+        const status = String(item.delivery_status || '').trim().toLowerCase();
+        if (status in fallback) {
+            fallback[status as keyof typeof fallback] += 1;
+        }
+        if (item.latest_outcome || item.latest_human_outcome || item.latest_raw_reply) {
+            fallback.with_reaction += 1;
+        }
+    });
+    return {
+        total: Number(base.total ?? fallback.total ?? 0),
+        queued: Number(base.queued ?? fallback.queued ?? 0),
+        sending: Number(base.sending ?? fallback.sending ?? 0),
+        sent: Number(base.sent ?? fallback.sent ?? 0),
+        delivered: Number(base.delivered ?? fallback.delivered ?? 0),
+        retry: Number(base.retry ?? fallback.retry ?? 0),
+        failed: Number(base.failed ?? fallback.failed ?? 0),
+        dlq: Number(base.dlq ?? fallback.dlq ?? 0),
+        withReaction: Number(base.with_reaction ?? fallback.with_reaction ?? 0),
+    };
+};
+
+const formatBatchRuntimeStatus = (batch: OutreachBatch) => {
+    const runtimeStatus = String(batch.runtime_status || batch.status || '').trim().toLowerCase();
+    if (runtimeStatus === 'draft') return 'Черновик';
+    if (runtimeStatus === 'sending') return 'Идёт отправка';
+    if (runtimeStatus === 'completed') return 'Завершён';
+    if (runtimeStatus === 'approved') return 'Подтверждён';
+    return runtimeStatus || '—';
+};
+
+const hasLeadAudit = (lead: Lead) => Boolean(String(lead.public_audit_url || '').trim());
+
+const leadAuditLanguageSummary = (lead: Lead) => {
+    const enabled = Array.isArray(lead.enabled_languages)
+        ? lead.enabled_languages
+            .map((item) => String(item || '').trim().toLowerCase())
+            .filter(Boolean)
+        : [];
+    const primary = String(lead.preferred_language || '').trim().toLowerCase() || enabled[0] || '';
+    const uniqueLanguages: string[] = [];
+    enabled.forEach((item) => {
+        if (!uniqueLanguages.includes(item)) {
+            uniqueLanguages.push(item);
+        }
+    });
+    if (primary && !uniqueLanguages.includes(primary)) {
+        uniqueLanguages.unshift(primary);
+    }
+    return {
+        primary,
+        total: uniqueLanguages.length,
+    };
+};
+
+const formatAuditUpdatedAt = (value?: string) => {
+    if (!value) {
+        return 'Дата не зафиксирована';
+    }
+    const timestamp = Date.parse(value);
+    if (Number.isNaN(timestamp)) {
+        return 'Дата не зафиксирована';
+    }
+    return new Date(timestamp).toLocaleString('ru-RU');
+};
+
 const reactionOutcomeOptions: Array<'positive' | 'question' | 'no_response' | 'hard_no'> = ['positive', 'question', 'no_response', 'hard_no'];
+
+const formatDraftStatusLabel = (status?: string | null) => {
+    const normalized = String(status || '').trim().toLowerCase();
+    if (normalized === 'approved') {
+        return 'Готово к отправке';
+    }
+    if (normalized === 'rejected') {
+        return 'Нужна проверка';
+    }
+    return 'Ждёт проверки';
+};
+
+const toneForDraftStatus = (status?: string | null): 'default' | 'success' | 'warning' | 'danger' => {
+    const normalized = String(status || '').trim().toLowerCase();
+    if (normalized === 'approved') {
+        return 'success';
+    }
+    if (normalized === 'rejected') {
+        return 'danger';
+    }
+    return 'warning';
+};
+
+const formatQueueStatusLabel = (status?: string | null) => {
+    const normalized = String(status || '').trim().toLowerCase();
+    if (normalized === 'queued') {
+        return 'Готово к отправке';
+    }
+    if (normalized === 'sending') {
+        return 'Отправляем';
+    }
+    if (normalized === 'sent') {
+        return 'Отправлено';
+    }
+    if (normalized === 'delivered') {
+        return 'Доставлено';
+    }
+    if (normalized === 'retry') {
+        return 'Повторная попытка';
+    }
+    if (normalized === 'dlq' || normalized === 'failed') {
+        return 'Нужна проверка';
+    }
+    return 'Ждёт действия';
+};
+
+const toneForQueueStatus = (status?: string | null): 'default' | 'success' | 'warning' | 'danger' | 'info' => {
+    const normalized = String(status || '').trim().toLowerCase();
+    if (normalized === 'sent' || normalized === 'delivered') {
+        return 'success';
+    }
+    if (normalized === 'failed' || normalized === 'dlq') {
+        return 'danger';
+    }
+    if (normalized === 'sending' || normalized === 'retry') {
+        return 'warning';
+    }
+    if (normalized === 'queued') {
+        return 'info';
+    }
+    return 'default';
+};
+
+const leadLanguageLabel = (lead: Lead | null | undefined) => {
+    if (!lead) {
+        return 'Язык не задан';
+    }
+    const enabled = Array.isArray(lead.enabled_languages) ? lead.enabled_languages.filter(Boolean) : [];
+    const primary = String(lead.preferred_language || enabled[0] || '').trim();
+    if (!primary) {
+        return 'Язык не задан';
+    }
+    if (enabled.length > 1) {
+        return `${primary.toUpperCase()} +${enabled.length - 1}`;
+    }
+    return primary.toUpperCase();
+};
 
 const getReactionClassifierSource = (note?: string | null) => {
     if (!note) {
@@ -358,6 +938,17 @@ const isDisplayableLead = (lead: Lead) => {
     return meaningful.some((value) => value && !isPlaceholderLike(value));
 };
 
+const isRawImportedLead = (lead: Lead) => {
+    const status = String(lead.status || '').trim().toLowerCase();
+    const stage = String(lead.partnership_stage || '').trim().toLowerCase();
+    return status === 'imported' && (!stage || stage === 'imported');
+};
+
+const isLeadAlreadySent = (lead?: Lead) => {
+    const status = String(lead?.status || '').trim().toLowerCase();
+    return ['sent', 'delivered', 'responded', 'converted'].includes(status);
+};
+
 const extractHasMessengers = (lead: Lead) => {
     const rawLinks = lead.messenger_links_json;
     const parsedLinks = Array.isArray(rawLinks)
@@ -372,6 +963,138 @@ const extractHasMessengers = (lead: Lead) => {
             })()
             : [];
     return Boolean(lead.telegram_url || lead.whatsapp_url || (Array.isArray(parsedLinks) && parsedLinks.length > 0));
+};
+
+const extractHasVk = (lead: Lead) => {
+    const website = String(lead.website || '').trim().toLowerCase();
+    if (website.includes('vk.com')) {
+        return true;
+    }
+    const rawLinks = lead.messenger_links_json;
+    const parsedLinks = Array.isArray(rawLinks)
+        ? rawLinks
+        : typeof rawLinks === 'string' && rawLinks.trim()
+            ? (() => {
+                try {
+                    return JSON.parse(rawLinks);
+                } catch {
+                    return [];
+                }
+            })()
+            : [];
+    return Array.isArray(parsedLinks) && parsedLinks.some((item) => String(item || '').toLowerCase().includes('vk.com'));
+};
+
+const extractHasMax = (lead: Lead) => {
+    const website = String(lead.website || '').trim().toLowerCase();
+    if (website.includes('max.ru') || website.includes('web.max.ru')) {
+        return true;
+    }
+    const rawLinks = lead.messenger_links_json;
+    const parsedLinks = Array.isArray(rawLinks)
+        ? rawLinks
+        : typeof rawLinks === 'string' && rawLinks.trim()
+            ? (() => {
+                try {
+                    return JSON.parse(rawLinks);
+                } catch {
+                    return [];
+                }
+            })()
+            : [];
+    return Array.isArray(parsedLinks) && parsedLinks.some((item) => {
+        const value = String(item || '').toLowerCase();
+        return value.includes('max.ru') || value.includes('web.max.ru');
+    });
+};
+
+const matchesBooleanFilter = (value: string, condition: boolean) => {
+    const normalized = normalizeBooleanFilter(value);
+    if (normalized === undefined) {
+        return true;
+    }
+    return normalized === condition;
+};
+
+type OutreachChannel = 'telegram' | 'whatsapp' | 'max' | 'email' | 'manual';
+type OutreachContactFilter = '' | 'telegram' | 'whatsapp' | 'max' | 'email' | 'vk';
+
+const toOutreachChannel = (value: string): OutreachChannel => {
+    if (value === 'telegram' || value === 'whatsapp' || value === 'max' || value === 'email') {
+        return value;
+    }
+    return 'manual';
+};
+
+const hasChannelContact = (lead: Lead | undefined, channel: string) => {
+    if (!lead) {
+        return false;
+    }
+    if (channel === 'telegram') {
+        return Boolean(lead.telegram_url);
+    }
+    if (channel === 'whatsapp') {
+        return Boolean(lead.whatsapp_url);
+    }
+    if (channel === 'max') {
+        return extractHasMax(lead);
+    }
+    if (channel === 'email') {
+        return Boolean(lead.email);
+    }
+    if (channel === 'vk') {
+        return extractHasVk(lead);
+    }
+    if (channel === 'manual') {
+        return true;
+    }
+    return false;
+};
+
+const leadMatchesOutreachContactFilter = (lead: Lead | undefined, filter: OutreachContactFilter) => {
+    if (!filter) {
+        return true;
+    }
+    return hasChannelContact(lead, filter);
+};
+
+const bestAvailableOutreachChannel = (lead: Lead | undefined): OutreachChannel => {
+    if (hasChannelContact(lead, 'telegram')) {
+        return 'telegram';
+    }
+    if (hasChannelContact(lead, 'whatsapp')) {
+        return 'whatsapp';
+    }
+    if (hasChannelContact(lead, 'max')) {
+        return 'max';
+    }
+    if (hasChannelContact(lead, 'email')) {
+        return 'email';
+    }
+    return 'manual';
+};
+
+const selectedChannelWarning = (lead: Lead | undefined, channel?: string | null) => {
+    const normalized = String(channel || '').trim().toLowerCase();
+    if (!normalized || normalized === 'manual') {
+        return '';
+    }
+    if (hasChannelContact(lead, normalized)) {
+        return '';
+    }
+    return `Выбран ${formatLeadChannel(normalized)}, но контакт этого типа у лида не заполнен.`;
+};
+
+const formatDateTime = (value?: string | null) => {
+    const raw = String(value || '').trim();
+    if (!raw) {
+        return '—';
+    }
+    const timestamp = Date.parse(raw);
+    if (Number.isNaN(timestamp)) {
+        return raw;
+    }
+    return new Date(timestamp).toLocaleString('ru-RU');
 };
 
 const ContactStack: React.FC<{ lead: Lead }> = ({ lead }) => (
@@ -421,12 +1144,32 @@ const LeadMetaSummary: React.FC<{ lead: Lead; showChannel?: boolean }> = ({ lead
                 <span className="text-muted-foreground">({lead.reviews_count ?? 0})</span>
             </span>
         </div>
+        <ContactPresenceBadges
+            title="Каналы связи"
+            website={lead.website}
+            phone={lead.phone}
+            email={lead.email}
+            telegramUrl={lead.telegram_url}
+            whatsappUrl={lead.whatsapp_url}
+            hasMessenger={extractHasMessengers(lead)}
+        />
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+            <Badge variant="outline">Лучший канал: {formatLeadChannel(bestAvailableOutreachChannel(lead))}</Badge>
+            {selectedChannelWarning(lead, lead.selected_channel) ? (
+                <Badge variant="destructive" className="font-normal">
+                    <TriangleAlert className="mr-1 h-3 w-3" />
+                    {selectedChannelWarning(lead, lead.selected_channel)}
+                </Badge>
+            ) : null}
+        </div>
         <ContactStack lead={lead} />
-        {lead.public_audit_url && (
-            <div className="text-sm">
-                <a href={lead.public_audit_url} target="_blank" rel="noreferrer" className="underline text-primary">
-                    Открыть созданный аудит
-                </a>
+        {buildLeadAuditLanguageLinks(lead).length > 0 && (
+            <div className="flex flex-wrap gap-2 text-sm">
+                {buildLeadAuditLanguageLinks(lead).map((item) => (
+                    <a key={item.language} href={item.href} target="_blank" rel="noreferrer" className="underline text-primary">
+                        Аудит {item.label}
+                    </a>
+                ))}
             </div>
         )}
     </div>
@@ -441,7 +1184,13 @@ export const ProspectingManagement: React.FC = () => {
     const [manualLeadName, setManualLeadName] = useState('');
     const [manualLeadCategory, setManualLeadCategory] = useState('');
     const [manualLeadBusy, setManualLeadBusy] = useState(false);
-    const [activeTab, setActiveTab] = useState<'search' | 'leads' | 'outreach' | 'drafts' | 'queue' | 'sent'>('search');
+    const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceTab>('raw');
+    const [outreachTab, setOutreachTab] = useState<OutreachTab>('drafts');
+    const [pipelineView, setPipelineView] = useState<PipelineViewMode>('kanban');
+    const [quickFilter, setQuickFilter] = useState<PipelineQuickFilter>('all');
+    const [pipelineSearch, setPipelineSearch] = useState('');
+    const [intakeOpen, setIntakeOpen] = useState(false);
+    const [filtersOpen, setFiltersOpen] = useState(false);
     const [results, setResults] = useState<Lead[]>([]);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState<Record<string, boolean>>({});
@@ -450,17 +1199,17 @@ export const ProspectingManagement: React.FC = () => {
     const [searchJobId, setSearchJobId] = useState<string | null>(null);
     const [searchJob, setSearchJob] = useState<SearchJob | null>(null);
     const [filters, setFilters] = useState<LeadFilters>(emptyFilters);
-    const [collectTab, setCollectTab] = useState<'candidates' | 'rejected'>('candidates');
-    const [shortlistTab, setShortlistTab] = useState<'shortlist' | 'deferred'>('shortlist');
     const [shortlistLoading, setShortlistLoading] = useState<Record<string, string>>({});
+    const [languageLoading, setLanguageLoading] = useState<Record<string, boolean>>({});
     const [selectionLoading, setSelectionLoading] = useState<Record<string, string>>({});
-    const [bulkParseBusy, setBulkParseBusy] = useState(false);
     const [drafts, setDrafts] = useState<OutreachDraft[]>([]);
     const [loadingDrafts, setLoadingDrafts] = useState(false);
     const [draftBusy, setDraftBusy] = useState<Record<string, string>>({});
     const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
     const [sendReadyDrafts, setSendReadyDrafts] = useState<OutreachDraft[]>([]);
     const [sendBatches, setSendBatches] = useState<OutreachBatch[]>([]);
+    const [telegramAppStatus, setTelegramAppStatus] = useState<TelegramAppStatus | null>(null);
+    const [telegramReplySyncSummary, setTelegramReplySyncSummary] = useState<TelegramReplySyncSummary | null>(null);
     const [sendDailyCap, setSendDailyCap] = useState(10);
     const [loadingSendQueue, setLoadingSendQueue] = useState(false);
     const [sendQueueBusy, setSendQueueBusy] = useState<Record<string, string>>({});
@@ -473,20 +1222,25 @@ export const ProspectingManagement: React.FC = () => {
     const [importBusy, setImportBusy] = useState(false);
     const [importResult, setImportResult] = useState<string | null>(null);
     const [draftChannelFilter, setDraftChannelFilter] = useState('');
+    const [draftContactFilter, setDraftContactFilter] = useState<OutreachContactFilter>('');
     const [draftStatusFilter, setDraftStatusFilter] = useState('');
     const [queueChannelFilter, setQueueChannelFilter] = useState('');
+    const [queueContactFilter, setQueueContactFilter] = useState<OutreachContactFilter>('');
     const [queueViewFilter, setQueueViewFilter] = useState<'all' | 'today' | 'attention'>('all');
+    const [sentContactFilter, setSentContactFilter] = useState<OutreachContactFilter>('');
+    const [outreachDetailOpen, setOutreachDetailOpen] = useState(true);
+    const [selectedDraftDetailId, setSelectedDraftDetailId] = useState<string | null>(null);
     const [selectedDraftIds, setSelectedDraftIds] = useState<string[]>([]);
     const [selectedSendReadyDraftIds, setSelectedSendReadyDraftIds] = useState<string[]>([]);
-    const [selectedShortlistLeadIds, setSelectedShortlistLeadIds] = useState<string[]>([]);
     const [selectedOutreachLeadIds, setSelectedOutreachLeadIds] = useState<string[]>([]);
     const [selectedQueueItemIds, setSelectedQueueItemIds] = useState<string[]>([]);
-    const [bulkOutreachChannel, setBulkOutreachChannel] = useState<'telegram' | 'whatsapp' | 'email' | 'manual'>('telegram');
+    const [selectedQueueItemId, setSelectedQueueItemId] = useState<string | null>(null);
+    const [selectedSentLeadId, setSelectedSentLeadId] = useState<string | null>(null);
+    const [bulkOutreachChannel, setBulkOutreachChannel] = useState<'telegram' | 'whatsapp' | 'max' | 'email' | 'manual'>('telegram');
     const [previewLead, setPreviewLead] = useState<Lead | null>(null);
     const [previewSnapshot, setPreviewSnapshot] = useState<LeadCardPreview | null>(null);
     const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null);
     const [previewError, setPreviewError] = useState<string | null>(null);
-    const [previewGenerateBusy, setPreviewGenerateBusy] = useState(false);
     const [previewAuditPageBusy, setPreviewAuditPageBusy] = useState(false);
     const [previewAuditPageUrl, setPreviewAuditPageUrl] = useState<string | null>(null);
     const [previewAuditPageLanguage, setPreviewAuditPageLanguage] = useState('en');
@@ -494,6 +1248,44 @@ export const ProspectingManagement: React.FC = () => {
     const [previewContactsBusy, setPreviewContactsBusy] = useState(false);
     const [previewParseBusy, setPreviewParseBusy] = useState(false);
     const [previewAutoRefreshing, setPreviewAutoRefreshing] = useState(false);
+    const [parseActionBusy, setParseActionBusy] = useState<Record<string, boolean>>({});
+    const [draggingLeadId, setDraggingLeadId] = useState<string | null>(null);
+    const [dropColumnId, setDropColumnId] = useState<PipelineBoardColumnId | null>(null);
+    const [statusUpdateBusy, setStatusUpdateBusy] = useState<Record<string, boolean>>({});
+    const [statusUpdateError, setStatusUpdateError] = useState<Record<string, string>>({});
+
+    const displayedSearchResults = useMemo(() => {
+        if (Array.isArray(results) && results.length > 0) {
+            return results;
+        }
+        if (searchJob?.status === 'completed' && Array.isArray(searchJob.results) && searchJob.results.length > 0) {
+            return searchJob.results.map((item) => ({ ...item, status: item.status || 'new' }));
+        }
+        return [];
+    }, [results, searchJob]);
+
+    const pipelineEligibleLeads = useMemo(
+        () => savedLeads.filter(isDisplayableLead).filter((lead) => !isRawImportedLead(lead)),
+        [savedLeads]
+    );
+
+    const savedLeadIdentityKeys = useMemo(() => {
+        const keys = new Set<string>();
+        pipelineEligibleLeads.forEach((lead) => {
+            buildLeadIdentityKeys(lead).forEach((key) => keys.add(key));
+        });
+        return keys;
+    }, [pipelineEligibleLeads]);
+
+    const unresolvedSearchResults = useMemo(
+        () => displayedSearchResults.filter((lead) => !buildLeadIdentityKeys(lead).some((key) => savedLeadIdentityKeys.has(key))),
+        [displayedSearchResults, savedLeadIdentityKeys]
+    );
+    const displayedSearchResultsCount = displayedSearchResults.length;
+    const unresolvedSearchResultsCount = unresolvedSearchResults.length;
+    const searchJobResultCount = searchJob?.status === 'completed'
+        ? Number(searchJob.result_count || displayedSearchResultsCount || 0)
+        : displayedSearchResultsCount;
 
     const lastSearchSummary = useMemo(() => {
         if (loading && !searchJob) {
@@ -514,7 +1306,9 @@ export const ProspectingManagement: React.FC = () => {
             if (searchJob.status === 'completed') {
                 return {
                     title: 'Последний запуск завершён',
-                    hint: `Найдено ${searchJob.result_count || 0} компаний${searchJob.result_count ? '. Сохраняйте релевантных кандидатов и отбраковывайте лишнее.' : '. Попробуйте сузить запрос или изменить формулировку.'}`,
+                    hint: unresolvedSearchResultsCount > 0
+                        ? `Осталось разобрать ${unresolvedSearchResultsCount} компаний из ${searchJob.result_count || 0}.`
+                        : `Все ${searchJob.result_count || 0} компаний из последней выдачи уже разобраны и перенесены по этапам.`,
                     tone: 'border-emerald-200 bg-emerald-50 text-emerald-900',
                 };
             }
@@ -529,17 +1323,40 @@ export const ProspectingManagement: React.FC = () => {
             hint: 'Сначала задайте источник, запрос и город. После запуска здесь появится статус и краткий итог.',
             tone: 'border-gray-200 bg-gray-50 text-gray-800',
         };
-    }, [loading, searchJob, searchPollError]);
+    }, [loading, searchJob, searchPollError, unresolvedSearchResultsCount]);
 
-    const displayedSearchResults = useMemo(() => {
+    useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
         if (Array.isArray(results) && results.length > 0) {
-            return results;
+            window.localStorage.setItem(LAST_SEARCH_RESULTS_STORAGE_KEY, JSON.stringify(results));
         }
-        if (searchJob?.status === 'completed' && Array.isArray(searchJob.results) && searchJob.results.length > 0) {
-            return searchJob.results.map((item) => ({ ...item, status: item.status || 'new' }));
+    }, [results]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
         }
-        return [];
-    }, [results, searchJob]);
+        if (displayedSearchResultsCount === 0) {
+            return;
+        }
+        if (unresolvedSearchResultsCount > 0) {
+            return;
+        }
+        setResults([]);
+        setSearchJob((prev) => {
+            if (!prev || prev.status !== 'completed') {
+                return prev;
+            }
+            if (!Array.isArray(prev.results) || prev.results.length === 0) {
+                return prev;
+            }
+            return { ...prev, results: [] };
+        });
+        window.localStorage.removeItem(LAST_SEARCH_RESULTS_STORAGE_KEY);
+    }, [displayedSearchResultsCount, unresolvedSearchResultsCount]);
+
 
     const activeFilters = useMemo(() => {
         const params: Record<string, string> = {};
@@ -594,6 +1411,17 @@ export const ProspectingManagement: React.FC = () => {
                         console.warn('Could not parse last stored search job:', error);
                     }
                 }
+                const storedResultsRaw = window.localStorage.getItem(LAST_SEARCH_RESULTS_STORAGE_KEY);
+                if (storedResultsRaw) {
+                    try {
+                        const storedResults = JSON.parse(storedResultsRaw) as Lead[];
+                        if (!cancelled && Array.isArray(storedResults) && storedResults.length > 0) {
+                            setResults(storedResults.map((item) => ({ ...item, status: item.status || 'new' })));
+                        }
+                    } catch (error) {
+                        console.warn('Could not parse stored search results:', error);
+                    }
+                }
 
                 const response = await api.get('/admin/prospecting/search-job/latest');
                 const latestJob = (response.data?.job || null) as SearchJob | null;
@@ -610,7 +1438,10 @@ export const ProspectingManagement: React.FC = () => {
 
                 if (latestJob.status === 'completed') {
                     const newResults = (latestJob.results || []).map((r: any) => ({ ...r, status: r.status || 'new' }));
-                    setResults(newResults);
+                    if (newResults.length > 0) {
+                        setResults(newResults);
+                    }
+                    void fetchSavedLeads();
                     setLoading(false);
                     setSearchJobId(null);
                     window.localStorage.removeItem(ACTIVE_SEARCH_JOB_STORAGE_KEY);
@@ -659,7 +1490,10 @@ export const ProspectingManagement: React.FC = () => {
                 window.localStorage.setItem(LAST_SEARCH_JOB_STORAGE_KEY, JSON.stringify(job));
                 if (job.status === 'completed') {
                     const newResults = (job.results || []).map((r: any) => ({ ...r, status: r.status || 'new' }));
-                    setResults(newResults);
+                    if (newResults.length > 0) {
+                        setResults(newResults);
+                    }
+                    void fetchSavedLeads();
                     setLoading(false);
                     setSearchJobId(null);
                     window.localStorage.removeItem(ACTIVE_SEARCH_JOB_STORAGE_KEY);
@@ -728,15 +1562,101 @@ export const ProspectingManagement: React.FC = () => {
     const fetchSendQueue = async () => {
         setLoadingSendQueue(true);
         try {
-            const response = await api.get('/admin/prospecting/send-batches');
-            setSendReadyDrafts(response.data?.ready_drafts || []);
-            setSendBatches(response.data?.batches || []);
-            setReactions(response.data?.reactions || []);
-            setSendDailyCap(response.data?.daily_cap || 10);
+            const queueResponse = await api.get('/admin/prospecting/send-batches');
+            setSendReadyDrafts(queueResponse.data?.ready_drafts || []);
+            setSendBatches(queueResponse.data?.batches || []);
+            setReactions(queueResponse.data?.reactions || []);
+            setSendDailyCap(queueResponse.data?.daily_cap || 10);
+            try {
+                const healthResponse = await api.get('/admin/prospecting/outbound/health');
+                setTelegramAppStatus(healthResponse.data?.telegram_app || null);
+            } catch (healthError) {
+                console.error('Error fetching outbound health:', healthError);
+                setTelegramAppStatus(null);
+            }
         } catch (error) {
             console.error('Error fetching send queue:', error);
         } finally {
             setLoadingSendQueue(false);
+        }
+    };
+
+    const syncTelegramReplies = async (batchId?: string) => {
+        await withSendQueueBusy('telegram-reply-sync', 'sync', async () => {
+            const response = await api.post('/admin/prospecting/telegram-app/replies/sync', {
+                batch_id: batchId || undefined,
+                limit: 50,
+            });
+            setTelegramReplySyncSummary({
+                picked: Number(response.data?.picked || 0),
+                imported: Number(response.data?.imported || 0),
+                duplicates: Number(response.data?.duplicates || 0),
+                noops: Number(response.data?.noops || 0),
+                failed: Number(response.data?.failed || 0),
+            });
+            await fetchSendQueue();
+        });
+    };
+
+    const refreshProspectingData = useCallback(async (scope: 'all' | 'leads' | 'drafts_queue' | 'leads_queue' = 'all') => {
+        if (scope === 'leads') {
+            await fetchSavedLeads();
+            return;
+        }
+        if (scope === 'drafts_queue') {
+            await Promise.all([fetchDrafts(), fetchSendQueue()]);
+            return;
+        }
+        if (scope === 'leads_queue') {
+            await Promise.all([fetchSavedLeads(), fetchSendQueue()]);
+            return;
+        }
+        await Promise.all([fetchSavedLeads(), fetchDrafts(), fetchSendQueue()]);
+    }, [fetchDrafts, fetchSavedLeads, fetchSendQueue]);
+
+    const withDraftBusy = async (key: string, state: string, action: () => Promise<void>) => {
+        setDraftBusy((prev) => ({ ...prev, [key]: state }));
+        try {
+            await action();
+        } catch (error) {
+            console.error(`Draft action failed (${state})`, error);
+        } finally {
+            setDraftBusy((prev) => {
+                const next = { ...prev };
+                delete next[key];
+                return next;
+            });
+        }
+    };
+
+    const withSelectionBusy = async (key: string, state: string, action: () => Promise<void>) => {
+        try {
+            await withBusyState(setSelectionLoading, key, state, action);
+        } catch (error) {
+            console.error(`Selection action failed (${state})`, error);
+        }
+    };
+
+    const withSendQueueBusy = async (key: string, state: string, action: () => Promise<void>) => {
+        setSendQueueBusy((prev) => ({ ...prev, [key]: state }));
+        try {
+            await action();
+        } catch (error) {
+            console.error(`Send queue action failed (${state})`, error);
+        } finally {
+            setSendQueueBusy((prev) => {
+                const next = { ...prev };
+                delete next[key];
+                return next;
+            });
+        }
+    };
+
+    const withReactionBusy = async (key: string, state: string, action: () => Promise<void>) => {
+        try {
+            await withBusyState(setReactionBusy, key, state, action);
+        } catch (error) {
+            console.error(`Reaction action failed (${state})`, error);
         }
     };
 
@@ -749,6 +1669,7 @@ export const ProspectingManagement: React.FC = () => {
         setSearchJobId(null);
         setSearchPollError(null);
         window.localStorage.removeItem(ACTIVE_SEARCH_JOB_STORAGE_KEY);
+        window.localStorage.removeItem(LAST_SEARCH_RESULTS_STORAGE_KEY);
         try {
             const response = await api.post('/admin/prospecting/search', {
                 query,
@@ -814,6 +1735,78 @@ export const ProspectingManagement: React.FC = () => {
         }
     };
 
+    const updateLeadStatusOptimistic = async (leadId: string, nextStatus: string) => {
+        if (!leadId) {
+            return;
+        }
+        setStatusUpdateBusy((prev) => ({ ...prev, [leadId]: true }));
+        setStatusUpdateError((prev) => {
+            const next = { ...prev };
+            delete next[leadId];
+            return next;
+        });
+        const previousLeads = savedLeads;
+        setSavedLeads((prev) =>
+            prev.map((lead) => (lead.id === leadId ? { ...lead, status: nextStatus } : lead))
+        );
+        setPreviewLead((prev) => (prev && prev.id === leadId ? { ...prev, status: nextStatus } : prev));
+        try {
+            await api.post(`/admin/prospecting/lead/${leadId}/status`, { status: nextStatus });
+        } catch (error) {
+            console.error('Error updating lead status:', error);
+            setSavedLeads(previousLeads);
+            const previousLead = previousLeads.find((lead) => lead.id === leadId) || null;
+            setPreviewLead((prev) => (prev && prev.id === leadId ? previousLead : prev));
+            setStatusUpdateError((prev) => ({ ...prev, [leadId]: 'Не удалось обновить статус. Попробуйте ещё раз.' }));
+        } finally {
+            setStatusUpdateBusy((prev) => {
+                const next = { ...prev };
+                delete next[leadId];
+                return next;
+            });
+        }
+    };
+
+    const handleLeadDragStart = (leadId: string) => (event: React.DragEvent<HTMLDivElement>) => {
+        if (!leadId) {
+            return;
+        }
+        event.dataTransfer.setData('text/plain', leadId);
+        event.dataTransfer.effectAllowed = 'move';
+        setDraggingLeadId(leadId);
+    };
+
+    const handleLeadDragEnd = () => {
+        setDraggingLeadId(null);
+        setDropColumnId(null);
+    };
+
+    const handleColumnDragOver = (columnId: PipelineBoardColumnId) => (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        if (dropColumnId !== columnId) {
+            setDropColumnId(columnId);
+        }
+    };
+
+    const handleColumnDrop = (columnId: PipelineBoardColumnId) => async (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        const leadId = event.dataTransfer.getData('text/plain');
+        setDropColumnId(null);
+        setDraggingLeadId(null);
+        if (!leadId) {
+            return;
+        }
+        const lead = savedLeads.find((item) => item.id === leadId);
+        if (!lead) {
+            return;
+        }
+        const nextStatus = pipelineBoardColumnMeta[columnId].statusToSet;
+        if (lead.status === nextStatus) {
+            return;
+        }
+        await updateLeadStatusOptimistic(leadId, nextStatus);
+    };
+
     const addLeadByUrl = async () => {
         const sourceUrl = manualLeadUrl.trim();
         if (!sourceUrl) return;
@@ -871,253 +1864,91 @@ export const ProspectingManagement: React.FC = () => {
         }
     };
 
-    const selectForOutreach = async (leadId: string) => {
-        setSelectionLoading(prev => ({ ...prev, [leadId]: 'select' }));
-        try {
-            await api.post(`/admin/prospecting/lead/${leadId}/select`);
-            await fetchSavedLeads();
-        } catch (error) {
-            console.error('Error selecting lead for outreach:', error);
-        } finally {
-            setSelectionLoading(prev => {
-                const next = { ...prev };
-                delete next[leadId];
-                return next;
-            });
-        }
-    };
-
     const chooseChannel = async (leadId: string, channel: 'telegram' | 'whatsapp' | 'email' | 'manual') => {
-        setSelectionLoading(prev => ({ ...prev, [leadId]: channel }));
-        try {
+        await withSelectionBusy(leadId, channel, async () => {
             await api.post(`/admin/prospecting/lead/${leadId}/channel`, { channel });
             await fetchSavedLeads();
-        } catch (error) {
-            console.error('Error selecting channel:', error);
-        } finally {
-            setSelectionLoading(prev => {
-                const next = { ...prev };
-                delete next[leadId];
-                return next;
-            });
-        }
-    };
-
-    const bulkSelectForOutreach = async () => {
-        const leadIds = step3ReadyLeads
-            .filter((lead) => lead.id && selectedShortlistLeadIds.includes(lead.id))
-            .map((lead) => lead.id as string);
-        if (leadIds.length === 0) return;
-
-        setSelectionLoading((prev) => ({ ...prev, bulkSelect: 'select' }));
-        try {
-            await Promise.all(leadIds.map((leadId) => api.post(`/admin/prospecting/lead/${leadId}/select`)));
-            setSelectedShortlistLeadIds([]);
-            await fetchSavedLeads();
-        } catch (error) {
-            console.error('Error bulk selecting leads for outreach:', error);
-        } finally {
-            setSelectionLoading((prev) => {
-                const next = { ...prev };
-                delete next.bulkSelect;
-                return next;
-            });
-        }
+        });
     };
 
     const bulkAssignOutreachChannel = async () => {
-        const leadIds = contactLeads
+        const leadIds = filteredContactLeads
             .filter((lead) => lead.id && selectedOutreachLeadIds.includes(lead.id))
             .map((lead) => lead.id as string);
         if (leadIds.length === 0) return;
 
-        setSelectionLoading((prev) => ({ ...prev, bulkChannel: bulkOutreachChannel }));
-        try {
+        await withSelectionBusy('bulkChannel', bulkOutreachChannel, async () => {
             await Promise.all(
                 leadIds.map((leadId) => api.post(`/admin/prospecting/lead/${leadId}/channel`, { channel: bulkOutreachChannel }))
             );
             setSelectedOutreachLeadIds([]);
             await fetchSavedLeads();
-        } catch (error) {
-            console.error('Error bulk assigning outreach channel:', error);
-        } finally {
-            setSelectionLoading((prev) => {
-                const next = { ...prev };
-                delete next.bulkChannel;
-                return next;
-            });
-        }
+        });
     };
 
     const deleteLeadEverywhere = async (leadId: string) => {
-        setSelectionLoading((prev) => ({ ...prev, [leadId]: 'delete' }));
-        try {
+        await withSelectionBusy(leadId, 'delete', async () => {
             await api.delete(`/admin/prospecting/lead/${leadId}`);
-            setSelectedShortlistLeadIds((prev) => prev.filter((id) => id !== leadId));
             setSelectedOutreachLeadIds((prev) => prev.filter((id) => id !== leadId));
             if (previewLead?.id === leadId) {
                 closeLeadPreview();
             }
-            await Promise.all([fetchSavedLeads(), fetchDrafts(), fetchSendQueue()]);
-        } catch (error) {
-            console.error('Error deleting lead:', error);
-        } finally {
-            setSelectionLoading((prev) => {
-                const next = { ...prev };
-                delete next[leadId];
-                return next;
-            });
-        }
-    };
-
-    const bulkDeleteShortlistLeads = async () => {
-        const leadIds = step3ReadyLeads
-            .filter((lead) => lead.id && selectedShortlistLeadIds.includes(lead.id))
-            .map((lead) => lead.id as string);
-        if (leadIds.length === 0) return;
-        setSelectionLoading((prev) => ({ ...prev, bulkDeleteShortlist: 'delete' }));
-        try {
-            await Promise.all(leadIds.map((leadId) => api.delete(`/admin/prospecting/lead/${leadId}`)));
-            setSelectedShortlistLeadIds([]);
-            await Promise.all([fetchSavedLeads(), fetchDrafts(), fetchSendQueue()]);
-        } catch (error) {
-            console.error('Error bulk deleting shortlist leads:', error);
-        } finally {
-            setSelectionLoading((prev) => {
-                const next = { ...prev };
-                delete next.bulkDeleteShortlist;
-                return next;
-            });
-        }
-    };
-
-    const bulkDeleteOutreachLeads = async () => {
-        const leadIds = contactLeads
-            .filter((lead) => lead.id && selectedOutreachLeadIds.includes(lead.id))
-            .map((lead) => lead.id as string);
-        if (leadIds.length === 0) return;
-        setSelectionLoading((prev) => ({ ...prev, bulkDeleteOutreach: 'delete' }));
-        try {
-            await Promise.all(leadIds.map((leadId) => api.delete(`/admin/prospecting/lead/${leadId}`)));
-            setSelectedOutreachLeadIds([]);
-            await Promise.all([fetchSavedLeads(), fetchDrafts(), fetchSendQueue()]);
-        } catch (error) {
-            console.error('Error bulk deleting outreach leads:', error);
-        } finally {
-            setSelectionLoading((prev) => {
-                const next = { ...prev };
-                delete next.bulkDeleteOutreach;
-                return next;
-            });
-        }
+            await refreshProspectingData('all');
+        });
     };
 
     const generateDraft = async (leadId: string) => {
-        setDraftBusy(prev => ({ ...prev, [leadId]: 'generate' }));
-        try {
+        await withDraftBusy(leadId, 'generate', async () => {
             await api.post(`/admin/prospecting/lead/${leadId}/draft-generate`);
-            await Promise.all([fetchSavedLeads(), fetchDrafts(), fetchSendQueue()]);
-        } catch (error) {
-            console.error('Error generating draft:', error);
-        } finally {
-            setDraftBusy(prev => {
-                const next = { ...prev };
-                delete next[leadId];
-                return next;
-            });
-        }
+            await refreshProspectingData('all');
+        });
     };
 
     const approveDraft = async (draftId: string) => {
         const approvedText = (draftEdits[draftId] || '').trim();
         if (!approvedText) return;
-        setDraftBusy(prev => ({ ...prev, [draftId]: 'approve' }));
-        try {
+        await withDraftBusy(draftId, 'approve', async () => {
             await api.post(`/admin/prospecting/drafts/${draftId}/approve`, {
                 approved_text: approvedText,
             });
-            await Promise.all([fetchDrafts(), fetchSendQueue()]);
-        } catch (error) {
-            console.error('Error approving draft:', error);
-        } finally {
-            setDraftBusy(prev => {
-                const next = { ...prev };
-                delete next[draftId];
-                return next;
-            });
-        }
+            await refreshProspectingData('drafts_queue');
+        });
     };
 
     const saveDraftEdit = async (draftId: string) => {
         const editedText = (draftEdits[draftId] || '').trim();
         if (!editedText) return;
-        setDraftBusy((prev) => ({ ...prev, [draftId]: 'save' }));
-        try {
+        await withDraftBusy(draftId, 'save', async () => {
             await api.post(`/admin/prospecting/drafts/${draftId}/save`, {
                 edited_text: editedText,
             });
             await fetchDrafts();
-        } catch (error) {
-            console.error('Error saving draft edit:', error);
-        } finally {
-            setDraftBusy((prev) => {
-                const next = { ...prev };
-                delete next[draftId];
-                return next;
-            });
-        }
+        });
     };
 
     const rejectDraft = async (draftId: string) => {
-        setDraftBusy(prev => ({ ...prev, [draftId]: 'reject' }));
-        try {
+        await withDraftBusy(draftId, 'reject', async () => {
             await api.post(`/admin/prospecting/drafts/${draftId}/reject`);
-            await Promise.all([fetchDrafts(), fetchSendQueue()]);
-        } catch (error) {
-            console.error('Error rejecting draft:', error);
-        } finally {
-            setDraftBusy(prev => {
-                const next = { ...prev };
-                delete next[draftId];
-                return next;
-            });
-        }
+            await refreshProspectingData('drafts_queue');
+        });
     };
 
     const deleteDraft = async (draftId: string) => {
-        setDraftBusy((prev) => ({ ...prev, [draftId]: 'delete' }));
-        try {
+        await withDraftBusy(draftId, 'delete', async () => {
             await api.delete(`/admin/prospecting/drafts/${draftId}`);
             setSelectedDraftIds((prev) => prev.filter((id) => id !== draftId));
-            await Promise.all([fetchDrafts(), fetchSendQueue()]);
-        } catch (error) {
-            console.error('Error deleting draft:', error);
-        } finally {
-            setDraftBusy((prev) => {
-                const next = { ...prev };
-                delete next[draftId];
-                return next;
-            });
-        }
+            await refreshProspectingData('drafts_queue');
+        });
     };
 
     const deleteSelectedDrafts = async () => {
         const draftIds = filteredDrafts.filter((draft) => selectedDraftIds.includes(draft.id)).map((draft) => draft.id);
         if (draftIds.length === 0) return;
-        setDraftBusy((prev) => ({ ...prev, bulkDelete: 'delete' }));
-        try {
+        await withDraftBusy('bulkDelete', 'delete', async () => {
             await Promise.all(draftIds.map((draftId) => api.delete(`/admin/prospecting/drafts/${draftId}`)));
             setSelectedDraftIds([]);
-            await Promise.all([fetchDrafts(), fetchSendQueue()]);
-        } catch (error) {
-            console.error('Error bulk deleting drafts:', error);
-        } finally {
-            setDraftBusy((prev) => {
-                const next = { ...prev };
-                delete next.bulkDelete;
-                return next;
-            });
-        }
+            await refreshProspectingData('drafts_queue');
+        });
     };
 
     const approveSelectedDrafts = async () => {
@@ -1126,8 +1957,7 @@ export const ProspectingManagement: React.FC = () => {
             .map((draft) => draft.id);
         if (draftIds.length === 0) return;
 
-        setDraftBusy((prev) => ({ ...prev, bulkApprove: 'approve' }));
-        try {
+        await withDraftBusy('bulkApprove', 'approve', async () => {
             await Promise.all(
                 draftIds.map((draftId) =>
                     api.post(`/admin/prospecting/drafts/${draftId}/approve`, {
@@ -1136,171 +1966,121 @@ export const ProspectingManagement: React.FC = () => {
                 )
             );
             setSelectedDraftIds([]);
-            await Promise.all([fetchDrafts(), fetchSendQueue()]);
-        } catch (error) {
-            console.error('Error approving selected drafts:', error);
-        } finally {
-            setDraftBusy((prev) => {
-                const next = { ...prev };
-                delete next.bulkApprove;
-                return next;
-            });
-        }
+            await refreshProspectingData('drafts_queue');
+        });
     };
 
     const rejectSelectedDrafts = async () => {
         const draftIds = filteredDrafts.filter((draft) => selectedDraftIds.includes(draft.id)).map((draft) => draft.id);
         if (draftIds.length === 0) return;
 
-        setDraftBusy((prev) => ({ ...prev, bulkReject: 'reject' }));
-        try {
+        await withDraftBusy('bulkReject', 'reject', async () => {
             await Promise.all(draftIds.map((draftId) => api.post(`/admin/prospecting/drafts/${draftId}/reject`)));
             setSelectedDraftIds([]);
-            await Promise.all([fetchDrafts(), fetchSendQueue()]);
-        } catch (error) {
-            console.error('Error rejecting selected drafts:', error);
-        } finally {
-            setDraftBusy((prev) => {
-                const next = { ...prev };
-                delete next.bulkReject;
-                return next;
-            });
+            await refreshProspectingData('drafts_queue');
+        });
+    };
+
+    const markDraftAsSentManually = async (draft: OutreachDraft) => {
+        const lead = savedLeadById.get(draft.lead_id);
+        if (!lead?.id) {
+            toast.error('Не удалось найти лид для ручной отправки');
+            return;
         }
+
+        await withDraftBusy(draft.id, 'manual_sent', async () => {
+            await api.post(`/admin/prospecting/lead/${lead.id}/status`, { status: 'sent' });
+            await refreshProspectingData('all');
+            setActiveWorkspace('outreach');
+            setOutreachTab('sent');
+            toast.success('Лид перенесён в "Отправленные"');
+        });
     };
 
     const createSendBatch = async (draftIds?: string[]) => {
-        setSendQueueBusy(prev => ({ ...prev, create: 'create' }));
-        try {
+        await withSendQueueBusy('create', 'create', async () => {
             const payload = draftIds && draftIds.length > 0 ? { draft_ids: draftIds } : {};
             await api.post('/admin/prospecting/send-batches', payload);
             setSelectedSendReadyDraftIds([]);
-            await Promise.all([fetchSavedLeads(), fetchSendQueue()]);
-        } catch (error) {
-            console.error('Error creating outreach batch:', error);
-        } finally {
-            setSendQueueBusy(prev => {
-                const next = { ...prev };
-                delete next.create;
-                return next;
-            });
-        }
+            await refreshProspectingData('leads_queue');
+        });
     };
 
     const approveSendBatch = async (batchId: string) => {
-        setSendQueueBusy(prev => ({ ...prev, [batchId]: 'approve' }));
-        try {
+        await withSendQueueBusy(batchId, 'approve', async () => {
             const response = await api.post(`/admin/prospecting/send-batches/${batchId}/approve`, {});
             await fetchSendQueue();
             const summary = response.data?.batch?.dispatch_summary;
             if (summary) {
-                alert(`Отправка batch завершена: sent ${summary.sent}/${summary.total}, failed ${summary.failed}`);
+                const total = Number(summary.total ?? summary.queued ?? 0);
+                const sent = Number(summary.sent ?? 0);
+                const failed = Number(summary.failed ?? 0);
+                alert(`Batch подтверждён: в очередь поставлено ${total}, sent ${sent}, failed ${failed}`);
             }
-        } catch (error) {
-            console.error('Error approving outreach batch:', error);
-        } finally {
-            setSendQueueBusy(prev => {
-                const next = { ...prev };
-                delete next[batchId];
-                return next;
-            });
-        }
+        });
+    };
+
+    const dispatchSendBatch = async (batchId: string) => {
+        await withSendQueueBusy(batchId, 'dispatch', async () => {
+            const response = await api.post(`/admin/prospecting/send-batches/${batchId}/dispatch`, {});
+            await fetchSendQueue();
+            const batch = response.data?.batch as OutreachBatch | undefined;
+            const summary = batch ? summarizeBatchFromItems(batch) : null;
+            if (summary) {
+                alert(`Отправка запущена: queued ${summary.queued}, sending ${summary.sending}, sent ${summary.sent}, failed ${summary.failed}`);
+            }
+        });
     };
 
     const deleteSendBatch = async (batchId: string) => {
-        setSendQueueBusy((prev) => ({ ...prev, [batchId]: 'delete' }));
-        try {
+        await withSendQueueBusy(batchId, 'delete', async () => {
             await api.delete(`/admin/prospecting/send-batches/${batchId}`);
             setSelectedQueueItemIds((prev) => prev.filter((id) => !visibleQueueItems.some((item) => item.id === id && item.batch_id === batchId)));
-            await Promise.all([fetchSavedLeads(), fetchSendQueue()]);
-        } catch (error) {
-            console.error('Error deleting outreach batch:', error);
-        } finally {
-            setSendQueueBusy((prev) => {
-                const next = { ...prev };
-                delete next[batchId];
-                return next;
-            });
-        }
+            await refreshProspectingData('leads_queue');
+        });
     };
 
     const cleanupTestBatches = async () => {
-        setSendQueueBusy((prev) => ({ ...prev, cleanupTest: 'cleanup' }));
-        try {
+        await withSendQueueBusy('cleanupTest', 'cleanup', async () => {
             await api.post('/admin/prospecting/send-batches/cleanup-test', {});
             setSelectedQueueItemIds([]);
-            await Promise.all([fetchSavedLeads(), fetchSendQueue()]);
-        } catch (error) {
-            console.error('Error cleaning test batches:', error);
-        } finally {
-            setSendQueueBusy((prev) => {
-                const next = { ...prev };
-                delete next.cleanupTest;
-                return next;
-            });
-        }
+            await refreshProspectingData('leads_queue');
+        });
     };
 
     const markDelivery = async (queueId: string, deliveryStatus: 'sent' | 'delivered' | 'failed') => {
-        setSendQueueBusy(prev => ({ ...prev, [queueId]: deliveryStatus }));
-        try {
+        await withSendQueueBusy(queueId, deliveryStatus, async () => {
             await api.post(`/admin/prospecting/send-queue/${queueId}/delivery`, {
                 delivery_status: deliveryStatus,
                 error_text: deliveryStatus === 'failed' ? 'Manual delivery failure' : undefined,
             });
-            await Promise.all([fetchSavedLeads(), fetchSendQueue()]);
-        } catch (error) {
-            console.error('Error updating delivery status:', error);
-        } finally {
-            setSendQueueBusy(prev => {
-                const next = { ...prev };
-                delete next[queueId];
-                return next;
-            });
-        }
+            await refreshProspectingData('leads_queue');
+        });
     };
 
     const deleteQueueItem = async (queueId: string) => {
-        setSendQueueBusy((prev) => ({ ...prev, [queueId]: 'delete' }));
-        try {
+        await withSendQueueBusy(queueId, 'delete', async () => {
             await api.delete(`/admin/prospecting/send-queue/${queueId}`);
             setSelectedQueueItemIds((prev) => prev.filter((id) => id !== queueId));
-            await Promise.all([fetchSavedLeads(), fetchSendQueue()]);
-        } catch (error) {
-            console.error('Error deleting queue item:', error);
-        } finally {
-            setSendQueueBusy((prev) => {
-                const next = { ...prev };
-                delete next[queueId];
-                return next;
-            });
-        }
+            await refreshProspectingData('leads_queue');
+        });
     };
 
     const bulkDeleteQueueItems = async () => {
         const queueIds = visibleQueueItems.filter((item) => selectedQueueItemIds.includes(item.id)).map((item) => item.id);
         if (queueIds.length === 0) return;
-        setSendQueueBusy((prev) => ({ ...prev, bulkDeleteQueue: 'delete' }));
-        try {
+        await withSendQueueBusy('bulkDeleteQueue', 'delete', async () => {
             await Promise.all(queueIds.map((queueId) => api.delete(`/admin/prospecting/send-queue/${queueId}`)));
             setSelectedQueueItemIds([]);
-            await Promise.all([fetchSavedLeads(), fetchSendQueue()]);
-        } catch (error) {
-            console.error('Error bulk deleting queue items:', error);
-        } finally {
-            setSendQueueBusy((prev) => {
-                const next = { ...prev };
-                delete next.bulkDeleteQueue;
-                return next;
-            });
-        }
+            await refreshProspectingData('leads_queue');
+        });
     };
 
     const bulkMarkDelivery = async (deliveryStatus: 'sent' | 'delivered' | 'failed') => {
         const queueIds = visibleQueueItems.filter((item) => selectedQueueItemIds.includes(item.id)).map((item) => item.id);
         if (queueIds.length === 0) return;
 
-        setSendQueueBusy((prev) => ({ ...prev, bulkDelivery: deliveryStatus }));
-        try {
+        await withSendQueueBusy('bulkDelivery', deliveryStatus, async () => {
             await Promise.all(
                 queueIds.map((queueId) =>
                     api.post(`/admin/prospecting/send-queue/${queueId}/delivery`, {
@@ -1310,93 +2090,339 @@ export const ProspectingManagement: React.FC = () => {
                 )
             );
             setSelectedQueueItemIds([]);
-            await Promise.all([fetchSavedLeads(), fetchSendQueue()]);
-        } catch (error) {
-            console.error('Error bulk updating delivery status:', error);
-        } finally {
-            setSendQueueBusy((prev) => {
-                const next = { ...prev };
-                delete next.bulkDelivery;
-                return next;
-            });
-        }
+            await refreshProspectingData('leads_queue');
+        });
     };
 
     const recordReaction = async (queueId: string, outcome?: 'positive' | 'question' | 'no_response' | 'hard_no') => {
-        setSendQueueBusy(prev => ({ ...prev, [queueId]: `reaction:${outcome || 'auto'}` }));
-        try {
+        await withSendQueueBusy(queueId, `reaction:${outcome || 'auto'}`, async () => {
             await api.post(`/admin/prospecting/send-queue/${queueId}/reaction`, {
                 raw_reply: (replyDrafts[queueId] || '').trim(),
                 outcome,
             });
-            await Promise.all([fetchSavedLeads(), fetchSendQueue()]);
-        } catch (error) {
-            console.error('Error recording reaction:', error);
-        } finally {
-            setSendQueueBusy(prev => {
-                const next = { ...prev };
-                delete next[queueId];
-                return next;
-            });
-        }
+            await refreshProspectingData('leads_queue');
+        });
     };
 
     const confirmReaction = async (reactionId: string, outcome: 'positive' | 'question' | 'no_response' | 'hard_no') => {
-        setReactionBusy((prev) => ({ ...prev, [reactionId]: outcome }));
-        try {
+        await withReactionBusy(reactionId, outcome, async () => {
             await api.post(`/admin/prospecting/reactions/${reactionId}/confirm`, { outcome });
-            await Promise.all([fetchSavedLeads(), fetchSendQueue()]);
-        } catch (error) {
-            console.error('Error confirming reaction outcome:', error);
-        } finally {
-            setReactionBusy((prev) => {
-                const next = { ...prev };
-                delete next[reactionId];
-                return next;
-            });
-        }
+            await refreshProspectingData('leads_queue');
+        });
     };
 
     const resetFilters = () => setFilters(emptyFilters);
 
+    const applyPreset = (preset: 'best' | 'messengers' | 'website' | 'no_contacts' | 'low_rating' | 'many_reviews') => {
+        switch (preset) {
+            case 'best':
+                setFilters((prev) => ({
+                    ...prev,
+                    minRating: '4.5',
+                    minReviews: '50',
+                }));
+                break;
+            case 'messengers':
+                setFilters((prev) => ({
+                    ...prev,
+                    hasMessengers: 'yes',
+                }));
+                break;
+            case 'website':
+                setFilters((prev) => ({
+                    ...prev,
+                    hasWebsite: 'yes',
+                }));
+                break;
+            case 'no_contacts':
+                setFilters((prev) => ({
+                    ...prev,
+                    hasWebsite: 'no',
+                    hasPhone: 'no',
+                    hasEmail: 'no',
+                    hasTelegram: 'no',
+                    hasWhatsApp: 'no',
+                    hasVk: 'no',
+                    hasMax: 'no',
+                }));
+                break;
+            case 'low_rating':
+                setFilters((prev) => ({
+                    ...prev,
+                    maxRating: '3.5',
+                }));
+                break;
+            case 'many_reviews':
+                setFilters((prev) => ({
+                    ...prev,
+                    minReviews: '100',
+                }));
+                break;
+            default:
+                break;
+        }
+    };
+
     const sourceFilteredLeads = useMemo(
-        () => savedLeads
-            .filter(isDisplayableLead)
-            .filter((lead) => !filters.source || (lead.source || '') === filters.source),
-        [savedLeads, filters.source]
+        () => pipelineEligibleLeads
+            .filter((lead) => !filters.source || (lead.source || '') === filters.source)
+            .filter((lead) => matchesBooleanFilter(filters.hasWebsite, Boolean(lead.website)))
+            .filter((lead) => matchesBooleanFilter(filters.hasPhone, Boolean(lead.phone)))
+            .filter((lead) => matchesBooleanFilter(filters.hasEmail, Boolean(lead.email)))
+            .filter((lead) => matchesBooleanFilter(filters.hasMessengers, extractHasMessengers(lead)))
+            .filter((lead) => matchesBooleanFilter(filters.hasTelegram, Boolean(lead.telegram_url)))
+            .filter((lead) => matchesBooleanFilter(filters.hasWhatsApp, Boolean(lead.whatsapp_url)))
+            .filter((lead) => matchesBooleanFilter(filters.hasVk, extractHasVk(lead)))
+            .filter((lead) => matchesBooleanFilter(filters.hasMax, extractHasMax(lead))),
+        [
+            pipelineEligibleLeads,
+            filters.source,
+            filters.hasWebsite,
+            filters.hasPhone,
+            filters.hasEmail,
+            filters.hasMessengers,
+            filters.hasTelegram,
+            filters.hasWhatsApp,
+            filters.hasVk,
+            filters.hasMax,
+        ]
     );
-    const shortlistLeads = useMemo(
-        () => sourceFilteredLeads.filter((lead) => lead.status === shortlistApproved),
-        [sourceFilteredLeads]
-    );
-    const step3ReadyLeads = useMemo(
-        () => sourceFilteredLeads.filter((lead) => lead.status === shortlistApproved),
-        [sourceFilteredLeads]
-    );
-    const rejectedLeads = useMemo(
-        () => sourceFilteredLeads.filter((lead) => lead.status === shortlistRejected || lead.status === 'rejected'),
-        [sourceFilteredLeads]
-    );
-    const deferredLeads = useMemo(
-        () => sourceFilteredLeads.filter((lead) => lead.status === deferredLead),
-        [sourceFilteredLeads]
-    );
-    const candidateLeads = useMemo(
-        () =>
-            sourceFilteredLeads.filter((lead) => {
-                const status = String(lead.status || '').trim();
-                return !status || status === 'new';
-            }),
-        [sourceFilteredLeads]
-    );
+    const visiblePipelineLeads = useMemo(() => {
+        const normalizedSearch = pipelineSearch.trim().toLowerCase();
+        return sourceFilteredLeads.filter((lead) => {
+            if (quickFilter === 'without_audit' && hasLeadAudit(lead)) {
+                return false;
+            }
+            if (quickFilter === 'with_audit' && !hasLeadAudit(lead)) {
+                return false;
+            }
+            if (quickFilter === 'priority' && String(lead.status || '').trim().toLowerCase() !== shortlistApproved) {
+                return false;
+            }
+            if (!normalizedSearch) {
+                return true;
+            }
+            const haystack = [
+                lead.name,
+                lead.category,
+                lead.address,
+                lead.city,
+                lead.phone,
+                lead.email,
+                lead.website,
+            ]
+                .filter(Boolean)
+                .join(' ')
+                .toLowerCase();
+            return haystack.includes(normalizedSearch);
+        });
+    }, [sourceFilteredLeads, quickFilter, pipelineSearch]);
     const contactLeads = useMemo(
         () => sourceFilteredLeads.filter((lead) => lead.status === selectedForOutreach),
         [sourceFilteredLeads]
     );
+    const filteredContactLeads = useMemo(
+        () =>
+            contactLeads.filter(
+                (lead) => leadMatchesOutreachContactFilter(lead, queueContactFilter)
+            ),
+        [contactLeads, queueContactFilter]
+    );
+    const isContactLeadFilterActive = queueContactFilter !== '';
+    const activeContactLeadFilterSummary = useMemo(() => {
+        const parts: string[] = [];
+        if (queueContactFilter === 'telegram') parts.push('с доступным контактом Telegram');
+        else if (queueContactFilter === 'whatsapp') parts.push('с доступным контактом WhatsApp');
+        else if (queueContactFilter === 'max') parts.push('с доступным контактом Max');
+        else if (queueContactFilter === 'email') parts.push('с доступным контактом Email');
+        else if (queueContactFilter === 'vk') parts.push('с VK-кандидатом');
+
+        if (parts.length === 0) {
+            return '';
+        }
+        return `Сейчас видны только лиды ${parts.join(' и ')}.`;
+    }, [queueContactFilter]);
     const sentLeads = useMemo(
         () => sourceFilteredLeads.filter((lead) => ['sent', 'delivered', 'responded', 'converted'].includes(String(lead.status || '').trim())),
         [sourceFilteredLeads]
     );
+    const filteredSentLeads = useMemo(
+        () => sentLeads.filter((lead) => leadMatchesOutreachContactFilter(lead, sentContactFilter)),
+        [sentLeads, sentContactFilter]
+    );
+    const savedLeadById = useMemo(() => {
+        const next = new Map<string, Lead>();
+        savedLeads.forEach((lead) => {
+            if (lead.id) {
+                next.set(lead.id, lead);
+            }
+        });
+        return next;
+    }, [savedLeads]);
+    const filteredLeadsForKanban = useMemo(() => sourceFilteredLeads, [sourceFilteredLeads]);
+    const pipelineBoardColumns = useMemo(() => {
+        const buckets: Record<PipelineBoardColumnId, Lead[]> = {
+            new: [],
+            in_progress: [],
+            contacted: [],
+            closed: [],
+        };
+        for (const lead of visiblePipelineLeads) {
+            const columnId = leadToPipelineBoardColumn(lead);
+            buckets[columnId].push(lead);
+        }
+        return pipelineBoardColumnOrder.map((columnId) => ({
+            id: columnId,
+            ...pipelineBoardColumnMeta[columnId],
+            leads: buckets[columnId],
+        }));
+    }, [visiblePipelineLeads]);
+    const pipelineBoardTotals = useMemo(() => {
+        const totals: Record<PipelineBoardColumnId, number> = {
+            new: 0,
+            in_progress: 0,
+            contacted: 0,
+            closed: 0,
+        };
+        pipelineBoardColumns.forEach((column) => {
+            totals[column.id] = column.leads.length;
+        });
+        return totals;
+    }, [pipelineBoardColumns]);
+    const kanbanColumns = useMemo(() => {
+        const buckets: Record<KanbanColumnId, Lead[]> = {
+            new: [],
+            shortlist: [],
+            in_progress: [],
+            contacted: [],
+            closed: [],
+        };
+        for (const lead of filteredLeadsForKanban) {
+            const columnId = leadToKanbanColumn(lead);
+            buckets[columnId].push(lead);
+        }
+        return kanbanColumnOrder.map((columnId) => ({
+            id: columnId,
+            ...kanbanColumnMeta[columnId],
+            leads: buckets[columnId],
+        }));
+    }, [filteredLeadsForKanban]);
+    const kanbanTotals = useMemo(() => {
+        const totals: Record<KanbanColumnId, number> = {
+            new: 0,
+            shortlist: 0,
+            in_progress: 0,
+            contacted: 0,
+            closed: 0,
+        };
+        for (const column of kanbanColumns) {
+            totals[column.id] = column.leads.length;
+        }
+        return totals;
+    }, [kanbanColumns]);
+    const positiveReactionCount = useMemo(
+        () =>
+            reactions.filter((reaction) => {
+                const outcome = String(reaction.human_confirmed_outcome || reaction.classified_outcome || '').trim().toLowerCase();
+                return outcome === 'positive';
+            }).length,
+        [reactions]
+    );
+    const pipelineLeadCount = filteredLeadsForKanban.length;
+    const shortlistLeadCount = kanbanTotals.shortlist;
+    const inProgressLeadCount = kanbanTotals.in_progress;
+    const contactedLeadCount = kanbanTotals.contacted;
+    const pipelineHeaderSummary = useMemo(() => {
+        let withoutAudit = 0;
+        let withAudit = 0;
+        let readyToContact = 0;
+        let priority = 0;
+        sourceFilteredLeads.forEach((lead) => {
+            if (hasLeadAudit(lead)) {
+                withAudit += 1;
+            } else {
+                withoutAudit += 1;
+            }
+            const normalizedStatus = String(lead.status || '').trim().toLowerCase();
+            if ([selectedForOutreach, channelSelected].includes(normalizedStatus)) {
+                readyToContact += 1;
+            }
+            if (normalizedStatus === shortlistApproved) {
+                priority += 1;
+            }
+        });
+        return { withoutAudit, withAudit, readyToContact, priority };
+    }, [sourceFilteredLeads]);
+    const pipelineStageMetrics = useMemo(() => {
+        const stages = [
+            {
+                key: 'found',
+                label: 'Найдено',
+                hint: 'Результаты последнего поиска или импорта',
+                count: searchJobResultCount,
+                conversion: '—',
+            },
+            {
+                key: 'pipeline',
+                label: 'В воронке',
+                hint: 'Сохранены и доступны для обработки',
+                count: pipelineLeadCount,
+                conversion: formatConversion(pipelineLeadCount, searchJobResultCount),
+            },
+            {
+                key: 'shortlist',
+                label: 'Отобранные',
+                hint: 'Прошли первичный отбор',
+                count: shortlistLeadCount,
+                conversion: formatConversion(shortlistLeadCount, pipelineLeadCount),
+            },
+            {
+                key: 'in_progress',
+                label: 'В работе',
+                hint: 'Готовятся к аудиту и первому контакту',
+                count: inProgressLeadCount,
+                conversion: formatConversion(inProgressLeadCount, shortlistLeadCount),
+            },
+            {
+                key: 'contacted',
+                label: 'Контактированы',
+                hint: 'Сообщение уже ушло или лид в доставке',
+                count: contactedLeadCount,
+                conversion: formatConversion(contactedLeadCount, inProgressLeadCount),
+            },
+            {
+                key: 'positive',
+                label: 'Позитивный ответ',
+                hint: 'Подтверждённый интерес после контакта',
+                count: positiveReactionCount,
+                conversion: formatConversion(positiveReactionCount, contactedLeadCount),
+            },
+        ];
+        return stages;
+    }, [
+        searchJobResultCount,
+        pipelineLeadCount,
+        shortlistLeadCount,
+        inProgressLeadCount,
+        contactedLeadCount,
+        positiveReactionCount,
+    ]);
+    const pipelineEfficiencySummary = useMemo(() => {
+        return {
+            foundCount: searchJobResultCount,
+            pipelineCount: pipelineLeadCount,
+            saveRate: formatConversion(pipelineLeadCount, searchJobResultCount),
+            shortlistRate: formatConversion(shortlistLeadCount, pipelineLeadCount),
+            contactRate: formatConversion(contactedLeadCount, shortlistLeadCount),
+            replyRate: formatConversion(positiveReactionCount, contactedLeadCount),
+        };
+    }, [
+        searchJobResultCount,
+        pipelineLeadCount,
+        shortlistLeadCount,
+        contactedLeadCount,
+        positiveReactionCount,
+    ]);
     const draftReadyLeads = useMemo(
         () => sourceFilteredLeads.filter((lead) => lead.status === channelSelected),
         [sourceFilteredLeads]
@@ -1405,29 +2431,45 @@ export const ProspectingManagement: React.FC = () => {
         () => draftReadyLeads.filter((lead) => !draftChannelFilter || (lead.selected_channel || '') === draftChannelFilter),
         [draftReadyLeads, draftChannelFilter]
     );
+    const getEffectiveDraftChannel = (draft: OutreachDraft) => {
+        const lead = savedLeadById.get(draft.lead_id);
+        return (lead?.selected_channel || draft.channel || '') as string;
+    };
     const filteredDrafts = useMemo(
         () =>
             drafts.filter(
-                (draft) =>
-                    (!draftChannelFilter || draft.channel === draftChannelFilter) &&
-                    (!draftStatusFilter || draft.status === draftStatusFilter)
+                (draft) => {
+                    const lead = savedLeadById.get(draft.lead_id);
+                    return (
+                        !isLeadAlreadySent(lead) &&
+                        (!draftChannelFilter || getEffectiveDraftChannel(draft) === draftChannelFilter) &&
+                        leadMatchesOutreachContactFilter(lead, draftContactFilter) &&
+                        (!draftStatusFilter || draft.status === draftStatusFilter)
+                    );
+                }
             ),
-        [drafts, draftChannelFilter, draftStatusFilter]
+        [drafts, draftChannelFilter, draftContactFilter, draftStatusFilter, savedLeadById]
     );
     const filteredSendReadyDrafts = useMemo(
-        () => sendReadyDrafts.filter((draft) => !queueChannelFilter || draft.channel === queueChannelFilter),
-        [sendReadyDrafts, queueChannelFilter]
+        () => sendReadyDrafts.filter((draft) =>
+            (!queueChannelFilter || draft.channel === queueChannelFilter) &&
+            leadMatchesOutreachContactFilter(savedLeadById.get(draft.lead_id), queueContactFilter)
+        ),
+        [sendReadyDrafts, queueChannelFilter, queueContactFilter, savedLeadById]
     );
     const todayBatchDate = useMemo(() => new Date().toISOString().slice(0, 10), []);
     const queueBatchNeedsAttention = (batch: OutreachBatch) =>
         (batch.items || []).some((item) => {
             if (queueChannelFilter && item.channel !== queueChannelFilter) return false;
             if (item.delivery_status === 'failed') return true;
+            if (item.delivery_status === 'dlq') return true;
             return item.delivery_status === 'sent' && !item.latest_human_outcome && !item.latest_outcome;
         });
     const filteredSendBatches = useMemo(() => {
         const byChannel = sendBatches.filter(
-            (batch) => !queueChannelFilter || (batch.items || []).some((item) => item.channel === queueChannelFilter)
+            (batch) =>
+                (!queueChannelFilter || (batch.items || []).some((item) => item.channel === queueChannelFilter)) &&
+                (queueContactFilter === '' || (batch.items || []).some((item) => queueItemMatchesContactFilter(item, savedLeadById.get(item.lead_id), queueContactFilter)))
         );
         if (queueViewFilter === 'today') {
             return byChannel.filter((batch) => batch.batch_date === todayBatchDate);
@@ -1436,65 +2478,251 @@ export const ProspectingManagement: React.FC = () => {
             return byChannel.filter((batch) => queueBatchNeedsAttention(batch));
         }
         return byChannel;
-    }, [sendBatches, queueChannelFilter, queueViewFilter, todayBatchDate]);
-    const groupedSendBatches = useMemo(() => {
-        const groups = new Map<string, { batchDate: string; draftCount: number; approvedCount: number; batches: OutreachBatch[] }>();
-        for (const batch of filteredSendBatches) {
-            const key = batch.batch_date || 'Без даты';
-            const existing = groups.get(key) || { batchDate: key, draftCount: 0, approvedCount: 0, batches: [] };
-            existing.batches.push(batch);
-            if (batch.status === 'approved') {
-                existing.approvedCount += 1;
-            } else {
-                existing.draftCount += 1;
-            }
-            groups.set(key, existing);
-        }
-        return Array.from(groups.values()).sort((a, b) => b.batchDate.localeCompare(a.batchDate));
-    }, [filteredSendBatches]);
+    }, [sendBatches, queueChannelFilter, queueContactFilter, queueViewFilter, todayBatchDate, savedLeadById]);
     const visibleQueueItems = useMemo(
         () =>
             filteredSendBatches.flatMap((batch) =>
-                (batch.items || []).filter((item) => !queueChannelFilter || item.channel === queueChannelFilter)
+                (batch.items || []).filter((item) =>
+                    (!queueChannelFilter || item.channel === queueChannelFilter) &&
+                    queueItemMatchesContactFilter(item, savedLeadById.get(item.lead_id), queueContactFilter)
+                )
             ),
-        [filteredSendBatches, queueChannelFilter]
+        [filteredSendBatches, queueChannelFilter, queueContactFilter, savedLeadById]
     );
-    const todaySendBatches = useMemo(
-        () => filteredSendBatches.filter((batch) => batch.batch_date === todayBatchDate),
-        [filteredSendBatches, todayBatchDate]
-    );
-    const todayQueueItems = useMemo(
-        () =>
-            todaySendBatches.flatMap((batch) =>
-                (batch.items || []).filter((item) => !queueChannelFilter || item.channel === queueChannelFilter)
-            ),
-        [todaySendBatches, queueChannelFilter]
-    );
-    const todayQueueSummary = useMemo(() => {
+    const visibleQueueSummary = useMemo(() => {
         let queued = 0;
+        let sending = 0;
         let sent = 0;
         let delivered = 0;
         let failed = 0;
+        let dlq = 0;
         let withReaction = 0;
 
-        for (const item of todayQueueItems) {
-            if (item.delivery_status === 'sent') {
-                sent += 1;
-            } else if (item.delivery_status === 'delivered') {
-                delivered += 1;
-            } else if (item.delivery_status === 'failed') {
-                failed += 1;
-            } else {
-                queued += 1;
-            }
+        for (const item of visibleQueueItems) {
+            if (item.delivery_status === 'sent') sent += 1;
+            else if (item.delivery_status === 'delivered') delivered += 1;
+            else if (item.delivery_status === 'failed') failed += 1;
+            else if (item.delivery_status === 'dlq') dlq += 1;
+            else if (item.delivery_status === 'sending') sending += 1;
+            else queued += 1;
 
-            if (item.latest_human_outcome || item.latest_outcome) {
+            if (item.latest_human_outcome || item.latest_outcome || item.latest_raw_reply) {
                 withReaction += 1;
             }
         }
 
-        return { queued, sent, delivered, failed, withReaction };
-    }, [todayQueueItems]);
+        return { queued, sending, sent, delivered, failed, dlq, withReaction };
+    }, [visibleQueueItems]);
+    const queueItemById = useMemo(() => {
+        const next = new Map<string, OutreachQueueItem>();
+        sendBatches.forEach((batch) => {
+            (batch.items || []).forEach((item) => {
+                next.set(item.id, item);
+            });
+        });
+        return next;
+    }, [sendBatches]);
+    const batchById = useMemo(() => {
+        const next = new Map<string, OutreachBatch>();
+        sendBatches.forEach((batch) => {
+            next.set(batch.id, batch);
+        });
+        return next;
+    }, [sendBatches]);
+    const latestQueueItemByLeadId = useMemo(() => {
+        const next = new Map<string, OutreachQueueItem>();
+        const sortValue = (item: OutreachQueueItem) =>
+            Date.parse(String(item.updated_at || item.sent_at || item.created_at || '')) || 0;
+        sendBatches.forEach((batch) => {
+            (batch.items || []).forEach((item) => {
+                const leadId = String(item.lead_id || '').trim();
+                if (!leadId) {
+                    return;
+                }
+                const existing = next.get(leadId);
+                if (!existing || sortValue(item) >= sortValue(existing)) {
+                    next.set(leadId, item);
+                }
+            });
+        });
+        return next;
+    }, [sendBatches]);
+    const selectedQueueItem = useMemo(
+        () => (selectedQueueItemId ? queueItemById.get(selectedQueueItemId) || null : null),
+        [queueItemById, selectedQueueItemId]
+    );
+    const selectedQueueBatch = useMemo(
+        () => (selectedQueueItem ? batchById.get(selectedQueueItem.batch_id) || null : null),
+        [batchById, selectedQueueItem]
+    );
+    const selectedQueueLead = useMemo(() => {
+        if (!selectedQueueItem) {
+            return null;
+        }
+        return savedLeadById.get(selectedQueueItem.lead_id) || buildLeadFallbackFromQueueItem(selectedQueueItem);
+    }, [savedLeadById, selectedQueueItem]);
+    const sentLeadSnapshots = useMemo(
+        () =>
+            filteredSentLeads.map((lead) => ({
+                lead,
+                queueItem: lead.id ? latestQueueItemByLeadId.get(lead.id) || null : null,
+            })),
+        [filteredSentLeads, latestQueueItemByLeadId]
+    );
+
+    const draftDetailRows = useMemo(
+        () =>
+            filteredDrafts.map((draft) => {
+                const lead = savedLeadById.get(draft.lead_id);
+                const effectiveChannel = getEffectiveDraftChannel(draft);
+                return {
+                    draft,
+                    lead,
+                    effectiveChannel,
+                    warning: selectedChannelWarning(lead, effectiveChannel),
+                };
+            }),
+        [filteredDrafts, getEffectiveDraftChannel, savedLeadById]
+    );
+    const selectedDraftDetail = useMemo(
+        () => draftDetailRows.find((item) => item.draft.id === selectedDraftDetailId) || draftDetailRows[0] || null,
+        [draftDetailRows, selectedDraftDetailId]
+    );
+
+    const sentDetailRows = useMemo(() => {
+        const rows = sentLeadSnapshots.map((item) => {
+            const status = String(item.queueItem?.delivery_status || '').trim().toLowerCase();
+            const hasReply = Boolean(item.queueItem?.latest_human_outcome || item.queueItem?.latest_outcome || item.queueItem?.latest_raw_reply);
+            let state: 'problem' | 'ready' | 'history';
+            if (['failed', 'dlq', 'retry'].includes(status)) {
+                state = 'problem';
+            } else if (!hasReply) {
+                state = 'ready';
+            } else {
+                state = 'history';
+            }
+            return {
+                ...item,
+                state,
+                warning: selectedChannelWarning(item.lead, item.queueItem?.channel || item.lead.selected_channel),
+            };
+        });
+
+        return rows.sort((a, b) => {
+            const aTime = Date.parse(String(a.queueItem?.updated_at || a.queueItem?.sent_at || a.queueItem?.created_at || a.lead.created_at || '')) || 0;
+            const bTime = Date.parse(String(b.queueItem?.updated_at || b.queueItem?.sent_at || b.queueItem?.created_at || b.lead.created_at || '')) || 0;
+            return bTime - aTime;
+        });
+    }, [sentLeadSnapshots]);
+    const selectedSentDetail = useMemo(
+        () => sentDetailRows.find((item) => item.lead.id === selectedSentLeadId) || sentDetailRows[0] || null,
+        [selectedSentLeadId, sentDetailRows]
+    );
+
+    useEffect(() => {
+        if (visibleQueueItems.length === 0) {
+            if (selectedQueueItemId) {
+                setSelectedQueueItemId(null);
+            }
+            return;
+        }
+        if (!selectedQueueItemId || !visibleQueueItems.some((item) => item.id === selectedQueueItemId)) {
+            setSelectedQueueItemId(visibleQueueItems[0].id);
+        }
+    }, [selectedQueueItemId, visibleQueueItems]);
+    useEffect(() => {
+        if (draftDetailRows.length === 0) {
+            if (selectedDraftDetailId) {
+                setSelectedDraftDetailId(null);
+            }
+            return;
+        }
+        if (!selectedDraftDetailId || !draftDetailRows.some((item) => item.draft.id === selectedDraftDetailId)) {
+            setSelectedDraftDetailId(draftDetailRows[0].draft.id);
+        }
+    }, [draftDetailRows, selectedDraftDetailId]);
+    useEffect(() => {
+        if (sentDetailRows.length === 0) {
+            if (selectedSentLeadId) {
+                setSelectedSentLeadId(null);
+            }
+            return;
+        }
+        if (!selectedSentLeadId || !sentDetailRows.some((item) => item.lead.id === selectedSentLeadId)) {
+            setSelectedSentLeadId(sentDetailRows[0].lead.id || null);
+        }
+    }, [selectedSentLeadId, sentDetailRows]);
+    const pipelineWindowMetrics = useMemo(() => {
+        const windows = [
+            { key: '7d', label: '7 дней', days: 7 },
+            { key: '30d', label: '30 дней', days: 30 },
+        ];
+        return windows.map((window) => {
+            const pipelineLeads = filteredLeadsForKanban.filter((lead) => isWithinLastDays(lead.created_at, window.days));
+            const shortlistLeads = pipelineLeads.filter((lead) => leadToKanbanColumn(lead) === 'shortlist');
+            const inProgressLeads = pipelineLeads.filter((lead) => leadToKanbanColumn(lead) === 'in_progress');
+            const contactedLeads = pipelineLeads.filter((lead) => leadToKanbanColumn(lead) === 'contacted');
+            const closedLeads = pipelineLeads.filter((lead) => leadToKanbanColumn(lead) === 'closed');
+            const draftsWindow = drafts.filter((draft) => isWithinLastDays(draft.created_at, window.days));
+            const approvedDraftsWindow = draftsWindow.filter((draft) => String(draft.status || '').trim().toLowerCase() === 'approved');
+            const queueItemsWindow = visibleQueueItems.filter((item) => isWithinLastDays(item.created_at || item.sent_at || item.updated_at, window.days));
+            const deliveredWindow = queueItemsWindow.filter((item) => item.delivery_status === 'delivered');
+            const failedWindow = queueItemsWindow.filter((item) => item.delivery_status === 'failed');
+            const reactionsWindow = reactions.filter((reaction) => isWithinLastDays(reaction.created_at || reaction.updated_at, window.days));
+            const positiveWindow = reactionsWindow.filter((reaction) => {
+                const outcome = String(reaction.human_confirmed_outcome || reaction.classified_outcome || '').trim().toLowerCase();
+                return outcome === 'positive';
+            });
+            return {
+                key: window.key,
+                label: window.label,
+                pipelineCount: pipelineLeads.length,
+                shortlistCount: shortlistLeads.length,
+                inProgressCount: inProgressLeads.length,
+                contactedCount: contactedLeads.length,
+                closedCount: closedLeads.length,
+                draftCount: draftsWindow.length,
+                approvedDraftCount: approvedDraftsWindow.length,
+                queueCount: queueItemsWindow.length,
+                deliveredCount: deliveredWindow.length,
+                failedCount: failedWindow.length,
+                reactionCount: reactionsWindow.length,
+                positiveCount: positiveWindow.length,
+            };
+        });
+    }, [filteredLeadsForKanban, drafts, visibleQueueItems, reactions]);
+    const outreachOperatorMetrics = useMemo(() => {
+        const approvedDrafts = drafts.filter((draft) => String(draft.status || '').trim().toLowerCase() === 'approved').length;
+        const deliveredQueueItems = visibleQueueItems.filter((item) => item.delivery_status === 'delivered').length;
+        const failedQueueItems = visibleQueueItems.filter((item) => item.delivery_status === 'failed').length;
+        const responseCount = reactions.length;
+        return [
+            {
+                key: 'drafts',
+                label: 'Черновики',
+                count: drafts.length,
+                conversion: formatConversion(approvedDrafts, drafts.length),
+                dropOff: formatDropOff(drafts.length - approvedDrafts, drafts.length),
+                hint: 'Сколько черновиков создано и какая часть дошла до approval.',
+            },
+            {
+                key: 'queue',
+                label: 'Отправка',
+                count: visibleQueueItems.length,
+                conversion: formatConversion(deliveredQueueItems, visibleQueueItems.length),
+                dropOff: `${failedQueueItems}`,
+                hint: 'Какой объём реально дошёл до delivered и сколько упало на доставке.',
+            },
+            {
+                key: 'sent',
+                label: 'Отправлено / ответ',
+                count: reactions.length,
+                conversion: formatConversion(positiveReactionCount, responseCount),
+                dropOff: formatDropOff(positiveReactionCount, responseCount),
+                hint: 'Какой объём входящих реакций закончился позитивным outcome.',
+            },
+        ];
+    }, [drafts, visibleQueueItems, reactions, positiveReactionCount]);
 
     useEffect(() => {
         setSelectedDraftIds((prev) => prev.filter((id) => filteredDrafts.some((draft) => draft.id === id)));
@@ -1505,12 +2733,8 @@ export const ProspectingManagement: React.FC = () => {
     }, [filteredSendReadyDrafts]);
 
     useEffect(() => {
-        setSelectedShortlistLeadIds((prev) => prev.filter((id) => step3ReadyLeads.some((lead) => lead.id === id)));
-    }, [step3ReadyLeads]);
-
-    useEffect(() => {
-        setSelectedOutreachLeadIds((prev) => prev.filter((id) => contactLeads.some((lead) => lead.id === id)));
-    }, [contactLeads]);
+        setSelectedOutreachLeadIds((prev) => prev.filter((id) => filteredContactLeads.some((lead) => lead.id === id)));
+    }, [filteredContactLeads]);
 
     useEffect(() => {
         setSelectedQueueItemIds((prev) => prev.filter((id) => visibleQueueItems.some((item) => item.id === id)));
@@ -1551,36 +2775,39 @@ export const ProspectingManagement: React.FC = () => {
         }
     }, []);
 
-    const openLeadPreview = async (lead: Lead) => {
-        if (!lead.id) {
+    const refreshSavedLeadsAndPreview = useCallback(async (leadId?: string, options?: { silentPreview?: boolean }) => {
+        await fetchSavedLeads();
+        if (leadId) {
+            await fetchLeadPreview(leadId, options?.silentPreview ? { silent: true } : undefined);
+        }
+    }, [fetchLeadPreview, fetchSavedLeads]);
+
+    const openLeadPreviewById = async (leadId?: string, fallbackLead?: Lead) => {
+        if (!leadId) {
             return;
         }
 
+        const lead =
+            fallbackLead ||
+            savedLeadById.get(leadId) || {
+                id: leadId,
+                name: leadId,
+                status: 'new',
+            };
         setPreviewLead(lead);
         const inferredLanguage = inferLeadAuditLanguage(lead);
-        setPreviewAuditPageLanguage(inferredLanguage);
-        setPreviewAuditPageEnabledLanguages([inferredLanguage]);
+        const storedLanguages = Array.isArray(lead.enabled_languages) ? lead.enabled_languages : [];
+        const primaryLanguage = String(lead.preferred_language || inferredLanguage).trim().toLowerCase() || inferredLanguage;
+        setPreviewAuditPageLanguage(primaryLanguage);
+        setPreviewAuditPageEnabledLanguages(ensureAuditLanguages(primaryLanguage, storedLanguages.length ? storedLanguages : [primaryLanguage]));
         setPreviewSnapshot(null);
         setPreviewError(null);
         setPreviewAuditPageUrl(lead.public_audit_url || null);
-        await fetchLeadPreview(lead.id);
+        await fetchLeadPreview(leadId);
     };
 
-    const generateDraftFromLeadPreview = async () => {
-        if (!previewLead?.id) {
-            return;
-        }
-        setPreviewGenerateBusy(true);
-        setPreviewError(null);
-        try {
-            await api.post(`/admin/prospecting/lead/${previewLead.id}/draft-generate-from-audit`);
-            await Promise.all([fetchSavedLeads(), fetchDrafts(), fetchSendQueue()]);
-            setActiveTab('drafts');
-        } catch (error: any) {
-            setPreviewError(error?.message || 'Не удалось сгенерировать письмо из аудита');
-        } finally {
-            setPreviewGenerateBusy(false);
-        }
+    const openLeadPreview = async (lead: Lead) => {
+        await openLeadPreviewById(lead.id, lead);
     };
 
     const generateAuditPageFromLeadPreview = async () => {
@@ -1600,13 +2827,12 @@ export const ProspectingManagement: React.FC = () => {
             if (updatedLead) {
                 setPreviewLead(updatedLead);
             }
-            await fetchSavedLeads();
-            await fetchLeadPreview(previewLead.id, { silent: true });
+            await refreshSavedLeadsAndPreview(previewLead.id, { silentPreview: true });
             if (url) {
                 window.open(url, '_blank', 'noopener,noreferrer');
             }
-        } catch (error: any) {
-            setPreviewError(error?.message || 'Не удалось сгенерировать страницу аудита');
+        } catch (error: unknown) {
+            setPreviewError(getRequestErrorMessage(error, 'Не удалось сгенерировать страницу аудита'));
         } finally {
             setPreviewAuditPageBusy(false);
         }
@@ -1624,9 +2850,9 @@ export const ProspectingManagement: React.FC = () => {
             if (updatedLead) {
                 setPreviewLead(updatedLead);
             }
-            await fetchSavedLeads();
-        } catch (error: any) {
-            setPreviewError(error?.message || 'Не удалось сохранить контакты лида');
+            await refreshSavedLeadsAndPreview();
+        } catch (error: unknown) {
+            setPreviewError(getRequestErrorMessage(error, 'Не удалось сохранить контакты лида'));
         } finally {
             setPreviewContactsBusy(false);
         }
@@ -1640,12 +2866,48 @@ export const ProspectingManagement: React.FC = () => {
         setPreviewError(null);
         try {
             await api.post(`/admin/prospecting/lead/${previewLead.id}/parse`);
-            await fetchLeadPreview(previewLead.id);
-            await fetchSavedLeads();
-        } catch (error: any) {
-            setPreviewError(error?.message || 'Не удалось запустить парсинг карточки');
+            await refreshSavedLeadsAndPreview(previewLead.id);
+        } catch (error: unknown) {
+            setPreviewError(getRequestErrorMessage(error, 'Не удалось запустить парсинг карточки'));
         } finally {
             setPreviewParseBusy(false);
+        }
+    };
+
+    const runLeadParse = async (lead: Lead) => {
+        if (!lead.id) {
+            return;
+        }
+        setParseActionBusy((prev) => ({ ...prev, [lead.id as string]: true }));
+        try {
+            await api.post(`/admin/prospecting/lead/${lead.id}/parse`);
+            await fetchSavedLeads();
+        } catch (error: any) {
+            toast.error(error?.message || 'Не удалось запустить парсинг карточки');
+        } finally {
+            setParseActionBusy((prev) => ({ ...prev, [lead.id as string]: false }));
+        }
+    };
+
+    const updateLeadLanguage = async (lead: Lead, language: string) => {
+        if (!lead.id) {
+            return;
+        }
+        const normalized = String(language || '').trim().toLowerCase();
+        if (!normalized) {
+            return;
+        }
+        setLanguageLoading((prev) => ({ ...prev, [lead.id as string]: true }));
+        try {
+            await api.post(`/admin/prospecting/lead/${lead.id}/language`, {
+                preferred_language: normalized,
+                enabled_languages: [normalized],
+            });
+            await fetchSavedLeads();
+        } catch (error: any) {
+            toast.error(error?.message || 'Не удалось обновить язык аудита');
+        } finally {
+            setLanguageLoading((prev) => ({ ...prev, [lead.id as string]: false }));
         }
     };
 
@@ -1679,243 +2941,784 @@ export const ProspectingManagement: React.FC = () => {
         };
     }, [previewLead?.id, previewSnapshot?.parse_context?.last_parse_status, fetchLeadPreview]);
 
-    const bulkParseShortlist = async () => {
-        const leadIds = step3ReadyLeads
-            .filter((lead) => lead.id && selectedShortlistLeadIds.includes(lead.id))
-            .map((lead) => lead.id as string);
-        if (leadIds.length === 0) {
-            return;
-        }
-        setBulkParseBusy(true);
-        try {
-            await api.post('/admin/prospecting/shortlist/parse', { lead_ids: leadIds });
-            await fetchSavedLeads();
-        } catch (error: any) {
-            setSearchError(error?.message || 'Не удалось запустить парсинг shortlist');
-        } finally {
-            setBulkParseBusy(false);
-        }
-    };
+    const renderKanbanCard = (lead: Lead) => {
+        const leadId = lead.id || '';
+        const columnId = leadToPipelineBoardColumn(lead);
+        const nextColumnId = nextPipelineBoardColumn(columnId);
+        const nextStatus = nextColumnId ? pipelineBoardColumnMeta[nextColumnId].statusToSet : null;
+        const isDragging = leadId && draggingLeadId === leadId;
+        const hasMessenger = extractHasMessengers(lead);
+        const updateBusy = leadId ? statusUpdateBusy[leadId] : false;
+        const updateError = leadId ? statusUpdateError[leadId] : undefined;
+        const auditSummary = leadAuditLanguageSummary(lead);
+        const hasAudit = hasLeadAudit(lead);
+        const normalizedStatus = String(lead.status || '').trim().toLowerCase();
+        const primaryActionLabel = hasAudit ? 'Открыть аудит' : 'Создать аудит';
+        const secondaryActions: Parameters<typeof WorkflowActionRow>[0]['secondary'] = [];
 
-    const renderLeadRow = (lead: Lead, context: 'candidates' | 'shortlist' | 'deferred' | 'rejected' | 'sent') => {
-        const isBusy = Boolean(lead.id && shortlistLoading[lead.id]);
-        const busyDecision = lead.id ? shortlistLoading[lead.id] : '';
+        secondaryActions.push({ label: 'Продолжить', onClick: () => openLeadPreview(lead) });
+
+        if (lead.website) {
+            secondaryActions.push({
+                label: 'Сайт',
+                href: lead.website || '',
+                variant: 'ghost',
+                icon: <ExternalLink className="h-3 w-3" />,
+            });
+        }
+
+        secondaryActions.push({ label: 'Карточка', onClick: () => openLeadPreview(lead) });
+
+        if (nextStatus && leadId) {
+            secondaryActions.push({
+                label: 'Дальше',
+                onClick: () => updateLeadStatusOptimistic(leadId, nextStatus),
+                disabled: updateBusy,
+                icon: updateBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : undefined,
+            });
+        }
+
+        if (leadId) {
+            secondaryActions.push({
+                label: 'Отложить',
+                variant: 'destructive',
+                onClick: () => updateLeadStatusOptimistic(leadId, pipelineBoardColumnMeta.closed.statusToSet),
+                disabled: updateBusy,
+            });
+        }
 
         return (
-            <TableRow key={lead.id}>
-                <TableCell className="font-medium min-w-[260px]">
-                    <div>{lead.name}</div>
-                    <div className="text-xs text-muted-foreground">{lead.category || 'Без категории'}</div>
-                    <div className="mt-1">
+            <Card
+                key={leadId || lead.name}
+                draggable={Boolean(leadId)}
+                onDragStart={leadId ? handleLeadDragStart(leadId) : undefined}
+                onDragEnd={handleLeadDragEnd}
+                className={`border border-border bg-background shadow-sm transition ${isDragging ? 'opacity-60' : ''}`}
+            >
+                <CardHeader className="space-y-3 pb-3">
+                    <div className="flex items-start justify-between gap-2">
+                        <div>
+                            <div className="text-sm font-semibold">{lead.name}</div>
+                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                <span>{lead.category || 'Без категории'}</span>
+                                <span className="inline-flex items-center gap-1">
+                                    <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                                    {lead.rating ?? '-'}
+                                </span>
+                                <span>({lead.reviews_count ?? 0})</span>
+                            </div>
+                        </div>
                         <Badge variant="outline" className="text-[11px] font-normal">
-                            {formatLeadSource(lead.source)}
+                            {sourceLabel(lead.source)}
                         </Badge>
                     </div>
-                    {lead.source_url && (
-                        <a href={lead.source_url} target="_blank" rel="noreferrer" className="text-xs text-blue-500 underline">
-                            Открыть в Яндекс Картах
-                        </a>
-                    )}
-                </TableCell>
-                <TableCell className="min-w-[220px]">
-                    <div className="flex items-center gap-1 text-sm">
-                        <MapPin className="h-3 w-3" />
-                        <span className="truncate" title={lead.address}>{lead.address || lead.city || '-'}</span>
+                    <div className="text-xs text-muted-foreground">
+                        {lead.address || lead.city || 'Адрес не указан'}
                     </div>
-                </TableCell>
-                <TableCell className="min-w-[220px]">
-                    <ContactStack lead={lead} />
-                </TableCell>
-                <TableCell className="min-w-[120px]">
-                    <div className="space-y-1 text-sm">
-                        <div className="flex items-center gap-1">
-                            <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                            <span>{lead.rating ?? '-'}</span>
+                    <div className="space-y-2">
+                        <ContactPresenceBadges
+                            title="Каналы связи"
+                            website={lead.website}
+                            phone={lead.phone}
+                            email={lead.email}
+                            telegramUrl={lead.telegram_url}
+                            whatsappUrl={lead.whatsapp_url}
+                            hasMessenger={hasMessenger}
+                        />
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        {normalizedStatus === shortlistApproved && (
+                            <Badge variant="outline" className="border-amber-200 text-amber-700">
+                                Приоритетный
+                            </Badge>
+                        )}
                         </div>
-                        <div className="text-muted-foreground">Отзывы: {lead.reviews_count ?? 0}</div>
                     </div>
-                </TableCell>
-                <TableCell className="min-w-[120px]">
-                    <Badge variant={badgeVariantForStatus(lead.status)}>{statusLabel(lead.status)}</Badge>
-                </TableCell>
-                <TableCell className="min-w-[220px]">
-                    <div className="flex flex-wrap gap-2">
-                        {context === 'sent' && lead.public_audit_url && (
-                            <a
-                                href={lead.public_audit_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex h-9 items-center rounded-md border border-input bg-secondary px-3 text-sm font-medium text-secondary-foreground hover:bg-secondary/80"
-                            >
-                                Открыть аудит
-                            </a>
-                        )}
-                        {context === 'candidates' && lead.id && (
-                            <>
-                                <Button
-                                    size="sm"
-                                    onClick={() => reviewShortlist(lead.id!, 'approved')}
-                                    disabled={isBusy}
-                                >
-                                    {busyDecision === 'approved' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                    В shortlist
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => reviewShortlist(lead.id!, 'rejected')}
-                                    disabled={isBusy}
-                                >
-                                    {busyDecision === 'rejected' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                    Отбраковать
-                                </Button>
-                            </>
-                        )}
-                        {context === 'shortlist' && lead.id && (
-                            <>
-                                <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    onClick={() => api.post(`/admin/prospecting/lead/${lead.id!}/status`, { status: deferredLead }).then(fetchSavedLeads)}
-                                    disabled={isBusy}
-                                >
-                                    Отложить
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => reviewShortlist(lead.id!, 'rejected')}
-                                    disabled={isBusy}
-                                >
-                                    {busyDecision === 'rejected' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                    Отбраковать
-                                </Button>
-                            </>
-                        )}
-                        {context === 'deferred' && lead.id && (
-                            <>
-                                <Button
-                                    size="sm"
-                                    onClick={() => reviewShortlist(lead.id!, 'approved')}
-                                    disabled={isBusy}
-                                >
-                                    {busyDecision === 'approved' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                    Вернуть в shortlist
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => reviewShortlist(lead.id!, 'rejected')}
-                                    disabled={isBusy}
-                                >
-                                    {busyDecision === 'rejected' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                    Отбраковать
-                                </Button>
-                            </>
-                        )}
-                        {context === 'rejected' && lead.id && (
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => api.post(`/admin/prospecting/lead/${lead.id!}/status`, { status: 'new' }).then(fetchSavedLeads)}
-                                disabled={isBusy}
-                            >
-                                {busyDecision === 'approved' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                Вернуть в сбор
-                            </Button>
-                        )}
-                        {lead.id && (
-                            <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => deleteLeadEverywhere(lead.id!)}
-                                disabled={busyDecision === 'delete'}
-                            >
-                                {busyDecision === 'delete' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                Удалить
-                            </Button>
-                        )}
-                    </div>
-                </TableCell>
-            </TableRow>
+                    <StatusSummaryCard
+                        title="Аудит"
+                        statusLabel={hasAudit ? 'Готов' : 'Не создан'}
+                        statusVariant={hasAudit ? 'secondary' : 'outline'}
+                        primaryText={hasAudit ? `Основной язык: ${formatLanguageLabel(auditSummary.primary)}` : 'Страница аудита ещё не создана'}
+                        secondaryText={hasAudit
+                            ? auditSummary.total > 1
+                                ? `Ещё ${auditSummary.total - 1} ${auditSummary.total - 1 === 1 ? 'язык' : 'языка'} · обновлено ${formatAuditUpdatedAt(lead.public_audit_updated_at)}`
+                                : `Только 1 языковая версия · обновлено ${formatAuditUpdatedAt(lead.public_audit_updated_at)}`
+                            : 'Создай аудит, чтобы увидеть языки, ссылку и прогресс по странице.'}
+                    />
+                    {updateError && <div className="text-xs text-red-600">{updateError}</div>}
+                </CardHeader>
+                <CardContent className="space-y-3 pt-0">
+                    <WorkflowActionRow
+                        primary={{
+                            label: primaryActionLabel,
+                            onClick: () => hasAudit ? window.open(String(lead.public_audit_url || ''), '_blank', 'noopener') : openLeadPreview(lead),
+                        }}
+                        secondary={secondaryActions}
+                    />
+                </CardContent>
+            </Card>
         );
     };
 
-    const renderLeadsTable = (items: Lead[], context: 'candidates' | 'shortlist' | 'deferred' | 'rejected' | 'sent') => {
-        if (loadingLeads) {
-            return <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>;
-        }
+    const renderDraftsWorkspace = () => {
+        const selectedItem = selectedDraftDetail;
+        const selectedDraft = selectedItem?.draft || null;
+        const selectedLead = selectedItem?.lead || null;
+        const selectedChannel = selectedItem?.effectiveChannel || '';
+        const selectedDraftText = selectedDraft ? (draftEdits[selectedDraft.id] || '') : '';
+        const selectedDraftPending = selectedDraft ? draftBusy[selectedDraft.id] : '';
+        const selectedDraftHasIssue = Boolean(selectedItem?.warning);
+        const selectedDraftMissingContacts = filteredDrafts.filter((draft) => {
+            const lead = savedLeadById.get(draft.lead_id);
+            return Boolean(selectedChannelWarning(lead, getEffectiveDraftChannel(draft)));
+        }).length;
 
         return (
-            <Table enableStickyScrollbar className="min-w-[1400px]">
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>Компания</TableHead>
-                        <TableHead>Адрес</TableHead>
-                        <TableHead>Контакты</TableHead>
-                        <TableHead>Рейтинг</TableHead>
-                        <TableHead>Статус</TableHead>
-                        <TableHead>Действие</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {items.map((lead) => renderLeadRow(lead, context))}
-                    {items.length === 0 && (
-                        <TableRow>
-                            <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                                Для текущего набора фильтров здесь пока нет лидов.
-                            </TableCell>
-                        </TableRow>
-                    )}
-                </TableBody>
-            </Table>
+            <div className="space-y-4">
+                <div className="flex flex-wrap items-center gap-3 rounded-xl border p-4">
+                    <div className="text-sm font-medium">Канал</div>
+                    <select className="border rounded-md px-3 py-2 bg-background text-sm" value={draftChannelFilter} onChange={(e) => setDraftChannelFilter(e.target.value)}>
+                        <option value="">Все каналы</option>
+                        <option value="telegram">Telegram</option>
+                        <option value="whatsapp">WhatsApp</option>
+                        <option value="max">Max</option>
+                        <option value="email">Email</option>
+                        <option value="manual">Ручная отправка</option>
+                    </select>
+                    <div className="text-sm font-medium">Контакт</div>
+                    <select className="border rounded-md px-3 py-2 bg-background text-sm" value={draftContactFilter} onChange={(e) => setDraftContactFilter(toOutreachContactFilter(String(e.target.value || '')))}>
+                        <option value="">Любой</option>
+                        <option value="telegram">Только с Telegram</option>
+                        <option value="whatsapp">Только с WhatsApp</option>
+                        <option value="max">Только с Max</option>
+                        <option value="email">Только с Email</option>
+                        <option value="vk">Только с VK</option>
+                    </select>
+                    <div className="text-sm font-medium">Состояние</div>
+                    <select className="border rounded-md px-3 py-2 bg-background text-sm" value={draftStatusFilter} onChange={(e) => setDraftStatusFilter(e.target.value)}>
+                        <option value="">Все</option>
+                        <option value="generated">Ждут проверки</option>
+                        <option value="approved">Готовы к отправке</option>
+                        <option value="rejected">Нужна проверка</option>
+                    </select>
+                    <Badge variant="outline">Показано {filteredDrafts.length} из {drafts.length}</Badge>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setOutreachDetailOpen((prev) => !prev)}>
+                        {outreachDetailOpen ? <PanelRightClose className="mr-2 h-4 w-4" /> : <PanelRightOpen className="mr-2 h-4 w-4" />}
+                        {outreachDetailOpen ? 'Скрыть детали' : 'Показать детали'}
+                    </Button>
+                </div>
+
+                {selectedDraftMissingContacts > 0 ? (
+                    <ErrorSummary
+                        title="Есть черновики с неверным каналом"
+                        description={`У ${selectedDraftMissingContacts} лидов выбран канал, для которого нет контакта. Сначала проверьте канал или откройте карточку лида.`}
+                    />
+                ) : null}
+
+                <div className={`grid gap-4 ${outreachDetailOpen ? 'xl:grid-cols-[380px,minmax(0,1fr)]' : 'grid-cols-1'}`}>
+                    <LeadList
+                        title="Нужно действие"
+                        description="Слева только короткий список: кому писать, через какой канал и где нужен ручной контроль."
+                        count={filteredDrafts.length}
+                    >
+                        <div className="space-y-3">
+                            {loadingDrafts ? (
+                                <div className="flex justify-center py-10 text-sm text-muted-foreground">
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Загружаем черновики...
+                                </div>
+                            ) : filteredDrafts.length === 0 ? (
+                                <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+                                    По текущим фильтрам здесь пока ничего нет.
+                                </div>
+                            ) : (
+                                draftDetailRows.map(({ draft, lead, effectiveChannel, warning }) => (
+                                    <LeadListItem
+                                        key={draft.id}
+                                        title={lead?.name || draft.lead_name || draft.lead_id}
+                                        subtitle={lead?.category || 'Без категории'}
+                                        location={lead?.city || lead?.address || 'Локация не указана'}
+                                        statusLabel={formatDraftStatusLabel(draft.status)}
+                                        statusTone={toneForDraftStatus(draft.status)}
+                                        channelLabel={`Канал: ${formatLeadChannel(effectiveChannel)}`}
+                                        languageLabel={leadLanguageLabel(lead)}
+                                        lastActionLabel={draft.updated_at ? `Обновлено ${formatDateTime(draft.updated_at)}` : 'Ещё не отправляли'}
+                                        contactBadges={
+                                            <ContactPresenceBadges
+                                                website={lead?.website}
+                                                phone={lead?.phone}
+                                                email={lead?.email}
+                                                telegramUrl={lead?.telegram_url}
+                                                whatsappUrl={lead?.whatsapp_url}
+                                                hasMessenger={lead ? extractHasMessengers(lead) : false}
+                                            />
+                                        }
+                                        warning={warning || undefined}
+                                        selected={selectedDraft?.id === draft.id}
+                                        onSelect={() => {
+                                            setSelectedDraftDetailId(draft.id);
+                                            setOutreachDetailOpen(true);
+                                        }}
+                                        checked={selectedDraftIds.includes(draft.id)}
+                                        onCheckedChange={(checked) => {
+                                            setSelectedDraftIds((prev) => checked ? Array.from(new Set([...prev, draft.id])) : prev.filter((id) => id !== draft.id));
+                                            setSelectedDraftDetailId(draft.id);
+                                            setOutreachDetailOpen(true);
+                                        }}
+                                    />
+                                ))
+                            )}
+                        </div>
+                    </LeadList>
+
+                    {outreachDetailOpen ? <DraftDetailPanel
+                        title={selectedLead?.name || selectedDraft?.lead_name}
+                        description={selectedLead?.address || 'Сначала проверьте канал, текст и безопасное следующее действие.'}
+                        statusLabel={selectedDraft ? formatDraftStatusLabel(selectedDraft.status) : undefined}
+                        statusTone={selectedDraft ? toneForDraftStatus(selectedDraft.status) : undefined}
+                        warning={selectedDraftHasIssue ? selectedItem?.warning || '' : ''}
+                        canOpenLeadCard={Boolean(selectedLead)}
+                        onOpenLeadCard={() => selectedLead && openLeadPreview(selectedLead)}
+                        onFixChannel={() => selectedLead?.id && chooseChannel(selectedLead.id, bestAvailableOutreachChannel(selectedLead))}
+                        leadContacts={selectedLead}
+                        hasMessenger={selectedLead ? extractHasMessengers(selectedLead) : false}
+                        selectedChannelLabel={formatLeadChannel(selectedChannel)}
+                        selectedChannelValue={selectedChannel === 'telegram' ? (selectedLead?.telegram_url || 'Нет контакта для выбранного канала') :
+                            selectedChannel === 'whatsapp' ? (selectedLead?.whatsapp_url || 'Нет контакта для выбранного канала') :
+                                selectedChannel === 'email' ? (selectedLead?.email || 'Нет контакта для выбранного канала') :
+                                    selectedChannel === 'max' ? (selectedLead && extractHasMax(selectedLead) ? 'Контакт через Max найден' : 'Нет контакта для выбранного канала') :
+                                        'Для ручной отправки используйте карточку лида'}
+                        selectedChannelTone={selectedDraftHasIssue ? 'warning' : 'success'}
+                        auditStatusLabel={selectedLead && hasLeadAudit(selectedLead) ? 'Доступен' : 'Пока нет'}
+                        auditPrimaryText={selectedLead && hasLeadAudit(selectedLead) ? 'Ссылки на аудит доступны ниже' : 'Аудит не должен мешать отправке, но помогает при проверке'}
+                        auditSecondaryText={selectedLead?.public_audit_updated_at ? `Обновлён ${formatAuditUpdatedAt(selectedLead.public_audit_updated_at)}` : 'Без даты обновления'}
+                        auditTone={selectedLead && hasLeadAudit(selectedLead) ? 'info' : 'default'}
+                        channelSelector={selectedLead ? (
+                            <div className="flex flex-wrap items-center gap-3">
+                                <select
+                                    className="border rounded-md px-3 py-2 bg-background text-sm"
+                                    value={selectedLead.selected_channel || 'manual'}
+                                    onChange={(e) => {
+                                        if (selectedLead.id) {
+                                            void chooseChannel(selectedLead.id, toOutreachChannel(String(e.target.value || 'manual')));
+                                        }
+                                    }}
+                                >
+                                    <option value="telegram">Telegram</option>
+                                    <option value="whatsapp">WhatsApp</option>
+                                    <option value="max">Max</option>
+                                    <option value="email">Email</option>
+                                    <option value="manual">Ручная отправка</option>
+                                </select>
+                                <div className="text-sm text-muted-foreground">
+                                    {selectedChannel === 'telegram' ? (selectedLead.telegram_url || 'Нет контакта для выбранного канала') :
+                                        selectedChannel === 'whatsapp' ? (selectedLead.whatsapp_url || 'Нет контакта для выбранного канала') :
+                                            selectedChannel === 'email' ? (selectedLead.email || 'Нет контакта для выбранного канала') :
+                                                selectedChannel === 'max' ? (extractHasMax(selectedLead) ? 'Контакт через Max найден' : 'Нет контакта для выбранного канала') :
+                                                    'Для ручной отправки используйте карточку лида'}
+                                </div>
+                            </div>
+                        ) : null}
+                        auditLinks={selectedLead && buildLeadAuditLanguageLinks(selectedLead).length > 0 ? buildLeadAuditLanguageLinks(selectedLead).map((item) => (
+                            <a key={item.language} href={item.href} target="_blank" rel="noreferrer">
+                                <Button type="button" size="sm" variant="outline">Аудит {item.label}</Button>
+                            </a>
+                        )) : null}
+                        primaryAction={selectedDraft ? (selectedDraft.status === 'approved'
+                            ? {
+                                label: 'Проверить и добавить в отправку',
+                                onClick: () => createSendBatch([selectedDraft.id]),
+                                disabled: Boolean(selectedDraftPending),
+                            }
+                            : {
+                                label: 'Утвердить черновик',
+                                onClick: () => approveDraft(selectedDraft.id),
+                                disabled: Boolean(selectedDraftPending) || !selectedDraftText.trim(),
+                            }) : undefined}
+                        secondaryActions={selectedDraft ? [
+                            {
+                                label: 'Сохранить черновик',
+                                onClick: () => saveDraftEdit(selectedDraft.id),
+                                disabled: Boolean(selectedDraftPending) || !selectedDraftText.trim(),
+                            },
+                            {
+                                label: 'Открыть карточку лида',
+                                onClick: () => selectedLead && openLeadPreview(selectedLead),
+                                disabled: !selectedLead,
+                            },
+                            {
+                                label: 'Отклонить',
+                                onClick: () => rejectDraft(selectedDraft.id),
+                                disabled: Boolean(selectedDraftPending),
+                                variant: 'outline',
+                            },
+                            {
+                                label: 'Отправлено вручную',
+                                onClick: () => markDraftAsSentManually(selectedDraft),
+                                disabled: Boolean(selectedDraftPending),
+                                variant: 'secondary',
+                            },
+                        ] : []}
+                        editorValue={selectedDraftText}
+                        onEditorChange={(value) => selectedDraft && setDraftEdits((prev) => ({ ...prev, [selectedDraft.id]: value }))}
+                        reviewDescription="Здесь видно итоговый текст до отправки или переноса в очередь."
+                        checklistItems={[
+                            {
+                                id: 'channel',
+                                label: 'Выбранный канал можно использовать',
+                                checked: !selectedDraftHasIssue,
+                                hint: selectedDraftHasIssue ? 'Сначала смените канал или уточните контакт.' : 'Контакт для выбранного канала найден.',
+                            },
+                            {
+                                id: 'text',
+                                label: 'Текст сообщения готов',
+                                checked: Boolean(selectedDraftText.trim()),
+                                hint: selectedDraftText.trim() ? 'Можно переходить к сохранению или отправке.' : 'Сообщение пока пустое.',
+                            },
+                            {
+                                id: 'audit',
+                                label: 'Контекст лида доступен',
+                                checked: Boolean(selectedLead),
+                                hint: selectedLead && hasLeadAudit(selectedLead) ? 'Аудит под рукой, если нужно быстро свериться.' : 'Можно работать и без аудита, но стоит проверить карточку.',
+                            },
+                        ]}
+                        historyRows={selectedDraft ? [
+                            { label: 'Статус', value: formatDraftStatusLabel(selectedDraft.status) },
+                            { label: 'Создан', value: selectedDraft.created_at ? formatDateTime(selectedDraft.created_at) : '—' },
+                            { label: 'Последнее изменение', value: selectedDraft.updated_at ? formatDateTime(selectedDraft.updated_at) : '—' },
+                        ] : []}
+                    /> : null}
+                </div>
+
+                <StickyBulkActionBar count={selectedDraftIds.length} label="Можно массово утвердить, отклонить или удалить выбранные черновики.">
+                    <Button size="sm" onClick={approveSelectedDrafts} disabled={selectedDraftIds.length === 0 || draftBusy.bulkApprove === 'approve'}>
+                        {draftBusy.bulkApprove === 'approve' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                        Утвердить
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={rejectSelectedDrafts} disabled={selectedDraftIds.length === 0 || draftBusy.bulkReject === 'reject'}>
+                        Отклонить
+                    </Button>
+                    <Button size="sm" variant="destructive" onClick={deleteSelectedDrafts} disabled={selectedDraftIds.length === 0 || draftBusy.bulkDelete === 'delete'}>
+                        Удалить
+                    </Button>
+                </StickyBulkActionBar>
+            </div>
         );
     };
 
-    return (
+    const renderQueueWorkspace = () => {
+        const selectedLead = selectedQueueLead;
+        const selectedItem = selectedQueueItem;
+        const selectedWarning = selectedLead ? selectedChannelWarning(selectedLead, selectedItem?.channel || selectedLead.selected_channel) : '';
+        const selectedMessage = selectedItem?.approved_text || selectedItem?.generated_text || '';
+        const selectedRecipient = selectedItem?.recipient_value
+            || (selectedItem?.channel === 'telegram' ? selectedLead?.telegram_url : '')
+            || (selectedItem?.channel === 'whatsapp' ? selectedLead?.whatsapp_url : '')
+            || (selectedItem?.channel === 'email' ? selectedLead?.email : '');
+        const selectedProblemCount = visibleQueueItems.filter((item) => {
+            const lead = savedLeadById.get(item.lead_id) || buildLeadFallbackFromQueueItem(item);
+            return Boolean(selectedChannelWarning(lead, item.channel) || item.error_text || ['failed', 'dlq', 'retry'].includes(String(item.delivery_status || '').toLowerCase()));
+        }).length;
+
+        return (
+            <div className="space-y-4">
+                <div className="flex flex-wrap items-center gap-3 rounded-xl border p-4">
+                    <div className="text-sm font-medium">Канал для списка и очереди</div>
+                    <select className="border rounded-md px-3 py-2 bg-background text-sm" value={queueChannelFilter} onChange={(e) => setQueueChannelFilter(e.target.value)}>
+                        <option value="">Все каналы</option>
+                        <option value="telegram">Telegram</option>
+                        <option value="whatsapp">WhatsApp</option>
+                        <option value="max">Max</option>
+                        <option value="email">Email</option>
+                        <option value="manual">Ручная отправка</option>
+                    </select>
+                    <div className="text-sm font-medium">Контакт для списка и очереди</div>
+                    <select className="border rounded-md px-3 py-2 bg-background text-sm" value={queueContactFilter} onChange={(e) => setQueueContactFilter(toOutreachContactFilter(String(e.target.value || '')))}>
+                        <option value="">Любой</option>
+                        <option value="telegram">Только с Telegram</option>
+                        <option value="whatsapp">Только с WhatsApp</option>
+                        <option value="max">Только с Max</option>
+                        <option value="email">Только с Email</option>
+                        <option value="vk">Только с VK</option>
+                    </select>
+                    <div className="text-sm font-medium">Срез</div>
+                    <select className="border rounded-md px-3 py-2 bg-background text-sm" value={queueViewFilter} onChange={(e) => setQueueViewFilter(String(e.target.value || 'all') as 'all' | 'today' | 'attention')}>
+                        <option value="all">Все</option>
+                        <option value="today">Только сегодня</option>
+                        <option value="attention">Требует внимания</option>
+                    </select>
+                    <Badge variant="outline">Показано {visibleQueueItems.length}</Badge>
+                    <Badge variant={selectedProblemCount > 0 ? 'destructive' : 'outline'}>Нужна проверка: {selectedProblemCount}</Badge>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setOutreachDetailOpen((prev) => !prev)}>
+                        {outreachDetailOpen ? <PanelRightClose className="mr-2 h-4 w-4" /> : <PanelRightOpen className="mr-2 h-4 w-4" />}
+                        {outreachDetailOpen ? 'Скрыть детали' : 'Показать детали'}
+                    </Button>
+                </div>
+
+                {selectedProblemCount > 0 ? (
+                    <ErrorSummary
+                        title="Есть лиды с проблемами отправки"
+                        description="Проверьте канал, контакт и статус отправки до следующего шага. Ошибки показаны прямо в списке и в деталях справа."
+                    />
+                ) : null}
+
+                <div className={`grid gap-4 ${outreachDetailOpen ? 'xl:grid-cols-[380px,minmax(0,1fr)]' : 'grid-cols-1'}`}>
+                    <LeadList
+                        title="Готово к отправке и требует контроля"
+                        description="Сначала видно, кому можно писать сейчас, а где сначала нужно исправить канал или статус."
+                        count={visibleQueueItems.length}
+                    >
+                        <div className="space-y-3">
+                            {loadingSendQueue ? (
+                                <div className="flex justify-center py-10 text-sm text-muted-foreground">
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Загружаем очередь...
+                                </div>
+                            ) : visibleQueueItems.length === 0 ? (
+                                <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+                                    По текущему срезу ничего не найдено.
+                                </div>
+                            ) : (
+                                visibleQueueItems.map((item) => {
+                                    const lead = savedLeadById.get(item.lead_id) || buildLeadFallbackFromQueueItem(item);
+                                    const warning = selectedChannelWarning(lead, item.channel) || item.error_text || '';
+                                    return (
+                                        <LeadListItem
+                                            key={item.id}
+                                            title={item.lead_name || lead.name || item.lead_id}
+                                            subtitle={lead.category || 'Без категории'}
+                                            location={lead.city || lead.address || 'Локация не указана'}
+                                            statusLabel={formatQueueStatusLabel(item.delivery_status)}
+                                            statusTone={toneForQueueStatus(item.delivery_status)}
+                                            channelLabel={`Канал: ${formatLeadChannel(item.channel)}`}
+                                            languageLabel={leadLanguageLabel(lead)}
+                                            lastActionLabel={item.updated_at ? `Обновлено ${formatDateTime(item.updated_at)}` : 'Ещё не отправляли'}
+                                            contactBadges={
+                                                <ContactPresenceBadges
+                                                    website={lead.website}
+                                                    phone={lead.phone}
+                                                    email={lead.email}
+                                                    telegramUrl={lead.telegram_url}
+                                                    whatsappUrl={lead.whatsapp_url}
+                                                    hasMessenger={extractHasMessengers(lead)}
+                                                />
+                                            }
+                                            warning={warning || undefined}
+                                            selected={selectedQueueItemId === item.id}
+                                            onSelect={() => {
+                                                setSelectedQueueItemId(item.id);
+                                                setOutreachDetailOpen(true);
+                                            }}
+                                            checked={selectedQueueItemIds.includes(item.id)}
+                                            onCheckedChange={(checked) => {
+                                                setSelectedQueueItemIds((prev) => checked ? Array.from(new Set([...prev, item.id])) : prev.filter((id) => id !== item.id));
+                                                setSelectedQueueItemId(item.id);
+                                                setOutreachDetailOpen(true);
+                                            }}
+                                        />
+                                    );
+                                })
+                            )}
+                        </div>
+                    </LeadList>
+
+                    {outreachDetailOpen ? <QueueDetailPanel
+                        title={selectedItem?.lead_name || selectedLead?.name}
+                        description={selectedLead?.address || 'Здесь видно канал, контакт, текст и безопасное следующее действие.'}
+                        statusLabel={selectedItem ? formatQueueStatusLabel(selectedItem.delivery_status) : undefined}
+                        statusTone={selectedItem ? toneForQueueStatus(selectedItem.delivery_status) : undefined}
+                        warning={selectedWarning}
+                        canOpenLeadCard={Boolean(selectedLead)}
+                        onOpenLeadCard={() => selectedLead && selectedItem && openLeadPreviewById(selectedItem.lead_id, selectedLead)}
+                        onFixChannel={selectedLead?.id ? () => chooseChannel(selectedLead.id || '', bestAvailableOutreachChannel(selectedLead)) : undefined}
+                        leadContacts={selectedLead}
+                        hasMessenger={selectedLead ? extractHasMessengers(selectedLead) : false}
+                        channelStatusLabel={formatLeadChannel(selectedItem?.channel || selectedLead?.selected_channel)}
+                        channelPrimaryText={selectedRecipient ? 'Контакт найден, можно продолжать' : 'Нет контакта для выбранного канала'}
+                        channelSecondaryText={selectedRecipient || 'Откройте карточку лида или смените канал'}
+                        channelTone={selectedRecipient ? 'success' : 'warning'}
+                        queueStatusLabel={selectedItem?.latest_human_outcome || selectedItem?.latest_outcome || 'Без ответа'}
+                        queuePrimaryText={selectedItem?.delivery_status ? `Статус доставки: ${formatQueueStatusLabel(selectedItem.delivery_status)}` : 'Статус ещё не задан'}
+                        queueSecondaryText={selectedItem?.updated_at ? `Последнее изменение ${formatDateTime(selectedItem.updated_at)}` : 'Без даты'}
+                        queueTone={selectedItem?.latest_human_outcome || selectedItem?.latest_outcome ? 'info' : 'default'}
+                        topErrorSummary={selectedItem?.error_text ? (
+                            <ErrorSummary
+                                title="Отправка не завершилась корректно"
+                                description={selectedItem.error_text}
+                                actions={selectedLead?.id ? <Button size="sm" variant="outline" onClick={() => openLeadPreviewById(selectedItem.lead_id, selectedLead)}>Открыть карточку лида</Button> : null}
+                            />
+                        ) : null}
+                        contextLinks={selectedLead ? (
+                            <>
+                                {buildLeadAuditLanguageLinks(selectedLead).map((item) => (
+                                    <a key={item.language} href={item.href} target="_blank" rel="noreferrer">
+                                        <Button type="button" size="sm" variant="outline">Аудит {item.label}</Button>
+                                    </a>
+                                ))}
+                                <Button type="button" size="sm" variant="outline" onClick={() => selectedItem && openLeadPreviewById(selectedItem.lead_id, selectedLead)}>Карточка лида</Button>
+                            </>
+                        ) : null}
+                        primaryAction={selectedItem ? (selectedWarning
+                            ? {
+                                label: 'Исправить канал',
+                                onClick: () => selectedLead?.id && chooseChannel(selectedLead.id, bestAvailableOutreachChannel(selectedLead)),
+                                disabled: !selectedLead?.id || Boolean(sendQueueBusy[selectedItem.id]),
+                            }
+                            : ['queued', 'retry', 'sending'].includes(String(selectedItem.delivery_status || '').toLowerCase())
+                                ? {
+                                    label: 'Проверить и отметить отправку',
+                                    onClick: () => markDelivery(selectedItem.id, 'sent'),
+                                    disabled: Boolean(sendQueueBusy[selectedItem.id]),
+                                }
+                                : {
+                                    label: 'Зафиксировать ответ',
+                                    onClick: () => recordReaction(selectedItem.id),
+                                    disabled: Boolean(sendQueueBusy[selectedItem.id]),
+                                }) : undefined}
+                        secondaryActions={selectedItem ? [
+                            {
+                                label: 'Открыть карточку лида',
+                                onClick: () => selectedLead && openLeadPreviewById(selectedItem.lead_id, selectedLead),
+                                disabled: !selectedLead,
+                            },
+                            {
+                                label: 'Пропустить этот лид',
+                                variant: 'outline',
+                                onClick: () => selectedLead?.id && updateLeadStatusOptimistic(selectedLead.id, pipelineBoardColumnMeta.closed.statusToSet),
+                                disabled: !selectedLead?.id,
+                            },
+                        ] : []}
+                        message={selectedMessage}
+                        reviewDescription="Сначала проверьте текст и канал, потом отмечайте отправку или фиксируйте ответ."
+                        checklistItems={[
+                            {
+                                id: 'channel',
+                                label: 'Канал подтверждён контактом',
+                                checked: !selectedWarning,
+                                hint: selectedWarning || 'Контакт для выбранного канала найден.',
+                            },
+                            {
+                                id: 'message',
+                                label: 'Текст сообщения готов',
+                                checked: Boolean(selectedMessage.trim()),
+                                hint: selectedMessage.trim() ? 'Текст можно использовать без дополнительного поиска по странице.' : 'В очереди нет текста сообщения.',
+                            },
+                            {
+                                id: 'status',
+                                label: 'Статус отправки понятен',
+                                checked: Boolean(selectedItem?.delivery_status),
+                                hint: selectedItem?.delivery_status ? `Сейчас: ${formatQueueStatusLabel(selectedItem.delivery_status)}` : 'Статус ещё не выбран.',
+                            },
+                        ]}
+                        reviewActions={selectedItem ? (
+                            <>
+                                <Button size="sm" variant={selectedItem.delivery_status === 'delivered' ? 'default' : 'outline'} onClick={() => markDelivery(selectedItem.id, 'delivered')} disabled={Boolean(sendQueueBusy[selectedItem.id])}>
+                                    Отметить как доставлено
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => markDelivery(selectedItem.id, 'failed')} disabled={Boolean(sendQueueBusy[selectedItem.id])}>
+                                    Ошибка отправки
+                                </Button>
+                            </>
+                        ) : null}
+                        noteValue={selectedItem ? (replyDrafts[selectedItem.id] ?? '') : ''}
+                        onNoteChange={(value) => selectedItem && setReplyDrafts((prev) => ({ ...prev, [selectedItem.id]: value }))}
+                        noteHint="Если ответ уже есть, вставьте его сюда и выберите безопасную классификацию."
+                        historyRows={selectedItem ? [
+                            { label: 'Batch', value: selectedQueueBatch?.batch_date || selectedItem.batch_id },
+                            { label: 'Provider', value: formatQueueProvider(selectedItem.provider_name) },
+                            { label: 'Recipient', value: selectedItem.recipient_value || '—' },
+                            { label: 'Последний outcome', value: selectedItem.latest_human_outcome || selectedItem.latest_outcome || '—' },
+                        ] : []}
+                    /> : null}
+                </div>
+
+                <StickyBulkActionBar count={selectedQueueItemIds.length} label="Выбранные лиды можно быстро отметить, удалить из очереди или вернуть на ручную проверку.">
+                    <Button size="sm" onClick={() => bulkMarkDelivery('sent')} disabled={selectedQueueItemIds.length === 0 || sendQueueBusy.bulkDelivery === 'sent'}>Отметить как отправленные</Button>
+                    <Button size="sm" variant="outline" onClick={() => bulkMarkDelivery('delivered')} disabled={selectedQueueItemIds.length === 0 || sendQueueBusy.bulkDelivery === 'delivered'}>Отметить как доставленные</Button>
+                    <Button size="sm" variant="outline" onClick={() => bulkMarkDelivery('failed')} disabled={selectedQueueItemIds.length === 0 || sendQueueBusy.bulkDelivery === 'failed'}>Нужна проверка</Button>
+                    <Button size="sm" variant="destructive" onClick={bulkDeleteQueueItems} disabled={selectedQueueItemIds.length === 0 || sendQueueBusy.bulkDeleteQueue === 'delete'}>Удалить из очереди</Button>
+                </StickyBulkActionBar>
+            </div>
+        );
+    };
+
+    const renderSentWorkspace = () => {
+        const selectedLead = selectedSentDetail?.lead || null;
+        const selectedQueue = selectedSentDetail?.queueItem || null;
+        const selectedFollowUp = selectedLead?.id ? (followUpDrafts[selectedLead.id] ?? '') : '';
+        const sentProblemCount = sentDetailRows.filter((item) => item.state === 'problem').length;
+        const followUpReadyCount = sentDetailRows.filter((item) => item.state === 'ready').length;
+
+        return (
+            <div className="space-y-4">
+                <div className="flex flex-wrap items-center gap-3 rounded-xl border p-4">
+                    <div className="text-sm font-medium">Контакт</div>
+                    <select className="border rounded-md px-3 py-2 bg-background text-sm" value={sentContactFilter} onChange={(e) => setSentContactFilter(toOutreachContactFilter(String(e.target.value || '')))}>
+                        <option value="">Любой</option>
+                        <option value="telegram">Только с Telegram</option>
+                        <option value="whatsapp">Только с WhatsApp</option>
+                        <option value="max">Только с Max</option>
+                        <option value="email">Только с Email</option>
+                        <option value="vk">Только с VK</option>
+                    </select>
+                    <Badge variant="outline">Показано {sentDetailRows.length}</Badge>
+                    <Badge variant="secondary">Готовы к follow-up: {followUpReadyCount}</Badge>
+                    <Badge variant={sentProblemCount > 0 ? 'destructive' : 'outline'}>Нужна проверка: {sentProblemCount}</Badge>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setOutreachDetailOpen((prev) => !prev)}>
+                        {outreachDetailOpen ? <PanelRightClose className="mr-2 h-4 w-4" /> : <PanelRightOpen className="mr-2 h-4 w-4" />}
+                        {outreachDetailOpen ? 'Скрыть детали' : 'Показать детали'}
+                    </Button>
+                </div>
+
+                {sentProblemCount > 0 ? (
+                    <ErrorSummary
+                        title="Не все отправленные лиды готовы к следующему шагу"
+                        description="Часть лидов ушла с ошибкой или без подходящего канала. Это видно в списке и в деталях выбранной записи."
+                    />
+                ) : null}
+
+                <div className={`grid gap-4 ${outreachDetailOpen ? 'xl:grid-cols-[380px,minmax(0,1fr)]' : 'grid-cols-1'}`}>
+                    <LeadList
+                        title="История отправки"
+                        description="Здесь в одном списке: отправлено, ждём ответ, уже ответили и лиды, которым сначала нужна проверка."
+                        count={sentDetailRows.length}
+                    >
+                        <div className="space-y-3">
+                            {sentDetailRows.length === 0 ? (
+                                <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+                                    Отправленных лидов пока нет.
+                                </div>
+                            ) : (
+                                sentDetailRows.map(({ lead, queueItem, state, warning }) => (
+                                    <LeadListItem
+                                        key={`sent-${lead.id}`}
+                                        title={lead.name}
+                                        subtitle={lead.category || 'Без категории'}
+                                        location={lead.city || lead.address || 'Локация не указана'}
+                                        statusLabel={state === 'problem' ? 'Нужна проверка' : state === 'ready' ? 'Ждём ответ' : 'История'}
+                                        statusTone={state === 'problem' ? 'danger' : state === 'ready' ? 'info' : 'success'}
+                                        channelLabel={`Канал: ${formatLeadChannel(queueItem?.channel || lead.selected_channel)}`}
+                                        languageLabel={leadLanguageLabel(lead)}
+                                        lastActionLabel={(queueItem?.updated_at || queueItem?.sent_at) ? formatDateTime(queueItem?.updated_at || queueItem?.sent_at || '') : 'Не отправлено'}
+                                        contactBadges={
+                                            <ContactPresenceBadges
+                                                website={lead.website}
+                                                phone={lead.phone}
+                                                email={lead.email}
+                                                telegramUrl={lead.telegram_url}
+                                                whatsappUrl={lead.whatsapp_url}
+                                                hasMessenger={extractHasMessengers(lead)}
+                                            />
+                                        }
+                                        warning={warning || queueItem?.error_text || undefined}
+                                        selected={selectedLead?.id === lead.id}
+                                        onSelect={() => {
+                                            setSelectedSentLeadId(lead.id || null);
+                                            setOutreachDetailOpen(true);
+                                        }}
+                                    />
+                                ))
+                            )}
+                        </div>
+                    </LeadList>
+
+                    {outreachDetailOpen ? <SentDetailPanel
+                        title={selectedLead?.name}
+                        description={selectedLead?.address || 'Здесь собраны история, follow-up и безопасное следующее действие.'}
+                        statusLabel={selectedSentDetail ? (selectedSentDetail.state === 'problem' ? 'Нужна проверка' : selectedSentDetail.state === 'ready' ? 'Готово к follow-up' : 'История') : undefined}
+                        statusTone={selectedSentDetail ? (selectedSentDetail.state === 'problem' ? 'danger' : selectedSentDetail.state === 'ready' ? 'info' : 'success') : undefined}
+                        warning={selectedSentDetail?.warning || ''}
+                        canOpenLeadCard={Boolean(selectedLead)}
+                        onOpenLeadCard={() => selectedLead && openLeadPreview(selectedLead)}
+                        onFixChannel={selectedLead?.id ? () => chooseChannel(selectedLead.id || '', bestAvailableOutreachChannel(selectedLead)) : undefined}
+                        leadContacts={selectedLead}
+                        hasMessenger={selectedLead ? extractHasMessengers(selectedLead) : false}
+                        channelStatusLabel={formatLeadChannel(selectedQueue?.channel || selectedLead?.selected_channel)}
+                        channelPrimaryText={selectedQueue?.recipient_value || 'Контакт нужно уточнить в карточке лида'}
+                        channelSecondaryText={selectedQueue?.delivery_status ? `Статус: ${formatQueueStatusLabel(selectedQueue.delivery_status)}` : 'Без статуса отправки'}
+                        channelTone={selectedSentDetail?.state === 'problem' ? 'warning' : 'success'}
+                        responseStatusLabel={selectedQueue?.latest_human_outcome || selectedQueue?.latest_outcome || 'Без ответа'}
+                        responsePrimaryText={selectedQueue?.latest_raw_reply ? 'Ответ уже зафиксирован' : 'Ответ ещё не зафиксирован'}
+                        responseSecondaryText={selectedQueue?.latest_raw_reply || 'Можно подготовить follow-up в одном месте'}
+                        responseTone={selectedQueue?.latest_raw_reply ? 'info' : 'default'}
+                        contextLinks={selectedLead ? (
+                            <>
+                                {buildLeadAuditLanguageLinks(selectedLead).map((item) => (
+                                    <a key={item.language} href={item.href} target="_blank" rel="noreferrer">
+                                        <Button type="button" size="sm" variant="outline">Аудит {item.label}</Button>
+                                    </a>
+                                ))}
+                                <Button type="button" size="sm" variant="outline" onClick={() => openLeadPreview(selectedLead)}>Карточка лида</Button>
+                            </>
+                        ) : null}
+                        primaryAction={selectedLead ? (selectedSentDetail?.state === 'problem'
+                            ? {
+                                label: 'Исправить контактный канал',
+                                onClick: () => selectedLead.id && chooseChannel(selectedLead.id, bestAvailableOutreachChannel(selectedLead)),
+                                disabled: !selectedLead.id,
+                            }
+                            : {
+                                label: 'Сохранить follow-up',
+                                onClick: () => toast.success('Follow-up сохранён локально в интерфейсе'),
+                                disabled: !selectedLead.id,
+                            }) : undefined}
+                        secondaryActions={selectedLead ? [
+                            {
+                                label: 'Открыть карточку лида',
+                                onClick: () => openLeadPreview(selectedLead),
+                            },
+                            {
+                                label: 'Пропустить этот лид',
+                                variant: 'outline',
+                                onClick: () => selectedLead.id && updateLeadStatusOptimistic(selectedLead.id, pipelineBoardColumnMeta.closed.statusToSet),
+                                disabled: !selectedLead.id,
+                            },
+                        ] : []}
+                        editorValue={selectedFollowUp}
+                        onEditorChange={(value) => selectedLead && setFollowUpDrafts((prev) => ({ ...prev, [selectedLead.id || '']: value }))}
+                        reviewDescription="Перед ручной отправкой посмотрите итоговый текст и убедитесь, что выбран правильный канал."
+                        checklistItems={[
+                            {
+                                id: 'channel',
+                                label: 'Выбранный канал ещё доступен',
+                                checked: !selectedSentDetail?.warning,
+                                hint: selectedSentDetail?.warning || 'Контакт для follow-up на месте.',
+                            },
+                            {
+                                id: 'followup',
+                                label: 'Follow-up подготовлен',
+                                checked: Boolean(selectedFollowUp.trim()),
+                                hint: selectedFollowUp.trim() ? 'Текст готов к ручной отправке.' : 'Добавьте follow-up, чтобы не возвращаться к этому лиду позже.',
+                            },
+                            {
+                                id: 'history',
+                                label: 'История отправки понятна',
+                                checked: Boolean(selectedQueue),
+                                hint: selectedQueue?.delivery_status ? `Последний статус: ${formatQueueStatusLabel(selectedQueue.delivery_status)}` : 'Нет зафиксированной отправки.',
+                            },
+                        ]}
+                        historyRows={selectedQueue ? [
+                            { label: 'Отправлено', value: selectedQueue.sent_at ? formatDateTime(selectedQueue.sent_at) : '—' },
+                            { label: 'Последнее изменение', value: selectedQueue.updated_at ? formatDateTime(selectedQueue.updated_at) : '—' },
+                            { label: 'Delivery', value: formatQueueStatusLabel(selectedQueue.delivery_status) },
+                            { label: 'Outcome', value: selectedQueue.latest_human_outcome || selectedQueue.latest_outcome || '—' },
+                        ] : []}
+                        rawReply={selectedQueue?.latest_raw_reply || undefined}
+                    /> : null}
+                </div>
+            </div>
+        );
+    };
+
+    const visibleMainTab = activeWorkspace === 'raw'
+        ? 'raw'
+        : activeWorkspace === 'pipeline'
+            ? 'inbox'
+            : activeWorkspace === 'analytics'
+                ? 'analytics'
+                : outreachTab;
+
+    const renderIntakeContent = () => (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Поиск клиентов</h2>
-                    <p className="text-muted-foreground">
-                        Единый поток: сбор → shortlist → контакт → черновик → отправка → follow-up.
-                    </p>
-                </div>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-6">
-                <div className="rounded-xl border border-sky-200 bg-sky-50 p-4">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">1. Сбор</div>
-                    <div className="mt-1 text-base font-semibold text-sky-950">Поиск или импорт</div>
-                    <div className="mt-1 text-sm text-sky-800">Ищем контакты, сохраняем кандидатов и сразу отбраковываем нерелевантных.</div>
-                </div>
-                <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-violet-700">2. Shortlist</div>
-                    <div className="mt-1 text-base font-semibold text-violet-950">Проверка сохранённых лидов</div>
-                    <div className="mt-1 text-sm text-violet-800">Отделяем тех, кто идёт в рассылку сейчас, от отложенных на потом.</div>
-                </div>
-                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-amber-700">3. Контакт</div>
-                    <div className="mt-1 text-base font-semibold text-amber-950">Аудит и готовность</div>
-                    <div className="mt-1 text-sm text-amber-800">Создаём страницу аудита и переводим лид в контактную работу.</div>
-                </div>
-                <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-indigo-700">4. Письмо</div>
-                    <div className="mt-1 text-base font-semibold text-indigo-950">Черновик</div>
-                    <div className="mt-1 text-sm text-indigo-800">Готовим первое сообщение и фиксируем итоговый текст.</div>
-                </div>
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">5. Отправка</div>
-                    <div className="mt-1 text-base font-semibold text-emerald-950">Очередь и batch</div>
-                    <div className="mt-1 text-sm text-emerald-800">Перепроверяем канал и запускаем рассылку.</div>
-                </div>
-                <div className="rounded-xl border border-teal-200 bg-teal-50 p-4">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-teal-700">6. Отправлено</div>
-                    <div className="mt-1 text-base font-semibold text-teal-950">Follow-up</div>
-                    <div className="mt-1 text-sm text-teal-800">Отслеживаем реакции и готовим follow-up сообщения.</div>
-                </div>
-            </div>
-
             <div className={`rounded-xl border p-4 ${lastSearchSummary.tone}`}>
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div>
@@ -1925,1463 +3728,559 @@ export const ProspectingManagement: React.FC = () => {
                     </div>
                     <div className="flex flex-wrap gap-2 text-xs">
                         <span className="rounded-full border border-current/15 bg-white/60 px-3 py-1">
-                            Найдено в выдаче: {displayedSearchResults.length}
+                            Осталось в выдаче: {unresolvedSearchResults.length}
                         </span>
                         <span className="rounded-full border border-current/15 bg-white/60 px-3 py-1">
-                            Кандидатов: {savedLeads.length}
-                        </span>
-                        <span className="rounded-full border border-current/15 bg-white/60 px-3 py-1">
-                            В контакте: {contactLeads.length}
+                            Уже в pipeline: {sourceFilteredLeads.length}
                         </span>
                     </div>
                 </div>
             </div>
 
-            {previewLead && (
-                <LeadCardPreviewPanel
-                    lead={previewLead}
-                    preview={previewSnapshot}
-                    loading={previewLoadingId === previewLead.id}
-                    error={previewError}
-                    generateBusy={previewGenerateBusy}
-                    generateAuditPageBusy={previewAuditPageBusy}
-                    generatedAuditPageUrl={previewAuditPageUrl}
-                    auditPageLanguage={previewAuditPageLanguage}
-                    auditPageEnabledLanguages={previewAuditPageEnabledLanguages}
-                    contactsBusy={previewContactsBusy}
-                    parseBusy={previewParseBusy}
-                    parseAutoRefreshing={previewAutoRefreshing}
-                    onGenerateFromAudit={generateDraftFromLeadPreview}
-                    onGenerateAuditPage={generateAuditPageFromLeadPreview}
-                    onAuditPageLanguageChange={setPreviewAuditPageLanguage}
-                    onAuditPageEnabledLanguagesChange={setPreviewAuditPageEnabledLanguages}
-                    onSaveContacts={saveLeadContactsFromPreview}
-                    onRunLiveParse={runLiveParseFromPreview}
-                    onRefreshPreview={refreshPreviewStatus}
-                    onClose={closeLeadPreview}
+            <div className="space-y-4">
+                <div className="text-sm font-medium">Поиск через Apify</div>
+                <form onSubmit={handleSearch} className="flex flex-wrap gap-4 items-end">
+                    <div className="grid w-56 items-center gap-1.5">
+                        <label htmlFor="search-source">Источник</label>
+                        <select
+                            id="search-source"
+                            value={searchSource}
+                            onChange={(e) => {
+                                const nextValue = String(e.target.value || '').trim().toLowerCase();
+                                if (nextValue === 'apify_2gis') {
+                                    setSearchSource('apify_2gis');
+                                    return;
+                                }
+                                if (nextValue === 'apify_google') {
+                                    setSearchSource('apify_google');
+                                    return;
+                                }
+                                if (nextValue === 'apify_apple') {
+                                    setSearchSource('apify_apple');
+                                    return;
+                                }
+                                setSearchSource('apify_yandex');
+                            }}
+                            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                            <option value="apify_yandex">Apify Yandex</option>
+                            <option value="apify_2gis">Apify 2GIS</option>
+                            <option value="apify_google">Apify Google</option>
+                            <option value="apify_apple">Apify Apple</option>
+                        </select>
+                    </div>
+                    <div className="grid w-full max-w-sm items-center gap-1.5">
+                        <label htmlFor="query">Категория / запрос</label>
+                        <Input
+                            type="text"
+                            id="query"
+                            placeholder="например: салон красоты"
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            required
+                        />
+                    </div>
+                    <div className="grid w-full max-w-sm items-center gap-1.5">
+                        <label htmlFor="location">Город</label>
+                        <Input
+                            type="text"
+                            id="location"
+                            placeholder="например: Санкт-Петербург"
+                            value={location}
+                            onChange={(e) => setLocation(e.target.value)}
+                            required
+                        />
+                    </div>
+                    <div className="grid w-24 items-center gap-1.5">
+                        <label htmlFor="limit">Лимит</label>
+                        <Input
+                            type="number"
+                            id="limit"
+                            value={limit}
+                            onChange={(e) => setLimit(Number(e.target.value))}
+                            min={1}
+                        />
+                    </div>
+                    <Button type="submit" disabled={loading}>
+                        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Запустить поиск
+                    </Button>
+                </form>
+
+                <div className="rounded-lg border border-border bg-muted/30 p-3">
+                    <div className="mb-2 text-sm font-medium">Добавить компанию вручную по ссылке</div>
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                        <Input
+                            placeholder="https://yandex.ru/maps/org/..."
+                            value={manualLeadUrl}
+                            onChange={(e) => setManualLeadUrl(e.target.value)}
+                            className="md:col-span-2"
+                        />
+                        <Input
+                            placeholder="Название (необязательно)"
+                            value={manualLeadName}
+                            onChange={(e) => setManualLeadName(e.target.value)}
+                        />
+                        <Input
+                            placeholder="Категория (необязательно)"
+                            value={manualLeadCategory}
+                            onChange={(e) => setManualLeadCategory(e.target.value)}
+                        />
+                    </div>
+                    <div className="mt-3 flex justify-end">
+                        <Button
+                            type="button"
+                            onClick={addLeadByUrl}
+                            disabled={manualLeadBusy || !manualLeadUrl.trim()}
+                        >
+                            {manualLeadBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Добавить по ссылке
+                        </Button>
+                    </div>
+                </div>
+
+                {searchJob && (
+                    <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
+                        <div className="font-medium">
+                            Поиск: {searchJob.status === 'queued' ? 'в очереди' :
+                                searchJob.status === 'running' ? 'выполняется' :
+                                    searchJob.status === 'completed' ? 'завершён' : 'ошибка'}
+                        </div>
+                        <div className="text-muted-foreground">Найдено: {searchJob.result_count || 0}</div>
+                        {searchJob.status === 'running' && (
+                            <div className="mt-2 text-muted-foreground">
+                                Поиск продолжается. Результаты подтянутся автоматически сразу после завершения.
+                            </div>
+                        )}
+                        {searchPollError && searchJob.status === 'running' && (
+                            <div className="mt-2 text-amber-600">{searchPollError}</div>
+                        )}
+                        {searchJob.error_text && <div className="mt-2 text-red-600">{searchJob.error_text}</div>}
+                    </div>
+                )}
+            </div>
+
+            <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-4">
+                <div className="text-sm font-medium">Импортировать свой список</div>
+                <div className="flex flex-wrap gap-3 items-center">
+                    <Input type="file" accept=".json,application/json" onChange={handleImportFile} className="max-w-sm" />
+                    <Button onClick={importLeads} disabled={importBusy || !importJson.trim()}>
+                        {importBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Импортировать JSON
+                    </Button>
+                </div>
+                <textarea
+                    className="min-h-[180px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    placeholder='Вставьте JSON из Apify export: [{"title":"...","address":"..."}]'
+                    value={importJson}
+                    onChange={(e) => setImportJson(e.target.value)}
                 />
-            )}
+                {importResult && (
+                    <div className={`text-sm ${importResult.startsWith('Ошибка') ? 'text-red-600' : 'text-emerald-700'}`}>
+                        {importResult}
+                    </div>
+                )}
+            </div>
 
-            <Tabs value={activeTab} onValueChange={(value) => {
-                if (value === 'search' || value === 'leads' || value === 'outreach' || value === 'drafts' || value === 'queue' || value === 'sent') {
-                    setActiveTab(value);
+            <div className="rounded-lg border border-border bg-muted/30 p-3">
+                <div className="mb-2 text-sm font-medium">
+                    Найденные компании ({unresolvedSearchResults.length})
+                </div>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Компания</TableHead>
+                            <TableHead>Адрес</TableHead>
+                            <TableHead>Контакты</TableHead>
+                            <TableHead>Рейтинг</TableHead>
+                            <TableHead>Действие</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {unresolvedSearchResults.map((lead, index) => {
+                            const key = lead.source_external_id || lead.google_id || `${lead.name}-${index}`;
+                            return (
+                                <TableRow key={key}>
+                                    <TableCell className="font-medium min-w-[260px]">
+                                        <div>{lead.name}</div>
+                                        <div className="text-xs text-muted-foreground">{lead.category || 'Без категории'}</div>
+                                        <div className="mt-1">
+                                            <Badge variant="outline" className="text-[11px] font-normal">
+                                                {sourceLabel(lead.source)}
+                                            </Badge>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="min-w-[220px]">
+                                        <div className="flex items-center gap-1 text-sm">
+                                            <MapPin className="h-3 w-3" />
+                                            <span className="truncate" title={lead.address}>{lead.address || lead.city || '-'}</span>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="min-w-[220px]">
+                                        <ContactStack lead={lead} />
+                                    </TableCell>
+                                    <TableCell className="min-w-[120px]">
+                                        <div className="flex items-center gap-1">
+                                            <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                                            {lead.rating ?? '-'}
+                                            <span className="text-muted-foreground">({lead.reviews_count ?? 0})</span>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="min-w-[160px]">
+                                        <div className="flex flex-wrap gap-2">
+                                            <Button
+                                                size="sm"
+                                                variant="default"
+                                                onClick={() => saveLead(lead, 'new')}
+                                                disabled={saving[key]}
+                                            >
+                                                {saving[key] ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : <Save className="mr-2 h-3 w-3" />}
+                                                В pipeline
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => saveLead(lead, shortlistRejected)}
+                                            >
+                                                Отклонить
+                                            </Button>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            );
+                        })}
+                        {unresolvedSearchResults.length === 0 && (
+                            <TableRow>
+                                <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
+                                    Пока нет сырых результатов. Запустите поиск или импорт.
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </div>
+        </div>
+    );
+
+    return (
+        <div className="space-y-6">
+            <div className="flex justify-between items-center">
+                <div>
+                    <h2 className="text-3xl font-bold tracking-tight">Поиск клиентов</h2>
+                    <p className="text-muted-foreground">
+                        Единый рабочий экран: сначала добавляем лиды, затем ведём их по pipeline до контакта и follow-up.
+                    </p>
+                </div>
+            </div>
+
+            <Sheet open={Boolean(previewLead)} onOpenChange={(open) => {
+                if (!open) {
+                    closeLeadPreview();
                 }
-            }} className="w-full">
-                <TabsList>
-                    <TabsTrigger value="search">1. Сбор</TabsTrigger>
-                    <TabsTrigger value="leads">2. Shortlist ({shortlistLeads.length})</TabsTrigger>
-                    <TabsTrigger value="outreach">3. Контакт ({contactLeads.length})</TabsTrigger>
-                    <TabsTrigger value="drafts">4. Черновики ({drafts.length})</TabsTrigger>
-                    <TabsTrigger value="queue">5. Отправка ({sendBatches.length})</TabsTrigger>
-                    <TabsTrigger value="sent">6. Отправлено ({sentLeads.length})</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="search" className="space-y-4">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Шаг 1. Найти компании</CardTitle>
-                            <CardDescription>Запускайте поиск через Apify или добавляйте точечные компании вручную. На этом шаге вы находите компании, сохраняете кандидатов и отбраковываете нерелевантных.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <form onSubmit={handleSearch} className="flex flex-wrap gap-4 items-end">
-                                <div className="grid w-56 items-center gap-1.5">
-                                    <label htmlFor="search-source">Источник</label>
-                                    <select
-                                        id="search-source"
-                                        value={searchSource}
-                                        onChange={(e) => {
-                                            const nextValue = String(e.target.value || '').trim().toLowerCase();
-                                            if (nextValue === 'apify_2gis') {
-                                                setSearchSource('apify_2gis');
-                                                return;
-                                            }
-                                            if (nextValue === 'apify_google') {
-                                                setSearchSource('apify_google');
-                                                return;
-                                            }
-                                            if (nextValue === 'apify_apple') {
-                                                setSearchSource('apify_apple');
-                                                return;
-                                            }
-                                            setSearchSource('apify_yandex');
-                                        }}
-                                        className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                                    >
-                                        <option value="apify_yandex">Apify Yandex</option>
-                                        <option value="apify_2gis">Apify 2GIS</option>
-                                        <option value="apify_google">Apify Google</option>
-                                        <option value="apify_apple">Apify Apple</option>
-                                    </select>
-                                </div>
-                                <div className="grid w-full max-w-sm items-center gap-1.5">
-                                    <label htmlFor="query">Категория / запрос</label>
-                                    <Input
-                                        type="text"
-                                        id="query"
-                                        placeholder="например: салон красоты"
-                                        value={query}
-                                        onChange={(e) => setQuery(e.target.value)}
-                                        required
-                                    />
-                                </div>
-                                <div className="grid w-full max-w-sm items-center gap-1.5">
-                                    <label htmlFor="location">Город</label>
-                                    <Input
-                                        type="text"
-                                        id="location"
-                                        placeholder="например: Санкт-Петербург"
-                                        value={location}
-                                        onChange={(e) => setLocation(e.target.value)}
-                                        required
-                                    />
-                                </div>
-                                <div className="grid w-24 items-center gap-1.5">
-                                    <label htmlFor="limit">Лимит</label>
-                                    <Input
-                                        type="number"
-                                        id="limit"
-                                        value={limit}
-                                        onChange={(e) => setLimit(Number(e.target.value))}
-                                        min={1}
-                                        max={200}
-                                    />
-                                </div>
-                                <Button type="submit" disabled={loading}>
-                                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                    Запустить поиск
-                                </Button>
-                            </form>
-                            <div className="mt-4 rounded-lg border border-border bg-muted/30 p-3">
-                                <div className="mb-2 text-sm font-medium">Добавить компанию вручную по ссылке</div>
-                                <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-                                    <Input
-                                        placeholder="https://yandex.ru/maps/org/..."
-                                        value={manualLeadUrl}
-                                        onChange={(e) => setManualLeadUrl(e.target.value)}
-                                        className="md:col-span-2"
-                                    />
-                                    <Input
-                                        placeholder="Название (необязательно)"
-                                        value={manualLeadName}
-                                        onChange={(e) => setManualLeadName(e.target.value)}
-                                    />
-                                    <Input
-                                        placeholder="Категория (необязательно)"
-                                        value={manualLeadCategory}
-                                        onChange={(e) => setManualLeadCategory(e.target.value)}
-                                    />
-                                </div>
-                                <div className="mt-3 flex justify-end">
-                                    <Button
-                                        type="button"
-                                        onClick={addLeadByUrl}
-                                        disabled={manualLeadBusy || !manualLeadUrl.trim()}
-                                    >
-                                        {manualLeadBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                        Добавить по ссылке
-                                    </Button>
-                                </div>
-                            </div>
-                            {searchJob && (
-                                <div className="mt-4 rounded-lg border border-border bg-muted/30 p-3 text-sm">
-                                    <div className="font-medium">
-                                        Поиск: {searchJob.status === 'queued' ? 'в очереди' :
-                                            searchJob.status === 'running' ? 'выполняется' :
-                                            searchJob.status === 'completed' ? 'завершён' : 'ошибка'}
-                                    </div>
-                                    <div className="text-muted-foreground">Найдено: {searchJob.result_count || 0}</div>
-                                    {searchJob.status === 'running' && (
-                                        <div className="mt-2 text-muted-foreground">
-                                            Поиск продолжается. Результаты подтянутся автоматически сразу после завершения.
-                                        </div>
-                                    )}
-                                    {searchJob.status === 'running' && searchJob.apify_status === 'START_PENDING' && (
-                                        <div className="mt-2 text-muted-foreground">
-                                            Ожидаем подтверждение запуска от Apify. Это может занять больше обычного.
-                                        </div>
-                                    )}
-                                    {searchJob.status === 'completed' && (searchJob.result_count || 0) === 0 && (
-                                        <div className="mt-2 text-muted-foreground">
-                                            Поиск завершён, но actor не вернул компаний по этому запросу. Попробуйте сузить категорию или изменить формулировку запроса.
-                                        </div>
-                                    )}
-                                    {searchPollError && searchJob.status === 'running' && (
-                                        <div className="mt-2 text-amber-600">{searchPollError}</div>
-                                    )}
-                                    {searchJob.error_text && <div className="mt-2 text-red-600">{searchJob.error_text}</div>}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Шаг 1б. Загрузить свой список</CardTitle>
-                            <CardDescription>
-                                Используйте этот путь, если запускаете поиск в Apify вручную. Поддерживается JSON-массив items или объект с полем <code>items</code>.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="flex flex-wrap gap-3 items-center">
-                                <Input type="file" accept=".json,application/json" onChange={handleImportFile} className="max-w-sm" />
-                                <Button onClick={importLeads} disabled={importBusy || !importJson.trim()}>
-                                    {importBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                    Импортировать JSON
-                                </Button>
-                            </div>
-                            <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
-                                <div className="font-medium">Рекомендуемый формат</div>
-                                <div className="mt-1 text-muted-foreground">
-                                    Лучше всего загружать экспорт Apify в формате <code>JSON</code> с <code>All fields</code>.
-                                    Импорт понимает либо массив объектов, либо объект с полем <code>items</code>, <code>results</code> или <code>leads</code>.
-                                </div>
-                                <pre className="mt-3 overflow-x-auto rounded-md bg-background p-3 text-xs leading-5">
-{`{
-  "items": [
-    {
-      "title": "Maya",
-      "categories": ["Beauty salon", "Nail salon"],
-      "address": "Санкт-Петербург, ...",
-      "phone": "+7 ...",
-      "website": "https://...",
-      "totalScore": 4.8,
-      "reviewsCount": 124,
-      "url": "https://yandex.ru/maps/..."
-    }
-  ]
-}`}
-                                </pre>
-                                <div className="mt-2 text-xs text-muted-foreground">
-                                    Если в выгрузке нет <code>email</code>, <code>telegram</code> или <code>whatsapp</code>, импорт это не выдумает.
-                                    Для первого этапа достаточно названия, категории, адреса, телефона, сайта, рейтинга и отзывов.
-                                </div>
-                            </div>
-                            <textarea
-                                className="min-h-[180px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                                placeholder='Вставьте JSON из Apify export: [{"title":"...","address":"..."}]'
-                                value={importJson}
-                                onChange={(e) => setImportJson(e.target.value)}
-                            />
-                            {importResult && (
-                                <div className={`text-sm ${importResult.startsWith('Ошибка') ? 'text-red-600' : 'text-emerald-700'}`}>
-                                    {importResult}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    {displayedSearchResults.length > 0 && (
-                        <Card>
-                        <CardHeader>
-                            <CardTitle>Найденные компании ({displayedSearchResults.length})</CardTitle>
-                            <CardDescription>Это сырой результат поиска. Сохраняйте подходящих в кандидаты и отбраковывайте явно неподходящие.</CardDescription>
-                        </CardHeader>
-                            <CardContent>
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Компания</TableHead>
-                                            <TableHead>Адрес</TableHead>
-                                            <TableHead>Контакты</TableHead>
-                                            <TableHead>Рейтинг</TableHead>
-                                            <TableHead>Действие</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {displayedSearchResults.map((lead, index) => {
-                                            const isSaved = savedLeads.some((saved) =>
-                                                (saved.source_external_id && saved.source_external_id === lead.source_external_id) ||
-                                                (saved.google_id && saved.google_id === lead.google_id)
-                                            );
-                                            const key = lead.source_external_id || lead.google_id || `${lead.name}-${index}`;
-                                            return (
-                                                <TableRow key={key}>
-                                                    <TableCell className="font-medium min-w-[260px]">
-                                                        <div>{lead.name}</div>
-                                                        <div className="text-xs text-muted-foreground">{lead.category || 'Без категории'}</div>
-                                                        <div className="mt-1">
-                                                            <Badge variant="outline" className="text-[11px] font-normal">
-                                                                {sourceLabel(lead.source)}
-                                                            </Badge>
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell className="min-w-[220px]">
-                                                        <div className="flex items-center gap-1 text-sm">
-                                                            <MapPin className="h-3 w-3" />
-                                                            <span className="truncate" title={lead.address}>{lead.address || lead.city || '-'}</span>
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell className="min-w-[220px]">
-                                                        <ContactStack lead={lead} />
-                                                    </TableCell>
-                                                    <TableCell className="min-w-[120px]">
-                                                        <div className="flex items-center gap-1">
-                                                            <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                                                            {lead.rating ?? '-'}
-                                                            <span className="text-muted-foreground">({lead.reviews_count ?? 0})</span>
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell className="min-w-[140px]">
-                                                        <div className="flex flex-wrap gap-2">
-                                                            <Button
-                                                                size="sm"
-                                                                variant={isSaved ? "secondary" : "default"}
-                                                                onClick={() => saveLead(lead, 'new')}
-                                                                disabled={isSaved || saving[key]}
-                                                            >
-                                                                {saving[key] ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : <Save className="mr-2 h-3 w-3" />}
-                                                                {isSaved ? "Уже сохранён" : "В кандидаты"}
-                                                            </Button>
-                                                            <Button
-                                                                size="sm"
-                                                                variant="outline"
-                                                                onClick={() => saveLead(lead, shortlistRejected)}
-                                                                disabled={isSaved || saving[key]}
-                                                            >
-                                                                Отбраковать
-                                                            </Button>
-                                                        </div>
-                                                    </TableCell>
-                                                </TableRow>
-                                            );
-                                        })}
-                                    </TableBody>
-                                </Table>
-                            </CardContent>
-                        </Card>
+            }}>
+            <SheetContent side="right" className="w-[96vw] overflow-y-auto p-0 sm:max-w-3xl lg:max-w-5xl">
+                    {previewLead && (
+                        <div className="p-4 sm:p-6">
+                            <Suspense
+                                fallback={
+                                    <Card className="border-dashed">
+                                        <CardContent className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+                                            Загружаем карточку лида...
+                                        </CardContent>
+                                    </Card>
+                                }
+                            >
+                                <LeadCardPreviewPanel
+                                    lead={previewLead}
+                                    preview={previewSnapshot}
+                                    loading={previewLoadingId === previewLead.id}
+                                    error={previewError}
+                                    generateAuditPageBusy={previewAuditPageBusy}
+                                    generatedAuditPageUrl={previewAuditPageUrl}
+                                    contactsBusy={previewContactsBusy}
+                                    parseBusy={previewParseBusy}
+                                    parseAutoRefreshing={previewAutoRefreshing}
+                                    onGenerateAuditPage={generateAuditPageFromLeadPreview}
+                                    onSaveContacts={saveLeadContactsFromPreview}
+                                    onRunLiveParse={runLiveParseFromPreview}
+                                    onRefreshPreview={refreshPreviewStatus}
+                                    onClose={closeLeadPreview}
+                                />
+                            </Suspense>
+                        </div>
                     )}
+                </SheetContent>
+            </Sheet>
 
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Кандидаты и отбракованные</CardTitle>
-                            <CardDescription>Собранные кандидаты остаются здесь до отбора в shortlist. Отбракованные фиксируются отдельно.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <Tabs value={collectTab} onValueChange={(value) => {
-                                if (value === 'candidates' || value === 'rejected') {
-                                    setCollectTab(value);
-                                }
-                            }}>
-                                <TabsList>
-                                    <TabsTrigger value="candidates">Кандидаты ({candidateLeads.length})</TabsTrigger>
-                                    <TabsTrigger value="rejected">Отбракованные ({rejectedLeads.length})</TabsTrigger>
-                                </TabsList>
-                                <TabsContent value="candidates" className="mt-4">
-                                    {renderLeadsTable(candidateLeads, 'candidates')}
-                                </TabsContent>
-                                <TabsContent value="rejected" className="mt-4">
-                                    {renderLeadsTable(rejectedLeads, 'rejected')}
-                                </TabsContent>
-                            </Tabs>
-                        </CardContent>
-                    </Card>
+            <Sheet open={intakeOpen} onOpenChange={setIntakeOpen}>
+                <SheetContent side="right" className="w-[96vw] overflow-y-auto sm:max-w-5xl">
+                    <SheetHeader>
+                        <SheetTitle>Добавить лиды</SheetTitle>
+                        <SheetDescription>
+                            Сырые результаты поиска, ручной ввод и импорт. Здесь пополняем pipeline, не смешивая intake с рабочей воронкой.
+                        </SheetDescription>
+                    </SheetHeader>
+                    <div className="mt-6">{renderIntakeContent()}</div>
+                </SheetContent>
+            </Sheet>
+
+            <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+                <SheetContent side="right" className="w-[96vw] overflow-y-auto sm:max-w-2xl">
+                    <SheetHeader>
+                        <SheetTitle>Все фильтры</SheetTitle>
+                        <SheetDescription>
+                            Расширенные фильтры для pipeline. Основной экран остаётся лёгким, а детальный отбор — здесь.
+                        </SheetDescription>
+                    </SheetHeader>
+                    <div className="mt-6 space-y-4">
+                        <div className="grid gap-3 md:grid-cols-2">
+                            <Input placeholder="Категория" value={filters.category} onChange={(e) => setFilters(prev => ({ ...prev, category: e.target.value }))} />
+                            <Input placeholder="Город" value={filters.city} onChange={(e) => setFilters(prev => ({ ...prev, city: e.target.value }))} />
+                            <Input placeholder="Мин. рейтинг" type="number" min="0" max="5" step="0.1" value={filters.minRating} onChange={(e) => setFilters(prev => ({ ...prev, minRating: e.target.value }))} />
+                            <Input placeholder="Макс. рейтинг" type="number" min="0" max="5" step="0.1" value={filters.maxRating} onChange={(e) => setFilters(prev => ({ ...prev, maxRating: e.target.value }))} />
+                            <Input placeholder="Мин. отзывов" type="number" min="0" value={filters.minReviews} onChange={(e) => setFilters(prev => ({ ...prev, minReviews: e.target.value }))} />
+                            <Input placeholder="Макс. отзывов" type="number" min="0" value={filters.maxReviews} onChange={(e) => setFilters(prev => ({ ...prev, maxReviews: e.target.value }))} />
+                            <select className="border rounded-md px-3 py-2 bg-background text-sm" value={filters.hasWebsite} onChange={(e) => setFilters(prev => ({ ...prev, hasWebsite: e.target.value }))}>
+                                <option value="">Сайт: любой</option>
+                                <option value="yes">Есть сайт</option>
+                                <option value="no">Нет сайта</option>
+                            </select>
+                            <select className="border rounded-md px-3 py-2 bg-background text-sm" value={filters.hasPhone} onChange={(e) => setFilters(prev => ({ ...prev, hasPhone: e.target.value }))}>
+                                <option value="">Телефон: любой</option>
+                                <option value="yes">Есть телефон</option>
+                                <option value="no">Нет телефона</option>
+                            </select>
+                            <select className="border rounded-md px-3 py-2 bg-background text-sm" value={filters.hasEmail} onChange={(e) => setFilters(prev => ({ ...prev, hasEmail: e.target.value }))}>
+                                <option value="">Email: любой</option>
+                                <option value="yes">Есть email</option>
+                                <option value="no">Нет email</option>
+                            </select>
+                            <select className="border rounded-md px-3 py-2 bg-background text-sm" value={filters.hasTelegram} onChange={(e) => setFilters(prev => ({ ...prev, hasTelegram: e.target.value }))}>
+                                <option value="">Telegram: любой</option>
+                                <option value="yes">Есть Telegram</option>
+                                <option value="no">Нет Telegram</option>
+                            </select>
+                            <select className="border rounded-md px-3 py-2 bg-background text-sm" value={filters.hasWhatsApp} onChange={(e) => setFilters(prev => ({ ...prev, hasWhatsApp: e.target.value }))}>
+                                <option value="">WhatsApp: любой</option>
+                                <option value="yes">Есть WhatsApp</option>
+                                <option value="no">Нет WhatsApp</option>
+                            </select>
+                            <select className="border rounded-md px-3 py-2 bg-background text-sm" value={filters.hasMax} onChange={(e) => setFilters(prev => ({ ...prev, hasMax: e.target.value }))}>
+                                <option value="">Max: любой</option>
+                                <option value="yes">Есть Max</option>
+                                <option value="no">Нет Max</option>
+                            </select>
+                            <select className="border rounded-md px-3 py-2 bg-background text-sm" value={filters.hasVk} onChange={(e) => setFilters(prev => ({ ...prev, hasVk: e.target.value }))}>
+                                <option value="">VK: любой</option>
+                                <option value="yes">Есть VK</option>
+                                <option value="no">Нет VK</option>
+                            </select>
+                            <select className="border rounded-md px-3 py-2 bg-background text-sm" value={filters.hasMessengers} onChange={(e) => setFilters(prev => ({ ...prev, hasMessengers: e.target.value }))}>
+                                <option value="">Мессенджеры: любые</option>
+                                <option value="yes">Есть мессенджеры</option>
+                                <option value="no">Нет мессенджеров</option>
+                            </select>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            <Button variant="outline" onClick={resetFilters}>Сбросить фильтры</Button>
+                            <Button variant="secondary" onClick={() => applyPreset('best')}>Лучшие лиды</Button>
+                            <Button variant="secondary" onClick={() => applyPreset('many_reviews')}>Много отзывов</Button>
+                            <Button variant="secondary" onClick={() => applyPreset('low_rating')}>Низкий рейтинг</Button>
+                        </div>
+                    </div>
+                </SheetContent>
+            </Sheet>
+
+            <ProspectingWorkspaceTabs
+                activeWorkspace={activeWorkspace}
+                onWorkspaceChange={(value) => setActiveWorkspace(toWorkspaceTab(value))}
+                workspaces={[
+                    { value: 'raw', label: 'Собранные', count: unresolvedSearchResults.length },
+                    { value: 'pipeline', label: 'Pipeline', count: sourceFilteredLeads.length },
+                    { value: 'outreach', label: 'Outreach', count: drafts.length + sendBatches.length + sentLeads.length },
+                    { value: 'analytics', label: 'Аналитика' },
+                ]}
+                outreachTabs={[
+                    { value: 'drafts', label: 'Черновики', count: drafts.length },
+                    { value: 'queue', label: 'Отправка', count: sendBatches.length },
+                    { value: 'sent', label: 'Отправлено', count: sentLeads.length },
+                ]}
+                activeOutreachTab={outreachTab}
+                onOutreachTabChange={(value) => setOutreachTab(toOutreachTab(value))}
+            />
+
+            <Tabs value={visibleMainTab} className="w-full">
+                <TabsContent value="raw" className="space-y-6">
+                    <ProspectingIntakePanel
+                        title="Собранные лиды"
+                        description="Сырые результаты последнего поиска, импорта и ручного добавления. Здесь отбираем входящий поток перед переносом в pipeline."
+                        badges={[
+                            { label: 'В выдаче', value: unresolvedSearchResults.length },
+                            { label: 'Уже в pipeline', value: sourceFilteredLeads.length },
+                        ]}
+                    >
+                        {renderIntakeContent()}
+                    </ProspectingIntakePanel>
                 </TabsContent>
 
-                <TabsContent value="leads" className="space-y-4">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Шаг 2. Shortlist</CardTitle>
-                            <CardDescription>На этом шаге вы решаете, кого берём в рассылку сейчас, а кого откладываем на потом.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-                                <Input placeholder="Категория" value={filters.category} onChange={(e) => setFilters(prev => ({ ...prev, category: e.target.value }))} />
-                                <Input placeholder="Город" value={filters.city} onChange={(e) => setFilters(prev => ({ ...prev, city: e.target.value }))} />
-                                <select className="border rounded-md px-3 py-2 bg-background text-sm" value={filters.source} onChange={(e) => setFilters(prev => ({ ...prev, source: e.target.value }))}>
-                                    <option value="">Источник: любой</option>
-                                    <option value="external_import">Внешний импорт</option>
-                                    <option value="apify_yandex">Apify Yandex</option>
-                                    <option value="apify_2gis">Apify 2GIS</option>
-                                    <option value="apify_google">Apify Google</option>
-                                    <option value="apify_apple">Apify Apple</option>
-                                    <option value="openclaw">OpenClaw</option>
-                                    <option value="manual">Ручной ввод</option>
-                                </select>
-                                <Input placeholder="Мин. рейтинг" type="number" min="0" max="5" step="0.1" value={filters.minRating} onChange={(e) => setFilters(prev => ({ ...prev, minRating: e.target.value }))} />
-                                <Input placeholder="Макс. рейтинг" type="number" min="0" max="5" step="0.1" value={filters.maxRating} onChange={(e) => setFilters(prev => ({ ...prev, maxRating: e.target.value }))} />
-                                <Input placeholder="Мин. отзывов" type="number" min="0" value={filters.minReviews} onChange={(e) => setFilters(prev => ({ ...prev, minReviews: e.target.value }))} />
-                                <Input placeholder="Макс. отзывов" type="number" min="0" value={filters.maxReviews} onChange={(e) => setFilters(prev => ({ ...prev, maxReviews: e.target.value }))} />
-                                <select className="border rounded-md px-3 py-2 bg-background text-sm" value={filters.hasWebsite} onChange={(e) => setFilters(prev => ({ ...prev, hasWebsite: e.target.value }))}>
-                                    <option value="">Сайт: любой</option>
-                                    <option value="yes">Есть сайт</option>
-                                    <option value="no">Нет сайта</option>
-                                </select>
-                                <select className="border rounded-md px-3 py-2 bg-background text-sm" value={filters.hasPhone} onChange={(e) => setFilters(prev => ({ ...prev, hasPhone: e.target.value }))}>
-                                    <option value="">Телефон: любой</option>
-                                    <option value="yes">Есть телефон</option>
-                                    <option value="no">Нет телефона</option>
-                                </select>
-                                <select className="border rounded-md px-3 py-2 bg-background text-sm" value={filters.hasEmail} onChange={(e) => setFilters(prev => ({ ...prev, hasEmail: e.target.value }))}>
-                                    <option value="">Email: любой</option>
-                                    <option value="yes">Есть email</option>
-                                    <option value="no">Нет email</option>
-                                </select>
-                                <select className="border rounded-md px-3 py-2 bg-background text-sm" value={filters.hasMessengers} onChange={(e) => setFilters(prev => ({ ...prev, hasMessengers: e.target.value }))}>
-                                    <option value="">Мессенджеры: любые</option>
-                                    <option value="yes">Есть мессенджеры</option>
-                                    <option value="no">Нет мессенджеров</option>
-                                </select>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                                <Button variant="outline" onClick={resetFilters}>Сбросить фильтры</Button>
-                                <Badge variant="default">Shortlist: {shortlistLeads.length}</Badge>
-                                <Badge variant="outline">Отложенные: {deferredLeads.length}</Badge>
-                                <Badge variant="secondary">Кандидаты в сборе: {candidateLeads.length}</Badge>
-                                <Badge variant="destructive">Отбракованные: {rejectedLeads.length}</Badge>
-                            </div>
-                        </CardContent>
-                    </Card>
+                <TabsContent value="inbox" className="space-y-6">
+                    <ProspectingPipelineHeader
+                        totalLeads={sourceFilteredLeads.length}
+                        summary={pipelineHeaderSummary}
+                        search={pipelineSearch}
+                        onSearchChange={setPipelineSearch}
+                        filters={{
+                            source: filters.source,
+                            hasTelegram: filters.hasTelegram,
+                            hasWhatsApp: filters.hasWhatsApp,
+                            hasMax: filters.hasMax,
+                            hasEmail: filters.hasEmail,
+                            hasWebsite: filters.hasWebsite,
+                            hasVk: filters.hasVk,
+                        }}
+                        onSourceChange={(value) => setFilters(prev => ({ ...prev, source: value }))}
+                        onHasTelegramChange={(value) => setFilters(prev => ({ ...prev, hasTelegram: value }))}
+                        onHasWhatsAppChange={(value) => setFilters(prev => ({ ...prev, hasWhatsApp: value }))}
+                        onHasMaxChange={(value) => setFilters(prev => ({ ...prev, hasMax: value }))}
+                        onHasEmailChange={(value) => setFilters(prev => ({ ...prev, hasEmail: value }))}
+                        onHasWebsiteChange={(value) => setFilters(prev => ({ ...prev, hasWebsite: value }))}
+                        onHasVkChange={(value) => setFilters(prev => ({ ...prev, hasVk: value }))}
+                        onOpenFilters={() => setFiltersOpen(true)}
+                        onOpenIntake={() => setIntakeOpen(true)}
+                        pipelineView={pipelineView}
+                        onPipelineViewChange={setPipelineView}
+                        quickFilter={quickFilter}
+                        onQuickFilterChange={setQuickFilter}
+                        onResetFilters={resetFilters}
+                        onApplyBestPreset={() => applyPreset('best')}
+                        onApplyManyReviewsPreset={() => applyPreset('many_reviews')}
+                    />
 
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Shortlist и отложенные</CardTitle>
-                            <CardDescription>Shortlist идёт в работу сейчас. Отложенные остаются на следующий раунд.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <Tabs value={shortlistTab} onValueChange={(value) => {
-                                if (value === 'shortlist' || value === 'deferred') {
-                                    setShortlistTab(value);
-                                }
-                            }}>
-                                <TabsList>
-                                    <TabsTrigger value="shortlist">Shortlist ({shortlistLeads.length})</TabsTrigger>
-                                    <TabsTrigger value="deferred">Отложенные ({deferredLeads.length})</TabsTrigger>
-                                </TabsList>
-                                <TabsContent value="shortlist" className="mt-4">
-                                    {renderLeadsTable(shortlistLeads, 'shortlist')}
-                                </TabsContent>
-                                <TabsContent value="deferred" className="mt-4">
-                                    {renderLeadsTable(deferredLeads, 'deferred')}
-                                </TabsContent>
-                            </Tabs>
-                        </CardContent>
-                    </Card>
+                    {pipelineView === 'kanban' ? (
+                        <div className="flex gap-4 overflow-x-auto pb-6">
+                            {pipelineBoardColumns.map((column) => (
+                                <div
+                                    key={column.id}
+                                    onDragOver={handleColumnDragOver(column.id)}
+                                    onDragLeave={() => setDropColumnId(null)}
+                                    onDrop={handleColumnDrop(column.id)}
+                                    className={`min-w-[280px] flex-1 rounded-xl border border-border bg-muted/30 p-3 transition ${dropColumnId === column.id ? 'ring-2 ring-primary/40' : ''}`}
+                                >
+                                    <div className="flex items-start justify-between gap-2 border-b border-border pb-2">
+                                        <div>
+                                            <div className="text-sm font-semibold">{column.label}</div>
+                                            <div className="text-xs text-muted-foreground">{column.description}</div>
+                                        </div>
+                                        <Badge variant="secondary">{column.leads.length}</Badge>
+                                    </div>
+                                    <div className="mt-3 space-y-3">
+                                        {loadingLeads ? (
+                                            <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                Загрузка лидов...
+                                            </div>
+                                        ) : column.leads.length === 0 ? (
+                                            <div className="rounded-lg border border-dashed border-border bg-background p-4 text-xs text-muted-foreground">
+                                                Здесь пока нет лидов.
+                                            </div>
+                                        ) : (
+                                            column.leads.map(renderKanbanCard)
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {loadingLeads ? (
+                                <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Загрузка лидов...
+                                </div>
+                            ) : visiblePipelineLeads.length === 0 ? (
+                                <Card className="border-dashed">
+                                    <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                                        По текущим фильтрам и поиску здесь пока ничего нет.
+                                    </CardContent>
+                                </Card>
+                            ) : (
+                                visiblePipelineLeads.map(renderKanbanCard)
+                            )}
+                        </div>
+                    )}
                 </TabsContent>
 
-                <TabsContent value="outreach" className="space-y-4">
+                <TabsContent value="analytics" className="space-y-6">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Шаг 3. Контакт</CardTitle>
+                            <CardTitle>Эффективность воронки</CardTitle>
                             <CardDescription>
-                                Создавайте аудит и переводите выбранные компании в контактную работу.
+                                Отдельный аналитический экран: объёмы, конверсия, потери между этапами и тренд за 7/30 дней.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
-                            <div className="rounded-lg border p-4">
-                                <div className="mb-3 flex items-center justify-between gap-3">
-                                    <div>
-                                        <h3 className="font-semibold">Shortlist → Контакт</h3>
-                                        <p className="text-sm text-muted-foreground">Проверяем аудит, создаём страницу и переводим лид в контактный этап.</p>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Badge variant="secondary">{step3ReadyLeads.length}</Badge>
-                                        <Badge variant="outline">Выбрано: {selectedShortlistLeadIds.length}</Badge>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() =>
-                                                setSelectedShortlistLeadIds(
-                                                    selectedShortlistLeadIds.length === step3ReadyLeads.length
-                                                        ? []
-                                                        : step3ReadyLeads.map((lead) => lead.id).filter(Boolean) as string[]
-                                                )
-                                            }
-                                            disabled={step3ReadyLeads.length === 0}
-                                        >
-                                            {selectedShortlistLeadIds.length === step3ReadyLeads.length && step3ReadyLeads.length > 0 ? 'Снять всё' : 'Выбрать всё'}
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            onClick={bulkSelectForOutreach}
-                                            disabled={selectedShortlistLeadIds.length === 0 || selectionLoading.bulkSelect === 'select'}
-                                        >
-                                            {selectionLoading.bulkSelect === 'select' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                            Выбрать отмеченные
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="secondary"
-                                            onClick={bulkParseShortlist}
-                                            disabled={selectedShortlistLeadIds.length === 0 || bulkParseBusy}
-                                        >
-                                            {bulkParseBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                            Парсить отмеченные
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="destructive"
-                                            onClick={bulkDeleteShortlistLeads}
-                                            disabled={selectedShortlistLeadIds.length === 0 || selectionLoading.bulkDeleteShortlist === 'delete'}
-                                        >
-                                            {selectionLoading.bulkDeleteShortlist === 'delete' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                            Удалить отмеченные
-                                        </Button>
-                                    </div>
-                                </div>
-                                <div className="space-y-3">
-                                    {step3ReadyLeads.length === 0 && (
-                                        <div className="text-sm text-muted-foreground">Нет лидов, готовых к первому контакту.</div>
-                                    )}
-                                    {step3ReadyLeads.map((lead) => {
-                                        const pending = selectionLoading[lead.id || ''];
-                                        return (
-                                            <div key={lead.id} className="flex flex-col gap-3 rounded-md border p-3 md:flex-row md:items-center md:justify-between">
-                                                <div className="space-y-2">
-                                                    <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={!!lead.id && selectedShortlistLeadIds.includes(lead.id)}
-                                                            onChange={(e) =>
-                                                                lead.id &&
-                                                                setSelectedShortlistLeadIds((prev) =>
-                                                                    e.target.checked ? [...prev, lead.id as string] : prev.filter((id) => id !== lead.id)
-                                                                )
-                                                            }
-                                                        />
-                                                        Отметить для массового перевода
-                                                    </label>
-                                                    <div className="font-medium">{lead.name}</div>
-                                                    <LeadMetaSummary lead={lead} />
-                                                </div>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {lead.id && (
-                                                        <Button
-                                                            variant="secondary"
-                                                            onClick={() => openLeadPreview(lead)}
-                                                            disabled={previewLoadingId === lead.id}
-                                                        >
-                                                            {previewLoadingId === lead.id && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                                            Карточка лида
-                                                        </Button>
-                                                    )}
-                                                    <Button onClick={() => lead.id && selectForOutreach(lead.id)} disabled={!lead.id || Boolean(pending)}>
-                                                        {pending === 'select' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                                        Выбрать для контакта
-                                                    </Button>
-                                                    <Button
-                                                        variant="destructive"
-                                                        onClick={() => lead.id && deleteLeadEverywhere(lead.id)}
-                                                        disabled={!lead.id || pending === 'delete'}
-                                                    >
-                                                        {pending === 'delete' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                                        Удалить
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
+                            <AnalyticsSummaryGrid
+                                items={[
+                                    { key: 'found', label: 'Найдено', value: pipelineEfficiencySummary.foundCount, helper: 'Последний поиск / импорт' },
+                                    { key: 'pipeline', label: 'В воронке', value: pipelineEfficiencySummary.pipelineCount, helper: `Сохранение: ${pipelineEfficiencySummary.saveRate}` },
+                                    { key: 'shortlist', label: 'Отобрано', value: kanbanTotals.shortlist, helper: `Из воронки: ${pipelineEfficiencySummary.shortlistRate}` },
+                                    { key: 'contacted', label: 'Контактировано', value: kanbanTotals.contacted, helper: `Из отбора: ${pipelineEfficiencySummary.contactRate}` },
+                                    { key: 'positive', label: 'Позитивный ответ', value: positiveReactionCount, helper: `От контакта: ${pipelineEfficiencySummary.replyRate}` },
+                                    { key: 'closed', label: 'Закрыто', value: kanbanTotals.closed, helper: 'Сняты с процесса или отложены' },
+                                ]}
+                            />
 
-                            <div className="rounded-lg border p-4">
-                                <div className="mb-3 flex items-center justify-between gap-3">
-                                    <div>
-                                        <h3 className="font-semibold">Выбранные для контакта</h3>
-                                        <p className="text-sm text-muted-foreground">Эти лиды уже готовы к переходу в черновики.</p>
-                                    </div>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <Badge variant="secondary">{contactLeads.length}</Badge>
-                                        <Badge variant="outline">Выбрано: {selectedOutreachLeadIds.length}</Badge>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() =>
-                                                setSelectedOutreachLeadIds(
-                                                    selectedOutreachLeadIds.length === contactLeads.length
-                                                        ? []
-                                                        : contactLeads.map((lead) => lead.id).filter(Boolean) as string[]
-                                                )
-                                            }
-                                            disabled={contactLeads.length === 0}
-                                        >
-                                            {selectedOutreachLeadIds.length === contactLeads.length && contactLeads.length > 0 ? 'Снять всё' : 'Выбрать всё'}
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="destructive"
-                                            onClick={bulkDeleteOutreachLeads}
-                                            disabled={selectedOutreachLeadIds.length === 0 || selectionLoading.bulkDeleteOutreach === 'delete'}
-                                        >
-                                            {selectionLoading.bulkDeleteOutreach === 'delete' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                            Удалить выбранные
-                                        </Button>
-                                    </div>
-                                </div>
-                                <div className="space-y-3">
-                                    {contactLeads.length === 0 && (
-                                        <div className="text-sm text-muted-foreground">Пока нет выбранных лидов для контакта.</div>
-                                    )}
-                                    {contactLeads.map((lead) => {
-                                        const pending = selectionLoading[lead.id || ''];
-                                        return (
-                                            <div key={lead.id} className="rounded-md border p-3">
-                                                <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                                                    <div className="space-y-2">
-                                                        <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={!!lead.id && selectedOutreachLeadIds.includes(lead.id)}
-                                                                onChange={(e) =>
-                                                                    lead.id &&
-                                                                    setSelectedOutreachLeadIds((prev) =>
-                                                                        e.target.checked ? [...prev, lead.id as string] : prev.filter((id) => id !== lead.id)
-                                                                    )
-                                                                }
-                                                            />
-                                                            Отметить для массового назначения канала
-                                                        </label>
-                                                        <div className="font-medium">{lead.name}</div>
-                                                        <LeadMetaSummary lead={lead} />
-                                                        <div className="flex items-center gap-2">
-                                                            <Badge variant={badgeVariantForStatus(lead.status)}>{statusLabel(lead.status)}</Badge>
-                                                            <Badge variant="outline">{workflowStatusLabel(lead.status)}</Badge>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {lead.id && (
-                                                        <Button
-                                                            size="sm"
-                                                            variant="secondary"
-                                                            onClick={() => openLeadPreview(lead)}
-                                                            disabled={previewLoadingId === lead.id}
-                                                        >
-                                                            {previewLoadingId === lead.id && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                                            Карточка лида
-                                                        </Button>
-                                                    )}
-                                                    <Button
-                                                        size="sm"
-                                                        variant="destructive"
-                                                        onClick={() => lead.id && deleteLeadEverywhere(lead.id)}
-                                                        disabled={!lead.id || pending === 'delete'}
-                                                    >
-                                                        {pending === 'delete' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                                        Удалить
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
+                            <AnalyticsMetricGrid
+                                items={pipelineStageMetrics.map((stage, index) => {
+                                    const previousCount = index > 0 ? pipelineStageMetrics[index - 1]?.count || 0 : 0;
+                                    return {
+                                        key: stage.key,
+                                        label: `${index + 1}. ${stage.label}`,
+                                        hint: stage.hint,
+                                        count: stage.count,
+                                        conversion: stage.conversion,
+                                        dropOff: formatDropOff(stage.count, previousCount),
+                                    };
+                                })}
+                            />
+
+                            <AnalyticsWindowGrid
+                                title="Тренд за 7 / 30 дней"
+                                description="Сравнение свежего потока и качества прохождения по этапам."
+                                items={pipelineWindowMetrics.map((window) => ({
+                                    key: window.key,
+                                    label: window.label,
+                                    badgeLabel: 'Пайплайн',
+                                    badgeValue: window.pipelineCount,
+                                    stats: [
+                                        { key: `${window.key}-shortlist`, label: 'Отобрано', value: window.shortlistCount, helper: `Conv: ${formatConversion(window.shortlistCount, window.pipelineCount)}` },
+                                        { key: `${window.key}-progress`, label: 'В работе', value: window.inProgressCount, helper: `Drop-off: ${formatDropOff(window.inProgressCount, window.shortlistCount)}` },
+                                        { key: `${window.key}-contacted`, label: 'Контактировано', value: window.contactedCount, helper: `Conv: ${formatConversion(window.contactedCount, window.inProgressCount)}` },
+                                        { key: `${window.key}-positive`, label: 'Позитивных', value: window.positiveCount, helper: `Conv: ${formatConversion(window.positiveCount, window.contactedCount)}` },
+                                    ],
+                                }))}
+                            />
+
+                            <AnalyticsSection
+                                title="Операторский блок outreach"
+                                description="Отдельно по черновикам, отправке и ответам, чтобы видеть узкие места уже после отбора."
+                            >
+                                <AnalyticsMetricGrid items={outreachOperatorMetrics} columnsClassName="md:grid-cols-3" />
+                            </AnalyticsSection>
                         </CardContent>
                     </Card>
                 </TabsContent>
 
                 <TabsContent value="drafts" className="space-y-4">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Черновики первого сообщения</CardTitle>
-                            <CardDescription>
-                                Здесь отображаются письма, уже сгенерированные из аудита карточки лида. Можно редактировать, утверждать и отклонять.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                            <div className="flex flex-wrap items-center gap-3 rounded-lg border p-4">
-                                <div className="text-sm font-medium">Фильтр канала для черновиков</div>
-                                <select className="border rounded-md px-3 py-2 bg-background text-sm" value={draftChannelFilter} onChange={(e) => setDraftChannelFilter(e.target.value)}>
-                                    <option value="">Все каналы</option>
-                                    <option value="telegram">Telegram</option>
-                                    <option value="whatsapp">WhatsApp</option>
-                                    <option value="email">Email</option>
-                                    <option value="manual">Manual</option>
-                                </select>
-                                <div className="text-sm font-medium">Статус</div>
-                                <select className="border rounded-md px-3 py-2 bg-background text-sm" value={draftStatusFilter} onChange={(e) => setDraftStatusFilter(e.target.value)}>
-                                    <option value="">Все статусы</option>
-                                    <option value="generated">generated</option>
-                                    <option value="approved">approved</option>
-                                    <option value="rejected">rejected</option>
-                                </select>
-                                <Badge variant="outline">Черновики: {filteredDrafts.length}</Badge>
-                            </div>
-                            <div className="rounded-lg border p-4">
-                                <div className="mb-3 flex items-center justify-between gap-3">
-                                    <div>
-                                        <h3 className="font-semibold">Список черновиков</h3>
-                                        <p className="text-sm text-muted-foreground">Ваши правки после утверждения сохраняются как learning examples.</p>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Badge variant="secondary">{filteredDrafts.length}</Badge>
-                                        <Badge variant="outline">Выбрано: {selectedDraftIds.length}</Badge>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => setSelectedDraftIds(selectedDraftIds.length === filteredDrafts.length ? [] : filteredDrafts.map((draft) => draft.id))}
-                                            disabled={filteredDrafts.length === 0}
-                                        >
-                                            {selectedDraftIds.length === filteredDrafts.length && filteredDrafts.length > 0 ? 'Снять всё' : 'Выбрать всё'}
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            onClick={approveSelectedDrafts}
-                                            disabled={selectedDraftIds.length === 0 || draftBusy.bulkApprove === 'approve'}
-                                        >
-                                            {draftBusy.bulkApprove === 'approve' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                            Утвердить выбранные
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={rejectSelectedDrafts}
-                                            disabled={selectedDraftIds.length === 0 || draftBusy.bulkReject === 'reject'}
-                                        >
-                                            {draftBusy.bulkReject === 'reject' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                            Отклонить выбранные
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="destructive"
-                                            onClick={deleteSelectedDrafts}
-                                            disabled={selectedDraftIds.length === 0 || draftBusy.bulkDelete === 'delete'}
-                                        >
-                                            {draftBusy.bulkDelete === 'delete' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                            Удалить выбранные
-                                        </Button>
-                                    </div>
-                                </div>
-                                <div className="space-y-4">
-                                    {loadingDrafts && (
-                                        <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>
-                                    )}
-                                    {!loadingDrafts && filteredDrafts.length === 0 && (
-                                        <div className="text-sm text-muted-foreground">Черновиков пока нет.</div>
-                                    )}
-                                    {filteredDrafts.map((draft) => {
-                                        const pending = draftBusy[draft.id];
-                                        return (
-                                            <div key={draft.id} className="rounded-md border p-4 space-y-3">
-                                                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                                                    <div>
-                                                        <label className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={selectedDraftIds.includes(draft.id)}
-                                                                onChange={(e) =>
-                                                                    setSelectedDraftIds((prev) =>
-                                                                        e.target.checked ? [...prev, draft.id] : prev.filter((id) => id !== draft.id)
-                                                                    )
-                                                                }
-                                                            />
-                                                            Выбрать для массового утверждения
-                                                        </label>
-                                                        <div className="font-medium">{draft.lead_name || draft.lead_id}</div>
-                                                        <div className="text-sm text-muted-foreground">
-                                                            Канал: {formatLeadChannel(draft.channel)} · Статус: {draft.status}
-                                                        </div>
-                                                        <div className="mt-1">
-                                                            <Badge variant="outline">{workflowStatusLabel(savedLeads.find((item) => item.id === draft.lead_id)?.status || '')}</Badge>
-                                                        </div>
-                                                        {(() => {
-                                                            const lead = savedLeads.find((item) => item.id === draft.lead_id);
-                                                            if (!lead) return null;
-                                                            return (
-                                                                <div className="mt-2">
-                                                                    <LeadMetaSummary lead={lead} showChannel />
-                                                                </div>
-                                                            );
-                                                        })()}
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        {(() => {
-                                                            const lead = savedLeads.find((item) => item.id === draft.lead_id);
-                                                            if (!lead?.id) return null;
-                                                            return (
-                                                                <Button
-                                                                    size="sm"
-                                                                    variant="secondary"
-                                                                    onClick={() => openLeadPreview(lead)}
-                                                                    disabled={previewLoadingId === lead.id}
-                                                                >
-                                                                    {previewLoadingId === lead.id && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                                                    Карточка лида
-                                                                </Button>
-                                                            );
-                                                        })()}
-                                                        <Badge variant={draft.status === 'approved' ? 'default' : draft.status === 'rejected' ? 'destructive' : 'secondary'}>
-                                                            {draft.status}
-                                                        </Badge>
-                                                    </div>
-                                                </div>
-                                                <div className="rounded-md bg-muted/30 p-3 text-sm whitespace-pre-wrap">
-                                                    {draft.generated_text}
-                                                </div>
-                                                <textarea
-                                                    className="min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                                                    value={draftEdits[draft.id] ?? ''}
-                                                    onChange={(e) => setDraftEdits(prev => ({ ...prev, [draft.id]: e.target.value }))}
-                                                />
-                                                <div className="flex flex-wrap gap-2">
-                                                    <Button variant="secondary" onClick={() => saveDraftEdit(draft.id)} disabled={Boolean(pending)}>
-                                                        {pending === 'save' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                                        Сохранить черновик
-                                                    </Button>
-                                                    <Button onClick={() => approveDraft(draft.id)} disabled={Boolean(pending)}>
-                                                        {pending === 'approve' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                                        Утвердить
-                                                    </Button>
-                                                    <Button variant="outline" onClick={() => rejectDraft(draft.id)} disabled={Boolean(pending)}>
-                                                        {pending === 'reject' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                                        Отклонить
-                                                    </Button>
-                                                    <Button variant="destructive" onClick={() => deleteDraft(draft.id)} disabled={Boolean(pending)}>
-                                                        {pending === 'delete' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                                        Удалить
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+                    {renderDraftsWorkspace()}
                 </TabsContent>
 
                 <TabsContent value="queue" className="space-y-4">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Очередь отправки</CardTitle>
-                            <CardDescription>
-                                Дневная capped-пачка: не более {sendDailyCap} сообщений. Сначала собираете batch, затем вручную подтверждаете его.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                            <div className="flex flex-wrap items-center gap-3 rounded-lg border p-4">
-                                <div className="text-sm font-medium">Фильтр канала для очереди</div>
-                                <select className="border rounded-md px-3 py-2 bg-background text-sm" value={queueChannelFilter} onChange={(e) => setQueueChannelFilter(e.target.value)}>
-                                    <option value="">Все каналы</option>
-                                    <option value="telegram">Telegram</option>
-                                    <option value="whatsapp">WhatsApp</option>
-                                    <option value="email">Email</option>
-                                    <option value="manual">Manual</option>
-                                </select>
-                                <div className="text-sm font-medium">Показать</div>
-                                <div className="flex flex-wrap gap-2">
-                                    <Button size="sm" variant={queueViewFilter === 'all' ? 'default' : 'outline'} onClick={() => setQueueViewFilter('all')}>
-                                        Все
-                                    </Button>
-                                    <Button size="sm" variant={queueViewFilter === 'today' ? 'default' : 'outline'} onClick={() => setQueueViewFilter('today')}>
-                                        Только сегодня
-                                    </Button>
-                                    <Button size="sm" variant={queueViewFilter === 'attention' ? 'default' : 'outline'} onClick={() => setQueueViewFilter('attention')}>
-                                        Требует внимания
-                                    </Button>
-                                </div>
-                                <Badge variant="secondary">Готовы к queue: {filteredSendReadyDrafts.length}</Badge>
-                                <Badge variant="outline">Batch-групп: {groupedSendBatches.length}</Badge>
-                                <Badge variant="outline">Выбрано в очереди: {selectedQueueItemIds.length}</Badge>
-                            </div>
-
-                            <div className="rounded-lg border p-4">
-                                <div className="mb-3 flex items-center justify-between gap-3">
-                                    <div>
-                                        <h3 className="font-semibold">Шаг 5. Выбор канала</h3>
-                                        <p className="text-sm text-muted-foreground">Сначала выберите канал контакта, затем лид появится в черновиках.</p>
-                                    </div>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <Badge variant="secondary">{contactLeads.length}</Badge>
-                                        <Badge variant="outline">Выбрано: {selectedOutreachLeadIds.length}</Badge>
-                                        <select
-                                            className="border rounded-md px-3 py-2 bg-background text-sm"
-                                            value={bulkOutreachChannel}
-                                            onChange={(e) => setBulkOutreachChannel(e.target.value as 'telegram' | 'whatsapp' | 'email' | 'manual')}
-                                        >
-                                            <option value="telegram">Telegram</option>
-                                            <option value="whatsapp">WhatsApp</option>
-                                            <option value="email">Email</option>
-                                            <option value="manual">Manual</option>
-                                        </select>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() =>
-                                                setSelectedOutreachLeadIds(
-                                                    selectedOutreachLeadIds.length === contactLeads.length
-                                                        ? []
-                                                        : contactLeads.map((lead) => lead.id).filter(Boolean) as string[]
-                                                )
-                                            }
-                                            disabled={contactLeads.length === 0}
-                                        >
-                                            {selectedOutreachLeadIds.length === contactLeads.length && contactLeads.length > 0 ? 'Снять всё' : 'Выбрать всё'}
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            onClick={bulkAssignOutreachChannel}
-                                            disabled={selectedOutreachLeadIds.length === 0 || selectionLoading.bulkChannel === bulkOutreachChannel}
-                                        >
-                                            {selectionLoading.bulkChannel === bulkOutreachChannel && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                            Назначить канал выбранным
-                                        </Button>
-                                    </div>
-                                </div>
-                                <div className="space-y-3">
-                                    {contactLeads.length === 0 && (
-                                        <div className="text-sm text-muted-foreground">Все лиды уже прошли выбор канала или отсутствуют.</div>
-                                    )}
-                                    {contactLeads.map((lead) => {
-                                        const pending = selectionLoading[lead.id || ''];
-                                        return (
-                                            <div key={lead.id} className="rounded-md border p-3">
-                                                <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                                                    <div className="space-y-2">
-                                                        <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={!!lead.id && selectedOutreachLeadIds.includes(lead.id)}
-                                                                onChange={(e) =>
-                                                                    lead.id &&
-                                                                    setSelectedOutreachLeadIds((prev) =>
-                                                                        e.target.checked ? [...prev, lead.id as string] : prev.filter((id) => id !== lead.id)
-                                                                    )
-                                                                }
-                                                            />
-                                                            Отметить для массового выбора
-                                                        </label>
-                                                        <div className="font-medium">{lead.name}</div>
-                                                        <LeadMetaSummary lead={lead} />
-                                                    </div>
-                                                </div>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {lead.id && (
-                                                        <Button
-                                                            size="sm"
-                                                            variant="secondary"
-                                                            onClick={() => openLeadPreview(lead)}
-                                                            disabled={previewLoadingId === lead.id}
-                                                        >
-                                                            {previewLoadingId === lead.id && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                                            Карточка лида
-                                                        </Button>
-                                                    )}
-                                                    {(['telegram', 'whatsapp', 'email', 'manual'] as const).map((channel) => (
-                                                        <Button
-                                                            key={channel}
-                                                            size="sm"
-                                                            variant={lead.selected_channel === channel ? 'default' : 'outline'}
-                                                            onClick={() => lead.id && chooseChannel(lead.id, channel)}
-                                                            disabled={!lead.id || Boolean(pending)}
-                                                        >
-                                                            {pending === channel && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                                            {channel === 'telegram' ? 'Telegram' : channel === 'whatsapp' ? 'WhatsApp' : channel === 'email' ? 'Email' : 'Manual'}
-                                                        </Button>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                            <div className="rounded-lg border p-4">
-                                <div className="mb-3 flex items-center justify-between gap-3">
-                                    <div>
-                                        <h3 className="font-semibold">Готовые к постановке в очередь</h3>
-                                        <p className="text-sm text-muted-foreground">Используются только утверждённые черновики, которые ещё не попали в send queue.</p>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Badge variant="secondary">{filteredSendReadyDrafts.length}</Badge>
-                                        <Badge variant="outline">Выбрано: {selectedSendReadyDraftIds.length}</Badge>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() =>
-                                                setSelectedSendReadyDraftIds(
-                                                    selectedSendReadyDraftIds.length === filteredSendReadyDrafts.length
-                                                        ? []
-                                                        : filteredSendReadyDrafts.slice(0, sendDailyCap).map((draft) => draft.id)
-                                                )
-                                            }
-                                            disabled={filteredSendReadyDrafts.length === 0}
-                                        >
-                                            {selectedSendReadyDraftIds.length > 0 ? 'Снять выбор' : `Выбрать первые ${Math.min(filteredSendReadyDrafts.length, sendDailyCap)}`}
-                                        </Button>
-                                        <Button onClick={() => createSendBatch()} disabled={loadingSendQueue || Boolean(sendQueueBusy.create) || filteredSendReadyDrafts.length === 0}>
-                                            {(loadingSendQueue || sendQueueBusy.create === 'create') && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                            Собрать batch (до {sendDailyCap})
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            onClick={() => createSendBatch(selectedSendReadyDraftIds)}
-                                            disabled={loadingSendQueue || Boolean(sendQueueBusy.create) || selectedSendReadyDraftIds.length === 0}
-                                        >
-                                            {(loadingSendQueue || sendQueueBusy.create === 'create') && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                            Собрать из выбранных
-                                        </Button>
-                                    </div>
-                                </div>
-                                <div className="space-y-3">
-                                    {loadingSendQueue && (
-                                        <div className="flex justify-center p-6"><Loader2 className="h-8 w-8 animate-spin" /></div>
-                                    )}
-                                    {!loadingSendQueue && filteredSendReadyDrafts.length === 0 && (
-                                        <div className="text-sm text-muted-foreground">Нет утверждённых черновиков, готовых к постановке в очередь.</div>
-                                    )}
-                                    {filteredSendReadyDrafts.slice(0, sendDailyCap).map((draft) => (
-                                        <div key={draft.id} className="rounded-md border p-3">
-                                            <div className="mb-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                                                <div>
-                                                    <label className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={selectedSendReadyDraftIds.includes(draft.id)}
-                                                            onChange={(e) =>
-                                                                setSelectedSendReadyDraftIds((prev) =>
-                                                                    e.target.checked ? [...prev, draft.id] : prev.filter((id) => id !== draft.id)
-                                                                )
-                                                            }
-                                                        />
-                                                        Включить в ручной batch
-                                                    </label>
-                                                    <div className="font-medium">{draft.lead_name || draft.lead_id}</div>
-                                                    <div className="text-sm text-muted-foreground">
-                                                        Канал: {formatLeadChannel(draft.channel)} · Черновик утверждён
-                                                    </div>
-                                                    {(() => {
-                                                        const lead = savedLeads.find((item) => item.id === draft.lead_id);
-                                                        if (!lead) return null;
-                                                        return (
-                                                            <div className="mt-2">
-                                                                <LeadMetaSummary lead={lead} showChannel />
-                                                            </div>
-                                                        );
-                                                    })()}
-                                                </div>
-                                                <Badge variant="default">Готов к queue</Badge>
-                                            </div>
-                                            <div className="rounded-md bg-muted/30 p-3 text-sm whitespace-pre-wrap">
-                                                {draft.approved_text || draft.edited_text || draft.generated_text}
-                                            </div>
-                                        </div>
-                                    ))}
-                                    {filteredSendReadyDrafts.length > sendDailyCap && (
-                                        <div className="text-xs text-muted-foreground">
-                                            В batch попадут первые {sendDailyCap} черновиков по времени обновления. Остальные останутся ждать следующего дня.
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="rounded-lg border p-4">
-                                <div className="mb-3 flex items-center justify-between gap-3">
-                                    <div>
-                                        <h3 className="font-semibold">Сегодня</h3>
-                                        <p className="text-sm text-muted-foreground">Текущая рабочая пачка на дату {todayBatchDate}.</p>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Badge variant="secondary">Batch: {todaySendBatches.length}</Badge>
-                                        <Badge variant="outline">Элементы: {todayQueueItems.length}</Badge>
-                                    </div>
-                                </div>
-                                <div className="space-y-3">
-                                    {todaySendBatches.length === 0 && (
-                                        <div className="text-sm text-muted-foreground">На сегодня ещё нет batch.</div>
-                                    )}
-                                    {todaySendBatches.length > 0 && (
-                                        <div className="flex flex-wrap gap-2">
-                                            <Badge variant="outline">В очереди: {todayQueueSummary.queued}</Badge>
-                                            <Badge variant="default">Sent: {todayQueueSummary.sent}</Badge>
-                                            <Badge variant="secondary">Delivered: {todayQueueSummary.delivered}</Badge>
-                                            <Badge variant={todayQueueSummary.failed > 0 ? 'destructive' : 'outline'}>
-                                                Failed: {todayQueueSummary.failed}
-                                            </Badge>
-                                            <Badge variant="secondary">С реакцией: {todayQueueSummary.withReaction}</Badge>
-                                        </div>
-                                    )}
-                                    {todaySendBatches.map((batch) => (
-                                        <div key={`today-${batch.id}`} className="rounded-md border p-3">
-                                            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                                                <div>
-                                                    <div className="font-medium">Batch {batch.id.slice(0, 8)}</div>
-                                                    <div className="text-sm text-muted-foreground">
-                                                        Статус: {batch.status === 'approved' ? 'Подтверждён' : 'Черновик'} · Элементов: {(batch.items || []).filter((item) => !queueChannelFilter || item.channel === queueChannelFilter).length}
-                                                    </div>
-                                                </div>
-                                                {batch.status === 'draft' && (
-                                                    <Button
-                                                        size="sm"
-                                                        onClick={() => approveSendBatch(batch.id)}
-                                                        disabled={Boolean(sendQueueBusy[batch.id])}
-                                                    >
-                                                        {sendQueueBusy[batch.id] === 'approve' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                                        Подтвердить и отправить
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="rounded-lg border p-4">
-                                <div className="mb-3 flex items-center justify-between gap-3">
-                                    <div>
-                                        <h3 className="font-semibold">Сформированные batch</h3>
-                                        <p className="text-sm text-muted-foreground">После ручного подтверждения batch можно вручную отмечать доставку и фиксировать входящие реакции.</p>
-                                    </div>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <Badge variant="secondary">{filteredSendBatches.length}</Badge>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() =>
-                                                setSelectedQueueItemIds(
-                                                    selectedQueueItemIds.length === visibleQueueItems.length
-                                                        ? []
-                                                        : visibleQueueItems.map((item) => item.id)
-                                                )
-                                            }
-                                            disabled={visibleQueueItems.length === 0}
-                                        >
-                                            {selectedQueueItemIds.length === visibleQueueItems.length && visibleQueueItems.length > 0 ? 'Снять всё' : 'Выбрать всё'}
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            onClick={() => bulkMarkDelivery('sent')}
-                                            disabled={selectedQueueItemIds.length === 0 || sendQueueBusy.bulkDelivery === 'sent'}
-                                        >
-                                            {sendQueueBusy.bulkDelivery === 'sent' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                            Отметить выбранные sent
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => bulkMarkDelivery('delivered')}
-                                            disabled={selectedQueueItemIds.length === 0 || sendQueueBusy.bulkDelivery === 'delivered'}
-                                        >
-                                            {sendQueueBusy.bulkDelivery === 'delivered' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                            Отметить выбранные delivered
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => bulkMarkDelivery('failed')}
-                                            disabled={selectedQueueItemIds.length === 0 || sendQueueBusy.bulkDelivery === 'failed'}
-                                        >
-                                            {sendQueueBusy.bulkDelivery === 'failed' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                            Пометить выбранные failed
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="destructive"
-                                            onClick={bulkDeleteQueueItems}
-                                            disabled={selectedQueueItemIds.length === 0 || sendQueueBusy.bulkDeleteQueue === 'delete'}
-                                        >
-                                            {sendQueueBusy.bulkDeleteQueue === 'delete' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                            Удалить выбранные
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="destructive"
-                                            onClick={cleanupTestBatches}
-                                            disabled={sendQueueBusy.cleanupTest === 'cleanup'}
-                                        >
-                                            {sendQueueBusy.cleanupTest === 'cleanup' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                            Очистить тестовые batch
-                                        </Button>
-                                    </div>
-                                </div>
-                                <div className="space-y-4">
-                                    {!loadingSendQueue && filteredSendBatches.length === 0 && (
-                                        <div className="text-sm text-muted-foreground">Пока нет сформированных batch.</div>
-                                    )}
-                                    {groupedSendBatches.map((group) => (
-                                        <div key={group.batchDate} className="rounded-lg border p-4 space-y-4">
-                                            <div className="flex flex-wrap items-center justify-between gap-3">
-                                                <div>
-                                                    <div className="font-semibold">Группа batch за {group.batchDate}</div>
-                                                    <div className="text-sm text-muted-foreground">
-                                                        Batch: {group.batches.length} · Draft: {group.draftCount} · Подтверждено: {group.approvedCount}
-                                                    </div>
-                                                </div>
-                                                <Badge variant="outline">Дата: {group.batchDate}</Badge>
-                                            </div>
-                                            {group.batches.map((batch) => (
-                                                <div key={batch.id} className="rounded-md border p-4 space-y-3">
-                                                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                                                        <div>
-                                                            <div className="font-medium">Batch от {batch.batch_date}</div>
-                                                            <div className="text-sm text-muted-foreground">
-                                                                Элементов: {batch.items?.length || 0} · Лимит: {batch.daily_limit}
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex items-center gap-2">
-                                                            <Badge variant={batch.status === 'approved' ? 'default' : 'secondary'}>
-                                                                {batch.status === 'approved' ? 'Подтверждён' : 'Черновик'}
-                                                            </Badge>
-                                                            {batch.status === 'draft' && (
-                                                                <Button
-                                                                    size="sm"
-                                                                    onClick={() => approveSendBatch(batch.id)}
-                                                                    disabled={Boolean(sendQueueBusy[batch.id])}
-                                                                >
-                                                                    {sendQueueBusy[batch.id] === 'approve' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                                                    Подтвердить и отправить
-                                                                </Button>
-                                                            )}
-                                                            <Button
-                                                                size="sm"
-                                                                variant="destructive"
-                                                                onClick={() => deleteSendBatch(batch.id)}
-                                                                disabled={Boolean(sendQueueBusy[batch.id])}
-                                                            >
-                                                                {sendQueueBusy[batch.id] === 'delete' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                                                Удалить batch
-                                                            </Button>
-                                                        </div>
-                                                    </div>
-                                                    <div className="space-y-2">
-                                                        {(batch.items || [])
-                                                            .filter((item) => !queueChannelFilter || item.channel === queueChannelFilter)
-                                                            .map((item) => (
-                                                            <div key={item.id} className="rounded-md bg-muted/20 p-3 text-sm space-y-3">
-                                                                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                                                                    <div>
-                                                                        <label className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
-                                                                            <input
-                                                                                type="checkbox"
-                                                                                checked={selectedQueueItemIds.includes(item.id)}
-                                                                                onChange={(e) =>
-                                                                                    setSelectedQueueItemIds((prev) =>
-                                                                                        e.target.checked ? [...prev, item.id] : prev.filter((id) => id !== item.id)
-                                                                                    )
-                                                                                }
-                                                                            />
-                                                                            Выбрать для массовой отметки
-                                                                        </label>
-                                                                        <div className="font-medium">{item.lead_name || item.lead_id}</div>
-                                                                        <div className="text-muted-foreground">
-                                                                            Канал: {formatLeadChannel(item.channel)} · Доставка: {item.delivery_status}
-                                                                        </div>
-                                                                        <div className="mt-1">
-                                                                            <Badge variant="outline">
-                                                                                {workflowStatusLabel(
-                                                                                    item.latest_human_outcome || item.latest_outcome
-                                                                                        ? 'responded'
-                                                                                        : item.delivery_status === 'sent' || item.delivery_status === 'delivered'
-                                                                                            ? 'sent'
-                                                                                            : 'queued_for_send'
-                                                                                )}
-                                                                            </Badge>
-                                                                        </div>
-                                                                        {(item.latest_human_outcome || item.latest_outcome) && (
-                                                                            <div className="text-xs text-emerald-700 mt-1">
-                                                                                Последний outcome: {item.latest_human_outcome || item.latest_outcome}
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                    <div className="flex flex-wrap gap-2">
-                                                                        <Button
-                                                                            size="sm"
-                                                                            variant={item.delivery_status === 'sent' || item.delivery_status === 'delivered' ? 'default' : 'outline'}
-                                                                            onClick={() => markDelivery(item.id, 'sent')}
-                                                                            disabled={Boolean(sendQueueBusy[item.id])}
-                                                                        >
-                                                                            {sendQueueBusy[item.id] === 'sent' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                                                            Отмечено как sent
-                                                                        </Button>
-                                                                        <Button
-                                                                            size="sm"
-                                                                            variant={item.delivery_status === 'delivered' ? 'default' : 'outline'}
-                                                                            onClick={() => markDelivery(item.id, 'delivered')}
-                                                                            disabled={Boolean(sendQueueBusy[item.id])}
-                                                                        >
-                                                                            {sendQueueBusy[item.id] === 'delivered' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                                                            Отмечено как delivered
-                                                                        </Button>
-                                                                        <Button
-                                                                            size="sm"
-                                                                            variant="outline"
-                                                                            onClick={() => markDelivery(item.id, 'failed')}
-                                                                            disabled={Boolean(sendQueueBusy[item.id])}
-                                                                        >
-                                                                            {sendQueueBusy[item.id] === 'failed' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                                                            Пометить failed
-                                                                        </Button>
-                                                                        <Button
-                                                                            size="sm"
-                                                                            variant="destructive"
-                                                                            onClick={() => deleteQueueItem(item.id)}
-                                                                            disabled={Boolean(sendQueueBusy[item.id])}
-                                                                        >
-                                                                            {sendQueueBusy[item.id] === 'delete' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                                                            Удалить
-                                                                        </Button>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="whitespace-pre-wrap">
-                                                                    {item.approved_text || item.generated_text || '—'}
-                                                                </div>
-                                                                {item.delivery_status !== 'failed' && (
-                                                                    <div className="space-y-2 rounded-md border p-3">
-                                                                        <div className="text-xs font-medium text-muted-foreground">Входящая реакция</div>
-                                                                        <textarea
-                                                                            className="min-h-[90px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                                                                            placeholder="Вставьте ответ клиента или оставьте пустым для no_response"
-                                                                            value={replyDrafts[item.id] ?? ''}
-                                                                            onChange={(e) => setReplyDrafts(prev => ({ ...prev, [item.id]: e.target.value }))}
-                                                                        />
-                                                                        <div className="flex flex-wrap gap-2">
-                                                                            <Button
-                                                                                size="sm"
-                                                                                onClick={() => recordReaction(item.id)}
-                                                                                disabled={Boolean(sendQueueBusy[item.id])}
-                                                                            >
-                                                                                {sendQueueBusy[item.id] === 'reaction:auto' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                                                                Автоклассифицировать
-                                                                            </Button>
-                                                                            {(['positive', 'question', 'no_response', 'hard_no'] as const).map((outcome) => (
-                                                                                <Button
-                                                                                    key={outcome}
-                                                                                    size="sm"
-                                                                                    variant="outline"
-                                                                                    onClick={() => recordReaction(item.id, outcome)}
-                                                                                    disabled={Boolean(sendQueueBusy[item.id])}
-                                                                                >
-                                                                                    {sendQueueBusy[item.id] === `reaction:${outcome}` && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                                                                    {outcome}
-                                                                                </Button>
-                                                                            ))}
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="rounded-lg border p-4">
-                                <div className="mb-3 flex items-center justify-between gap-3">
-                                    <div>
-                                        <h3 className="font-semibold">Последние реакции</h3>
-                                        <p className="text-sm text-muted-foreground">Базовая классификация outcome для первого supervised цикла.</p>
-                                    </div>
-                                    <Badge variant="secondary">{reactions.length}</Badge>
-                                </div>
-                                <div className="space-y-2">
-                                    {!loadingSendQueue && reactions.length === 0 && (
-                                        <div className="text-sm text-muted-foreground">Реакций пока нет.</div>
-                                    )}
-                                    {reactions.map((reaction) => (
-                                        <div key={reaction.id} className="rounded-md border p-3 text-sm">
-                                            <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-                                                <div className="font-medium">{reaction.lead_name || reaction.lead_id}</div>
-                                                <div className="flex flex-wrap items-center gap-2">
-                                                    <Badge variant="outline">
-                                                        {formatReactionClassifierSource(getReactionClassifierSource(reaction.note))}
-                                                    </Badge>
-                                                    <Badge variant={reaction.human_confirmed_outcome === 'hard_no' ? 'destructive' : 'secondary'}>
-                                                        {reaction.human_confirmed_outcome || reaction.classified_outcome}
-                                                    </Badge>
-                                                </div>
-                                            </div>
-                                            <div className="text-muted-foreground">
-                                                Batch: {reaction.batch_id || '—'} · Канал: {reaction.channel || '—'} · Delivery: {reaction.delivery_status || '—'}
-                                            </div>
-                                            {reaction.human_confirmed_outcome && reaction.human_confirmed_outcome !== reaction.classified_outcome && (
-                                                <div className="mt-1 text-xs text-muted-foreground">
-                                                    AI: {reaction.classified_outcome} → Подтверждено: {reaction.human_confirmed_outcome}
-                                                </div>
-                                            )}
-                                            {reaction.raw_reply && (
-                                                <div className="mt-2 whitespace-pre-wrap">
-                                                    {reaction.raw_reply}
-                                                </div>
-                                            )}
-                                            <div className="mt-3 flex flex-wrap gap-2">
-                                                {reactionOutcomeOptions.map((outcome) => (
-                                                    <Button
-                                                        key={`${reaction.id}-${outcome}`}
-                                                        type="button"
-                                                        size="sm"
-                                                        variant={(reaction.human_confirmed_outcome || reaction.classified_outcome) === outcome ? 'default' : 'outline'}
-                                                        onClick={() => confirmReaction(reaction.id, outcome)}
-                                                        disabled={Boolean(reactionBusy[reaction.id])}
-                                                    >
-                                                        {reactionBusy[reaction.id] === outcome && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                                        {outcome}
-                                                    </Button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+                    {renderQueueWorkspace()}
                 </TabsContent>
-                <TabsContent value="sent" className="space-y-4">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Отправлено</CardTitle>
-                            <CardDescription>
-                                Лиды, по которым уже была отправка или получена реакция. Здесь удобно держать отправленные страницы аудита и возвращаться к ним без поиска по очереди.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            {renderLeadsTable(sentLeads, 'sent')}
-                        </CardContent>
-                    </Card>
 
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Follow-up сообщения</CardTitle>
-                            <CardDescription>
-                                Второе касание после отправки: здесь удобно подготовить текст и быстро перейти к карточке или аудиту.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            {sentLeads.length === 0 && (
-                                <div className="text-sm text-muted-foreground">Нет лидов, готовых для follow-up.</div>
-                            )}
-                            {sentLeads.map((lead) => (
-                                <div key={`followup-${lead.id}`} className="rounded-md border p-3 space-y-3">
-                                    <div className="flex flex-wrap items-center justify-between gap-3">
-                                        <div className="font-medium">{lead.name}</div>
-                                        <div className="flex flex-wrap gap-2">
-                                            <Button
-                                                size="sm"
-                                                variant="secondary"
-                                                onClick={() => openLeadPreview(lead)}
-                                                disabled={previewLoadingId === lead.id}
-                                            >
-                                                {previewLoadingId === lead.id && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                                Карточка лида
-                                            </Button>
-                                            {lead.public_audit_url && (
-                                                <a
-                                                    href={lead.public_audit_url}
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                    className="inline-flex h-9 items-center rounded-md border border-input bg-secondary px-3 text-sm font-medium text-secondary-foreground hover:bg-secondary/80"
-                                                >
-                                                    Открыть аудит
-                                                </a>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <textarea
-                                        className="min-h-[110px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                                        placeholder="Текст follow-up сообщения"
-                                        value={followUpDrafts[lead.id || ''] ?? ''}
-                                        onChange={(e) => {
-                                            const leadId = lead.id || '';
-                                            setFollowUpDrafts((prev) => ({ ...prev, [leadId]: e.target.value }));
-                                        }}
-                                    />
-                                    <div className="text-xs text-muted-foreground">
-                                        Текст сохраняется локально в интерфейсе и готов к ручной отправке через выбранный канал.
-                                    </div>
-                                </div>
-                            ))}
-                        </CardContent>
-                    </Card>
+                <TabsContent value="sent" className="space-y-4">
+                    {renderSentWorkspace()}
                 </TabsContent>
             </Tabs>
         </div>
