@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Badge } from "./ui/badge";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "./ui/sheet";
-import { Loader2, MapPin, Phone, Globe, Star, Mail, MessageCircle, Save, Search, SlidersHorizontal, Plus, LayoutGrid, List, ExternalLink, TriangleAlert, PanelRightClose, PanelRightOpen } from "lucide-react";
+import { Loader2, MapPin, Phone, Globe, Star, Mail, MessageCircle, Save, Search, SlidersHorizontal, Plus, LayoutGrid, List, ExternalLink, TriangleAlert, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { api } from "@/services/api";
 import { ContactPresenceBadges, StatusSummaryCard, WorkflowActionRow } from "./prospecting/LeadWorkflowBlocks";
 import { AnalyticsMetricGrid, AnalyticsSection, AnalyticsSummaryGrid, AnalyticsWindowGrid } from "./prospecting/ProspectingAnalyticsBlocks";
@@ -23,6 +23,110 @@ import type { LeadCardPreview } from "./LeadCardPreviewPanel";
 import { toast } from "sonner";
 
 const LeadCardPreviewPanel = lazy(() => import("./LeadCardPreviewPanel"));
+
+const OutreachDetailModal = ({
+    title,
+    description,
+    onClose,
+    onPrevious,
+    onNext,
+    previousDisabled = false,
+    nextDisabled = false,
+    children,
+}: {
+    title: string;
+    description?: string;
+    onClose: () => void;
+    onPrevious?: () => void;
+    onNext?: () => void;
+    previousDisabled?: boolean;
+    nextDisabled?: boolean;
+    children: React.ReactNode;
+}) => {
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                onClose();
+                return;
+            }
+            if (event.key === 'ArrowLeft' && onPrevious && !previousDisabled) {
+                onPrevious();
+                return;
+            }
+            if (event.key === 'ArrowRight' && onNext && !nextDisabled) {
+                onNext();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [nextDisabled, onClose, onNext, onPrevious, previousDisabled]);
+
+    return (
+        <div
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200"
+            onClick={onClose}
+        >
+            <Card
+                className="w-[min(1280px,calc(100vw-1rem))] sm:w-[min(1280px,calc(100vw-2rem))] max-h-[94vh] overflow-hidden shadow-2xl border-0 animate-in zoom-in-95 duration-200"
+                onClick={(event) => event.stopPropagation()}
+            >
+                <CardHeader className="border-b border-border/50 bg-gradient-to-r from-card to-card/50 px-4 py-4 sm:px-6">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="min-w-0">
+                            <CardTitle className="text-xl sm:text-2xl">{title}</CardTitle>
+                            {description ? <p className="text-sm text-muted-foreground mt-1">{description}</p> : null}
+                            <p className="mt-2 text-xs text-muted-foreground">
+                                `Esc` закрывает окно. Стрелки влево и вправо листают соседние лиды.
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-2 self-end lg:self-start">
+                            {onPrevious ? (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={onPrevious}
+                                    disabled={previousDisabled}
+                                    aria-label="Открыть предыдущего лида"
+                                >
+                                    <ChevronLeft className="mr-1 h-4 w-4" />
+                                    Назад
+                                </Button>
+                            ) : null}
+                            {onNext ? (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={onNext}
+                                    disabled={nextDisabled}
+                                    aria-label="Открыть следующего лида"
+                                >
+                                    Вперёд
+                                    <ChevronRight className="ml-1 h-4 w-4" />
+                                </Button>
+                            ) : null}
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={onClose}
+                                className="rounded-full"
+                                aria-label="Закрыть детали лида"
+                            >
+                                <X className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="overflow-y-auto max-h-[calc(94vh-132px)] p-4 sm:p-6">
+                    {children}
+                </CardContent>
+            </Card>
+        </div>
+    );
+};
 
 type Lead = {
     id?: string;
@@ -47,6 +151,7 @@ type Lead = {
     location?: any;
     status: string;
     created_at?: string;
+    updated_at?: string;
     partnership_stage?: string;
     public_audit_slug?: string;
     public_audit_url?: string;
@@ -216,7 +321,7 @@ const toOutreachTab = (value: string): OutreachTab => {
 type OutreachTab = 'drafts' | 'queue' | 'sent';
 type PipelineViewMode = 'kanban' | 'list';
 type PipelineQuickFilter = 'all' | 'without_audit' | 'with_audit' | 'priority';
-type PipelineBoardColumnId = 'new' | 'in_progress' | 'contacted' | 'closed';
+type PipelineBoardColumnId = 'new' | 'in_progress' | 'ready_to_contact' | 'contact_started' | 'waiting_reply' | 'dialog' | 'qualified' | 'inactive';
 
 const inferLeadAuditLanguage = (lead: Lead | null): string => {
     const preferred = String(lead?.preferred_language || '').trim().toLowerCase();
@@ -474,32 +579,30 @@ const badgeVariantForStatus = (status: string) => {
 
 const statusLabel = (status: string) => {
     switch (status) {
-        case shortlistApproved:
-            return 'В shortlist';
-        case shortlistRejected:
-            return 'Отбракован';
-        case deferredLead:
-            return 'Отложен';
         case 'new':
-            return 'Кандидат';
-        case 'contacted':
-            return 'Контакт';
+            return 'Новый';
+        case shortlistApproved:
+            return 'В работе';
         case selectedForOutreach:
-            return 'Контакт';
         case channelSelected:
-            return 'Черновик';
+            return 'В работе';
+        case 'draft_ready':
+        case 'queued_for_send':
+            return 'Готов к контакту';
         case 'sent':
-            return 'Отправлено';
+            return 'Первичный контакт начат';
         case 'delivered':
-            return 'Доставлено';
+            return 'Ждём ответ';
         case 'responded':
-            return 'Есть реакция';
+            return 'Диалог';
         case 'qualified':
-            return 'Квалифицирован';
         case 'converted':
-            return 'Конвертирован';
+            return 'Квалифицирован';
+        case shortlistRejected:
+        case deferredLead:
         case 'rejected':
-            return 'Отбракован';
+        case 'closed':
+            return 'Неактуален';
         default:
             return status || 'Без статуса';
     }
@@ -508,30 +611,30 @@ const statusLabel = (status: string) => {
 const workflowStatusLabel = (status: string) => {
     switch (status) {
         case 'new':
-            return '1. Сбор';
+            return 'Новый';
         case shortlistApproved:
-            return '2. Shortlist';
         case selectedForOutreach:
-            return '3. Контакт';
         case channelSelected:
-            return '4. Черновик';
+            return 'В работе';
+        case 'draft_ready':
         case 'queued_for_send':
-            return '5. Отправка';
-        case deferredLead:
-            return 'Отложен на будущее';
+            return 'Готов к контакту';
         case 'sent':
-            return '6. Отправлено';
+            return 'Первичный контакт начат';
         case 'delivered':
-            return '6. Отправлено';
+            return 'Ждём ответ';
         case 'responded':
-            return '6. Отправлено';
+            return 'Диалог';
+        case 'qualified':
         case 'converted':
-            return '6. Отправлено';
+            return 'Квалифицирован';
         case shortlistRejected:
+        case deferredLead:
         case 'rejected':
-            return 'Отбракован';
+        case 'closed':
+            return 'Неактуален';
         default:
-            return statusLabel(status);
+            return status || 'Без статуса';
     }
 };
 
@@ -593,43 +696,75 @@ const nextKanbanColumn = (columnId: KanbanColumnId): KanbanColumnId | null => {
     return kanbanColumnOrder[idx + 1];
 };
 
-const pipelineBoardColumnOrder: PipelineBoardColumnId[] = ['new', 'in_progress', 'contacted', 'closed'];
+const pipelineBoardColumnOrder: PipelineBoardColumnId[] = ['new', 'in_progress', 'ready_to_contact', 'contact_started', 'waiting_reply', 'dialog', 'qualified', 'inactive'];
 
 const pipelineBoardColumnMeta: Record<PipelineBoardColumnId, { label: string; description: string; statusToSet: string }> = {
     new: {
-        label: 'Новые',
-        description: 'Свежие и приоритетные лиды, которые ждут первого рабочего шага.',
+        label: 'Новый',
+        description: 'Лид только попал в работу и ещё не прошёл первую проверку.',
         statusToSet: 'new',
     },
     in_progress: {
         label: 'В работе',
-        description: 'Аудит, проверка контактов и подготовка первого касания.',
+        description: 'Проверяем лид, уточняем контекст и решаем, стоит ли его доводить до контакта.',
+        statusToSet: shortlistApproved,
+    },
+    ready_to_contact: {
+        label: 'Готов к контакту',
+        description: 'Лид прошёл подготовку и готов к первому касанию.',
         statusToSet: selectedForOutreach,
     },
-    contacted: {
-        label: 'Контактированы',
-        description: 'Сообщение уже ушло или лид находится в доставке и обработке.',
+    contact_started: {
+        label: 'Первичный контакт начат',
+        description: 'Канал выбран, черновик или отправка уже запущены.',
+        statusToSet: channelSelected,
+    },
+    waiting_reply: {
+        label: 'Ждём ответ',
+        description: 'Первичное сообщение ушло, ждём реакцию.',
         statusToSet: 'sent',
     },
-    closed: {
-        label: 'Отложенные',
-        description: 'Лиды, к которым вернёмся позже или не берём в текущую волну.',
+    dialog: {
+        label: 'Диалог',
+        description: 'Лид ответил, идёт переписка или уточнение деталей.',
+        statusToSet: 'responded',
+    },
+    qualified: {
+        label: 'Квалифицирован',
+        description: 'Лид подтверждён и пригоден для следующего коммерческого шага.',
+        statusToSet: 'qualified',
+    },
+    inactive: {
+        label: 'Неактуален',
+        description: 'Лид снят с процесса, отложен или признан нецелевым.',
         statusToSet: deferredLead,
     },
 };
 
 const leadToPipelineBoardColumn = (lead: Lead): PipelineBoardColumnId => {
     const status = String(lead.status || '').trim().toLowerCase();
-    if (!status || status === 'new' || status === shortlistApproved) {
+    if (!status || status === 'new') {
         return 'new';
     }
-    if ([selectedForOutreach, channelSelected, 'draft_ready'].includes(status)) {
+    if ([shortlistApproved, selectedForOutreach, channelSelected].includes(status)) {
         return 'in_progress';
     }
-    if (['queued_for_send', 'sent', 'delivered', 'responded', 'converted'].includes(status)) {
-        return 'contacted';
+    if (['draft_ready', 'queued_for_send'].includes(status)) {
+        return 'ready_to_contact';
     }
-    return 'closed';
+    if (status === 'sent') {
+        return 'contact_started';
+    }
+    if (status === 'delivered') {
+        return 'waiting_reply';
+    }
+    if (status === 'responded') {
+        return 'dialog';
+    }
+    if (['qualified', 'converted'].includes(status)) {
+        return 'qualified';
+    }
+    return 'inactive';
 };
 
 const nextPipelineBoardColumn = (columnId: PipelineBoardColumnId): PipelineBoardColumnId | null => {
@@ -709,6 +844,59 @@ const buildLeadFallbackFromQueueItem = (item: OutreachQueueItem): Lead => ({
                 ? 'queued_for_send'
                 : 'queued_for_send',
 });
+
+const buildLeadRecipientValue = (lead: Lead | null | undefined, channel?: string) => {
+    const normalizedChannel = String(channel || lead?.selected_channel || '').trim().toLowerCase();
+    if (!lead) {
+        return null;
+    }
+    if (normalizedChannel === 'telegram') {
+        return lead.telegram_url || null;
+    }
+    if (normalizedChannel === 'whatsapp') {
+        return lead.whatsapp_url || lead.phone || null;
+    }
+    if (normalizedChannel === 'email') {
+        return lead.email || null;
+    }
+    if (normalizedChannel === 'max') {
+        return extractHasMax(lead) ? 'Контакт через Max найден' : null;
+    }
+    if (normalizedChannel === 'manual') {
+        return 'Ручная отправка';
+    }
+    return lead.phone || lead.website || null;
+};
+
+const buildSyntheticSentQueueItem = (lead: Lead): OutreachQueueItem | null => {
+    const leadId = String(lead.id || '').trim();
+    if (!leadId) {
+        return null;
+    }
+    const status = String(lead.status || '').trim().toLowerCase();
+    if (!['sent', 'delivered', 'responded', 'qualified', 'converted'].includes(status)) {
+        return null;
+    }
+    const channel = String(lead.selected_channel || '').trim().toLowerCase() || 'manual';
+    const deliveryStatus = status === 'sent' ? 'sent' : 'delivered';
+    const timestamp = lead.updated_at || lead.created_at || null;
+    return {
+        id: `manual-${leadId}`,
+        batch_id: 'manual',
+        draft_id: '',
+        lead_id: leadId,
+        lead_name: lead.name,
+        channel,
+        delivery_status: deliveryStatus,
+        provider_name: 'manual',
+        provider_message_id: `manual:${leadId}`,
+        recipient_kind: channel,
+        recipient_value: buildLeadRecipientValue(lead, channel),
+        created_at: timestamp || undefined,
+        updated_at: timestamp || undefined,
+        sent_at: timestamp || undefined,
+    };
+};
 
 const queueItemMatchesContactFilter = (
     item: OutreachQueueItem,
@@ -1018,6 +1206,7 @@ const matchesBooleanFilter = (value: string, condition: boolean) => {
 
 type OutreachChannel = 'telegram' | 'whatsapp' | 'max' | 'email' | 'manual';
 type OutreachContactFilter = '' | 'telegram' | 'whatsapp' | 'max' | 'email' | 'vk';
+type SentStateFilter = '' | 'problem' | 'ready' | 'history';
 
 const toOutreachChannel = (value: string): OutreachChannel => {
     if (value === 'telegram' || value === 'whatsapp' || value === 'max' || value === 'email') {
@@ -1072,6 +1261,13 @@ const bestAvailableOutreachChannel = (lead: Lead | undefined): OutreachChannel =
         return 'email';
     }
     return 'manual';
+};
+
+const bestAlternativeOutreachChannel = (lead: Lead | undefined, currentChannel?: string | null): OutreachChannel | null => {
+    const normalizedCurrent = String(currentChannel || '').trim().toLowerCase();
+    const orderedChannels: OutreachChannel[] = ['telegram', 'whatsapp', 'max', 'email', 'manual'];
+    const alternative = orderedChannels.find((channel) => channel !== normalizedCurrent && hasChannelContact(lead, channel));
+    return alternative || null;
 };
 
 const selectedChannelWarning = (lead: Lead | undefined, channel?: string | null) => {
@@ -1228,7 +1424,8 @@ export const ProspectingManagement: React.FC = () => {
     const [queueContactFilter, setQueueContactFilter] = useState<OutreachContactFilter>('');
     const [queueViewFilter, setQueueViewFilter] = useState<'all' | 'today' | 'attention'>('all');
     const [sentContactFilter, setSentContactFilter] = useState<OutreachContactFilter>('');
-    const [outreachDetailOpen, setOutreachDetailOpen] = useState(true);
+    const [sentStateFilter, setSentStateFilter] = useState<SentStateFilter>('');
+    const [outreachDetailOpen, setOutreachDetailOpen] = useState(false);
     const [selectedDraftDetailId, setSelectedDraftDetailId] = useState<string | null>(null);
     const [selectedDraftIds, setSelectedDraftIds] = useState<string[]>([]);
     const [selectedSendReadyDraftIds, setSelectedSendReadyDraftIds] = useState<string[]>([]);
@@ -1989,11 +2186,11 @@ export const ProspectingManagement: React.FC = () => {
         }
 
         await withDraftBusy(draft.id, 'manual_sent', async () => {
-            await api.post(`/admin/prospecting/lead/${lead.id}/status`, { status: 'sent' });
+            await api.post(`/admin/prospecting/drafts/${draft.id}/manual-sent`, {});
             await refreshProspectingData('all');
             setActiveWorkspace('outreach');
-            setOutreachTab('sent');
-            toast.success('Лид перенесён в "Отправленные"');
+            setSelectedSentLeadId(lead.id);
+            toast.success('Лид отмечен как отправленный вручную и появится в разделе "Отправлено"');
         });
     };
 
@@ -2055,6 +2252,28 @@ export const ProspectingManagement: React.FC = () => {
                 error_text: deliveryStatus === 'failed' ? 'Manual delivery failure' : undefined,
             });
             await refreshProspectingData('leads_queue');
+        });
+    };
+
+    const prepareProblemLeadResend = async (lead: Lead, currentChannel?: string | null) => {
+        if (!lead.id) {
+            toast.error('Не удалось найти лид для переотправки');
+            return;
+        }
+
+        const alternativeChannel = bestAlternativeOutreachChannel(lead, currentChannel);
+        if (!alternativeChannel) {
+            toast.error('Для этого лида нет другого доступного канала. Можно отметить отправку вручную.');
+            return;
+        }
+
+        await withSelectionBusy(lead.id, `resend:${alternativeChannel}`, async () => {
+            await api.post(`/admin/prospecting/lead/${lead.id}/channel`, { channel: alternativeChannel });
+            await api.post(`/admin/prospecting/lead/${lead.id}/draft-generate-from-audit`, { channel: alternativeChannel });
+            await refreshProspectingData('all');
+            setActiveWorkspace('outreach');
+            setOutreachTab('drafts');
+            toast.success(`Подготовили переотправку через ${formatLeadChannel(alternativeChannel)}. Лид перенесён в "Черновики".`);
         });
     };
 
@@ -2242,14 +2461,6 @@ export const ProspectingManagement: React.FC = () => {
         }
         return `Сейчас видны только лиды ${parts.join(' и ')}.`;
     }, [queueContactFilter]);
-    const sentLeads = useMemo(
-        () => sourceFilteredLeads.filter((lead) => ['sent', 'delivered', 'responded', 'converted'].includes(String(lead.status || '').trim())),
-        [sourceFilteredLeads]
-    );
-    const filteredSentLeads = useMemo(
-        () => sentLeads.filter((lead) => leadMatchesOutreachContactFilter(lead, sentContactFilter)),
-        [sentLeads, sentContactFilter]
-    );
     const savedLeadById = useMemo(() => {
         const next = new Map<string, Lead>();
         savedLeads.forEach((lead) => {
@@ -2264,8 +2475,12 @@ export const ProspectingManagement: React.FC = () => {
         const buckets: Record<PipelineBoardColumnId, Lead[]> = {
             new: [],
             in_progress: [],
-            contacted: [],
-            closed: [],
+            ready_to_contact: [],
+            contact_started: [],
+            waiting_reply: [],
+            dialog: [],
+            qualified: [],
+            inactive: [],
         };
         for (const lead of visiblePipelineLeads) {
             const columnId = leadToPipelineBoardColumn(lead);
@@ -2281,45 +2496,18 @@ export const ProspectingManagement: React.FC = () => {
         const totals: Record<PipelineBoardColumnId, number> = {
             new: 0,
             in_progress: 0,
-            contacted: 0,
-            closed: 0,
+            ready_to_contact: 0,
+            contact_started: 0,
+            waiting_reply: 0,
+            dialog: 0,
+            qualified: 0,
+            inactive: 0,
         };
         pipelineBoardColumns.forEach((column) => {
             totals[column.id] = column.leads.length;
         });
         return totals;
     }, [pipelineBoardColumns]);
-    const kanbanColumns = useMemo(() => {
-        const buckets: Record<KanbanColumnId, Lead[]> = {
-            new: [],
-            shortlist: [],
-            in_progress: [],
-            contacted: [],
-            closed: [],
-        };
-        for (const lead of filteredLeadsForKanban) {
-            const columnId = leadToKanbanColumn(lead);
-            buckets[columnId].push(lead);
-        }
-        return kanbanColumnOrder.map((columnId) => ({
-            id: columnId,
-            ...kanbanColumnMeta[columnId],
-            leads: buckets[columnId],
-        }));
-    }, [filteredLeadsForKanban]);
-    const kanbanTotals = useMemo(() => {
-        const totals: Record<KanbanColumnId, number> = {
-            new: 0,
-            shortlist: 0,
-            in_progress: 0,
-            contacted: 0,
-            closed: 0,
-        };
-        for (const column of kanbanColumns) {
-            totals[column.id] = column.leads.length;
-        }
-        return totals;
-    }, [kanbanColumns]);
     const positiveReactionCount = useMemo(
         () =>
             reactions.filter((reaction) => {
@@ -2329,9 +2517,14 @@ export const ProspectingManagement: React.FC = () => {
         [reactions]
     );
     const pipelineLeadCount = filteredLeadsForKanban.length;
-    const shortlistLeadCount = kanbanTotals.shortlist;
-    const inProgressLeadCount = kanbanTotals.in_progress;
-    const contactedLeadCount = kanbanTotals.contacted;
+    const newLeadCount = pipelineBoardTotals.new;
+    const inProgressLeadCount = pipelineBoardTotals.in_progress;
+    const readyToContactLeadCount = pipelineBoardTotals.ready_to_contact;
+    const contactStartedLeadCount = pipelineBoardTotals.contact_started;
+    const waitingReplyLeadCount = pipelineBoardTotals.waiting_reply;
+    const dialogLeadCount = pipelineBoardTotals.dialog;
+    const qualifiedLeadCount = pipelineBoardTotals.qualified;
+    const inactiveLeadCount = pipelineBoardTotals.inactive;
     const pipelineHeaderSummary = useMemo(() => {
         let withoutAudit = 0;
         let withAudit = 0;
@@ -2343,11 +2536,11 @@ export const ProspectingManagement: React.FC = () => {
             } else {
                 withoutAudit += 1;
             }
-            const normalizedStatus = String(lead.status || '').trim().toLowerCase();
-            if ([selectedForOutreach, channelSelected].includes(normalizedStatus)) {
+            const stage = leadToPipelineBoardColumn(lead);
+            if (stage === 'ready_to_contact') {
                 readyToContact += 1;
             }
-            if (normalizedStatus === shortlistApproved) {
+            if (stage === 'in_progress') {
                 priority += 1;
             }
         });
@@ -2356,72 +2549,90 @@ export const ProspectingManagement: React.FC = () => {
     const pipelineStageMetrics = useMemo(() => {
         const stages = [
             {
-                key: 'found',
-                label: 'Найдено',
-                hint: 'Результаты последнего поиска или импорта',
-                count: searchJobResultCount,
-                conversion: '—',
-            },
-            {
-                key: 'pipeline',
-                label: 'В воронке',
-                hint: 'Сохранены и доступны для обработки',
-                count: pipelineLeadCount,
-                conversion: formatConversion(pipelineLeadCount, searchJobResultCount),
-            },
-            {
-                key: 'shortlist',
-                label: 'Отобранные',
-                hint: 'Прошли первичный отбор',
-                count: shortlistLeadCount,
-                conversion: formatConversion(shortlistLeadCount, pipelineLeadCount),
+                key: 'new',
+                label: 'Новый',
+                hint: 'Лид ещё не проходил рабочую проверку',
+                count: newLeadCount,
+                conversion: formatConversion(newLeadCount, pipelineLeadCount),
             },
             {
                 key: 'in_progress',
                 label: 'В работе',
-                hint: 'Готовятся к аудиту и первому контакту',
+                hint: 'Идёт оценка и подготовка лида',
                 count: inProgressLeadCount,
-                conversion: formatConversion(inProgressLeadCount, shortlistLeadCount),
+                conversion: formatConversion(inProgressLeadCount, pipelineLeadCount),
             },
             {
-                key: 'contacted',
-                label: 'Контактированы',
-                hint: 'Сообщение уже ушло или лид в доставке',
-                count: contactedLeadCount,
-                conversion: formatConversion(contactedLeadCount, inProgressLeadCount),
+                key: 'ready_to_contact',
+                label: 'Готов к контакту',
+                hint: 'Можно переходить к первому касанию',
+                count: readyToContactLeadCount,
+                conversion: formatConversion(readyToContactLeadCount, inProgressLeadCount),
             },
             {
-                key: 'positive',
-                label: 'Позитивный ответ',
-                hint: 'Подтверждённый интерес после контакта',
-                count: positiveReactionCount,
-                conversion: formatConversion(positiveReactionCount, contactedLeadCount),
+                key: 'contact_started',
+                label: 'Первичный контакт начат',
+                hint: 'Канал или отправка уже запущены',
+                count: contactStartedLeadCount,
+                conversion: formatConversion(contactStartedLeadCount, readyToContactLeadCount),
+            },
+            {
+                key: 'waiting_reply',
+                label: 'Ждём ответ',
+                hint: 'Сообщение ушло и ждёт реакции',
+                count: waitingReplyLeadCount,
+                conversion: formatConversion(waitingReplyLeadCount, contactStartedLeadCount),
+            },
+            {
+                key: 'dialog',
+                label: 'Диалог',
+                hint: 'Лид ответил и находится в переписке',
+                count: dialogLeadCount,
+                conversion: formatConversion(dialogLeadCount, waitingReplyLeadCount),
+            },
+            {
+                key: 'qualified',
+                label: 'Квалифицирован',
+                hint: 'Подтверждён для следующего шага',
+                count: qualifiedLeadCount,
+                conversion: formatConversion(qualifiedLeadCount, dialogLeadCount),
+            },
+            {
+                key: 'inactive',
+                label: 'Неактуален',
+                hint: 'Снят с процесса или больше не нужен',
+                count: inactiveLeadCount,
+                conversion: formatConversion(inactiveLeadCount, pipelineLeadCount),
             },
         ];
         return stages;
     }, [
-        searchJobResultCount,
-        pipelineLeadCount,
-        shortlistLeadCount,
+        contactStartedLeadCount,
+        dialogLeadCount,
         inProgressLeadCount,
-        contactedLeadCount,
-        positiveReactionCount,
+        inactiveLeadCount,
+        newLeadCount,
+        pipelineLeadCount,
+        qualifiedLeadCount,
+        readyToContactLeadCount,
+        waitingReplyLeadCount,
     ]);
     const pipelineEfficiencySummary = useMemo(() => {
         return {
             foundCount: searchJobResultCount,
             pipelineCount: pipelineLeadCount,
             saveRate: formatConversion(pipelineLeadCount, searchJobResultCount),
-            shortlistRate: formatConversion(shortlistLeadCount, pipelineLeadCount),
-            contactRate: formatConversion(contactedLeadCount, shortlistLeadCount),
-            replyRate: formatConversion(positiveReactionCount, contactedLeadCount),
+            readyRate: formatConversion(readyToContactLeadCount, pipelineLeadCount),
+            replyRate: formatConversion(dialogLeadCount, waitingReplyLeadCount),
+            qualifiedRate: formatConversion(qualifiedLeadCount, dialogLeadCount),
         };
     }, [
-        searchJobResultCount,
+        dialogLeadCount,
         pipelineLeadCount,
-        shortlistLeadCount,
-        contactedLeadCount,
-        positiveReactionCount,
+        qualifiedLeadCount,
+        readyToContactLeadCount,
+        searchJobResultCount,
+        waitingReplyLeadCount,
     ]);
     const draftReadyLeads = useMemo(
         () => sourceFilteredLeads.filter((lead) => lead.status === channelSelected),
@@ -2547,6 +2758,22 @@ export const ProspectingManagement: React.FC = () => {
         });
         return next;
     }, [sendBatches]);
+    const sentLeads = useMemo(
+        () => sourceFilteredLeads.filter((lead) => {
+            if (!lead.id) {
+                return false;
+            }
+            if (latestQueueItemByLeadId.has(lead.id)) {
+                return true;
+            }
+            return ['sent', 'delivered', 'responded', 'qualified', 'converted'].includes(String(lead.status || '').trim().toLowerCase());
+        }),
+        [latestQueueItemByLeadId, sourceFilteredLeads]
+    );
+    const filteredSentLeads = useMemo(
+        () => sentLeads.filter((lead) => leadMatchesOutreachContactFilter(lead, sentContactFilter)),
+        [sentContactFilter, sentLeads]
+    );
     const selectedQueueItem = useMemo(
         () => (selectedQueueItemId ? queueItemById.get(selectedQueueItemId) || null : null),
         [queueItemById, selectedQueueItemId]
@@ -2565,7 +2792,7 @@ export const ProspectingManagement: React.FC = () => {
         () =>
             filteredSentLeads.map((lead) => ({
                 lead,
-                queueItem: lead.id ? latestQueueItemByLeadId.get(lead.id) || null : null,
+                queueItem: lead.id ? latestQueueItemByLeadId.get(lead.id) || buildSyntheticSentQueueItem(lead) : null,
             })),
         [filteredSentLeads, latestQueueItemByLeadId]
     );
@@ -2614,9 +2841,13 @@ export const ProspectingManagement: React.FC = () => {
             return bTime - aTime;
         });
     }, [sentLeadSnapshots]);
+    const filteredSentDetailRows = useMemo(
+        () => sentDetailRows.filter((item) => !sentStateFilter || item.state === sentStateFilter),
+        [sentDetailRows, sentStateFilter]
+    );
     const selectedSentDetail = useMemo(
-        () => sentDetailRows.find((item) => item.lead.id === selectedSentLeadId) || sentDetailRows[0] || null,
-        [selectedSentLeadId, sentDetailRows]
+        () => filteredSentDetailRows.find((item) => item.lead.id === selectedSentLeadId) || filteredSentDetailRows[0] || null,
+        [filteredSentDetailRows, selectedSentLeadId]
     );
 
     useEffect(() => {
@@ -2642,16 +2873,16 @@ export const ProspectingManagement: React.FC = () => {
         }
     }, [draftDetailRows, selectedDraftDetailId]);
     useEffect(() => {
-        if (sentDetailRows.length === 0) {
+        if (filteredSentDetailRows.length === 0) {
             if (selectedSentLeadId) {
                 setSelectedSentLeadId(null);
             }
             return;
         }
-        if (!selectedSentLeadId || !sentDetailRows.some((item) => item.lead.id === selectedSentLeadId)) {
-            setSelectedSentLeadId(sentDetailRows[0].lead.id || null);
+        if (!selectedSentLeadId || !filteredSentDetailRows.some((item) => item.lead.id === selectedSentLeadId)) {
+            setSelectedSentLeadId(filteredSentDetailRows[0].lead.id || null);
         }
-    }, [selectedSentLeadId, sentDetailRows]);
+    }, [filteredSentDetailRows, selectedSentLeadId]);
     const pipelineWindowMetrics = useMemo(() => {
         const windows = [
             { key: '7d', label: '7 дней', days: 7 },
@@ -2982,7 +3213,7 @@ export const ProspectingManagement: React.FC = () => {
             secondaryActions.push({
                 label: 'Отложить',
                 variant: 'destructive',
-                onClick: () => updateLeadStatusOptimistic(leadId, pipelineBoardColumnMeta.closed.statusToSet),
+                onClick: () => updateLeadStatusOptimistic(leadId, pipelineBoardColumnMeta.inactive.statusToSet),
                 disabled: updateBusy,
             });
         }
@@ -3063,6 +3294,7 @@ export const ProspectingManagement: React.FC = () => {
         const selectedItem = selectedDraftDetail;
         const selectedDraft = selectedItem?.draft || null;
         const selectedLead = selectedItem?.lead || null;
+        const selectedDraftIndex = selectedDraft ? draftDetailRows.findIndex((item) => item.draft.id === selectedDraft.id) : -1;
         const selectedChannel = selectedItem?.effectiveChannel || '';
         const selectedDraftText = selectedDraft ? (draftEdits[selectedDraft.id] || '') : '';
         const selectedDraftPending = selectedDraft ? draftBusy[selectedDraft.id] : '';
@@ -3071,6 +3303,125 @@ export const ProspectingManagement: React.FC = () => {
             const lead = savedLeadById.get(draft.lead_id);
             return Boolean(selectedChannelWarning(lead, getEffectiveDraftChannel(draft)));
         }).length;
+        const detailPanel = selectedDraft ? (
+            <DraftDetailPanel
+                title={selectedLead?.name || selectedDraft?.lead_name}
+                description={selectedLead?.address || 'Сначала проверьте канал, текст и безопасное следующее действие.'}
+                statusLabel={formatDraftStatusLabel(selectedDraft.status)}
+                statusTone={toneForDraftStatus(selectedDraft.status)}
+                warning={selectedDraftHasIssue ? selectedItem?.warning || '' : ''}
+                canOpenLeadCard={Boolean(selectedLead)}
+                onOpenLeadCard={() => selectedLead && openLeadPreview(selectedLead)}
+                onFixChannel={() => selectedLead?.id && chooseChannel(selectedLead.id, bestAvailableOutreachChannel(selectedLead))}
+                leadContacts={selectedLead}
+                hasMessenger={selectedLead ? extractHasMessengers(selectedLead) : false}
+                selectedChannelLabel={formatLeadChannel(selectedChannel)}
+                selectedChannelValue={selectedChannel === 'telegram' ? (selectedLead?.telegram_url || 'Нет контакта для выбранного канала') :
+                    selectedChannel === 'whatsapp' ? (selectedLead?.whatsapp_url || 'Нет контакта для выбранного канала') :
+                        selectedChannel === 'email' ? (selectedLead?.email || 'Нет контакта для выбранного канала') :
+                            selectedChannel === 'max' ? (selectedLead && extractHasMax(selectedLead) ? 'Контакт через Max найден' : 'Нет контакта для выбранного канала') :
+                                'Для ручной отправки используйте карточку лида'}
+                selectedChannelTone={selectedDraftHasIssue ? 'warning' : 'success'}
+                auditStatusLabel={selectedLead && hasLeadAudit(selectedLead) ? 'Доступен' : 'Пока нет'}
+                auditPrimaryText={selectedLead && hasLeadAudit(selectedLead) ? 'Ссылки на аудит доступны ниже' : 'Аудит не должен мешать отправке, но помогает при проверке'}
+                auditSecondaryText={selectedLead?.public_audit_updated_at ? `Обновлён ${formatAuditUpdatedAt(selectedLead.public_audit_updated_at)}` : 'Без даты обновления'}
+                auditTone={selectedLead && hasLeadAudit(selectedLead) ? 'info' : 'default'}
+                channelSelector={selectedLead ? (
+                    <div className="flex flex-wrap items-center gap-3">
+                        <select
+                            className="border rounded-md px-3 py-2 bg-background text-sm"
+                            value={selectedLead.selected_channel || 'manual'}
+                            onChange={(e) => {
+                                if (selectedLead.id) {
+                                    void chooseChannel(selectedLead.id, toOutreachChannel(String(e.target.value || 'manual')));
+                                }
+                            }}
+                        >
+                            <option value="telegram">Telegram</option>
+                            <option value="whatsapp">WhatsApp</option>
+                            <option value="max">Max</option>
+                            <option value="email">Email</option>
+                            <option value="manual">Ручная отправка</option>
+                        </select>
+                        <div className="text-sm text-muted-foreground">
+                            {selectedChannel === 'telegram' ? (selectedLead.telegram_url || 'Нет контакта для выбранного канала') :
+                                selectedChannel === 'whatsapp' ? (selectedLead.whatsapp_url || 'Нет контакта для выбранного канала') :
+                                    selectedChannel === 'email' ? (selectedLead.email || 'Нет контакта для выбранного канала') :
+                                        selectedChannel === 'max' ? (extractHasMax(selectedLead) ? 'Контакт через Max найден' : 'Нет контакта для выбранного канала') :
+                                            'Для ручной отправки используйте карточку лида'}
+                        </div>
+                    </div>
+                ) : null}
+                auditLinks={selectedLead && buildLeadAuditLanguageLinks(selectedLead).length > 0 ? buildLeadAuditLanguageLinks(selectedLead).map((item) => (
+                    <a key={item.language} href={item.href} target="_blank" rel="noreferrer">
+                        <Button type="button" size="sm" variant="outline">Аудит {item.label}</Button>
+                    </a>
+                )) : null}
+                primaryAction={selectedDraft.status === 'approved'
+                    ? {
+                        label: 'Проверить и добавить в отправку',
+                        onClick: () => createSendBatch([selectedDraft.id]),
+                        disabled: Boolean(selectedDraftPending),
+                    }
+                    : {
+                        label: 'Утвердить черновик',
+                        onClick: () => approveDraft(selectedDraft.id),
+                        disabled: Boolean(selectedDraftPending) || !selectedDraftText.trim(),
+                    }}
+                secondaryActions={[
+                    {
+                        label: 'Сохранить черновик',
+                        onClick: () => saveDraftEdit(selectedDraft.id),
+                        disabled: Boolean(selectedDraftPending) || !selectedDraftText.trim(),
+                    },
+                    {
+                        label: 'Открыть карточку лида',
+                        onClick: () => selectedLead && openLeadPreview(selectedLead),
+                        disabled: !selectedLead,
+                    },
+                    {
+                        label: 'Отклонить',
+                        onClick: () => rejectDraft(selectedDraft.id),
+                        disabled: Boolean(selectedDraftPending),
+                        variant: 'outline',
+                    },
+                    {
+                        label: 'Отправлено вручную',
+                        onClick: () => markDraftAsSentManually(selectedDraft),
+                        disabled: Boolean(selectedDraftPending),
+                        variant: 'secondary',
+                    },
+                ]}
+                editorValue={selectedDraftText}
+                onEditorChange={(value) => setDraftEdits((prev) => ({ ...prev, [selectedDraft.id]: value }))}
+                reviewDescription="Здесь видно итоговый текст до отправки или переноса в очередь."
+                checklistItems={[
+                    {
+                        id: 'channel',
+                        label: 'Выбранный канал можно использовать',
+                        checked: !selectedDraftHasIssue,
+                        hint: selectedDraftHasIssue ? 'Сначала смените канал или уточните контакт.' : 'Контакт для выбранного канала найден.',
+                    },
+                    {
+                        id: 'text',
+                        label: 'Текст сообщения готов',
+                        checked: Boolean(selectedDraftText.trim()),
+                        hint: selectedDraftText.trim() ? 'Можно переходить к сохранению или отправке.' : 'Сообщение пока пустое.',
+                    },
+                    {
+                        id: 'audit',
+                        label: 'Контекст лида доступен',
+                        checked: Boolean(selectedLead),
+                        hint: selectedLead && hasLeadAudit(selectedLead) ? 'Аудит под рукой, если нужно быстро свериться.' : 'Можно работать и без аудита, но стоит проверить карточку.',
+                    },
+                ]}
+                historyRows={[
+                    { label: 'Статус', value: formatDraftStatusLabel(selectedDraft.status) },
+                    { label: 'Создан', value: selectedDraft.created_at ? formatDateTime(selectedDraft.created_at) : '—' },
+                    { label: 'Последнее изменение', value: selectedDraft.updated_at ? formatDateTime(selectedDraft.updated_at) : '—' },
+                ]}
+            />
+        ) : null;
 
         return (
             <div className="space-y-4">
@@ -3101,10 +3452,6 @@ export const ProspectingManagement: React.FC = () => {
                         <option value="rejected">Нужна проверка</option>
                     </select>
                     <Badge variant="outline">Показано {filteredDrafts.length} из {drafts.length}</Badge>
-                    <Button type="button" variant="outline" size="sm" onClick={() => setOutreachDetailOpen((prev) => !prev)}>
-                        {outreachDetailOpen ? <PanelRightClose className="mr-2 h-4 w-4" /> : <PanelRightOpen className="mr-2 h-4 w-4" />}
-                        {outreachDetailOpen ? 'Скрыть детали' : 'Показать детали'}
-                    </Button>
                 </div>
 
                 {selectedDraftMissingContacts > 0 ? (
@@ -3114,7 +3461,7 @@ export const ProspectingManagement: React.FC = () => {
                     />
                 ) : null}
 
-                <div className={`grid gap-4 ${outreachDetailOpen ? 'xl:grid-cols-[380px,minmax(0,1fr)]' : 'grid-cols-1'}`}>
+                <div className="grid gap-4">
                     <LeadList
                         title="Нужно действие"
                         description="Слева только короткий список: кому писать, через какой канал и где нужен ручной контроль."
@@ -3169,124 +3516,6 @@ export const ProspectingManagement: React.FC = () => {
                             )}
                         </div>
                     </LeadList>
-
-                    {outreachDetailOpen ? <DraftDetailPanel
-                        title={selectedLead?.name || selectedDraft?.lead_name}
-                        description={selectedLead?.address || 'Сначала проверьте канал, текст и безопасное следующее действие.'}
-                        statusLabel={selectedDraft ? formatDraftStatusLabel(selectedDraft.status) : undefined}
-                        statusTone={selectedDraft ? toneForDraftStatus(selectedDraft.status) : undefined}
-                        warning={selectedDraftHasIssue ? selectedItem?.warning || '' : ''}
-                        canOpenLeadCard={Boolean(selectedLead)}
-                        onOpenLeadCard={() => selectedLead && openLeadPreview(selectedLead)}
-                        onFixChannel={() => selectedLead?.id && chooseChannel(selectedLead.id, bestAvailableOutreachChannel(selectedLead))}
-                        leadContacts={selectedLead}
-                        hasMessenger={selectedLead ? extractHasMessengers(selectedLead) : false}
-                        selectedChannelLabel={formatLeadChannel(selectedChannel)}
-                        selectedChannelValue={selectedChannel === 'telegram' ? (selectedLead?.telegram_url || 'Нет контакта для выбранного канала') :
-                            selectedChannel === 'whatsapp' ? (selectedLead?.whatsapp_url || 'Нет контакта для выбранного канала') :
-                                selectedChannel === 'email' ? (selectedLead?.email || 'Нет контакта для выбранного канала') :
-                                    selectedChannel === 'max' ? (selectedLead && extractHasMax(selectedLead) ? 'Контакт через Max найден' : 'Нет контакта для выбранного канала') :
-                                        'Для ручной отправки используйте карточку лида'}
-                        selectedChannelTone={selectedDraftHasIssue ? 'warning' : 'success'}
-                        auditStatusLabel={selectedLead && hasLeadAudit(selectedLead) ? 'Доступен' : 'Пока нет'}
-                        auditPrimaryText={selectedLead && hasLeadAudit(selectedLead) ? 'Ссылки на аудит доступны ниже' : 'Аудит не должен мешать отправке, но помогает при проверке'}
-                        auditSecondaryText={selectedLead?.public_audit_updated_at ? `Обновлён ${formatAuditUpdatedAt(selectedLead.public_audit_updated_at)}` : 'Без даты обновления'}
-                        auditTone={selectedLead && hasLeadAudit(selectedLead) ? 'info' : 'default'}
-                        channelSelector={selectedLead ? (
-                            <div className="flex flex-wrap items-center gap-3">
-                                <select
-                                    className="border rounded-md px-3 py-2 bg-background text-sm"
-                                    value={selectedLead.selected_channel || 'manual'}
-                                    onChange={(e) => {
-                                        if (selectedLead.id) {
-                                            void chooseChannel(selectedLead.id, toOutreachChannel(String(e.target.value || 'manual')));
-                                        }
-                                    }}
-                                >
-                                    <option value="telegram">Telegram</option>
-                                    <option value="whatsapp">WhatsApp</option>
-                                    <option value="max">Max</option>
-                                    <option value="email">Email</option>
-                                    <option value="manual">Ручная отправка</option>
-                                </select>
-                                <div className="text-sm text-muted-foreground">
-                                    {selectedChannel === 'telegram' ? (selectedLead.telegram_url || 'Нет контакта для выбранного канала') :
-                                        selectedChannel === 'whatsapp' ? (selectedLead.whatsapp_url || 'Нет контакта для выбранного канала') :
-                                            selectedChannel === 'email' ? (selectedLead.email || 'Нет контакта для выбранного канала') :
-                                                selectedChannel === 'max' ? (extractHasMax(selectedLead) ? 'Контакт через Max найден' : 'Нет контакта для выбранного канала') :
-                                                    'Для ручной отправки используйте карточку лида'}
-                                </div>
-                            </div>
-                        ) : null}
-                        auditLinks={selectedLead && buildLeadAuditLanguageLinks(selectedLead).length > 0 ? buildLeadAuditLanguageLinks(selectedLead).map((item) => (
-                            <a key={item.language} href={item.href} target="_blank" rel="noreferrer">
-                                <Button type="button" size="sm" variant="outline">Аудит {item.label}</Button>
-                            </a>
-                        )) : null}
-                        primaryAction={selectedDraft ? (selectedDraft.status === 'approved'
-                            ? {
-                                label: 'Проверить и добавить в отправку',
-                                onClick: () => createSendBatch([selectedDraft.id]),
-                                disabled: Boolean(selectedDraftPending),
-                            }
-                            : {
-                                label: 'Утвердить черновик',
-                                onClick: () => approveDraft(selectedDraft.id),
-                                disabled: Boolean(selectedDraftPending) || !selectedDraftText.trim(),
-                            }) : undefined}
-                        secondaryActions={selectedDraft ? [
-                            {
-                                label: 'Сохранить черновик',
-                                onClick: () => saveDraftEdit(selectedDraft.id),
-                                disabled: Boolean(selectedDraftPending) || !selectedDraftText.trim(),
-                            },
-                            {
-                                label: 'Открыть карточку лида',
-                                onClick: () => selectedLead && openLeadPreview(selectedLead),
-                                disabled: !selectedLead,
-                            },
-                            {
-                                label: 'Отклонить',
-                                onClick: () => rejectDraft(selectedDraft.id),
-                                disabled: Boolean(selectedDraftPending),
-                                variant: 'outline',
-                            },
-                            {
-                                label: 'Отправлено вручную',
-                                onClick: () => markDraftAsSentManually(selectedDraft),
-                                disabled: Boolean(selectedDraftPending),
-                                variant: 'secondary',
-                            },
-                        ] : []}
-                        editorValue={selectedDraftText}
-                        onEditorChange={(value) => selectedDraft && setDraftEdits((prev) => ({ ...prev, [selectedDraft.id]: value }))}
-                        reviewDescription="Здесь видно итоговый текст до отправки или переноса в очередь."
-                        checklistItems={[
-                            {
-                                id: 'channel',
-                                label: 'Выбранный канал можно использовать',
-                                checked: !selectedDraftHasIssue,
-                                hint: selectedDraftHasIssue ? 'Сначала смените канал или уточните контакт.' : 'Контакт для выбранного канала найден.',
-                            },
-                            {
-                                id: 'text',
-                                label: 'Текст сообщения готов',
-                                checked: Boolean(selectedDraftText.trim()),
-                                hint: selectedDraftText.trim() ? 'Можно переходить к сохранению или отправке.' : 'Сообщение пока пустое.',
-                            },
-                            {
-                                id: 'audit',
-                                label: 'Контекст лида доступен',
-                                checked: Boolean(selectedLead),
-                                hint: selectedLead && hasLeadAudit(selectedLead) ? 'Аудит под рукой, если нужно быстро свериться.' : 'Можно работать и без аудита, но стоит проверить карточку.',
-                            },
-                        ]}
-                        historyRows={selectedDraft ? [
-                            { label: 'Статус', value: formatDraftStatusLabel(selectedDraft.status) },
-                            { label: 'Создан', value: selectedDraft.created_at ? formatDateTime(selectedDraft.created_at) : '—' },
-                            { label: 'Последнее изменение', value: selectedDraft.updated_at ? formatDateTime(selectedDraft.updated_at) : '—' },
-                        ] : []}
-                    /> : null}
                 </div>
 
                 <StickyBulkActionBar count={selectedDraftIds.length} label="Можно массово утвердить, отклонить или удалить выбранные черновики.">
@@ -3301,6 +3530,20 @@ export const ProspectingManagement: React.FC = () => {
                         Удалить
                     </Button>
                 </StickyBulkActionBar>
+
+                {outreachDetailOpen && detailPanel ? (
+                    <OutreachDetailModal
+                        title="Карточка лида"
+                        description="Проверьте канал, сообщение и следующее безопасное действие."
+                        onClose={() => setOutreachDetailOpen(false)}
+                        onPrevious={selectedDraftIndex > 0 ? () => setSelectedDraftDetailId(draftDetailRows[selectedDraftIndex - 1].draft.id) : undefined}
+                        onNext={selectedDraftIndex >= 0 && selectedDraftIndex < draftDetailRows.length - 1 ? () => setSelectedDraftDetailId(draftDetailRows[selectedDraftIndex + 1].draft.id) : undefined}
+                        previousDisabled={selectedDraftIndex <= 0}
+                        nextDisabled={selectedDraftIndex === -1 || selectedDraftIndex >= draftDetailRows.length - 1}
+                    >
+                        {detailPanel}
+                    </OutreachDetailModal>
+                ) : null}
             </div>
         );
     };
@@ -3308,6 +3551,7 @@ export const ProspectingManagement: React.FC = () => {
     const renderQueueWorkspace = () => {
         const selectedLead = selectedQueueLead;
         const selectedItem = selectedQueueItem;
+        const selectedQueueIndex = selectedItem ? visibleQueueItems.findIndex((item) => item.id === selectedItem.id) : -1;
         const selectedWarning = selectedLead ? selectedChannelWarning(selectedLead, selectedItem?.channel || selectedLead.selected_channel) : '';
         const selectedMessage = selectedItem?.approved_text || selectedItem?.generated_text || '';
         const selectedRecipient = selectedItem?.recipient_value
@@ -3348,10 +3592,6 @@ export const ProspectingManagement: React.FC = () => {
                     </select>
                     <Badge variant="outline">Показано {visibleQueueItems.length}</Badge>
                     <Badge variant={selectedProblemCount > 0 ? 'destructive' : 'outline'}>Нужна проверка: {selectedProblemCount}</Badge>
-                    <Button type="button" variant="outline" size="sm" onClick={() => setOutreachDetailOpen((prev) => !prev)}>
-                        {outreachDetailOpen ? <PanelRightClose className="mr-2 h-4 w-4" /> : <PanelRightOpen className="mr-2 h-4 w-4" />}
-                        {outreachDetailOpen ? 'Скрыть детали' : 'Показать детали'}
-                    </Button>
                 </div>
 
                 {selectedProblemCount > 0 ? (
@@ -3361,7 +3601,7 @@ export const ProspectingManagement: React.FC = () => {
                     />
                 ) : null}
 
-                <div className={`grid gap-4 ${outreachDetailOpen ? 'xl:grid-cols-[380px,minmax(0,1fr)]' : 'grid-cols-1'}`}>
+                <div className="grid gap-4">
                     <LeadList
                         title="Готово к отправке и требует контроля"
                         description="Сначала видно, кому можно писать сейчас, а где сначала нужно исправить канал или статус."
@@ -3421,114 +3661,6 @@ export const ProspectingManagement: React.FC = () => {
                         </div>
                     </LeadList>
 
-                    {outreachDetailOpen ? <QueueDetailPanel
-                        title={selectedItem?.lead_name || selectedLead?.name}
-                        description={selectedLead?.address || 'Здесь видно канал, контакт, текст и безопасное следующее действие.'}
-                        statusLabel={selectedItem ? formatQueueStatusLabel(selectedItem.delivery_status) : undefined}
-                        statusTone={selectedItem ? toneForQueueStatus(selectedItem.delivery_status) : undefined}
-                        warning={selectedWarning}
-                        canOpenLeadCard={Boolean(selectedLead)}
-                        onOpenLeadCard={() => selectedLead && selectedItem && openLeadPreviewById(selectedItem.lead_id, selectedLead)}
-                        onFixChannel={selectedLead?.id ? () => chooseChannel(selectedLead.id || '', bestAvailableOutreachChannel(selectedLead)) : undefined}
-                        leadContacts={selectedLead}
-                        hasMessenger={selectedLead ? extractHasMessengers(selectedLead) : false}
-                        channelStatusLabel={formatLeadChannel(selectedItem?.channel || selectedLead?.selected_channel)}
-                        channelPrimaryText={selectedRecipient ? 'Контакт найден, можно продолжать' : 'Нет контакта для выбранного канала'}
-                        channelSecondaryText={selectedRecipient || 'Откройте карточку лида или смените канал'}
-                        channelTone={selectedRecipient ? 'success' : 'warning'}
-                        queueStatusLabel={selectedItem?.latest_human_outcome || selectedItem?.latest_outcome || 'Без ответа'}
-                        queuePrimaryText={selectedItem?.delivery_status ? `Статус доставки: ${formatQueueStatusLabel(selectedItem.delivery_status)}` : 'Статус ещё не задан'}
-                        queueSecondaryText={selectedItem?.updated_at ? `Последнее изменение ${formatDateTime(selectedItem.updated_at)}` : 'Без даты'}
-                        queueTone={selectedItem?.latest_human_outcome || selectedItem?.latest_outcome ? 'info' : 'default'}
-                        topErrorSummary={selectedItem?.error_text ? (
-                            <ErrorSummary
-                                title="Отправка не завершилась корректно"
-                                description={selectedItem.error_text}
-                                actions={selectedLead?.id ? <Button size="sm" variant="outline" onClick={() => openLeadPreviewById(selectedItem.lead_id, selectedLead)}>Открыть карточку лида</Button> : null}
-                            />
-                        ) : null}
-                        contextLinks={selectedLead ? (
-                            <>
-                                {buildLeadAuditLanguageLinks(selectedLead).map((item) => (
-                                    <a key={item.language} href={item.href} target="_blank" rel="noreferrer">
-                                        <Button type="button" size="sm" variant="outline">Аудит {item.label}</Button>
-                                    </a>
-                                ))}
-                                <Button type="button" size="sm" variant="outline" onClick={() => selectedItem && openLeadPreviewById(selectedItem.lead_id, selectedLead)}>Карточка лида</Button>
-                            </>
-                        ) : null}
-                        primaryAction={selectedItem ? (selectedWarning
-                            ? {
-                                label: 'Исправить канал',
-                                onClick: () => selectedLead?.id && chooseChannel(selectedLead.id, bestAvailableOutreachChannel(selectedLead)),
-                                disabled: !selectedLead?.id || Boolean(sendQueueBusy[selectedItem.id]),
-                            }
-                            : ['queued', 'retry', 'sending'].includes(String(selectedItem.delivery_status || '').toLowerCase())
-                                ? {
-                                    label: 'Проверить и отметить отправку',
-                                    onClick: () => markDelivery(selectedItem.id, 'sent'),
-                                    disabled: Boolean(sendQueueBusy[selectedItem.id]),
-                                }
-                                : {
-                                    label: 'Зафиксировать ответ',
-                                    onClick: () => recordReaction(selectedItem.id),
-                                    disabled: Boolean(sendQueueBusy[selectedItem.id]),
-                                }) : undefined}
-                        secondaryActions={selectedItem ? [
-                            {
-                                label: 'Открыть карточку лида',
-                                onClick: () => selectedLead && openLeadPreviewById(selectedItem.lead_id, selectedLead),
-                                disabled: !selectedLead,
-                            },
-                            {
-                                label: 'Пропустить этот лид',
-                                variant: 'outline',
-                                onClick: () => selectedLead?.id && updateLeadStatusOptimistic(selectedLead.id, pipelineBoardColumnMeta.closed.statusToSet),
-                                disabled: !selectedLead?.id,
-                            },
-                        ] : []}
-                        message={selectedMessage}
-                        reviewDescription="Сначала проверьте текст и канал, потом отмечайте отправку или фиксируйте ответ."
-                        checklistItems={[
-                            {
-                                id: 'channel',
-                                label: 'Канал подтверждён контактом',
-                                checked: !selectedWarning,
-                                hint: selectedWarning || 'Контакт для выбранного канала найден.',
-                            },
-                            {
-                                id: 'message',
-                                label: 'Текст сообщения готов',
-                                checked: Boolean(selectedMessage.trim()),
-                                hint: selectedMessage.trim() ? 'Текст можно использовать без дополнительного поиска по странице.' : 'В очереди нет текста сообщения.',
-                            },
-                            {
-                                id: 'status',
-                                label: 'Статус отправки понятен',
-                                checked: Boolean(selectedItem?.delivery_status),
-                                hint: selectedItem?.delivery_status ? `Сейчас: ${formatQueueStatusLabel(selectedItem.delivery_status)}` : 'Статус ещё не выбран.',
-                            },
-                        ]}
-                        reviewActions={selectedItem ? (
-                            <>
-                                <Button size="sm" variant={selectedItem.delivery_status === 'delivered' ? 'default' : 'outline'} onClick={() => markDelivery(selectedItem.id, 'delivered')} disabled={Boolean(sendQueueBusy[selectedItem.id])}>
-                                    Отметить как доставлено
-                                </Button>
-                                <Button size="sm" variant="outline" onClick={() => markDelivery(selectedItem.id, 'failed')} disabled={Boolean(sendQueueBusy[selectedItem.id])}>
-                                    Ошибка отправки
-                                </Button>
-                            </>
-                        ) : null}
-                        noteValue={selectedItem ? (replyDrafts[selectedItem.id] ?? '') : ''}
-                        onNoteChange={(value) => selectedItem && setReplyDrafts((prev) => ({ ...prev, [selectedItem.id]: value }))}
-                        noteHint="Если ответ уже есть, вставьте его сюда и выберите безопасную классификацию."
-                        historyRows={selectedItem ? [
-                            { label: 'Batch', value: selectedQueueBatch?.batch_date || selectedItem.batch_id },
-                            { label: 'Provider', value: formatQueueProvider(selectedItem.provider_name) },
-                            { label: 'Recipient', value: selectedItem.recipient_value || '—' },
-                            { label: 'Последний outcome', value: selectedItem.latest_human_outcome || selectedItem.latest_outcome || '—' },
-                        ] : []}
-                    /> : null}
                 </div>
 
                 <StickyBulkActionBar count={selectedQueueItemIds.length} label="Выбранные лиды можно быстро отметить, удалить из очереди или вернуть на ручную проверку.">
@@ -3537,6 +3669,112 @@ export const ProspectingManagement: React.FC = () => {
                     <Button size="sm" variant="outline" onClick={() => bulkMarkDelivery('failed')} disabled={selectedQueueItemIds.length === 0 || sendQueueBusy.bulkDelivery === 'failed'}>Нужна проверка</Button>
                     <Button size="sm" variant="destructive" onClick={bulkDeleteQueueItems} disabled={selectedQueueItemIds.length === 0 || sendQueueBusy.bulkDeleteQueue === 'delete'}>Удалить из очереди</Button>
                 </StickyBulkActionBar>
+
+                {outreachDetailOpen && selectedItem ? (
+                    <OutreachDetailModal
+                        title="Карточка лида"
+                        description="Проверьте текст, канал, статус доставки и следующее действие."
+                        onClose={() => setOutreachDetailOpen(false)}
+                        onPrevious={selectedQueueIndex > 0 ? () => setSelectedQueueItemId(visibleQueueItems[selectedQueueIndex - 1].id) : undefined}
+                        onNext={selectedQueueIndex >= 0 && selectedQueueIndex < visibleQueueItems.length - 1 ? () => setSelectedQueueItemId(visibleQueueItems[selectedQueueIndex + 1].id) : undefined}
+                        previousDisabled={selectedQueueIndex <= 0}
+                        nextDisabled={selectedQueueIndex === -1 || selectedQueueIndex >= visibleQueueItems.length - 1}
+                    >
+                        <QueueDetailPanel
+                            title={selectedItem.lead_name || selectedLead?.name}
+                            description={selectedLead?.address || 'Здесь видно канал, контакт, текст и безопасное следующее действие.'}
+                            statusLabel={formatQueueStatusLabel(selectedItem.delivery_status)}
+                            statusTone={toneForQueueStatus(selectedItem.delivery_status)}
+                            warning={selectedWarning}
+                            canOpenLeadCard={Boolean(selectedLead)}
+                            onOpenLeadCard={() => selectedLead && openLeadPreviewById(selectedItem.lead_id, selectedLead)}
+                            onFixChannel={selectedLead?.id ? () => chooseChannel(selectedLead.id || '', bestAvailableOutreachChannel(selectedLead)) : undefined}
+                            leadContacts={selectedLead}
+                            hasMessenger={selectedLead ? extractHasMessengers(selectedLead) : false}
+                            channelStatusLabel={formatLeadChannel(selectedItem.channel || selectedLead?.selected_channel)}
+                            channelPrimaryText={selectedRecipient ? 'Контакт найден, можно продолжать' : 'Нет контакта для выбранного канала'}
+                            channelSecondaryText={selectedRecipient || 'Откройте карточку лида или смените канал'}
+                            channelTone={selectedRecipient ? 'success' : 'warning'}
+                            queueStatusLabel={selectedItem.latest_human_outcome || selectedItem.latest_outcome || 'Без ответа'}
+                            queuePrimaryText={selectedItem.delivery_status ? `Статус доставки: ${formatQueueStatusLabel(selectedItem.delivery_status)}` : 'Статус ещё не задан'}
+                            queueSecondaryText={selectedItem.updated_at ? `Последнее изменение ${formatDateTime(selectedItem.updated_at)}` : 'Без даты'}
+                            queueTone={selectedItem.latest_human_outcome || selectedItem.latest_outcome ? 'info' : 'default'}
+                            topErrorSummary={selectedItem.error_text ? (
+                                <ErrorSummary
+                                    title="Отправка не завершилась корректно"
+                                    description={selectedItem.error_text}
+                                    actions={selectedLead?.id ? <Button size="sm" variant="outline" onClick={() => openLeadPreviewById(selectedItem.lead_id, selectedLead)}>Открыть карточку лида</Button> : null}
+                                />
+                            ) : null}
+                            contextLinks={selectedLead ? (
+                                <>
+                                    {buildLeadAuditLanguageLinks(selectedLead).map((item) => (
+                                        <a key={item.language} href={item.href} target="_blank" rel="noreferrer">
+                                            <Button type="button" size="sm" variant="outline">Аудит {item.label}</Button>
+                                        </a>
+                                    ))}
+                                    <Button type="button" size="sm" variant="outline" onClick={() => openLeadPreviewById(selectedItem.lead_id, selectedLead)}>Карточка лида</Button>
+                                </>
+                            ) : null}
+                            primaryAction={selectedWarning
+                                ? {
+                                    label: 'Исправить канал',
+                                    onClick: () => selectedLead?.id && chooseChannel(selectedLead.id, bestAvailableOutreachChannel(selectedLead)),
+                                    disabled: !selectedLead?.id || Boolean(sendQueueBusy[selectedItem.id]),
+                                }
+                                : ['queued', 'retry', 'sending'].includes(String(selectedItem.delivery_status || '').toLowerCase())
+                                    ? {
+                                        label: 'Проверить и отметить отправку',
+                                        onClick: () => markDelivery(selectedItem.id, 'sent'),
+                                        disabled: Boolean(sendQueueBusy[selectedItem.id]),
+                                    }
+                                    : {
+                                        label: 'Зафиксировать ответ',
+                                        onClick: () => recordReaction(selectedItem.id),
+                                        disabled: Boolean(sendQueueBusy[selectedItem.id]),
+                                    }}
+                            secondaryActions={[
+                                {
+                                    label: 'Открыть карточку лида',
+                                    onClick: () => selectedLead && openLeadPreviewById(selectedItem.lead_id, selectedLead),
+                                    disabled: !selectedLead,
+                                },
+                                {
+                                    label: 'Пропустить этот лид',
+                                    variant: 'outline',
+                                    onClick: () => selectedLead?.id && updateLeadStatusOptimistic(selectedLead.id, pipelineBoardColumnMeta.inactive.statusToSet),
+                                    disabled: !selectedLead?.id,
+                                },
+                            ]}
+                            message={selectedMessage}
+                            reviewDescription="Сначала проверьте текст и канал, потом отмечайте отправку или фиксируйте ответ."
+                            checklistItems={[
+                                { id: 'channel', label: 'Канал подтверждён контактом', checked: !selectedWarning, hint: selectedWarning || 'Контакт для выбранного канала найден.' },
+                                { id: 'message', label: 'Текст сообщения готов', checked: Boolean(selectedMessage.trim()), hint: selectedMessage.trim() ? 'Текст можно использовать без дополнительного поиска по странице.' : 'В очереди нет текста сообщения.' },
+                                { id: 'status', label: 'Статус отправки понятен', checked: Boolean(selectedItem.delivery_status), hint: selectedItem.delivery_status ? `Сейчас: ${formatQueueStatusLabel(selectedItem.delivery_status)}` : 'Статус ещё не выбран.' },
+                            ]}
+                            reviewActions={
+                                <>
+                                    <Button size="sm" variant={selectedItem.delivery_status === 'delivered' ? 'default' : 'outline'} onClick={() => markDelivery(selectedItem.id, 'delivered')} disabled={Boolean(sendQueueBusy[selectedItem.id])}>
+                                        Отметить как доставлено
+                                    </Button>
+                                    <Button size="sm" variant="outline" onClick={() => markDelivery(selectedItem.id, 'failed')} disabled={Boolean(sendQueueBusy[selectedItem.id])}>
+                                        Ошибка отправки
+                                    </Button>
+                                </>
+                            }
+                            noteValue={replyDrafts[selectedItem.id] ?? ''}
+                            onNoteChange={(value) => setReplyDrafts((prev) => ({ ...prev, [selectedItem.id]: value }))}
+                            noteHint="Если ответ уже есть, вставьте его сюда и выберите безопасную классификацию."
+                            historyRows={[
+                                { label: 'Batch', value: selectedQueueBatch?.batch_date || selectedItem.batch_id },
+                                { label: 'Provider', value: formatQueueProvider(selectedItem.provider_name) },
+                                { label: 'Recipient', value: selectedItem.recipient_value || '—' },
+                                { label: 'Последний outcome', value: selectedItem.latest_human_outcome || selectedItem.latest_outcome || '—' },
+                            ]}
+                        />
+                    </OutreachDetailModal>
+                ) : null}
             </div>
         );
     };
@@ -3544,9 +3782,12 @@ export const ProspectingManagement: React.FC = () => {
     const renderSentWorkspace = () => {
         const selectedLead = selectedSentDetail?.lead || null;
         const selectedQueue = selectedSentDetail?.queueItem || null;
+        const selectedSentIndex = selectedLead?.id ? filteredSentDetailRows.findIndex((item) => item.lead.id === selectedLead.id) : -1;
         const selectedFollowUp = selectedLead?.id ? (followUpDrafts[selectedLead.id] ?? '') : '';
         const sentProblemCount = sentDetailRows.filter((item) => item.state === 'problem').length;
         const followUpReadyCount = sentDetailRows.filter((item) => item.state === 'ready').length;
+        const sentHistoryCount = sentDetailRows.filter((item) => item.state === 'history').length;
+        const canPrepareAlternativeResend = Boolean(selectedLead && bestAlternativeOutreachChannel(selectedLead, selectedQueue?.channel || selectedLead.selected_channel));
 
         return (
             <div className="space-y-4">
@@ -3560,12 +3801,30 @@ export const ProspectingManagement: React.FC = () => {
                         <option value="email">Только с Email</option>
                         <option value="vk">Только с VK</option>
                     </select>
-                    <Badge variant="outline">Показано {sentDetailRows.length}</Badge>
-                    <Badge variant="secondary">Готовы к follow-up: {followUpReadyCount}</Badge>
-                    <Badge variant={sentProblemCount > 0 ? 'destructive' : 'outline'}>Нужна проверка: {sentProblemCount}</Badge>
-                    <Button type="button" variant="outline" size="sm" onClick={() => setOutreachDetailOpen((prev) => !prev)}>
-                        {outreachDetailOpen ? <PanelRightClose className="mr-2 h-4 w-4" /> : <PanelRightOpen className="mr-2 h-4 w-4" />}
-                        {outreachDetailOpen ? 'Скрыть детали' : 'Показать детали'}
+                    <Badge variant="outline">Показано {filteredSentDetailRows.length}</Badge>
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant={sentStateFilter === 'ready' ? 'default' : 'outline'}
+                        onClick={() => setSentStateFilter((prev) => (prev === 'ready' ? '' : 'ready'))}
+                    >
+                        Готовы к follow-up: {followUpReadyCount}
+                    </Button>
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant={sentStateFilter === 'problem' ? 'destructive' : 'outline'}
+                        onClick={() => setSentStateFilter((prev) => (prev === 'problem' ? '' : 'problem'))}
+                    >
+                        Нужна проверка: {sentProblemCount}
+                    </Button>
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant={sentStateFilter === 'history' ? 'secondary' : 'outline'}
+                        onClick={() => setSentStateFilter((prev) => (prev === 'history' ? '' : 'history'))}
+                    >
+                        История: {sentHistoryCount}
                     </Button>
                 </div>
 
@@ -3576,19 +3835,21 @@ export const ProspectingManagement: React.FC = () => {
                     />
                 ) : null}
 
-                <div className={`grid gap-4 ${outreachDetailOpen ? 'xl:grid-cols-[380px,minmax(0,1fr)]' : 'grid-cols-1'}`}>
+                <div className="grid gap-4">
                     <LeadList
                         title="История отправки"
                         description="Здесь в одном списке: отправлено, ждём ответ, уже ответили и лиды, которым сначала нужна проверка."
-                        count={sentDetailRows.length}
+                        count={filteredSentDetailRows.length}
                     >
                         <div className="space-y-3">
-                            {sentDetailRows.length === 0 ? (
+                            {filteredSentDetailRows.length === 0 ? (
                                 <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-                                    Отправленных лидов пока нет.
+                                    {sentStateFilter
+                                        ? 'По этому фильтру отправленных лидов пока нет.'
+                                        : 'Отправленных лидов пока нет.'}
                                 </div>
                             ) : (
-                                sentDetailRows.map(({ lead, queueItem, state, warning }) => (
+                                filteredSentDetailRows.map(({ lead, queueItem, state, warning }) => (
                                     <LeadListItem
                                         key={`sent-${lead.id}`}
                                         title={lead.name}
@@ -3621,90 +3882,109 @@ export const ProspectingManagement: React.FC = () => {
                         </div>
                     </LeadList>
 
-                    {outreachDetailOpen ? <SentDetailPanel
-                        title={selectedLead?.name}
-                        description={selectedLead?.address || 'Здесь собраны история, follow-up и безопасное следующее действие.'}
-                        statusLabel={selectedSentDetail ? (selectedSentDetail.state === 'problem' ? 'Нужна проверка' : selectedSentDetail.state === 'ready' ? 'Готово к follow-up' : 'История') : undefined}
-                        statusTone={selectedSentDetail ? (selectedSentDetail.state === 'problem' ? 'danger' : selectedSentDetail.state === 'ready' ? 'info' : 'success') : undefined}
-                        warning={selectedSentDetail?.warning || ''}
-                        canOpenLeadCard={Boolean(selectedLead)}
-                        onOpenLeadCard={() => selectedLead && openLeadPreview(selectedLead)}
-                        onFixChannel={selectedLead?.id ? () => chooseChannel(selectedLead.id || '', bestAvailableOutreachChannel(selectedLead)) : undefined}
-                        leadContacts={selectedLead}
-                        hasMessenger={selectedLead ? extractHasMessengers(selectedLead) : false}
-                        channelStatusLabel={formatLeadChannel(selectedQueue?.channel || selectedLead?.selected_channel)}
-                        channelPrimaryText={selectedQueue?.recipient_value || 'Контакт нужно уточнить в карточке лида'}
-                        channelSecondaryText={selectedQueue?.delivery_status ? `Статус: ${formatQueueStatusLabel(selectedQueue.delivery_status)}` : 'Без статуса отправки'}
-                        channelTone={selectedSentDetail?.state === 'problem' ? 'warning' : 'success'}
-                        responseStatusLabel={selectedQueue?.latest_human_outcome || selectedQueue?.latest_outcome || 'Без ответа'}
-                        responsePrimaryText={selectedQueue?.latest_raw_reply ? 'Ответ уже зафиксирован' : 'Ответ ещё не зафиксирован'}
-                        responseSecondaryText={selectedQueue?.latest_raw_reply || 'Можно подготовить follow-up в одном месте'}
-                        responseTone={selectedQueue?.latest_raw_reply ? 'info' : 'default'}
-                        contextLinks={selectedLead ? (
-                            <>
-                                {buildLeadAuditLanguageLinks(selectedLead).map((item) => (
-                                    <a key={item.language} href={item.href} target="_blank" rel="noreferrer">
-                                        <Button type="button" size="sm" variant="outline">Аудит {item.label}</Button>
-                                    </a>
-                                ))}
-                                <Button type="button" size="sm" variant="outline" onClick={() => openLeadPreview(selectedLead)}>Карточка лида</Button>
-                            </>
-                        ) : null}
-                        primaryAction={selectedLead ? (selectedSentDetail?.state === 'problem'
-                            ? {
-                                label: 'Исправить контактный канал',
-                                onClick: () => selectedLead.id && chooseChannel(selectedLead.id, bestAvailableOutreachChannel(selectedLead)),
-                                disabled: !selectedLead.id,
-                            }
-                            : {
-                                label: 'Сохранить follow-up',
-                                onClick: () => toast.success('Follow-up сохранён локально в интерфейсе'),
-                                disabled: !selectedLead.id,
-                            }) : undefined}
-                        secondaryActions={selectedLead ? [
-                            {
-                                label: 'Открыть карточку лида',
-                                onClick: () => openLeadPreview(selectedLead),
-                            },
-                            {
-                                label: 'Пропустить этот лид',
-                                variant: 'outline',
-                                onClick: () => selectedLead.id && updateLeadStatusOptimistic(selectedLead.id, pipelineBoardColumnMeta.closed.statusToSet),
-                                disabled: !selectedLead.id,
-                            },
-                        ] : []}
-                        editorValue={selectedFollowUp}
-                        onEditorChange={(value) => selectedLead && setFollowUpDrafts((prev) => ({ ...prev, [selectedLead.id || '']: value }))}
-                        reviewDescription="Перед ручной отправкой посмотрите итоговый текст и убедитесь, что выбран правильный канал."
-                        checklistItems={[
-                            {
-                                id: 'channel',
-                                label: 'Выбранный канал ещё доступен',
-                                checked: !selectedSentDetail?.warning,
-                                hint: selectedSentDetail?.warning || 'Контакт для follow-up на месте.',
-                            },
-                            {
-                                id: 'followup',
-                                label: 'Follow-up подготовлен',
-                                checked: Boolean(selectedFollowUp.trim()),
-                                hint: selectedFollowUp.trim() ? 'Текст готов к ручной отправке.' : 'Добавьте follow-up, чтобы не возвращаться к этому лиду позже.',
-                            },
-                            {
-                                id: 'history',
-                                label: 'История отправки понятна',
-                                checked: Boolean(selectedQueue),
-                                hint: selectedQueue?.delivery_status ? `Последний статус: ${formatQueueStatusLabel(selectedQueue.delivery_status)}` : 'Нет зафиксированной отправки.',
-                            },
-                        ]}
-                        historyRows={selectedQueue ? [
-                            { label: 'Отправлено', value: selectedQueue.sent_at ? formatDateTime(selectedQueue.sent_at) : '—' },
-                            { label: 'Последнее изменение', value: selectedQueue.updated_at ? formatDateTime(selectedQueue.updated_at) : '—' },
-                            { label: 'Delivery', value: formatQueueStatusLabel(selectedQueue.delivery_status) },
-                            { label: 'Outcome', value: selectedQueue.latest_human_outcome || selectedQueue.latest_outcome || '—' },
-                        ] : []}
-                        rawReply={selectedQueue?.latest_raw_reply || undefined}
-                    /> : null}
                 </div>
+
+                {outreachDetailOpen && selectedSentDetail ? (
+                    <OutreachDetailModal
+                        title="Карточка лида"
+                        description="Проверьте историю, канал и follow-up перед следующим шагом."
+                        onClose={() => setOutreachDetailOpen(false)}
+                        onPrevious={selectedSentIndex > 0 ? () => setSelectedSentLeadId(filteredSentDetailRows[selectedSentIndex - 1].lead.id || null) : undefined}
+                        onNext={selectedSentIndex >= 0 && selectedSentIndex < filteredSentDetailRows.length - 1 ? () => setSelectedSentLeadId(filteredSentDetailRows[selectedSentIndex + 1].lead.id || null) : undefined}
+                        previousDisabled={selectedSentIndex <= 0}
+                        nextDisabled={selectedSentIndex === -1 || selectedSentIndex >= filteredSentDetailRows.length - 1}
+                    >
+                        <SentDetailPanel
+                            title={selectedLead?.name}
+                            description={selectedLead?.address || 'Здесь собраны история, follow-up и безопасное следующее действие.'}
+                            statusLabel={selectedSentDetail.state === 'problem' ? 'Нужна проверка' : selectedSentDetail.state === 'ready' ? 'Готово к follow-up' : 'История'}
+                            statusTone={selectedSentDetail.state === 'problem' ? 'danger' : selectedSentDetail.state === 'ready' ? 'info' : 'success'}
+                            warning={selectedSentDetail.warning || ''}
+                            canOpenLeadCard={Boolean(selectedLead)}
+                            onOpenLeadCard={() => selectedLead && openLeadPreview(selectedLead)}
+                            onFixChannel={selectedLead?.id ? () => chooseChannel(selectedLead.id || '', bestAvailableOutreachChannel(selectedLead)) : undefined}
+                            leadContacts={selectedLead}
+                            hasMessenger={selectedLead ? extractHasMessengers(selectedLead) : false}
+                            channelStatusLabel={formatLeadChannel(selectedQueue?.channel || selectedLead?.selected_channel)}
+                            channelPrimaryText={selectedQueue?.recipient_value || 'Контакт нужно уточнить в карточке лида'}
+                            channelSecondaryText={selectedQueue?.delivery_status ? `Статус: ${formatQueueStatusLabel(selectedQueue.delivery_status)}` : 'Без статуса отправки'}
+                            channelTone={selectedSentDetail.state === 'problem' ? 'warning' : 'success'}
+                            responseStatusLabel={selectedQueue?.latest_human_outcome || selectedQueue?.latest_outcome || 'Без ответа'}
+                            responsePrimaryText={selectedQueue?.latest_raw_reply ? 'Ответ уже зафиксирован' : 'Ответ ещё не зафиксирован'}
+                            responseSecondaryText={selectedQueue?.latest_raw_reply || 'Можно подготовить follow-up в одном месте'}
+                            responseTone={selectedQueue?.latest_raw_reply ? 'info' : 'default'}
+                            contextLinks={selectedLead ? (
+                                <>
+                                    {buildLeadAuditLanguageLinks(selectedLead).map((item) => (
+                                        <a key={item.language} href={item.href} target="_blank" rel="noreferrer">
+                                            <Button type="button" size="sm" variant="outline">Аудит {item.label}</Button>
+                                        </a>
+                                    ))}
+                                    <Button type="button" size="sm" variant="outline" onClick={() => openLeadPreview(selectedLead)}>Карточка лида</Button>
+                                </>
+                            ) : null}
+                            primaryAction={selectedLead ? (selectedSentDetail.state === 'problem'
+                                ? {
+                                    label: 'Подготовить переотправку',
+                                    onClick: () => prepareProblemLeadResend(selectedLead, selectedQueue?.channel || selectedLead.selected_channel),
+                                    disabled: !selectedLead.id || !canPrepareAlternativeResend,
+                                }
+                                : {
+                                    label: 'Сохранить follow-up',
+                                    onClick: () => toast.success('Follow-up сохранён локально в интерфейсе'),
+                                    disabled: !selectedLead.id,
+                                }) : undefined}
+                            secondaryActions={selectedLead ? [
+                                {
+                                    label: 'Отметить как отправленное вручную',
+                                    onClick: () => selectedQueue?.id && markDelivery(selectedQueue.id, 'sent'),
+                                    disabled: !selectedQueue?.id,
+                                    variant: 'secondary',
+                                },
+                                {
+                                    label: 'Открыть карточку лида',
+                                    onClick: () => openLeadPreview(selectedLead),
+                                },
+                                {
+                                    label: 'Пропустить этот лид',
+                                    variant: 'outline',
+                                    onClick: () => selectedLead.id && updateLeadStatusOptimistic(selectedLead.id, pipelineBoardColumnMeta.inactive.statusToSet),
+                                    disabled: !selectedLead.id,
+                                },
+                            ] : []}
+                            editorValue={selectedFollowUp}
+                            onEditorChange={(value) => selectedLead && setFollowUpDrafts((prev) => ({ ...prev, [selectedLead.id || '']: value }))}
+                            reviewDescription="Перед ручной отправкой посмотрите итоговый текст и убедитесь, что выбран правильный канал."
+                            checklistItems={[
+                                {
+                                    id: 'channel',
+                                    label: 'Выбранный канал ещё доступен',
+                                    checked: !selectedSentDetail.warning,
+                                    hint: selectedSentDetail.warning || 'Контакт для follow-up на месте.',
+                                },
+                                {
+                                    id: 'followup',
+                                    label: 'Follow-up подготовлен',
+                                    checked: Boolean(selectedFollowUp.trim()),
+                                    hint: selectedFollowUp.trim() ? 'Текст готов к ручной отправке.' : 'Добавьте follow-up, чтобы не возвращаться к этому лиду позже.',
+                                },
+                                {
+                                    id: 'history',
+                                    label: 'История отправки понятна',
+                                    checked: Boolean(selectedQueue),
+                                    hint: selectedQueue?.delivery_status ? `Последний статус: ${formatQueueStatusLabel(selectedQueue.delivery_status)}` : 'Нет зафиксированной отправки.',
+                                },
+                            ]}
+                            historyRows={selectedQueue ? [
+                                { label: 'Отправлено', value: selectedQueue.sent_at ? formatDateTime(selectedQueue.sent_at) : '—' },
+                                { label: 'Последнее изменение', value: selectedQueue.updated_at ? formatDateTime(selectedQueue.updated_at) : '—' },
+                                { label: 'Delivery', value: formatQueueStatusLabel(selectedQueue.delivery_status) },
+                                { label: 'Outcome', value: selectedQueue.latest_human_outcome || selectedQueue.latest_outcome || '—' },
+                            ] : []}
+                            rawReply={selectedQueue?.latest_raw_reply || undefined}
+                        />
+                    </OutreachDetailModal>
+                ) : null}
             </div>
         );
     };
@@ -4097,13 +4377,13 @@ export const ProspectingManagement: React.FC = () => {
                 workspaces={[
                     { value: 'raw', label: 'Собранные', count: unresolvedSearchResults.length },
                     { value: 'pipeline', label: 'Pipeline', count: sourceFilteredLeads.length },
-                    { value: 'outreach', label: 'Outreach', count: drafts.length + sendBatches.length + sentLeads.length },
+                    { value: 'outreach', label: 'Outreach', count: drafts.length + visibleQueueItems.length + sentDetailRows.length },
                     { value: 'analytics', label: 'Аналитика' },
                 ]}
                 outreachTabs={[
                     { value: 'drafts', label: 'Черновики', count: drafts.length },
-                    { value: 'queue', label: 'Отправка', count: sendBatches.length },
-                    { value: 'sent', label: 'Отправлено', count: sentLeads.length },
+                    { value: 'queue', label: 'В очереди', count: visibleQueueItems.length },
+                    { value: 'sent', label: 'Отправлено', count: sentDetailRows.length },
                 ]}
                 activeOutreachTab={outreachTab}
                 onOutreachTabChange={(value) => setOutreachTab(toOutreachTab(value))}
@@ -4222,11 +4502,12 @@ export const ProspectingManagement: React.FC = () => {
                             <AnalyticsSummaryGrid
                                 items={[
                                     { key: 'found', label: 'Найдено', value: pipelineEfficiencySummary.foundCount, helper: 'Последний поиск / импорт' },
-                                    { key: 'pipeline', label: 'В воронке', value: pipelineEfficiencySummary.pipelineCount, helper: `Сохранение: ${pipelineEfficiencySummary.saveRate}` },
-                                    { key: 'shortlist', label: 'Отобрано', value: kanbanTotals.shortlist, helper: `Из воронки: ${pipelineEfficiencySummary.shortlistRate}` },
-                                    { key: 'contacted', label: 'Контактировано', value: kanbanTotals.contacted, helper: `Из отбора: ${pipelineEfficiencySummary.contactRate}` },
-                                    { key: 'positive', label: 'Позитивный ответ', value: positiveReactionCount, helper: `От контакта: ${pipelineEfficiencySummary.replyRate}` },
-                                    { key: 'closed', label: 'Закрыто', value: kanbanTotals.closed, helper: 'Сняты с процесса или отложены' },
+                                    { key: 'pipeline', label: 'В pipeline', value: pipelineEfficiencySummary.pipelineCount, helper: `Сохранение: ${pipelineEfficiencySummary.saveRate}` },
+                                    { key: 'ready', label: 'Готово к контакту', value: readyToContactLeadCount, helper: `Из pipeline: ${pipelineEfficiencySummary.readyRate}` },
+                                    { key: 'waiting', label: 'Ждём ответ', value: waitingReplyLeadCount, helper: 'Сообщение ушло, но ответа ещё нет' },
+                                    { key: 'dialog', label: 'Диалог', value: dialogLeadCount, helper: `От ответа: ${pipelineEfficiencySummary.replyRate}` },
+                                    { key: 'qualified', label: 'Квалифицировано', value: qualifiedLeadCount, helper: `Из диалога: ${pipelineEfficiencySummary.qualifiedRate}` },
+                                    { key: 'inactive', label: 'Неактуально', value: inactiveLeadCount, helper: 'Сняты с процесса или отложены' },
                                 ]}
                             />
 
@@ -4246,17 +4527,18 @@ export const ProspectingManagement: React.FC = () => {
 
                             <AnalyticsWindowGrid
                                 title="Тренд за 7 / 30 дней"
-                                description="Сравнение свежего потока и качества прохождения по этапам."
+                                description="Сравнение свежего потока и качества прохождения по стадиям лида."
                                 items={pipelineWindowMetrics.map((window) => ({
                                     key: window.key,
                                     label: window.label,
-                                    badgeLabel: 'Пайплайн',
+                                    badgeLabel: 'Pipeline',
                                     badgeValue: window.pipelineCount,
                                     stats: [
-                                        { key: `${window.key}-shortlist`, label: 'Отобрано', value: window.shortlistCount, helper: `Conv: ${formatConversion(window.shortlistCount, window.pipelineCount)}` },
-                                        { key: `${window.key}-progress`, label: 'В работе', value: window.inProgressCount, helper: `Drop-off: ${formatDropOff(window.inProgressCount, window.shortlistCount)}` },
-                                        { key: `${window.key}-contacted`, label: 'Контактировано', value: window.contactedCount, helper: `Conv: ${formatConversion(window.contactedCount, window.inProgressCount)}` },
-                                        { key: `${window.key}-positive`, label: 'Позитивных', value: window.positiveCount, helper: `Conv: ${formatConversion(window.positiveCount, window.contactedCount)}` },
+                                        { key: `${window.key}-progress`, label: 'В работе', value: window.inProgressCount, helper: `Conv: ${formatConversion(window.inProgressCount, window.pipelineCount)}` },
+                                        { key: `${window.key}-ready`, label: 'Готов к контакту', value: window.readyToContactCount, helper: `Conv: ${formatConversion(window.readyToContactCount, window.inProgressCount)}` },
+                                        { key: `${window.key}-waiting`, label: 'Ждём ответ', value: window.waitingReplyCount, helper: `Conv: ${formatConversion(window.waitingReplyCount, window.readyToContactCount)}` },
+                                        { key: `${window.key}-dialog`, label: 'Диалог', value: window.dialogCount, helper: `Conv: ${formatConversion(window.dialogCount, window.waitingReplyCount)}` },
+                                        { key: `${window.key}-qualified`, label: 'Квалифицирован', value: window.qualifiedCount, helper: `Conv: ${formatConversion(window.qualifiedCount, window.dialogCount)}` },
                                     ],
                                 }))}
                             />
