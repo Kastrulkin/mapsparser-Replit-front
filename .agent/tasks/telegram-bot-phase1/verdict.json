@@ -1,0 +1,45 @@
+{
+  "task_id": "telegram-bot-phase1",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Guest mode now replaces the bind-only dead-end for unbound users and exposes quick-audit entry."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Map-link intake now normalizes supported URLs and blocks unsupported links with human-readable guidance."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Bound users now have Telegram entrypoints for partnership status and automation requests, with DB persistence for feature requests."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Production schema and source updates are live on app/worker and server runtime bot source."
+    }
+  ],
+  "commands_run": [
+    "PYTHONPATH=src python3 -m py_compile src/telegram_bot.py src/services/telegram_lead_intake.py src/services/bot_feature_requests.py",
+    "PYTHONPATH=src python3 - <<'PY' ... parse_map_links_from_text(...) ... PY",
+    "ssh root@80.78.242.105 'cd /opt/seo-app && bash scripts/postgres-backup.sh'",
+    "ssh root@80.78.242.105 'cd /opt/seo-app && docker compose up -d app worker'",
+    "ssh root@80.78.242.105 'cd /opt/seo-app && docker compose ps && curl -I http://localhost:8000'",
+    "ssh root@80.78.242.105 'cd /opt/seo-app && docker compose exec -T postgres psql -U beautybot -d local -c \"SELECT version_num FROM alembic_version;\"'",
+    "ssh root@80.78.242.105 'cd /opt/seo-app && docker compose exec -T postgres psql -U beautybot -d local -c \"SELECT to_regclass(''public.botfeaturerequests'');\"'",
+    "ssh root@80.78.242.105 'cd /opt/seo-app && PYTHONPATH=/opt/seo-app:/opt/seo-app/src runtime_bot/.venv/bin/python - <<'\"'\"'PY'\"'\"' ... PY'"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/telegram-bot-phase1/spec.md",
+    ".agent/tasks/telegram-bot-phase1/evidence.md",
+    ".agent/tasks/telegram-bot-phase1/problems.md",
+    ".agent/tasks/telegram-bot-phase1/raw/build.txt",
+    ".agent/tasks/telegram-bot-phase1/raw/test-unit.txt",
+    ".agent/tasks/telegram-bot-phase1/raw/test-integration.txt",
+    ".agent/tasks/telegram-bot-phase1/raw/lint.txt"
+  ]
+}

@@ -9,6 +9,7 @@ import requests
 import json
 from ai_agent import process_message, get_business_info
 from core.telegram_token_store import decode_telegram_bot_token
+from core.telegram_network import build_requests_proxy_kwargs
 
 ai_webhooks_bp = Blueprint('ai_webhooks', __name__)
 
@@ -47,7 +48,7 @@ def send_telegram_message(bot_token: str, chat_id: str, message: str) -> bool:
             'parse_mode': 'Markdown'
         }
         
-        response = requests.post(url, json=payload, timeout=10)
+        response = requests.post(url, json=payload, timeout=10, **build_requests_proxy_kwargs())
         response.raise_for_status()
         print(f"✅ Telegram сообщение отправлено в чат {chat_id}")
         return True

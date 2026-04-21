@@ -42,6 +42,14 @@ from core.action_orchestrator import ActionOrchestrator
 from core.parsing_runtime_config import get_use_apify_map_parsing, resolve_map_source_for_queue
 from yookassa_integration import run_due_renewals
 from api.admin_prospecting import dispatch_due_outreach_queue
+from core.card_automation import (
+    collect_due_telegram_digest_messages,
+    ensure_card_automation_tables,
+    handle_review_sync_completion,
+    mark_telegram_digest_sent,
+    run_due_card_automation,
+)
+from core.telegram_network import telegram_urlopen
 
 # Реестр активных Playwright-сессий для human-in-the-loop
 ACTIVE_CAPTCHA_SESSIONS: Dict[str, BrowserSession] = {}
@@ -55,6 +63,7 @@ _LAST_CALLBACK_ALERT_BY_TENANT: Dict[str, float] = {}
 _LAST_CALLBACK_ALERT_SCAN_AT = 0.0
 _LAST_YOOKASSA_RENEWALS_AT = 0.0
 _LAST_OUTREACH_DISPATCH_AT = 0.0
+_LAST_CARD_AUTOMATION_AT = 0.0
 
 _EDITORIAL_SERVICE_PATTERNS = (
     "хорошее место",
@@ -97,7 +106,6 @@ _SERVICE_NOISE_TERMS = (
     "парковка",
     "банкомат",
     "этаж",
-    "лифт",
     "остановка",
     "подъезд",
     "navigation",
@@ -118,6 +126,11 @@ _GENERIC_SERVICE_CATEGORIES = {
     "услуги",
     "товары",
     "категория",
+}
+
+_SERVICE_EXCLUDED_CATEGORIES = {
+    "payment_method",
+    "promotions",
 }
 
 _HUMAN_USER_AGENTS = (
@@ -926,6 +939,9 @@ def _parse_card_via_apify(
     parsed_source: str,
     source_hint: str,
     city: str = "",
+    timeout_sec: int = 300,
+    debug_bundle_dir: Optional[str] = None,
+    debug_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     normalized_hint = str(source_hint or "").strip().lower()
     if normalized_hint in {"apify_2gis", "2gis", "two_gis"} or parsed_source == "2gis":
@@ -942,29 +958,55 @@ def _parse_card_via_apify(
         from src.services.prospecting_service import ProspectingService
 
     service = ProspectingService(source=source)
-    result = service.run_business_by_map_url(url, limit=1, timeout_sec=300, city=city)
+    result = service.run_business_by_map_url(
+        url,
+        limit=1,
+        timeout_sec=max(30, int(timeout_sec or 300) - 30),
+        city=city,
+        debug_bundle_dir=debug_bundle_dir,
+        debug_context=debug_context,
+    )
     items = result.get("items") if isinstance(result, dict) else []
     if not isinstance(items, list) or not items:
         raise RuntimeError("Apify returned empty dataset for business card parsing")
 
     item = items[0] if isinstance(items[0], dict) else {}
     raw_payload = item.get("raw_payload_json") if isinstance(item, dict) else {}
+    if not isinstance(raw_payload, dict):
+        raw_payload = {}
     services_preview = item.get("services_json") if isinstance(item, dict) else []
     reviews_preview = item.get("reviews_json") if isinstance(item, dict) else []
     photos = item.get("photos_json") if isinstance(item, dict) else []
     if not isinstance(photos, list):
         photos = []
+    raw_categories = raw_payload.get("categories")
+    normalized_categories = item.get("category")
+    if isinstance(raw_categories, list) and raw_categories:
+        normalized_categories = raw_categories
+    elif isinstance(normalized_categories, str):
+        normalized_categories = [part.strip() for part in normalized_categories.split("/") if str(part).strip()]
+
+    normalized_address = str(item.get("address") or "").strip()
+    if not normalized_address:
+        normalized_address = str(raw_payload.get("address") or "").strip()
+    if not normalized_address:
+        city_text = str(raw_payload.get("city") or "").strip()
+        street_text = str(raw_payload.get("street") or "").strip()
+        house_text = str(raw_payload.get("house") or "").strip()
+        address_parts = [part for part in (city_text, street_text, house_text) if part]
+        if address_parts:
+            normalized_address = ", ".join(address_parts)
 
     card_data: Dict[str, Any] = {
         "name": str(item.get("name") or "").strip(),
         "title": str(item.get("name") or "").strip(),
         "title_or_name": str(item.get("name") or "").strip(),
-        "address": str(item.get("address") or "").strip(),
+        "address": normalized_address,
         "phone": str(item.get("phone") or "").strip(),
         "site": str(item.get("website") or "").strip(),
         "website": str(item.get("website") or "").strip(),
         "description": str(item.get("description") or "").strip(),
-        "categories": item.get("category"),
+        "categories": normalized_categories,
         "rating": item.get("rating"),
         "reviews_count": item.get("reviews_count") or 0,
         "reviews": reviews_preview if isinstance(reviews_preview, list) else [],
@@ -979,9 +1021,145 @@ def _parse_card_via_apify(
             "reviews_count": item.get("reviews_count") or 0,
             "description": str(item.get("description") or "").strip(),
         },
-        "raw_payload_json": raw_payload if isinstance(raw_payload, dict) else {},
+        "raw_payload_json": raw_payload,
+        "business_status": str(raw_payload.get("status") or "").strip().lower(),
+        "_apify_debug": {
+            "source": source,
+            "run_id": result.get("run_id") if isinstance(result, dict) else None,
+            "dataset_id": result.get("dataset_id") if isinstance(result, dict) else None,
+            "run_input": result.get("run_input") if isinstance(result, dict) else {},
+            "item_keys": sorted(list(item.keys())) if isinstance(item, dict) else [],
+            "item_preview": item if isinstance(item, dict) else {},
+        },
     }
     return card_data
+
+
+def _parse_card_via_apify_subprocess_entry(
+    result_queue: Any,
+    url: str,
+    kwargs: Dict[str, Any],
+) -> None:
+    result_file_path = str(kwargs.pop("result_file_path", "") or "").strip()
+    try:
+        result = _parse_card_via_apify(url, **kwargs)
+        if result_file_path:
+            os.makedirs(os.path.dirname(result_file_path), exist_ok=True)
+            with open(result_file_path, "w", encoding="utf-8") as fh:
+                json.dump(result, fh, ensure_ascii=False, indent=2, default=str)
+            result_queue.put({"result_file_path": result_file_path})
+            return
+        result_queue.put(result)
+    except Exception as exc:
+        error_payload = {
+            "error": "apify_parser_subprocess_exception",
+            "message": str(exc),
+            "url": url,
+        }
+        if result_file_path:
+            try:
+                os.makedirs(os.path.dirname(result_file_path), exist_ok=True)
+                with open(result_file_path, "w", encoding="utf-8") as fh:
+                    json.dump(error_payload, fh, ensure_ascii=False, indent=2, default=str)
+                result_queue.put({"result_file_path": result_file_path})
+                return
+            except Exception:
+                pass
+        result_queue.put(error_payload)
+
+
+def _parse_card_via_apify_with_timeout(
+    url: str,
+    *,
+    timeout_sec: int = 330,
+    debug_bundle_dir: Optional[str] = None,
+    debug_context: Optional[Dict[str, Any]] = None,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    ctx = multiprocessing.get_context("fork")
+    result_queue = ctx.Queue(maxsize=1)
+    subprocess_kwargs = dict(kwargs)
+    subprocess_kwargs["timeout_sec"] = timeout_sec
+    if debug_bundle_dir:
+        subprocess_kwargs["debug_bundle_dir"] = debug_bundle_dir
+        subprocess_kwargs["result_file_path"] = os.path.join(debug_bundle_dir, "apify_result.json")
+    if debug_context:
+        subprocess_kwargs["debug_context"] = dict(debug_context)
+    proc = ctx.Process(
+        target=_parse_card_via_apify_subprocess_entry,
+        args=(result_queue, url, subprocess_kwargs),
+        daemon=True,
+    )
+    proc.start()
+    proc.join(timeout_sec)
+
+    if proc.is_alive():
+        proc.terminate()
+        proc.join(timeout=5)
+        if debug_bundle_dir:
+            try:
+                os.makedirs(debug_bundle_dir, exist_ok=True)
+                timeout_payload = {
+                    "error": "apify_parser_subprocess_timeout",
+                    "message": f"Apify business parse timeout after {timeout_sec}s",
+                    "url": url,
+                    "timeout_sec": timeout_sec,
+                    "debug_context": debug_context or {},
+                    "kwargs": kwargs,
+                }
+                with open(os.path.join(debug_bundle_dir, "timeout.json"), "w", encoding="utf-8") as fh:
+                    json.dump(timeout_payload, fh, ensure_ascii=False, indent=2, default=str)
+            except Exception as timeout_bundle_exc:
+                print(f"⚠️ Failed to write timeout.json: {timeout_bundle_exc}", flush=True)
+        return {
+            "error": "apify_parser_subprocess_timeout",
+            "message": f"Apify business parse timeout after {timeout_sec}s",
+            "url": url,
+        }
+
+    if result_queue.empty():
+        if debug_bundle_dir:
+            try:
+                os.makedirs(debug_bundle_dir, exist_ok=True)
+                no_result_payload = {
+                    "error": "apify_parser_subprocess_no_result",
+                    "message": "Apify business parse subprocess finished without payload",
+                    "url": url,
+                    "timeout_sec": timeout_sec,
+                    "debug_context": debug_context or {},
+                    "kwargs": kwargs,
+                }
+                with open(os.path.join(debug_bundle_dir, "subprocess_no_result.json"), "w", encoding="utf-8") as fh:
+                    json.dump(no_result_payload, fh, ensure_ascii=False, indent=2, default=str)
+            except Exception as no_result_bundle_exc:
+                print(f"⚠️ Failed to write subprocess_no_result.json: {no_result_bundle_exc}", flush=True)
+        return {
+            "error": "apify_parser_subprocess_no_result",
+            "message": "Apify business parse subprocess finished without payload",
+            "url": url,
+        }
+
+    result = result_queue.get()
+    if isinstance(result, dict) and str(result.get("result_file_path") or "").strip():
+        result_file_path = str(result.get("result_file_path") or "").strip()
+        try:
+            with open(result_file_path, "r", encoding="utf-8") as fh:
+                loaded_result = json.load(fh)
+            if isinstance(loaded_result, dict):
+                return loaded_result
+        except Exception as read_result_exc:
+            return {
+                "error": "apify_parser_subprocess_result_read_failed",
+                "message": str(read_result_exc),
+                "url": url,
+            }
+    if isinstance(result, dict):
+        return result
+    return {
+        "error": "apify_parser_subprocess_invalid_result",
+        "message": "Apify business parse returned invalid payload",
+        "url": url,
+    }
 
 
 def _parse_yandex_card_with_playwright_fallback(
@@ -1185,6 +1363,54 @@ def _dispatch_outreach_queue_if_due() -> None:
         print(f"[OUTREACH_DISPATCH] error: {e}", flush=True)
 
 
+def _run_card_automation_if_due() -> None:
+    global _LAST_CARD_AUTOMATION_AT
+    if not _env_bool("CARD_AUTOMATION_ENABLED", True):
+        return
+
+    now = time.time()
+    interval_sec = max(15, int(os.getenv("CARD_AUTOMATION_INTERVAL_SEC", "60")))
+    if now - _LAST_CARD_AUTOMATION_AT < interval_sec:
+        return
+
+    _LAST_CARD_AUTOMATION_AT = now
+    db = None
+    try:
+        db = DatabaseManager()
+        ensure_card_automation_tables(db.conn)
+        batch_size = max(1, min(int(os.getenv("CARD_AUTOMATION_BATCH_SIZE", "20")), 100))
+        result = run_due_card_automation(db.conn, batch_size=batch_size)
+        if int(result.get("processed") or 0) > 0:
+            print(
+                "[CARD_AUTOMATION] "
+                f"processed={int(result.get('processed') or 0)} "
+                f"success={int(result.get('success') or 0)} "
+                f"noop={int(result.get('noop') or 0)} "
+                f"errors={int(result.get('errors') or 0)}",
+                flush=True,
+            )
+        digest_messages = collect_due_telegram_digest_messages(db.conn)
+        for digest in digest_messages:
+            telegram_id = str(digest.get("telegram_id") or "").strip()
+            message = str(digest.get("message") or "").strip()
+            sent_date = digest.get("sent_date")
+            business_ids = [str(item or "").strip() for item in (digest.get("business_ids") or []) if str(item or "").strip()]
+            if not telegram_id or not message or not sent_date or not business_ids:
+                continue
+            if _send_telegram_plain_message(telegram_id, message):
+                mark_telegram_digest_sent(db.conn, business_ids, sent_date)
+            else:
+                print(f"[CARD_AUTOMATION_DIGEST] failed to send telegram digest to {telegram_id}", flush=True)
+    except Exception as e:
+        print(f"[CARD_AUTOMATION] error: {e}", flush=True)
+    finally:
+        try:
+            if db:
+                db.close()
+        except Exception:
+            pass
+
+
 def _dispatch_openclaw_callback_outbox_if_due() -> None:
     global _LAST_CALLBACK_DISPATCH_AT
     if not _env_bool("OPENCLAW_CALLBACK_DISPATCH_ENABLED", True):
@@ -1227,7 +1453,7 @@ def _send_telegram_plain_message(chat_id: str, text: str) -> bool:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib_request.urlopen(req, timeout=10) as resp:
+        with telegram_urlopen(req, timeout=10) as resp:
             return 200 <= int(getattr(resp, "status", 500)) < 300
     except (urllib_error.URLError, urllib_error.HTTPError, TimeoutError) as e:
         print(f"[BILLING_RECONCILE] telegram send failed chat_id={chat_id}: {e}", flush=True)
@@ -2285,10 +2511,16 @@ def _validate_parsing_result(card_data: dict, source: str = SOURCE_YANDEX_BUSINE
             reason = f"{reason} missing={','.join(critical_list)}"
         return False, reason, validation
 
+    source_lc = str(source or "").strip().lower()
+    business_status = str(card_data.get("business_status") or card_data.get("status") or "").strip().lower()
+
+    if source_lc == "apify_yandex" and business_status == "permanent-closed":
+        return False, "business_closed:permanent_closed", validation
+
     # 2GIS-specific guard:
     # if parse returned only sparse shell (title/address etc.) without any rich content,
     # do not treat it as a successful snapshot, otherwise UI may look "emptied".
-    if str(source or "").strip().lower() == "2gis":
+    if source_lc == "2gis":
         has_rich_lists = any(
             isinstance(card_data.get(key), list) and len(card_data.get(key) or []) > 0
             for key in ("products", "news", "reviews", "photos")
@@ -2336,6 +2568,12 @@ def _validate_parsing_result(card_data: dict, source: str = SOURCE_YANDEX_BUSINE
         if not has_rich_lists and not has_reviews_count:
             return False, "low_quality_payload:2gis_sparse_payload", validation
 
+    if source_lc == "apify_yandex":
+        has_products = isinstance(card_data.get("products"), list) and len(card_data.get("products") or []) > 0
+        has_categories = "categories" not in missing_fields
+        if not has_products and not has_categories:
+            return False, "low_quality_payload:apify_yandex_sparse_payload missing=categories,products", validation
+
     return True, "success", validation
 
 
@@ -2359,6 +2597,33 @@ def _transient_retry_delay_for_task(queue_dict: dict, attempt_no: int) -> timede
     else:
         minutes = min(10 * attempt, 40)
     return timedelta(minutes=minutes)
+
+
+def _uses_apify_timeout_slow_lane(queue_dict: dict) -> bool:
+    source_value = str(queue_dict.get("source") or "").strip().lower()
+    if source_value not in {"apify_yandex", "apify_2gis", "apify_google", "apify_apple"}:
+        return False
+    prev_attempt = _parse_transient_retry_attempt(queue_dict.get("error_message"))
+    slow_after = max(int(os.getenv("APIFY_TIMEOUT_SLOW_LANE_AFTER_ATTEMPT", "1") or 1), 1)
+    if prev_attempt < slow_after:
+        return False
+    error_text = str(queue_dict.get("error_message") or "").lower()
+    return "apify_parser_subprocess_timeout" in error_text
+
+
+def _apify_business_timeout_profile(queue_dict: dict) -> str:
+    return "slow_lane" if _uses_apify_timeout_slow_lane(queue_dict) else "default"
+
+
+def _effective_apify_business_timeout_sec(queue_dict: dict) -> int:
+    default_timeout = max(int(os.getenv("APIFY_BUSINESS_PARSE_TIMEOUT_SEC", "330") or 330), 60)
+    if not _uses_apify_timeout_slow_lane(queue_dict):
+        return default_timeout
+    slow_timeout = max(
+        int(os.getenv("APIFY_BUSINESS_PARSE_TIMEOUT_SEC_SLOW", "540") or 540),
+        default_timeout,
+    )
+    return slow_timeout
 
 
 def _queue_transient_parse_retry(queue_dict: dict, reason: str, card_data: Optional[dict]) -> bool:
@@ -2387,7 +2652,10 @@ def _queue_transient_parse_retry(queue_dict: dict, reason: str, card_data: Optio
             or "err_name_not_resolved" in parser_message
         )
     )
+    is_apify_timeout = parser_error == "apify_parser_subprocess_timeout"
     reason_text = str(reason or "").lower()
+    if "business_closed:" in reason_text:
+        return False
     is_apify_empty_dataset = (
         parser_error == "apify_empty_dataset"
         or "apify returned empty dataset" in reason_text
@@ -2397,23 +2665,48 @@ def _queue_transient_parse_retry(queue_dict: dict, reason: str, card_data: Optio
             and "empty dataset" in parser_message
         )
     )
+    source_value = str(queue_dict.get("source") or "").strip().lower()
+    is_retryable_quality_gap = (
+        (source_value == "apify_yandex" and "low_quality_payload:apify_yandex_sparse_payload" in reason_text)
+        or "services_upsert_zero" in reason_text
+    )
+    if is_apify_empty_dataset and source_value == "apify_google":
+        # For Google actor this error is often deterministic for a concrete URL:
+        # keep a terminal error instead of long pending retries.
+        return False
 
-    if parser_error not in transient_errors and not is_2gis_timeout and not is_apify_empty_dataset:
+    if (
+        parser_error not in transient_errors
+        and not is_2gis_timeout
+        and not is_apify_timeout
+        and not is_apify_empty_dataset
+        and not is_retryable_quality_gap
+    ):
         return False
 
     prev_attempt = _parse_transient_retry_attempt(queue_dict.get("error_message"))
     attempt_no = prev_attempt + 1
     max_attempts = int(os.getenv("TRANSIENT_PARSE_MAX_ATTEMPTS", "8") or 8)
+    if is_apify_timeout:
+        max_attempts = min(
+            max_attempts,
+            max(int(os.getenv("APIFY_TIMEOUT_MAX_ATTEMPTS", "3") or 3), 1),
+        )
     if attempt_no > max_attempts:
         return False
 
     retry_delay = _transient_retry_delay_for_task(queue_dict, attempt_no)
     retry_after = datetime.now() + retry_delay
     detail = str(reason or "")[:220]
+    timeout_profile = ""
+    if is_apify_timeout:
+        timeout_profile = "slow_lane" if attempt_no >= max(int(os.getenv("APIFY_TIMEOUT_SLOW_LANE_AFTER_ATTEMPT", "1") or 1), 1) else "default"
     comment = (
         f"transient_retry_attempt={attempt_no}; "
-            f"transient_error={parser_error or 'unknown'}; detail={detail}"
-        )
+        f"transient_error={parser_error or 'unknown'}; "
+        f"timeout_profile={timeout_profile or 'default'}; "
+        f"detail={detail}"
+    )
 
     conn = None
     cursor = None
@@ -2480,6 +2773,33 @@ def _has_existing_card_snapshot(business_id: str) -> bool:
         return cursor.fetchone() is not None
     except Exception as e:
         print(f"⚠️ Не удалось проверить existing cards snapshot для {business_id}: {e}")
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def _has_existing_active_services_snapshot(business_id: str) -> bool:
+    """Есть ли у бизнеса уже активные услуги в userservices."""
+    if not business_id:
+        return False
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT 1
+            FROM userservices
+            WHERE business_id = %s
+              AND (is_active IS TRUE OR is_active IS NULL)
+            LIMIT 1
+            """,
+            (business_id,),
+        )
+        return cursor.fetchone() is not None
+    except Exception as e:
+        print(f"⚠️ Не удалось проверить existing active services для {business_id}: {e}")
         return False
     finally:
         cursor.close()
@@ -3294,11 +3614,29 @@ def process_queue():
                             business_city = str(row_city[0] or "").strip()
                     except Exception as e:
                         print(f"⚠️ Не удалось загрузить city для business_id={business_id}: {e}")
-                card_data = _parse_card_via_apify(
+                apify_timeout_profile = _apify_business_timeout_profile(queue_dict)
+                apify_timeout_sec = _effective_apify_business_timeout_sec(queue_dict)
+                print(
+                    f"🕒 Apify timeout profile={apify_timeout_profile} timeout_sec={apify_timeout_sec} "
+                    f"queue_id={queue_dict.get('id')}",
+                    flush=True,
+                )
+                card_data = _parse_card_via_apify_with_timeout(
                     url,
                     parsed_source=parsed_source,
                     source_hint=source_hint,
                     city=business_city,
+                    timeout_sec=apify_timeout_sec,
+                    debug_bundle_dir=bundle_dir,
+                    debug_context={
+                        "queue_id": queue_dict.get("id"),
+                        "business_id": business_id,
+                        "source_hint": source_hint,
+                        "parsed_source": parsed_source,
+                        "city": business_city,
+                        "timeout_profile": apify_timeout_profile,
+                        "timeout_sec": apify_timeout_sec,
+                    },
                 )
             else:
                 browser_profile = _build_human_browser_profile()
@@ -3489,13 +3827,27 @@ def process_queue():
         
         # Проверяем успешность парсинга (валидация только по данным Яндекса, без fallback из БД)
         validation_source = SOURCE_YANDEX_BUSINESS
-        if parsed_source == "2gis":
+        if source_hint == "apify_yandex":
+            validation_source = "apify_yandex"
+        elif parsed_source == "2gis":
             validation_source = "2gis"
         elif parsed_source == "google_maps":
             validation_source = "google_business"
         elif parsed_source == "apple_maps":
             validation_source = "apple_maps"
         is_successful, reason, validation_result = _validate_parsing_result(card_data, source=validation_source)
+
+        apify_debug_payload = None
+        if isinstance(card_data, dict):
+            apify_debug_payload = card_data.pop("_apify_debug", None)
+
+        if bundle_dir and apify_debug_payload:
+            try:
+                apify_debug_path = os.path.join(bundle_dir, "apify_debug.json")
+                with open(apify_debug_path, "w", encoding="utf-8") as f:
+                    json.dump(apify_debug_payload, f, ensure_ascii=False, indent=2, default=str)
+            except Exception as apify_debug_exc:
+                print(f"⚠️ Failed to write apify_debug.json: {apify_debug_exc}")
 
         # пишем validation.json в bundle (если он есть)
         if bundle_dir and validation_result:
@@ -3755,22 +4107,31 @@ def process_queue():
                         news_list = []
                     
                     rating_float = _normalize_rating_value(rating)
+                    _photos = card_data.get("photos") or []
+                    if isinstance(_photos, int):
+                        _photos = []
+                    sparse_apify_snapshot = bool(use_apify_parser) and (
+                        not products
+                        and not news_list
+                        and not _photos
+                        and not reviews_list
+                    )
                     
                     # Готовим overview с метой парсинга
                     overview_payload = {
                         'photos_count': photos_count,
                         'news_count': len(news_list),
-                        'snapshot_type': 'full',
+                        'snapshot_type': 'metrics_update' if sparse_apify_snapshot else 'full',
                     }
                     if card_data.get("_meta"):
                         overview_payload["_meta"] = card_data["_meta"]
+                    if sparse_apify_snapshot:
+                        overview_payload["sparse_payload"] = True
+                        overview_payload["sparse_payload_source"] = source_hint or parsed_source
 
                     db_manager = DatabaseManager()
                     services_saved_count = 0
                     try:
-                        _photos = card_data.get("photos") or []
-                        if isinstance(_photos, int):
-                            _photos = []
                         db_manager.save_new_card_version(
                             business_id,
                             url=queue_dict["url"],
@@ -3781,9 +4142,9 @@ def process_queue():
                             rating=rating_float,
                             reviews_count=reviews_count,
                             overview=overview_payload,
-                            products=products or None,
-                            news=news_list or None,
-                            photos=_photos if _photos else None,
+                            products=(None if sparse_apify_snapshot else (products or None)),
+                            news=(None if sparse_apify_snapshot else (news_list or None)),
+                            photos=(None if sparse_apify_snapshot else (_photos if _photos else None)),
                             competitors=competitors or None,
                             hours=hours_struct,
                             hours_full=hours_full or None,
@@ -4233,6 +4594,18 @@ def process_queue():
                     f"business_id={business_id} {services_alert}",
                     flush=True,
                 )
+                if not _has_existing_active_services_snapshot(str(business_id or "")):
+                    retry_card_data = {
+                        "error": "services_upsert_zero",
+                        "message": services_alert,
+                    }
+                    if _queue_transient_parse_retry(queue_dict, services_alert, retry_card_data):
+                        print(
+                            f"🔁 Retry scheduled instead of completed for business_id={business_id}: "
+                            f"{services_alert}",
+                            flush=True,
+                        )
+                        return
 
             # Предупреждения по отсутствующим CRITICAL-полям в источнике
             if validation_result:
@@ -4262,6 +4635,11 @@ def process_queue():
                 else:
                     raise
             conn.commit()
+
+            try:
+                handle_review_sync_completion(conn, str(business_id or ""), triggered_by="parser")
+            except Exception as automation_exc:
+                print(f"[CARD_AUTOMATION] post-parse review automation error: {automation_exc}", flush=True)
 
             if queue_dict.get("_resume_batch_after_captcha"):
                 _resume_network_batch_after_captcha(queue_dict["id"])
@@ -4312,6 +4690,16 @@ def map_card_services(
     Поддерживает структуру: список категорий с items или плоский список элементов.
     """
     products = card_data.get("products") or card_data.get("services") or []
+    if isinstance(products, str):
+        try:
+            products = json.loads(products)
+        except Exception:
+            products = []
+    if isinstance(products, dict):
+        products = [
+            {"category": str(category_name or "").strip(), "items": items}
+            for category_name, items in products.items()
+        ]
     print(f"[map_card_services] Found {len(products) if isinstance(products, list) else 0} product categories for {business_id}")
     if not products:
         print(f"[map_card_services] No products in card_data. Keys: {list(card_data.keys())}")
@@ -4409,11 +4797,14 @@ def _one_service_row(item: Dict[str, Any], business_id: str, user_id: str, sourc
     description = re.sub(r"\s+", " ", str(item.get("description") or "")).strip() or None
     if description and len(description) > 1000:
         description = description[:1000].rstrip()
+    extracted_category = (_extract_service_category(item) or "").strip()
+    category_hint = extracted_category.lower()
     combined_text = f"{name} {description or ''}".lower()
     if any(pattern in combined_text for pattern in _EDITORIAL_SERVICE_PATTERNS):
         print(f"⚠️ [map_card_services] Skip editorial listing: {name}")
         return {}
-    if any(term in lower_name for term in _SERVICE_NOISE_TERMS):
+    normalized_name_tokens = re.sub(r"[^0-9a-zA-Zа-яА-Я]+", " ", lower_name).split()
+    if any(term in normalized_name_tokens for term in _SERVICE_NOISE_TERMS):
         return {}
     if "http://" in lower_name or "https://" in lower_name or "yandex." in lower_name:
         print(f"⚠️ [map_card_services] Skip URL-like service title: {name}")
@@ -4435,13 +4826,17 @@ def _one_service_row(item: Dict[str, Any], business_id: str, user_id: str, sourc
         external_id = str(external_id).strip() or None
     raw_price = item.get("price") or item.get("price_from") or ""
     price_from, price_to = _parse_service_price(raw_price)
+    if category_hint in _SERVICE_EXCLUDED_CATEGORIES:
+        return {}
+    if not price_from and not price_to and not description:
+        return {}
     if not price_from and not price_to:
         # Доп. защита от редакционных подборок, которые иногда попадают в products API
         # и не являются услугами конкретного бизнеса.
         if ":" in name or len(name.split()) >= 7 or "," in name:
             print(f"⚠️ [map_card_services] Skip long editorial-like title without price: {name}")
             return {}
-    inferred_category = _extract_service_category(item) or _infer_service_category(name, description or "")
+    inferred_category = extracted_category or _infer_service_category(name, description or "")
     return {
         "business_id": business_id,
         "user_id": user_id,
@@ -4995,6 +5390,10 @@ def _process_sync_yandex_business_task(queue_dict):
             """, (STATUS_COMPLETED, queue_dict["id"]))
             conn.commit()
             try:
+                handle_review_sync_completion(conn, str(business_id or ""), triggered_by="parser")
+            except Exception as automation_exc:
+                print(f"[CARD_AUTOMATION] post-sync review automation error: {automation_exc}", flush=True)
+            try:
                 if cursor:
                     cursor.close()
             except Exception:
@@ -5061,6 +5460,10 @@ def _process_cabinet_fallback_task(queue_dict):
         WHERE id = %s
         """, (STATUS_COMPLETED, queue_dict["id"]))
         conn.commit()
+        try:
+            handle_review_sync_completion(conn, str(business_id or ""), triggered_by="parser")
+        except Exception as automation_exc:
+            print(f"[CARD_AUTOMATION] post-fallback review automation error: {automation_exc}", flush=True)
         cursor.close()
         conn.close()
 
@@ -5213,6 +5616,7 @@ if __name__ == "__main__":
     while True:
         try:
             process_queue()
+            _run_card_automation_if_due()
             _dispatch_outreach_queue_if_due()
             _dispatch_openclaw_callback_outbox_if_due()
             _check_openclaw_callback_alerts_if_due()

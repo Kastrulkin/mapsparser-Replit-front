@@ -44,6 +44,9 @@ services:
       APIFY_HTTPS_PROXY: ${APIFY_HTTPS_PROXY:-}
       APIFY_PROXY_GROUPS: ${APIFY_PROXY_GROUPS:-RESIDENTIAL}
       APIFY_PROXY_STRICT: ${APIFY_PROXY_STRICT:-false}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_REVIEWS_BOT_TOKEN: ${TELEGRAM_REVIEWS_BOT_TOKEN:-}
+      TELEGRAM_HTTP_PROXY: ${TELEGRAM_HTTP_PROXY:-http://host.docker.internal:2081}
       TELEGRAM_USERBOT_PROXY: ${TELEGRAM_USERBOT_PROXY:-}
       TELEGRAM_USERBOT_MTPROXY_HOST: ${TELEGRAM_USERBOT_MTPROXY_HOST:-}
       TELEGRAM_USERBOT_MTPROXY_PORT: ${TELEGRAM_USERBOT_MTPROXY_PORT:-}
@@ -60,10 +63,19 @@ services:
       GIGACHAT_SSL_VERIFY: ${GIGACHAT_SSL_VERIFY:-false}
       GIGACHAT_CA_BUNDLE: ${GIGACHAT_CA_BUNDLE:-}
       REQUESTS_CA_BUNDLE: ${REQUESTS_CA_BUNDLE:-}
+      YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID:-}
+      YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY:-}
+      YOOKASSA_ENV: ${YOOKASSA_ENV:-}
+      YOOKASSA_API_BASE: ${YOOKASSA_API_BASE:-}
+      YOOKASSA_RETURN_URL: ${YOOKASSA_RETURN_URL:-}
+      YOOKASSA_RENEWALS_ENABLED: ${YOOKASSA_RENEWALS_ENABLED:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./data/legacy.sqlite:/app/legacy.sqlite:ro
       - ./debug_data:/app/debug_data
+      - ./src:/app/src:ro
+      - ./entrypoint.sh:/app/entrypoint.sh:ro
+      - ./alembic_migrations:/app/alembic_migrations:ro
       - ./frontend/dist:/app/frontend/dist
       - ./frontend/public-dist:/app/frontend/public-dist
     extra_hosts:
@@ -111,6 +123,9 @@ services:
       APIFY_HTTPS_PROXY: ${APIFY_HTTPS_PROXY:-}
       APIFY_PROXY_GROUPS: ${APIFY_PROXY_GROUPS:-RESIDENTIAL}
       APIFY_PROXY_STRICT: ${APIFY_PROXY_STRICT:-false}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_REVIEWS_BOT_TOKEN: ${TELEGRAM_REVIEWS_BOT_TOKEN:-}
+      TELEGRAM_HTTP_PROXY: ${TELEGRAM_HTTP_PROXY:-http://host.docker.internal:2081}
       TELEGRAM_USERBOT_PROXY: ${TELEGRAM_USERBOT_PROXY:-}
       TELEGRAM_USERBOT_MTPROXY_HOST: ${TELEGRAM_USERBOT_MTPROXY_HOST:-}
       TELEGRAM_USERBOT_MTPROXY_PORT: ${TELEGRAM_USERBOT_MTPROXY_PORT:-}
@@ -127,8 +142,19 @@ services:
       GIGACHAT_SSL_VERIFY: ${GIGACHAT_SSL_VERIFY:-false}
       GIGACHAT_CA_BUNDLE: ${GIGACHAT_CA_BUNDLE:-}
       REQUESTS_CA_BUNDLE: ${REQUESTS_CA_BUNDLE:-}
+      YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID:-}
+      YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY:-}
+      YOOKASSA_ENV: ${YOOKASSA_ENV:-}
+      YOOKASSA_API_BASE: ${YOOKASSA_API_BASE:-}
+      YOOKASSA_RETURN_URL: ${YOOKASSA_RETURN_URL:-}
+      YOOKASSA_RENEWALS_ENABLED: ${YOOKASSA_RENEWALS_ENABLED:-}
     volumes:
       - ./debug_data:/app/debug_data
+      - ./src:/app/src:ro
+      - ./entrypoint.sh:/app/entrypoint.sh:ro
+      - ./alembic_migrations:/app/alembic_migrations:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy

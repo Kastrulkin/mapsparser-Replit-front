@@ -1,0 +1,6 @@
+Command:
+PYTHONPATH=src python3 -m py_compile src/telegram_bot.py src/services/telegram_lead_intake.py src/services/bot_feature_requests.py
+
+Result:
+- exit code 0
+- syntax compile passed for all changed Python files

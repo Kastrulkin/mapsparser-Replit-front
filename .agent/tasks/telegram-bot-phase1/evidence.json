@@ -1,0 +1,81 @@
+{
+  "task_id": "telegram-bot-phase1",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Unbound Telegram user sees a guest mode menu and can start a quick card audit from chat.",
+      "status": "PASS",
+      "proof": [
+        "telegram_bot.py /start now renders guest menu for unbound users",
+        "guest callback handlers cover audit/about/bind-help flow",
+        "free-text handler for unbound users attempts audit intake directly"
+      ],
+      "gaps": [
+        "Competitor compare remains a placeholder"
+      ]
+    },
+    {
+      "id": "AC2",
+      "text": "Incoming map links are normalized and softly validated before audit creation.",
+      "status": "PASS",
+      "proof": [
+        "services/telegram_lead_intake.py adds extraction, normalization, classification and readable errors",
+        "local targeted smoke confirmed supported Yandex, 2GIS and Google business-card URLs",
+        "telegram_bot.py audit intake requires exactly one valid normalized card URL"
+      ],
+      "gaps": [
+        "No broader automated link edge-case suite yet"
+      ]
+    },
+    {
+      "id": "AC3",
+      "text": "Bound Telegram user gets partnership and feature-request entrypoints, and feature requests persist in DB.",
+      "status": "PASS",
+      "proof": [
+        "telegram_bot.py main menu now includes partnerships and feature request actions",
+        "telegram_bot.py adds /partnerships and /feature_request command handlers",
+        "new botfeaturerequests migration and save_bot_feature_request service persist requests"
+      ],
+      "gaps": [
+        "No admin UI for browsing these requests in this phase"
+      ]
+    },
+    {
+      "id": "AC4",
+      "text": "Production backend is updated with the new schema and Telegram bot source.",
+      "status": "PASS",
+      "proof": [
+        "Postgres backup created before migration",
+        "Production alembic_version is 20260421_001",
+        "Production botfeaturerequests table exists",
+        "app and worker are up and localhost health returns 200",
+        "Server runtime venv imports updated telegram helpers successfully"
+      ],
+      "gaps": [
+        "Polling bot still cannot reach Telegram API from current VPS network"
+      ]
+    }
+  ],
+  "changed_files": [
+    "src/telegram_bot.py",
+    "src/services/telegram_lead_intake.py",
+    "src/services/bot_feature_requests.py",
+    "alembic_migrations/versions/20260421_add_bot_feature_requests.py",
+    ".agent/tasks/telegram-bot-phase1/spec.md",
+    ".agent/tasks/telegram-bot-phase1/evidence.md",
+    ".agent/tasks/telegram-bot-phase1/evidence.json",
+    ".agent/tasks/telegram-bot-phase1/verdict.json",
+    ".agent/tasks/telegram-bot-phase1/problems.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "PYTHONPATH=src python3 -m py_compile src/telegram_bot.py src/services/telegram_lead_intake.py src/services/bot_feature_requests.py",
+    "ssh root@80.78.242.105 'cd /opt/seo-app && docker compose ps && curl -I http://localhost:8000'",
+    "ssh root@80.78.242.105 'cd /opt/seo-app && docker compose exec -T postgres psql -U beautybot -d local -c \"SELECT version_num FROM alembic_version;\"'",
+    "ssh root@80.78.242.105 'cd /opt/seo-app && docker compose exec -T postgres psql -U beautybot -d local -c \"SELECT to_regclass(''public.botfeaturerequests'');\"'",
+    "ssh root@80.78.242.105 'cd /opt/seo-app && PYTHONPATH=/opt/seo-app:/opt/seo-app/src runtime_bot/.venv/bin/python - <<'\"'\"'PY'\"'\"' from telegram_bot import _guest_welcome_text; print(_guest_welcome_text().splitlines()[0]); PY'"
+  ],
+  "known_gaps": [
+    "Current VPS still cannot reach Telegram Bot API, so polling/send remains blocked until VPN/proxy or a separate relay is enabled."
+  ]
+}

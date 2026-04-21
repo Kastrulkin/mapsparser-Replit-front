@@ -1,0 +1,19 @@
+Command:
+PYTHONPATH=src python3 - <<'PY'
+from services.telegram_lead_intake import parse_map_links_from_text
+samples = [
+    'https://yandex.ru/maps/org/test/123',
+    'вот карточка https://2gis.ru/saint_petersburg/firm/70000000000000000',
+    'compare https://yandex.com/maps/org/test/123 and https://google.com/maps/place/test',
+    'not a map link https://example.com',
+]
+for sample in samples:
+    print('SAMPLE:', sample)
+    print(parse_map_links_from_text(sample))
+PY
+
+Observed:
+- Yandex org URL -> ok=True
+- 2GIS firm URL -> ok=True
+- mixed Yandex + Google -> two valid_items
+- unsupported example.com -> ok=False with human-readable message

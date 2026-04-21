@@ -8,6 +8,8 @@ import os
 import urllib.error as urllib_error
 import urllib.request as urllib_request
 
+from core.telegram_network import telegram_urlopen
+
 
 def mask_phone(phone: str | None) -> str:
     digits = "".join(ch for ch in str(phone or "") if ch.isdigit())
@@ -50,7 +52,7 @@ def send_telegram_bot_message(bot_token: str | None, chat_id: str | None, text: 
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib_request.urlopen(req, timeout=10) as resp:
+        with telegram_urlopen(req, timeout=10) as resp:
             status = int(getattr(resp, "status", 500))
             return {"success": 200 <= status < 300, "status_code": status}
     except urllib_error.HTTPError as e:

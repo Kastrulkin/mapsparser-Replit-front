@@ -7,6 +7,7 @@
 import os
 import requests
 from datetime import datetime
+from core.telegram_network import build_requests_proxy_kwargs
 
 # Загружаем переменные окружения
 try:
@@ -70,7 +71,7 @@ def send_telegram_notification(telegram_id: str, booking_data: dict) -> bool:
             'parse_mode': 'HTML'
         }
         
-        response = requests.post(url, json=payload, timeout=10)
+        response = requests.post(url, json=payload, timeout=10, **build_requests_proxy_kwargs())
         
         if response.status_code == 200:
             print(f"✅ Telegram уведомление отправлено на {telegram_id}")
@@ -368,7 +369,7 @@ def send_support_request_notification(
                 'text': message,
                 'parse_mode': 'HTML'
             }
-            response = requests.post(url, json=payload, timeout=10)
+            response = requests.post(url, json=payload, timeout=10, **build_requests_proxy_kwargs())
             if response.status_code == 200:
                 telegram_sent = True
                 bot_type = "бизнеса" if telegram_bot_token else "глобального"

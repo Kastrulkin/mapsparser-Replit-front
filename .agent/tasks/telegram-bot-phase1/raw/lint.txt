@@ -1,0 +1,10 @@
+Narrow lint gate:
+- `PYTHONPATH=src python3 -m py_compile src/telegram_bot.py src/services/telegram_lead_intake.py src/services/bot_feature_requests.py`
+- exit code 0
+
+Server import smoke:
+- `PYTHONPATH=/opt/seo-app:/opt/seo-app/src runtime_bot/.venv/bin/python - <<'PY' ...`
+- output:
+  - `👋 Это бот LocalOS.`
+  - `Отзывы`
+  - `True`

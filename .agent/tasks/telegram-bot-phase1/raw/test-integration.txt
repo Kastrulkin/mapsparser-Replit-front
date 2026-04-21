@@ -1,0 +1,23 @@
+Production rollout checks:
+
+1. DB backup created:
+- `cd /opt/seo-app && bash scripts/postgres-backup.sh`
+- backup file: `data/backups/postgres/local_20260421_172148.sql.gz`
+
+2. Changed files synced to `/opt/seo-app`:
+- `src/telegram_bot.py`
+- `src/services/telegram_lead_intake.py`
+- `src/services/bot_feature_requests.py`
+- `alembic_migrations/versions/20260421_add_bot_feature_requests.py`
+
+3. Runtime verification:
+- `cd /opt/seo-app && docker compose ps` -> `app`, `worker`, `postgres` are `Up`
+- `cd /opt/seo-app && curl -I http://localhost:8000` -> `HTTP/1.1 200 OK`
+- `cd /opt/seo-app && docker compose exec -T postgres psql -U beautybot -d local -c "SELECT version_num FROM alembic_version;"` -> `20260421_001`
+- `cd /opt/seo-app && docker compose exec -T postgres psql -U beautybot -d local -c "SELECT to_regclass('public.botfeaturerequests');"` -> `botfeaturerequests`
+- `cd /opt/seo-app && PYTHONPATH=/opt/seo-app:/opt/seo-app/src runtime_bot/.venv/bin/python - <<'PY' ...` -> imported guest/menu helpers and link parser successfully
+
+4. Known operational blocker:
+- runtime bot restart reaches new code but fails on Telegram network access:
+  - `telegram.error.TimedOut: Timed out`
+  - root cause remains server-side inability to reach Telegram API
