@@ -1,0 +1,37 @@
+{
+  "task_id": "repo-stability-20260420",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Critical runtime files and alembic revisions are now in tracked state locally, and the backend source-of-truth check passes."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Dashboard tab-content orchestration is extracted, and repeated detail/admin render blocks were reduced without lint or build regressions."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Frontend build succeeded and canonical frontend deploy verification confirmed a healthy live bundle and 200 OK health check."
+    }
+  ],
+  "commands_run": [
+    "scripts/check_backend_source_of_truth.sh",
+    "cd frontend && ./node_modules/.bin/eslint src/pages/Dashboard.tsx src/components/dashboard/DashboardSections.tsx src/components/prospecting/OutreachDetailPanes.tsx src/pages/dashboard/AdminPage.tsx",
+    "cd frontend && npm run build",
+    "python3 -m py_compile src/main.py src/worker.py src/stripe_integration.py src/api/admin_prospecting.py",
+    "bash scripts/deploy_frontend_dist.sh",
+    "scripts/proof_loop.sh validate repo-stability-20260420"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/repo-stability-20260420/evidence.md",
+    ".agent/tasks/repo-stability-20260420/evidence.json",
+    ".agent/tasks/repo-stability-20260420/raw/build.txt",
+    ".agent/tasks/repo-stability-20260420/raw/lint.txt",
+    ".agent/tasks/repo-stability-20260420/raw/test-unit.txt",
+    ".agent/tasks/repo-stability-20260420/raw/test-integration.txt"
+  ]
+}

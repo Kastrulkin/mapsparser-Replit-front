@@ -1,0 +1,72 @@
+{
+  "task_id": "repo-stability-20260420",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Critical runtime/backend source-of-truth is normalized locally: key runtime files and alembic revisions are in tracked state, and scripts/check_backend_source_of_truth.sh passes.",
+      "status": "PASS",
+      "proof": [
+        "Critical runtime files src/core/card_audit_policy.py, src/core/card_automation.py and src/core/map_url_normalizer.py were moved into tracked state.",
+        "Critical revisions 20260416_001, 20260417_001 and 20260420_001 were moved into tracked state.",
+        "scripts/check_backend_source_of_truth.sh now returns OK: backend runtime source-of-truth is clean."
+      ],
+      "gaps": [
+        "Server-side git working tree is still dirtier than local; this pass normalizes the local source-of-truth and deploy path first."
+      ]
+    },
+    {
+      "id": "AC2",
+      "text": "Admin-heavy frontend becomes thinner and more stable: Dashboard.tsx acts as orchestration, and repeated admin/detail blocks are extracted or simplified without build regressions.",
+      "status": "PASS",
+      "proof": [
+        "Dashboard tab-content orchestration is extracted into DashboardTabContent inside frontend/src/components/dashboard/DashboardSections.tsx.",
+        "Dashboard.tsx no longer holds the inline activeTab render tree for overview/finance/progress/settings/network sections.",
+        "OutreachDetailPanes now reuses shared DetailWarningActions and DetailStatusCards helpers instead of repeating status/warning clusters.",
+        "AdminPage now memoizes filtered users and avoids repeated filter work in the hot render path."
+      ],
+      "gaps": [
+        "Dashboard.tsx still contains substantial business-side action handlers; the page is thinner, but not fully orchestration-only yet."
+      ]
+    },
+    {
+      "id": "AC3",
+      "text": "Application builds successfully and the fresh frontend deploys to live without breaking the base health checks.",
+      "status": "PASS",
+      "proof": [
+        "Frontend build succeeded and produced live bundle index-DYspwMqI.js with stylesheet index-DS0mDI9T.css.",
+        "bash scripts/deploy_frontend_dist.sh completed with standard verification: docker compose ps, app logs, curl -I http://localhost:8000, and targeted frontend checks.",
+        "Deploy verification confirmed localos.pro HTML references /assets/index-DYspwMqI.js and /assets/index-DS0mDI9T.css.",
+        "curl -I http://localhost:8000 returned 200 OK during deploy verification."
+      ],
+      "gaps": [
+        "Deploy log still shows harmless tar warnings because old assets are intentionally retained for open tabs."
+      ]
+    }
+  ],
+  "changed_files": [
+    "alembic_migrations/versions/20260416_add_outreach_queue_provider_metadata.py",
+    "alembic_migrations/versions/20260417_add_outreach_reaction_provider_metadata.py",
+    "alembic_migrations/versions/20260420_add_business_card_automation.py",
+    "frontend/src/components/dashboard/DashboardSections.tsx",
+    "frontend/src/components/prospecting/OutreachDetailPanes.tsx",
+    "frontend/src/pages/Dashboard.tsx",
+    "frontend/src/pages/dashboard/AdminPage.tsx",
+    "scripts/check_backend_source_of_truth.sh",
+    "scripts/deploy_backend_src.sh",
+    "src/core/card_audit_policy.py",
+    "src/core/card_automation.py",
+    "src/core/map_url_normalizer.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "scripts/check_backend_source_of_truth.sh",
+    "cd frontend && ./node_modules/.bin/eslint src/pages/Dashboard.tsx src/components/dashboard/DashboardSections.tsx src/components/prospecting/OutreachDetailPanes.tsx src/pages/dashboard/AdminPage.tsx",
+    "cd frontend && npm run build",
+    "bash scripts/deploy_frontend_dist.sh",
+    "scripts/proof_loop.sh validate repo-stability-20260420"
+  ],
+  "known_gaps": [
+    "The repository as a whole is still very dirty outside this task scope; this pass intentionally isolates the critical runtime/admin stability slice.",
+    "The server git working tree still needs a later normalization pass after these tracked files are committed and pulled through the canonical update path."
+  ]
+}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
@@ -6,16 +6,29 @@ import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Tras
 import { newAuth } from '../../lib/auth_new';
 import { useToast } from '../../hooks/use-toast';
 import { CreateBusinessModal } from '../../components/CreateBusinessModal';
-import { AIAgentsManagement } from '../../components/AIAgentsManagement';
-import { TokenUsageStats } from '../../components/TokenUsageStats';
 import { AdminExternalCabinetSettings } from '../../components/AdminExternalCabinetSettings';
-import { GrowthPlan } from '../../components/GrowthPlan';
-import { GrowthPlanEditor } from '../../components/GrowthPlanEditor';
-import { PromptsManagement } from '../../components/PromptsManagement';
-import { ProxyManagement } from '../../components/ProxyManagement';
-import { ParsingManagement } from '../../components/ParsingManagement';
 import { ProspectingManagement } from '../../components/ProspectingManagement';
 
+const AIAgentsManagement = lazy(() =>
+  import('../../components/AIAgentsManagement').then((module) => ({ default: module.AIAgentsManagement })),
+);
+const TokenUsageStats = lazy(() =>
+  import('../../components/TokenUsageStats').then((module) => ({ default: module.TokenUsageStats })),
+);
+const GrowthPlanEditor = lazy(() =>
+  import('../../components/GrowthPlanEditor').then((module) => ({ default: module.GrowthPlanEditor })),
+);
+const PromptsManagement = lazy(() =>
+  import('../../components/PromptsManagement').then((module) => ({ default: module.PromptsManagement })),
+);
+const ProxyManagement = lazy(() =>
+  import('../../components/ProxyManagement').then((module) => ({ default: module.ProxyManagement })),
+);
+const ParsingManagement = lazy(() =>
+  import('../../components/ParsingManagement').then((module) => ({ default: module.ParsingManagement })),
+);
+
+type AdminTabId = 'businesses' | 'agents' | 'tokens' | 'growth' | 'prompts' | 'proxies' | 'parsing' | 'prospecting';
 interface Business {
   id: string;
   name: string;
@@ -58,12 +71,66 @@ interface BusinessListItem {
   business: Business;
 }
 
+type AdminTabConfig = {
+  id: AdminTabId;
+  label: string;
+  icon: typeof User;
+};
+
+const adminTabs: AdminTabConfig[] = [
+  { id: 'businesses', label: 'Пользователи и бизнесы', icon: User },
+  { id: 'agents', label: 'ИИ агенты', icon: Bot },
+  { id: 'tokens', label: 'Статистика кредитов', icon: BarChart3 },
+  { id: 'growth', label: 'Схема роста', icon: TrendingUp },
+  { id: 'prompts', label: 'Промпты анализа', icon: FileText },
+  { id: 'proxies', label: 'Прокси', icon: Network },
+  { id: 'parsing', label: 'Парсинг', icon: MapPin },
+  { id: 'prospecting', label: 'Поиск клиентов', icon: Search },
+];
+
 const LEAD_OUTREACH_STATUS = 'lead_outreach';
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  return fallback;
+};
 
 const isLeadBusiness = (business?: Business | null) =>
   business?.is_lead_business === true ||
   String(business?.entity_group || '').trim().toLowerCase() === 'lead' ||
   String(business?.moderation_status || '').trim().toLowerCase() === LEAD_OUTREACH_STATUS;
+
+const filterUsersBySearch = (users: UserWithBusinesses[], normalizedSearchQuery: string) =>
+  users.filter((user) => {
+    const directBusinesses = user.direct_businesses || [];
+    const networkBusinesses = (user.networks || []).flatMap((network) => network.businesses || []);
+    const allBusinesses = [...directBusinesses, ...networkBusinesses];
+
+    if (!normalizedSearchQuery) {
+      return true;
+    }
+
+    const userHaystack = [
+      user.email || '',
+      user.name || '',
+      user.phone || '',
+    ].join(' ').toLowerCase();
+
+    if (userHaystack.includes(normalizedSearchQuery)) {
+      return true;
+    }
+
+    return allBusinesses.some((business) =>
+      [
+        business.name || '',
+        business.address || '',
+        business.description || '',
+        business.id || '',
+      ].join(' ').toLowerCase().includes(normalizedSearchQuery)
+    );
+  });
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -119,9 +186,18 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   );
 };
 
+const AdminTabFallback = () => (
+  <Card className="border-dashed">
+    <CardContent className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+      Загрузка раздела...
+    </CardContent>
+  </Card>
+);
+
 export const AdminPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'businesses' | 'leads' | 'agents' | 'tokens' | 'growth' | 'prompts' | 'proxies' | 'parsing' | 'prospecting'>('businesses');
+  const [activeTab, setActiveTab] = useState<AdminTabId>('businesses');
   const [users, setUsers] = useState<UserWithBusinesses[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [expandedNetworks, setExpandedNetworks] = useState<Set<string>>(new Set());
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -153,66 +229,18 @@ export const AdminPage: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  useEffect(() => {
-    // Проверяем доступ только для demyanovap@yandex.ru
-    const checkAccess = async () => {
-      try {
-        const currentUser = await newAuth.getCurrentUser();
-        if (!currentUser) {
-          // Если пользователь не авторизован, перенаправляем на логин
-          toast({
-            title: 'Требуется авторизация',
-            description: 'Пожалуйста, войдите в систему',
-            variant: 'destructive',
-          });
-          navigate('/login');
-          return;
-        }
-        if (currentUser.email !== 'demyanovap@yandex.ru') {
-          toast({
-            title: 'Доступ запрещён',
-            description: 'Эта страница доступна только для demyanovap@yandex.ru',
-            variant: 'destructive',
-          });
-          navigate('/dashboard');
-          return;
-        }
-        loadUsers();
-      } catch (error) {
-        console.error('Ошибка проверки доступа:', error);
-        // Не перенаправляем на /login, если уже в контексте DashboardLayout
-        // Просто показываем ошибку и остаёмся на странице
-        toast({
-          title: 'Ошибка',
-          description: 'Не удалось проверить доступ',
-          variant: 'destructive',
-        });
-      }
-    };
-    checkAccess();
-  }, [navigate]);
-
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     try {
       setLoading(true);
       const data = await newAuth.makeRequest('/admin/users-with-businesses');
 
       if (data.success) {
-        // Логируем для отладки
-        let totalBlocked = 0;
-        data.users?.forEach((user: any) => {
-          const blockedDirect = user.direct_businesses?.filter((b: any) => b.is_active === 0).length || 0;
-          const blockedNetwork = user.networks?.reduce((sum: number, n: any) =>
-            sum + (n.businesses?.filter((b: any) => b.is_active === 0).length || 0), 0) || 0;
-          totalBlocked += blockedDirect + blockedNetwork;
-        });
-        console.log(`🔍 DEBUG AdminPage: Загружено пользователей: ${data.users?.length || 0}, заблокированных бизнесов: ${totalBlocked}`);
-        console.log('🔍 DEBUG AdminPage: Данные пользователей:', data.users);
         setUsers(data.users || []);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Ошибка загрузки пользователей:', error);
-      if (error.message && (error.message.includes('401') || error.message.includes('403'))) {
+      const message = getErrorMessage(error, 'Не удалось загрузить данные');
+      if (message.includes('401') || message.includes('403')) {
         toast({
           title: 'Ошибка доступа',
           description: 'Недостаточно прав для просмотра этой страницы',
@@ -223,13 +251,48 @@ export const AdminPage: React.FC = () => {
       }
       toast({
         title: 'Ошибка',
-        description: 'Не удалось загрузить данные',
+        description: message,
         variant: 'destructive',
       });
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigate, toast]);
+
+  useEffect(() => {
+    const checkAccess = async () => {
+      try {
+        const currentUser = await newAuth.getCurrentUser();
+        if (!currentUser) {
+          toast({
+            title: 'Требуется авторизация',
+            description: 'Пожалуйста, войдите в систему',
+            variant: 'destructive',
+          });
+          navigate('/login');
+          return;
+        }
+        if (!currentUser.is_superadmin) {
+          toast({
+            title: 'Доступ запрещён',
+            description: 'Эта страница доступна только супер-администраторам',
+            variant: 'destructive',
+          });
+          navigate('/dashboard');
+          return;
+        }
+        loadUsers();
+      } catch (error: unknown) {
+        console.error('Ошибка проверки доступа:', error);
+        toast({
+          title: 'Ошибка',
+          description: getErrorMessage(error, 'Не удалось проверить доступ'),
+          variant: 'destructive',
+        });
+      }
+    };
+    checkAccess();
+  }, [loadUsers, navigate, toast]);
 
   const toggleNetwork = (networkId: string) => {
     const newExpanded = new Set(expandedNetworks);
@@ -257,7 +320,6 @@ export const AdminPage: React.FC = () => {
       variant: 'delete',
       onConfirm: async () => {
         try {
-          console.log(`🔍 DELETE запрос для бизнеса: ID=${businessId}, name=${businessName}`);
           const data = await newAuth.makeRequest(`/superadmin/businesses/${businessId}`, {
             method: 'DELETE',
           });
@@ -269,10 +331,10 @@ export const AdminPage: React.FC = () => {
             });
             loadUsers();
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           toast({
             title: 'Ошибка',
-            description: error.message || 'Не удалось удалить бизнес',
+            description: getErrorMessage(error, 'Не удалось удалить бизнес'),
             variant: 'destructive',
           });
         } finally {
@@ -306,10 +368,10 @@ export const AdminPage: React.FC = () => {
             });
             loadUsers();
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           toast({
             title: 'Ошибка',
-            description: error.message || 'Не удалось изменить статус бизнеса',
+            description: getErrorMessage(error, 'Не удалось изменить статус бизнеса'),
             variant: 'destructive',
           });
         } finally {
@@ -343,10 +405,10 @@ export const AdminPage: React.FC = () => {
             });
             loadUsers();
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           toast({
             title: 'Ошибка',
-            description: error.message || 'Не удалось изменить статус пользователя',
+            description: getErrorMessage(error, 'Не удалось изменить статус пользователя'),
             variant: 'destructive',
           });
         } finally {
@@ -380,10 +442,10 @@ export const AdminPage: React.FC = () => {
             });
             loadUsers();
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           toast({
             title: 'Ошибка',
-            description: error.message || 'Не удалось удалить пользователя',
+            description: getErrorMessage(error, 'Не удалось удалить пользователя'),
             variant: 'destructive',
           });
         }
@@ -405,10 +467,10 @@ export const AdminPage: React.FC = () => {
         });
         loadUsers();
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Ошибка',
-        description: error.message || 'Не удалось изменить промо тариф',
+        description: getErrorMessage(error, 'Не удалось изменить промо тариф'),
         variant: 'destructive',
       });
     }
@@ -428,10 +490,10 @@ export const AdminPage: React.FC = () => {
         });
         loadUsers();
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Ошибка',
-        description: error.message || `Не удалось изменить промо тариф для сети "${networkName}"`,
+        description: getErrorMessage(error, `Не удалось изменить промо тариф для сети "${networkName}"`),
         variant: 'destructive',
       });
     }
@@ -440,6 +502,13 @@ export const AdminPage: React.FC = () => {
   const handleCreateSuccess = () => {
     loadUsers();
   };
+
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const pinnedBusinessId = localStorage.getItem('selectedBusinessId') || localStorage.getItem('admin_selected_business_id') || '';
+  const filteredUsers = useMemo(
+    () => filterUsersBySearch(users, normalizedSearchQuery),
+    [users, normalizedSearchQuery],
+  );
 
   if (loading) {
     return (
@@ -455,21 +524,9 @@ export const AdminPage: React.FC = () => {
     );
   }
 
-  const tabs = [
-    { id: 'businesses' as const, label: 'Пользователи и бизнесы', icon: User },
-    { id: 'leads' as const, label: 'Лиды', icon: Building2 },
-    { id: 'agents' as const, label: 'ИИ агенты', icon: Bot },
-    { id: 'tokens' as const, label: 'Статистика кредитов', icon: BarChart3 },
-    { id: 'growth' as const, label: 'Схема роста', icon: TrendingUp },
-    { id: 'prompts' as const, label: 'Промпты анализа', icon: FileText },
-    { id: 'proxies' as const, label: 'Прокси', icon: Network },
-    { id: 'parsing' as const, label: 'Парсинг', icon: MapPin },
-    { id: 'prospecting' as const, label: 'Поиск клиентов', icon: Search },
-  ];
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
+      <div className="w-full px-3 py-4 sm:px-4 lg:px-6 xl:px-8 2xl:px-10">
         {/* Header */}
         <div className="mb-8 space-y-2">
           <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
@@ -481,7 +538,7 @@ export const AdminPage: React.FC = () => {
         {/* Modern Tab Navigation */}
         <div className="mb-8">
           <div className="flex flex-wrap gap-2 p-1 bg-card/50 backdrop-blur-sm rounded-xl border border-border/50 shadow-sm">
-            {tabs.map((tab) => {
+            {adminTabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
               return (
@@ -508,6 +565,7 @@ export const AdminPage: React.FC = () => {
           </div>
         </div>
 
+        <Suspense fallback={<AdminTabFallback />}>
         {activeTab === 'agents' ? (
           <AIAgentsManagement />
         ) : activeTab === 'tokens' ? (
@@ -525,73 +583,61 @@ export const AdminPage: React.FC = () => {
         ) : (
           <>
             {(() => {
-              const isLeadsTab = activeTab === 'leads';
-              const usersToRender = isLeadsTab
-                ? users.filter((user) => {
-                    const directBusinesses = user.direct_businesses || [];
-                    const networkBusinesses = (user.networks || []).flatMap((network) => network.businesses || []);
-                    const all = [...directBusinesses, ...networkBusinesses];
-                    return all.some((business) => isLeadBusiness(business));
-                  })
-                : users;
               return (
                 <>
             {/* Action Bar */}
             <div className="mb-6 flex items-center justify-between">
-              <div className="text-sm text-muted-foreground">
-                {isLeadsTab ? (
-                  <>
-                    Пользователи с лидами: <span className="font-semibold text-foreground">{usersToRender.length}</span>
-                  </>
-                ) : (
-                  <>
-                    Всего пользователей: <span className="font-semibold text-foreground">{users.length}</span>
-                  </>
-                )}
+              <div className="flex w-full items-center justify-between gap-4">
+                <div className="text-sm text-muted-foreground">
+                  Всего пользователей: <span className="font-semibold text-foreground">{users.length}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="relative w-[320px] max-w-full">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Поиск по бизнесам, адресам и email"
+                      className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm"
+                    />
+                  </div>
+                  <Button
+                    onClick={() => setShowCreateModal(true)}
+                    className="shadow-md hover:shadow-lg transition-shadow duration-200"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Создать аккаунт
+                  </Button>
+                </div>
               </div>
-              {!isLeadsTab && (
-                <Button
-                  onClick={() => setShowCreateModal(true)}
-                  className="shadow-md hover:shadow-lg transition-shadow duration-200"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Создать аккаунт
-                </Button>
-              )}
             </div>
 
             {/* Modern Card-based Layout */}
             <div className="space-y-6">
-              {usersToRender.length === 0 ? (
+              {filteredUsers.length === 0 ? (
                 <Card className="border-dashed">
                   <CardContent className="flex flex-col items-center justify-center py-16">
                     <div className="p-4 rounded-full bg-muted mb-4">
                       <User className="w-8 h-8 text-muted-foreground" />
                     </div>
-                    <p className="text-muted-foreground font-medium">
-                      {isLeadsTab ? 'Лиды не найдены' : 'Пользователи не найдены'}
-                    </p>
-                    {!isLeadsTab && (
-                      <Button
-                        onClick={() => setShowCreateModal(true)}
-                        variant="outline"
-                        className="mt-4"
-                      >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Создать первого пользователя
-                      </Button>
-                    )}
+                    <p className="text-muted-foreground font-medium">Пользователи не найдены</p>
+                    <Button
+                      onClick={() => setShowCreateModal(true)}
+                      variant="outline"
+                      className="mt-4"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Создать первого пользователя
+                    </Button>
                   </CardContent>
                 </Card>
               ) : (
-                usersToRender.map((user) => {
+                filteredUsers.map((user) => {
                   const allBusinesses: BusinessListItem[] = [];
 
                   // Добавляем прямые бизнесы (включая заблокированные)
                   const directBusinesses = user.direct_businesses || [];
-                  console.log(`🔍 DEBUG Frontend: Пользователь ${user.email}, прямых бизнесов: ${directBusinesses.length}`);
                   directBusinesses.forEach(business => {
-                    console.log(`  - Бизнес: ${business.name}, is_active: ${business.is_active}, type: ${typeof business.is_active}`);
                     allBusinesses.push({
                       id: business.id,
                       name: business.name,
@@ -603,7 +649,6 @@ export const AdminPage: React.FC = () => {
                   // Добавляем сети (каждая сеть - одна строка, бизнесы внутри раскрываются)
                   user.networks.forEach(network => {
                     const networkBusinesses = network.businesses || [];
-                    console.log(`🔍 DEBUG Frontend: Сеть ${network.name}, бизнесов: ${networkBusinesses.length}`);
                     // Добавляем сеть как отдельный элемент (показываем первый бизнес или название сети)
                     if (networkBusinesses.length > 0) {
                       allBusinesses.push({
@@ -618,8 +663,24 @@ export const AdminPage: React.FC = () => {
                   });
 
                   const regularBusinesses = allBusinesses.filter((item) => !isLeadBusiness(item.business));
-                  const leadBusinesses = allBusinesses.filter((item) => isLeadBusiness(item.business));
-                  const visibleBusinesses = isLeadsTab ? leadBusinesses : regularBusinesses;
+                  const matchedBusinesses = regularBusinesses.filter((item) => {
+                    if (!normalizedSearchQuery) {
+                      return true;
+                    }
+                    const haystack = [
+                      item.name || '',
+                      item.networkName || '',
+                      item.business.address || '',
+                      item.business.description || '',
+                      item.business.id || '',
+                    ].join(' ').toLowerCase();
+                    return haystack.includes(normalizedSearchQuery);
+                  });
+                  const visibleBusinesses = [...matchedBusinesses].sort((left, right) => {
+                    const leftPinned = left.business.id === pinnedBusinessId ? 1 : 0;
+                    const rightPinned = right.business.id === pinnedBusinessId ? 1 : 0;
+                    return rightPinned - leftPinned;
+                  });
                   if (visibleBusinesses.length === 0) {
                     return null;
                   }
@@ -684,6 +745,7 @@ export const AdminPage: React.FC = () => {
                                 <BusinessCard
                                   key={business.id}
                                   business={business}
+                                  isPinned={business.id === pinnedBusinessId}
                                   onSettingsClick={() => setSettingsModal({
                                     isOpen: true,
                                     businessId: business.id,
@@ -704,6 +766,7 @@ export const AdminPage: React.FC = () => {
                       ) : (
                         <BusinessCard
                           business={item.business}
+                          isPinned={item.business.id === pinnedBusinessId}
                           onSettingsClick={() => setSettingsModal({
                             isOpen: true,
                             businessId: item.business.id,
@@ -803,6 +866,7 @@ export const AdminPage: React.FC = () => {
             })()}
           </>
         )}
+        </Suspense>
       </div>
 
       <CreateBusinessModal
@@ -860,6 +924,7 @@ export const AdminPage: React.FC = () => {
 // Business Card Component
 interface BusinessCardProps {
   business: Business;
+  isPinned?: boolean;
   onSettingsClick: () => void;
   onPromoClick: () => void;
   onBlockClick: () => void;
@@ -869,6 +934,7 @@ interface BusinessCardProps {
 
 const BusinessCard: React.FC<BusinessCardProps> = ({
   business,
+  isPinned = false,
   onSettingsClick,
   onPromoClick,
   onBlockClick,
@@ -900,6 +966,11 @@ const BusinessCard: React.FC<BusinessCardProps> = ({
             {isPromo && (
               <span className="px-2 py-0.5 text-xs font-medium bg-primary/20 text-primary rounded-full">
                 Промо
+              </span>
+            )}
+            {isPinned && (
+              <span className="px-2 py-0.5 text-xs font-medium bg-sky-100 text-sky-700 rounded-full">
+                Выбран сейчас
               </span>
             )}
           </div>

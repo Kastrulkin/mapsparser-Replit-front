@@ -1,0 +1,62 @@
+$ bash scripts/deploy_frontend_dist.sh
+OK: frontend/dist integrity check passed
+JS: /assets/index-DYspwMqI.js
+CSS: /assets/index-DS0mDI9T.css
+OK: frontend/dist integrity check passed
+JS: /public-audit/assets/index-DpwYC-IC.js
+CSS: /public-audit/assets/index-BLyCbZxQ.css
+Deploying frontend dist to root@80.78.242.105:/opt/seo-app
+Keeping previous asset files in place to avoid breaking open tabs that still reference older lazy chunks.
+ Container seo-app-postgres-1 Running 
+ Container seo-app-app-1 Running 
+ Container seo-app-postgres-1 Waiting 
+ Container seo-app-postgres-1 Healthy 
+tar: ./assets: file changed as we read it
+tar: .: file changed as we read it
+tar: ./assets: file changed as we read it
+tar: .: file changed as we read it
+Verification:
+1) docker compose ps
+NAME                 IMAGE            COMMAND                  SERVICE    CREATED        STATUS                  PORTS
+seo-app-app-1        seo-app-app      "/app/entrypoint.sh …"   app        17 hours ago   Up 17 hours             0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp
+seo-app-postgres-1   postgres:16      "docker-entrypoint.s…"   postgres   5 days ago     Up 28 hours (healthy)   5432/tcp
+seo-app-worker-1     seo-app-worker   "/app/entrypoint.sh …"   worker     17 hours ago   Up 17 hours             
+2) docker compose logs --since 10m app
+app-1  | 172.18.0.1 - - [21/Apr/2026 13:34:35] "HEAD / HTTP/1.1" 200 -
+app-1  | 172.18.0.1 - - [21/Apr/2026 13:34:36] "HEAD / HTTP/1.1" 200 -
+app-1  | 172.18.0.1 - - [21/Apr/2026 13:34:36] "GET / HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [21/Apr/2026 13:34:36] "GET / HTTP/1.0" 200 -
+3) curl -I http://localhost:8000
+HTTP/1.1 200 OK
+Server: Werkzeug/3.1.8 Python/3.11.15
+Date: Tue, 21 Apr 2026 13:43:48 GMT
+Content-Disposition: inline; filename=index.html
+Content-Type: text/html; charset=utf-8
+Content-Length: 4166
+Last-Modified: Tue, 21 Apr 2026 13:43:46 GMT
+Cache-Control: no-cache
+ETag: "1776779026.0-4166-2731084557"
+Date: Tue, 21 Apr 2026 13:43:48 GMT
+Accept-Ranges: bytes
+Connection: close
+
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0  4166    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0  4166    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+4) targeted frontend checks
+53:  <script type="module" crossorigin src="/assets/index-DYspwMqI.js"></script>
+59:  <link rel="stylesheet" crossorigin href="/assets/index-DS0mDI9T.css">
+7:    <script type="module" crossorigin src="/public-audit/assets/index-DpwYC-IC.js"></script>
+9:    <link rel="stylesheet" crossorigin href="/public-audit/assets/index-BLyCbZxQ.css">
+53:  <script type="module" crossorigin src="/assets/index-DYspwMqI.js"></script>
+Frontend dist deployed to /opt/seo-app/frontend/dist and /opt/seo-app/frontend/public-dist
+
+$ scripts/proof_loop.sh validate repo-stability-20260420
+{
+  "repo_root": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "task_id": "repo-stability-20260420",
+  "task_dir": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/.agent/tasks/repo-stability-20260420",
+  "valid": true,
+  "missing_files": [],
+  "errors": []
+}

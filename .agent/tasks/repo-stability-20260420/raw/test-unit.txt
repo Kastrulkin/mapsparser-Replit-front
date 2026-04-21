@@ -1,0 +1,1 @@
+$ python3 -m py_compile src/main.py src/worker.py src/stripe_integration.py src/api/admin_prospecting.py

@@ -1,0 +1,4 @@
+$ scripts/check_backend_source_of_truth.sh
+OK: backend runtime source-of-truth is clean
+
+$ cd frontend && ./node_modules/.bin/eslint src/pages/Dashboard.tsx src/components/dashboard/DashboardSections.tsx src/components/prospecting/OutreachDetailPanes.tsx src/pages/dashboard/AdminPage.tsx
