@@ -148,7 +148,15 @@ type Lead = {
     google_id?: string;
     category?: string;
     selected_channel?: string;
-    location?: any;
+    pipeline_status?: string;
+    disqualification_reason?: string | null;
+    disqualification_comment?: string | null;
+    postponed_comment?: string | null;
+    next_action_at?: string | null;
+    last_contact_at?: string | null;
+    last_contact_channel?: string | null;
+    last_contact_comment?: string | null;
+    location?: Record<string, unknown> | null;
     status: string;
     created_at?: string;
     updated_at?: string;
@@ -164,6 +172,37 @@ type Lead = {
     parse_task_id?: string | null;
     preferred_language?: string | null;
     enabled_languages?: string[] | null;
+    groups?: Array<{
+        id?: string;
+        name?: string;
+        status?: string;
+        channel_hint?: string | null;
+        city_hint?: string | null;
+    }>;
+    group_count?: number;
+    timeline_preview?: {
+        event_type?: string;
+        comment?: string | null;
+        payload?: Record<string, unknown>;
+        created_at?: string;
+    } | null;
+};
+
+type LeadGroup = {
+    id: string;
+    name: string;
+    description?: string | null;
+    status: string;
+    channel_hint?: string | null;
+    city_hint?: string | null;
+    created_by?: string | null;
+    created_at?: string;
+    updated_at?: string;
+    leads_count?: number;
+    without_channel_count?: number;
+    without_contact_count?: number;
+    without_audit_count?: number;
+    drafts_count?: number;
 };
 
 type SearchJob = {
@@ -173,6 +212,11 @@ type SearchJob = {
     apify_status?: string | null;
     error_text?: string | null;
     results: Lead[];
+};
+
+type SearchDuplicateReason = {
+    code: string;
+    label: string;
 };
 
 type OutreachDraft = {
@@ -297,7 +341,7 @@ type LeadFilters = {
 };
 
 type KanbanColumnId = 'new' | 'shortlist' | 'in_progress' | 'contacted' | 'closed';
-type WorkspaceTab = 'raw' | 'pipeline' | 'outreach' | 'analytics';
+type WorkspaceTab = 'raw' | 'pipeline' | 'groups' | 'outreach' | 'analytics';
 const toOutreachContactFilter = (value: string): OutreachContactFilter => {
     if (value === 'telegram' || value === 'whatsapp' || value === 'max' || value === 'email' || value === 'vk') {
         return value;
@@ -306,7 +350,7 @@ const toOutreachContactFilter = (value: string): OutreachContactFilter => {
 };
 
 const toWorkspaceTab = (value: string): WorkspaceTab => {
-    if (value === 'pipeline' || value === 'outreach' || value === 'analytics') {
+    if (value === 'pipeline' || value === 'groups' || value === 'outreach' || value === 'analytics') {
         return value;
     }
     return 'raw';
@@ -321,7 +365,7 @@ const toOutreachTab = (value: string): OutreachTab => {
 type OutreachTab = 'drafts' | 'queue' | 'sent';
 type PipelineViewMode = 'kanban' | 'list';
 type PipelineQuickFilter = 'all' | 'without_audit' | 'with_audit' | 'priority';
-type PipelineBoardColumnId = 'new' | 'in_progress' | 'ready_to_contact' | 'contact_started' | 'waiting_reply' | 'dialog' | 'qualified' | 'inactive';
+type PipelineBoardColumnId = 'in_progress' | 'postponed' | 'not_relevant' | 'contacted' | 'waiting_reply' | 'replied' | 'converted';
 
 const inferLeadAuditLanguage = (lead: Lead | null): string => {
     const preferred = String(lead?.preferred_language || '').trim().toLowerCase();
@@ -504,6 +548,48 @@ const buildLeadIdentityKeys = (lead: Partial<Lead>) => {
     return keys;
 };
 
+const buildStrictDuplicateReasons = (lead: Partial<Lead>): Array<SearchDuplicateReason & { key: string }> => {
+    const reasons: Array<SearchDuplicateReason & { key: string }> = [];
+    const seen = new Set<string>();
+    const push = (code: string, label: string, value: unknown) => {
+        const normalized = String(value || '').trim().toLowerCase();
+        if (!normalized) {
+            return;
+        }
+        const dedupeKey = `${code}:${normalized}`;
+        if (seen.has(dedupeKey)) {
+            return;
+        }
+        seen.add(dedupeKey);
+        reasons.push({ code, label, key: dedupeKey });
+    };
+
+    push('source_external_id', 'совпадает внешний ID карточки', lead.source_external_id);
+    push('google_id', 'совпадает Google/Yandex ID', lead.google_id);
+
+    const normalizedSourceUrl = normalizeLeadIdentityUrl(lead.source_url);
+    if (normalizedSourceUrl) {
+        push('source_url_normalized', 'совпадает ссылка на карточку', normalizedSourceUrl);
+        extractLeadIdentityIdsFromUrl(normalizedSourceUrl).forEach((item) => {
+            const [code, value] = item.split(':', 2);
+            if (code && value) {
+                push(code, code === 'google_id' ? 'совпадает Google/Yandex ID' : 'совпадает внешний ID карточки', value);
+            }
+        });
+    }
+
+    const normalizedName = normalizeLeadIdentityText(lead.name);
+    const normalizedAddress = normalizeLeadIdentityText(lead.address);
+    const normalizedCity = normalizeLeadIdentityText(lead.city);
+    if (normalizedName && normalizedAddress) {
+        push('name_address', 'совпадают название и адрес', `${normalizedName} | ${normalizedAddress}`);
+    } else if (normalizedName && normalizedCity) {
+        push('name_city', 'совпадают название и город', `${normalizedName} | ${normalizedCity}`);
+    }
+
+    return reasons;
+};
+
 const isWithinLastDays = (value?: string, days?: number) => {
     if (!value || !days) {
         return false;
@@ -563,6 +649,58 @@ const shortlistRejected = 'shortlist_rejected';
 const deferredLead = 'deferred';
 const selectedForOutreach = 'selected_for_outreach';
 const channelSelected = 'channel_selected';
+const PIPELINE_UNPROCESSED = 'unprocessed';
+const PIPELINE_IN_PROGRESS = 'in_progress';
+const PIPELINE_POSTPONED = 'postponed';
+const PIPELINE_NOT_RELEVANT = 'not_relevant';
+const PIPELINE_CONTACTED = 'contacted';
+const PIPELINE_WAITING_REPLY = 'waiting_reply';
+const PIPELINE_REPLIED = 'replied';
+const PIPELINE_CONVERTED = 'converted';
+const PIPELINE_CLOSED_LOST = 'closed_lost';
+
+const getLeadPipelineStatus = (lead?: Partial<Lead> | null) => {
+    const explicit = String(lead?.pipeline_status || '').trim().toLowerCase();
+    if (explicit) {
+        return explicit;
+    }
+    const legacy = String(lead?.status || '').trim().toLowerCase();
+    if (!legacy || legacy === 'new') return PIPELINE_UNPROCESSED;
+    if ([shortlistApproved, selectedForOutreach, channelSelected, 'draft_ready', 'queued_for_send', 'audited', 'matched', 'proposal_draft_ready', 'proposal_approved', 'approved_for_send'].includes(legacy)) return PIPELINE_IN_PROGRESS;
+    if (legacy === 'deferred') return PIPELINE_POSTPONED;
+    if ([shortlistRejected, 'rejected'].includes(legacy)) return PIPELINE_NOT_RELEVANT;
+    if (legacy === 'sent') return PIPELINE_CONTACTED;
+    if (legacy === 'delivered') return PIPELINE_WAITING_REPLY;
+    if (legacy === 'responded') return PIPELINE_REPLIED;
+    if (['qualified', 'converted'].includes(legacy)) return PIPELINE_CONVERTED;
+    if (legacy === 'closed') return PIPELINE_CLOSED_LOST;
+    return PIPELINE_IN_PROGRESS;
+};
+
+const pipelineStatusLabel = (status?: string | null) => {
+    switch (String(status || '').trim().toLowerCase()) {
+        case PIPELINE_UNPROCESSED:
+            return 'Необработан';
+        case PIPELINE_IN_PROGRESS:
+            return 'В работе';
+        case PIPELINE_POSTPONED:
+            return 'Отложен';
+        case PIPELINE_NOT_RELEVANT:
+            return 'Неактуален';
+        case PIPELINE_CONTACTED:
+            return 'Отправлено';
+        case PIPELINE_WAITING_REPLY:
+            return 'Ждём ответ';
+        case PIPELINE_REPLIED:
+            return 'Ответил';
+        case PIPELINE_CONVERTED:
+            return 'Конвертирован';
+        case PIPELINE_CLOSED_LOST:
+            return 'Закрыт';
+        default:
+            return '—';
+    }
+};
 
 const badgeVariantForStatus = (status: string) => {
     if (status === shortlistApproved) {
@@ -578,64 +716,11 @@ const badgeVariantForStatus = (status: string) => {
 };
 
 const statusLabel = (status: string) => {
-    switch (status) {
-        case 'new':
-            return 'Новый';
-        case shortlistApproved:
-            return 'В работе';
-        case selectedForOutreach:
-        case channelSelected:
-            return 'В работе';
-        case 'draft_ready':
-        case 'queued_for_send':
-            return 'Готов к контакту';
-        case 'sent':
-            return 'Первичный контакт начат';
-        case 'delivered':
-            return 'Ждём ответ';
-        case 'responded':
-            return 'Диалог';
-        case 'qualified':
-        case 'converted':
-            return 'Квалифицирован';
-        case shortlistRejected:
-        case deferredLead:
-        case 'rejected':
-        case 'closed':
-            return 'Неактуален';
-        default:
-            return status || 'Без статуса';
-    }
+    return pipelineStatusLabel(getLeadPipelineStatus({ status }));
 };
 
 const workflowStatusLabel = (status: string) => {
-    switch (status) {
-        case 'new':
-            return 'Новый';
-        case shortlistApproved:
-        case selectedForOutreach:
-        case channelSelected:
-            return 'В работе';
-        case 'draft_ready':
-        case 'queued_for_send':
-            return 'Готов к контакту';
-        case 'sent':
-            return 'Первичный контакт начат';
-        case 'delivered':
-            return 'Ждём ответ';
-        case 'responded':
-            return 'Диалог';
-        case 'qualified':
-        case 'converted':
-            return 'Квалифицирован';
-        case shortlistRejected:
-        case deferredLead:
-        case 'rejected':
-        case 'closed':
-            return 'Неактуален';
-        default:
-            return status || 'Без статуса';
-    }
+    return pipelineStatusLabel(getLeadPipelineStatus({ status }));
 };
 
 const kanbanColumnOrder: KanbanColumnId[] = ['new', 'shortlist', 'in_progress', 'contacted', 'closed'];
@@ -696,75 +781,70 @@ const nextKanbanColumn = (columnId: KanbanColumnId): KanbanColumnId | null => {
     return kanbanColumnOrder[idx + 1];
 };
 
-const pipelineBoardColumnOrder: PipelineBoardColumnId[] = ['new', 'in_progress', 'ready_to_contact', 'contact_started', 'waiting_reply', 'dialog', 'qualified', 'inactive'];
+const pipelineBoardColumnOrder: PipelineBoardColumnId[] = ['in_progress', 'postponed', 'not_relevant', 'contacted', 'waiting_reply', 'replied', 'converted'];
 
 const pipelineBoardColumnMeta: Record<PipelineBoardColumnId, { label: string; description: string; statusToSet: string }> = {
-    new: {
-        label: 'Новый',
-        description: 'Лид только попал в работу и ещё не прошёл первую проверку.',
-        statusToSet: 'new',
-    },
     in_progress: {
         label: 'В работе',
-        description: 'Проверяем лид, уточняем контекст и решаем, стоит ли его доводить до контакта.',
-        statusToSet: shortlistApproved,
+        description: 'Подходящие лиды, с которыми сейчас работаем и которых можно собирать в группы.',
+        statusToSet: PIPELINE_IN_PROGRESS,
     },
-    ready_to_contact: {
-        label: 'Готов к контакту',
-        description: 'Лид прошёл подготовку и готов к первому касанию.',
-        statusToSet: selectedForOutreach,
+    postponed: {
+        label: 'Отложенные',
+        description: 'Лиды, к которым нужно вернуться позже с комментарием и следующим шагом.',
+        statusToSet: PIPELINE_POSTPONED,
     },
-    contact_started: {
-        label: 'Первичный контакт начат',
-        description: 'Канал выбран, черновик или отправка уже запущены.',
-        statusToSet: channelSelected,
+    not_relevant: {
+        label: 'Неактуален',
+        description: 'Лиды, которые отсеяны как неподходящие или сняты с процесса.',
+        statusToSet: PIPELINE_NOT_RELEVANT,
+    },
+    contacted: {
+        label: 'Отправлено',
+        description: 'Первичный контакт уже состоялся: вручную или через отправку.',
+        statusToSet: PIPELINE_CONTACTED,
     },
     waiting_reply: {
         label: 'Ждём ответ',
-        description: 'Первичное сообщение ушло, ждём реакцию.',
-        statusToSet: 'sent',
+        description: 'Первое касание уже сделано, сейчас ждём реакцию.',
+        statusToSet: PIPELINE_WAITING_REPLY,
     },
-    dialog: {
-        label: 'Диалог',
+    replied: {
+        label: 'Ответил',
         description: 'Лид ответил, идёт переписка или уточнение деталей.',
-        statusToSet: 'responded',
+        statusToSet: PIPELINE_REPLIED,
     },
-    qualified: {
-        label: 'Квалифицирован',
-        description: 'Лид подтверждён и пригоден для следующего коммерческого шага.',
-        statusToSet: 'qualified',
-    },
-    inactive: {
-        label: 'Неактуален',
-        description: 'Лид снят с процесса, отложен или признан нецелевым.',
-        statusToSet: deferredLead,
+    converted: {
+        label: 'Конвертирован',
+        description: 'Лид перешёл в следующий коммерческий этап или стал клиентом.',
+        statusToSet: PIPELINE_CONVERTED,
     },
 };
 
 const leadToPipelineBoardColumn = (lead: Lead): PipelineBoardColumnId => {
-    const status = String(lead.status || '').trim().toLowerCase();
-    if (!status || status === 'new') {
-        return 'new';
-    }
-    if ([shortlistApproved, selectedForOutreach, channelSelected].includes(status)) {
+    const status = getLeadPipelineStatus(lead);
+    if (status === PIPELINE_IN_PROGRESS || status === PIPELINE_UNPROCESSED) {
         return 'in_progress';
     }
-    if (['draft_ready', 'queued_for_send'].includes(status)) {
-        return 'ready_to_contact';
+    if (status === PIPELINE_POSTPONED) {
+        return 'postponed';
     }
-    if (status === 'sent') {
-        return 'contact_started';
+    if (status === PIPELINE_NOT_RELEVANT || status === PIPELINE_CLOSED_LOST) {
+        return 'not_relevant';
     }
-    if (status === 'delivered') {
+    if (status === PIPELINE_CONTACTED) {
+        return 'contacted';
+    }
+    if (status === PIPELINE_WAITING_REPLY) {
         return 'waiting_reply';
     }
-    if (status === 'responded') {
-        return 'dialog';
+    if (status === PIPELINE_REPLIED) {
+        return 'replied';
     }
-    if (['qualified', 'converted'].includes(status)) {
-        return 'qualified';
+    if (status === PIPELINE_CONVERTED) {
+        return 'converted';
     }
-    return 'inactive';
+    return 'in_progress';
 };
 
 const nextPipelineBoardColumn = (columnId: PipelineBoardColumnId): PipelineBoardColumnId | null => {
@@ -1391,7 +1471,9 @@ export const ProspectingManagement: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState<Record<string, boolean>>({});
     const [savedLeads, setSavedLeads] = useState<Lead[]>([]);
+    const [leadGroups, setLeadGroups] = useState<LeadGroup[]>([]);
     const [loadingLeads, setLoadingLeads] = useState(false);
+    const [loadingGroups, setLoadingGroups] = useState(false);
     const [searchJobId, setSearchJobId] = useState<string | null>(null);
     const [searchJob, setSearchJob] = useState<SearchJob | null>(null);
     const [filters, setFilters] = useState<LeadFilters>(emptyFilters);
@@ -1430,6 +1512,7 @@ export const ProspectingManagement: React.FC = () => {
     const [selectedDraftIds, setSelectedDraftIds] = useState<string[]>([]);
     const [selectedSendReadyDraftIds, setSelectedSendReadyDraftIds] = useState<string[]>([]);
     const [selectedOutreachLeadIds, setSelectedOutreachLeadIds] = useState<string[]>([]);
+    const [selectedPipelineLeadIds, setSelectedPipelineLeadIds] = useState<string[]>([]);
     const [selectedQueueItemIds, setSelectedQueueItemIds] = useState<string[]>([]);
     const [selectedQueueItemId, setSelectedQueueItemId] = useState<string | null>(null);
     const [selectedSentLeadId, setSelectedSentLeadId] = useState<string | null>(null);
@@ -1445,6 +1528,11 @@ export const ProspectingManagement: React.FC = () => {
     const [previewContactsBusy, setPreviewContactsBusy] = useState(false);
     const [previewParseBusy, setPreviewParseBusy] = useState(false);
     const [previewAutoRefreshing, setPreviewAutoRefreshing] = useState(false);
+    const [groupModalOpen, setGroupModalOpen] = useState(false);
+    const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+    const [selectedGroupDetail, setSelectedGroupDetail] = useState<LeadGroup | null>(null);
+    const [selectedGroupLeads, setSelectedGroupLeads] = useState<Lead[]>([]);
+    const [groupBusy, setGroupBusy] = useState<Record<string, boolean>>({});
     const [parseActionBusy, setParseActionBusy] = useState<Record<string, boolean>>({});
     const [draggingLeadId, setDraggingLeadId] = useState<string | null>(null);
     const [dropColumnId, setDropColumnId] = useState<PipelineBoardColumnId | null>(null);
@@ -1461,25 +1549,75 @@ export const ProspectingManagement: React.FC = () => {
         return [];
     }, [results, searchJob]);
 
-    const pipelineEligibleLeads = useMemo(
-        () => savedLeads.filter(isDisplayableLead).filter((lead) => !isRawImportedLead(lead)),
+    const unprocessedLeads = useMemo(
+        () =>
+            savedLeads
+                .filter(isDisplayableLead)
+                .filter((lead) => getLeadPipelineStatus(lead) === PIPELINE_UNPROCESSED),
         [savedLeads]
     );
 
-    const savedLeadIdentityKeys = useMemo(() => {
-        const keys = new Set<string>();
+    const pipelineEligibleLeads = useMemo(
+        () =>
+            savedLeads
+                .filter(isDisplayableLead)
+                .filter((lead) => !isRawImportedLead(lead))
+                .filter((lead) => getLeadPipelineStatus(lead) !== PIPELINE_UNPROCESSED),
+        [savedLeads]
+    );
+
+    const savedLeadDuplicateReasonMap = useMemo(() => {
+        const map = new Map<string, SearchDuplicateReason>();
         pipelineEligibleLeads.forEach((lead) => {
-            buildLeadIdentityKeys(lead).forEach((key) => keys.add(key));
+            buildStrictDuplicateReasons(lead).forEach(({ key, code, label }) => {
+                if (!map.has(key)) {
+                    map.set(key, { code, label });
+                }
+            });
         });
-        return keys;
+        return map;
     }, [pipelineEligibleLeads]);
 
-    const unresolvedSearchResults = useMemo(
-        () => displayedSearchResults.filter((lead) => !buildLeadIdentityKeys(lead).some((key) => savedLeadIdentityKeys.has(key))),
-        [displayedSearchResults, savedLeadIdentityKeys]
+    const searchResultDuplicateAnalysis = useMemo(
+        () =>
+            displayedSearchResults.map((lead) => {
+                const matchedReasons = buildStrictDuplicateReasons(lead)
+                    .filter(({ key }) => savedLeadDuplicateReasonMap.has(key))
+                    .map(({ key }) => savedLeadDuplicateReasonMap.get(key))
+                    .filter((item): item is SearchDuplicateReason => Boolean(item));
+                const dedupedReasons = Array.from(new Map(matchedReasons.map((item) => [item.code, item])).values());
+                return {
+                    lead,
+                    duplicateReasons: dedupedReasons,
+                };
+            }),
+        [displayedSearchResults, savedLeadDuplicateReasonMap]
     );
+    const duplicateSearchResults = useMemo(
+        () => searchResultDuplicateAnalysis.filter((item) => item.duplicateReasons.length > 0),
+        [searchResultDuplicateAnalysis]
+    );
+    const unresolvedSearchResults = useMemo(
+        () => searchResultDuplicateAnalysis.filter((item) => item.duplicateReasons.length === 0).map((item) => item.lead),
+        [searchResultDuplicateAnalysis]
+    );
+    const duplicateReasonSummary = useMemo(() => {
+        const counts = new Map<string, { label: string; count: number }>();
+        duplicateSearchResults.forEach((item) => {
+            item.duplicateReasons.forEach((reason) => {
+                const current = counts.get(reason.code);
+                if (current) {
+                    current.count += 1;
+                } else {
+                    counts.set(reason.code, { label: reason.label, count: 1 });
+                }
+            });
+        });
+        return Array.from(counts.values()).sort((left, right) => right.count - left.count);
+    }, [duplicateSearchResults]);
     const displayedSearchResultsCount = displayedSearchResults.length;
     const unresolvedSearchResultsCount = unresolvedSearchResults.length;
+    const duplicateSearchResultsCount = duplicateSearchResults.length;
     const searchJobResultCount = searchJob?.status === 'completed'
         ? Number(searchJob.result_count || displayedSearchResultsCount || 0)
         : displayedSearchResultsCount;
@@ -1504,8 +1642,8 @@ export const ProspectingManagement: React.FC = () => {
                 return {
                     title: 'Последний запуск завершён',
                     hint: unresolvedSearchResultsCount > 0
-                        ? `Осталось разобрать ${unresolvedSearchResultsCount} компаний из ${searchJob.result_count || 0}.`
-                        : `Все ${searchJob.result_count || 0} компаний из последней выдачи уже разобраны и перенесены по этапам.`,
+                        ? `Осталось разобрать ${unresolvedSearchResultsCount} компаний из ${searchJob.result_count || 0}. Дублей в этом поиске: ${duplicateSearchResultsCount}.`
+                        : `Все ${searchJob.result_count || 0} компаний из последней выдачи уже разобраны или распознаны как дубли.`,
                     tone: 'border-emerald-200 bg-emerald-50 text-emerald-900',
                 };
             }
@@ -1520,7 +1658,7 @@ export const ProspectingManagement: React.FC = () => {
             hint: 'Сначала задайте источник, запрос и город. После запуска здесь появится статус и краткий итог.',
             tone: 'border-gray-200 bg-gray-50 text-gray-800',
         };
-    }, [loading, searchJob, searchPollError, unresolvedSearchResultsCount]);
+    }, [duplicateSearchResultsCount, loading, searchJob, searchPollError, unresolvedSearchResultsCount]);
 
     useEffect(() => {
         if (typeof window === 'undefined') {
@@ -1576,17 +1714,101 @@ export const ProspectingManagement: React.FC = () => {
         return params;
     }, [filters]);
 
-    useEffect(() => {
-        fetchSavedLeads();
+    const fetchSavedLeads = useCallback(async () => {
+        setLoadingLeads(true);
+        try {
+            const response = await api.get('/admin/prospecting/leads', {
+                params: {
+                    ...activeFilters,
+                    compact: '1',
+                    include_groups: '0',
+                    include_timeline: '0',
+                },
+            });
+            setSavedLeads(response.data.leads || []);
+        } catch (error) {
+            console.error('Error fetching leads:', error);
+        } finally {
+            setLoadingLeads(false);
+        }
     }, [activeFilters]);
 
-    useEffect(() => {
-        fetchDrafts();
+    const fetchLeadGroups = useCallback(async () => {
+        setLoadingGroups(true);
+        try {
+            const response = await api.get('/admin/prospecting/groups');
+            setLeadGroups(response.data?.groups || []);
+        } catch (error) {
+            console.error('Error fetching lead groups:', error);
+        } finally {
+            setLoadingGroups(false);
+        }
+    }, []);
+
+    const fetchDrafts = useCallback(async () => {
+        setLoadingDrafts(true);
+        try {
+            const response = await api.get('/admin/prospecting/drafts');
+            const items = response.data?.drafts || [];
+            setDrafts(items);
+            setDraftEdits((prev) => {
+                const next = { ...prev };
+                for (const draft of items) {
+                    if (!(draft.id in next)) {
+                        next[draft.id] = draft.approved_text || draft.edited_text || draft.generated_text || '';
+                    }
+                }
+                return next;
+            });
+        } catch (error) {
+            console.error('Error fetching drafts:', error);
+        } finally {
+            setLoadingDrafts(false);
+        }
+    }, []);
+
+    const fetchSendQueue = useCallback(async () => {
+        setLoadingSendQueue(true);
+        try {
+            const queueResponse = await api.get('/admin/prospecting/send-batches');
+            setSendReadyDrafts(queueResponse.data?.ready_drafts || []);
+            setSendBatches(queueResponse.data?.batches || []);
+            setReactions(queueResponse.data?.reactions || []);
+            setSendDailyCap(queueResponse.data?.daily_cap || 10);
+            try {
+                const healthResponse = await api.get('/admin/prospecting/outbound/health');
+                setTelegramAppStatus(healthResponse.data?.telegram_app || null);
+            } catch (healthError) {
+                console.error('Error fetching outbound health:', healthError);
+                setTelegramAppStatus(null);
+            }
+        } catch (error) {
+            console.error('Error fetching send queue:', error);
+        } finally {
+            setLoadingSendQueue(false);
+        }
     }, []);
 
     useEffect(() => {
-        fetchSendQueue();
-    }, []);
+        void fetchSavedLeads();
+    }, [fetchSavedLeads]);
+
+    useEffect(() => {
+        const availableIds = new Set(savedLeads.map((lead) => String(lead.id || '')).filter(Boolean));
+        setSelectedPipelineLeadIds((prev) => prev.filter((id) => availableIds.has(id)));
+    }, [savedLeads]);
+
+    useEffect(() => {
+        void fetchLeadGroups();
+    }, [fetchLeadGroups]);
+
+    useEffect(() => {
+        void fetchDrafts();
+    }, [fetchDrafts]);
+
+    useEffect(() => {
+        void fetchSendQueue();
+    }, [fetchSendQueue]);
 
     useEffect(() => {
         let cancelled = false;
@@ -1600,7 +1822,7 @@ export const ProspectingManagement: React.FC = () => {
                         if (!cancelled && storedLastJob?.id) {
                             setSearchJob(storedLastJob);
                             if (storedLastJob.status === 'completed') {
-                                const storedResults = (storedLastJob.results || []).map((r: any) => ({ ...r, status: r.status || 'new' }));
+                                const storedResults = (storedLastJob.results || []).map((result: Lead) => ({ ...result, status: result.status || 'new' }));
                                 setResults(storedResults);
                             }
                         }
@@ -1634,7 +1856,7 @@ export const ProspectingManagement: React.FC = () => {
                 window.localStorage.setItem(LAST_SEARCH_JOB_STORAGE_KEY, JSON.stringify(latestJob));
 
                 if (latestJob.status === 'completed') {
-                    const newResults = (latestJob.results || []).map((r: any) => ({ ...r, status: r.status || 'new' }));
+                    const newResults = (latestJob.results || []).map((result: Lead) => ({ ...result, status: result.status || 'new' }));
                     if (newResults.length > 0) {
                         setResults(newResults);
                     }
@@ -1660,12 +1882,12 @@ export const ProspectingManagement: React.FC = () => {
             }
         };
 
-        hydrateLatestSearchJob();
+        void hydrateLatestSearchJob();
 
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [fetchSavedLeads]);
 
     useEffect(() => {
         if (!searchJobId) {
@@ -1686,7 +1908,7 @@ export const ProspectingManagement: React.FC = () => {
                 setSearchJob(job);
                 window.localStorage.setItem(LAST_SEARCH_JOB_STORAGE_KEY, JSON.stringify(job));
                 if (job.status === 'completed') {
-                    const newResults = (job.results || []).map((r: any) => ({ ...r, status: r.status || 'new' }));
+                    const newResults = (job.results || []).map((result: Lead) => ({ ...result, status: result.status || 'new' }));
                     if (newResults.length > 0) {
                         setResults(newResults);
                     }
@@ -1715,68 +1937,12 @@ export const ProspectingManagement: React.FC = () => {
             }
         };
 
-        poll();
+        void poll();
 
         return () => {
             cancelled = true;
         };
-    }, [searchJobId]);
-
-    const fetchSavedLeads = async () => {
-        setLoadingLeads(true);
-        try {
-            const response = await api.get('/admin/prospecting/leads', { params: activeFilters });
-            setSavedLeads(response.data.leads || []);
-        } catch (error) {
-            console.error('Error fetching leads:', error);
-        } finally {
-            setLoadingLeads(false);
-        }
-    };
-
-    const fetchDrafts = async () => {
-        setLoadingDrafts(true);
-        try {
-            const response = await api.get('/admin/prospecting/drafts');
-            const items = response.data?.drafts || [];
-            setDrafts(items);
-            setDraftEdits((prev) => {
-                const next = { ...prev };
-                for (const draft of items) {
-                    if (!(draft.id in next)) {
-                        next[draft.id] = draft.approved_text || draft.edited_text || draft.generated_text || '';
-                    }
-                }
-                return next;
-            });
-        } catch (error) {
-            console.error('Error fetching drafts:', error);
-        } finally {
-            setLoadingDrafts(false);
-        }
-    };
-
-    const fetchSendQueue = async () => {
-        setLoadingSendQueue(true);
-        try {
-            const queueResponse = await api.get('/admin/prospecting/send-batches');
-            setSendReadyDrafts(queueResponse.data?.ready_drafts || []);
-            setSendBatches(queueResponse.data?.batches || []);
-            setReactions(queueResponse.data?.reactions || []);
-            setSendDailyCap(queueResponse.data?.daily_cap || 10);
-            try {
-                const healthResponse = await api.get('/admin/prospecting/outbound/health');
-                setTelegramAppStatus(healthResponse.data?.telegram_app || null);
-            } catch (healthError) {
-                console.error('Error fetching outbound health:', healthError);
-                setTelegramAppStatus(null);
-            }
-        } catch (error) {
-            console.error('Error fetching send queue:', error);
-        } finally {
-            setLoadingSendQueue(false);
-        }
-    };
+    }, [searchJobId, fetchSavedLeads]);
 
     const syncTelegramReplies = async (batchId?: string) => {
         await withSendQueueBusy('telegram-reply-sync', 'sync', async () => {
@@ -1910,9 +2076,9 @@ export const ProspectingManagement: React.FC = () => {
             setImportResult(`Импортировано лидов: ${importedCount}`);
             setImportJson('');
             await fetchSavedLeads();
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Error importing leads:', error);
-            const message = error?.message || 'Не удалось импортировать лиды';
+            const message = getRequestErrorMessage(error, 'Не удалось импортировать лиды');
             setImportResult(`Ошибка импорта: ${message}`);
         } finally {
             setImportBusy(false);
@@ -1923,8 +2089,14 @@ export const ProspectingManagement: React.FC = () => {
         const key = lead.source_external_id || lead.google_id || lead.name;
         setSaving(prev => ({ ...prev, [key]: true }));
         try {
-            await api.post('/admin/prospecting/save', { lead: { ...lead, status: targetStatus } });
-            await fetchSavedLeads();
+            await api.post('/admin/prospecting/save', {
+                lead: {
+                    ...lead,
+                    status: targetStatus,
+                    pipeline_status: PIPELINE_UNPROCESSED,
+                },
+            });
+            await Promise.all([fetchSavedLeads(), fetchLeadGroups()]);
         } catch (error) {
             console.error('Error saving lead:', error);
         } finally {
@@ -1932,8 +2104,49 @@ export const ProspectingManagement: React.FC = () => {
         }
     };
 
+    const normalizeRequestedPipelineStatus = (value: string) => {
+        const normalized = String(value || '').trim().toLowerCase();
+        if (!normalized) {
+            return normalized;
+        }
+        if (normalized === 'new') {
+            return PIPELINE_UNPROCESSED;
+        }
+        if ([shortlistApproved, selectedForOutreach, channelSelected, 'draft_ready', queuedForSend].includes(normalized)) {
+            return PIPELINE_IN_PROGRESS;
+        }
+        if (normalized === 'deferred') {
+            return PIPELINE_POSTPONED;
+        }
+        if ([shortlistRejected, 'rejected'].includes(normalized)) {
+            return PIPELINE_NOT_RELEVANT;
+        }
+        if (normalized === 'sent') {
+            return PIPELINE_CONTACTED;
+        }
+        if (normalized === 'delivered') {
+            return PIPELINE_WAITING_REPLY;
+        }
+        if (normalized === 'responded') {
+            return PIPELINE_REPLIED;
+        }
+        if (['qualified', 'converted'].includes(normalized)) {
+            return PIPELINE_CONVERTED;
+        }
+        return normalized;
+    };
+
     const updateLeadStatusOptimistic = async (leadId: string, nextStatus: string) => {
         if (!leadId) {
+            return;
+        }
+        const normalizedPipelineStatus = normalizeRequestedPipelineStatus(nextStatus);
+        if (normalizedPipelineStatus === PIPELINE_POSTPONED) {
+            await moveLeadToPostponed(leadId);
+            return;
+        }
+        if (normalizedPipelineStatus === PIPELINE_NOT_RELEVANT) {
+            await moveLeadToNotRelevant(leadId);
             return;
         }
         setStatusUpdateBusy((prev) => ({ ...prev, [leadId]: true }));
@@ -1944,11 +2157,22 @@ export const ProspectingManagement: React.FC = () => {
         });
         const previousLeads = savedLeads;
         setSavedLeads((prev) =>
-            prev.map((lead) => (lead.id === leadId ? { ...lead, status: nextStatus } : lead))
+            prev.map((lead) => (
+                lead.id === leadId
+                    ? { ...lead, status: nextStatus, pipeline_status: normalizedPipelineStatus || lead.pipeline_status }
+                    : lead
+            ))
         );
-        setPreviewLead((prev) => (prev && prev.id === leadId ? { ...prev, status: nextStatus } : prev));
+        setPreviewLead((prev) => (
+            prev && prev.id === leadId
+                ? { ...prev, status: nextStatus, pipeline_status: normalizedPipelineStatus || prev.pipeline_status }
+                : prev
+        ));
         try {
-            await api.post(`/admin/prospecting/lead/${leadId}/status`, { status: nextStatus });
+            await api.post(`/admin/prospecting/lead/${leadId}/status`, {
+                pipeline_status: normalizedPipelineStatus || nextStatus,
+                status: nextStatus,
+            });
         } catch (error) {
             console.error('Error updating lead status:', error);
             setSavedLeads(previousLeads);
@@ -1959,6 +2183,176 @@ export const ProspectingManagement: React.FC = () => {
             setStatusUpdateBusy((prev) => {
                 const next = { ...prev };
                 delete next[leadId];
+                return next;
+            });
+        }
+    };
+
+    const moveLeadToPostponed = async (leadId: string) => {
+        const comment = window.prompt('Почему откладываем этого лида?');
+        if (!comment || !comment.trim()) {
+            return;
+        }
+        await api.post(`/admin/prospecting/lead/${leadId}/status`, {
+            pipeline_status: PIPELINE_POSTPONED,
+            postponed_comment: comment.trim(),
+            comment: comment.trim(),
+        });
+        await Promise.all([fetchSavedLeads(), fetchLeadGroups()]);
+    };
+
+    const moveLeadToNotRelevant = async (leadId: string) => {
+        const reason = window.prompt('Причина: not_icp / duplicate / closed_business / no_contacts / weak_potential / wrong_geo / other', 'other');
+        if (!reason || !reason.trim()) {
+            return;
+        }
+        const normalizedReason = reason.trim().toLowerCase();
+        const comment = window.prompt('Комментарий к причине (обязательно для other):', normalizedReason === 'other' ? '' : undefined) || '';
+        await api.post(`/admin/prospecting/lead/${leadId}/status`, {
+            pipeline_status: PIPELINE_NOT_RELEVANT,
+            disqualification_reason: normalizedReason,
+            disqualification_comment: comment.trim() || undefined,
+            comment: comment.trim() || undefined,
+        });
+        await Promise.all([fetchSavedLeads(), fetchLeadGroups()]);
+    };
+
+    const saveSearchResultAsNotRelevant = async (lead: Lead) => {
+        const reason = window.prompt('Причина: not_icp / duplicate / closed_business / no_contacts / weak_potential / wrong_geo / other', 'other');
+        if (!reason || !reason.trim()) {
+            return;
+        }
+        const normalizedReason = reason.trim().toLowerCase();
+        const comment = window.prompt('Комментарий к причине (обязательно для other):', normalizedReason === 'other' ? '' : undefined) || '';
+        if (normalizedReason === 'other' && !comment.trim()) {
+            return;
+        }
+        await saveLead(
+            {
+                ...lead,
+                pipeline_status: PIPELINE_NOT_RELEVANT,
+                disqualification_reason: normalizedReason,
+                disqualification_comment: comment.trim() || undefined,
+            },
+            shortlistRejected
+        );
+    };
+
+    const markLeadManualContact = async (leadId: string, channel: string = 'manual') => {
+        const comment = window.prompt('Комментарий к ручной отправке (необязательно):') || '';
+        await api.post(`/admin/prospecting/lead/${leadId}/manual-contact`, {
+            channel,
+            comment: comment.trim() || undefined,
+        });
+        await Promise.all([fetchSavedLeads(), fetchSendQueue()]);
+    };
+
+    const createLeadGroupFromIds = async (leadIds: string[]) => {
+        const normalizedIds = Array.from(new Set(leadIds.filter(Boolean)));
+        if (normalizedIds.length === 0) {
+            return;
+        }
+        const name = window.prompt('Название группы лидов');
+        if (!name || !name.trim()) {
+            return;
+        }
+        await api.post('/admin/prospecting/groups', {
+            name: name.trim(),
+            lead_ids: normalizedIds,
+        });
+        setSelectedPipelineLeadIds([]);
+        await fetchLeadGroups();
+        setActiveWorkspace('groups');
+    };
+
+    const addLeadToExistingGroup = async (leadId: string) => {
+        const availableGroups = leadGroups.filter((group) => group.id);
+        if (availableGroups.length === 0) {
+            toast.error('Сначала создайте хотя бы одну группу');
+            return;
+        }
+
+        const promptText = availableGroups
+            .map((group, index) => `${index + 1}. ${group.name}`)
+            .join('\n');
+        const rawChoice = window.prompt(`Выберите номер группы:\n${promptText}`);
+        const choice = Number.parseInt(String(rawChoice || '').trim(), 10);
+        if (!Number.isFinite(choice) || choice < 1 || choice > availableGroups.length) {
+            return;
+        }
+
+        const targetGroup = availableGroups[choice - 1];
+        if (!targetGroup?.id) {
+            return;
+        }
+
+        setGroupBusy((prev) => ({ ...prev, [targetGroup.id]: true }));
+        try {
+            await api.post(`/admin/prospecting/groups/${targetGroup.id}/add-leads`, { lead_ids: [leadId] });
+            await Promise.all([fetchSavedLeads(), fetchLeadGroups()]);
+            toast.success(`Лид добавлен в группу «${targetGroup.name || 'без названия'}»`);
+            if (selectedGroupId === targetGroup.id) {
+                await openLeadGroup(targetGroup.id);
+            }
+        } catch (error) {
+            console.error('Error adding single lead to existing group:', error);
+            toast.error('Не удалось добавить лида в группу');
+        } finally {
+            setGroupBusy((prev) => {
+                const next = { ...prev };
+                delete next[targetGroup.id];
+                return next;
+            });
+        }
+    };
+
+    const openLeadGroup = async (groupId: string) => {
+        setSelectedGroupId(groupId);
+        setGroupModalOpen(true);
+        setGroupBusy((prev) => ({ ...prev, [groupId]: true }));
+        try {
+            const response = await api.get(`/admin/prospecting/groups/${groupId}`);
+            setSelectedGroupDetail(response.data?.group || null);
+            setSelectedGroupLeads(response.data?.leads || []);
+        } catch (error) {
+            console.error('Error loading lead group:', error);
+            setSelectedGroupDetail(null);
+            setSelectedGroupLeads([]);
+        } finally {
+            setGroupBusy((prev) => {
+                const next = { ...prev };
+                delete next[groupId];
+                return next;
+            });
+        }
+    };
+
+    const removeLeadFromGroup = async (groupId: string, leadId: string) => {
+        await api.post(`/admin/prospecting/groups/${groupId}/remove-leads`, { lead_ids: [leadId] });
+        await Promise.all([fetchSavedLeads(), fetchLeadGroups(), openLeadGroup(groupId)]);
+    };
+
+    const addSelectedLeadsToGroup = async (groupId: string) => {
+        const normalizedIds = Array.from(new Set(selectedPipelineLeadIds.filter(Boolean)));
+        if (normalizedIds.length === 0) {
+            return;
+        }
+        setGroupBusy((prev) => ({ ...prev, [groupId]: true }));
+        try {
+            await api.post(`/admin/prospecting/groups/${groupId}/add-leads`, { lead_ids: normalizedIds });
+            setSelectedPipelineLeadIds([]);
+            await Promise.all([fetchSavedLeads(), fetchLeadGroups()]);
+            if (selectedGroupId === groupId) {
+                await openLeadGroup(groupId);
+            }
+            toast.success('Выбранные лиды добавлены в группу');
+        } catch (error) {
+            console.error('Error adding leads to group:', error);
+            toast.error('Не удалось добавить выбранные лиды в группу');
+        } finally {
+            setGroupBusy((prev) => {
+                const next = { ...prev };
+                delete next[groupId];
                 return next;
             });
         }
@@ -2473,14 +2867,13 @@ export const ProspectingManagement: React.FC = () => {
     const filteredLeadsForKanban = useMemo(() => sourceFilteredLeads, [sourceFilteredLeads]);
     const pipelineBoardColumns = useMemo(() => {
         const buckets: Record<PipelineBoardColumnId, Lead[]> = {
-            new: [],
             in_progress: [],
-            ready_to_contact: [],
-            contact_started: [],
+            postponed: [],
+            not_relevant: [],
+            contacted: [],
             waiting_reply: [],
-            dialog: [],
-            qualified: [],
-            inactive: [],
+            replied: [],
+            converted: [],
         };
         for (const lead of visiblePipelineLeads) {
             const columnId = leadToPipelineBoardColumn(lead);
@@ -2494,14 +2887,13 @@ export const ProspectingManagement: React.FC = () => {
     }, [visiblePipelineLeads]);
     const pipelineBoardTotals = useMemo(() => {
         const totals: Record<PipelineBoardColumnId, number> = {
-            new: 0,
             in_progress: 0,
-            ready_to_contact: 0,
-            contact_started: 0,
+            postponed: 0,
+            not_relevant: 0,
+            contacted: 0,
             waiting_reply: 0,
-            dialog: 0,
-            qualified: 0,
-            inactive: 0,
+            replied: 0,
+            converted: 0,
         };
         pipelineBoardColumns.forEach((column) => {
             totals[column.id] = column.leads.length;
@@ -2517,14 +2909,13 @@ export const ProspectingManagement: React.FC = () => {
         [reactions]
     );
     const pipelineLeadCount = filteredLeadsForKanban.length;
-    const newLeadCount = pipelineBoardTotals.new;
     const inProgressLeadCount = pipelineBoardTotals.in_progress;
-    const readyToContactLeadCount = pipelineBoardTotals.ready_to_contact;
-    const contactStartedLeadCount = pipelineBoardTotals.contact_started;
+    const postponedLeadCount = pipelineBoardTotals.postponed;
+    const notRelevantLeadCount = pipelineBoardTotals.not_relevant;
+    const contactedLeadCount = pipelineBoardTotals.contacted;
     const waitingReplyLeadCount = pipelineBoardTotals.waiting_reply;
-    const dialogLeadCount = pipelineBoardTotals.dialog;
-    const qualifiedLeadCount = pipelineBoardTotals.qualified;
-    const inactiveLeadCount = pipelineBoardTotals.inactive;
+    const repliedLeadCount = pipelineBoardTotals.replied;
+    const convertedLeadCount = pipelineBoardTotals.converted;
     const pipelineHeaderSummary = useMemo(() => {
         let withoutAudit = 0;
         let withAudit = 0;
@@ -2537,7 +2928,7 @@ export const ProspectingManagement: React.FC = () => {
                 withoutAudit += 1;
             }
             const stage = leadToPipelineBoardColumn(lead);
-            if (stage === 'ready_to_contact') {
+            if (stage === 'contacted') {
                 readyToContact += 1;
             }
             if (stage === 'in_progress') {
@@ -2549,13 +2940,6 @@ export const ProspectingManagement: React.FC = () => {
     const pipelineStageMetrics = useMemo(() => {
         const stages = [
             {
-                key: 'new',
-                label: 'Новый',
-                hint: 'Лид ещё не проходил рабочую проверку',
-                count: newLeadCount,
-                conversion: formatConversion(newLeadCount, pipelineLeadCount),
-            },
-            {
                 key: 'in_progress',
                 label: 'В работе',
                 hint: 'Идёт оценка и подготовка лида',
@@ -2563,58 +2947,57 @@ export const ProspectingManagement: React.FC = () => {
                 conversion: formatConversion(inProgressLeadCount, pipelineLeadCount),
             },
             {
-                key: 'ready_to_contact',
-                label: 'Готов к контакту',
-                hint: 'Можно переходить к первому касанию',
-                count: readyToContactLeadCount,
-                conversion: formatConversion(readyToContactLeadCount, inProgressLeadCount),
+                key: 'postponed',
+                label: 'Отложенные',
+                hint: 'Лиды со следующим шагом на потом',
+                count: postponedLeadCount,
+                conversion: formatConversion(postponedLeadCount, pipelineLeadCount),
             },
             {
-                key: 'contact_started',
-                label: 'Первичный контакт начат',
-                hint: 'Канал или отправка уже запущены',
-                count: contactStartedLeadCount,
-                conversion: formatConversion(contactStartedLeadCount, readyToContactLeadCount),
+                key: 'not_relevant',
+                label: 'Неактуален',
+                hint: 'Лиды, которые не подходят или сняты с процесса',
+                count: notRelevantLeadCount,
+                conversion: formatConversion(notRelevantLeadCount, pipelineLeadCount),
+            },
+            {
+                key: 'contacted',
+                label: 'Отправлено',
+                hint: 'Первое касание уже сделано',
+                count: contactedLeadCount,
+                conversion: formatConversion(contactedLeadCount, inProgressLeadCount),
             },
             {
                 key: 'waiting_reply',
                 label: 'Ждём ответ',
-                hint: 'Сообщение ушло и ждёт реакции',
+                hint: 'Сообщение ушло и ждём реакцию',
                 count: waitingReplyLeadCount,
-                conversion: formatConversion(waitingReplyLeadCount, contactStartedLeadCount),
+                conversion: formatConversion(waitingReplyLeadCount, contactedLeadCount),
             },
             {
-                key: 'dialog',
-                label: 'Диалог',
+                key: 'replied',
+                label: 'Ответил',
                 hint: 'Лид ответил и находится в переписке',
-                count: dialogLeadCount,
-                conversion: formatConversion(dialogLeadCount, waitingReplyLeadCount),
+                count: repliedLeadCount,
+                conversion: formatConversion(repliedLeadCount, waitingReplyLeadCount),
             },
             {
-                key: 'qualified',
-                label: 'Квалифицирован',
-                hint: 'Подтверждён для следующего шага',
-                count: qualifiedLeadCount,
-                conversion: formatConversion(qualifiedLeadCount, dialogLeadCount),
-            },
-            {
-                key: 'inactive',
-                label: 'Неактуален',
-                hint: 'Снят с процесса или больше не нужен',
-                count: inactiveLeadCount,
-                conversion: formatConversion(inactiveLeadCount, pipelineLeadCount),
+                key: 'converted',
+                label: 'Конвертирован',
+                hint: 'Лид доведён до следующего коммерческого шага',
+                count: convertedLeadCount,
+                conversion: formatConversion(convertedLeadCount, repliedLeadCount),
             },
         ];
         return stages;
     }, [
-        contactStartedLeadCount,
-        dialogLeadCount,
+        contactedLeadCount,
+        convertedLeadCount,
         inProgressLeadCount,
-        inactiveLeadCount,
-        newLeadCount,
+        notRelevantLeadCount,
         pipelineLeadCount,
-        qualifiedLeadCount,
-        readyToContactLeadCount,
+        postponedLeadCount,
+        repliedLeadCount,
         waitingReplyLeadCount,
     ]);
     const pipelineEfficiencySummary = useMemo(() => {
@@ -2622,15 +3005,15 @@ export const ProspectingManagement: React.FC = () => {
             foundCount: searchJobResultCount,
             pipelineCount: pipelineLeadCount,
             saveRate: formatConversion(pipelineLeadCount, searchJobResultCount),
-            readyRate: formatConversion(readyToContactLeadCount, pipelineLeadCount),
-            replyRate: formatConversion(dialogLeadCount, waitingReplyLeadCount),
-            qualifiedRate: formatConversion(qualifiedLeadCount, dialogLeadCount),
+            readyRate: formatConversion(contactedLeadCount, pipelineLeadCount),
+            replyRate: formatConversion(repliedLeadCount, waitingReplyLeadCount),
+            qualifiedRate: formatConversion(convertedLeadCount, repliedLeadCount),
         };
     }, [
-        dialogLeadCount,
+        contactedLeadCount,
+        convertedLeadCount,
         pipelineLeadCount,
-        qualifiedLeadCount,
-        readyToContactLeadCount,
+        repliedLeadCount,
         searchJobResultCount,
         waitingReplyLeadCount,
     ]);
@@ -2642,10 +3025,10 @@ export const ProspectingManagement: React.FC = () => {
         () => draftReadyLeads.filter((lead) => !draftChannelFilter || (lead.selected_channel || '') === draftChannelFilter),
         [draftReadyLeads, draftChannelFilter]
     );
-    const getEffectiveDraftChannel = (draft: OutreachDraft) => {
+    const getEffectiveDraftChannel = useCallback((draft: OutreachDraft) => {
         const lead = savedLeadById.get(draft.lead_id);
         return (lead?.selected_channel || draft.channel || '') as string;
-    };
+    }, [savedLeadById]);
     const filteredDrafts = useMemo(
         () =>
             drafts.filter(
@@ -2659,7 +3042,7 @@ export const ProspectingManagement: React.FC = () => {
                     );
                 }
             ),
-        [drafts, draftChannelFilter, draftContactFilter, draftStatusFilter, savedLeadById]
+        [drafts, draftChannelFilter, draftContactFilter, draftStatusFilter, savedLeadById, getEffectiveDraftChannel]
     );
     const filteredSendReadyDrafts = useMemo(
         () => sendReadyDrafts.filter((draft) =>
@@ -2669,13 +3052,13 @@ export const ProspectingManagement: React.FC = () => {
         [sendReadyDrafts, queueChannelFilter, queueContactFilter, savedLeadById]
     );
     const todayBatchDate = useMemo(() => new Date().toISOString().slice(0, 10), []);
-    const queueBatchNeedsAttention = (batch: OutreachBatch) =>
+    const queueBatchNeedsAttention = useCallback((batch: OutreachBatch) =>
         (batch.items || []).some((item) => {
             if (queueChannelFilter && item.channel !== queueChannelFilter) return false;
             if (item.delivery_status === 'failed') return true;
             if (item.delivery_status === 'dlq') return true;
             return item.delivery_status === 'sent' && !item.latest_human_outcome && !item.latest_outcome;
-        });
+        }), [queueChannelFilter]);
     const filteredSendBatches = useMemo(() => {
         const byChannel = sendBatches.filter(
             (batch) =>
@@ -2689,7 +3072,7 @@ export const ProspectingManagement: React.FC = () => {
             return byChannel.filter((batch) => queueBatchNeedsAttention(batch));
         }
         return byChannel;
-    }, [sendBatches, queueChannelFilter, queueContactFilter, queueViewFilter, todayBatchDate, savedLeadById]);
+    }, [sendBatches, queueChannelFilter, queueContactFilter, queueViewFilter, todayBatchDate, savedLeadById, queueBatchNeedsAttention]);
     const visibleQueueItems = useMemo(
         () =>
             filteredSendBatches.flatMap((batch) =>
@@ -2995,9 +3378,9 @@ export const ProspectingManagement: React.FC = () => {
                 setPreviewLead(payload.lead as Lead);
             }
             setPreviewSnapshot((payload.preview as LeadCardPreview) || null);
-        } catch (error: any) {
+        } catch (error: unknown) {
             if (!options?.silent) {
-                setPreviewError(error?.message || 'Не удалось загрузить аудит карточки лида');
+                setPreviewError(getRequestErrorMessage(error, 'Не удалось загрузить аудит карточки лида'));
             }
         } finally {
             if (!options?.silent) {
@@ -3113,8 +3496,8 @@ export const ProspectingManagement: React.FC = () => {
         try {
             await api.post(`/admin/prospecting/lead/${lead.id}/parse`);
             await fetchSavedLeads();
-        } catch (error: any) {
-            toast.error(error?.message || 'Не удалось запустить парсинг карточки');
+        } catch (error: unknown) {
+            toast.error(getRequestErrorMessage(error, 'Не удалось запустить парсинг карточки'));
         } finally {
             setParseActionBusy((prev) => ({ ...prev, [lead.id as string]: false }));
         }
@@ -3135,8 +3518,8 @@ export const ProspectingManagement: React.FC = () => {
                 enabled_languages: [normalized],
             });
             await fetchSavedLeads();
-        } catch (error: any) {
-            toast.error(error?.message || 'Не удалось обновить язык аудита');
+        } catch (error: unknown) {
+            toast.error(getRequestErrorMessage(error, 'Не удалось обновить язык аудита'));
         } finally {
             setLanguageLoading((prev) => ({ ...prev, [lead.id as string]: false }));
         }
@@ -3175,48 +3558,8 @@ export const ProspectingManagement: React.FC = () => {
     const renderKanbanCard = (lead: Lead) => {
         const leadId = lead.id || '';
         const columnId = leadToPipelineBoardColumn(lead);
-        const nextColumnId = nextPipelineBoardColumn(columnId);
-        const nextStatus = nextColumnId ? pipelineBoardColumnMeta[nextColumnId].statusToSet : null;
         const isDragging = leadId && draggingLeadId === leadId;
-        const hasMessenger = extractHasMessengers(lead);
-        const updateBusy = leadId ? statusUpdateBusy[leadId] : false;
-        const updateError = leadId ? statusUpdateError[leadId] : undefined;
-        const auditSummary = leadAuditLanguageSummary(lead);
-        const hasAudit = hasLeadAudit(lead);
-        const normalizedStatus = String(lead.status || '').trim().toLowerCase();
-        const primaryActionLabel = hasAudit ? 'Открыть аудит' : 'Создать аудит';
-        const secondaryActions: Parameters<typeof WorkflowActionRow>[0]['secondary'] = [];
-
-        secondaryActions.push({ label: 'Продолжить', onClick: () => openLeadPreview(lead) });
-
-        if (lead.website) {
-            secondaryActions.push({
-                label: 'Сайт',
-                href: lead.website || '',
-                variant: 'ghost',
-                icon: <ExternalLink className="h-3 w-3" />,
-            });
-        }
-
-        secondaryActions.push({ label: 'Карточка', onClick: () => openLeadPreview(lead) });
-
-        if (nextStatus && leadId) {
-            secondaryActions.push({
-                label: 'Дальше',
-                onClick: () => updateLeadStatusOptimistic(leadId, nextStatus),
-                disabled: updateBusy,
-                icon: updateBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : undefined,
-            });
-        }
-
-        if (leadId) {
-            secondaryActions.push({
-                label: 'Отложить',
-                variant: 'destructive',
-                onClick: () => updateLeadStatusOptimistic(leadId, pipelineBoardColumnMeta.inactive.statusToSet),
-                disabled: updateBusy,
-            });
-        }
+        const isSelected = Boolean(leadId && selectedPipelineLeadIds.includes(leadId));
 
         return (
             <Card
@@ -3224,68 +3567,56 @@ export const ProspectingManagement: React.FC = () => {
                 draggable={Boolean(leadId)}
                 onDragStart={leadId ? handleLeadDragStart(leadId) : undefined}
                 onDragEnd={handleLeadDragEnd}
-                className={`border border-border bg-background shadow-sm transition ${isDragging ? 'opacity-60' : ''}`}
+                onClick={() => openLeadPreview(lead)}
+                className={`cursor-pointer border border-border bg-background shadow-sm transition hover:border-primary/40 hover:shadow-md ${isDragging ? 'opacity-60' : ''}`}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        openLeadPreview(lead);
+                    }
+                }}
             >
-                <CardHeader className="space-y-3 pb-3">
+                <CardHeader className="space-y-2 pb-3">
                     <div className="flex items-start justify-between gap-2">
-                        <div>
-                            <div className="text-sm font-semibold">{lead.name}</div>
-                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                <span>{lead.category || 'Без категории'}</span>
-                                <span className="inline-flex items-center gap-1">
-                                    <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                                    {lead.rating ?? '-'}
-                                </span>
-                                <span>({lead.reviews_count ?? 0})</span>
+                        <div className="flex items-start gap-3">
+                            {leadId ? (
+                                <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onClick={(event) => event.stopPropagation()}
+                                    onChange={(event) =>
+                                        setSelectedPipelineLeadIds((prev) =>
+                                            event.target.checked
+                                                ? Array.from(new Set([...prev, leadId]))
+                                                : prev.filter((id) => id !== leadId)
+                                        )
+                                    }
+                                    className="mt-1 h-4 w-4 rounded border border-input"
+                                />
+                            ) : null}
+                            <div>
+                                <div className="text-sm font-semibold">{lead.name}</div>
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                    {lead.category || 'Без категории'}
+                                </div>
                             </div>
                         </div>
                         <Badge variant="outline" className="text-[11px] font-normal">
                             {sourceLabel(lead.source)}
                         </Badge>
                     </div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+                        <span>{lead.rating ?? '-'}</span>
+                        {lead.reviews_count ? <span>({lead.reviews_count})</span> : null}
+                    </div>
+                    <div className="text-xs leading-5 text-muted-foreground">
                         {lead.address || lead.city || 'Адрес не указан'}
                     </div>
-                    <div className="space-y-2">
-                        <ContactPresenceBadges
-                            title="Каналы связи"
-                            website={lead.website}
-                            phone={lead.phone}
-                            email={lead.email}
-                            telegramUrl={lead.telegram_url}
-                            whatsappUrl={lead.whatsapp_url}
-                            hasMessenger={hasMessenger}
-                        />
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                        {normalizedStatus === shortlistApproved && (
-                            <Badge variant="outline" className="border-amber-200 text-amber-700">
-                                Приоритетный
-                            </Badge>
-                        )}
-                        </div>
-                    </div>
-                    <StatusSummaryCard
-                        title="Аудит"
-                        statusLabel={hasAudit ? 'Готов' : 'Не создан'}
-                        statusVariant={hasAudit ? 'secondary' : 'outline'}
-                        primaryText={hasAudit ? `Основной язык: ${formatLanguageLabel(auditSummary.primary)}` : 'Страница аудита ещё не создана'}
-                        secondaryText={hasAudit
-                            ? auditSummary.total > 1
-                                ? `Ещё ${auditSummary.total - 1} ${auditSummary.total - 1 === 1 ? 'язык' : 'языка'} · обновлено ${formatAuditUpdatedAt(lead.public_audit_updated_at)}`
-                                : `Только 1 языковая версия · обновлено ${formatAuditUpdatedAt(lead.public_audit_updated_at)}`
-                            : 'Создай аудит, чтобы увидеть языки, ссылку и прогресс по странице.'}
-                    />
-                    {updateError && <div className="text-xs text-red-600">{updateError}</div>}
                 </CardHeader>
-                <CardContent className="space-y-3 pt-0">
-                    <WorkflowActionRow
-                        primary={{
-                            label: primaryActionLabel,
-                            onClick: () => hasAudit ? window.open(String(lead.public_audit_url || ''), '_blank', 'noopener') : openLeadPreview(lead),
-                        }}
-                        secondary={secondaryActions}
-                    />
-                </CardContent>
+                <CardContent className="pt-0" />
             </Card>
         );
     };
@@ -3742,7 +4073,7 @@ export const ProspectingManagement: React.FC = () => {
                                 {
                                     label: 'Пропустить этот лид',
                                     variant: 'outline',
-                                    onClick: () => selectedLead?.id && updateLeadStatusOptimistic(selectedLead.id, pipelineBoardColumnMeta.inactive.statusToSet),
+                                    onClick: () => selectedLead?.id && updateLeadStatusOptimistic(selectedLead.id, pipelineBoardColumnMeta.not_relevant.statusToSet),
                                     disabled: !selectedLead?.id,
                                 },
                             ]}
@@ -3948,7 +4279,7 @@ export const ProspectingManagement: React.FC = () => {
                                 {
                                     label: 'Пропустить этот лид',
                                     variant: 'outline',
-                                    onClick: () => selectedLead.id && updateLeadStatusOptimistic(selectedLead.id, pipelineBoardColumnMeta.inactive.statusToSet),
+                                    onClick: () => selectedLead.id && updateLeadStatusOptimistic(selectedLead.id, pipelineBoardColumnMeta.not_relevant.statusToSet),
                                     disabled: !selectedLead.id,
                                 },
                             ] : []}
@@ -3993,6 +4324,8 @@ export const ProspectingManagement: React.FC = () => {
         ? 'raw'
         : activeWorkspace === 'pipeline'
             ? 'inbox'
+            : activeWorkspace === 'groups'
+                ? 'groups'
             : activeWorkspace === 'analytics'
                 ? 'analytics'
                 : outreachTab;
@@ -4009,6 +4342,9 @@ export const ProspectingManagement: React.FC = () => {
                     <div className="flex flex-wrap gap-2 text-xs">
                         <span className="rounded-full border border-current/15 bg-white/60 px-3 py-1">
                             Осталось в выдаче: {unresolvedSearchResults.length}
+                        </span>
+                        <span className="rounded-full border border-current/15 bg-white/60 px-3 py-1">
+                            Дубликаты в поиске: {duplicateSearchResultsCount}
                         </span>
                         <span className="rounded-full border border-current/15 bg-white/60 px-3 py-1">
                             Уже в pipeline: {sourceFilteredLeads.length}
@@ -4163,17 +4499,58 @@ export const ProspectingManagement: React.FC = () => {
             </div>
 
             <div className="rounded-lg border border-border bg-muted/30 p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                    <div className="text-sm font-medium">Необработанные лиды ({unprocessedLeads.length})</div>
+                    {unprocessedLeads.length > 0 ? (
+                        <Button size="sm" variant="outline" onClick={() => createLeadGroupFromIds(unprocessedLeads.map((lead) => lead.id || '').filter(Boolean))}>
+                            Собрать всех в группу
+                        </Button>
+                    ) : null}
+                </div>
+                <div className="space-y-3">
+                    {unprocessedLeads.length === 0 ? (
+                        <div className="rounded-lg border border-dashed border-border bg-background p-4 text-xs text-muted-foreground">
+                            Сюда попадают сохранённые лиды из ручного добавления, парсинга и импорта. Сейчас очередь необработанных пуста.
+                        </div>
+                    ) : (
+                        unprocessedLeads.map(renderKanbanCard)
+                    )}
+                </div>
+            </div>
+
+            {duplicateSearchResultsCount > 0 ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3 text-sm">
+                    <div className="font-medium text-amber-900">
+                        В этом поиске найдено дублей: {duplicateSearchResultsCount}
+                    </div>
+                    <div className="mt-1 text-amber-800">
+                        Эти компании скрыты из блока «Найденные компании», потому что уже совпали с существующими лидами по более строгим признакам.
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                        {duplicateReasonSummary.slice(0, 4).map((item) => (
+                            <span
+                                key={item.label}
+                                className="rounded-full border border-amber-300 bg-white/70 px-3 py-1 text-xs text-amber-900"
+                            >
+                                {item.label}: {item.count}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            ) : null}
+
+            <div className="rounded-lg border border-border bg-muted/30 p-3">
                 <div className="mb-2 text-sm font-medium">
                     Найденные компании ({unresolvedSearchResults.length})
                 </div>
-                <Table>
+                <Table className="table-fixed">
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Компания</TableHead>
-                            <TableHead>Адрес</TableHead>
-                            <TableHead>Контакты</TableHead>
-                            <TableHead>Рейтинг</TableHead>
-                            <TableHead>Действие</TableHead>
+                            <TableHead className="w-[26%]">Компания</TableHead>
+                            <TableHead className="w-[24%]">Адрес</TableHead>
+                            <TableHead className="w-[22%]">Контакты</TableHead>
+                            <TableHead className="w-[10%]">Рейтинг</TableHead>
+                            <TableHead className="w-[18%]">Действие</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -4181,32 +4558,34 @@ export const ProspectingManagement: React.FC = () => {
                             const key = lead.source_external_id || lead.google_id || `${lead.name}-${index}`;
                             return (
                                 <TableRow key={key}>
-                                    <TableCell className="font-medium min-w-[260px]">
-                                        <div>{lead.name}</div>
-                                        <div className="text-xs text-muted-foreground">{lead.category || 'Без категории'}</div>
+                                    <TableCell className="font-medium">
+                                        <div className="break-words">{lead.name}</div>
+                                        <div className="text-xs text-muted-foreground break-words">{lead.category || 'Без категории'}</div>
                                         <div className="mt-1">
                                             <Badge variant="outline" className="text-[11px] font-normal">
                                                 {sourceLabel(lead.source)}
                                             </Badge>
                                         </div>
                                     </TableCell>
-                                    <TableCell className="min-w-[220px]">
-                                        <div className="flex items-center gap-1 text-sm">
-                                            <MapPin className="h-3 w-3" />
-                                            <span className="truncate" title={lead.address}>{lead.address || lead.city || '-'}</span>
+                                    <TableCell>
+                                        <div className="flex items-start gap-1 text-sm">
+                                            <MapPin className="mt-0.5 h-3 w-3 shrink-0" />
+                                            <span className="min-w-0 break-words whitespace-normal" title={lead.address}>
+                                                {lead.address || lead.city || '-'}
+                                            </span>
                                         </div>
                                     </TableCell>
-                                    <TableCell className="min-w-[220px]">
+                                    <TableCell className="align-top">
                                         <ContactStack lead={lead} />
                                     </TableCell>
-                                    <TableCell className="min-w-[120px]">
+                                    <TableCell className="align-top">
                                         <div className="flex items-center gap-1">
                                             <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
                                             {lead.rating ?? '-'}
                                             <span className="text-muted-foreground">({lead.reviews_count ?? 0})</span>
                                         </div>
                                     </TableCell>
-                                    <TableCell className="min-w-[160px]">
+                                    <TableCell className="align-top">
                                         <div className="flex flex-wrap gap-2">
                                             <Button
                                                 size="sm"
@@ -4215,14 +4594,14 @@ export const ProspectingManagement: React.FC = () => {
                                                 disabled={saving[key]}
                                             >
                                                 {saving[key] ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : <Save className="mr-2 h-3 w-3" />}
-                                                В pipeline
+                                                В необработанные
                                             </Button>
                                             <Button
                                                 size="sm"
                                                 variant="outline"
-                                                onClick={() => saveLead(lead, shortlistRejected)}
+                                                onClick={() => saveSearchResultAsNotRelevant(lead)}
                                             >
-                                                Отклонить
+                                                Сразу в неактуальные
                                             </Button>
                                         </div>
                                     </TableCell>
@@ -4284,6 +4663,12 @@ export const ProspectingManagement: React.FC = () => {
                                     onSaveContacts={saveLeadContactsFromPreview}
                                     onRunLiveParse={runLiveParseFromPreview}
                                     onRefreshPreview={refreshPreviewStatus}
+                                    onMoveToPostponed={previewLead.id ? () => moveLeadToPostponed(previewLead.id || '') : undefined}
+                                    onMoveToNotRelevant={previewLead.id ? () => moveLeadToNotRelevant(previewLead.id || '') : undefined}
+                                    onMarkManualContact={previewLead.id ? () => markLeadManualContact(previewLead.id || '', previewLead.selected_channel || bestAvailableOutreachChannel(previewLead)) : undefined}
+                                    onCreateLeadGroup={previewLead.id ? () => createLeadGroupFromIds([previewLead.id || '']) : undefined}
+                                    onAddToExistingGroup={previewLead.id ? () => addLeadToExistingGroup(previewLead.id || '') : undefined}
+                                    onRemoveFromGroup={previewLead.id ? (groupId: string) => removeLeadFromGroup(groupId, previewLead.id || '') : undefined}
                                     onClose={closeLeadPreview}
                                 />
                             </Suspense>
@@ -4291,6 +4676,103 @@ export const ProspectingManagement: React.FC = () => {
                     )}
                 </SheetContent>
             </Sheet>
+
+            {groupModalOpen && selectedGroupId ? (
+                <OutreachDetailModal
+                    title={selectedGroupDetail?.name || 'Группа лидов'}
+                    description={selectedGroupDetail?.description || 'Состав группы и быстрые ручные действия по каждому лиду.'}
+                    onClose={() => {
+                        setGroupModalOpen(false);
+                        setSelectedGroupId(null);
+                        setSelectedGroupDetail(null);
+                        setSelectedGroupLeads([]);
+                    }}
+                >
+                    <div className="space-y-4">
+                        {groupBusy[selectedGroupId] ? (
+                            <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Загружаем группу...
+                            </div>
+                        ) : (
+                            <>
+                                <div className="grid gap-3 md:grid-cols-4">
+                                    <StatusSummaryCard
+                                        title="Лидов"
+                                        statusLabel={String(selectedGroupLeads.length)}
+                                        statusVariant="secondary"
+                                        primaryText="Всего в группе"
+                                        secondaryText="Лиды остаются в своих этапах и могут входить в несколько групп."
+                                    />
+                                    <StatusSummaryCard
+                                        title="Без аудита"
+                                        statusLabel={String(selectedGroupLeads.filter((lead) => !hasLeadAudit(lead)).length)}
+                                        statusVariant="outline"
+                                        primaryText="Нужно добрать аудит"
+                                        secondaryText="Хорошая точка для массовой подготовки."
+                                    />
+                                    <StatusSummaryCard
+                                        title="Без канала"
+                                        statusLabel={String(selectedGroupLeads.filter((lead) => !lead.selected_channel).length)}
+                                        statusVariant="outline"
+                                        primaryText="Канал не выбран"
+                                        secondaryText="Можно сначала сегментировать по Telegram / WhatsApp / Email / Manual."
+                                    />
+                                    <StatusSummaryCard
+                                        title="Отправлено"
+                                        statusLabel={String(selectedGroupLeads.filter((lead) => getLeadPipelineStatus(lead) === PIPELINE_CONTACTED).length)}
+                                        statusVariant="secondary"
+                                        primaryText="Уже контактированы"
+                                        secondaryText="Проверьте, кого оставить в группе, а кого убрать."
+                                    />
+                                </div>
+                                <div className="space-y-3">
+                                    {selectedGroupLeads.length === 0 ? (
+                                        <div className="rounded-lg border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
+                                            В группе пока нет лидов.
+                                        </div>
+                                    ) : (
+                                        selectedGroupLeads.map((lead) => (
+                                            <Card key={lead.id || lead.name} className="border border-border bg-background">
+                                                <CardContent className="flex flex-col gap-3 p-4">
+                                                    <LeadMetaSummary lead={lead} showChannel />
+                                                    <div className="flex flex-wrap gap-2">
+                                                        <Badge variant="outline">{pipelineStatusLabel(getLeadPipelineStatus(lead))}</Badge>
+                                                        {(lead.group_count || 0) > 1 ? <Badge variant="outline">Ещё групп: {(lead.group_count || 1) - 1}</Badge> : null}
+                                                    </div>
+                                                    <WorkflowActionRow
+                                                        primary={{ label: 'Карточка лида', onClick: () => lead.id && openLeadPreviewById(lead.id, lead) }}
+                                                        secondary={[
+                                                            {
+                                                                label: 'Отправлено вручную',
+                                                                onClick: () => lead.id && markLeadManualContact(lead.id, lead.selected_channel || bestAvailableOutreachChannel(lead)),
+                                                            },
+                                                            {
+                                                                label: 'Отложить',
+                                                                onClick: () => lead.id && moveLeadToPostponed(lead.id),
+                                                            },
+                                                            {
+                                                                label: 'Неактуален',
+                                                                variant: 'destructive',
+                                                                onClick: () => lead.id && moveLeadToNotRelevant(lead.id),
+                                                            },
+                                                            {
+                                                                label: 'Убрать из группы',
+                                                                variant: 'ghost',
+                                                                onClick: () => lead.id && removeLeadFromGroup(selectedGroupId, lead.id),
+                                                            },
+                                                        ]}
+                                                    />
+                                                </CardContent>
+                                            </Card>
+                                        ))
+                                    )}
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </OutreachDetailModal>
+            ) : null}
 
             <Sheet open={intakeOpen} onOpenChange={setIntakeOpen}>
                 <SheetContent side="right" className="w-[96vw] overflow-y-auto sm:max-w-5xl">
@@ -4375,9 +4857,10 @@ export const ProspectingManagement: React.FC = () => {
                 activeWorkspace={activeWorkspace}
                 onWorkspaceChange={(value) => setActiveWorkspace(toWorkspaceTab(value))}
                 workspaces={[
-                    { value: 'raw', label: 'Собранные', count: unresolvedSearchResults.length },
-                    { value: 'pipeline', label: 'Pipeline', count: sourceFilteredLeads.length },
-                    { value: 'outreach', label: 'Outreach', count: drafts.length + visibleQueueItems.length + sentDetailRows.length },
+                    { value: 'raw', label: 'Необработанные', count: unprocessedLeads.length + unresolvedSearchResults.length },
+                    { value: 'pipeline', label: 'Воронка', count: sourceFilteredLeads.length },
+                    { value: 'groups', label: 'Группы лидов', count: leadGroups.length },
+                    { value: 'outreach', label: 'Аутрич', count: drafts.length + visibleQueueItems.length + sentDetailRows.length },
                     { value: 'analytics', label: 'Аналитика' },
                 ]}
                 outreachTabs={[
@@ -4392,11 +4875,13 @@ export const ProspectingManagement: React.FC = () => {
             <Tabs value={visibleMainTab} className="w-full">
                 <TabsContent value="raw" className="space-y-6">
                     <ProspectingIntakePanel
-                        title="Собранные лиды"
-                        description="Сырые результаты последнего поиска, импорта и ручного добавления. Здесь отбираем входящий поток перед переносом в pipeline."
+                        title="Необработанные"
+                        description="Все новые лиды сначала попадают сюда. Здесь разбираем ручной ввод, импорт и результаты поиска перед переводом в работу или в неактуальные."
                         badges={[
-                            { label: 'В выдаче', value: unresolvedSearchResults.length },
-                            { label: 'Уже в pipeline', value: sourceFilteredLeads.length },
+                            { label: 'Найдено в последнем поиске', value: searchJob?.result_count || 0 },
+                            { label: 'Сохранено в необработанные', value: unprocessedLeads.length },
+                            { label: 'Ещё не сохранено из выдачи', value: unresolvedSearchResults.length },
+                            { label: 'Дубликаты в последнем поиске', value: duplicateSearchResultsCount },
                         ]}
                     >
                         {renderIntakeContent()}
@@ -4488,6 +4973,15 @@ export const ProspectingManagement: React.FC = () => {
                             )}
                         </div>
                     )}
+
+                    <StickyBulkActionBar count={selectedPipelineLeadIds.length} label="Выбранные лиды можно собрать в группу, отложить, убрать в неактуальные или отметить как отправленные вручную.">
+                        <Button size="sm" onClick={() => createLeadGroupFromIds(selectedPipelineLeadIds)} disabled={selectedPipelineLeadIds.length === 0}>
+                            Собрать в группу
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => Promise.all(selectedPipelineLeadIds.map((leadId) => markLeadManualContact(leadId))).catch(() => undefined)} disabled={selectedPipelineLeadIds.length === 0}>
+                            Отправлено вручную
+                        </Button>
+                    </StickyBulkActionBar>
                 </TabsContent>
 
                 <TabsContent value="analytics" className="space-y-6">
@@ -4503,11 +4997,11 @@ export const ProspectingManagement: React.FC = () => {
                                 items={[
                                     { key: 'found', label: 'Найдено', value: pipelineEfficiencySummary.foundCount, helper: 'Последний поиск / импорт' },
                                     { key: 'pipeline', label: 'В pipeline', value: pipelineEfficiencySummary.pipelineCount, helper: `Сохранение: ${pipelineEfficiencySummary.saveRate}` },
-                                    { key: 'ready', label: 'Готово к контакту', value: readyToContactLeadCount, helper: `Из pipeline: ${pipelineEfficiencySummary.readyRate}` },
+                                    { key: 'contacted', label: 'Отправлено', value: contactedLeadCount, helper: `Из pipeline: ${pipelineEfficiencySummary.readyRate}` },
                                     { key: 'waiting', label: 'Ждём ответ', value: waitingReplyLeadCount, helper: 'Сообщение ушло, но ответа ещё нет' },
-                                    { key: 'dialog', label: 'Диалог', value: dialogLeadCount, helper: `От ответа: ${pipelineEfficiencySummary.replyRate}` },
-                                    { key: 'qualified', label: 'Квалифицировано', value: qualifiedLeadCount, helper: `Из диалога: ${pipelineEfficiencySummary.qualifiedRate}` },
-                                    { key: 'inactive', label: 'Неактуально', value: inactiveLeadCount, helper: 'Сняты с процесса или отложены' },
+                                    { key: 'replied', label: 'Ответили', value: repliedLeadCount, helper: `От ответа: ${pipelineEfficiencySummary.replyRate}` },
+                                    { key: 'converted', label: 'Конвертировано', value: convertedLeadCount, helper: `Из ответа: ${pipelineEfficiencySummary.qualifiedRate}` },
+                                    { key: 'inactive', label: 'Неактуально / отложено', value: notRelevantLeadCount + postponedLeadCount, helper: 'Сняты с процесса или отложены' },
                                 ]}
                             />
 
@@ -4535,10 +5029,11 @@ export const ProspectingManagement: React.FC = () => {
                                     badgeValue: window.pipelineCount,
                                     stats: [
                                         { key: `${window.key}-progress`, label: 'В работе', value: window.inProgressCount, helper: `Conv: ${formatConversion(window.inProgressCount, window.pipelineCount)}` },
-                                        { key: `${window.key}-ready`, label: 'Готов к контакту', value: window.readyToContactCount, helper: `Conv: ${formatConversion(window.readyToContactCount, window.inProgressCount)}` },
-                                        { key: `${window.key}-waiting`, label: 'Ждём ответ', value: window.waitingReplyCount, helper: `Conv: ${formatConversion(window.waitingReplyCount, window.readyToContactCount)}` },
-                                        { key: `${window.key}-dialog`, label: 'Диалог', value: window.dialogCount, helper: `Conv: ${formatConversion(window.dialogCount, window.waitingReplyCount)}` },
-                                        { key: `${window.key}-qualified`, label: 'Квалифицирован', value: window.qualifiedCount, helper: `Conv: ${formatConversion(window.qualifiedCount, window.dialogCount)}` },
+                                        { key: `${window.key}-contacted`, label: 'Отправлено', value: window.contactedCount, helper: `Conv: ${formatConversion(window.contactedCount, window.inProgressCount)}` },
+                                        { key: `${window.key}-inactive`, label: 'Неактуально / отложено', value: window.closedCount, helper: `Conv: ${formatConversion(window.closedCount, window.pipelineCount)}` },
+                                        { key: `${window.key}-queue`, label: 'Ждём ответ', value: window.deliveredCount, helper: `Conv: ${formatConversion(window.deliveredCount, window.contactedCount)}` },
+                                        { key: `${window.key}-reply`, label: 'Ответили', value: window.reactionCount, helper: `Conv: ${formatConversion(window.reactionCount, window.deliveredCount)}` },
+                                        { key: `${window.key}-positive`, label: 'Позитивный ответ', value: window.positiveCount, helper: `Conv: ${formatConversion(window.positiveCount, window.reactionCount)}` },
                                     ],
                                 }))}
                             />
@@ -4555,6 +5050,65 @@ export const ProspectingManagement: React.FC = () => {
 
                 <TabsContent value="drafts" className="space-y-4">
                     {renderDraftsWorkspace()}
+                </TabsContent>
+
+                <TabsContent value="groups" className="space-y-4">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Группы лидов</CardTitle>
+                            <CardDescription>
+                                Рабочие подборки для ручной сегментации, аудитов и дальнейшей отправки. Лид остаётся в своей стадии и может входить в несколько групп.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            {loadingGroups ? (
+                                <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Загружаем группы...
+                                </div>
+                            ) : leadGroups.length === 0 ? (
+                                <div className="rounded-lg border border-dashed border-border bg-background p-6 text-sm text-muted-foreground">
+                                    Групп пока нет. Выделите лиды в этапе «В работе» или «Необработанные» и соберите первую группу.
+                                </div>
+                            ) : (
+                                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                    {leadGroups.map((group) => (
+                                        <Card key={group.id} className="border border-border bg-background shadow-sm">
+                                            <CardHeader className="pb-3">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div>
+                                                        <CardTitle className="text-base">{group.name}</CardTitle>
+                                                        <CardDescription className="mt-1">
+                                                            {group.description || 'Рабочая группа для ручной обработки и массовых действий.'}
+                                                        </CardDescription>
+                                                    </div>
+                                                    <Badge variant="outline">{group.leads_count || 0}</Badge>
+                                                </div>
+                                            </CardHeader>
+                                            <CardContent className="space-y-3">
+                                                <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                                                    <div>Без аудита: <span className="font-medium text-foreground">{group.without_audit_count || 0}</span></div>
+                                                    <div>Без канала: <span className="font-medium text-foreground">{group.without_channel_count || 0}</span></div>
+                                                    <div>Без контакта: <span className="font-medium text-foreground">{group.without_contact_count || 0}</span></div>
+                                                    <div>Черновиков: <span className="font-medium text-foreground">{group.drafts_count || 0}</span></div>
+                                                </div>
+                                                <WorkflowActionRow
+                                                    primary={{ label: 'Открыть группу', onClick: () => openLeadGroup(group.id) }}
+                                                    secondary={[
+                                                        {
+                                                            label: 'Добавить выбранные',
+                                                            onClick: () => addSelectedLeadsToGroup(group.id),
+                                                            disabled: selectedPipelineLeadIds.length === 0 || Boolean(groupBusy[group.id]),
+                                                        },
+                                                    ]}
+                                                />
+                                            </CardContent>
+                                        </Card>
+                                    ))}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
                 </TabsContent>
 
                 <TabsContent value="queue" className="space-y-4">

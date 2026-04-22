@@ -99,66 +99,11 @@ class DatabaseManager:
         if not businesses:
             return businesses
 
-        business_ids = [str(item.get("id") or "").strip() for item in businesses if str(item.get("id") or "").strip()]
-        owner_ids = [str(item.get("owner_id") or "").strip() for item in businesses if str(item.get("owner_id") or "").strip()]
-        linked_lead_business_ids: set[str] = set()
-        superadmin_owner_ids: set[str] = set()
-
-        try:
-            cursor = self.conn.cursor()
-            if business_ids:
-                cursor.execute(
-                    """
-                    SELECT column_name
-                    FROM information_schema.columns
-                    WHERE table_schema = 'public' AND table_name = 'prospectingleads'
-                    """
-                )
-                lead_columns = {
-                    str(row.get("column_name") if hasattr(row, "get") else row[0])
-                    for row in (cursor.fetchall() or [])
-                    if (row.get("column_name") if hasattr(row, "get") else (row[0] if row else None))
-                }
-                if "business_id" in lead_columns:
-                    cursor.execute(
-                        """
-                        SELECT DISTINCT business_id
-                        FROM prospectingleads
-                        WHERE business_id = ANY(%s)
-                          AND business_id IS NOT NULL
-                        """,
-                        (business_ids,),
-                    )
-                    for row in cursor.fetchall() or []:
-                        business_id = str(row.get("business_id") if hasattr(row, "get") else row[0] or "").strip()
-                        if business_id:
-                            linked_lead_business_ids.add(business_id)
-
-            if owner_ids:
-                cursor.execute(
-                    """
-                    SELECT id
-                    FROM users
-                    WHERE is_superadmin = TRUE
-                      AND id = ANY(%s)
-                    """,
-                    (owner_ids,),
-                )
-                for row in cursor.fetchall() or []:
-                    owner_id = str(row.get("id") if hasattr(row, "get") else row[0] or "").strip()
-                    if owner_id:
-                        superadmin_owner_ids.add(owner_id)
-        except Exception as exc:
-            print(f"⚠️ Не удалось вычислить lead business flags: {exc}")
-
         for business in businesses:
             moderation_status = str(business.get("moderation_status") or "").strip().lower()
             description = str(business.get("description") or "").strip().lower()
             is_shadow_lead = description.startswith("lead shadow business for outreach lead")
-            business_id = str(business.get("id") or "").strip()
-            owner_id = str(business.get("owner_id") or "").strip()
-            is_superadmin_linked_lead = business_id in linked_lead_business_ids and owner_id in superadmin_owner_ids
-            is_lead = moderation_status == "lead_outreach" or is_shadow_lead or is_superadmin_linked_lead
+            is_lead = moderation_status == "lead_outreach" or is_shadow_lead
             business["is_lead_business"] = is_lead
             business["entity_group"] = "lead" if is_lead else "company"
         return businesses
@@ -602,6 +547,28 @@ class DatabaseManager:
         updates = []
         values: List[Any] = []
 
+        def coerce_json_value(field_name: str, value: Any) -> Optional[Json]:
+            if value is None:
+                return None
+            if isinstance(value, (dict, list)):
+                return Json(value)
+            if isinstance(value, str):
+                text = value.strip()
+                if not text:
+                    return None
+                try:
+                    parsed = json.loads(text)
+                    return Json(parsed)
+                except Exception:
+                    # Fallback for legacy parsers that still send plain strings.
+                    if field_name == "categories":
+                        return Json([text])
+                    return Json({"raw": text})
+            # Keep primitive JSON scalars valid for json/jsonb fields.
+            if isinstance(value, (int, float, bool)):
+                return Json(value)
+            return None
+
         def has_value(v: Any) -> bool:
             if v is None:
                 return False
@@ -628,8 +595,10 @@ class DatabaseManager:
                     continue
 
             if card_key in json_fields:
-                if isinstance(v, (dict, list)):
-                    v = Json(v)
+                json_value = coerce_json_value(card_key, v)
+                if json_value is None:
+                    continue
+                v = json_value
 
             updates.append(f"{col} = %s")
             values.append(v)
@@ -665,10 +634,30 @@ class DatabaseManager:
             return 0
         cursor = self.conn.cursor()
         saved = 0
+        source_alias_map = {
+            "yandex_maps": ["yandex_maps", "yandex_business", "apify_yandex"],
+            "2gis": ["2gis", "apify_2gis", "two_gis"],
+            "google_maps": ["google_maps", "google_business", "apify_google"],
+            "apple_maps": ["apple_maps", "apify_apple"],
+        }
+
+        def _normalize_service_source(raw_source: Any) -> str:
+            source_value = str(raw_source or "yandex_maps").strip().lower() or "yandex_maps"
+            for canonical_source, aliases in source_alias_map.items():
+                if source_value in aliases:
+                    return canonical_source
+            return source_value
+
+        def _source_aliases(source_value: str) -> List[str]:
+            normalized = _normalize_service_source(source_value)
+            aliases = source_alias_map.get(normalized)
+            if aliases:
+                return aliases
+            return [normalized]
         try:
             parsed_sources = sorted(
                 {
-                    (row.get("source") or "yandex_maps").strip() or "yandex_maps"
+                    _normalize_service_source((row.get("source") if isinstance(row, dict) else None))
                     for row in service_rows
                     if isinstance(row, dict) and row.get("name")
                 }
@@ -691,7 +680,7 @@ class DatabaseManager:
             for row in rows_sorted:
                 if not row or not row.get("name"):
                     continue
-                source = (row.get("source") or "yandex_maps").strip() or "yandex_maps"
+                source = _normalize_service_source(row.get("source"))
                 name_value = (row.get("name") or "").strip()
                 lower_name = name_value.lower()
                 if re.search(r"[✅❌🔥⭐✨💥]", name_value) and "₽" in name_value and " за " in lower_name:
@@ -725,46 +714,43 @@ class DatabaseManager:
                 effective_source_counts[source] = int(effective_source_counts.get(source) or 0) + 1
 
             if parsed_sources:
-                cursor.execute(
-                    """
-                    SELECT source, COUNT(*) AS cnt
-                    FROM userservices
-                    WHERE business_id = %s
-                      AND raw IS NOT NULL
-                      AND COALESCE(is_active, TRUE) = TRUE
-                      AND source = ANY(%s)
-                    GROUP BY source
-                    """,
-                    (business_id, parsed_sources),
-                )
-                for row in cursor.fetchall() or []:
-                    src = (row.get("source") if hasattr(row, "get") else row[0]) or "yandex_maps"
-                    cnt = row.get("cnt") if hasattr(row, "get") else row[1]
-                    try:
-                        existing_active_counts[str(src)] = int(cnt or 0)
-                    except Exception:
-                        existing_active_counts[str(src)] = 0
-
-                cursor.execute(
-                    """
-                    SELECT source, COUNT(*) AS cnt
-                    FROM userservices
-                    WHERE business_id = %s
-                      AND raw IS NOT NULL
-                      AND source = ANY(%s)
-                    GROUP BY source
-                    """,
-                    (business_id, parsed_sources),
-                )
-                for row in cursor.fetchall() or []:
-                    src = (row.get("source") if hasattr(row, "get") else row[0]) or "yandex_maps"
-                    cnt = row.get("cnt") if hasattr(row, "get") else row[1]
-                    try:
-                        existing_total_counts[str(src)] = int(cnt or 0)
-                    except Exception:
-                        existing_total_counts[str(src)] = 0
-
                 for src in parsed_sources:
+                    aliases = _source_aliases(src)
+                    cursor.execute(
+                        """
+                        SELECT COUNT(*) AS cnt
+                        FROM userservices
+                        WHERE business_id = %s
+                          AND raw IS NOT NULL
+                          AND COALESCE(is_active, TRUE) = TRUE
+                          AND LOWER(COALESCE(source, '')) = ANY(%s)
+                        """,
+                        (business_id, aliases),
+                    )
+                    active_row = cursor.fetchone()
+                    active_cnt = active_row.get("cnt") if hasattr(active_row, "get") else (active_row[0] if active_row else 0)
+                    try:
+                        existing_active_counts[src] = int(active_cnt or 0)
+                    except Exception:
+                        existing_active_counts[src] = 0
+
+                    cursor.execute(
+                        """
+                        SELECT COUNT(*) AS cnt
+                        FROM userservices
+                        WHERE business_id = %s
+                          AND raw IS NOT NULL
+                          AND LOWER(COALESCE(source, '')) = ANY(%s)
+                        """,
+                        (business_id, aliases),
+                    )
+                    total_row = cursor.fetchone()
+                    total_cnt = total_row.get("cnt") if hasattr(total_row, "get") else (total_row[0] if total_row else 0)
+                    try:
+                        existing_total_counts[src] = int(total_cnt or 0)
+                    except Exception:
+                        existing_total_counts[src] = 0
+
                     prev_active_count = int(existing_active_counts.get(src) or 0)
                     prev_total_count = int(existing_total_counts.get(src) or 0)
                     prev_count = max(prev_active_count, prev_total_count)
@@ -786,21 +772,22 @@ class DatabaseManager:
             for src in parsed_sources:
                 if src in skipped_sources:
                     continue
+                aliases = _source_aliases(src)
                 cursor.execute(
                     """
                     UPDATE userservices
                     SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
                     WHERE business_id = %s
-                      AND source = %s
+                      AND LOWER(COALESCE(source, '')) = ANY(%s)
                       AND raw IS NOT NULL
                     """,
-                    (business_id, src),
+                    (business_id, aliases),
                 )
             seen_keys = set()
             for row in prepared_rows:
                 if not row or not row.get("name"):
                     continue
-                source = (row.get("source") or "yandex_maps").strip() or "yandex_maps"
+                source = _normalize_service_source(row.get("source"))
                 if source in skipped_sources:
                     continue
                 name_value = (row.get("name") or "").strip()
@@ -1289,7 +1276,119 @@ class DatabaseManager:
             INSERT INTO networks (id, name, owner_id, description, created_at, updated_at)
             VALUES (%s, %s, %s, %s, %s, %s)
         """, (network_id, name, owner_id, description, datetime.now().isoformat(), datetime.now().isoformat()))
+        self.ensure_network_parent_business(
+            network_id=network_id,
+            owner_id=owner_id,
+            network_name=name,
+            description=description,
+        )
         self.conn.commit()
+        return network_id
+
+    def ensure_network_parent_business(
+        self,
+        network_id: str,
+        owner_id: str,
+        network_name: str,
+        description: str = None,
+    ) -> str:
+        """Создать или обновить материнскую точку сети.
+
+        Материнская точка использует id сети как id бизнеса и входит в ту же сеть,
+        чтобы фронтенд и network-locations API могли явно распознать её как parent.
+        """
+        if not network_id:
+            raise ValueError("network_id обязателен для материнской точки сети")
+        if not owner_id:
+            raise ValueError("owner_id обязателен для материнской точки сети")
+
+        cursor = self.conn.cursor()
+
+        existing_columns = set()
+        try:
+            if self.db_type == 'postgresql':
+                cursor.execute("""
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public' AND lower(table_name) = 'businesses'
+                """)
+                existing_columns = {
+                    (row.get('column_name') if hasattr(row, 'keys') else row[0])
+                    for row in (cursor.fetchall() or [])
+                }
+            else:
+                cursor.execute("PRAGMA table_info(Businesses)")
+                existing_columns = {row[1] for row in (cursor.fetchall() or [])}
+        except Exception:
+            existing_columns = {"id", "owner_id", "name", "network_id"}
+
+        business_name = str(network_name or '').strip() or 'Сеть'
+        business_description = (
+            str(description or '').strip()
+            or f"Материнская точка сети {business_name}. Здесь собираются отзывы, новости и данные по всей сети."
+        )
+        business_address = "Материнская точка сети"
+
+        requested_fields = [
+            "id",
+            "owner_id",
+            "name",
+            "network_id",
+            "description",
+            "address",
+            "is_active",
+            "ai_agent_language",
+        ]
+        requested_values = [
+            network_id,
+            owner_id,
+            business_name,
+            network_id,
+            business_description,
+            business_address,
+            True,
+            "ru",
+        ]
+
+        fields = []
+        values = []
+        for field_name, field_value in zip(requested_fields, requested_values):
+            if field_name in existing_columns:
+                fields.append(field_name)
+                values.append(field_value)
+
+        cursor.execute("SELECT id FROM businesses WHERE id = %s", (network_id,))
+        existing_row = cursor.fetchone()
+
+        if existing_row:
+            update_fields = []
+            update_values = []
+            for field_name, field_value in zip(fields, values):
+                if field_name == "id":
+                    continue
+                update_fields.append(f"{field_name} = %s")
+                update_values.append(field_value)
+            if "updated_at" in existing_columns:
+                update_fields.append("updated_at = CURRENT_TIMESTAMP")
+            update_values.append(network_id)
+            cursor.execute(
+                f"""
+                UPDATE businesses
+                SET {', '.join(update_fields)}
+                WHERE id = %s
+                """,
+                update_values,
+            )
+            return network_id
+
+        placeholders = ", ".join(["%s"] * len(fields))
+        cursor.execute(
+            f"""
+            INSERT INTO businesses ({', '.join(fields)})
+            VALUES ({placeholders})
+            """,
+            values,
+        )
         return network_id
     
     def get_user_networks(self, owner_id: str) -> List[Dict[str, Any]]:
@@ -1770,6 +1869,51 @@ class DatabaseManager:
         rows = cursor.fetchall()
         return [self._row_to_dict(cursor, row) for row in rows if row]
 
+    def get_all_leads_compact(self) -> List[Dict[str, Any]]:
+        """Получить компактный набор полей для экранов списка/воронки."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                id,
+                business_id,
+                name,
+                source,
+                address,
+                city,
+                phone,
+                website,
+                email,
+                telegram_url,
+                whatsapp_url,
+                messenger_links_json,
+                rating,
+                reviews_count,
+                source_url,
+                source_external_id,
+                google_id,
+                category,
+                selected_channel,
+                pipeline_status,
+                disqualification_reason,
+                disqualification_comment,
+                postponed_comment,
+                next_action_at,
+                last_contact_at,
+                last_contact_channel,
+                last_contact_comment,
+                status,
+                created_at,
+                updated_at,
+                preferred_language,
+                enabled_languages
+            FROM prospectingleads
+            ORDER BY created_at DESC
+            """
+        )
+        rows = cursor.fetchall()
+        return [self._row_to_dict(cursor, row) for row in rows if row]
+
     def save_lead(self, lead_data: Dict[str, Any]) -> str:
         """Сохранить лид (если уже есть google_id - обновить)"""
         cursor = self.conn.cursor()
@@ -1801,12 +1945,14 @@ class DatabaseManager:
             scalar_fields = (
                 "name",
                 "address",
+                "city",
                 "phone",
                 "website",
                 "email",
                 "source_url",
                 "category",
                 "status",
+                "pipeline_status",
                 "source",
                 "source_external_id",
                 "google_id",
@@ -1814,6 +1960,13 @@ class DatabaseManager:
                 "whatsapp_url",
                 "logo_url",
                 "description",
+                "disqualification_reason",
+                "disqualification_comment",
+                "postponed_comment",
+                "next_action_at",
+                "last_contact_at",
+                "last_contact_channel",
+                "last_contact_comment",
             )
             for field in scalar_fields:
                 if field not in table_columns:
@@ -1898,7 +2051,7 @@ class DatabaseManager:
         location_param = _to_json_param(location_value) if location_value is not None else None
 
         fields = [
-            'id', 'name', 'address', 'phone', 'website', 'rating', 'reviews_count',
+            'id', 'name', 'address', 'city', 'phone', 'website', 'rating', 'reviews_count',
             'source_url', 'google_id', 'category', 'location', 'status',
             'source', 'source_external_id', 'email', 'telegram_url', 'whatsapp_url', 'messenger_links_json'
         ]
@@ -1906,6 +2059,7 @@ class DatabaseManager:
             lead_id,
             lead_data.get('name'),
             lead_data.get('address'),
+            lead_data.get('city'),
             lead_data.get('phone'),
             lead_data.get('website'),
             lead_data.get('rating'),
@@ -1922,6 +2076,24 @@ class DatabaseManager:
             lead_data.get('whatsapp_url'),
             json.dumps(lead_data.get('messenger_links') or [], ensure_ascii=False),
         ]
+
+        if 'pipeline_status' in table_columns:
+            fields.append('pipeline_status')
+            values.append(lead_data.get('pipeline_status') or 'unprocessed')
+
+        optional_scalar_columns = (
+            'disqualification_reason',
+            'disqualification_comment',
+            'postponed_comment',
+            'next_action_at',
+            'last_contact_at',
+            'last_contact_channel',
+            'last_contact_comment',
+        )
+        for column_name in optional_scalar_columns:
+            if column_name in table_columns:
+                fields.append(column_name)
+                values.append(lead_data.get(column_name))
 
         optional_json_columns = {
             "search_payload_json": lead_data.get("search_payload_json"),
@@ -1976,11 +2148,31 @@ class DatabaseManager:
     def update_lead_status(self, lead_id: str, status: str) -> bool:
         """Обновить статус лида"""
         cursor = self.conn.cursor()
-        cursor.execute("""
-            UPDATE prospectingleads 
-            SET status = %s, updated_at = CURRENT_TIMESTAMP 
-            WHERE id = %s
-        """, (status, lead_id))
+        try:
+            cursor.execute("""
+                UPDATE prospectingleads
+                SET status = %s,
+                    pipeline_status = CASE
+                        WHEN %s = 'new' THEN 'unprocessed'
+                        WHEN %s = 'deferred' THEN 'postponed'
+                        WHEN %s IN ('shortlist_rejected', 'rejected') THEN 'not_relevant'
+                        WHEN %s = 'sent' THEN 'contacted'
+                        WHEN %s = 'delivered' THEN 'waiting_reply'
+                        WHEN %s = 'responded' THEN 'replied'
+                        WHEN %s IN ('qualified', 'converted') THEN 'converted'
+                        WHEN %s = 'closed' THEN 'closed_lost'
+                        ELSE pipeline_status
+                    END,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+            """, (status, status, status, status, status, status, status, status, lead_id))
+        except Exception:
+            self.conn.rollback()
+            cursor.execute("""
+                UPDATE prospectingleads
+                SET status = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+            """, (status, lead_id))
         self.conn.commit()
         return cursor.rowcount > 0
 
@@ -1992,11 +2184,19 @@ class DatabaseManager:
                 """
                 UPDATE prospectingleads
                 SET status = %s,
+                    pipeline_status = CASE
+                        WHEN %s IN ('selected_for_outreach', 'channel_selected', 'draft_ready', 'queued_for_send') THEN 'in_progress'
+                        WHEN %s = 'sent' THEN 'contacted'
+                        WHEN %s = 'delivered' THEN 'waiting_reply'
+                        WHEN %s = 'responded' THEN 'replied'
+                        WHEN %s IN ('qualified', 'converted') THEN 'converted'
+                        ELSE pipeline_status
+                    END,
                     selected_channel = %s,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = %s
                 """,
-                (status, selected_channel, lead_id),
+                (status, status, status, status, status, status, selected_channel, lead_id),
             )
         except Exception:
             self.conn.rollback()

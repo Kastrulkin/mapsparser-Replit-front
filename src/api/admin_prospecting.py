@@ -5,8 +5,12 @@ import os
 import csv
 import io
 import threading
+import subprocess
+import sys
 import uuid
 import re
+import time
+import random
 from difflib import SequenceMatcher
 from urllib.parse import unquote
 from datetime import date, datetime, timedelta, timezone
@@ -19,6 +23,7 @@ from psycopg2.extras import Json, RealDictCursor
 from auth_system import verify_session
 from core.channel_delivery import normalize_phone, send_maton_bridge_message
 from core.card_audit import build_lead_card_preview_snapshot
+from core.telegram_userbot import load_userbot_account, send_message as userbot_send_message
 from core.ai_learning import ensure_ai_learning_events_table, record_ai_learning_event
 from core.helpers import get_business_id_from_user
 from core.map_url_normalizer import normalize_map_url
@@ -38,7 +43,7 @@ SHORTLIST_APPROVED = "shortlist_approved"
 SHORTLIST_REJECTED = "shortlist_rejected"
 SELECTED_FOR_OUTREACH = "selected_for_outreach"
 CHANNEL_SELECTED = "channel_selected"
-ALLOWED_OUTREACH_CHANNELS = {"telegram", "whatsapp", "email", "manual"}
+ALLOWED_OUTREACH_CHANNELS = {"telegram", "whatsapp", "max", "email", "manual"}
 DRAFT_GENERATED = "generated"
 DRAFT_APPROVED = "approved"
 DRAFT_REJECTED = "rejected"
@@ -57,8 +62,46 @@ ALLOWED_REPLY_OUTCOMES = {"positive", "question", "no_response", "hard_no"}
 SEARCH_JOB_TIMEOUT_SEC = int(os.environ.get("APIFY_SEARCH_TIMEOUT_SEC", "180"))
 OUTREACH_SEND_MAX_ATTEMPTS = int(os.environ.get("OUTREACH_SEND_MAX_ATTEMPTS", "3"))
 OUTREACH_RETRY_DELAY_DAYS = (1, 2)  # D1, D3 относительно D0
+OUTREACH_SEND_DELAY_MIN_SEC = max(0.0, float(os.environ.get("OUTREACH_SEND_DELAY_MIN_SEC", "12")))
+OUTREACH_SEND_DELAY_MAX_SEC = max(OUTREACH_SEND_DELAY_MIN_SEC, float(os.environ.get("OUTREACH_SEND_DELAY_MAX_SEC", "28")))
+TELEGRAM_REPLY_SYNC_LOOKBACK_DAYS = max(1, int(os.environ.get("TELEGRAM_REPLY_SYNC_LOOKBACK_DAYS", "14")))
+TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT = max(1, min(int(os.environ.get("TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT", "12")), 50))
+TELEGRAM_REPLY_SYNC_TIMEOUT_SEC = max(5, int(os.environ.get("TELEGRAM_REPLY_SYNC_TIMEOUT_SEC", "12")))
 LEAD_OUTREACH_MODERATION_STATUS = "lead_outreach"
 PUBLIC_AUDIT_LANGUAGES = ("ru", "en", "fr", "es", "el", "de", "th", "ar", "ha", "tr")
+PIPELINE_UNPROCESSED = "unprocessed"
+PIPELINE_IN_PROGRESS = "in_progress"
+PIPELINE_POSTPONED = "postponed"
+PIPELINE_NOT_RELEVANT = "not_relevant"
+PIPELINE_CONTACTED = "contacted"
+PIPELINE_WAITING_REPLY = "waiting_reply"
+PIPELINE_REPLIED = "replied"
+PIPELINE_CONVERTED = "converted"
+PIPELINE_CLOSED_LOST = "closed_lost"
+ALLOWED_PIPELINE_STATUSES = {
+    PIPELINE_UNPROCESSED,
+    PIPELINE_IN_PROGRESS,
+    PIPELINE_POSTPONED,
+    PIPELINE_NOT_RELEVANT,
+    PIPELINE_CONTACTED,
+    PIPELINE_WAITING_REPLY,
+    PIPELINE_REPLIED,
+    PIPELINE_CONVERTED,
+    PIPELINE_CLOSED_LOST,
+}
+NOT_RELEVANT_REASONS = {
+    "not_icp",
+    "duplicate",
+    "closed_business",
+    "no_contacts",
+    "weak_potential",
+    "wrong_geo",
+    "other",
+}
+GROUP_STATUS_DRAFT = "draft"
+GROUP_STATUS_ACTIVE = "active"
+GROUP_STATUS_ARCHIVED = "archived"
+ALLOWED_GROUP_STATUSES = {GROUP_STATUS_DRAFT, GROUP_STATUS_ACTIVE, GROUP_STATUS_ARCHIVED}
 
 
 def _normalize_learning_intent(raw_intent: str | None) -> str:
@@ -138,6 +181,90 @@ def _remaining_daily_outreach_slots(conn) -> int:
     else:
         used = int((row[0] if row else 0) or 0)
     return max(0, MAX_DAILY_OUTREACH_BATCH - used)
+
+
+def _normalize_scalar_text(value: Any) -> str | None:
+    normalized = str(value or "").strip()
+    return normalized or None
+
+
+def _extract_max_contact(lead: dict[str, Any] | None) -> str | None:
+    if not lead:
+        return None
+    website = str(lead.get("website") or "").strip()
+    if website and ("max.ru" in website.lower() or "web.max.ru" in website.lower()):
+        return website
+    raw_links = lead.get("messenger_links_json")
+    parsed_links: list[Any]
+    if isinstance(raw_links, list):
+        parsed_links = raw_links
+    elif isinstance(raw_links, str) and raw_links.strip():
+        try:
+            parsed = json.loads(raw_links)
+            parsed_links = parsed if isinstance(parsed, list) else [raw_links]
+        except Exception:
+            parsed_links = [raw_links]
+    else:
+        parsed_links = []
+    for item in parsed_links:
+        candidate = str(item or "").strip()
+        if candidate and ("max.ru" in candidate.lower() or "web.max.ru" in candidate.lower()):
+            return candidate
+    return None
+
+
+def _lead_has_channel_contact(lead: dict[str, Any] | None, channel: str | None) -> bool:
+    normalized_channel = str(channel or "").strip().lower()
+    if not normalized_channel:
+        return False
+    if normalized_channel == "manual":
+        return True
+    if not lead:
+        return False
+    if normalized_channel == "telegram":
+        return _normalize_scalar_text(lead.get("telegram_url")) is not None
+    if normalized_channel == "whatsapp":
+        return _normalize_scalar_text(lead.get("whatsapp_url")) is not None
+    if normalized_channel == "max":
+        return _extract_max_contact(lead) is not None
+    if normalized_channel == "email":
+        return _normalize_scalar_text(lead.get("email")) is not None
+    return False
+
+
+def _outreach_channel_contact_error(channel: str | None) -> str:
+    normalized_channel = str(channel or "").strip().lower()
+    if normalized_channel == "telegram":
+        return "Telegram channel cannot be selected without telegram_url"
+    if normalized_channel == "whatsapp":
+        return "WhatsApp channel cannot be selected without whatsapp_url"
+    if normalized_channel == "max":
+        return "MAX channel cannot be selected without max.ru contact"
+    if normalized_channel == "email":
+        return "Email channel cannot be selected without email"
+    return "Selected outreach channel has no matching contact"
+
+
+def _resolve_manual_outreach_recipient(lead: dict[str, Any] | None, channel: str | None) -> tuple[str | None, str | None]:
+    normalized_channel = str(channel or "").strip().lower()
+    if normalized_channel == "telegram":
+        recipient = _resolve_telegram_app_recipient(lead or {})
+        if recipient:
+            return recipient.get("recipient_kind"), recipient.get("recipient_value")
+        return None, None
+    if normalized_channel == "whatsapp":
+        phone = normalize_phone((lead or {}).get("whatsapp_url") or (lead or {}).get("phone"))
+        return ("phone", phone) if phone else (None, None)
+    if normalized_channel == "email":
+        email = _normalize_scalar_text((lead or {}).get("email"))
+        return ("email", email) if email else (None, None)
+    if normalized_channel == "max":
+        if _lead_has_channel_contact(lead or {}, "max"):
+            return "max", "manual"
+        return None, None
+    if normalized_channel == "manual":
+        return "manual", None
+    return None, None
 
 
 def _outreach_retry_delay_for_attempt(attempt_no: int) -> timedelta | None:
@@ -247,6 +374,307 @@ def _ensure_partnership_columns(conn) -> None:
     conn.commit()
 
 
+def _ensure_manual_crm_tables(conn) -> None:
+    cur = conn.cursor()
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS pipeline_status TEXT NOT NULL DEFAULT 'unprocessed'")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS disqualification_reason TEXT")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS disqualification_comment TEXT")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS postponed_comment TEXT")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS next_action_at TIMESTAMPTZ")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS last_contact_at TIMESTAMPTZ")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS last_contact_channel TEXT")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS last_contact_comment TEXT")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS qualified_at TIMESTAMPTZ")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS qualified_by TEXT")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS last_manual_action_at TIMESTAMPTZ")
+    cur.execute("ALTER TABLE prospectingleads ADD COLUMN IF NOT EXISTS last_manual_action_by TEXT")
+    cur.execute(
+        """
+        UPDATE prospectingleads
+        SET pipeline_status = CASE
+            WHEN COALESCE(status, 'new') = 'new' THEN %s
+            WHEN COALESCE(status, '') = 'deferred' THEN %s
+            WHEN COALESCE(status, '') IN ('shortlist_rejected', 'rejected') THEN %s
+            WHEN COALESCE(status, '') = 'sent' THEN %s
+            WHEN COALESCE(status, '') = 'delivered' THEN %s
+            WHEN COALESCE(status, '') = 'responded' THEN %s
+            WHEN COALESCE(status, '') IN ('qualified', 'converted') THEN %s
+            WHEN COALESCE(status, '') = 'closed' THEN %s
+            ELSE %s
+        END
+        WHERE COALESCE(pipeline_status, '') = ''
+           OR (COALESCE(pipeline_status, '') = 'unprocessed' AND COALESCE(status, 'new') <> 'new')
+        """,
+        (
+            PIPELINE_UNPROCESSED,
+            PIPELINE_POSTPONED,
+            PIPELINE_NOT_RELEVANT,
+            PIPELINE_CONTACTED,
+            PIPELINE_WAITING_REPLY,
+            PIPELINE_REPLIED,
+            PIPELINE_CONVERTED,
+            PIPELINE_CLOSED_LOST,
+            PIPELINE_IN_PROGRESS,
+        ),
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS lead_groups (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            status TEXT NOT NULL DEFAULT 'draft',
+            channel_hint TEXT,
+            city_hint TEXT,
+            created_by TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS lead_group_items (
+            id TEXT PRIMARY KEY,
+            group_id TEXT NOT NULL REFERENCES lead_groups(id) ON DELETE CASCADE,
+            lead_id TEXT NOT NULL REFERENCES prospectingleads(id) ON DELETE CASCADE,
+            added_by TEXT,
+            added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE (group_id, lead_id)
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS lead_timeline_events (
+            id TEXT PRIMARY KEY,
+            lead_id TEXT NOT NULL REFERENCES prospectingleads(id) ON DELETE CASCADE,
+            event_type TEXT NOT NULL,
+            actor_id TEXT,
+            comment TEXT,
+            payload_json JSONB,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_prospectingleads_pipeline_status ON prospectingleads(pipeline_status)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_prospectingleads_next_action_at ON prospectingleads(next_action_at)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_prospectingleads_last_contact_at ON prospectingleads(last_contact_at DESC)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_lead_groups_status ON lead_groups(status, created_at DESC)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_lead_group_items_group_id ON lead_group_items(group_id, added_at DESC)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_lead_group_items_lead_id ON lead_group_items(lead_id, added_at DESC)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_lead_timeline_events_lead_created ON lead_timeline_events(lead_id, created_at DESC)")
+    conn.commit()
+
+
+def _derive_pipeline_status_from_lead(lead: dict[str, Any] | None) -> str:
+    if not lead:
+        return PIPELINE_UNPROCESSED
+    explicit = str(lead.get("pipeline_status") or "").strip().lower()
+    if explicit in ALLOWED_PIPELINE_STATUSES:
+        return explicit
+    legacy = str(lead.get("status") or "").strip().lower()
+    if not legacy or legacy == "new":
+        return PIPELINE_UNPROCESSED
+    if legacy in {"deferred", "shortlist_rejected", "rejected", "closed"}:
+        return PIPELINE_NOT_RELEVANT
+    if legacy in {"shortlist_approved", "selected_for_outreach", "channel_selected", "draft_ready", "queued_for_send", "audited", "matched", "proposal_draft_ready", "proposal_approved", "approved_for_send"}:
+        return PIPELINE_IN_PROGRESS
+    if legacy == "sent":
+        return PIPELINE_CONTACTED
+    if legacy == "delivered":
+        return PIPELINE_WAITING_REPLY
+    if legacy == "responded":
+        return PIPELINE_REPLIED
+    if legacy in {"qualified", "converted"}:
+        return PIPELINE_CONVERTED
+    return PIPELINE_IN_PROGRESS
+
+
+def _record_lead_timeline_event(
+    cur,
+    *,
+    lead_id: str,
+    event_type: str,
+    actor_id: str | None = None,
+    comment: str | None = None,
+    payload: dict[str, Any] | None = None,
+) -> None:
+    cur.execute(
+        """
+        INSERT INTO lead_timeline_events (
+            id, lead_id, event_type, actor_id, comment, payload_json, created_at
+        ) VALUES (%s, %s, %s, %s, %s, %s, NOW())
+        """,
+        (
+            str(uuid.uuid4()),
+            lead_id,
+            event_type,
+            actor_id,
+            (comment or "").strip() or None,
+            Json(_to_json_compatible(payload or {})),
+        ),
+    )
+
+
+def _apply_pipeline_transition(
+    cur,
+    *,
+    lead_id: str,
+    pipeline_status: str,
+    actor_id: str | None = None,
+    comment: str | None = None,
+    disqualification_reason: str | None = None,
+    disqualification_comment: str | None = None,
+    postponed_comment: str | None = None,
+    next_action_at: str | None = None,
+    last_contact_channel: str | None = None,
+    last_contact_comment: str | None = None,
+    set_last_contact_at: bool = False,
+) -> dict[str, Any] | None:
+    assignments = [
+        "pipeline_status = %s",
+        "last_manual_action_at = NOW()",
+        "last_manual_action_by = %s",
+        "updated_at = NOW()",
+    ]
+    params: list[Any] = [pipeline_status, actor_id]
+
+    legacy_status = None
+    if pipeline_status == PIPELINE_UNPROCESSED:
+        legacy_status = "new"
+    elif pipeline_status == PIPELINE_IN_PROGRESS:
+        legacy_status = SHORTLIST_APPROVED
+    elif pipeline_status == PIPELINE_POSTPONED:
+        legacy_status = "deferred"
+    elif pipeline_status == PIPELINE_NOT_RELEVANT:
+        legacy_status = SHORTLIST_REJECTED
+    elif pipeline_status == PIPELINE_CONTACTED:
+        legacy_status = "sent"
+    elif pipeline_status == PIPELINE_WAITING_REPLY:
+        legacy_status = "delivered"
+    elif pipeline_status == PIPELINE_REPLIED:
+        legacy_status = "responded"
+    elif pipeline_status == PIPELINE_CONVERTED:
+        legacy_status = "converted"
+    elif pipeline_status == PIPELINE_CLOSED_LOST:
+        legacy_status = "closed"
+    if legacy_status:
+        assignments.append("status = %s")
+        params.append(legacy_status)
+
+    if disqualification_reason is not None:
+        assignments.append("disqualification_reason = %s")
+        params.append(disqualification_reason)
+    if disqualification_comment is not None:
+        assignments.append("disqualification_comment = %s")
+        params.append(disqualification_comment)
+    if postponed_comment is not None:
+        assignments.append("postponed_comment = %s")
+        params.append(postponed_comment)
+    if next_action_at is not None:
+        assignments.append("next_action_at = %s")
+        params.append(next_action_at or None)
+    if last_contact_channel is not None:
+        assignments.append("last_contact_channel = %s")
+        params.append(last_contact_channel or None)
+    if last_contact_comment is not None:
+        assignments.append("last_contact_comment = %s")
+        params.append(last_contact_comment or None)
+    if set_last_contact_at:
+        assignments.append("last_contact_at = NOW()")
+
+    params.append(lead_id)
+    cur.execute(
+        f"""
+        UPDATE prospectingleads
+        SET {', '.join(assignments)}
+        WHERE id = %s
+        RETURNING *
+        """,
+        tuple(params),
+    )
+    row = cur.fetchone()
+    if row:
+        _record_lead_timeline_event(
+            cur,
+            lead_id=lead_id,
+            event_type="pipeline_status_changed",
+            actor_id=actor_id,
+            comment=comment,
+            payload={
+                "pipeline_status": pipeline_status,
+                "legacy_status": legacy_status,
+                "disqualification_reason": disqualification_reason,
+                "postponed_comment": postponed_comment,
+                "next_action_at": next_action_at,
+                "last_contact_channel": last_contact_channel,
+            },
+        )
+        return dict(row) if hasattr(row, "keys") else None
+    return None
+
+
+def _group_summary_for_lead_ids(cur, lead_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+    normalized_ids = [str(item or "").strip() for item in lead_ids if str(item or "").strip()]
+    if not normalized_ids:
+        return {}
+    cur.execute(
+        """
+        SELECT gi.lead_id, g.id AS group_id, g.name, g.status, g.channel_hint, g.city_hint
+        FROM lead_group_items gi
+        JOIN lead_groups g ON g.id = gi.group_id
+        WHERE gi.lead_id = ANY(%s)
+        ORDER BY g.created_at DESC, g.name ASC
+        """,
+        (normalized_ids,),
+    )
+    summary: dict[str, list[dict[str, Any]]] = {}
+    for row in cur.fetchall() or []:
+        payload = dict(row) if hasattr(row, "keys") else {}
+        lead_id = str(payload.get("lead_id") or "").strip()
+        if not lead_id:
+            continue
+        summary.setdefault(lead_id, []).append(
+            {
+                "id": payload.get("group_id"),
+                "name": payload.get("name"),
+                "status": payload.get("status"),
+                "channel_hint": payload.get("channel_hint"),
+                "city_hint": payload.get("city_hint"),
+            }
+        )
+    return summary
+
+
+def _latest_timeline_preview(cur, lead_ids: list[str]) -> dict[str, dict[str, Any]]:
+    normalized_ids = [str(item or "").strip() for item in lead_ids if str(item or "").strip()]
+    if not normalized_ids:
+        return {}
+    cur.execute(
+        """
+        SELECT DISTINCT ON (lead_id)
+            lead_id, event_type, comment, payload_json, created_at
+        FROM lead_timeline_events
+        WHERE lead_id = ANY(%s)
+        ORDER BY lead_id, created_at DESC
+        """,
+        (normalized_ids,),
+    )
+    preview: dict[str, dict[str, Any]] = {}
+    for row in cur.fetchall() or []:
+        payload = dict(row) if hasattr(row, "keys") else {}
+        lead_id = str(payload.get("lead_id") or "").strip()
+        if lead_id:
+            preview[lead_id] = {
+                "event_type": payload.get("event_type"),
+                "comment": payload.get("comment"),
+                "payload": payload.get("payload_json") if isinstance(payload.get("payload_json"), dict) else {},
+                "created_at": payload.get("created_at"),
+            }
+    return preview
+
+
 def _get_cursor_table_columns(cur, table_name: str) -> set[str]:
     cur.execute(
         """
@@ -262,6 +690,60 @@ def _get_cursor_table_columns(cur, table_name: str) -> set[str]:
         if col:
             cols.add(str(col))
     return cols
+
+
+def _cursor_table_exists(cur, table_name: str) -> bool:
+    cur.execute("SELECT to_regclass(%s) AS table_ref", (f"public.{table_name}",))
+    row = cur.fetchone()
+    if hasattr(row, "get"):
+        return bool(row.get("table_ref"))
+    return bool(row[0] if row else None)
+
+
+def _get_partnership_schema_flags(cur) -> dict[str, bool]:
+    prospectingleads_columns = _get_cursor_table_columns(cur, "prospectingleads")
+    parsequeue_exists = _cursor_table_exists(cur, "parsequeue")
+    parsequeue_columns = _get_cursor_table_columns(cur, "parsequeue") if parsequeue_exists else set()
+    reactions_exists = _cursor_table_exists(cur, "outreachmessagereactions")
+    reactions_columns = _get_cursor_table_columns(cur, "outreachmessagereactions") if reactions_exists else set()
+
+    has_parse_lookup = (
+        parsequeue_exists
+        and {"business_id", "url", "task_type", "status", "created_at"}.issubset(parsequeue_columns)
+        and {"parse_business_id", "source_url"}.issubset(prospectingleads_columns)
+    )
+    has_reactions = reactions_exists and {"queue_id", "created_at"}.issubset(reactions_columns)
+    has_reaction_outcomes = has_reactions and {
+        "human_confirmed_outcome",
+        "classified_outcome",
+    }.issubset(reactions_columns)
+
+    return {
+        "has_parse_lookup": has_parse_lookup,
+        "has_reactions": has_reactions,
+        "has_reaction_outcomes": has_reaction_outcomes,
+    }
+
+
+def _partnership_parse_status_select_sql(lead_alias: str = "l") -> str:
+    return f"""
+        (
+            SELECT pq.status
+            FROM parsequeue pq
+            WHERE (
+                    ({lead_alias}.parse_business_id IS NOT NULL AND pq.business_id = {lead_alias}.parse_business_id)
+                    OR (
+                        {lead_alias}.parse_business_id IS NULL
+                        AND {lead_alias}.source_url IS NOT NULL
+                        AND {lead_alias}.source_url <> ''
+                        AND pq.url = {lead_alias}.source_url
+                    )
+                  )
+              AND pq.task_type IN ('parse_card', 'sync_yandex_business')
+            ORDER BY COALESCE(pq.updated_at, pq.created_at) DESC
+            LIMIT 1
+        )
+    """
 
 
 def _normalize_partnership_source_url(url: Any) -> str:
@@ -557,6 +1039,17 @@ def _to_bool_filter(value: str | None):
     return None
 
 
+def _to_bool_query_flag(value: str | None, default: bool) -> bool:
+    if value is None or value == "":
+        return default
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "yes"}:
+        return True
+    if normalized in {"0", "false", "no"}:
+        return False
+    return default
+
+
 def _is_placeholder_like(value: Any) -> bool:
     if value is None:
         return False
@@ -599,6 +1092,7 @@ def _normalize_lead_for_display(lead: dict[str, Any]) -> dict[str, Any] | None:
         "website",
         "source",
         "status",
+        "pipeline_status",
     ):
         if _is_placeholder_like(normalized.get(field)):
             normalized[field] = None
@@ -624,6 +1118,7 @@ def _normalize_lead_for_display(lead: dict[str, Any]) -> dict[str, Any] | None:
     if not has_identity:
         return None
 
+    normalized["pipeline_status"] = _derive_pipeline_status_from_lead(normalized)
     return normalized
 
 
@@ -641,7 +1136,7 @@ def _lead_matches_filters(lead: dict[str, Any], filters: dict[str, Any]) -> bool
             return False
 
     status = filters.get("status")
-    if status and (lead.get("status") or "") != status:
+    if status and (lead.get("pipeline_status") or lead.get("status") or "") != status:
         return False
 
     min_rating = filters.get("min_rating")
@@ -1691,25 +2186,25 @@ def _deterministic_issue_hint_from_preview(preview: dict[str, Any]) -> str:
     findings = preview.get("findings") if isinstance(preview.get("findings"), list) else []
     titles = [str(item.get("title") or "").strip() for item in findings if isinstance(item, dict)]
     titles = [item for item in titles if item]
-    joined = " ".join(titles).lower()
-
-    if "опис" in joined and "услуг" in joined and "поиск" in joined:
-        return "описание не всех услуг попадает в поиск."
-    if "опис" in joined and "услуг" in joined:
-        return "описание услуг не полностью работает на поисковый спрос."
-    if "опис" in joined:
-        return "описание карточки не доносит до клиента ключевые услуги и сценарии записи."
-    if "фото" in joined:
-        return "фото не показывают ключевые услуги, результаты и атмосферу."
-    if "отзыв" in joined:
-        return "отзывы не усиливают доверие и не помогают карточке конвертировать в запись."
-    if "сайт" in joined or "контакт" in joined:
-        return "в карточке не хватает контактных сигналов, которые влияют на конверсию."
     if titles:
         hint = re.sub(r"\s+", " ", titles[0]).strip(" .")
         if hint:
             return hint[:1].lower() + hint[1:] + "."
-    return "описание и структура карточки не полностью работают на поиск и запись."
+    current_state = preview.get("current_state") if isinstance(preview.get("current_state"), dict) else {}
+    services_count = int(current_state.get("services_count") or 0)
+    photos_count = int(current_state.get("photos_count") or 0)
+    has_website = bool(current_state.get("has_website"))
+    reviews_count = int(current_state.get("reviews_count") or 0)
+    rating = current_state.get("rating")
+    if services_count <= 0:
+        return "в карточке нет понятной структуры услуг."
+    if photos_count <= 1:
+        return "в карточке слишком мало фото, чтобы продавать качество услуг."
+    if not has_website:
+        return "в карточке не хватает контактов и маршрута к записи."
+    if rating is None or reviews_count <= 0:
+        return "карточка слабо закрывает доверие через рейтинг и отзывы."
+    return "карточка не полностью работает на поиск и запись."
 
 
 def _generate_superadmin_deterministic_first_message(
@@ -1717,19 +2212,19 @@ def _generate_superadmin_deterministic_first_message(
     preview: dict[str, Any],
 ) -> dict[str, str]:
     public_audit_url = str(lead.get("public_audit_url") or "").strip()
+    company_name = str(lead.get("name") or "ваш бизнес").strip() or "ваш бизнес"
     issue_hint = _deterministic_issue_hint_from_preview(preview)
     message_lines = [
         "Здравствуйте!",
         "",
-        "Нашёл вас на картах - вижу, что часть клиентов теряется.",
-        "",
+        f"Нашёл {company_name} на картах - вижу, что у вас часть клиентов теряется.",
         f"Например, {issue_hint}",
         "",
         "Разобрал вашу карточку и показал конкретные причины и шаги, как исправить самостоятельно:",
         public_audit_url or "https://localos.pro",
         "Это обычно даёт +30-80% к обращениям без рекламы.",
         "",
-        "Или, хотите, сделаю все настройки, которые дадут результат?",
+        "Или, хотите, настрою всё, до результата?",
     ]
     return {
         "angle_type": "audit_preview",
@@ -2805,6 +3300,13 @@ def _normalize_recommended_actions(items: Any) -> list[dict[str, str]]:
     return normalized
 
 
+def _lowercase_first(text: Any) -> str:
+    value = str(text or "").strip()
+    if not value:
+        return ""
+    return value[:1].lower() + value[1:]
+
+
 def _truncate_text(value: Any, limit: int) -> str:
     text = str(value or "").strip()
     if len(text) <= limit:
@@ -2903,6 +3405,229 @@ def _needs_dense_audit_retry(summary_text: str, why_now: str, language: str) -> 
         ):
             return True
     return False
+
+
+def _deterministic_actor_label(preview: dict[str, Any]) -> str:
+    audit_profile = str(preview.get("audit_profile") or "").strip().lower()
+    if audit_profile == "medical":
+        return "пациент"
+    if audit_profile == "hospitality":
+        return "гость"
+    return "клиент"
+
+
+def _deterministic_actor_dative(actor: str) -> str:
+    mapping = {
+        "клиент": "клиенту",
+        "пациент": "пациенту",
+        "гость": "гостю",
+    }
+    return mapping.get(actor, "клиенту")
+
+
+def _deterministic_priority_steps(
+    findings: list[dict[str, Any]],
+    current_state: dict[str, Any],
+) -> list[str]:
+    joined = " ".join(
+        str(item.get("title") or "").strip().lower()
+        for item in findings
+        if isinstance(item, dict)
+    )
+    priorities: list[str] = []
+
+    def _add(step: str) -> None:
+        if step and step not in priorities:
+            priorities.append(step)
+
+    services_count = int(current_state.get("services_count") or 0)
+    services_with_price_count = int(current_state.get("services_with_price_count") or 0)
+    photos_count = int(current_state.get("photos_count") or 0)
+    photos_state = str(current_state.get("photos_state") or "").strip().lower()
+    reviews_count = int(current_state.get("reviews_count") or 0)
+    rating = current_state.get("rating")
+    has_website = bool(current_state.get("has_website"))
+    description_present = bool(current_state.get("description_present"))
+
+    if "опис" in joined or not description_present:
+        _add("переписать описание под реальный спрос")
+    if "услуг" in joined or services_count <= 0:
+        _add("собрать понятную структуру услуг")
+    if "цен" in joined or (services_count > 0 and services_with_price_count <= 0):
+        _add("добавить ценовые ориентиры")
+    if "фото" in joined or photos_state == "weak" or photos_count <= 1:
+        _add("добавить фото, которые продают качество и результат")
+    if "отзыв" in joined or "рейтинг" in joined or reviews_count <= 0 or rating is None:
+        _add("усилить слой доверия через отзывы и ответы")
+    if "контакт" in joined or not has_website:
+        _add("закрыть пробелы в контактах и переходе в запись")
+
+    return priorities[:3]
+
+
+def _build_deterministic_dense_audit_enrichment(
+    lead: dict[str, Any],
+    preview: dict[str, Any],
+    preferred_language: str | None,
+) -> dict[str, Any]:
+    language = str(preferred_language or "").strip().lower()
+    if language not in PUBLIC_AUDIT_LANGUAGES:
+        language = _resolve_outreach_language(lead)
+    if language != "ru":
+        fallback_summary = str(preview.get("summary_text") or "").strip()
+        fallback_actions = _normalize_recommended_actions(preview.get("recommended_actions"))[:3]
+        return {
+            "summary_text": fallback_summary,
+            "recommended_actions": fallback_actions,
+            "why_now": "",
+            "meta": {
+                "source": "deterministic",
+                "prompt_key": "lead_audit_enrichment",
+                "prompt_version": "deterministic_dense_v2",
+                "prompt_source": "local_dense",
+            },
+        }
+
+    findings = preview.get("findings") if isinstance(preview.get("findings"), list) else []
+    normalized_findings = [item for item in findings if isinstance(item, dict)]
+    current_state = preview.get("current_state") if isinstance(preview.get("current_state"), dict) else {}
+    actions = _normalize_recommended_actions(preview.get("recommended_actions"))[:3]
+    actor = _deterministic_actor_label(preview)
+    actor_dative = _deterministic_actor_dative(actor)
+
+    services_count = int(current_state.get("services_count") or 0)
+    services_with_price_count = int(current_state.get("services_with_price_count") or 0)
+    photos_count = int(current_state.get("photos_count") or 0)
+    photos_state = str(current_state.get("photos_state") or "").strip().lower()
+    reviews_count = int(current_state.get("reviews_count") or 0)
+    rating = current_state.get("rating")
+    has_website = bool(current_state.get("has_website"))
+    description_present = bool(current_state.get("description_present"))
+
+    metric_fragments: list[str] = []
+    if photos_count <= 1:
+        metric_fragments.append("в карточке всего 1 фото")
+    elif photos_count > 1 and photos_state == "weak":
+        metric_fragments.append(f"фото пока только {photos_count}")
+    if not has_website:
+        metric_fragments.append("нет сайта")
+    if rating is None and reviews_count <= 0:
+        metric_fragments.append("нет рейтинга и отзывов")
+    elif rating is not None:
+        try:
+            rating_value = float(rating)
+        except (TypeError, ValueError):
+            rating_value = None
+        if rating_value is not None and rating_value < 4.5:
+            metric_fragments.append(f"рейтинг {rating_value:.1f} ниже целевой зоны")
+    elif reviews_count > 0 and reviews_count <= 5:
+        metric_fragments.append(f"отзывов пока только {reviews_count}")
+    if services_count > 0 and services_with_price_count <= 0:
+        metric_fragments.append("нет ценовых ориентиров")
+
+    metrics_text = ", ".join(metric_fragments[:3]).strip()
+
+    top_titles = [
+        str(item.get("title") or "").strip().rstrip(".")
+        for item in normalized_findings[:2]
+        if str(item.get("title") or "").strip()
+    ]
+    if len(top_titles) >= 2:
+        sentence1 = f"{top_titles[0]}, а {_lowercase_first(top_titles[1])}."
+    elif top_titles:
+        sentence1 = f"{top_titles[0]}."
+    elif services_count <= 0:
+        sentence1 = "В карточке нет понятной структуры услуг."
+    elif not description_present:
+        sentence1 = "Описание карточки не объясняет, почему сюда стоит записаться."
+    elif photos_state == "weak" or photos_count <= 1:
+        sentence1 = "Карточка не даёт достаточного визуального доверия перед записью."
+    else:
+        sentence1 = "Карточка пока недобирает обращения из локального поиска."
+
+    if services_count <= 0:
+        if metrics_text:
+            sentence2 = f"Сейчас {metrics_text}, поэтому {actor} не видит ни точку входа в запись, ни достаточное доказательство качества."
+        else:
+            sentence2 = f"Без понятных услуг {actor} не видит, с чем сюда можно обратиться и по какому запросу выбрать именно эту карточку."
+    elif not description_present and (photos_state == "weak" or photos_count <= 1):
+        if metrics_text:
+            sentence2 = f"Сейчас {metrics_text}, поэтому {actor} не понимает ключевые направления и не получает визуального подтверждения качества до записи."
+        else:
+            sentence2 = f"{actor[:1].upper() + actor[1:]} не понимает ключевые направления и не получает визуального подтверждения качества до записи."
+    elif not description_present:
+        if metrics_text:
+            sentence2 = f"Сейчас {metrics_text}, и {actor_dative} сложнее понять, какие услуги здесь ключевые и чем бизнес отличается от соседних предложений."
+        else:
+            sentence2 = f"{actor_dative[:1].upper() + actor_dative[1:]} сложнее понять, какие услуги здесь ключевые и чем бизнес отличается от соседних предложений."
+    elif photos_state == "weak" or photos_count <= 1:
+        if metrics_text:
+            sentence2 = f"Сейчас {metrics_text}, и слабый визуальный слой режет доверие ещё до первого контакта."
+        else:
+            sentence2 = "Слабый визуальный слой режет доверие ещё до первого контакта и делает выбор менее очевидным."
+    elif reviews_count <= 0 or rating is None:
+        if metrics_text:
+            sentence2 = f"Сейчас {metrics_text}, поэтому карточка хуже закрывает доверие и проигрывает более понятным конкурентам рядом."
+        else:
+            sentence2 = "Без рейтинга и свежих отзывов карточка хуже закрывает доверие и проигрывает более понятным конкурентам рядом."
+    elif not has_website:
+        if metrics_text:
+            sentence2 = f"Сейчас {metrics_text}, и часть тёплого спроса теряется ещё на этапе перехода в запись."
+        else:
+            sentence2 = "Часть тёплого спроса теряется на этапе перехода в запись, потому что карточка не даёт полного маршрута к контакту."
+    elif services_count > 0 and services_with_price_count <= 0:
+        if metrics_text:
+            sentence2 = f"Сейчас {metrics_text}, поэтому {actor_dative} сложнее быстро принять решение о записи."
+        else:
+            sentence2 = f"Услуги есть, но без ценовых ориентиров {actor_dative} сложнее быстро принять решение о записи."
+    else:
+        if metrics_text:
+            sentence2 = f"Сейчас {metrics_text}, и часть спроса уходит к тем, кто понятнее упаковал предложение."
+        else:
+            sentence2 = "Сейчас карточка выглядит слабее, чем могла бы, и часть спроса уходит к тем, кто понятнее упаковал предложение."
+
+    priorities = _deterministic_priority_steps(normalized_findings, current_state)
+    if priorities:
+        if len(priorities) == 1:
+            sentence3 = f"В первую очередь стоит {priorities[0]}."
+        elif len(priorities) == 2:
+            sentence3 = f"В первую очередь стоит {priorities[0]} и {priorities[1]}."
+        else:
+            sentence3 = f"В первую очередь стоит {priorities[0]}, {priorities[1]} и {priorities[2]}."
+    else:
+        sentence3 = "В первую очередь стоит сделать карточку понятнее по услугам, доверию и конверсии."
+
+    summary_text = " ".join(
+        part.strip()
+        for part in [sentence1, sentence2, sentence3]
+        if str(part or "").strip()
+    ).strip()
+    summary_text = _truncate_text(summary_text, 420)
+
+    if services_count <= 0:
+        why_now = f"Пока в карточке нет понятных услуг{', ' + metrics_text if metrics_text else ''}, тёплый спрос уходит в более понятные предложения рядом."
+    elif not description_present and (photos_state == "weak" or photos_count <= 1):
+        why_now = f"Сейчас карточка теряет конверсию и на поиске, и на доверии{', ' + metrics_text if metrics_text else ''}, хотя спрос уже можно забирать без рекламы."
+    elif reviews_count <= 0 or rating is None:
+        why_now = f"Пока карточка не закрывает доверие через рейтинг и отзывы{', ' + metrics_text if metrics_text else ''}, часть обращений не доходит до записи."
+    elif not has_website:
+        why_now = f"Пока карточка не даёт полного маршрута к контакту{', ' + metrics_text if metrics_text else ''}, часть пользователей теряется перед записью."
+    elif services_count > 0 and services_with_price_count <= 0:
+        why_now = f"Пока у ключевых услуг нет ценовых ориентиров{', ' + metrics_text if metrics_text else ''}, карточка недобирает быстрые обращения из горячего спроса."
+    else:
+        why_now = f"Спрос уже есть, и более понятная упаковка карточки{', ' + metrics_text if metrics_text else ''} может быстро поднять долю обращений без допрекламы."
+
+    return {
+        "summary_text": summary_text,
+        "recommended_actions": actions,
+        "why_now": _truncate_text(why_now, 180),
+        "meta": {
+            "source": "deterministic",
+            "prompt_key": "lead_audit_enrichment",
+            "prompt_version": "deterministic_dense_v2",
+            "prompt_source": "local_dense",
+        },
+    }
 
 
 def _needs_outreach_retry(message: str) -> bool:
@@ -3341,7 +4066,8 @@ def _load_send_queue_snapshot():
                 """
                 SELECT
                     q.id, q.batch_id, q.lead_id, q.draft_id, q.channel,
-                    q.delivery_status, q.provider_message_id, q.error_text,
+                    q.delivery_status, q.provider_message_id, q.provider_name,
+                    q.provider_account_id, q.recipient_kind, q.recipient_value, q.error_text,
                     q.sent_at, q.attempts, q.last_attempt_at, q.next_retry_at, q.dlq_at,
                     q.created_at, q.updated_at,
                     l.name AS lead_name,
@@ -3369,6 +4095,9 @@ def _load_send_queue_snapshot():
                 payload = dict(row)
                 batches_by_id[payload["batch_id"]]["items"].append(payload)
 
+        for batch in batch_rows:
+            _apply_batch_runtime_state(batch)
+
         return {"ready_drafts": ready_drafts, "batches": batch_rows}
     finally:
         conn.close()
@@ -3384,6 +4113,7 @@ def _load_reactions(limit: int = 50):
                 r.id, r.queue_id, r.lead_id, r.raw_reply,
                 r.classified_outcome, r.confidence, r.human_confirmed_outcome,
                 r.note, r.created_by, r.created_at, r.updated_at,
+                r.provider_name, r.provider_account_id, r.provider_message_id, r.reply_created_at,
                 l.name AS lead_name,
                 q.batch_id, q.channel, q.delivery_status
             FROM outreachreactions r
@@ -3410,7 +4140,10 @@ def _create_send_batch(user_id: str, draft_ids: list[str] | None = None):
         query = """
             SELECT
                 d.id, d.lead_id, d.channel,
-                l.status AS lead_status
+                l.status AS lead_status,
+                l.telegram_url,
+                l.whatsapp_url,
+                l.email
             FROM outreachmessagedrafts d
             JOIN prospectingleads l ON l.id = d.lead_id
             WHERE d.status = %s
@@ -3428,8 +4161,9 @@ def _create_send_batch(user_id: str, draft_ids: list[str] | None = None):
         params.append(remaining_slots)
         cur.execute(query, params)
         selected_rows = [dict(row) for row in cur.fetchall()]
+        valid_rows = [row for row in selected_rows if _lead_has_channel_contact(row, row.get("channel"))]
 
-        if not selected_rows:
+        if not valid_rows:
             return None, "No approved drafts available for queue"
 
         batch_id = str(uuid.uuid4())
@@ -3444,7 +4178,7 @@ def _create_send_batch(user_id: str, draft_ids: list[str] | None = None):
             (batch_id, MAX_DAILY_OUTREACH_BATCH, BATCH_DRAFT, user_id),
         )
 
-        for row in selected_rows:
+        for row in valid_rows:
             queue_id = str(uuid.uuid4())
             cur.execute(
                 """
@@ -3467,10 +4201,11 @@ def _create_send_batch(user_id: str, draft_ids: list[str] | None = None):
                 """
                 UPDATE prospectingleads
                 SET status = %s,
+                    pipeline_status = %s,
                     updated_at = NOW()
                 WHERE id = %s
                 """,
-                (QUEUED_FOR_SEND, row["lead_id"]),
+                (QUEUED_FOR_SEND, PIPELINE_IN_PROGRESS, row["lead_id"]),
             )
 
         conn.commit()
@@ -3480,6 +4215,112 @@ def _create_send_batch(user_id: str, draft_ids: list[str] | None = None):
         raise
     finally:
         conn.close()
+
+
+def _load_send_batch(batch_id: str) -> dict[str, Any] | None:
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT id, batch_date, daily_limit, status, created_by, approved_by, created_at, updated_at
+            FROM outreachsendbatches
+            WHERE id = %s
+            """,
+            (batch_id,),
+        )
+        row = cur.fetchone()
+        return _serialize_batch_row(dict(row)) if row else None
+    finally:
+        conn.close()
+
+
+def _load_send_batch_with_items(batch_id: str) -> dict[str, Any] | None:
+    batch = _load_send_batch(batch_id)
+    if not batch:
+        return None
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                q.id, q.batch_id, q.lead_id, q.draft_id, q.channel,
+                q.delivery_status, q.provider_message_id, q.error_text,
+                q.sent_at, q.attempts, q.last_attempt_at, q.next_retry_at, q.dlq_at,
+                q.created_at, q.updated_at,
+                l.name AS lead_name,
+                d.approved_text, d.generated_text,
+                r.classified_outcome AS latest_outcome,
+                r.human_confirmed_outcome AS latest_human_outcome,
+                r.raw_reply AS latest_raw_reply,
+                r.created_at AS latest_reaction_at
+            FROM outreachsendqueue q
+            JOIN prospectingleads l ON l.id = q.lead_id
+            JOIN outreachmessagedrafts d ON d.id = q.draft_id
+            LEFT JOIN LATERAL (
+                SELECT classified_outcome, human_confirmed_outcome, raw_reply, created_at
+                FROM outreachreactions rx
+                WHERE rx.queue_id = q.id
+                ORDER BY rx.created_at DESC
+                LIMIT 1
+            ) r ON TRUE
+            WHERE q.batch_id = %s
+            ORDER BY q.created_at ASC
+            """,
+            (batch_id,),
+        )
+        batch["items"] = [dict(row) for row in cur.fetchall()]
+        return batch
+    finally:
+        conn.close()
+
+
+def _summarize_batch_items(items: list[dict[str, Any]]) -> dict[str, int]:
+    summary = {
+        "total": len(items),
+        "queued": 0,
+        "sending": 0,
+        "sent": 0,
+        "delivered": 0,
+        "retry": 0,
+        "failed": 0,
+        "dlq": 0,
+        "with_reaction": 0,
+    }
+    for item in items:
+        status = str(item.get("delivery_status") or "").strip().lower()
+        if status in summary:
+            summary[status] += 1
+        if item.get("latest_outcome") or item.get("latest_human_outcome") or item.get("latest_raw_reply"):
+            summary["with_reaction"] += 1
+    return summary
+
+
+def _batch_runtime_status_from_summary(batch_status: str, summary: dict[str, int]) -> str:
+    if batch_status == BATCH_DRAFT:
+        return BATCH_DRAFT
+    if summary.get("sending", 0) > 0:
+        return "sending"
+    waiting = summary.get("queued", 0) + summary.get("retry", 0)
+    finished = summary.get("sent", 0) + summary.get("delivered", 0) + summary.get("failed", 0) + summary.get("dlq", 0)
+    total = summary.get("total", 0)
+    if total > 0 and finished >= total and waiting == 0:
+        return "completed"
+    return BATCH_APPROVED
+
+
+def _apply_batch_runtime_state(batch: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not batch:
+        return None
+    items = batch.get("items")
+    if not isinstance(items, list):
+        items = []
+        batch["items"] = items
+    summary = _summarize_batch_items(items)
+    batch["queue_summary"] = summary
+    batch["runtime_status"] = _batch_runtime_status_from_summary(str(batch.get("status") or ""), summary)
+    return batch
 
 
 def _approve_send_batch(batch_id: str, user_id: str):
@@ -3512,20 +4353,18 @@ def _approve_send_batch(batch_id: str, user_id: str):
             if not existing:
                 return None, "Batch not found"
             return None, "Batch is not in draft status"
-        batch_payload = _serialize_batch_row(dict(row))
-        cur.execute(
-            """
-            SELECT
-                q.id
-            FROM outreachsendqueue q
-            WHERE q.batch_id = %s
-            ORDER BY q.created_at ASC
-            """,
-            (batch_id,),
-        )
-        queue_rows = [dict(item) for item in cur.fetchall()]
         conn.commit()
-        return batch_payload | {"dispatch_summary": {"queued": len(queue_rows), "sent": 0, "failed": 0}}, None
+        batch = _load_send_batch_with_items(batch_id)
+        batch = _apply_batch_runtime_state(batch)
+        if not batch:
+            return None, "Batch not found"
+        batch["dispatch_summary"] = {
+            "queued": int(batch.get("queue_summary", {}).get("queued", 0)),
+            "sent": int(batch.get("queue_summary", {}).get("sent", 0)),
+            "failed": int(batch.get("queue_summary", {}).get("failed", 0)),
+            "total": int(batch.get("queue_summary", {}).get("total", 0)),
+        }
+        return batch, None
     except Exception:
         conn.rollback()
         raise
@@ -3533,27 +4372,44 @@ def _approve_send_batch(batch_id: str, user_id: str):
         conn.close()
 
 
-def dispatch_due_outreach_queue(batch_size: int = 20) -> dict[str, Any]:
+def dispatch_due_outreach_queue(batch_size: int = 20, batch_id: str | None = None, force_ready: bool = False) -> dict[str, Any]:
     """Фоновый диспетчер outbound-очереди outreach: queued/retry -> sent/retry/dlq."""
     safe_batch_size = max(1, min(int(batch_size or 20), 200))
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        cur.execute(
-            """
+        query = """
             WITH due AS (
                 SELECT
                     q.id
                 FROM outreachsendqueue q
                 JOIN outreachsendbatches b ON b.id = q.batch_id
                 WHERE b.status = %s
+        """
+        params: list[Any] = [BATCH_APPROVED]
+        if batch_id:
+            query += " AND q.batch_id = %s"
+            params.append(batch_id)
+        query += """
                   AND (
                     q.delivery_status = %s
+        """
+        params.append(QUEUE_STATUS_QUEUED)
+        if force_ready:
+            query += """
+                    OR q.delivery_status = %s
+            """
+            params.append(QUEUE_STATUS_RETRY)
+        else:
+            query += """
                     OR (
                         q.delivery_status = %s
                         AND q.next_retry_at IS NOT NULL
                         AND q.next_retry_at <= NOW()
                     )
+            """
+            params.append(QUEUE_STATUS_RETRY)
+        query += """
                   )
                 ORDER BY COALESCE(q.next_retry_at, q.created_at) ASC
                 LIMIT %s
@@ -3568,14 +4424,16 @@ def dispatch_due_outreach_queue(batch_size: int = 20) -> dict[str, Any]:
             WHERE q.id = due.id
             RETURNING q.id, q.batch_id, q.lead_id, q.draft_id, q.channel, q.delivery_status,
                       q.attempts, q.provider_message_id, q.error_text
-            """,
-            (
-                BATCH_APPROVED,
-                QUEUE_STATUS_QUEUED,
-                QUEUE_STATUS_RETRY,
+        """
+        params.extend(
+            [
                 safe_batch_size,
                 QUEUE_STATUS_SENDING,
-            ),
+            ]
+        )
+        cur.execute(
+            query,
+            params,
         )
         claimed = [dict(row) for row in cur.fetchall()]
         if claimed:
@@ -3621,6 +4479,7 @@ def dispatch_due_outreach_queue(batch_size: int = 20) -> dict[str, Any]:
 
         summary = {
             "success": True,
+            "batch_id": batch_id,
             "picked": len(claimed),
             "sent": 0,
             "delivered": 0,
@@ -3639,7 +4498,12 @@ def dispatch_due_outreach_queue(batch_size: int = 20) -> dict[str, Any]:
             dispatch_result = _dispatch_outreach_queue_item(item)
             delivery_status = str(dispatch_result.get("delivery_status") or QUEUE_STATUS_FAILED).strip().lower()
             provider_message_id = dispatch_result.get("provider_message_id")
+            provider_name = dispatch_result.get("provider_name")
+            provider_account_id = dispatch_result.get("provider_account_id")
+            recipient_kind = dispatch_result.get("recipient_kind")
+            recipient_value = dispatch_result.get("recipient_value")
             error_text = str(dispatch_result.get("error_text") or "").strip()[:500] or None
+            retryable = bool(dispatch_result.get("retryable", True))
 
             update_conn = get_db_connection()
             try:
@@ -3650,6 +4514,10 @@ def dispatch_due_outreach_queue(batch_size: int = 20) -> dict[str, Any]:
                         UPDATE outreachsendqueue
                         SET delivery_status = %s,
                             provider_message_id = %s,
+                            provider_name = %s,
+                            provider_account_id = %s,
+                            recipient_kind = %s,
+                            recipient_value = %s,
                             error_text = NULL,
                             sent_at = COALESCE(sent_at, NOW()),
                             next_retry_at = NULL,
@@ -3657,7 +4525,15 @@ def dispatch_due_outreach_queue(batch_size: int = 20) -> dict[str, Any]:
                             updated_at = NOW()
                         WHERE id = %s
                         """,
-                        (delivery_status, provider_message_id, queue_id),
+                        (
+                            delivery_status,
+                            provider_message_id,
+                            provider_name,
+                            provider_account_id,
+                            recipient_kind,
+                            recipient_value,
+                            queue_id,
+                        ),
                     )
                     update_cur.execute(
                         """
@@ -3673,9 +4549,13 @@ def dispatch_due_outreach_queue(batch_size: int = 20) -> dict[str, Any]:
                     else:
                         summary["sent"] += 1
                 else:
-                    retry_delay = _outreach_retry_delay_for_attempt(attempt_no)
-                    exhausted = attempt_no >= OUTREACH_SEND_MAX_ATTEMPTS or retry_delay is None
-                    if exhausted:
+                    retry_delay = _outreach_retry_delay_for_attempt(attempt_no) if retryable else None
+                    exhausted = (attempt_no >= OUTREACH_SEND_MAX_ATTEMPTS or retry_delay is None) and retryable
+                    if not retryable:
+                        next_status = QUEUE_STATUS_FAILED
+                        next_retry_at = None
+                        dlq_at_sql = "NULL"
+                    elif exhausted:
                         next_status = QUEUE_STATUS_DLQ
                         next_retry_at = None
                         dlq_at_sql = "NOW()"
@@ -3690,13 +4570,27 @@ def dispatch_due_outreach_queue(batch_size: int = 20) -> dict[str, Any]:
                         UPDATE outreachsendqueue
                         SET delivery_status = %s,
                             provider_message_id = %s,
+                            provider_name = %s,
+                            provider_account_id = %s,
+                            recipient_kind = %s,
+                            recipient_value = %s,
                             error_text = %s,
                             next_retry_at = %s,
                             dlq_at = {dlq_at_sql},
                             updated_at = NOW()
                         WHERE id = %s
                         """,
-                        (next_status, provider_message_id, error_text, next_retry_at, queue_id),
+                        (
+                            next_status,
+                            provider_message_id,
+                            provider_name,
+                            provider_account_id,
+                            recipient_kind,
+                            recipient_value,
+                            error_text,
+                            next_retry_at,
+                            queue_id,
+                        ),
                     )
                     update_cur.execute(
                         """
@@ -3723,12 +4617,53 @@ def dispatch_due_outreach_queue(batch_size: int = 20) -> dict[str, Any]:
                     "attempt_no": attempt_no,
                     "delivery_status": delivery_status,
                     "provider_message_id": provider_message_id,
+                    "provider_name": provider_name,
+                    "provider_account_id": provider_account_id,
+                    "recipient_kind": recipient_kind,
+                    "recipient_value": recipient_value,
                     "error_text": error_text,
                 }
             )
+            if len(claimed) > 1 and queue_id != str(claimed[-1].get("id") or ""):
+                delay_seconds = random.uniform(OUTREACH_SEND_DELAY_MIN_SEC, OUTREACH_SEND_DELAY_MAX_SEC)
+                if delay_seconds > 0:
+                    time.sleep(delay_seconds)
         return summary
     finally:
         conn.close()
+
+
+def _dispatch_send_batch_async(batch_id: str, batch_size: int | None = None) -> None:
+    target_batch = _load_send_batch_with_items(batch_id)
+    if not target_batch:
+        return
+    target_batch = _apply_batch_runtime_state(target_batch)
+    queue_summary = target_batch.get("queue_summary", {}) if target_batch else {}
+    waiting_count = int(queue_summary.get("queued", 0)) + int(queue_summary.get("retry", 0))
+    if waiting_count <= 0:
+        return
+    dispatch_due_outreach_queue(batch_size=batch_size or waiting_count, batch_id=batch_id, force_ready=True)
+
+
+def _start_batch_dispatch(batch_id: str) -> tuple[dict[str, Any] | None, str | None]:
+    batch = _load_send_batch_with_items(batch_id)
+    batch = _apply_batch_runtime_state(batch)
+    if not batch:
+        return None, "Batch not found"
+    if str(batch.get("status") or "") == BATCH_DRAFT:
+        return None, "Batch must be approved before dispatch"
+    runtime_status = str(batch.get("runtime_status") or "")
+    if runtime_status == "sending":
+        return None, "Batch is already sending"
+    queue_summary = batch.get("queue_summary", {}) if isinstance(batch.get("queue_summary"), dict) else {}
+    waiting_count = int(queue_summary.get("queued", 0)) + int(queue_summary.get("retry", 0))
+    if waiting_count <= 0:
+        return None, "No queued items left for dispatch"
+
+    thread = threading.Thread(target=_dispatch_send_batch_async, args=(batch_id, waiting_count), daemon=True)
+    thread.start()
+    batch["runtime_status"] = "sending"
+    return batch, None
 
 
 def _extract_telegram_handle(raw_value: str | None) -> str:
@@ -3746,7 +4681,446 @@ def _extract_telegram_handle(raw_value: str | None) -> str:
         raw = raw.split("/", 1)[0]
     if "?" in raw:
         raw = raw.split("?", 1)[0]
+    if raw.startswith("+"):
+        return ""
+    if raw.isdigit():
+        return ""
     return raw.strip().lstrip("@")
+
+
+def _extract_telegram_invite_link(raw_value: str | None) -> str:
+    raw = str(raw_value or "").strip()
+    if not raw:
+        return ""
+    for prefix in ("https://t.me/", "http://t.me/", "https://telegram.me/", "http://telegram.me/"):
+        if raw.startswith(prefix):
+            suffix = raw[len(prefix):].strip().strip("/")
+            suffix = suffix.split("?", 1)[0].split("#", 1)[0].strip()
+            if suffix.startswith("+"):
+                return raw
+            return ""
+    return ""
+
+
+def _resolve_telegram_app_account(account_id: str | None = None) -> dict[str, Any] | None:
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        account = load_userbot_account(cur, business_id=None, account_id=account_id)
+        if not account:
+            return None
+        return account
+    finally:
+        conn.close()
+
+
+def _telegram_app_status_payload() -> dict[str, Any]:
+    account = _resolve_telegram_app_account()
+    if not account:
+        return {
+            "configured": False,
+            "authorized": False,
+            "phone": None,
+            "account_id": None,
+            "status": "missing",
+        }
+    session_string = str(account.get("session_string") or "").strip()
+    return {
+        "configured": True,
+        "authorized": bool(session_string),
+        "phone": str(account.get("phone") or "").strip() or None,
+        "account_id": str(account.get("account_id") or "").strip() or None,
+        "status": "ready" if session_string else "not_authorized",
+    }
+
+
+def _resolve_telegram_app_recipient(lead: dict[str, Any]) -> dict[str, str] | None:
+    handle = _extract_telegram_handle(lead.get("telegram_url"))
+    if handle:
+        return {
+            "recipient_kind": "username",
+            "recipient_value": f"@{handle}",
+        }
+    invite_link = _extract_telegram_invite_link(lead.get("telegram_url"))
+    if invite_link:
+        return {
+            "recipient_kind": "invite_link",
+            "recipient_value": invite_link,
+        }
+    phone = normalize_phone(lead.get("phone"))
+    if phone:
+        return {
+            "recipient_kind": "phone",
+            "recipient_value": phone,
+        }
+    return None
+
+
+def _classify_telegram_app_error(exc: Exception) -> tuple[str, bool, str]:
+    text = str(exc or "").strip()
+    lowered = text.lower()
+    class_name = exc.__class__.__name__.lower()
+
+    if "floodwait" in class_name or "flood wait" in lowered or "a wait of" in lowered:
+        return "telegram_flood_wait", True, text or "Flood wait from Telegram"
+    if "invitehashexpired" in class_name or "checkchatinvite" in lowered or "invite link" in lowered:
+        return "telegram_invite_expired", False, text or "Telegram invite link is expired"
+    if "usernameinvalid" in class_name or "usernamenotoccupied" in class_name or "peeridinvalid" in class_name:
+        return "telegram_peer_not_found", False, text or "Telegram peer not found"
+    if "privacy" in class_name or "you can't write in this chat" in lowered or "cannot send messages" in lowered:
+        return "telegram_privacy_restricted", False, text or "Telegram privacy restriction"
+    if "timeout" in lowered or "timed out" in lowered or "connection" in lowered or "network" in lowered:
+        return "telegram_send_failed", True, text or "Temporary Telegram transport failure"
+    return "telegram_send_failed", True, text or "Telegram send failed"
+
+
+def _classify_telegram_sync_error(exc: Exception) -> tuple[str, bool, str]:
+    text = str(exc or "").strip()
+    lowered = text.lower()
+    class_name = exc.__class__.__name__.lower()
+
+    if "floodwait" in class_name or "flood wait" in lowered or "a wait of" in lowered:
+        return "telegram_flood_wait", True, text or "Flood wait from Telegram"
+    if "usernameinvalid" in class_name or "usernamenotoccupied" in class_name or "peeridinvalid" in class_name:
+        return "telegram_peer_not_found", False, text or "Telegram peer not found"
+    if "privacy" in class_name or "you can't write in this chat" in lowered or "cannot find any entity" in lowered:
+        return "telegram_peer_not_found", False, text or "Telegram peer not found"
+    if "timeout" in lowered or "timed out" in lowered or "connection" in lowered or "network" in lowered:
+        return "telegram_sync_failed", True, text or "Temporary Telegram transport failure"
+    return "telegram_sync_failed", True, text or "Telegram sync failed"
+
+
+def _normalize_provider_message_id(value: Any) -> str | None:
+    normalized = str(value or "").strip()
+    return normalized[:255] if normalized else None
+
+
+def _fetch_telegram_replies_subprocess(
+    account: dict[str, Any],
+    recipient_value: str,
+    *,
+    sent_after: Any = None,
+    after_message_id: Any = None,
+    limit: int = TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT,
+) -> dict[str, Any]:
+    payload = {
+        "account": _to_json_compatible(account),
+        "recipient": recipient_value,
+        "sent_after": _to_json_compatible(sent_after),
+        "after_message_id": _to_json_compatible(after_message_id),
+        "limit": int(limit or TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT),
+    }
+    runner = """
+import json
+import sys
+from src.core.telegram_userbot import fetch_recent_replies
+
+payload = json.loads(sys.stdin.read() or "{}")
+result = fetch_recent_replies(
+    payload.get("account") or {},
+    payload.get("recipient") or "",
+    sent_after=payload.get("sent_after"),
+    after_message_id=payload.get("after_message_id"),
+    limit=payload.get("limit") or 20,
+)
+print(json.dumps(result, ensure_ascii=False))
+"""
+    def _clean_subprocess_error(raw: str) -> str:
+        lines = [line.strip() for line in str(raw or "").splitlines() if line.strip()]
+        if not lines:
+            return ""
+        for line in reversed(lines):
+            if "Traceback" in line:
+                continue
+            return line[:500]
+        return lines[-1][:500]
+
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-c", runner],
+            input=json.dumps(payload, ensure_ascii=False),
+            capture_output=True,
+            text=True,
+            timeout=TELEGRAM_REPLY_SYNC_TIMEOUT_SEC,
+            cwd="/app",
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise TimeoutError(f"Timed out after {TELEGRAM_REPLY_SYNC_TIMEOUT_SEC}s") from exc
+
+    stdout = str(completed.stdout or "").strip()
+    if completed.returncode != 0:
+        stderr = _clean_subprocess_error(completed.stderr or completed.stdout)
+        raise RuntimeError(stderr or f"telegram reply subprocess failed with code {completed.returncode}")
+    if not stdout:
+        return {"status": "ok", "replies": []}
+    try:
+        return json.loads(stdout.splitlines()[-1])
+    except Exception as exc:
+        raise RuntimeError(f"Invalid telegram reply subprocess output: {stdout[:400]}") from exc
+
+
+def _dispatch_via_telegram_app(item: dict[str, Any], message: str) -> dict[str, Any]:
+    account = _resolve_telegram_app_account()
+    if not account:
+        return {
+            "success": False,
+            "error_code": "telegram_app_missing",
+            "error_text": "Telegram app is not configured",
+            "retryable": False,
+        }
+
+    account_id = str(account.get("account_id") or "").strip() or None
+    session_string = str(account.get("session_string") or "").strip()
+    if not session_string:
+        return {
+            "success": False,
+            "error_code": "telegram_app_not_authorized",
+            "error_text": "Telegram app is not authorized",
+            "retryable": False,
+            "provider_name": "telegram_app",
+            "provider_account_id": account_id,
+        }
+
+    recipient = _resolve_telegram_app_recipient(item)
+    if not recipient:
+        return {
+            "success": False,
+            "error_code": "telegram_recipient_missing",
+            "error_text": "Lead has no Telegram username and no fallback phone",
+            "retryable": False,
+            "provider_name": "telegram_app",
+            "provider_account_id": account_id,
+        }
+
+    try:
+        send_result = userbot_send_message(account, recipient["recipient_value"], message)
+    except Exception as exc:
+        error_code, retryable, error_text = _classify_telegram_app_error(exc)
+        return {
+            "success": False,
+            "error_code": error_code,
+            "error_text": error_text[:500],
+            "retryable": retryable,
+            "provider_name": "telegram_app",
+            "provider_account_id": account_id,
+            "recipient_kind": recipient["recipient_kind"],
+            "recipient_value": recipient["recipient_value"],
+        }
+
+    status = str(send_result.get("status") or "").strip().lower()
+    if status == "not_authorized":
+        return {
+            "success": False,
+            "error_code": "telegram_app_not_authorized",
+            "error_text": "Telegram app is not authorized",
+            "retryable": False,
+            "provider_name": "telegram_app",
+            "provider_account_id": account_id,
+            "recipient_kind": recipient["recipient_kind"],
+            "recipient_value": recipient["recipient_value"],
+            "route_label": str(send_result.get("route_label") or "").strip() or None,
+            "route_target": str(send_result.get("route_target") or "").strip() or None,
+        }
+    if status != "sent":
+        return {
+            "success": False,
+            "error_code": "telegram_send_failed",
+            "error_text": f"Unexpected Telegram app status: {status or 'unknown'}",
+            "retryable": True,
+            "provider_name": "telegram_app",
+            "provider_account_id": account_id,
+            "recipient_kind": recipient["recipient_kind"],
+            "recipient_value": recipient["recipient_value"],
+            "route_label": str(send_result.get("route_label") or "").strip() or None,
+            "route_target": str(send_result.get("route_target") or "").strip() or None,
+        }
+
+    provider_message_id = str(send_result.get("message_id") or "").strip()
+    return {
+        "success": True,
+        "provider_name": "telegram_app",
+        "provider_account_id": account_id,
+        "recipient_kind": recipient["recipient_kind"],
+        "recipient_value": recipient["recipient_value"],
+        "provider_message_id": provider_message_id or f"telegram_app:{item.get('id')}",
+        "route_label": str(send_result.get("route_label") or "").strip() or None,
+        "route_target": str(send_result.get("route_target") or "").strip() or None,
+    }
+
+
+def _load_telegram_reply_sync_candidates(limit: int = 25, batch_id: str | None = None) -> list[dict[str, Any]]:
+    safe_limit = max(1, min(int(limit or 25), 200))
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        query = """
+            SELECT
+                q.id,
+                q.batch_id,
+                q.lead_id,
+                q.channel,
+                q.delivery_status,
+                q.provider_name,
+                q.provider_account_id,
+                q.provider_message_id,
+                q.recipient_kind,
+                q.recipient_value,
+                q.sent_at,
+                l.name AS lead_name
+            FROM outreachsendqueue q
+            JOIN prospectingleads l ON l.id = q.lead_id
+            WHERE q.provider_name = 'telegram_app'
+              AND q.delivery_status IN (%s, %s)
+              AND q.provider_account_id IS NOT NULL
+              AND q.recipient_value IS NOT NULL
+              AND q.sent_at >= NOW() - (%s || ' days')::interval
+        """
+        params: list[Any] = [QUEUE_STATUS_SENT, QUEUE_STATUS_DELIVERED, TELEGRAM_REPLY_SYNC_LOOKBACK_DAYS]
+        if batch_id:
+            query += " AND q.batch_id = %s"
+            params.append(batch_id)
+        query += """
+            ORDER BY COALESCE(q.sent_at, q.updated_at, q.created_at) DESC
+            LIMIT %s
+        """
+        params.append(safe_limit)
+        cur.execute(query, params)
+        return [dict(row) for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def _sync_telegram_app_replies_for_queue_item(
+    item: dict[str, Any],
+    *,
+    per_chat_limit: int = TELEGRAM_REPLY_SYNC_PER_CHAT_LIMIT,
+) -> dict[str, Any]:
+    queue_id = str(item.get("id") or "").strip()
+    if not queue_id:
+        return {"status": "skipped", "reason": "missing_queue_id", "imported": 0, "duplicates": 0}
+
+    provider_account_id = str(item.get("provider_account_id") or "").strip()
+    account = _resolve_telegram_app_account(provider_account_id or None)
+    if not account:
+        return {"status": "failed", "reason": "telegram_app_missing", "imported": 0, "duplicates": 0}
+
+    session_string = str(account.get("session_string") or "").strip()
+    if not session_string:
+        return {"status": "failed", "reason": "telegram_app_not_authorized", "imported": 0, "duplicates": 0}
+
+    recipient_value = str(item.get("recipient_value") or "").strip()
+    if not recipient_value:
+        return {"status": "failed", "reason": "telegram_recipient_missing", "imported": 0, "duplicates": 0}
+
+    try:
+        replies_result = _fetch_telegram_replies_subprocess(
+            account,
+            recipient_value,
+            sent_after=item.get("sent_at"),
+            after_message_id=item.get("provider_message_id"),
+            limit=per_chat_limit,
+        )
+    except Exception as exc:
+        error_code, retryable, error_text = _classify_telegram_sync_error(exc)
+        return {
+            "status": "failed",
+            "reason": error_code,
+            "retryable": retryable,
+            "error_text": error_text[:500],
+            "imported": 0,
+            "duplicates": 0,
+        }
+
+    fetch_status = str(replies_result.get("status") or "").strip().lower()
+    if fetch_status == "not_authorized":
+        return {"status": "failed", "reason": "telegram_app_not_authorized", "imported": 0, "duplicates": 0}
+    if fetch_status != "ok":
+        return {
+            "status": "failed",
+            "reason": "telegram_sync_failed",
+            "error_text": str(replies_result.get("error") or f"Unexpected Telegram sync status: {fetch_status or 'unknown'}")[:500],
+            "imported": 0,
+            "duplicates": 0,
+        }
+
+    replies = replies_result.get("replies") if isinstance(replies_result.get("replies"), list) else []
+    imported = 0
+    duplicates = 0
+    last_reaction = None
+    for reply in replies:
+        provider_message_id = _normalize_provider_message_id(reply.get("message_id"))
+        reaction, reaction_error = _record_reaction(
+            queue_id,
+            reply.get("text"),
+            None,
+            f"sync=telegram_app; recipient={recipient_value}; provider_message_id={provider_message_id or '-'}",
+            "system:telegram_app_sync",
+            provider_name="telegram_app",
+            provider_account_id=provider_account_id,
+            provider_message_id=provider_message_id,
+            reply_created_at=reply.get("created_at"),
+            prefer_ai=False,
+        )
+        if reaction_error == "Reaction already recorded":
+            duplicates += 1
+            continue
+        if reaction_error:
+            return {
+                "status": "failed",
+                "reason": "reaction_record_failed",
+                "error_text": reaction_error,
+                "imported": imported,
+                "duplicates": duplicates,
+            }
+        imported += 1
+        last_reaction = reaction
+
+    if imported > 0:
+        return {
+            "status": "imported",
+            "imported": imported,
+            "duplicates": duplicates,
+            "last_reaction": last_reaction,
+        }
+    return {
+        "status": "noop",
+        "imported": 0,
+        "duplicates": duplicates,
+    }
+
+
+def _sync_telegram_app_replies(batch_id: str | None = None, limit: int = 25) -> dict[str, Any]:
+    items = _load_telegram_reply_sync_candidates(limit=limit, batch_id=batch_id)
+    summary = {
+        "success": True,
+        "batch_id": batch_id,
+        "picked": len(items),
+        "imported": 0,
+        "duplicates": 0,
+        "noops": 0,
+        "failed": 0,
+        "results": [],
+    }
+    for item in items:
+        result = _sync_telegram_app_replies_for_queue_item(item)
+        summary["results"].append(
+            {
+                "queue_id": item.get("id"),
+                "lead_id": item.get("lead_id"),
+                "lead_name": item.get("lead_name"),
+                **result,
+            }
+        )
+        if result.get("status") == "imported":
+            summary["imported"] += int(result.get("imported") or 0)
+            summary["duplicates"] += int(result.get("duplicates") or 0)
+        elif result.get("status") == "noop":
+            summary["duplicates"] += int(result.get("duplicates") or 0)
+            summary["noops"] += 1
+        else:
+            summary["failed"] += 1
+    return summary
 
 
 def _resolve_outreach_maton_key() -> str:
@@ -3913,7 +5287,18 @@ def _dispatch_via_openclaw(item: dict[str, Any], channel: str, message: str) -> 
         str(data.get("message_id") or data.get("delivery_id") or data.get("action_id") or "").strip()
         or f"openclaw:{channel}:{item.get('id')}"
     )
-    return {"success": True, "provider_message_id": provider_id}
+    return {
+        "success": True,
+        "provider_name": "openclaw",
+        "recipient_kind": channel,
+        "recipient_value": (
+            _extract_telegram_handle(item.get("telegram_url")) if channel == "telegram"
+            else normalize_phone(item.get("whatsapp_url") or item.get("phone")) if channel == "whatsapp"
+            else str(item.get("email") or "").strip() if channel == "email"
+            else ""
+        ) or None,
+        "provider_message_id": provider_id,
+    }
 
 
 def _dispatch_outreach_queue_item(item: dict[str, Any]) -> dict[str, Any]:
@@ -3929,28 +5314,75 @@ def _dispatch_outreach_queue_item(item: dict[str, Any]) -> dict[str, Any]:
         return {
             "delivery_status": QUEUE_STATUS_DELIVERED,
             "provider_message_id": f"manual:{item.get('id')}",
+            "provider_name": "manual",
+            "recipient_kind": "manual",
+            "recipient_value": None,
             "error_text": None,
+            "retryable": False,
+        }
+
+    if channel == "max":
+        return {
+            "delivery_status": QUEUE_STATUS_FAILED,
+            "error_text": "MAX delivery is not configured for outreach yet",
+            "provider_name": "max",
+            "retryable": False,
         }
 
     if channel == "email":
         return {
             "delivery_status": QUEUE_STATUS_FAILED,
             "error_text": "Email provider is not configured for outreach yet",
+            "provider_name": "email",
+            "retryable": False,
+        }
+
+    if channel == "telegram":
+        telegram_result = _dispatch_via_telegram_app(item, message)
+        if telegram_result.get("success"):
+            return {
+                "delivery_status": QUEUE_STATUS_SENT,
+                "provider_message_id": str(telegram_result.get("provider_message_id") or "")[:255] or None,
+                "provider_name": str(telegram_result.get("provider_name") or "telegram_app"),
+                "provider_account_id": str(telegram_result.get("provider_account_id") or "")[:255] or None,
+                "recipient_kind": str(telegram_result.get("recipient_kind") or "")[:64] or None,
+                "recipient_value": str(telegram_result.get("recipient_value") or "")[:255] or None,
+                "error_text": None,
+                "retryable": False,
+            }
+        return {
+            "delivery_status": QUEUE_STATUS_FAILED,
+            "provider_name": str(telegram_result.get("provider_name") or "telegram_app"),
+            "provider_account_id": str(telegram_result.get("provider_account_id") or "")[:255] or None,
+            "recipient_kind": str(telegram_result.get("recipient_kind") or "")[:64] or None,
+            "recipient_value": str(telegram_result.get("recipient_value") or "")[:255] or None,
+            "error_text": (
+                f"{telegram_result.get('error_code')}: {telegram_result.get('error_text')}"
+                if telegram_result.get("error_code") and telegram_result.get("error_text")
+                else str(telegram_result.get("error_code") or telegram_result.get("error_text") or "Telegram app delivery failed")
+            )[:500],
+            "retryable": bool(telegram_result.get("retryable", False)),
         }
 
     # Runtime-first outbound via OpenClaw for supported machine channels.
-    if channel in {"telegram", "whatsapp", "email"}:
+    if channel in {"whatsapp", "email"}:
         openclaw_result = _dispatch_via_openclaw(item, channel, message)
         if openclaw_result.get("success"):
             return {
                 "delivery_status": QUEUE_STATUS_SENT,
                 "provider_message_id": str(openclaw_result.get("provider_message_id") or "")[:255] or None,
+                "provider_name": str(openclaw_result.get("provider_name") or "openclaw"),
+                "recipient_kind": str(openclaw_result.get("recipient_kind") or channel)[:64] or None,
+                "recipient_value": str(openclaw_result.get("recipient_value") or "")[:255] or None,
                 "error_text": None,
+                "retryable": False,
             }
         if strict_openclaw:
             return {
                 "delivery_status": QUEUE_STATUS_FAILED,
+                "provider_name": "openclaw",
                 "error_text": f"OpenClaw strict mode: {str(openclaw_result.get('error') or 'delivery failed')[:430]}",
+                "retryable": True,
             }
         # fallback to legacy bridge path below if strict mode is disabled.
 
@@ -3959,6 +5391,8 @@ def _dispatch_outreach_queue_item(item: dict[str, Any]) -> dict[str, Any]:
         return {
             "delivery_status": QUEUE_STATUS_FAILED,
             "error_text": "MATON_OUTREACH_API_KEY is not configured",
+            "provider_name": "maton",
+            "retryable": False,
         }
 
     whatsapp_phone = normalize_phone(item.get("whatsapp_url") or item.get("phone"))
@@ -3967,11 +5401,15 @@ def _dispatch_outreach_queue_item(item: dict[str, Any]) -> dict[str, Any]:
         return {
             "delivery_status": QUEUE_STATUS_FAILED,
             "error_text": "Lead has no telegram handle/url",
+            "provider_name": "maton",
+            "retryable": False,
         }
     if channel == "whatsapp" and not whatsapp_phone:
         return {
             "delivery_status": QUEUE_STATUS_FAILED,
             "error_text": "Lead has no WhatsApp phone",
+            "provider_name": "maton",
+            "retryable": False,
         }
 
     response = send_maton_bridge_message(
@@ -3997,12 +5435,20 @@ def _dispatch_outreach_queue_item(item: dict[str, Any]) -> dict[str, Any]:
         return {
             "delivery_status": QUEUE_STATUS_SENT,
             "provider_message_id": str(provider_marker)[:255],
+            "provider_name": "maton",
+            "recipient_kind": "telegram_handle" if channel == "telegram" else "phone",
+            "recipient_value": telegram_handle if channel == "telegram" else whatsapp_phone,
             "error_text": None,
+            "retryable": False,
         }
     return {
         "delivery_status": QUEUE_STATUS_FAILED,
+        "provider_name": "maton",
         "error_text": str(response.get("error") or "Maton bridge delivery failed")[:500],
         "provider_message_id": None,
+        "recipient_kind": "telegram_handle" if channel == "telegram" else "phone",
+        "recipient_value": telegram_handle if channel == "telegram" else whatsapp_phone,
+        "retryable": True,
     }
 
 
@@ -4021,6 +5467,7 @@ def get_outbound_health():
     payload: dict[str, Any] = {
         "success": True,
         "strict_openclaw": strict_mode,
+        "telegram_app": _telegram_app_status_payload(),
         "openclaw": {
             "configured": bool(endpoint and token),
             "endpoint": endpoint or None,
@@ -4087,14 +5534,28 @@ def _update_send_queue_delivery(queue_id: str, delivery_status: str, provider_me
             return None
         payload = dict(row)
         lead_status = "sent" if delivery_status in {QUEUE_STATUS_SENT, QUEUE_STATUS_DELIVERED} else CHANNEL_SELECTED
+        pipeline_status = (
+            PIPELINE_WAITING_REPLY
+            if delivery_status == QUEUE_STATUS_DELIVERED
+            else PIPELINE_CONTACTED
+            if delivery_status == QUEUE_STATUS_SENT
+            else PIPELINE_IN_PROGRESS
+        )
         cur.execute(
             """
             UPDATE prospectingleads
             SET status = %s,
+                pipeline_status = %s,
                 updated_at = NOW()
             WHERE id = %s
             """,
-            (lead_status, payload.get("lead_id")),
+            (lead_status, pipeline_status, payload.get("lead_id")),
+        )
+        _record_lead_timeline_event(
+            cur,
+            lead_id=str(payload.get("lead_id") or ""),
+            event_type="delivery_sent" if delivery_status in {QUEUE_STATUS_SENT, QUEUE_STATUS_DELIVERED} else "delivery_failed",
+            payload={"queue_id": queue_id, "delivery_status": delivery_status, "provider_message_id": provider_message_id},
         )
         conn.commit()
         return payload
@@ -4105,7 +5566,19 @@ def _update_send_queue_delivery(queue_id: str, delivery_status: str, provider_me
         conn.close()
 
 
-def _record_reaction(queue_id: str, raw_reply: str | None, outcome: str | None, note: str | None, user_id: str):
+def _record_reaction(
+    queue_id: str,
+    raw_reply: str | None,
+    outcome: str | None,
+    note: str | None,
+    user_id: str,
+    *,
+    provider_name: str | None = None,
+    provider_account_id: str | None = None,
+    provider_message_id: str | None = None,
+    reply_created_at: Any = None,
+    prefer_ai: bool = True,
+):
     conn = get_db_connection()
     try:
         cur = conn.cursor()
@@ -4129,7 +5602,32 @@ def _record_reaction(queue_id: str, raw_reply: str | None, outcome: str | None, 
         if normalized_outcome and normalized_outcome not in ALLOWED_REPLY_OUTCOMES:
             return None, "Outcome must be one of: positive, question, no_response, hard_no"
 
-        classified_outcome, confidence, classifier_source = _classify_reply_outcome_ai(raw_reply or "")
+        normalized_provider_name = str(provider_name or "").strip()[:64] or None
+        normalized_provider_account_id = str(provider_account_id or "").strip()[:255] or None
+        normalized_provider_message_id = _normalize_provider_message_id(provider_message_id)
+        if normalized_provider_name and normalized_provider_message_id:
+            cur.execute(
+                """
+                SELECT id, queue_id, lead_id, raw_reply, classified_outcome,
+                       confidence, human_confirmed_outcome, note, created_by, created_at, updated_at,
+                       provider_name, provider_account_id, provider_message_id, reply_created_at
+                FROM outreachreactions
+                WHERE provider_name = %s
+                  AND provider_account_id IS NOT DISTINCT FROM %s
+                  AND provider_message_id = %s
+                LIMIT 1
+                """,
+                (normalized_provider_name, normalized_provider_account_id, normalized_provider_message_id),
+            )
+            existing = cur.fetchone()
+            if existing:
+                return dict(existing), "Reaction already recorded"
+
+        if prefer_ai:
+            classified_outcome, confidence, classifier_source = _classify_reply_outcome_ai(raw_reply or "")
+        else:
+            classified_outcome, confidence = _classify_reply_outcome(raw_reply or "")
+            classifier_source = "heuristic"
         final_outcome = normalized_outcome or classified_outcome
         note_prefix = f"classifier={classifier_source}"
         note_value = f"{note_prefix}; {note}" if note else note_prefix
@@ -4139,13 +5637,16 @@ def _record_reaction(queue_id: str, raw_reply: str | None, outcome: str | None, 
             """
             INSERT INTO outreachreactions (
                 id, queue_id, lead_id, raw_reply, classified_outcome,
-                confidence, human_confirmed_outcome, note, created_by
+                confidence, human_confirmed_outcome, note, created_by,
+                provider_name, provider_account_id, provider_message_id, reply_created_at
             ) VALUES (
                 %s, %s, %s, %s, %s,
+                %s, %s, %s, %s,
                 %s, %s, %s, %s
             )
             RETURNING id, queue_id, lead_id, raw_reply, classified_outcome,
-                      confidence, human_confirmed_outcome, note, created_by, created_at, updated_at
+                      confidence, human_confirmed_outcome, note, created_by, created_at, updated_at,
+                      provider_name, provider_account_id, provider_message_id, reply_created_at
             """,
             (
                 reaction_id,
@@ -4157,19 +5658,39 @@ def _record_reaction(queue_id: str, raw_reply: str | None, outcome: str | None, 
                 final_outcome,
                 note_value,
                 user_id,
+                normalized_provider_name,
+                normalized_provider_account_id,
+                normalized_provider_message_id,
+                reply_created_at,
             ),
         )
         reaction = dict(cur.fetchone())
 
         next_lead_status = _lead_status_for_outcome(final_outcome)
+        next_pipeline_status = (
+            PIPELINE_CONVERTED
+            if next_lead_status in {"qualified", "converted"}
+            else PIPELINE_REPLIED
+            if next_lead_status == "responded"
+            else PIPELINE_WAITING_REPLY
+        )
         cur.execute(
             """
             UPDATE prospectingleads
             SET status = %s,
+                pipeline_status = %s,
                 updated_at = NOW()
             WHERE id = %s
             """,
-            (next_lead_status, queue_payload["lead_id"]),
+            (next_lead_status, next_pipeline_status, queue_payload["lead_id"]),
+        )
+        _record_lead_timeline_event(
+            cur,
+            lead_id=str(queue_payload["lead_id"]),
+            event_type="reaction_recorded",
+            actor_id=user_id,
+            comment=(raw_reply or "").strip() or None,
+            payload={"queue_id": queue_id, "outcome": final_outcome},
         )
         conn.commit()
         return reaction, None
@@ -4227,10 +5748,11 @@ def _delete_send_queue_item(queue_id: str) -> dict[str, Any] | None:
             """
             UPDATE prospectingleads
             SET status = %s,
+                pipeline_status = %s,
                 updated_at = NOW()
             WHERE id = %s
             """,
-            (CHANNEL_SELECTED, payload.get("lead_id")),
+            (CHANNEL_SELECTED, PIPELINE_IN_PROGRESS, payload.get("lead_id")),
         )
         conn.commit()
         return payload
@@ -4356,7 +5878,8 @@ def _confirm_reaction(reaction_id: str, outcome: str, note: str | None, user_id:
                 updated_at = NOW()
             WHERE id = %s
             RETURNING id, queue_id, lead_id, raw_reply, classified_outcome,
-                      confidence, human_confirmed_outcome, note, created_by, created_at, updated_at
+                      confidence, human_confirmed_outcome, note, created_by, created_at, updated_at,
+                      provider_name, provider_account_id, provider_message_id, reply_created_at
             """,
             (normalized_outcome, note_value, reaction_id),
         )
@@ -4660,10 +6183,17 @@ def get_leads():
         return error
 
     try:
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            _ensure_manual_crm_tables(conn)
+        finally:
+            conn.close()
         filters = {
             "category": (request.args.get("category") or "").strip() or None,
             "city": (request.args.get("city") or "").strip() or None,
             "status": (request.args.get("status") or "").strip() or None,
+            "group_id": (request.args.get("group_id") or "").strip() or None,
             "min_rating": float(request.args.get("min_rating")) if request.args.get("min_rating") not in {None, ""} else None,
             "max_rating": float(request.args.get("max_rating")) if request.args.get("max_rating") not in {None, ""} else None,
             "min_reviews": int(request.args.get("min_reviews")) if request.args.get("min_reviews") not in {None, ""} else None,
@@ -4673,12 +6203,18 @@ def get_leads():
             "has_email": _to_bool_filter(request.args.get("has_email")),
             "has_messengers": _to_bool_filter(request.args.get("has_messengers")),
         }
+        compact_mode = _to_bool_query_flag(request.args.get("compact"), False)
+        include_groups = _to_bool_query_flag(request.args.get("include_groups"), not compact_mode)
+        include_timeline = _to_bool_query_flag(request.args.get("include_timeline"), not compact_mode)
         with DatabaseManager() as db:
-            leads = db.get_all_leads()
+            leads = db.get_all_leads_compact() if compact_mode else db.get_all_leads()
         offer_by_lead_id = {}
+        group_summary_by_lead_id: dict[str, list[dict[str, Any]]] = {}
+        timeline_preview_by_lead_id: dict[str, dict[str, Any]] = {}
         conn = get_db_connection()
         try:
             _ensure_admin_prospecting_public_offers_table(conn)
+            _ensure_manual_crm_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             cur.execute(
                 """
@@ -4690,6 +6226,11 @@ def get_leads():
                 lead_id = str(row.get("lead_id") or "").strip()
                 if lead_id:
                     offer_by_lead_id[lead_id] = row
+            lead_ids = [str((lead or {}).get("id") or "").strip() for lead in leads if str((lead or {}).get("id") or "").strip()]
+            if include_groups:
+                group_summary_by_lead_id = _group_summary_for_lead_ids(cur, lead_ids)
+            if include_timeline:
+                timeline_preview_by_lead_id = _latest_timeline_preview(cur, lead_ids)
         finally:
             conn.close()
         normalized = []
@@ -4697,6 +6238,7 @@ def get_leads():
             display_lead = _normalize_lead_for_display(lead)
             if not display_lead:
                 continue
+            lead_id = str(display_lead.get("id") or "").strip()
             offer = offer_by_lead_id.get(str(display_lead.get("id") or "").strip())
             slug = str((offer or {}).get("slug") or "").strip()
             if offer and bool(offer.get("is_active")) and slug:
@@ -4711,8 +6253,22 @@ def get_leads():
                 display_lead["public_audit_updated_at"] = offer.get("updated_at")
                 display_lead["preferred_language"] = primary_language
                 display_lead["enabled_languages"] = enabled_languages
+            if include_groups:
+                display_lead["groups"] = group_summary_by_lead_id.get(lead_id, [])
+                display_lead["group_count"] = len(display_lead["groups"])
+            else:
+                display_lead["groups"] = []
+                display_lead["group_count"] = 0
+            if include_timeline:
+                display_lead["timeline_preview"] = timeline_preview_by_lead_id.get(lead_id)
             normalized.append(display_lead)
         filtered = [lead for lead in normalized if _lead_matches_filters(lead, filters)]
+        group_id = str(filters.get("group_id") or "").strip()
+        if group_id:
+            filtered = [
+                lead for lead in filtered
+                if any(str(group.get("id") or "") == group_id for group in (lead.get("groups") or []))
+            ]
         return jsonify(_to_json_compatible({"leads": filtered, "count": len(filtered)}))
     except Exception as e:
         print(f"Error getting leads: {e}")
@@ -4727,6 +6283,12 @@ def save_lead():
         return error
 
     try:
+        conn = get_db_connection()
+        try:
+            _ensure_partnership_columns(conn)
+            _ensure_manual_crm_tables(conn)
+        finally:
+            conn.close()
         data = request.get_json(silent=True) or {}
         lead_data = data.get("lead")
 
@@ -4736,9 +6298,28 @@ def save_lead():
         lead_data.setdefault("source", "apify_yandex")
         lead_data.setdefault("source_external_id", lead_data.get("google_id"))
         lead_data.setdefault("status", "new")
+        lead_data.setdefault("pipeline_status", PIPELINE_UNPROCESSED)
 
         with DatabaseManager() as db:
             lead_id = db.save_lead(lead_data)
+
+        conn = get_db_connection()
+        try:
+            _ensure_manual_crm_tables(conn)
+            cur = conn.cursor()
+            _record_lead_timeline_event(
+                cur,
+                lead_id=lead_id,
+                event_type="lead_created",
+                comment="Lead added to intake",
+                payload={
+                    "source": lead_data.get("source"),
+                    "pipeline_status": lead_data.get("pipeline_status") or PIPELINE_UNPROCESSED,
+                },
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
         return jsonify({"success": True, "lead_id": lead_id})
     except Exception as e:
@@ -4816,6 +6397,7 @@ def partnership_import_links():
             business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
             if not business_id:
                 return jsonify({"error": "Business not found or access denied"}), 403
+            schema_flags = _get_partnership_schema_flags(cur)
 
             imported_ids: list[str] = []
             skipped = 0
@@ -5357,18 +6939,20 @@ def partnership_health():
             )
             batches_total = int((cur.fetchone() or [0])[0] or 0)
 
-            cur.execute(
-                """
-                SELECT COUNT(*)::INT
-                FROM outreachmessagereactions r
-                JOIN outreachsendqueue q ON q.id = r.queue_id
-                JOIN prospectingleads l ON l.id = q.lead_id
-                WHERE l.business_id = %s
-                  AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
-                """,
-                (business_id,),
-            )
-            reactions_total = int((cur.fetchone() or [0])[0] or 0)
+            reactions_total = 0
+            if schema_flags["has_reactions"]:
+                cur.execute(
+                    """
+                    SELECT COUNT(*)::INT
+                    FROM outreachmessagereactions r
+                    JOIN outreachsendqueue q ON q.id = r.queue_id
+                    JOIN prospectingleads l ON l.id = q.lead_id
+                    WHERE l.business_id = %s
+                      AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+                    """,
+                    (business_id,),
+                )
+                reactions_total = int((cur.fetchone() or [0])[0] or 0)
         finally:
             conn.close()
 
@@ -5415,6 +6999,7 @@ def partnership_export():
             business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
             if not business_id:
                 return jsonify({"error": "Business not found or access denied"}), 403
+            schema_flags = _get_partnership_schema_flags(cur)
 
             cur.execute(
                 """
@@ -5456,21 +7041,23 @@ def partnership_export():
             )
             batches = [dict(r) if hasattr(r, "keys") else {} for r in cur.fetchall()]
 
-            cur.execute(
-                """
-                SELECT r.id, r.queue_id, r.classified_outcome, r.human_confirmed_outcome,
-                       r.created_at, l.name AS lead_name
-                FROM outreachmessagereactions r
-                JOIN outreachsendqueue q ON q.id = r.queue_id
-                JOIN prospectingleads l ON l.id = q.lead_id
-                WHERE l.business_id = %s
-                  AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
-                ORDER BY r.created_at DESC NULLS LAST
-                LIMIT %s
-                """,
-                (business_id, limit),
-            )
-            reactions = [dict(r) if hasattr(r, "keys") else {} for r in cur.fetchall()]
+            reactions: list[dict[str, Any]] = []
+            if schema_flags["has_reactions"]:
+                cur.execute(
+                    """
+                    SELECT r.id, r.queue_id, r.classified_outcome, r.human_confirmed_outcome,
+                           r.created_at, l.name AS lead_name
+                    FROM outreachmessagereactions r
+                    JOIN outreachsendqueue q ON q.id = r.queue_id
+                    JOIN prospectingleads l ON l.id = q.lead_id
+                    WHERE l.business_id = %s
+                      AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+                    ORDER BY r.created_at DESC NULLS LAST
+                    LIMIT %s
+                    """,
+                    (business_id, limit),
+                )
+                reactions = [dict(r) if hasattr(r, "keys") else {} for r in cur.fetchall()]
         finally:
             conn.close()
 
@@ -5645,9 +7232,26 @@ def partnership_source_quality_summary():
             business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
             if not business_id:
                 return jsonify({"error": "Business not found or access denied"}), 403
+            schema_flags = _get_partnership_schema_flags(cur)
+
+            positive_leads_cte = """
+                positive_leads AS (
+                    SELECT NULL::text AS lead_id WHERE FALSE
+                )
+            """
+            if schema_flags["has_reaction_outcomes"]:
+                positive_leads_cte = """
+                positive_leads AS (
+                    SELECT DISTINCT q.lead_id::text AS lead_id
+                    FROM outreachmessagereactions r
+                    JOIN outreachsendqueue q ON q.id = r.queue_id
+                    JOIN leads_scope ls ON ls.id = q.lead_id
+                    WHERE COALESCE(r.human_confirmed_outcome, r.classified_outcome, '') = 'positive'
+                )
+                """
 
             cur.execute(
-                """
+                f"""
                 WITH leads_scope AS (
                     SELECT
                         l.id,
@@ -5670,13 +7274,7 @@ def partnership_source_quality_summary():
                     JOIN leads_scope ls ON ls.id = q.lead_id
                     WHERE COALESCE(q.delivery_status, '') IN ('sent', 'delivered')
                 ),
-                positive_leads AS (
-                    SELECT DISTINCT q.lead_id
-                    FROM outreachmessagereactions r
-                    JOIN outreachsendqueue q ON q.id = r.queue_id
-                    JOIN leads_scope ls ON ls.id = q.lead_id
-                    WHERE COALESCE(r.human_confirmed_outcome, r.classified_outcome, '') = 'positive'
-                )
+                {positive_leads_cte}
                 SELECT
                     ls.source_kind,
                     ls.source_provider,
@@ -5765,11 +7363,28 @@ def partnership_blockers_summary():
             business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
             if not business_id:
                 return jsonify({"error": "Business not found or access denied"}), 403
+            schema_flags = _get_partnership_schema_flags(cur)
+            parse_leads_cte = "SELECT l.id, ''::text AS parse_status"
+            if schema_flags["has_parse_lookup"]:
+                parse_leads_cte = f"""
+                    SELECT
+                        l.id,
+                        {_partnership_parse_status_select_sql("l")} AS parse_status
+                """
+            reaction_lookup_sql = "SELECT ''::text AS outcome"
+            if schema_flags["has_reaction_outcomes"]:
+                reaction_lookup_sql = """
+                    SELECT COALESCE(NULLIF(r.human_confirmed_outcome, ''), NULLIF(r.classified_outcome, ''), '') AS outcome
+                    FROM outreachmessagereactions r
+                    WHERE r.queue_id = q.id
+                    ORDER BY COALESCE(r.updated_at, r.created_at) DESC
+                    LIMIT 1
+                """
 
             cur.execute(
-                """
+                f"""
                 WITH leads_scope AS (
-                    SELECT l.id
+                    {parse_leads_cte}
                     FROM prospectingleads l
                     WHERE l.business_id = %s
                       AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
@@ -5777,17 +7392,14 @@ def partnership_blockers_summary():
                 )
                 SELECT
                     (SELECT COUNT(*)::INT
-                     FROM prospectingleads l
-                     JOIN leads_scope ls ON ls.id = l.id
-                     WHERE COALESCE(l.parse_status, '') IN ('pending', 'processing')) AS parse_in_progress_count,
+                     FROM leads_scope ls
+                     WHERE COALESCE(ls.parse_status, '') IN ('pending', 'processing')) AS parse_in_progress_count,
                     (SELECT COUNT(*)::INT
-                     FROM prospectingleads l
-                     JOIN leads_scope ls ON ls.id = l.id
-                     WHERE COALESCE(l.parse_status, '') = 'captcha') AS captcha_required_count,
+                     FROM leads_scope ls
+                     WHERE COALESCE(ls.parse_status, '') = 'captcha') AS captcha_required_count,
                     (SELECT COUNT(*)::INT
-                     FROM prospectingleads l
-                     JOIN leads_scope ls ON ls.id = l.id
-                     WHERE COALESCE(l.parse_status, '') = 'error') AS parse_error_count,
+                     FROM leads_scope ls
+                     WHERE COALESCE(ls.parse_status, '') = 'error') AS parse_error_count,
                     (SELECT COUNT(*)::INT
                      FROM outreachmessagedrafts d
                      JOIN leads_scope ls ON ls.id = d.lead_id
@@ -5800,11 +7412,7 @@ def partnership_blockers_summary():
                      FROM outreachsendqueue q
                      JOIN leads_scope ls ON ls.id = q.lead_id
                      LEFT JOIN LATERAL (
-                         SELECT COALESCE(NULLIF(r.human_confirmed_outcome, ''), NULLIF(r.classified_outcome, ''), '') AS outcome
-                         FROM outreachmessagereactions r
-                         WHERE r.queue_id = q.id
-                         ORDER BY COALESCE(r.updated_at, r.created_at) DESC
-                         LIMIT 1
+                         {reaction_lookup_sql}
                      ) rx ON TRUE
                      WHERE COALESCE(q.delivery_status, '') IN ('sent', 'delivered')
                        AND COALESCE(rx.outcome, '') = '') AS sent_without_outcome_count
@@ -5911,81 +7519,89 @@ def partnership_outcomes_summary():
             business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
             if not business_id:
                 return jsonify({"error": "Business not found or access denied"}), 403
+            schema_flags = _get_partnership_schema_flags(cur)
+            total_reactions = 0
+            positive_count = 0
+            question_count = 0
+            no_response_count = 0
+            hard_no_count = 0
+            by_channel: list[dict[str, Any]] = []
 
-            cur.execute(
-                """
-                WITH leads_scope AS (
-                    SELECT l.id
-                    FROM prospectingleads l
-                    WHERE l.business_id = %s
-                      AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
-                ),
-                reactions_scope AS (
+            if schema_flags["has_reaction_outcomes"]:
+                cur.execute(
+                    """
+                    WITH leads_scope AS (
+                        SELECT l.id
+                        FROM prospectingleads l
+                        WHERE l.business_id = %s
+                          AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+                    ),
+                    reactions_scope AS (
+                        SELECT
+                            COALESCE(q.channel, 'unknown') AS channel,
+                            COALESCE(NULLIF(r.human_confirmed_outcome, ''), NULLIF(r.classified_outcome, ''), 'no_response') AS outcome
+                        FROM outreachmessagereactions r
+                        JOIN outreachsendqueue q ON q.id = r.queue_id
+                        JOIN leads_scope ls ON ls.id = q.lead_id
+                        WHERE COALESCE(r.updated_at, r.created_at) >= NOW() - (%s || ' days')::INTERVAL
+                    )
                     SELECT
-                        COALESCE(q.channel, 'unknown') AS channel,
-                        COALESCE(NULLIF(r.human_confirmed_outcome, ''), NULLIF(r.classified_outcome, ''), 'no_response') AS outcome
-                    FROM outreachmessagereactions r
-                    JOIN outreachsendqueue q ON q.id = r.queue_id
-                    JOIN leads_scope ls ON ls.id = q.lead_id
-                    WHERE COALESCE(r.updated_at, r.created_at) >= NOW() - (%s || ' days')::INTERVAL
+                        COUNT(*)::INT AS total_reactions,
+                        COUNT(*) FILTER (WHERE outcome = 'positive')::INT AS positive_count,
+                        COUNT(*) FILTER (WHERE outcome = 'question')::INT AS question_count,
+                        COUNT(*) FILTER (WHERE outcome = 'no_response')::INT AS no_response_count,
+                        COUNT(*) FILTER (WHERE outcome = 'hard_no')::INT AS hard_no_count
+                    FROM reactions_scope
+                    """,
+                    (business_id, window_days),
                 )
-                SELECT
-                    COUNT(*)::INT AS total_reactions,
-                    COUNT(*) FILTER (WHERE outcome = 'positive')::INT AS positive_count,
-                    COUNT(*) FILTER (WHERE outcome = 'question')::INT AS question_count,
-                    COUNT(*) FILTER (WHERE outcome = 'no_response')::INT AS no_response_count,
-                    COUNT(*) FILTER (WHERE outcome = 'hard_no')::INT AS hard_no_count
-                FROM reactions_scope
-                """,
-                (business_id, window_days),
-            )
-            row = cur.fetchone()
-            if row and hasattr(row, "keys"):
-                total_reactions = int(row.get("total_reactions") or 0)
-                positive_count = int(row.get("positive_count") or 0)
-                question_count = int(row.get("question_count") or 0)
-                no_response_count = int(row.get("no_response_count") or 0)
-                hard_no_count = int(row.get("hard_no_count") or 0)
-            else:
-                values = list(row or [0, 0, 0, 0, 0])
-                total_reactions = int(values[0] or 0)
-                positive_count = int(values[1] or 0)
-                question_count = int(values[2] or 0)
-                no_response_count = int(values[3] or 0)
-                hard_no_count = int(values[4] or 0)
+                row = cur.fetchone()
+                if row and hasattr(row, "keys"):
+                    total_reactions = int(row.get("total_reactions") or 0)
+                    positive_count = int(row.get("positive_count") or 0)
+                    question_count = int(row.get("question_count") or 0)
+                    no_response_count = int(row.get("no_response_count") or 0)
+                    hard_no_count = int(row.get("hard_no_count") or 0)
+                else:
+                    values = list(row or [0, 0, 0, 0, 0])
+                    total_reactions = int(values[0] or 0)
+                    positive_count = int(values[1] or 0)
+                    question_count = int(values[2] or 0)
+                    no_response_count = int(values[3] or 0)
+                    hard_no_count = int(values[4] or 0)
 
-            cur.execute(
-                """
-                WITH leads_scope AS (
-                    SELECT l.id
-                    FROM prospectingleads l
-                    WHERE l.business_id = %s
-                      AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
-                ),
-                reactions_scope AS (
+                cur.execute(
+                    """
+                    WITH leads_scope AS (
+                        SELECT l.id
+                        FROM prospectingleads l
+                        WHERE l.business_id = %s
+                          AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+                    ),
+                    reactions_scope AS (
+                        SELECT
+                            COALESCE(q.channel, 'unknown') AS channel,
+                            COALESCE(NULLIF(r.human_confirmed_outcome, ''), NULLIF(r.classified_outcome, ''), 'no_response') AS outcome
+                        FROM outreachmessagereactions r
+                        JOIN outreachsendqueue q ON q.id = r.queue_id
+                        JOIN leads_scope ls ON ls.id = q.lead_id
+                        WHERE COALESCE(r.updated_at, r.created_at) >= NOW() - (%s || ' days')::INTERVAL
+                    )
                     SELECT
-                        COALESCE(q.channel, 'unknown') AS channel,
-                        COALESCE(NULLIF(r.human_confirmed_outcome, ''), NULLIF(r.classified_outcome, ''), 'no_response') AS outcome
-                    FROM outreachmessagereactions r
-                    JOIN outreachsendqueue q ON q.id = r.queue_id
-                    JOIN leads_scope ls ON ls.id = q.lead_id
-                    WHERE COALESCE(r.updated_at, r.created_at) >= NOW() - (%s || ' days')::INTERVAL
+                        channel,
+                        COUNT(*)::INT AS total,
+                        COUNT(*) FILTER (WHERE outcome = 'positive')::INT AS positive_count,
+                        COUNT(*) FILTER (WHERE outcome = 'question')::INT AS question_count,
+                        COUNT(*) FILTER (WHERE outcome = 'no_response')::INT AS no_response_count,
+                        COUNT(*) FILTER (WHERE outcome = 'hard_no')::INT AS hard_no_count
+                    FROM reactions_scope
+                    GROUP BY channel
+                    ORDER BY total DESC, channel ASC
+                    """,
+                    (business_id, window_days),
                 )
-                SELECT
-                    channel,
-                    COUNT(*)::INT AS total,
-                    COUNT(*) FILTER (WHERE outcome = 'positive')::INT AS positive_count,
-                    COUNT(*) FILTER (WHERE outcome = 'question')::INT AS question_count,
-                    COUNT(*) FILTER (WHERE outcome = 'no_response')::INT AS no_response_count,
-                    COUNT(*) FILTER (WHERE outcome = 'hard_no')::INT AS hard_no_count
-                FROM reactions_scope
-                GROUP BY channel
-                ORDER BY total DESC, channel ASC
-                """,
-                (business_id, window_days),
-            )
-            by_channel_rows = cur.fetchall() or []
-            by_channel = [dict(r) if hasattr(r, "keys") else {} for r in by_channel_rows]
+                by_channel_rows = cur.fetchall() or []
+                by_channel = [dict(r) if hasattr(r, "keys") else {} for r in by_channel_rows]
         finally:
             conn.close()
 
@@ -6269,6 +7885,28 @@ def partnership_update_lead(lead_id):
             business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
             if not business_id:
                 return jsonify({"error": "Business not found or access denied"}), 403
+            cur.execute(
+                """
+                SELECT id, name, telegram_url, whatsapp_url, email
+                FROM prospectingleads
+                WHERE id = %s
+                  AND business_id = %s
+                  AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
+                """,
+                (lead_id, business_id),
+            )
+            existing_row = cur.fetchone()
+            if not existing_row:
+                return jsonify({"error": "Lead not found"}), 404
+            existing_lead = dict(existing_row)
+            candidate_lead = {
+                **existing_lead,
+                "telegram_url": telegram_url if telegram_url is not None else existing_lead.get("telegram_url"),
+                "whatsapp_url": whatsapp_url if whatsapp_url is not None else existing_lead.get("whatsapp_url"),
+                "email": email if email is not None else existing_lead.get("email"),
+            }
+            if selected_channel is not None and not _lead_has_channel_contact(candidate_lead, selected_channel):
+                return jsonify({"error": _outreach_channel_contact_error(selected_channel)}), 400
 
             assignments = ["updated_at = NOW()"]
             params: list[Any] = []
@@ -6381,6 +8019,25 @@ def partnership_bulk_update_leads():
             business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
             if not business_id:
                 return jsonify({"error": "Business not found or access denied"}), 403
+            if selected_channel is not None and selected_channel != "manual":
+                cur.execute(
+                    """
+                    SELECT id, name, telegram_url, whatsapp_url, email
+                    FROM prospectingleads
+                    WHERE id = ANY(%s)
+                      AND business_id = %s
+                      AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
+                    """,
+                    (lead_ids, business_id),
+                )
+                rows = [dict(row) for row in cur.fetchall() or []]
+                invalid = [row for row in rows if not _lead_has_channel_contact(row, selected_channel)]
+                if invalid:
+                    example = str(invalid[0].get("name") or invalid[0].get("id") or "lead")
+                    return jsonify({
+                        "error": f"{_outreach_channel_contact_error(selected_channel)}: {example}",
+                        "invalid_ids": [str(row.get("id") or "") for row in invalid if str(row.get("id") or "").strip()],
+                    }), 400
 
             assignments = ["updated_at = NOW()"]
             params: list[Any] = []
@@ -6446,6 +8103,7 @@ def partnership_ralph_loop_summary():
             business_id = _resolve_business_for_user(cur, user_data, requested_business_id)
             if not business_id:
                 return jsonify({"error": "Business not found or access denied"}), 403
+            schema_flags = _get_partnership_schema_flags(cur)
 
             lead_filter_sql = [
                 "l.business_id = %s",
@@ -6456,156 +8114,237 @@ def partnership_ralph_loop_summary():
                 lead_filter_sql.append("COALESCE(l.pilot_cohort, 'backlog') = %s")
                 lead_filter_params.append(pilot_cohort)
             lead_filter = " AND ".join(lead_filter_sql)
+            parse_status_sql = "''::text"
+            if schema_flags["has_parse_lookup"]:
+                parse_status_sql = _partnership_parse_status_select_sql("l")
+            parsed_completed_sql = "(SELECT COUNT(*) FROM leads_scope WHERE COALESCE(parse_status, '') = 'completed')"
+            if not schema_flags["has_parse_lookup"]:
+                parsed_completed_sql = "0"
 
-            cur.execute(
-                f"""
-                WITH leads_scope AS (
+            if schema_flags["has_reaction_outcomes"]:
+                cur.execute(
+                    f"""
+                    WITH leads_scope AS (
+                        SELECT
+                            l.id,
+                            l.partnership_stage,
+                            l.selected_channel,
+                            l.created_at,
+                            l.updated_at,
+                            {parse_status_sql} AS parse_status
+                        FROM prospectingleads l
+                        WHERE {lead_filter}
+                    ),
+                    sent_scope AS (
+                        SELECT q.id, q.channel, q.delivery_status, q.created_at, q.lead_id
+                        FROM outreachsendqueue q
+                        JOIN leads_scope ls ON ls.id = q.lead_id
+                        WHERE q.created_at >= NOW() - (%s || ' days')::INTERVAL
+                    ),
+                    reaction_scope AS (
+                        SELECT r.id,
+                               COALESCE(r.human_confirmed_outcome, r.classified_outcome, '') AS final_outcome,
+                               q.channel
+                        FROM outreachmessagereactions r
+                        JOIN outreachsendqueue q ON q.id = r.queue_id
+                        JOIN leads_scope ls ON ls.id = q.lead_id
+                        WHERE r.created_at >= NOW() - (%s || ' days')::INTERVAL
+                    ),
+                    draft_scope AS (
+                        SELECT d.id, d.status
+                        FROM outreachmessagedrafts d
+                        JOIN leads_scope ls ON ls.id = d.lead_id
+                        WHERE COALESCE(d.updated_at, d.created_at) >= NOW() - (%s || ' days')::INTERVAL
+                    )
                     SELECT
-                        l.id,
-                        l.partnership_stage,
-                        l.selected_channel,
-                        l.created_at,
-                        l.updated_at,
-                        (
-                            SELECT pq.status
-                            FROM parsequeue pq
-                            WHERE pq.business_id = l.business_id
-                              AND pq.task_type IN ('parse_card', 'sync_yandex_business')
-                            ORDER BY COALESCE(pq.updated_at, pq.created_at) DESC
-                            LIMIT 1
-                        ) AS parse_status
-                    FROM prospectingleads l
-                    WHERE {lead_filter}
-                ),
-                sent_scope AS (
-                    SELECT q.id, q.channel, q.delivery_status, q.created_at, q.lead_id
-                    FROM outreachsendqueue q
-                    JOIN leads_scope ls ON ls.id = q.lead_id
-                    WHERE q.created_at >= NOW() - (%s || ' days')::INTERVAL
-                ),
-                reaction_scope AS (
-                    SELECT r.id,
-                           COALESCE(r.human_confirmed_outcome, r.classified_outcome, '') AS final_outcome,
-                           q.channel
-                    FROM outreachmessagereactions r
-                    JOIN outreachsendqueue q ON q.id = r.queue_id
-                    JOIN leads_scope ls ON ls.id = q.lead_id
-                    WHERE r.created_at >= NOW() - (%s || ' days')::INTERVAL
-                ),
-                draft_scope AS (
-                    SELECT d.id, d.status
-                    FROM outreachmessagedrafts d
-                    JOIN leads_scope ls ON ls.id = d.lead_id
-                    WHERE COALESCE(d.updated_at, d.created_at) >= NOW() - (%s || ' days')::INTERVAL
+                        (SELECT COUNT(*) FROM leads_scope) AS leads_total,
+                        {parsed_completed_sql} AS parsed_completed_count,
+                        (SELECT COUNT(*) FROM leads_scope WHERE COALESCE(partnership_stage, 'imported') IN ('audited','matched','proposal_draft_ready','selected_for_outreach','channel_selected','approved_for_send','sent')) AS audited_count,
+                        (SELECT COUNT(*) FROM leads_scope WHERE COALESCE(partnership_stage, 'imported') IN ('matched','proposal_draft_ready','selected_for_outreach','channel_selected','approved_for_send','sent')) AS matched_count,
+                        (SELECT COUNT(*) FROM draft_scope) AS drafts_total,
+                        (SELECT COUNT(*) FROM draft_scope WHERE COALESCE(status, '') = 'approved') AS drafts_approved_count,
+                        (SELECT COUNT(*) FROM sent_scope) AS sent_total,
+                        (SELECT COUNT(*) FROM reaction_scope WHERE final_outcome = 'positive') AS positive_count,
+                        (SELECT COUNT(*) FROM reaction_scope WHERE final_outcome = 'question') AS question_count,
+                        (SELECT COUNT(*) FROM reaction_scope WHERE final_outcome = 'no_response') AS no_response_count,
+                        (SELECT COUNT(*) FROM reaction_scope WHERE final_outcome = 'hard_no') AS hard_no_count
+                    """,
+                    (*lead_filter_params, window_days, window_days, window_days),
                 )
-                SELECT
-                    (SELECT COUNT(*) FROM leads_scope) AS leads_total,
-                    (SELECT COUNT(*) FROM leads_scope WHERE COALESCE(parse_status, '') = 'completed') AS parsed_completed_count,
-                    (SELECT COUNT(*) FROM leads_scope WHERE COALESCE(partnership_stage, 'imported') IN ('audited','matched','proposal_draft_ready','selected_for_outreach','channel_selected','approved_for_send','sent')) AS audited_count,
-                    (SELECT COUNT(*) FROM leads_scope WHERE COALESCE(partnership_stage, 'imported') IN ('matched','proposal_draft_ready','selected_for_outreach','channel_selected','approved_for_send','sent')) AS matched_count,
-                    (SELECT COUNT(*) FROM draft_scope) AS drafts_total,
-                    (SELECT COUNT(*) FROM draft_scope WHERE COALESCE(status, '') = 'approved') AS drafts_approved_count,
-                    (SELECT COUNT(*) FROM sent_scope) AS sent_total,
-                    (SELECT COUNT(*) FROM reaction_scope WHERE final_outcome = 'positive') AS positive_count,
-                    (SELECT COUNT(*) FROM reaction_scope WHERE final_outcome = 'question') AS question_count,
-                    (SELECT COUNT(*) FROM reaction_scope WHERE final_outcome = 'no_response') AS no_response_count,
-                    (SELECT COUNT(*) FROM reaction_scope WHERE final_outcome = 'hard_no') AS hard_no_count
-                """,
-                (*lead_filter_params, window_days, window_days, window_days),
-            )
+            else:
+                cur.execute(
+                    f"""
+                    WITH leads_scope AS (
+                        SELECT
+                            l.id,
+                            l.partnership_stage,
+                            l.selected_channel,
+                            l.created_at,
+                            l.updated_at,
+                            {parse_status_sql} AS parse_status
+                        FROM prospectingleads l
+                        WHERE {lead_filter}
+                    ),
+                    sent_scope AS (
+                        SELECT q.id, q.channel, q.delivery_status, q.created_at, q.lead_id
+                        FROM outreachsendqueue q
+                        JOIN leads_scope ls ON ls.id = q.lead_id
+                        WHERE q.created_at >= NOW() - (%s || ' days')::INTERVAL
+                    ),
+                    draft_scope AS (
+                        SELECT d.id, d.status
+                        FROM outreachmessagedrafts d
+                        JOIN leads_scope ls ON ls.id = d.lead_id
+                        WHERE COALESCE(d.updated_at, d.created_at) >= NOW() - (%s || ' days')::INTERVAL
+                    )
+                    SELECT
+                        (SELECT COUNT(*) FROM leads_scope) AS leads_total,
+                        {parsed_completed_sql} AS parsed_completed_count,
+                        (SELECT COUNT(*) FROM leads_scope WHERE COALESCE(partnership_stage, 'imported') IN ('audited','matched','proposal_draft_ready','selected_for_outreach','channel_selected','approved_for_send','sent')) AS audited_count,
+                        (SELECT COUNT(*) FROM leads_scope WHERE COALESCE(partnership_stage, 'imported') IN ('matched','proposal_draft_ready','selected_for_outreach','channel_selected','approved_for_send','sent')) AS matched_count,
+                        (SELECT COUNT(*) FROM draft_scope) AS drafts_total,
+                        (SELECT COUNT(*) FROM draft_scope WHERE COALESCE(status, '') = 'approved') AS drafts_approved_count,
+                        (SELECT COUNT(*) FROM sent_scope) AS sent_total,
+                        0 AS positive_count,
+                        0 AS question_count,
+                        0 AS no_response_count,
+                        0 AS hard_no_count
+                    """,
+                    (*lead_filter_params, window_days, window_days),
+                )
             row = cur.fetchone()
 
-            cur.execute(
-                f"""
-                WITH leads_scope AS (
+            if schema_flags["has_reaction_outcomes"]:
+                cur.execute(
+                    f"""
+                    WITH leads_scope AS (
+                        SELECT
+                            l.id,
+                            l.partnership_stage,
+                            {parse_status_sql} AS parse_status
+                        FROM prospectingleads l
+                        WHERE {lead_filter}
+                    ),
+                    sent_scope AS (
+                        SELECT q.id, q.channel, q.delivery_status, q.created_at, q.lead_id
+                        FROM outreachsendqueue q
+                        JOIN leads_scope ls ON ls.id = q.lead_id
+                        WHERE q.created_at >= NOW() - (%s || ' days')::INTERVAL
+                          AND q.created_at < NOW() - (%s || ' days')::INTERVAL
+                    ),
+                    reaction_scope AS (
+                        SELECT r.id,
+                               COALESCE(r.human_confirmed_outcome, r.classified_outcome, '') AS final_outcome
+                        FROM outreachmessagereactions r
+                        JOIN outreachsendqueue q ON q.id = r.queue_id
+                        JOIN leads_scope ls ON ls.id = q.lead_id
+                        WHERE r.created_at >= NOW() - (%s || ' days')::INTERVAL
+                          AND r.created_at < NOW() - (%s || ' days')::INTERVAL
+                    ),
+                    draft_scope AS (
+                        SELECT d.id, d.status
+                        FROM outreachmessagedrafts d
+                        JOIN leads_scope ls ON ls.id = d.lead_id
+                        WHERE COALESCE(d.updated_at, d.created_at) >= NOW() - (%s || ' days')::INTERVAL
+                          AND COALESCE(d.updated_at, d.created_at) < NOW() - (%s || ' days')::INTERVAL
+                    )
                     SELECT
-                        l.id,
-                        l.partnership_stage,
-                        (
-                            SELECT pq.status
-                            FROM parsequeue pq
-                            WHERE pq.business_id = l.business_id
-                              AND pq.task_type IN ('parse_card', 'sync_yandex_business')
-                            ORDER BY COALESCE(pq.updated_at, pq.created_at) DESC
-                            LIMIT 1
-                        ) AS parse_status
-                    FROM prospectingleads l
-                    WHERE {lead_filter}
-                ),
-                sent_scope AS (
-                    SELECT q.id, q.channel, q.delivery_status, q.created_at, q.lead_id
-                    FROM outreachsendqueue q
-                    JOIN leads_scope ls ON ls.id = q.lead_id
-                    WHERE q.created_at >= NOW() - (%s || ' days')::INTERVAL
-                      AND q.created_at < NOW() - (%s || ' days')::INTERVAL
-                ),
-                reaction_scope AS (
-                    SELECT r.id,
-                           COALESCE(r.human_confirmed_outcome, r.classified_outcome, '') AS final_outcome
-                    FROM outreachmessagereactions r
-                    JOIN outreachsendqueue q ON q.id = r.queue_id
-                    JOIN leads_scope ls ON ls.id = q.lead_id
-                    WHERE r.created_at >= NOW() - (%s || ' days')::INTERVAL
-                      AND r.created_at < NOW() - (%s || ' days')::INTERVAL
-                ),
-                draft_scope AS (
-                    SELECT d.id, d.status
-                    FROM outreachmessagedrafts d
-                    JOIN leads_scope ls ON ls.id = d.lead_id
-                    WHERE COALESCE(d.updated_at, d.created_at) >= NOW() - (%s || ' days')::INTERVAL
-                      AND COALESCE(d.updated_at, d.created_at) < NOW() - (%s || ' days')::INTERVAL
+                        (SELECT COUNT(*) FROM leads_scope) AS leads_total,
+                        {parsed_completed_sql} AS parsed_completed_count,
+                        (SELECT COUNT(*) FROM leads_scope WHERE COALESCE(partnership_stage, 'imported') IN ('audited','matched','proposal_draft_ready','selected_for_outreach','channel_selected','approved_for_send','sent')) AS audited_count,
+                        (SELECT COUNT(*) FROM leads_scope WHERE COALESCE(partnership_stage, 'imported') IN ('matched','proposal_draft_ready','selected_for_outreach','channel_selected','approved_for_send','sent')) AS matched_count,
+                        (SELECT COUNT(*) FROM draft_scope) AS drafts_total,
+                        (SELECT COUNT(*) FROM draft_scope WHERE COALESCE(status, '') = 'approved') AS drafts_approved_count,
+                        (SELECT COUNT(*) FROM sent_scope) AS sent_total,
+                        (SELECT COUNT(*) FROM reaction_scope WHERE final_outcome = 'positive') AS positive_count,
+                        (SELECT COUNT(*) FROM reaction_scope WHERE final_outcome = 'question') AS question_count,
+                        (SELECT COUNT(*) FROM reaction_scope WHERE final_outcome = 'no_response') AS no_response_count,
+                        (SELECT COUNT(*) FROM reaction_scope WHERE final_outcome = 'hard_no') AS hard_no_count
+                    """,
+                    (
+                        *lead_filter_params,
+                        window_days * 2,
+                        window_days,
+                        window_days * 2,
+                        window_days,
+                        window_days * 2,
+                        window_days,
+                    ),
                 )
-                SELECT
-                    (SELECT COUNT(*) FROM leads_scope) AS leads_total,
-                    (SELECT COUNT(*) FROM leads_scope WHERE COALESCE(parse_status, '') = 'completed') AS parsed_completed_count,
-                    (SELECT COUNT(*) FROM leads_scope WHERE COALESCE(partnership_stage, 'imported') IN ('audited','matched','proposal_draft_ready','selected_for_outreach','channel_selected','approved_for_send','sent')) AS audited_count,
-                    (SELECT COUNT(*) FROM leads_scope WHERE COALESCE(partnership_stage, 'imported') IN ('matched','proposal_draft_ready','selected_for_outreach','channel_selected','approved_for_send','sent')) AS matched_count,
-                    (SELECT COUNT(*) FROM draft_scope) AS drafts_total,
-                    (SELECT COUNT(*) FROM draft_scope WHERE COALESCE(status, '') = 'approved') AS drafts_approved_count,
-                    (SELECT COUNT(*) FROM sent_scope) AS sent_total,
-                    (SELECT COUNT(*) FROM reaction_scope WHERE final_outcome = 'positive') AS positive_count,
-                    (SELECT COUNT(*) FROM reaction_scope WHERE final_outcome = 'question') AS question_count,
-                    (SELECT COUNT(*) FROM reaction_scope WHERE final_outcome = 'no_response') AS no_response_count,
-                    (SELECT COUNT(*) FROM reaction_scope WHERE final_outcome = 'hard_no') AS hard_no_count
-                """,
-                (
-                    *lead_filter_params,
-                    window_days * 2,
-                    window_days,
-                    window_days * 2,
-                    window_days,
-                    window_days * 2,
-                    window_days,
-                    window_days * 2,
-                    window_days,
-                ),
-            )
+            else:
+                cur.execute(
+                    f"""
+                    WITH leads_scope AS (
+                        SELECT
+                            l.id,
+                            l.partnership_stage,
+                            {parse_status_sql} AS parse_status
+                        FROM prospectingleads l
+                        WHERE {lead_filter}
+                    ),
+                    sent_scope AS (
+                        SELECT q.id, q.channel, q.delivery_status, q.created_at, q.lead_id
+                        FROM outreachsendqueue q
+                        JOIN leads_scope ls ON ls.id = q.lead_id
+                        WHERE q.created_at >= NOW() - (%s || ' days')::INTERVAL
+                          AND q.created_at < NOW() - (%s || ' days')::INTERVAL
+                    ),
+                    draft_scope AS (
+                        SELECT d.id, d.status
+                        FROM outreachmessagedrafts d
+                        JOIN leads_scope ls ON ls.id = d.lead_id
+                        WHERE COALESCE(d.updated_at, d.created_at) >= NOW() - (%s || ' days')::INTERVAL
+                          AND COALESCE(d.updated_at, d.created_at) < NOW() - (%s || ' days')::INTERVAL
+                    )
+                    SELECT
+                        (SELECT COUNT(*) FROM leads_scope) AS leads_total,
+                        {parsed_completed_sql} AS parsed_completed_count,
+                        (SELECT COUNT(*) FROM leads_scope WHERE COALESCE(partnership_stage, 'imported') IN ('audited','matched','proposal_draft_ready','selected_for_outreach','channel_selected','approved_for_send','sent')) AS audited_count,
+                        (SELECT COUNT(*) FROM leads_scope WHERE COALESCE(partnership_stage, 'imported') IN ('matched','proposal_draft_ready','selected_for_outreach','channel_selected','approved_for_send','sent')) AS matched_count,
+                        (SELECT COUNT(*) FROM draft_scope) AS drafts_total,
+                        (SELECT COUNT(*) FROM draft_scope WHERE COALESCE(status, '') = 'approved') AS drafts_approved_count,
+                        (SELECT COUNT(*) FROM sent_scope) AS sent_total,
+                        0 AS positive_count,
+                        0 AS question_count,
+                        0 AS no_response_count,
+                        0 AS hard_no_count
+                    """,
+                    (
+                        *lead_filter_params,
+                        window_days * 2,
+                        window_days,
+                        window_days * 2,
+                        window_days,
+                    ),
+                )
             baseline_row = cur.fetchone()
 
-            cur.execute(
-                f"""
-                WITH leads_scope AS (
-                    SELECT l.id
-                    FROM prospectingleads l
-                    WHERE {lead_filter}
+            by_channel_rows = []
+            if schema_flags["has_reaction_outcomes"]:
+                cur.execute(
+                    f"""
+                    WITH leads_scope AS (
+                        SELECT l.id
+                        FROM prospectingleads l
+                        WHERE {lead_filter}
+                    )
+                    SELECT
+                        q.channel,
+                        COUNT(*) AS total,
+                        COUNT(*) FILTER (WHERE COALESCE(r.human_confirmed_outcome, r.classified_outcome, '') = 'positive') AS positive_count,
+                        COUNT(*) FILTER (WHERE COALESCE(r.human_confirmed_outcome, r.classified_outcome, '') = 'question') AS question_count,
+                        COUNT(*) FILTER (WHERE COALESCE(r.human_confirmed_outcome, r.classified_outcome, '') = 'no_response') AS no_response_count,
+                        COUNT(*) FILTER (WHERE COALESCE(r.human_confirmed_outcome, r.classified_outcome, '') = 'hard_no') AS hard_no_count
+                    FROM outreachsendqueue q
+                    LEFT JOIN outreachmessagereactions r ON r.queue_id = q.id
+                    JOIN leads_scope ls ON ls.id = q.lead_id
+                    WHERE q.created_at >= NOW() - (%s || ' days')::INTERVAL
+                    GROUP BY q.channel
+                    ORDER BY total DESC, q.channel
+                    """,
+                    (*lead_filter_params, window_days),
                 )
-                SELECT
-                    q.channel,
-                    COUNT(*) AS total,
-                    COUNT(*) FILTER (WHERE COALESCE(r.human_confirmed_outcome, r.classified_outcome, '') = 'positive') AS positive_count,
-                    COUNT(*) FILTER (WHERE COALESCE(r.human_confirmed_outcome, r.classified_outcome, '') = 'question') AS question_count,
-                    COUNT(*) FILTER (WHERE COALESCE(r.human_confirmed_outcome, r.classified_outcome, '') = 'no_response') AS no_response_count,
-                    COUNT(*) FILTER (WHERE COALESCE(r.human_confirmed_outcome, r.classified_outcome, '') = 'hard_no') AS hard_no_count
-                FROM outreachsendqueue q
-                LEFT JOIN outreachmessagereactions r ON r.queue_id = q.id
-                JOIN leads_scope ls ON ls.id = q.lead_id
-                WHERE q.created_at >= NOW() - (%s || ' days')::INTERVAL
-                GROUP BY q.channel
-                ORDER BY total DESC, q.channel
-                """,
-                (*lead_filter_params, window_days),
-            )
-            by_channel_rows = cur.fetchall() or []
+                by_channel_rows = cur.fetchall() or []
 
             ensure_ai_learning_events_table(conn)
             cur.execute(
@@ -6661,42 +8400,72 @@ def partnership_ralph_loop_summary():
             )
             edit_row = cur.fetchone()
 
-            cur.execute(
-                f"""
-                WITH leads_scope AS (
-                    SELECT l.id
-                    FROM prospectingleads l
-                    WHERE {lead_filter}
-                ),
-                latest_reaction AS (
-                    SELECT DISTINCT ON (r.queue_id)
-                        r.queue_id,
-                        COALESCE(r.human_confirmed_outcome, r.classified_outcome, '') AS final_outcome
-                    FROM outreachmessagereactions r
-                    ORDER BY r.queue_id, COALESCE(r.created_at, NOW()) DESC
+            if schema_flags["has_reaction_outcomes"]:
+                cur.execute(
+                    f"""
+                    WITH leads_scope AS (
+                        SELECT l.id
+                        FROM prospectingleads l
+                        WHERE {lead_filter}
+                    ),
+                    latest_reaction AS (
+                        SELECT DISTINCT ON (r.queue_id)
+                            r.queue_id,
+                            COALESCE(r.human_confirmed_outcome, r.classified_outcome, '') AS final_outcome
+                        FROM outreachmessagereactions r
+                        ORDER BY r.queue_id, COALESCE(r.created_at, NOW()) DESC
+                    )
+                    SELECT
+                        COALESCE(d.learning_note_json->>'prompt_key', '') AS prompt_key,
+                        COALESCE(d.learning_note_json->>'prompt_version', '') AS prompt_version,
+                        COUNT(*)::INT AS drafts_total,
+                        COUNT(*) FILTER (WHERE COALESCE(d.status, '') = 'approved')::INT AS approved_total,
+                        COUNT(*) FILTER (
+                            WHERE COALESCE(d.status, '') = 'approved'
+                              AND COALESCE(d.approved_text, '') <> COALESCE(d.generated_text, '')
+                        )::INT AS edited_approved_total,
+                        COUNT(DISTINCT q.id)::INT AS sent_total,
+                        COUNT(DISTINCT q.id) FILTER (WHERE lr.final_outcome = 'positive')::INT AS positive_count
+                    FROM outreachmessagedrafts d
+                    JOIN leads_scope ls ON ls.id = d.lead_id
+                    LEFT JOIN outreachsendqueue q ON q.draft_id = d.id
+                        AND q.created_at >= NOW() - (%s || ' days')::INTERVAL
+                    LEFT JOIN latest_reaction lr ON lr.queue_id = q.id
+                    WHERE COALESCE(d.updated_at, d.created_at) >= NOW() - (%s || ' days')::INTERVAL
+                    GROUP BY COALESCE(d.learning_note_json->>'prompt_key', ''), COALESCE(d.learning_note_json->>'prompt_version', '')
+                    ORDER BY approved_total DESC, sent_total DESC, prompt_key, prompt_version
+                    """,
+                    (*lead_filter_params, window_days, window_days),
                 )
-                SELECT
-                    COALESCE(d.learning_note_json->>'prompt_key', '') AS prompt_key,
-                    COALESCE(d.learning_note_json->>'prompt_version', '') AS prompt_version,
-                    COUNT(*)::INT AS drafts_total,
-                    COUNT(*) FILTER (WHERE COALESCE(d.status, '') = 'approved')::INT AS approved_total,
-                    COUNT(*) FILTER (
-                        WHERE COALESCE(d.status, '') = 'approved'
-                          AND COALESCE(d.approved_text, '') <> COALESCE(d.generated_text, '')
-                    )::INT AS edited_approved_total,
-                    COUNT(DISTINCT q.id)::INT AS sent_total,
-                    COUNT(DISTINCT q.id) FILTER (WHERE lr.final_outcome = 'positive')::INT AS positive_count
-                FROM outreachmessagedrafts d
-                JOIN leads_scope ls ON ls.id = d.lead_id
-                LEFT JOIN outreachsendqueue q ON q.draft_id = d.id
-                    AND q.created_at >= NOW() - (%s || ' days')::INTERVAL
-                LEFT JOIN latest_reaction lr ON lr.queue_id = q.id
-                WHERE COALESCE(d.updated_at, d.created_at) >= NOW() - (%s || ' days')::INTERVAL
-                GROUP BY COALESCE(d.learning_note_json->>'prompt_key', ''), COALESCE(d.learning_note_json->>'prompt_version', '')
-                ORDER BY approved_total DESC, sent_total DESC, prompt_key, prompt_version
-                """,
-                (*lead_filter_params, window_days, window_days),
-            )
+            else:
+                cur.execute(
+                    f"""
+                    WITH leads_scope AS (
+                        SELECT l.id
+                        FROM prospectingleads l
+                        WHERE {lead_filter}
+                    )
+                    SELECT
+                        COALESCE(d.learning_note_json->>'prompt_key', '') AS prompt_key,
+                        COALESCE(d.learning_note_json->>'prompt_version', '') AS prompt_version,
+                        COUNT(*)::INT AS drafts_total,
+                        COUNT(*) FILTER (WHERE COALESCE(d.status, '') = 'approved')::INT AS approved_total,
+                        COUNT(*) FILTER (
+                            WHERE COALESCE(d.status, '') = 'approved'
+                              AND COALESCE(d.approved_text, '') <> COALESCE(d.generated_text, '')
+                        )::INT AS edited_approved_total,
+                        COUNT(DISTINCT q.id)::INT AS sent_total,
+                        0::INT AS positive_count
+                    FROM outreachmessagedrafts d
+                    JOIN leads_scope ls ON ls.id = d.lead_id
+                    LEFT JOIN outreachsendqueue q ON q.draft_id = d.id
+                        AND q.created_at >= NOW() - (%s || ' days')::INTERVAL
+                    WHERE COALESCE(d.updated_at, d.created_at) >= NOW() - (%s || ' days')::INTERVAL
+                    GROUP BY COALESCE(d.learning_note_json->>'prompt_key', ''), COALESCE(d.learning_note_json->>'prompt_version', '')
+                    ORDER BY approved_total DESC, sent_total DESC, prompt_key, prompt_version
+                    """,
+                    (*lead_filter_params, window_days, window_days),
+                )
             prompt_rows = cur.fetchall() or []
         finally:
             conn.close()
@@ -6750,47 +8519,82 @@ def partnership_ralph_loop_summary():
                     source_filter_sql.append("COALESCE(l.pilot_cohort, 'backlog') = %s")
                     source_filter_params.append(pilot_cohort)
                 source_filter = " AND ".join(source_filter_sql)
-                cur.execute(
-                    f"""
-                    WITH lead_scope AS (
+                if schema_flags["has_reaction_outcomes"]:
+                    cur.execute(
+                        f"""
+                        WITH lead_scope AS (
+                            SELECT
+                                l.id,
+                                COALESCE(NULLIF(l.source_kind, ''), 'unknown') AS source_kind,
+                                COALESCE(NULLIF(l.source_provider, ''), 'unknown') AS source_provider
+                            FROM prospectingleads l
+                            WHERE {source_filter}
+                        ),
+                        sent_scope AS (
+                            SELECT DISTINCT q.id, q.lead_id
+                            FROM outreachsendqueue q
+                            WHERE q.created_at >= NOW() - (%s || ' days')::INTERVAL
+                        ),
+                        latest_reaction AS (
+                            SELECT DISTINCT ON (r.queue_id)
+                                r.queue_id,
+                                COALESCE(r.human_confirmed_outcome, r.classified_outcome, '') AS final_outcome
+                            FROM outreachmessagereactions r
+                            ORDER BY r.queue_id, COALESCE(r.created_at, NOW()) DESC
+                        )
                         SELECT
-                            l.id,
-                            COALESCE(NULLIF(l.source_kind, ''), 'unknown') AS source_kind,
-                            COALESCE(NULLIF(l.source_provider, ''), 'unknown') AS source_provider
-                        FROM prospectingleads l
-                        WHERE {source_filter}
-                    ),
-                    sent_scope AS (
-                        SELECT DISTINCT q.id, q.lead_id
-                        FROM outreachsendqueue q
-                        WHERE q.created_at >= NOW() - (%s || ' days')::INTERVAL
-                    ),
-                    latest_reaction AS (
-                        SELECT DISTINCT ON (r.queue_id)
-                            r.queue_id,
-                            COALESCE(r.human_confirmed_outcome, r.classified_outcome, '') AS final_outcome
-                        FROM outreachmessagereactions r
-                        ORDER BY r.queue_id, COALESCE(r.created_at, NOW()) DESC
+                            ls.source_kind,
+                            ls.source_provider,
+                            COUNT(DISTINCT ls.id)::INT AS leads_total,
+                            COUNT(DISTINCT ls.id) FILTER (WHERE COALESCE(pl.partnership_stage, '') IN ('audited', 'matched', 'proposal_draft_ready', 'selected_for_outreach', 'channel_selected', 'approved_for_send', 'sent'))::INT AS audited_count,
+                            COUNT(DISTINCT ls.id) FILTER (WHERE COALESCE(pl.partnership_stage, '') IN ('matched', 'proposal_draft_ready', 'selected_for_outreach', 'channel_selected', 'approved_for_send', 'sent'))::INT AS matched_count,
+                            COUNT(DISTINCT d.id)::INT AS draft_count,
+                            COUNT(DISTINCT q.id)::INT AS sent_count,
+                            COUNT(DISTINCT q.id) FILTER (WHERE lr.final_outcome = 'positive')::INT AS positive_count
+                        FROM lead_scope ls
+                        JOIN prospectingleads pl ON pl.id = ls.id
+                        LEFT JOIN outreachmessagedrafts d ON d.lead_id = ls.id
+                        LEFT JOIN sent_scope q ON q.lead_id = ls.id
+                        LEFT JOIN latest_reaction lr ON lr.queue_id = q.id
+                        GROUP BY ls.source_kind, ls.source_provider
+                        ORDER BY positive_count DESC, sent_count DESC, leads_total DESC, ls.source_kind, ls.source_provider
+                        """,
+                        (*source_filter_params, window_days),
                     )
-                    SELECT
-                        ls.source_kind,
-                        ls.source_provider,
-                        COUNT(DISTINCT ls.id)::INT AS leads_total,
-                        COUNT(DISTINCT ls.id) FILTER (WHERE COALESCE(pl.partnership_stage, '') IN ('audited', 'matched', 'proposal_draft_ready', 'selected_for_outreach', 'channel_selected', 'approved_for_send', 'sent'))::INT AS audited_count,
-                        COUNT(DISTINCT ls.id) FILTER (WHERE COALESCE(pl.partnership_stage, '') IN ('matched', 'proposal_draft_ready', 'selected_for_outreach', 'channel_selected', 'approved_for_send', 'sent'))::INT AS matched_count,
-                        COUNT(DISTINCT d.id)::INT AS draft_count,
-                        COUNT(DISTINCT q.id)::INT AS sent_count,
-                        COUNT(DISTINCT q.id) FILTER (WHERE lr.final_outcome = 'positive')::INT AS positive_count
-                    FROM lead_scope ls
-                    JOIN prospectingleads pl ON pl.id = ls.id
-                    LEFT JOIN outreachmessagedrafts d ON d.lead_id = ls.id
-                    LEFT JOIN sent_scope q ON q.lead_id = ls.id
-                    LEFT JOIN latest_reaction lr ON lr.queue_id = q.id
-                    GROUP BY ls.source_kind, ls.source_provider
-                    ORDER BY positive_count DESC, sent_count DESC, leads_total DESC, ls.source_kind, ls.source_provider
-                    """,
-                    (*source_filter_params, window_days),
-                )
+                else:
+                    cur.execute(
+                        f"""
+                        WITH lead_scope AS (
+                            SELECT
+                                l.id,
+                                COALESCE(NULLIF(l.source_kind, ''), 'unknown') AS source_kind,
+                                COALESCE(NULLIF(l.source_provider, ''), 'unknown') AS source_provider
+                            FROM prospectingleads l
+                            WHERE {source_filter}
+                        ),
+                        sent_scope AS (
+                            SELECT DISTINCT q.id, q.lead_id
+                            FROM outreachsendqueue q
+                            WHERE q.created_at >= NOW() - (%s || ' days')::INTERVAL
+                        )
+                        SELECT
+                            ls.source_kind,
+                            ls.source_provider,
+                            COUNT(DISTINCT ls.id)::INT AS leads_total,
+                            COUNT(DISTINCT ls.id) FILTER (WHERE COALESCE(pl.partnership_stage, '') IN ('audited', 'matched', 'proposal_draft_ready', 'selected_for_outreach', 'channel_selected', 'approved_for_send', 'sent'))::INT AS audited_count,
+                            COUNT(DISTINCT ls.id) FILTER (WHERE COALESCE(pl.partnership_stage, '') IN ('matched', 'proposal_draft_ready', 'selected_for_outreach', 'channel_selected', 'approved_for_send', 'sent'))::INT AS matched_count,
+                            COUNT(DISTINCT d.id)::INT AS draft_count,
+                            COUNT(DISTINCT q.id)::INT AS sent_count,
+                            0::INT AS positive_count
+                        FROM lead_scope ls
+                        JOIN prospectingleads pl ON pl.id = ls.id
+                        LEFT JOIN outreachmessagedrafts d ON d.lead_id = ls.id
+                        LEFT JOIN sent_scope q ON q.lead_id = ls.id
+                        GROUP BY ls.source_kind, ls.source_provider
+                        ORDER BY sent_count DESC, leads_total DESC, ls.source_kind, ls.source_provider
+                        """,
+                        (*source_filter_params, window_days),
+                    )
                 source_rows = cur.fetchall() or []
             finally:
                 conn.close()
@@ -8911,7 +10715,8 @@ def _load_partnership_send_snapshot(*, business_id: str) -> dict[str, Any]:
                 """
                 SELECT
                     q.id, q.batch_id, q.lead_id, q.draft_id, q.channel,
-                    q.delivery_status, q.provider_message_id, q.error_text,
+                    q.delivery_status, q.provider_message_id, q.provider_name,
+                    q.provider_account_id, q.recipient_kind, q.recipient_value, q.error_text,
                     q.sent_at, q.attempts, q.last_attempt_at, q.next_retry_at, q.dlq_at,
                     q.created_at, q.updated_at,
                     l.name AS lead_name,
@@ -9298,26 +11103,209 @@ def partnership_confirm_reaction(reaction_id):
 
 @admin_prospecting_bp.route("/api/admin/prospecting/lead/<string:lead_id>/status", methods=["POST"])
 def update_lead_status(lead_id):
-    """Update lead status."""
-    _, error = _require_superadmin()
+    """Update lead pipeline status or legacy status with manual-first validation."""
+    user_data, error = _require_superadmin()
     if error:
         return error
 
     try:
         data = request.get_json(silent=True) or {}
-        status = data.get("status")
+        requested_status = str(data.get("pipeline_status") or data.get("status") or "").strip().lower()
+        legacy_to_pipeline = {
+            "new": PIPELINE_UNPROCESSED,
+            SHORTLIST_APPROVED: PIPELINE_IN_PROGRESS,
+            SELECTED_FOR_OUTREACH: PIPELINE_IN_PROGRESS,
+            CHANNEL_SELECTED: PIPELINE_IN_PROGRESS,
+            "draft_ready": PIPELINE_IN_PROGRESS,
+            QUEUED_FOR_SEND: PIPELINE_IN_PROGRESS,
+            "sent": PIPELINE_CONTACTED,
+            "delivered": PIPELINE_WAITING_REPLY,
+            "responded": PIPELINE_REPLIED,
+            "qualified": PIPELINE_CONVERTED,
+            "converted": PIPELINE_CONVERTED,
+            "deferred": PIPELINE_POSTPONED,
+            SHORTLIST_REJECTED: PIPELINE_NOT_RELEVANT,
+            "rejected": PIPELINE_NOT_RELEVANT,
+            "closed": PIPELINE_CLOSED_LOST,
+        }
+        pipeline_status = legacy_to_pipeline.get(requested_status, requested_status)
+        comment = str(data.get("comment") or "").strip() or None
+        disqualification_reason = str(data.get("disqualification_reason") or "").strip().lower() or None
+        disqualification_comment = str(data.get("disqualification_comment") or "").strip() or None
+        postponed_comment = str(data.get("postponed_comment") or data.get("comment") or "").strip() or None
+        next_action_at = str(data.get("next_action_at") or "").strip() or None
 
-        if not status:
-            return jsonify({"error": "Status is required"}), 400
+        if pipeline_status not in ALLOWED_PIPELINE_STATUSES:
+            return jsonify({"error": f"pipeline_status must be one of: {', '.join(sorted(ALLOWED_PIPELINE_STATUSES))}"}), 400
+        if pipeline_status == PIPELINE_NOT_RELEVANT:
+            if disqualification_reason not in NOT_RELEVANT_REASONS:
+                return jsonify({"error": "disqualification_reason is required"}), 400
+            if disqualification_reason == "other" and not disqualification_comment:
+                return jsonify({"error": "disqualification_comment is required for reason=other"}), 400
+        if pipeline_status == PIPELINE_POSTPONED and not postponed_comment:
+            return jsonify({"error": "postponed_comment is required"}), 400
 
-        with DatabaseManager() as db:
-            success = db.update_lead_status(lead_id, status)
+        conn = get_db_connection()
+        try:
+            _ensure_manual_crm_tables(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            updated = _apply_pipeline_transition(
+                cur,
+                lead_id=lead_id,
+                pipeline_status=pipeline_status,
+                actor_id=str(user_data.get("user_id") or "") or None,
+                comment=comment,
+                disqualification_reason=disqualification_reason if pipeline_status == PIPELINE_NOT_RELEVANT else None,
+                disqualification_comment=disqualification_comment if pipeline_status == PIPELINE_NOT_RELEVANT else None,
+                postponed_comment=postponed_comment if pipeline_status == PIPELINE_POSTPONED else None,
+                next_action_at=next_action_at if pipeline_status == PIPELINE_POSTPONED else None,
+            )
+            if not updated:
+                return jsonify({"error": "Lead not found"}), 404
+            conn.commit()
+            updated = _normalize_lead_for_display(updated) or updated
+        finally:
+            conn.close()
 
-        if success:
-            return jsonify({"success": True})
-        return jsonify({"error": "Lead not found"}), 404
+        return jsonify({"success": True, "lead": _to_json_compatible(updated)})
     except Exception as e:
         print(f"Error updating lead status: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/lead/<string:lead_id>/manual-contact", methods=["POST"])
+def mark_lead_manual_contact(lead_id):
+    """Mark lead as contacted manually without requiring queue dispatch."""
+    user_data, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        data = request.get_json(silent=True) or {}
+        channel = str(data.get("channel") or "manual").strip().lower() or "manual"
+        comment = str(data.get("comment") or "").strip() or None
+        if channel not in ALLOWED_OUTREACH_CHANNELS:
+            return jsonify({"error": "Unsupported channel"}), 400
+
+        conn = get_db_connection()
+        try:
+            _ensure_manual_crm_tables(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute("SELECT * FROM prospectingleads WHERE id = %s", (lead_id,))
+            lead = cur.fetchone()
+            if not lead:
+                return jsonify({"error": "Lead not found"}), 404
+            lead_payload = dict(lead)
+            if channel != "manual" and not _lead_has_channel_contact(lead_payload, channel):
+                return jsonify({"error": _outreach_channel_contact_error(channel)}), 400
+            updated = _apply_pipeline_transition(
+                cur,
+                lead_id=lead_id,
+                pipeline_status=PIPELINE_CONTACTED,
+                actor_id=str(user_data.get("user_id") or "") or None,
+                comment=comment or "Manual contact marked",
+                last_contact_channel=channel,
+                last_contact_comment=comment,
+                set_last_contact_at=True,
+            )
+            _record_lead_timeline_event(
+                cur,
+                lead_id=lead_id,
+                event_type="manual_contact_marked",
+                actor_id=str(user_data.get("user_id") or "") or None,
+                comment=comment,
+                payload={"channel": channel},
+            )
+            conn.commit()
+            updated = _normalize_lead_for_display(updated or lead_payload) or updated or lead_payload
+        finally:
+            conn.close()
+
+        return jsonify({"success": True, "lead": _to_json_compatible(updated)})
+    except Exception as e:
+        print(f"Error marking manual lead contact: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/lead/<string:lead_id>/comment", methods=["POST"])
+def add_lead_comment(lead_id):
+    """Add free-form operator note to lead timeline."""
+    user_data, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        data = request.get_json(silent=True) or {}
+        comment = str(data.get("comment") or "").strip()
+        if not comment:
+            return jsonify({"error": "comment is required"}), 400
+
+        conn = get_db_connection()
+        try:
+            _ensure_manual_crm_tables(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute(
+                """
+                UPDATE prospectingleads
+                SET last_manual_action_at = NOW(),
+                    last_manual_action_by = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                RETURNING *
+                """,
+                (str(user_data.get("user_id") or "") or None, lead_id),
+            )
+            row = cur.fetchone()
+            if not row:
+                return jsonify({"error": "Lead not found"}), 404
+            _record_lead_timeline_event(
+                cur,
+                lead_id=lead_id,
+                event_type="comment_added",
+                actor_id=str(user_data.get("user_id") or "") or None,
+                comment=comment,
+            )
+            conn.commit()
+            lead = _normalize_lead_for_display(dict(row)) or dict(row)
+        finally:
+            conn.close()
+        return jsonify({"success": True, "lead": _to_json_compatible(lead)})
+    except Exception as e:
+        print(f"Error adding lead comment: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/lead/<string:lead_id>/timeline", methods=["GET"])
+def get_lead_timeline(lead_id):
+    """Return manual/automation timeline for one lead."""
+    _, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        conn = get_db_connection()
+        try:
+            _ensure_manual_crm_tables(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute("SELECT 1 FROM prospectingleads WHERE id = %s", (lead_id,))
+            if not cur.fetchone():
+                return jsonify({"error": "Lead not found"}), 404
+            cur.execute(
+                """
+                SELECT id, lead_id, event_type, actor_id, comment, payload_json, created_at
+                FROM lead_timeline_events
+                WHERE lead_id = %s
+                ORDER BY created_at DESC
+                LIMIT 200
+                """,
+                (lead_id,),
+            )
+            events = [dict(row) for row in cur.fetchall() or []]
+        finally:
+            conn.close()
+        return jsonify({"success": True, "events": _to_json_compatible(events), "count": len(events)})
+    except Exception as e:
+        print(f"Error loading lead timeline: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -9383,7 +11371,7 @@ def select_outreach_channel(lead_id):
         data = request.get_json(silent=True) or {}
         channel = (data.get("channel") or "").strip().lower()
         if channel not in ALLOWED_OUTREACH_CHANNELS:
-            return jsonify({"error": "Channel must be one of: telegram, whatsapp, email, manual"}), 400
+            return jsonify({"error": "Channel must be one of: telegram, whatsapp, max, email, manual"}), 400
 
         with DatabaseManager() as db:
             lead = db.get_lead_by_id(lead_id)
@@ -9391,6 +11379,8 @@ def select_outreach_channel(lead_id):
                 return jsonify({"error": "Lead not found"}), 404
             if lead.get("status") not in {SELECTED_FOR_OUTREACH, CHANNEL_SELECTED}:
                 return jsonify({"error": "Lead must be selected for outreach before channel selection"}), 400
+            if not _lead_has_channel_contact(lead, channel):
+                return jsonify({"error": _outreach_channel_contact_error(channel)}), 400
             success = db.update_lead_outreach(lead_id, CHANNEL_SELECTED, channel)
             if not success:
                 return jsonify({"error": "Lead not found"}), 404
@@ -9499,6 +11489,305 @@ def update_lead_language(lead_id):
         return jsonify({"error": str(e)}), 500
 
 
+@admin_prospecting_bp.route("/api/admin/prospecting/groups", methods=["GET"])
+def get_lead_groups():
+    """List manual lead groups with readiness summary."""
+    _, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        status_filter = str(request.args.get("status") or "").strip().lower() or None
+        conn = get_db_connection()
+        try:
+            _ensure_manual_crm_tables(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            query = """
+                SELECT
+                    g.id,
+                    g.name,
+                    g.description,
+                    g.status,
+                    g.channel_hint,
+                    g.city_hint,
+                    g.created_by,
+                    g.created_at,
+                    g.updated_at,
+                    COUNT(DISTINCT gi.lead_id)::INT AS leads_count,
+                    COUNT(DISTINCT gi.lead_id) FILTER (WHERE COALESCE(l.selected_channel, '') = '')::INT AS without_channel_count,
+                    COUNT(DISTINCT gi.lead_id) FILTER (WHERE COALESCE(l.phone, '') = '' AND COALESCE(l.email, '') = '' AND COALESCE(l.telegram_url, '') = '' AND COALESCE(l.whatsapp_url, '') = '')::INT AS without_contact_count,
+                    COUNT(DISTINCT gi.lead_id) FILTER (WHERE po.lead_id IS NULL)::INT AS without_audit_count,
+                    COUNT(DISTINCT gi.lead_id) FILTER (WHERE d.id IS NOT NULL)::INT AS drafts_count
+                FROM lead_groups g
+                LEFT JOIN lead_group_items gi ON gi.group_id = g.id
+                LEFT JOIN prospectingleads l ON l.id = gi.lead_id
+                LEFT JOIN adminprospectingleadpublicoffers po ON po.lead_id = gi.lead_id AND po.is_active = TRUE
+                LEFT JOIN LATERAL (
+                    SELECT id
+                    FROM outreachmessagedrafts d
+                    WHERE d.lead_id = gi.lead_id
+                    ORDER BY d.updated_at DESC, d.created_at DESC
+                    LIMIT 1
+                ) d ON TRUE
+            """
+            params: list[Any] = []
+            if status_filter in ALLOWED_GROUP_STATUSES:
+                query += " WHERE g.status = %s"
+                params.append(status_filter)
+            query += """
+                GROUP BY g.id, g.name, g.description, g.status, g.channel_hint, g.city_hint, g.created_by, g.created_at, g.updated_at
+                ORDER BY g.updated_at DESC, g.created_at DESC
+            """
+            cur.execute(query, tuple(params))
+            groups = [dict(row) for row in cur.fetchall() or []]
+        finally:
+            conn.close()
+        return jsonify({"success": True, "groups": _to_json_compatible(groups), "count": len(groups)})
+    except Exception as e:
+        print(f"Error loading lead groups: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/groups", methods=["POST"])
+def create_lead_group():
+    """Create a reusable lead group from selected leads."""
+    user_data, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        data = request.get_json(silent=True) or {}
+        name = str(data.get("name") or "").strip()
+        if not name:
+            return jsonify({"error": "name is required"}), 400
+        description = str(data.get("description") or "").strip() or None
+        status = str(data.get("status") or GROUP_STATUS_DRAFT).strip().lower() or GROUP_STATUS_DRAFT
+        if status not in ALLOWED_GROUP_STATUSES:
+            return jsonify({"error": "Unsupported group status"}), 400
+        lead_ids = [str(item).strip() for item in (data.get("lead_ids") or []) if str(item).strip()]
+        lead_ids = list(dict.fromkeys(lead_ids))
+        channel_hint = str(data.get("channel_hint") or "").strip().lower() or None
+        city_hint = str(data.get("city_hint") or "").strip() or None
+
+        conn = get_db_connection()
+        try:
+            _ensure_manual_crm_tables(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            group_id = str(uuid.uuid4())
+            cur.execute(
+                """
+                INSERT INTO lead_groups (
+                    id, name, description, status, channel_hint, city_hint, created_by, created_at, updated_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                """,
+                (
+                    group_id,
+                    name,
+                    description,
+                    status,
+                    channel_hint,
+                    city_hint,
+                    str(user_data.get("user_id") or "") or None,
+                ),
+            )
+            for lead_id in lead_ids:
+                cur.execute(
+                    """
+                    INSERT INTO lead_group_items (id, group_id, lead_id, added_by, added_at)
+                    VALUES (%s, %s, %s, %s, NOW())
+                    ON CONFLICT (group_id, lead_id) DO NOTHING
+                    """,
+                    (
+                        str(uuid.uuid4()),
+                        group_id,
+                        lead_id,
+                        str(user_data.get("user_id") or "") or None,
+                    ),
+                )
+                _record_lead_timeline_event(
+                    cur,
+                    lead_id=lead_id,
+                    event_type="added_to_group",
+                    actor_id=str(user_data.get("user_id") or "") or None,
+                    payload={"group_id": group_id, "group_name": name},
+                )
+            conn.commit()
+        finally:
+            conn.close()
+        return jsonify({"success": True, "group_id": group_id})
+    except Exception as e:
+        print(f"Error creating lead group: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/groups/<string:group_id>", methods=["GET"])
+def get_lead_group(group_id):
+    """Load one group with member leads."""
+    _, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        conn = get_db_connection()
+        try:
+            _ensure_manual_crm_tables(conn)
+            _ensure_admin_prospecting_public_offers_table(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute("SELECT * FROM lead_groups WHERE id = %s", (group_id,))
+            row = cur.fetchone()
+            if not row:
+                return jsonify({"error": "Group not found"}), 404
+            group = dict(row)
+            cur.execute(
+                """
+                SELECT l.*
+                FROM lead_group_items gi
+                JOIN prospectingleads l ON l.id = gi.lead_id
+                WHERE gi.group_id = %s
+                ORDER BY gi.added_at DESC
+                """,
+                (group_id,),
+            )
+            leads = [_normalize_lead_for_display(dict(item)) for item in cur.fetchall() or []]
+            leads = [item for item in leads if item]
+            lead_ids = [str(item.get("id") or "").strip() for item in leads if str(item.get("id") or "").strip()]
+            offer_by_lead_id: dict[str, dict[str, Any]] = {}
+            if lead_ids:
+                cur.execute(
+                    """
+                    SELECT lead_id, slug, is_active, updated_at, page_json
+                    FROM adminprospectingleadpublicoffers
+                    WHERE lead_id = ANY(%s)
+                    """,
+                    (lead_ids,),
+                )
+                for offer in cur.fetchall() or []:
+                    payload = dict(offer)
+                    lead_id = str(payload.get("lead_id") or "").strip()
+                    if lead_id:
+                        offer_by_lead_id[lead_id] = payload
+            for lead in leads:
+                lead_id = str(lead.get("id") or "").strip()
+                offer = offer_by_lead_id.get(lead_id)
+                slug = str((offer or {}).get("slug") or "").strip()
+                if offer and bool(offer.get("is_active")) and slug:
+                    page_json = offer.get("page_json") if isinstance(offer.get("page_json"), dict) else {}
+                    primary_language, enabled_languages = _normalize_public_audit_languages(
+                        page_json.get("preferred_language"),
+                        page_json.get("enabled_languages"),
+                    )
+                    lead["public_audit_slug"] = slug
+                    lead["public_audit_url"] = _make_public_offer_url(slug)
+                    lead["has_public_audit"] = True
+                    lead["public_audit_updated_at"] = offer.get("updated_at")
+                    lead["preferred_language"] = primary_language
+                    lead["enabled_languages"] = enabled_languages
+            timeline_preview = _latest_timeline_preview(cur, lead_ids)
+            groups_summary = _group_summary_for_lead_ids(cur, lead_ids)
+            for lead in leads:
+                lead_id = str(lead.get("id") or "").strip()
+                lead["timeline_preview"] = timeline_preview.get(lead_id)
+                lead["groups"] = groups_summary.get(lead_id, [])
+                lead["group_count"] = len(lead["groups"])
+        finally:
+            conn.close()
+        return jsonify({"success": True, "group": _to_json_compatible(group), "leads": _to_json_compatible(leads), "count": len(leads)})
+    except Exception as e:
+        print(f"Error loading lead group: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/groups/<string:group_id>/add-leads", methods=["POST"])
+def add_leads_to_group(group_id):
+    """Add leads to an existing group."""
+    user_data, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        lead_ids = [str(item).strip() for item in ((request.get_json(silent=True) or {}).get("lead_ids") or []) if str(item).strip()]
+        lead_ids = list(dict.fromkeys(lead_ids))
+        if not lead_ids:
+            return jsonify({"error": "lead_ids is required"}), 400
+        conn = get_db_connection()
+        try:
+            _ensure_manual_crm_tables(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute("SELECT name FROM lead_groups WHERE id = %s", (group_id,))
+            row = cur.fetchone()
+            if not row:
+                return jsonify({"error": "Group not found"}), 404
+            group_name = str(row.get("name") or "").strip()
+            for lead_id in lead_ids:
+                cur.execute(
+                    """
+                    INSERT INTO lead_group_items (id, group_id, lead_id, added_by, added_at)
+                    VALUES (%s, %s, %s, %s, NOW())
+                    ON CONFLICT (group_id, lead_id) DO NOTHING
+                    """,
+                    (str(uuid.uuid4()), group_id, lead_id, str(user_data.get("user_id") or "") or None),
+                )
+                _record_lead_timeline_event(
+                    cur,
+                    lead_id=lead_id,
+                    event_type="added_to_group",
+                    actor_id=str(user_data.get("user_id") or "") or None,
+                    payload={"group_id": group_id, "group_name": group_name},
+                )
+            conn.commit()
+        finally:
+            conn.close()
+        return jsonify({"success": True, "group_id": group_id, "added_count": len(lead_ids)})
+    except Exception as e:
+        print(f"Error adding leads to group: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/groups/<string:group_id>/remove-leads", methods=["POST"])
+def remove_leads_from_group(group_id):
+    """Remove leads from group without changing their pipeline status."""
+    user_data, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        lead_ids = [str(item).strip() for item in ((request.get_json(silent=True) or {}).get("lead_ids") or []) if str(item).strip()]
+        lead_ids = list(dict.fromkeys(lead_ids))
+        if not lead_ids:
+            return jsonify({"error": "lead_ids is required"}), 400
+        conn = get_db_connection()
+        try:
+            _ensure_manual_crm_tables(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute("SELECT name FROM lead_groups WHERE id = %s", (group_id,))
+            row = cur.fetchone()
+            if not row:
+                return jsonify({"error": "Group not found"}), 404
+            group_name = str(row.get("name") or "").strip()
+            cur.execute(
+                """
+                DELETE FROM lead_group_items
+                WHERE group_id = %s
+                  AND lead_id = ANY(%s)
+                """,
+                (group_id, lead_ids),
+            )
+            for lead_id in lead_ids:
+                _record_lead_timeline_event(
+                    cur,
+                    lead_id=lead_id,
+                    event_type="removed_from_group",
+                    actor_id=str(user_data.get("user_id") or "") or None,
+                    payload={"group_id": group_id, "group_name": group_name},
+                )
+            conn.commit()
+        finally:
+            conn.close()
+        return jsonify({"success": True, "group_id": group_id, "removed_count": len(lead_ids)})
+    except Exception as e:
+        print(f"Error removing leads from group: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @admin_prospecting_bp.route("/api/admin/prospecting/drafts", methods=["GET"])
 def get_outreach_drafts():
     """List outreach message drafts."""
@@ -9606,6 +11895,23 @@ def approve_outreach_send_batch(batch_id):
         return jsonify({"error": str(e)}), 500
 
 
+@admin_prospecting_bp.route("/api/admin/prospecting/send-batches/<string:batch_id>/dispatch", methods=["POST"])
+def dispatch_outreach_send_batch(batch_id):
+    """Start real delivery for one approved batch."""
+    _, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        batch, batch_error = _start_batch_dispatch(batch_id)
+        if batch_error:
+            return jsonify({"error": batch_error}), 400 if batch_error != "Batch not found" else 404
+        return jsonify({"success": True, "batch": batch})
+    except Exception as e:
+        print(f"Error dispatching outreach batch: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @admin_prospecting_bp.route("/api/admin/prospecting/send-batches/<string:batch_id>", methods=["DELETE"])
 def delete_outreach_send_batch(batch_id):
     """Delete full outreach batch (queue rows are removed by cascade)."""
@@ -9653,6 +11959,24 @@ def dispatch_outreach_send_queue():
         return jsonify(summary)
     except Exception as e:
         print(f"Error dispatching outreach queue: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/telegram-app/replies/sync", methods=["POST"])
+def sync_telegram_app_replies():
+    """Pull inbound Telegram app replies into outreachreactions."""
+    _, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        data = request.get_json(silent=True) or {}
+        batch_id = str(data.get("batch_id") or "").strip() or None
+        limit = max(1, min(int(data.get("limit", 25) or 25), 200))
+        summary = _sync_telegram_app_replies(batch_id=batch_id, limit=limit)
+        return jsonify(summary)
+    except Exception as e:
+        print(f"Error syncing telegram_app replies: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -9772,6 +12096,8 @@ def generate_outreach_draft(lead_id):
             channel = (lead_dict.get("selected_channel") or "").strip().lower()
             if channel not in ALLOWED_OUTREACH_CHANNELS:
                 return jsonify({"error": "Lead has no approved outreach channel"}), 400
+            if not _lead_has_channel_contact(lead_dict, channel):
+                return jsonify({"error": _outreach_channel_contact_error(channel)}), 400
 
             draft_payload = _generate_first_message_draft(lead_dict, channel)
             draft_id = str(uuid.uuid4())
@@ -9853,6 +12179,8 @@ def generate_outreach_draft_from_audit(lead_id):
                 return jsonify({"error": "Lead is not available for preview"}), 404
             display_lead = _attach_admin_prospecting_public_offer_metadata(conn, display_lead)
             preview = build_lead_card_preview_snapshot(display_lead)
+            if not _lead_has_channel_contact(display_lead, channel):
+                return jsonify({"error": _outreach_channel_contact_error(channel)}), 400
 
             cur.execute(
                 """
@@ -10120,6 +12448,15 @@ def approve_outreach_draft(draft_id):
                 ),
             )
             updated = dict(cur.fetchone())
+            cur.execute(
+                """
+                UPDATE prospectingleads
+                SET status = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                """,
+                ("draft_ready", draft_dict["lead_id"]),
+            )
 
             learning_id = str(uuid.uuid4())
             cur.execute(
@@ -10168,6 +12505,152 @@ def approve_outreach_draft(draft_id):
         return jsonify({"success": True, "draft": _serialize_draft(updated)})
     except Exception as e:
         print(f"Error approving outreach draft: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/drafts/<string:draft_id>/manual-sent", methods=["POST"])
+def mark_outreach_draft_sent_manually(draft_id):
+    """Mark approved draft as sent manually and create a history item in outreach queue."""
+    user_data, error = _require_superadmin()
+    if error:
+        return error
+
+    try:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT
+                    d.*,
+                    l.name AS lead_name,
+                    l.status AS lead_status,
+                    l.selected_channel,
+                    l.telegram_url,
+                    l.whatsapp_url,
+                    l.phone,
+                    l.email
+                FROM outreachmessagedrafts d
+                JOIN prospectingleads l ON l.id = d.lead_id
+                WHERE d.id = %s
+                LIMIT 1
+                """,
+                (draft_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return jsonify({"error": "Draft not found"}), 404
+            draft = dict(row)
+            channel = str(draft.get("channel") or draft.get("selected_channel") or "").strip().lower()
+            if not channel:
+                return jsonify({"error": "Draft has no channel"}), 400
+            if channel != "manual" and not _lead_has_channel_contact(draft, channel):
+                return jsonify({"error": _outreach_channel_contact_error(channel)}), 400
+
+            cur.execute(
+                """
+                SELECT id
+                FROM outreachsendqueue
+                WHERE draft_id = %s
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (draft_id,),
+            )
+            existing = cur.fetchone()
+            recipient_kind, recipient_value = _resolve_manual_outreach_recipient(draft, channel)
+
+            if existing:
+                queue_id = str(existing["id"] if hasattr(existing, "__getitem__") else existing[0])
+                cur.execute(
+                    """
+                    UPDATE outreachsendqueue
+                    SET delivery_status = %s,
+                        provider_name = %s,
+                        provider_message_id = %s,
+                        recipient_kind = %s,
+                        recipient_value = %s,
+                        error_text = NULL,
+                        sent_at = NOW(),
+                        updated_at = NOW()
+                    WHERE id = %s
+                    """,
+                    (QUEUE_STATUS_SENT, "manual", f"manual:{draft_id}", recipient_kind, recipient_value, queue_id),
+                )
+            else:
+                batch_id = str(uuid.uuid4())
+                queue_id = str(uuid.uuid4())
+                cur.execute(
+                    """
+                    INSERT INTO outreachsendbatches (
+                        id, batch_date, daily_limit, status, created_by, approved_by
+                    ) VALUES (
+                        %s, CURRENT_DATE, %s, %s, %s, %s
+                    )
+                    """,
+                    (batch_id, MAX_DAILY_OUTREACH_BATCH, BATCH_APPROVED, user_data["user_id"], user_data["user_id"]),
+                )
+                cur.execute(
+                    """
+                    INSERT INTO outreachsendqueue (
+                        id, batch_id, lead_id, draft_id, channel, delivery_status,
+                        provider_message_id, provider_name, recipient_kind, recipient_value, sent_at
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, NOW()
+                    )
+                    """,
+                    (
+                        queue_id,
+                        batch_id,
+                        draft["lead_id"],
+                        draft_id,
+                        channel,
+                        QUEUE_STATUS_SENT,
+                        f"manual:{draft_id}",
+                        "manual",
+                        recipient_kind,
+                        recipient_value,
+                    ),
+                )
+
+            cur.execute(
+                """
+                UPDATE prospectingleads
+                SET status = %s,
+                    pipeline_status = %s,
+                    last_contact_at = NOW(),
+                    last_contact_channel = %s,
+                    last_contact_comment = %s,
+                    last_manual_action_at = NOW(),
+                    last_manual_action_by = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                """,
+                (
+                    "sent",
+                    PIPELINE_CONTACTED,
+                    channel,
+                    "Marked sent manually from approved draft",
+                    str(user_data.get("user_id") or "") or None,
+                    draft["lead_id"],
+                ),
+            )
+            _record_lead_timeline_event(
+                cur,
+                lead_id=str(draft["lead_id"]),
+                event_type="manual_contact_marked",
+                actor_id=str(user_data.get("user_id") or "") or None,
+                comment="Marked sent manually from approved draft",
+                payload={"channel": channel, "draft_id": draft_id, "queue_id": queue_id},
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        return jsonify({"success": True, "draft_id": draft_id, "lead_id": draft["lead_id"]})
+    except Exception as e:
+        print(f"Error marking outreach draft as sent manually: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -10390,8 +12873,7 @@ def preview_lead_card(lead_id):
         return error
 
     try:
-        with DatabaseManager() as db:
-            lead = db.get_lead_by_id(lead_id)
+        lead = _load_prospecting_lead(lead_id)
 
         if not lead:
             return jsonify({"error": "Lead not found"}), 404
@@ -10405,6 +12887,11 @@ def preview_lead_card(lead_id):
         conn = get_db_connection()
         try:
             display_lead = _attach_admin_prospecting_public_offer_metadata(conn, display_lead)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            group_summary = _group_summary_for_lead_ids(cur, [lead_id])
+            display_lead["groups"] = group_summary.get(lead_id, [])
+            display_lead["group_count"] = len(display_lead["groups"])
+            display_lead["timeline_preview"] = _latest_timeline_preview(cur, [lead_id]).get(lead_id)
         finally:
             conn.close()
 
@@ -10427,8 +12914,7 @@ def generate_admin_prospecting_offer_page(lead_id):
         requested_languages = data.get("enabled_languages")
         primary_language, enabled_languages = _normalize_public_audit_languages(requested_language, requested_languages)
 
-        with DatabaseManager() as db:
-            lead = db.get_lead_by_id(lead_id)
+        lead = _load_prospecting_lead(lead_id)
         if not lead:
             return jsonify({"error": "Lead not found"}), 404
 
