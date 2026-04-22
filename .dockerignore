@@ -20,6 +20,8 @@ reports.db
 *.log
 /tmp
 db_backups
+backups
+data
 
 # IDE и служебные каталоги
 .cursor
@@ -35,6 +37,8 @@ frontend/dist
 # Отладочные данные и архив. Не исключать scripts/ (migrate_sqlite_to_postgres.py, smoke) и tests/
 debug_data
 archive
+runtime_bot
+telegram-bot-venv
 
 # Прочее
 Dockerfile
@@ -42,3 +46,4 @@ Dockerfile
 docker-compose*.yml
 *.backup
 .DS_Store
+main.py
