@@ -1,9 +1,11 @@
 import os
 import re
 import time
+import json
+from difflib import SequenceMatcher
 from decimal import Decimal
 import requests
-from urllib.parse import quote, urlparse, parse_qs
+from urllib.parse import quote, unquote, urlparse, parse_qs
 from requests import Response
 try:
     from apify_client import ApifyClient
@@ -15,6 +17,7 @@ except ImportError:
 from typing import List, Dict, Any, Optional
 import datetime
 
+from core.map_url_normalizer import normalize_map_url
 
 APIFY_SEARCH_TIMEOUT_SEC = int(os.environ.get("APIFY_SEARCH_TIMEOUT_SEC", "180"))
 APIFY_SEARCH_MAX_CHARGE_USD = Decimal(os.environ.get("APIFY_SEARCH_MAX_CHARGE_USD", "1.0"))
@@ -46,7 +49,7 @@ class ProspectingService:
         )
         google_actor = (
             os.environ.get("APIFY_GOOGLE_ACTOR_ID")
-            or "0SHtjFyh3L6V8fLDT"
+            or "compass~crawler-google-places"
         )
         apple_actor = (
             os.environ.get("APIFY_APPLE_ACTOR_ID")
@@ -100,6 +103,35 @@ class ProspectingService:
         return quote(raw_actor_id, safe="~")
 
     @staticmethod
+    def _append_debug_trace(
+        debug_bundle_dir: Optional[str],
+        event: str,
+        payload: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        if not debug_bundle_dir:
+            return
+        try:
+            os.makedirs(debug_bundle_dir, exist_ok=True)
+            trace_path = os.path.join(debug_bundle_dir, "apify_trace.json")
+            events: List[Dict[str, Any]] = []
+            if os.path.exists(trace_path):
+                with open(trace_path, "r", encoding="utf-8") as fh:
+                    loaded = json.load(fh)
+                if isinstance(loaded, list):
+                    events = loaded
+            item = {
+                "ts": datetime.datetime.utcnow().isoformat() + "Z",
+                "event": str(event or "").strip(),
+            }
+            if isinstance(payload, dict) and payload:
+                item["payload"] = payload
+            events.append(item)
+            with open(trace_path, "w", encoding="utf-8") as fh:
+                json.dump(events, fh, ensure_ascii=False, indent=2, default=str)
+        except Exception:
+            return
+
+    @staticmethod
     def _pick(item: Dict[str, Any], *keys: str) -> Any:
         for key in keys:
             if key in item and item.get(key) not in (None, ""):
@@ -143,6 +175,23 @@ class ProspectingService:
         if value is None:
             return ""
         return str(value).strip()
+
+    @classmethod
+    def _normalize_identity_text(cls, value: Any) -> str:
+        text = cls._normalize_text(value).lower().replace("ё", "е")
+        text = re.sub(r"https?://", "", text)
+        text = re.sub(r"[^a-z0-9а-я]+", " ", text, flags=re.IGNORECASE)
+        return re.sub(r"\s+", " ", text).strip()
+
+    @classmethod
+    def _text_similarity(cls, left: Any, right: Any) -> float:
+        left_text = cls._normalize_identity_text(left)
+        right_text = cls._normalize_identity_text(right)
+        if not left_text or not right_text:
+            return 0.0
+        if left_text == right_text:
+            return 1.0
+        return SequenceMatcher(None, left_text, right_text).ratio()
 
     @classmethod
     def _coerce_scalar_text(cls, value: Any) -> Optional[str]:
@@ -204,6 +253,28 @@ class ProspectingService:
                         if candidate:
                             photos.append(candidate)
                             break
+        image_url = cls._normalize_media_url(item.get("imageUrl")) or cls._coerce_scalar_text(item.get("imageUrl"))
+        if image_url:
+            photos.insert(0, image_url)
+        image_urls = item.get("imageUrls")
+        if isinstance(image_urls, list):
+            for entry in image_urls:
+                candidate = cls._normalize_media_url(entry) or cls._coerce_scalar_text(entry)
+                if candidate:
+                    photos.append(candidate)
+        raw_images = item.get("images")
+        if isinstance(raw_images, list):
+            for entry in raw_images:
+                if isinstance(entry, str):
+                    candidate = cls._normalize_media_url(entry) or entry.strip()
+                    if candidate:
+                        photos.append(candidate)
+                elif isinstance(entry, dict):
+                    for key in ("url", "imageUrl", "src", "originalUrl", "thumbnailUrl"):
+                        candidate = cls._normalize_media_url(entry.get(key)) or cls._coerce_scalar_text(entry.get(key))
+                        if candidate:
+                            photos.append(candidate)
+                            break
         main_photo = cls._normalize_media_url(item.get("photoUrlTemplate")) or cls._coerce_scalar_text(item.get("photoUrlTemplate"))
         if main_photo:
             photos.insert(0, main_photo)
@@ -221,7 +292,7 @@ class ProspectingService:
         return deduped
 
     @classmethod
-    def _extract_services_preview(cls, item: Dict[str, Any], limit: int = 30) -> List[Dict[str, Any]]:
+    def _extract_services_list(cls, item: Dict[str, Any], limit: Optional[int] = None) -> List[Dict[str, Any]]:
         services: List[Dict[str, Any]] = []
         menu_payload = item.get("menu")
         menu_items: List[Dict[str, Any]] = []
@@ -256,7 +327,7 @@ class ProspectingService:
                     "price": price,
                 }
             )
-            if len(services) >= max(1, limit):
+            if limit is not None and len(services) >= max(1, limit):
                 return services
 
         # Fallback: when menu is missing, derive pseudo-services from features blocks.
@@ -279,9 +350,38 @@ class ProspectingService:
                             "price": None,
                         }
                     )
-                    if len(services) >= max(1, limit):
+                    if limit is not None and len(services) >= max(1, limit):
                         return services
+        additional_info = item.get("additionalInfo")
+        if isinstance(additional_info, dict):
+            for section_name, section_values in additional_info.items():
+                if not isinstance(section_values, list):
+                    continue
+                category = cls._coerce_scalar_text(section_name) or "additional_info"
+                for raw_value in section_values:
+                    if isinstance(raw_value, dict):
+                        for amenity_name, amenity_value in raw_value.items():
+                            if amenity_value in (False, None, "", "false", "False", 0):
+                                continue
+                            name = cls._coerce_scalar_text(amenity_name)
+                            if not name:
+                                continue
+                            services.append(
+                                {
+                                    "name": name,
+                                    "title": name,
+                                    "category": category,
+                                    "description": None,
+                                    "price": None,
+                                }
+                            )
+                            if limit is not None and len(services) >= max(1, limit):
+                                return services
         return services
+
+    @classmethod
+    def _extract_services_preview(cls, item: Dict[str, Any], limit: int = 30) -> List[Dict[str, Any]]:
+        return cls._extract_services_list(item, limit=limit)
 
     @classmethod
     def _extract_reviews_preview(cls, item: Dict[str, Any], limit: int = 30) -> List[Dict[str, Any]]:
@@ -359,7 +459,7 @@ class ProspectingService:
             return False
         return True
 
-    def _normalize_result(self, item: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalize_result(self, item: Dict[str, Any], *, compact: bool = False) -> Dict[str, Any]:
         messenger_links = self._pick(item, "messengerLinks", "messengers", "socialLinks", "socials", "contacts") or []
         if isinstance(messenger_links, dict):
             messenger_links = [messenger_links]
@@ -410,29 +510,15 @@ class ProspectingService:
         reviews_count = self._coerce_reviews_count(
             self._pick(item, "reviewsCount", "reviews_count", "reviewCount", "ratingsCount", "reviews")
         )
-        description = self._coerce_scalar_text(item.get("description"))
-        logo_url = self._coerce_scalar_text(item.get("logoUrl") or item.get("logo_url"))
-        photos = self._extract_photos(item)
-        services_preview = self._extract_services_preview(item)
-        reviews_preview = self._extract_reviews_preview(item)
-        social_links = self._collect_nested_strings(item.get("socialLinks"))
-
-        search_payload_json = {
-            "logo_url": logo_url,
-            "description": description,
-            "photos": photos,
-            "menu_preview": services_preview,
-            "reviews_preview": reviews_preview,
-            "social_links": social_links,
-            "reviews_count": reviews_count,
-        }
-
-        return {
+        description = self._coerce_scalar_text(
+            self._pick(item, "description", "hotelDescription", "hotelReviewSummary", "subTitle")
+        )
+        normalized = {
             "source": self.source,
             "name": self._coerce_scalar_text(self._pick(item, "title", "name", "companyName")),
             "address": self._coerce_scalar_text(self._pick(item, "address", "fullAddress")),
             "phone": self._coerce_scalar_text(self._pick(item, "phone", "phoneNumber", "phones")),
-            "website": self._coerce_scalar_text(self._pick(item, "website", "site", "siteUrl")),
+            "website": self._coerce_scalar_text(self._pick(item, "website", "site", "siteUrl", "googleFoodUrl")),
             "email": email,
             "rating": self._pick(item, "rating", "totalScore"),
             "reviews_count": reviews_count,
@@ -445,20 +531,47 @@ class ProspectingService:
             "telegram_url": telegram_url,
             "whatsapp_url": whatsapp_url,
             "messenger_links": normalized_messenger_links,
+        }
+        if compact:
+            return normalized
+
+        logo_url = self._coerce_scalar_text(item.get("logoUrl") or item.get("logo_url"))
+        photos = self._extract_photos(item)
+        services_full = self._extract_services_list(item)
+        services_preview = services_full[:30]
+        reviews_preview = self._extract_reviews_preview(item)
+        social_links = self._collect_nested_strings(item.get("socialLinks"))
+        services_with_price_count = sum(
+            1
+            for service in services_full
+            if isinstance(service, dict) and str(service.get("price") or "").strip()
+        )
+
+        normalized["logo_url"] = logo_url
+        normalized["description"] = description
+        normalized["photos_json"] = photos
+        normalized["services_json"] = services_full
+        normalized["reviews_json"] = reviews_preview
+        normalized["search_payload_json"] = {
             "logo_url": logo_url,
             "description": description,
-            "photos_json": photos,
-            "services_json": services_preview,
-            "reviews_json": reviews_preview,
-            "search_payload_json": search_payload_json,
-            "raw_payload_json": item,
+            "photos": photos,
+            "menu_preview": services_preview,
+            "menu_full": services_full,
+            "services_total_count": len(services_full),
+            "services_with_price_count": services_with_price_count,
+            "reviews_preview": reviews_preview,
+            "social_links": social_links,
+            "reviews_count": reviews_count,
         }
+        normalized["raw_payload_json"] = item
+        return normalized
 
-    def normalize_results(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def normalize_results(self, items: List[Dict[str, Any]], *, compact: bool = False) -> List[Dict[str, Any]]:
         normalized: List[Dict[str, Any]] = []
         for item in items:
             if isinstance(item, dict):
-                normalized_item = self._normalize_result(item)
+                normalized_item = self._normalize_result(item, compact=compact)
                 if self._is_meaningful_lead(normalized_item):
                     normalized.append(normalized_item)
         return normalized
@@ -470,12 +583,14 @@ class ProspectingService:
 
         if self.source == "apify_google":
             return {
-                "search_term": query_text,
+                "searchStringsArray": [query_text],
                 "location": location_text,
-                "language": str(os.environ.get("APIFY_GOOGLE_LANGUAGE", "English") or "English"),
-                "max_results": max(1, int(limit or 1)),
-                "reviews": 0,
-                "photos": 0,
+                "locationQuery": location_text,
+                "language": str(os.environ.get("APIFY_GOOGLE_LANGUAGE", "en") or "en"),
+                "maxCrawledPlacesPerSearch": max(1, int(limit or 1)),
+                "scrapePlaceDetailPage": True,
+                "maxReviews": 10,
+                "maxImages": 5,
             }
 
         if self.source == "apify_apple":
@@ -556,6 +671,16 @@ class ProspectingService:
         return None
 
     @staticmethod
+    def _extract_yandex_org_id(map_url: str) -> Optional[str]:
+        value = str(map_url or "").strip()
+        if not value:
+            return None
+        match = re.search(r"/org/(?:[^/?]+/)?(\d+)", value)
+        if match:
+            return str(match.group(1)).strip()
+        return None
+
+    @staticmethod
     def _extract_google_place_id(map_url: str) -> Optional[str]:
         value = str(map_url or "").strip()
         if not value:
@@ -569,6 +694,98 @@ class ProspectingService:
             if match:
                 return str(match.group(1)).strip()
         return None
+
+    @classmethod
+    def _matches_requested_map_entity(
+        cls,
+        *,
+        normalized_item: Dict[str, Any],
+        raw_item: Dict[str, Any],
+        map_url: str,
+        city: str = "",
+    ) -> bool:
+        normalized_url = normalize_map_url(map_url)
+        source = str(cls._normalize_text(normalized_item.get("source")) or "").lower()
+        source_url = str(normalized_item.get("source_url") or "").strip()
+        expected_city = cls._normalize_identity_text(city)
+        candidate_city = cls._normalize_identity_text(
+            normalized_item.get("city") or normalized_item.get("address")
+        )
+        exact_external_match = False
+
+        if source == "apify_yandex":
+            expected_org_id = cls._extract_yandex_org_id(normalized_url)
+            candidate_org_id = cls._normalize_text(
+                normalized_item.get("source_external_id")
+                or raw_item.get("businessId")
+                or raw_item.get("id")
+                or raw_item.get("oid")
+                or raw_item.get("organizationId")
+            )
+            exact_external_match = bool(expected_org_id and candidate_org_id and expected_org_id == candidate_org_id)
+            if expected_org_id and candidate_org_id and expected_org_id != candidate_org_id:
+                return False
+        elif source == "apify_google":
+            expected_place_id = cls._extract_google_place_id(map_url) or cls._extract_google_place_id(normalized_url)
+            candidate_place_id = cls._normalize_text(
+                normalized_item.get("source_external_id")
+                or normalized_item.get("google_id")
+                or raw_item.get("placeId")
+                or raw_item.get("id")
+            )
+            exact_external_match = bool(
+                expected_place_id and candidate_place_id and expected_place_id.lower() == candidate_place_id.lower()
+            )
+            if expected_place_id and candidate_place_id and expected_place_id.lower() != candidate_place_id.lower():
+                return False
+
+        if (
+            not exact_external_match
+            and expected_city
+            and candidate_city
+            and expected_city not in candidate_city
+            and candidate_city not in expected_city
+        ):
+            return False
+
+        query_text = cls._extract_query_from_map_url(map_url) or cls._extract_query_from_map_url(normalized_url)
+        candidate_name = normalized_item.get("name")
+        if not exact_external_match and query_text and candidate_name:
+            if cls._text_similarity(query_text, candidate_name) < 0.42:
+                return False
+
+        if source_url and normalized_url and source == "apify_yandex":
+            expected_org_id = cls._extract_yandex_org_id(normalized_url)
+            if expected_org_id and expected_org_id not in source_url:
+                return False
+
+        return True
+
+    @classmethod
+    def _build_entity_mismatch_message(
+        cls,
+        rejected_candidates: List[Dict[str, Any]],
+    ) -> str:
+        if not rejected_candidates:
+            return "Parsed entity mismatch for source URL"
+
+        first_candidate = rejected_candidates[0] if isinstance(rejected_candidates[0], dict) else {}
+        candidate_name = str(first_candidate.get("name") or "").strip()
+        candidate_city = str(first_candidate.get("city") or "").strip()
+        candidate_address = str(first_candidate.get("address") or "").strip()
+
+        details: List[str] = []
+        if candidate_name:
+            details.append(f"название: {candidate_name}")
+        if candidate_city:
+            details.append(f"город: {candidate_city}")
+        if candidate_address:
+            details.append(f"адрес: {candidate_address}")
+
+        if details:
+            return "Parsed entity mismatch for source URL | " + "; ".join(details)
+
+        return "Parsed entity mismatch for source URL"
 
     @staticmethod
     def _extract_query_from_map_url(map_url: str) -> str:
@@ -588,12 +805,12 @@ class ProspectingService:
             pass
         match = re.search(r"/org/([^/?#]+)/", value)
         if match:
-            slug = str(match.group(1)).replace("_", " ").replace("-", " ").strip()
+            slug = unquote(str(match.group(1))).replace("_", " ").replace("-", " ").strip()
             if slug:
                 return slug
         match = re.search(r"/place/([^/?#]+)", value)
         if match:
-            slug = str(match.group(1)).replace("+", " ").replace("%20", " ").strip()
+            slug = unquote(str(match.group(1))).replace("+", " ").replace("_", " ").replace("-", " ").strip()
             if slug:
                 return slug
         return ""
@@ -616,26 +833,35 @@ class ProspectingService:
         return city_map.get(slug, "")
 
     def _build_run_input_for_map_url(self, map_url: str, limit: int = 1, city: str = "") -> Dict[str, Any]:
-        map_url_text = str(map_url or "").strip()
+        raw_map_url_text = str(map_url or "").strip()
+        map_url_text = normalize_map_url(map_url)
         if not map_url_text:
             raise ValueError("map_url is required")
         proxy_configuration = self._apify_actor_proxy_config()
 
         if self.source == "apify_google":
-            place_id = self._extract_google_place_id(map_url_text)
-            query_text = self._extract_query_from_map_url(map_url_text) or map_url_text
-            payload = {
-                "search_term": query_text,
-                "location": str(city or "").strip(),
-                "language": str(os.environ.get("APIFY_GOOGLE_LANGUAGE", "English") or "English"),
-                "max_results": max(1, int(limit or 1)),
-                "reviews": 30,
-                "photos": 20,
-                "startUrls": [map_url_text],
-            }
-            if place_id:
-                payload["placeIds"] = [place_id]
-            return payload
+            location_text = str(city or "").strip()
+            query_text = (
+                self._extract_query_from_map_url(raw_map_url_text)
+                or self._extract_query_from_map_url(map_url_text)
+                or map_url_text
+            )
+            place_id = self._extract_google_place_id(raw_map_url_text) or self._extract_google_place_id(map_url_text)
+            return self._strip_none_values(
+                {
+                    "searchStringsArray": [query_text],
+                    "location": location_text,
+                    "locationQuery": location_text,
+                    "language": str(os.environ.get("APIFY_GOOGLE_LANGUAGE", "en") or "en"),
+                    "scrapePlaceDetailPage": True,
+                    "maxCrawledPlacesPerSearch": max(1, int(limit or 1)),
+                    "maxReviews": 50,
+                    "maxImages": 20,
+                    "searchMatching": "only_exact",
+                    "placeIds": [place_id] if place_id else [],
+                    "startUrls": [{"url": raw_map_url_text or map_url_text}],
+                }
+            )
 
         if self.source == "apify_apple":
             query_text = self._extract_query_from_map_url(map_url_text)
@@ -663,7 +889,51 @@ class ProspectingService:
                 "proxyConfiguration": proxy_configuration,
             }
 
-        # Minimal input for map-url runs to avoid actor schema mismatch (400).
+        if self.source == "apify_yandex":
+            business_id = self._extract_map_business_id(map_url_text, self.source)
+            query_text = self._extract_query_from_map_url(map_url_text)
+            return self._strip_none_values(
+                {
+                    "query": [query_text] if query_text else [],
+                    "location": str(city or "").strip(),
+                    "category": "",
+                    "maxResults": max(1, int(limit or 1)),
+                    "language": "ru",
+                    "enrichBusinessData": True,
+                    "maxPhotos": 20,
+                    "maxPosts": 10,
+                    "startUrls": [{"url": map_url_text}],
+                    "businessIds": [business_id] if business_id else [],
+                    "coordinates": "",
+                    "viewportSpan": "",
+                    "filterRating": "",
+                    "filterOpenNow": False,
+                    "filterOpen24h": False,
+                    "filterDelivery": False,
+                    "filterTakeaway": False,
+                    "filterWifi": False,
+                    "filterCardPayment": False,
+                    "filterParking": False,
+                    "filterPetFriendly": False,
+                    "filterWheelchairAccess": False,
+                    "filterGoodPlace": False,
+                    "filterMichelin": False,
+                    "filterBusinessLunch": False,
+                    "filterSummerTerrace": False,
+                    "filterCuisine": [],
+                    "filterPriceCategory": [],
+                    "filterPriceMin": None,
+                    "filterPriceMax": None,
+                    "filterCategoryId": [],
+                    "filterChainId": [],
+                    "customFilters": [],
+                    "sortBy": "",
+                    "sortOrigin": "",
+                    "proxyConfiguration": proxy_configuration,
+                }
+            )
+
+        # Minimal input for other map-url runs to avoid actor schema mismatch (400).
         return {
             "startUrls": [{"url": map_url_text}],
             "maxItems": max(1, int(limit or 1)),
@@ -738,35 +1008,106 @@ class ProspectingService:
         limit: int = 1,
         timeout_sec: int = 300,
         city: str = "",
+        debug_bundle_dir: Optional[str] = None,
+        debug_context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        run_input = self._build_run_input_for_map_url(map_url, limit=limit, city=city)
+        raw_map_url = str(map_url or "").strip()
+        normalized_map_url = normalize_map_url(map_url)
+        self._append_debug_trace(
+            debug_bundle_dir,
+            "input_prepared",
+            {
+                "source": self.source,
+                "map_url": raw_map_url or normalized_map_url,
+                "normalized_map_url": normalized_map_url,
+                "city": str(city or "").strip(),
+                "timeout_sec": int(timeout_sec or 300),
+                "debug_context": debug_context or {},
+            },
+        )
+        run_input = self._build_run_input_for_map_url(raw_map_url or normalized_map_url, limit=limit, city=city)
         run_input_candidates = [self._strip_none_values(run_input)]
         if self.source == "apify_google":
-            run_input_candidates.append(
+            query_text = (
+                self._extract_query_from_map_url(raw_map_url)
+                or self._extract_query_from_map_url(normalized_map_url)
+                or normalized_map_url
+            )
+            location_text = str(city or "").strip()
+            place_id = self._extract_google_place_id(raw_map_url) or self._extract_google_place_id(normalized_map_url)
+            run_input_candidates = [
                 self._strip_none_values(
                     {
-                        "search_term": self._extract_query_from_map_url(map_url) or str(map_url or "").strip(),
-                        "location": str(city or "").strip(),
-                        "language": str(os.environ.get("APIFY_GOOGLE_LANGUAGE", "English") or "English"),
-                        "max_results": max(1, int(limit or 1)),
-                        "reviews": 30,
-                        "photos": 20,
+                        "searchStringsArray": [query_text],
+                        "location": location_text,
+                        "locationQuery": location_text,
+                        "language": str(os.environ.get("APIFY_GOOGLE_LANGUAGE", "en") or "en"),
+                        "maxCrawledPlacesPerSearch": max(1, int(limit or 1)),
+                        "scrapePlaceDetailPage": True,
+                        "maxReviews": 50,
+                        "maxImages": 20,
+                        "searchMatching": "only_exact",
+                        "placeIds": [place_id] if place_id else [],
+                        "startUrls": [{"url": raw_map_url or normalized_map_url}],
                     }
-                )
-            )
+                ),
+                self._strip_none_values(
+                    {
+                        "startUrls": [{"url": raw_map_url or normalized_map_url}],
+                        "language": str(os.environ.get("APIFY_GOOGLE_LANGUAGE", "en") or "en"),
+                        "scrapePlaceDetailPage": True,
+                        "maxCrawledPlacesPerSearch": max(1, int(limit or 1)),
+                        "maxReviews": 50,
+                        "maxImages": 20,
+                        "searchMatching": "only_exact",
+                    }
+                ),
+                self._strip_none_values(
+                    {
+                        "startUrls": [{"url": normalized_map_url}],
+                        "language": str(os.environ.get("APIFY_GOOGLE_LANGUAGE", "en") or "en"),
+                        "scrapePlaceDetailPage": True,
+                        "maxCrawledPlacesPerSearch": max(1, int(limit or 1)),
+                        "maxReviews": 50,
+                        "maxImages": 20,
+                    }
+                ),
+            ]
         elif self.source == "apify_apple":
             run_input_candidates.append(
                 self._strip_none_values(
                     {
                         "searchQueries": [
                             {
-                                "query": self._extract_query_from_map_url(map_url) or str(map_url or "").strip(),
+                                "query": self._extract_query_from_map_url(normalized_map_url) or normalized_map_url,
                                 "location": str(city or "").strip(),
                             }
                         ],
                         "maxResults": max(1, int(limit or 1)),
                         "countryCode": str(os.environ.get("APIFY_APPLE_COUNTRY_CODE", "RU") or "RU"),
                         "language": str(os.environ.get("APIFY_APPLE_LANGUAGE", "ru-RU") or "ru-RU"),
+                    }
+                )
+            )
+        elif self.source == "apify_yandex":
+            run_input_candidates.append(
+                self._strip_none_values(
+                    {
+                        "startUrls": [{"url": normalized_map_url}],
+                        "maxResults": max(1, int(limit or 1)),
+                        "language": "ru",
+                        "enrichBusinessData": True,
+                        "proxyConfiguration": self._apify_actor_proxy_config(),
+                    }
+                )
+            )
+            run_input_candidates.append(
+                self._strip_none_values(
+                    {
+                        "startUrls": [{"url": normalized_map_url}],
+                        "maxItems": max(1, int(limit or 1)),
+                        "language": "ru",
+                        "proxyConfiguration": self._apify_actor_proxy_config(),
                     }
                 )
             )
@@ -779,15 +1120,42 @@ class ProspectingService:
             try:
                 run_meta = self._start_run_with_input(candidate)
                 run_input = candidate
+                self._append_debug_trace(
+                    debug_bundle_dir,
+                    "run_started",
+                    {
+                        "run_id": run_meta.get("run_id"),
+                        "dataset_id": run_meta.get("dataset_id"),
+                        "status": run_meta.get("status"),
+                        "run_input": candidate,
+                    },
+                )
                 break
             except requests.exceptions.HTTPError as exc:
                 response = getattr(exc, "response", None)
                 if response is not None and int(response.status_code or 0) == 400:
                     last_error = exc
+                    self._append_debug_trace(
+                        debug_bundle_dir,
+                        "run_start_http_400",
+                        {
+                            "candidate": candidate,
+                            "status_code": int(response.status_code or 0),
+                            "body": response.text[:1000],
+                        },
+                    )
                     continue
                 raise
             except Exception as exc:
                 last_error = exc
+                self._append_debug_trace(
+                    debug_bundle_dir,
+                    "run_start_failed",
+                    {
+                        "candidate": candidate,
+                        "error": str(exc),
+                    },
+                )
                 break
         if not run_meta:
             if last_error:
@@ -804,16 +1172,179 @@ class ProspectingService:
         while final_status in {"READY", "RUNNING", "TIMING-OUT", "ABORTING"}:
             elapsed = (datetime.datetime.utcnow() - started_at).total_seconds()
             if elapsed > max(30, int(timeout_sec or 300)):
+                self._append_debug_trace(
+                    debug_bundle_dir,
+                    "run_timeout",
+                    {
+                        "run_id": run_id,
+                        "dataset_id": dataset_id,
+                        "status": final_status,
+                        "elapsed_sec": elapsed,
+                        "timeout_sec": int(timeout_sec or 300),
+                    },
+                )
                 raise TimeoutError(f"Apify actor did not finish within {int(timeout_sec or 300)} seconds")
             time.sleep(4)
             run_data = self.get_run(run_id)
             final_status = str(run_data.get("status") or "").strip().upper() or final_status
             dataset_id = str(run_data.get("defaultDatasetId") or dataset_id or "").strip()
+            self._append_debug_trace(
+                debug_bundle_dir,
+                "run_polled",
+                {
+                    "run_id": run_id,
+                    "dataset_id": dataset_id,
+                    "status": final_status,
+                    "elapsed_sec": round(elapsed, 2),
+                },
+            )
 
         if final_status != "SUCCEEDED":
+            self._append_debug_trace(
+                debug_bundle_dir,
+                "run_failed",
+                {
+                    "run_id": run_id,
+                    "dataset_id": dataset_id,
+                    "status": final_status,
+                },
+            )
             raise RuntimeError(f"Apify run finished with status={final_status}")
 
+        self._append_debug_trace(
+            debug_bundle_dir,
+            "dataset_fetch_started",
+            {
+                "run_id": run_id,
+                "dataset_id": dataset_id,
+            },
+        )
         items = self.fetch_dataset_items(dataset_id)
+        self._append_debug_trace(
+            debug_bundle_dir,
+            "run_succeeded",
+            {
+                "run_id": run_id,
+                "dataset_id": dataset_id,
+                "items_count": len(items) if isinstance(items, list) else 0,
+            },
+        )
+        if (not isinstance(items, list) or not items) and self.source == "apify_google":
+            query_text = self._extract_query_from_map_url(normalized_map_url) or normalized_map_url
+            location_text = str(city or "").strip()
+            fallback_inputs = [
+                self._strip_none_values(
+                    {
+                        "searchStringsArray": [query_text],
+                        "location": location_text,
+                        "locationQuery": location_text,
+                        "language": str(os.environ.get("APIFY_GOOGLE_LANGUAGE", "en") or "en"),
+                        "maxCrawledPlacesPerSearch": max(1, int(limit or 1)),
+                        "scrapePlaceDetailPage": True,
+                        "maxReviews": 50,
+                        "maxImages": 20,
+                        "searchMatching": "only_exact",
+                    }
+                ),
+                self._strip_none_values(
+                    {
+                        "startUrls": [{"url": normalized_map_url}],
+                        "language": str(os.environ.get("APIFY_GOOGLE_LANGUAGE", "en") or "en"),
+                        "scrapePlaceDetailPage": True,
+                        "maxCrawledPlacesPerSearch": max(1, int(limit or 1)),
+                        "maxReviews": 50,
+                        "maxImages": 20,
+                        "searchMatching": "only_exact",
+                    }
+                ),
+                self._strip_none_values(
+                    {
+                        "startUrls": [{"url": normalized_map_url}],
+                        "language": str(os.environ.get("APIFY_GOOGLE_LANGUAGE", "en") or "en"),
+                        "scrapePlaceDetailPage": True,
+                        "maxCrawledPlacesPerSearch": max(1, int(limit or 1)),
+                        "maxReviews": 50,
+                        "maxImages": 20,
+                    }
+                ),
+            ]
+            for fallback_input in fallback_inputs:
+                if not fallback_input:
+                    continue
+                try:
+                    fallback_meta = self._start_run_with_input(fallback_input)
+                except requests.exceptions.HTTPError as exc:
+                    response = getattr(exc, "response", None)
+                    if response is not None and int(response.status_code or 0) == 400:
+                        continue
+                    raise
+                except Exception:
+                    continue
+                fallback_run_id = str(fallback_meta.get("run_id") or "").strip()
+                if not fallback_run_id:
+                    continue
+                fallback_started_at = datetime.datetime.utcnow()
+                fallback_status = str(fallback_meta.get("status") or "").strip().upper() or "RUNNING"
+                fallback_dataset_id = str(fallback_meta.get("dataset_id") or "").strip()
+                while fallback_status in {"READY", "RUNNING", "TIMING-OUT", "ABORTING"}:
+                    elapsed = (datetime.datetime.utcnow() - fallback_started_at).total_seconds()
+                    if elapsed > max(30, int(timeout_sec or 300)):
+                        raise TimeoutError(
+                            f"Apify actor did not finish within {int(timeout_sec or 300)} seconds"
+                        )
+                    time.sleep(4)
+                    fallback_data = self.get_run(fallback_run_id)
+                    fallback_status = str(fallback_data.get("status") or "").strip().upper() or fallback_status
+                    fallback_dataset_id = str(fallback_data.get("defaultDatasetId") or fallback_dataset_id or "").strip()
+                if fallback_status != "SUCCEEDED":
+                    continue
+                fallback_items = self.fetch_dataset_items(fallback_dataset_id)
+                if isinstance(fallback_items, list) and fallback_items:
+                    run_id = fallback_run_id
+                    dataset_id = fallback_dataset_id
+                    final_status = fallback_status
+                    run_input = fallback_input
+                    items = fallback_items
+                    break
+        if isinstance(items, list) and items:
+            filtered_items: List[Dict[str, Any]] = []
+            rejected_candidates: List[Dict[str, Any]] = []
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                normalized_item = self._normalize_result(item)
+                if not self._is_meaningful_lead(normalized_item):
+                    continue
+                if self._matches_requested_map_entity(
+                    normalized_item=normalized_item,
+                    raw_item=item,
+                    map_url=raw_map_url or normalized_map_url,
+                    city=city,
+                ):
+                    filtered_items.append(item)
+                else:
+                    rejected_candidates.append(
+                        {
+                            "name": normalized_item.get("name"),
+                            "city": normalized_item.get("city"),
+                            "address": normalized_item.get("address"),
+                            "source_url": normalized_item.get("source_url"),
+                            "source_external_id": normalized_item.get("source_external_id"),
+                        }
+                    )
+            if rejected_candidates:
+                self._append_debug_trace(
+                    debug_bundle_dir,
+                    "identity_filtered",
+                    {
+                        "kept_count": len(filtered_items),
+                        "rejected_count": len(rejected_candidates),
+                        "rejected_candidates": rejected_candidates[:5],
+                    },
+                )
+            if not filtered_items:
+                raise RuntimeError(self._build_entity_mismatch_message(rejected_candidates))
+            items = filtered_items
         return {
             "run_id": run_id,
             "dataset_id": dataset_id,
@@ -872,7 +1403,7 @@ class ProspectingService:
         response.raise_for_status()
         return response.json().get("data") or {}
 
-    def fetch_dataset_items(self, dataset_id: str) -> List[Dict[str, Any]]:
+    def fetch_dataset_items(self, dataset_id: str, *, compact: bool = False) -> List[Dict[str, Any]]:
         if not self.api_token:
             raise ValueError("APIFY_TOKEN is not set")
         if not dataset_id:
@@ -887,7 +1418,7 @@ class ProspectingService:
         items = response.json()
         if not isinstance(items, list):
             return []
-        return [self._normalize_result(item) for item in items if isinstance(item, dict)]
+        return [self._normalize_result(item, compact=compact) for item in items if isinstance(item, dict)]
 
     def search_businesses(self, query: str, location: str, limit: int = 50) -> List[Dict[str, Any]]:
         """

@@ -1499,14 +1499,14 @@ def _extract_contact_from_social_links(raw_links: Any) -> tuple[str | None, str 
     return telegram_url, whatsapp_url
 
 
-def _extract_apify_menu_preview(raw_menu: Any, limit: int = 20) -> list[dict[str, Any]]:
+def _extract_apify_menu_preview(raw_menu: Any, limit: int | None = 20) -> list[dict[str, Any]]:
     if not isinstance(raw_menu, dict):
         return []
     raw_items = raw_menu.get("items")
     if not isinstance(raw_items, list):
         return []
     result: list[dict[str, Any]] = []
-    for item in raw_items[: max(1, limit)]:
+    for item in raw_items:
         if not isinstance(item, dict):
             continue
         title = str(item.get("title") or item.get("name") or "").strip()
@@ -1522,6 +1522,8 @@ def _extract_apify_menu_preview(raw_menu: Any, limit: int = 20) -> list[dict[str
                 "photo_url": str(item.get("photoUrl") or "").strip() or None,
             }
         )
+        if limit is not None and len(result) >= max(1, limit):
+            break
     return result
 
 
@@ -1599,7 +1601,9 @@ def _normalize_partnership_file_row(
         if photo_template:
             photos.append(photo_template)
 
-    menu_preview = _extract_apify_menu_preview(row.get("menu"))
+    menu_full = _extract_apify_menu_preview(row.get("menu"), limit=None)
+    menu_preview = menu_full[:20]
+    services_with_price_count = sum(1 for item in menu_full if str(item.get("price") or "").strip())
     reviews_raw = row.get("reviews")
     reviews_preview: list[dict[str, Any]] = []
     if isinstance(reviews_raw, list):
@@ -1637,6 +1641,9 @@ def _normalize_partnership_file_row(
             "logo_url": logo_url,
             "photos": photos[:20],
             "menu_preview": menu_preview,
+            "menu_full": menu_full,
+            "services_total_count": len(menu_full),
+            "services_with_price_count": services_with_price_count,
             "reviews_preview": reviews_preview,
             "social_links": row.get("socialLinks") if isinstance(row.get("socialLinks"), list) else [],
             "source_row_url": row.get("url"),
