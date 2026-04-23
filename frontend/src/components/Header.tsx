@@ -1,5 +1,5 @@
 import { Button } from "./ui/button";
-import { Menu, X, LogIn } from "lucide-react";
+import { ChevronDown, LogIn, Menu, X } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { newAuth } from "../lib/auth_new";
@@ -57,6 +57,12 @@ const Header = () => {
     { name: t.header.prices, href: '/about#pricing' },
   ];
 
+  const materialsNavigation = [
+    { name: "Статьи", href: "/articles", description: "Карты, отзывы и локальный маркетинг" },
+    { name: "Документы", href: "/documents", description: "Чек-листы, шаблоны и таблицы" },
+    { name: "Кейсы", href: "/cases", description: "Рост заявок, отзывов и повторных клиентов" },
+  ];
+
   // Не показываем Header на страницах кабинета (/dashboard...)
   if (location.pathname.startsWith('/dashboard')) {
     return null;
@@ -83,7 +89,7 @@ const Header = () => {
             </div>
           </div>
 
-          <nav className="hidden md:flex items-center space-x-14">
+          <nav className="hidden md:flex items-center space-x-10">
             {navigation.map((item) => (
               item.href === '/#agents' ? (
                 <Link
@@ -126,6 +132,26 @@ const Header = () => {
                 </a>
               )
             ))}
+            <div className="group relative">
+              <button className="flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground" type="button">
+                Материалы
+                <ChevronDown className="h-4 w-4 transition group-hover:rotate-180" />
+              </button>
+              <div className="invisible absolute left-1/2 top-full w-72 -translate-x-1/2 pt-4 opacity-0 transition group-hover:visible group-hover:opacity-100">
+                <div className="rounded-2xl border border-orange-100 bg-white p-2 shadow-2xl shadow-orange-500/10">
+                  {materialsNavigation.map((item) => (
+                    <Link
+                      className="block rounded-xl px-4 py-3 transition hover:bg-orange-50"
+                      key={item.href}
+                      to={item.href}
+                    >
+                      <span className="block font-semibold text-gray-950">{item.name}</span>
+                      <span className="mt-1 block text-sm text-muted-foreground">{item.description}</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </div>
           </nav>
 
           <div className="hidden md:flex items-center space-x-4">
@@ -140,7 +166,7 @@ const Header = () => {
                 <span>{t.header.login}</span>
               </Button>
             </Link>
-            <Link to={{ pathname: "/", hash: "#hero-form" }}>
+            <Link to="/login">
               <Button className="btn-iridescent">{t.header.tryFree}</Button>
             </Link>
           </div>
@@ -203,6 +229,21 @@ const Header = () => {
                   </a>
                 )
               ))}
+              <div className="border-t border-border pt-3">
+                <div className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  Материалы
+                </div>
+                {materialsNavigation.map((item) => (
+                  <Link
+                    className="block px-3 py-2 text-muted-foreground transition-colors hover:text-foreground"
+                    key={item.href}
+                    onClick={() => setIsMenuOpen(false)}
+                    to={item.href}
+                  >
+                    {item.name}
+                  </Link>
+                ))}
+              </div>
               <div className="pt-4 space-y-2 pb-4">
                 <div className="px-3 py-2">
                   <LanguageSwitcher />
@@ -217,7 +258,7 @@ const Header = () => {
                     {t.header.login}
                   </Button>
                 </Link>
-                <Link to={{ pathname: "/", hash: "#hero-form" }} className="w-full block">
+                <Link to="/login" className="w-full block">
                   <Button className="w-full justify-start mx-3 btn-iridescent">{t.header.tryFree}</Button>
                 </Link>
               </div>

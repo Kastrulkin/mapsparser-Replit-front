@@ -3,9 +3,10 @@ import { Heart } from "lucide-react";
 import { useLanguage } from "@/i18n/LanguageContext";
 
 const Footer = () => {
-  const { t } = useLanguage();
-  const industries = t.footer.madeWithLoveIndustries ?? ["индустрии красоты"];
-  const prefix = t.footer.madeWithLovePrefix ?? "Сделано с любовью для ";
+  const { t, language } = useLanguage();
+  const isRu = language === "ru";
+  const industries = t.footer.madeWithLoveIndustries ?? [isRu ? "индустрии красоты" : "the beauty industry"];
+  const prefix = t.footer.madeWithLovePrefix ?? (isRu ? "Сделано с любовью для " : "Made with love for ");
   const [index, setIndex] = useState(0);
   const [isExiting, setIsExiting] = useState(false);
 
@@ -24,7 +25,12 @@ const Footer = () => {
     company: [
       { name: t.footer.whoWeAre, href: '/about' },
       { name: t.footer.contacts, href: '/contact' },
-      { name: 'Реквизиты', href: '/requisites' },
+      { name: t.footer.requisites ?? (isRu ? 'Реквизиты' : 'Requisites'), href: '/requisites' },
+    ],
+    materials: [
+      { name: "Статьи", href: "/articles" },
+      { name: "Документы", href: "/documents" },
+      { name: "Кейсы", href: "/cases" },
     ],
   };
 
@@ -55,17 +61,37 @@ const Footer = () => {
             </div>
           </div>
 
-          <div className="ml-auto">
-            <h4 className="font-semibold text-foreground mb-4 text-right">{t.footer.company}</h4>
-            <ul className="space-y-2 text-right">
-              {footerLinks.company.map((link) => (
-                <li key={link.name}>
-                  <a href={link.href} className="text-muted-foreground hover:text-foreground transition-colors">
-                    {link.name}
+          <div className="ml-auto grid gap-8 sm:grid-cols-2">
+            <div>
+              <h4 className="font-semibold text-foreground mb-4 md:text-right">{t.footer.company}</h4>
+              <ul className="space-y-2 md:text-right">
+                {footerLinks.company.map((link) => (
+                  <li key={link.name}>
+                    <a href={link.href} className="text-muted-foreground hover:text-foreground transition-colors">
+                      {link.name}
+                    </a>
+                  </li>
+                ))}
+                <li>
+                  <a href="mailto:info@local.pro" className="text-muted-foreground hover:text-foreground transition-colors">
+                    info@local.pro
                   </a>
                 </li>
-              ))}
-            </ul>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="font-semibold text-foreground mb-4 md:text-right">Материалы</h4>
+              <ul className="space-y-2 md:text-right">
+                {footerLinks.materials.map((link) => (
+                  <li key={link.name}>
+                    <a href={link.href} className="text-muted-foreground hover:text-foreground transition-colors">
+                      {link.name}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
 
