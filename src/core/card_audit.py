@@ -366,6 +366,95 @@ def _table_exists(cursor, table_name: str) -> bool:
     return bool((row or {}).get("exists"))
 
 
+def _load_preferred_review_metrics(
+    cursor: Any,
+    business_id: str,
+    *,
+    last_parse_at: Any = None,
+    expected_reviews_count: int = 0,
+    preview_limit: int = 200,
+) -> Dict[str, Any]:
+    result: Dict[str, Any] = {
+        "source": None,
+        "total_count": 0,
+        "unanswered_count": 0,
+        "refreshed_count": 0,
+        "is_reliable": False,
+        "rows": [],
+    }
+    if not _table_exists(cursor, "externalbusinessreviews"):
+        return result
+
+    cursor.execute(
+        """
+        WITH preferred_source AS (
+            SELECT CASE
+                WHEN EXISTS (
+                    SELECT 1
+                    FROM externalbusinessreviews r2
+                    WHERE r2.business_id = %s
+                      AND r2.source = 'yandex_maps'
+                ) THEN 'yandex_maps'
+                ELSE 'yandex_business'
+            END AS source
+        )
+        SELECT
+            ps.source AS source,
+            COUNT(*) AS total_count,
+            SUM(CASE WHEN COALESCE(TRIM(r.response_text), '') = '' THEN 1 ELSE 0 END) AS unanswered_count
+        FROM externalbusinessreviews r, preferred_source ps
+        WHERE r.business_id = %s
+          AND r.source = ps.source
+        GROUP BY ps.source
+        """,
+        (business_id, business_id),
+    )
+    metrics_row = _to_dict(cursor, cursor.fetchone()) or {}
+    if not metrics_row:
+        return result
+
+    result["source"] = metrics_row.get("source")
+    result["total_count"] = int(metrics_row.get("total_count") or 0)
+    result["unanswered_count"] = int(metrics_row.get("unanswered_count") or 0)
+    parse_dt = _coerce_dt(last_parse_at)
+    expected_total = int(expected_reviews_count or 0)
+    if result["source"] and parse_dt is not None:
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS cnt
+            FROM externalbusinessreviews
+            WHERE business_id = %s
+              AND source = %s
+              AND updated_at >= %s - INTERVAL '10 minutes'
+            """,
+            (business_id, result["source"], parse_dt),
+        )
+        result["refreshed_count"] = int((_to_dict(cursor, cursor.fetchone()) or {}).get("cnt") or 0)
+    if result["total_count"] > 0:
+        result["is_reliable"] = True
+    if expected_total > 0 and result["refreshed_count"] > 0:
+        minimum_fresh_rows = max(25, int(expected_total * 0.7))
+        if result["refreshed_count"] < minimum_fresh_rows:
+            result["is_reliable"] = False
+
+    cursor.execute(
+        """
+        WITH preferred_source AS (
+            SELECT %s AS source
+        )
+        SELECT r.text AS review_text, r.response_text, r.rating, r.published_at, r.source
+        FROM externalbusinessreviews r, preferred_source ps
+        WHERE r.business_id = %s
+          AND r.source = ps.source
+        ORDER BY published_at DESC NULLS LAST, created_at DESC
+        LIMIT %s
+        """,
+        (result["source"], business_id, int(preview_limit or 200)),
+    )
+    result["rows"] = [_to_dict(cursor, row) or {} for row in (cursor.fetchall() or [])]
+    return result
+
+
 def _extract_numeric(value: Any) -> Optional[float]:
     if value is None:
         return None
@@ -528,11 +617,68 @@ BEAUTY_INTENT_MARKERS = (
     (("massage", "массаж"), "массаж"),
 )
 
+MEDICAL_INTENT_MARKERS = (
+    (("дермат", "бородав", "папиллом", "кондилом", "невус", "родинк"), "дерматолог"),
+    (("деструкц", "удален", "удаление", "лазерная деструкция", "химическая деструкция"), "удаление бородавок и папиллом"),
+    (("космет", "контурная пластика", "аппликационная анестезия"), "косметология"),
+    (("анализ", "днк", "трепонем", "соскоб"), "дерматологические анализы"),
+    (("стомат", "зуб", "ортодонт", "имплант"), "стоматология"),
+    (("гинек",), "гинеколог"),
+    (("гастроэнтеролог",), "гастроэнтеролог"),
+    (("кардиолог", "экг"), "кардиолог"),
+    (("отоларинголог", "лор"), "отоларинголог"),
+    (("офтальмолог",), "офтальмолог"),
+    (("проктолог",), "проктолог"),
+    (("психиатр",), "психиатр"),
+    (("терапевт",), "терапевт"),
+    (("уролог",), "уролог"),
+    (("хирург",), "хирург"),
+    (("эндокринолог",), "эндокринолог"),
+    (("ревматолог",), "ревматолог"),
+    (("флеболог",), "флеболог"),
+    (("пульмонолог",), "пульмонолог"),
+    (("онкомаммолог",), "онкомаммолог"),
+    (("онколог",), "онколог"),
+    (("невролог",), "невролог"),
+    (("узи", "ультразвук"), "УЗИ"),
+)
+
 
 def _derive_beauty_focus_terms(service_names: List[str], overview_text: str, limit: int = 3) -> List[str]:
     haystack = " ".join([str(item or "") for item in service_names] + [str(overview_text or "")]).lower()
     found: List[str] = []
     for markers, label in BEAUTY_INTENT_MARKERS:
+        if any(marker in haystack for marker in markers):
+            found.append(label)
+    if not found:
+        return []
+    return _dedupe_text_list(found, limit=limit)
+
+
+def _derive_medical_focus_terms(service_names: List[str], overview_text: str, limit: int = 4) -> List[str]:
+    normalized_services = [str(item or "").strip().lower() for item in service_names if str(item or "").strip()]
+    haystack = " ".join(normalized_services + [str(overview_text or "")]).lower()
+    found: List[str] = []
+    specialty_terms: List[str] = []
+    for service_name in normalized_services:
+        for markers, label in MEDICAL_INTENT_MARKERS:
+            if any(marker in service_name for marker in markers):
+                specialty_terms.append(label)
+                break
+    for markers, label in MEDICAL_INTENT_MARKERS:
+        if label in specialty_terms:
+            continue
+        if any(marker in haystack for marker in markers):
+            specialty_terms.append(label)
+    specialty_terms = _dedupe_text_list(specialty_terms, limit=20)
+    consultation_rows = sum(1 for item in normalized_services if "консультац" in item and "врач" in item)
+    if consultation_rows >= 6 or len(specialty_terms) >= 5:
+        found.extend(["медицинский центр", "консультации врачей"])
+        for label in specialty_terms:
+            if label not in found:
+                found.append(label)
+        return _dedupe_text_list(found, limit=limit)
+    for markers, label in MEDICAL_INTENT_MARKERS:
         if any(marker in haystack for marker in markers):
             found.append(label)
     if not found:
@@ -806,6 +952,71 @@ def _dedupe_text_list(items: List[str], limit: int = 6) -> List[str]:
     return result
 
 
+RU_LOCATION_PREPOSITIONAL = {
+    "москва": "Москве",
+    "санкт-петербург": "Санкт-Петербурге",
+    "спб": "Санкт-Петербурге",
+    "великий новгород": "Великом Новгороде",
+    "нижний новгород": "Нижнем Новгороде",
+    "тверь": "Твери",
+    "псков": "Пскове",
+    "вологда": "Вологде",
+    "петрозаводск": "Петрозаводске",
+    "пушкин": "Пушкине",
+    "колпино": "Колпине",
+    "кудрово": "Кудрово",
+    "мурино": "Мурино",
+    "ленинградская область": "Ленинградской области",
+    "новгородская область": "Новгородской области",
+    "тверская область": "Тверской области",
+    "вологодская область": "Вологодской области",
+    "псковская область": "Псковской области",
+    "республика карелия": "Республике Карелия",
+}
+
+
+def _format_ru_location_prepositional(city: str) -> str:
+    value = str(city or "").strip()
+    if not value:
+        return "вашем городе"
+    key = value.lower().replace("ё", "е")
+    mapped = RU_LOCATION_PREPOSITIONAL.get(key)
+    if mapped:
+        return mapped
+    if value.endswith("а"):
+        return f"{value[:-1]}е"
+    if value.endswith("я"):
+        return f"{value[:-1]}е"
+    if value.endswith("ь"):
+        return f"{value[:-1]}и"
+    if value.endswith("й"):
+        return f"{value[:-1]}ом"
+    if value.endswith("ск") or value.endswith("град") or value.endswith("бург"):
+        return f"{value}е"
+    return value
+
+
+def _normalize_generated_location_phrases(text: str, city: str) -> str:
+    value = str(text or "").strip()
+    raw_city = str(city or "").strip()
+    if not value or not raw_city:
+        return value
+    city_in = _format_ru_location_prepositional(raw_city)
+    if city_in == raw_city:
+        return value
+    replacements = {
+        f"в {raw_city}.": f"в {city_in}.",
+        f"в {raw_city}...": f"в {city_in}...",
+        f"в {raw_city}!": f"в {city_in}!",
+        f"в {raw_city}?": f"в {city_in}?",
+        f"в {raw_city},": f"в {city_in},",
+    }
+    result = value
+    for source, target in replacements.items():
+        result = result.replace(source, target)
+    return result
+
+
 def _detect_audit_profile(business_type: Any, business_name: Any, overview: Any) -> str:
     if _is_hospitality_business(business_type, business_name, overview):
         return "hospitality"
@@ -899,6 +1110,7 @@ def _build_reasoning_fields(
     top_negative: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     location = city or "вашем городе"
+    location_in = _format_ru_location_prepositional(city)
     positive_labels = [_theme_label(item) for item in (top_positive or [])]
     negative_labels = [_theme_label(item) for item in (top_negative or [])]
 
@@ -914,7 +1126,7 @@ def _build_reasoning_fields(
         ).lower()
         intent_modifiers = _extract_hospitality_intent_modifiers(hospitality_context)
         best_fit = [
-            f"Гости, которые ищут спокойное размещение в {location}",
+            f"Гости, которые ищут спокойное размещение в {location_in}",
             "Семьи и пары, которым важны простор, бассейн и понятный формат отдыха",
             "Путешественники, которым удобно передвигаться на машине",
         ]
@@ -947,21 +1159,34 @@ def _build_reasoning_fields(
             "Добавить trust-triggers: free Wi-Fi, breakfast, airport transfer, 24/7 reception, best price guarantee — если они реально доступны",
         ]
     elif audit_profile == "medical":
+        medical_focus_terms = _derive_medical_focus_terms(service_names or [], overview_text)
+        focus_text = ", ".join(medical_focus_terms[:3]) if medical_focus_terms else "ключевые медицинские направления"
         best_fit = [
-            f"Пациенты, которые ищут конкретную процедуру или врача в {location}",
+            f"Пациенты, которые ищут конкретную процедуру или врача в {location_in}",
             "Люди, которым важны понятные показания, формат услуги и доверие к специалисту",
             "Клиенты, которые сравнивают не только цену, но и опыт, оборудование и профиль врача",
         ]
-        weak_fit = [
-            "Аудитория, которая не понимает, чем отличается приём, процедура и диагностика",
-            "Холодный трафик, если карточка не раскрывает направления и специализацию",
-        ]
-        intents = [
-            f"невролог {location}",
-            f"диагностика {location}",
-            f"лечение и консультация {location}",
-            f"процедуры и восстановление {location}",
-        ]
+        if medical_focus_terms:
+            best_fit.append(f"Те, кто уже ищет: {focus_text}")
+        if medical_focus_terms:
+            weak_fit = [
+                f"Клиенты, которым по карточке неясно, что это: {focus_text}",
+                "Холодный трафик, если карточка не раскрывает направления и специализацию",
+            ]
+        else:
+            weak_fit = [
+                "Клиенты, которым по карточке неясно, какие медицинские направления здесь есть",
+                "Холодный трафик, если карточка не раскрывает направления и специализацию",
+            ]
+        if medical_focus_terms:
+            intents = [f"{term} {location}" for term in medical_focus_terms[:4]]
+        else:
+            intents = [
+                f"медицинский центр {location}",
+                f"консультация врача {location}",
+                f"диагностика и процедуры {location}",
+                f"клиника {location}",
+            ]
         photo_shots = [
             "Вход, ресепшен и навигация по клинике",
             "Кабинеты, оборудование и рабочие зоны без визуального шума",
@@ -969,7 +1194,7 @@ def _build_reasoning_fields(
             "Фото, которые помогают понять уровень сервиса и доверия",
         ]
         positioning_focus = [
-            "Сделать акцент на специализации, показаниях и понятном маршруте пациента",
+            f"Сделать акцент на направлениях: {focus_text}",
             "Разделить консультации, диагностику и процедуры как отдельные входы в спрос",
             "Снизить тревожность через ясное описание формата визита и ожиданий",
         ]
@@ -977,7 +1202,7 @@ def _build_reasoning_fields(
         beauty_focus_terms = _derive_beauty_focus_terms(service_names or [], overview_text)
         focus_text = ", ".join(beauty_focus_terms[:3]) if beauty_focus_terms else "ключевые направления"
         best_fit = [
-            f"Клиенты, которые ищут конкретную beauty-услугу рядом в {location}",
+            f"Клиенты, которые ищут конкретную beauty-услугу рядом в {location_in}",
             "Аудитория, которой важны понятные цены, фото результата и удобная запись",
             "Повторные клиенты, если карточка регулярно показывает новинки и работы",
         ]
@@ -1038,7 +1263,7 @@ def _build_reasoning_fields(
         ]
     elif audit_profile == "wellness":
         best_fit = [
-            f"Клиенты, которые ищут восстановление, релакс и wellness-процедуры в {location}",
+            f"Клиенты, которые ищут восстановление, релакс и wellness-процедуры в {location_in}",
             "Люди, которым важно сочетание процедур, атмосферы и доверия",
             "Аудитория, которая выбирает между spa, массажем и оздоровительными программами",
         ]
@@ -1064,7 +1289,7 @@ def _build_reasoning_fields(
         ]
     elif audit_profile == "food":
         best_fit = [
-            f"Гости, которые ищут конкретный формат заведения в {location}",
+            f"Гости, которые ищут конкретный формат заведения в {location_in}",
             "Трафик по сценариям: завтрак, ужин, доставка, бизнес-ланч, speciality",
             "Пользователи, которым важны фото, меню и быстрый сигнал доверия",
         ]
@@ -1090,7 +1315,7 @@ def _build_reasoning_fields(
         ]
     elif audit_profile == "fitness":
         best_fit = [
-            f"Люди, которые ищут конкретный формат тренировок в {location}",
+            f"Люди, которые ищут конкретный формат тренировок в {location_in}",
             "Клиенты, которым важны расписание, оборудование и понятная точка входа",
             "Пользователи, которые сравнивают групповые и персональные форматы",
         ]
@@ -1116,7 +1341,7 @@ def _build_reasoning_fields(
         ]
     else:
         best_fit = [
-            f"Люди, которые ищут конкретную услугу рядом в {location}",
+            f"Люди, которые ищут конкретную услугу рядом в {location_in}",
             "Пользователи, которым важны доверие, понятный прайс и удобный контакт",
         ]
         weak_fit = [
@@ -1234,6 +1459,7 @@ def _extract_lead_import_payload(lead: Dict[str, Any]) -> Dict[str, Any]:
             "logo_url": None,
             "photos": [],
             "services_preview": [],
+            "services_profile_names": [],
             "services_total_count": 0,
             "services_with_price_count": 0,
             "reviews_preview": [],
@@ -1242,6 +1468,11 @@ def _extract_lead_import_payload(lead: Dict[str, Any]) -> Dict[str, Any]:
             "social_links": [],
         }
     logo_url = _normalize_media_url(payload.get("logo_url")) or None
+    lead_city = str(lead.get("city") or "").strip()
+    if not lead_city:
+        lead_address = str(lead.get("address") or "").strip()
+        if lead_address:
+            lead_city = str(lead_address.split(",", 1)[0] or "").strip()
     photos_raw = payload.get("photos")
     photos: List[str] = []
     if isinstance(photos_raw, list):
@@ -1258,6 +1489,12 @@ def _extract_lead_import_payload(lead: Dict[str, Any]) -> Dict[str, Any]:
     full_source = full_services_payload if isinstance(full_services_payload, list) else preview_source
     services_total_count = _extract_int(payload.get("services_total_count") or 0)
     services_with_price_count = _extract_int(payload.get("services_with_price_count") or 0)
+    services_preview_limited = (
+        not isinstance(full_services_payload, list)
+        and isinstance(preview_source, list)
+        and len(preview_source) >= 30
+        and services_total_count <= len(preview_source)
+    )
 
     if services_total_count <= 0 and isinstance(full_source, list):
         for item in full_source:
@@ -1273,6 +1510,23 @@ def _extract_lead_import_payload(lead: Dict[str, Any]) -> Dict[str, Any]:
             if str(item.get("price") or "").strip():
                 services_with_price_count += 1
 
+    services_profile_names: List[str] = []
+    if isinstance(full_source, list):
+        for item in full_source:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("title") or item.get("name") or "").strip()
+            if not name:
+                continue
+            description = str(item.get("description") or "").strip()
+            if _is_editorial_service_entry(name, description):
+                continue
+            description_value = _normalize_generated_location_phrases(description, lead_city) or None
+            price = str(item.get("price") or "").strip()
+            category = str(item.get("category") or "").strip()
+            profile_name = " ".join(part for part in [name, category] if part).strip()
+            if profile_name:
+                services_profile_names.append(profile_name)
     if isinstance(preview_source, list):
         for item in preview_source:
             if not isinstance(item, dict):
@@ -1283,7 +1537,7 @@ def _extract_lead_import_payload(lead: Dict[str, Any]) -> Dict[str, Any]:
             description = str(item.get("description") or "").strip()
             if _is_editorial_service_entry(name, description):
                 continue
-            description_value = description or None
+            description_value = _normalize_generated_location_phrases(description, lead_city) or None
             price = str(item.get("price") or "").strip()
             category = str(item.get("category") or "").strip()
             note_parts = []
@@ -1327,8 +1581,10 @@ def _extract_lead_import_payload(lead: Dict[str, Any]) -> Dict[str, Any]:
         "logo_url": logo_url,
         "photos": photos,
         "services_preview": services_preview,
+        "services_profile_names": _dedupe_text_list(services_profile_names, limit=80),
         "services_total_count": services_total_count,
         "services_with_price_count": services_with_price_count,
+        "services_preview_limited": services_preview_limited,
         "reviews_preview": reviews_preview,
         "news_preview": [],
         "reviews_count": _extract_numeric(payload.get("reviews_count")),
@@ -1629,7 +1885,7 @@ def _resolve_lead_business_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
                     "current_name": name,
                     "suggested_name": name,
                     "note": " • ".join(note_parts) if note_parts else "Парсинг карточки",
-                    "description": description or None,
+                    "description": _normalize_generated_location_phrases(description, lead_city) or None,
                 }
             )
 
@@ -1640,52 +1896,35 @@ def _resolve_lead_business_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
                 priced_services = len([row for row in services_preview if row.get("_price_present")])
 
         reviews_preview: List[Dict[str, Any]] = []
-        reviews_count_from_table: Optional[int] = None
-        if _table_exists(cursor, "externalbusinessreviews"):
-            cursor.execute(
-                """
-                WITH preferred_source AS (
-                    SELECT CASE
-                        WHEN EXISTS (
-                            SELECT 1
-                            FROM externalbusinessreviews r2
-                            WHERE r2.business_id = %s
-                              AND r2.source = 'yandex_maps'
-                        ) THEN 'yandex_maps'
-                        ELSE 'yandex_business'
-                    END AS source
+        reviews_count_value = int(metrics_card.get("reviews_count") or business.get("yandex_reviews_total") or 0)
+        review_metrics = _load_preferred_review_metrics(
+            cursor,
+            business_id,
+            last_parse_at=latest_parse.get("updated_at"),
+            expected_reviews_count=reviews_count_value,
+        )
+        reviews_count_from_table = int(review_metrics.get("total_count") or 0)
+        unanswered_reviews_count = int(metrics_card.get("unanswered_reviews_count") or latest_card.get("unanswered_reviews_count") or 0)
+        if review_metrics.get("is_reliable"):
+            unanswered_reviews_count = int(review_metrics.get("unanswered_count") or 0)
+        for review_row in review_metrics.get("rows") or []:
+            review_text = str(review_row.get("review_text") or "").strip()
+            if not review_text:
+                continue
+            response_text = str(review_row.get("response_text") or "").strip()
+            if _is_placeholder_review_entry(review_text, response_text):
+                continue
+            rating = review_row.get("rating")
+            rating_suffix = ""
+            if rating is not None and str(rating).strip() != "":
+                rating_suffix = f" (оценка: {rating})"
+            if len(reviews_preview) < 6:
+                reviews_preview.append(
+                    {
+                        "review": f"{review_text}{rating_suffix}",
+                        "reply_preview": response_text or "Ответа пока нет",
+                    }
                 )
-                SELECT text AS review_text, response_text, rating
-                FROM externalbusinessreviews r, preferred_source ps
-                WHERE r.business_id = %s
-                  AND r.source = ps.source
-                ORDER BY published_at DESC NULLS LAST, created_at DESC
-                LIMIT 200
-                """,
-                (business_id, business_id),
-            )
-            valid_reviews_count = 0
-            for row in cursor.fetchall() or []:
-                review_row = _to_dict(cursor, row) or {}
-                review_text = str(review_row.get("review_text") or "").strip()
-                if not review_text:
-                    continue
-                response_text = str(review_row.get("response_text") or "").strip()
-                if _is_placeholder_review_entry(review_text, response_text):
-                    continue
-                valid_reviews_count += 1
-                rating = review_row.get("rating")
-                rating_suffix = ""
-                if rating is not None and str(rating).strip() != "":
-                    rating_suffix = f" (оценка: {rating})"
-                if len(reviews_preview) < 6:
-                    reviews_preview.append(
-                        {
-                            "review": f"{review_text}{rating_suffix}",
-                            "reply_preview": response_text or "Ответа пока нет",
-                        }
-                    )
-            reviews_count_from_table = valid_reviews_count
 
         news_preview: List[Dict[str, Any]] = []
         if isinstance(news_payload, list):
@@ -1703,12 +1942,8 @@ def _resolve_lead_business_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         if active_services > 0 and not services_preview:
             active_services = 0
             priced_services = 0
-        reviews_count_value = int(metrics_card.get("reviews_count") or business.get("yandex_reviews_total") or 0)
-        if reviews_count_from_table is not None:
-            if reviews_count_from_table <= 0:
-                reviews_count_value = 0
-            elif reviews_count_value <= 0:
-                reviews_count_value = reviews_count_from_table
+        if review_metrics.get("is_reliable") and reviews_count_from_table > 0:
+            reviews_count_value = reviews_count_from_table
 
         return {
             "business": business,
@@ -1716,7 +1951,7 @@ def _resolve_lead_business_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             "priced_services_count": priced_services,
             "rating": _extract_numeric(metrics_card.get("rating")) if metrics_card.get("rating") is not None else _extract_numeric(business.get("yandex_rating")),
             "reviews_count": reviews_count_value,
-            "unanswered_reviews_count": int(metrics_card.get("unanswered_reviews_count") or latest_card.get("unanswered_reviews_count") or 0),
+            "unanswered_reviews_count": unanswered_reviews_count,
             "photos_count": len(photos_payload) if isinstance(photos_payload, list) else 0,
             "photo_urls": photo_urls,
             "news_count": len(news_payload) if isinstance(news_payload, list) else 0,
@@ -2406,6 +2641,7 @@ def _build_hospitality_issue_blocks(
     expectation_mismatch: bool,
 ) -> List[Dict[str, Any]]:
     issue_blocks: List[Dict[str, Any]] = []
+    city_in = _format_ru_location_prepositional(city)
 
     if not has_description:
         issue_blocks.append(
@@ -2415,7 +2651,7 @@ def _build_hospitality_issue_blocks(
                 "priority": "high",
                 "title": "Описание не продаёт объект под поисковое намерение",
                 "problem": "Карточка не объясняет, что это за формат отдыха и кому он подходит.",
-                "evidence": f"У объекта {business_name} нет сильного описания под сценарии поиска по {city}.",
+                "evidence": f"В карточке объекта {business_name} не описаны формат проживания, локация и сценарии выбора гостя в {city_in}.",
                 "impact": "Падает конверсия из просмотра карточки в клик и бронь.",
                 "fix": "Добавить описание 500–1000 символов: формат объекта, nearby landmarks, сильные стороны, локация, кому подходит и какие ожидания важно выставить заранее.",
             }
@@ -2526,7 +2762,7 @@ def _build_hospitality_issue_blocks(
             "priority": "medium",
             "title": "Карточка недоиспользует landmark и nearby-intent запросы",
             "problem": "Отель можно находить не только по названию, но и по сценариям рядом с ключевыми точками района.",
-            "evidence": f"Для hospitality в {city} важны nearby-intent формулировки: old city / landmark / airport / family stay / budget stay.",
+            "evidence": f"Для hospitality в {city_in} важны nearby-intent формулировки: old city / landmark / airport / family stay / budget stay.",
             "impact": "Карточка недополучает трафик из туристических сценариев поиска и слабее конкурирует с более конкретно упакованными объектами.",
             "fix": "Добавить в описание, posts и ответы на отзывы nearby-intent сценарии: near landmark, old city, airport convenience, family stay, quiet stay — только там, где это соответствует фактической локации объекта.",
         }
@@ -2572,19 +2808,33 @@ def _build_medical_issue_blocks(
     photos_count: int,
     reviews_count: int,
     unanswered_reviews_count: int,
+    focus_terms: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     issue_blocks: List[Dict[str, Any]] = []
+    city_in = _format_ru_location_prepositional(city)
+    focus_text = ", ".join((focus_terms or [])[:4])
     if not has_description:
+        evidence = (
+            f"В прайсе {services_count} услуг с ценами, включая {focus_text}; "
+            f"в описании эти направления не собраны в понятные сценарии поиска в {city_in}."
+            if focus_text and services_count > 0
+            else f"В карточке {business_name} не описано, по каким медицинским задачам и специалистам сюда обращаться в {city_in}."
+        )
+        impact = (
+            f"Пациент с запросом по конкретному врачу или услуге не видит быстрый ответ и сравнивает другие клиники."
+            if not focus_text
+            else f"Пациент с запросом вроде {focus_text.split(', ')[0]} не видит быстрый ответ и сравнивает другие клиники."
+        )
         issue_blocks.append(
             {
                 "id": "positioning_description_gap",
                 "section": "positioning",
                 "priority": "high",
-                "title": "Описание карточки не объясняет, как и с чем сюда обращаться",
-                "problem": "Карточка не раскрывает специализацию, показания и формат приёма.",
-                "evidence": f"У {business_name} нет сильного описания под медицинские сценарии поиска в {city}.",
-                "impact": "Пациенту сложнее понять, подходит ли клиника под его запрос, и он уходит сравнивать другие варианты.",
-                "fix": "Добавить описание: специализация, виды помощи, как проходит визит, кому подходит центр и какие ожидания нужно выставить заранее.",
+                "title": "Описание не собирает направления клиники в понятный выбор",
+                "problem": "Прайс показывает разные медицинские направления, но описание не объясняет пациенту, какой врач и какой формат приёма ему нужен.",
+                "evidence": evidence,
+                "impact": impact,
+                "fix": "Переписать описание блоками: основные специалисты, первичный и повторный приём, диагностика, кому подходит центр и как записаться.",
             }
         )
     if services_count <= 0:
@@ -2680,6 +2930,7 @@ def _build_beauty_issue_blocks(
     focus_terms: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     issue_blocks: List[Dict[str, Any]] = []
+    city_in = _format_ru_location_prepositional(city)
     focus_text = ", ".join((focus_terms or [])[:3]) or "ключевые направления"
     if not has_description:
         issue_blocks.append(
@@ -2689,7 +2940,7 @@ def _build_beauty_issue_blocks(
                 "priority": "high",
                 "title": "Описание карточки не продаёт салон под реальный спрос",
                 "problem": f"Карточка не объясняет, какие направления здесь ключевые ({focus_text}) и почему клиенту стоит выбрать именно этот бизнес.",
-                "evidence": f"У {business_name} нет сильного beauty-описания под поиск в {city}.",
+                "evidence": f"В карточке {business_name} видны направления: {focus_text}; описание не превращает их в понятные причины записаться в {city_in}.",
                 "impact": "Падает конверсия из просмотра в запись и карточка хуже отрабатывает локальные запросы.",
                 "fix": f"Добавить описание: главные направления ({focus_text}), для кого салон, ключевые услуги, чем отличаются мастера и в чём удобство записи.",
             }
@@ -2785,6 +3036,7 @@ def _build_wellness_issue_blocks(
     unanswered_reviews_count: int,
 ) -> List[Dict[str, Any]]:
     issue_blocks: List[Dict[str, Any]] = []
+    city_in = _format_ru_location_prepositional(city)
     if not has_description:
         issue_blocks.append(
             {
@@ -2793,7 +3045,7 @@ def _build_wellness_issue_blocks(
                 "priority": "high",
                 "title": "Описание карточки не продаёт центр под поисковое намерение",
                 "problem": "Карточка не объясняет, это spa, массажный центр, wellness space или восстановительный формат.",
-                "evidence": f"У {business_name} нет сильного SEO-описания под сценарии поиска в {city}.",
+                "evidence": f"В карточке {business_name} не описаны ключевые процедуры, формат визита и кому центр подходит в {city_in}.",
                 "impact": "Точка недобирает локальный трафик и хуже конвертирует в запись.",
                 "fix": "Добавить описание 500–1000 символов: ключевые процедуры, формат, оборудование, кому подходит и в чём УТП центра.",
             }
@@ -2875,6 +3127,7 @@ def _build_fashion_issue_blocks(
     reviews_count: int,
 ) -> List[Dict[str, Any]]:
     issue_blocks: List[Dict[str, Any]] = []
+    city_in = _format_ru_location_prepositional(city)
     if not has_description:
         issue_blocks.append(
             {
@@ -2883,7 +3136,7 @@ def _build_fashion_issue_blocks(
                 "priority": "high",
                 "title": "Описание карточки не продаёт студию под поисковое намерение",
                 "problem": "Карточка не объясняет, это bridal designer, custom dresses studio или atelier под индивидуальный пошив.",
-                "evidence": f"У {business_name} нет сильного fashion-описания под сценарии поиска в {city}.",
+                "evidence": f"В карточке {business_name} не описаны направления пошива, формат примерки и какие заказы студия берёт в {city_in}.",
                 "impact": "Карточка хуже ранжируется по designer и bridal запросам и слабее конвертирует в обращение.",
                 "fix": "Добавить описание с ключами custom dresses, bridal wear, stitching, designer studio, Lahore и объяснить, для кого студия подходит лучше всего.",
             }
@@ -2955,6 +3208,7 @@ def _build_food_issue_blocks(
     unanswered_reviews_count: int,
 ) -> List[Dict[str, Any]]:
     issue_blocks: List[Dict[str, Any]] = []
+    city_in = _format_ru_location_prepositional(city)
     if not has_description:
         issue_blocks.append(
             {
@@ -2963,7 +3217,7 @@ def _build_food_issue_blocks(
                 "priority": "high",
                 "title": "Описание карточки не продаёт формат заведения",
                 "problem": "Карточка не объясняет кухню, сценарий визита и зачем сюда идти именно в этом районе.",
-                "evidence": f"У {business_name} нет сильного food-описания под поиск в {city}.",
+                "evidence": f"В карточке {business_name} не описаны кухня, хиты меню, атмосфера и поводы прийти в {city_in}.",
                 "impact": "Падает конверсия из просмотра карточки в визит, заказ или бронь.",
                 "fix": "Добавить описание: формат заведения, хиты меню, атмосфера, сценарии визита и локальные поводы прийти.",
             }
@@ -3048,6 +3302,7 @@ def _build_fitness_issue_blocks(
     unanswered_reviews_count: int,
 ) -> List[Dict[str, Any]]:
     issue_blocks: List[Dict[str, Any]] = []
+    city_in = _format_ru_location_prepositional(city)
     if not has_description:
         issue_blocks.append(
             {
@@ -3056,7 +3311,7 @@ def _build_fitness_issue_blocks(
                 "priority": "high",
                 "title": "Описание карточки не продаёт формат тренировок",
                 "problem": "Карточка не объясняет уровень, формат занятий, оборудование и сценарий входа для нового клиента.",
-                "evidence": f"У {business_name} нет сильного fitness-описания под спрос в {city}.",
+                "evidence": f"В карточке {business_name} не описаны форматы тренировок, уровень входа и как начать заниматься в {city_in}.",
                 "impact": "Падает конверсия из просмотра в пробную запись и абонемент.",
                 "fix": "Добавить описание: групповой/персональный формат, для кого студия, что по уровню, оборудованию и как начать заниматься.",
             }
@@ -3141,6 +3396,7 @@ def _build_default_local_business_issue_blocks(
     unanswered_reviews_count: int,
 ) -> List[Dict[str, Any]]:
     issue_blocks: List[Dict[str, Any]] = []
+    city_in = _format_ru_location_prepositional(city)
     if not has_description:
         issue_blocks.append(
             {
@@ -3149,7 +3405,7 @@ def _build_default_local_business_issue_blocks(
                 "priority": "high",
                 "title": "Описание карточки не объясняет ценность бизнеса",
                 "problem": "Карточка не даёт понять, что это за бизнес, для кого он и с чем сюда обращаться.",
-                "evidence": f"У {business_name} нет сильного описания под локальный спрос в {city}.",
+                "evidence": f"В карточке {business_name} не описано, какие задачи закрывает бизнес, для кого он подходит и почему его стоит выбрать в {city_in}.",
                 "impact": "Падает доверие и карточка хуже конвертирует в обращение.",
                 "fix": "Добавить описание: кто вы, какие задачи решаете, в чём сильные стороны и что клиент получает на выходе.",
             }
@@ -3244,15 +3500,22 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
     lead_import_payload = _extract_lead_import_payload(lead)
     business = snapshot.get("business") or {}
     imported_services_preview = lead_import_payload.get("services_preview") if isinstance(lead_import_payload.get("services_preview"), list) else []
+    imported_services_profile_names = lead_import_payload.get("services_profile_names") if isinstance(lead_import_payload.get("services_profile_names"), list) else []
     snapshot_services_preview = snapshot.get("services_preview") if isinstance(snapshot.get("services_preview"), list) else []
     profile_overview = {"category": lead.get("category")}
     profile_service_names: List[str] = []
-    for item in snapshot_services_preview[:20]:
+    for item in snapshot_services_preview[:60]:
         if isinstance(item, dict):
-            profile_service_names.append(str(item.get("current_name") or item.get("suggested_name") or "").strip())
-    for item in imported_services_preview[:20]:
+            name = str(item.get("current_name") or item.get("suggested_name") or "").strip()
+            category = str(item.get("category") or "").strip()
+            profile_service_names.append(" ".join(part for part in [name, category] if part))
+    for item in imported_services_profile_names[:80]:
+        profile_service_names.append(str(item or "").strip())
+    for item in imported_services_preview[:60]:
         if isinstance(item, dict):
-            profile_service_names.append(str(item.get("current_name") or item.get("suggested_name") or item.get("name") or "").strip())
+            name = str(item.get("current_name") or item.get("suggested_name") or item.get("name") or "").strip()
+            category = str(item.get("category") or "").strip()
+            profile_service_names.append(" ".join(part for part in [name, category] if part))
     profile_service_names = [item for item in profile_service_names if item]
     beauty_focus_terms = _derive_beauty_focus_terms(profile_service_names, str(lead.get("description") or ""))
     if profile_service_names:
@@ -3286,6 +3549,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
 
     imported_services_total_count = _extract_int(lead_import_payload.get("services_total_count") or len(imported_services_preview) or 0)
     imported_services_with_price_count = _extract_int(lead_import_payload.get("services_with_price_count") or 0)
+    services_preview_limited = bool(lead_import_payload.get("services_preview_limited"))
     snapshot_services_count = _extract_int(snapshot.get("services_count") or 0)
     snapshot_priced_services_count = _extract_int(snapshot.get("priced_services_count") or 0)
     services_count = max(snapshot_services_count, imported_services_total_count)
@@ -3404,15 +3668,17 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             expectation_mismatch=bool(hospitality_signals.get("expectation_mismatch")),
         )
     elif audit_profile == "medical":
+        medical_focus_terms = _derive_medical_focus_terms(profile_service_names, str(lead.get("description") or ""))
         issue_blocks = _build_medical_issue_blocks(
             business_name=lead_name,
             city=city,
-            has_description=bool(snapshot.get("description_present")),
+            has_description=bool(snapshot.get("description_present") or lead.get("description")),
             services_count=services_count,
             priced_services_count=priced_services_count,
             photos_count=photos_count,
             reviews_count=reviews_count,
             unanswered_reviews_count=unanswered_reviews_count,
+            focus_terms=medical_focus_terms,
         )
     elif audit_profile == "beauty":
         issue_blocks = _build_beauty_issue_blocks(
@@ -3618,7 +3884,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
     elif audit_profile == "medical":
         summary_text = (
             f"{health_label}. Карточка уже может собирать доверие через отзывы, но пока недостаточно хорошо объясняет специализацию, маршрут пациента и ключевые услуги. "
-            f"Главные зоны роста сейчас — сильное описание, структура медицинских услуг и визуальный слой доверия."
+            f"Главные зоны роста сейчас — понятная специализация, структура медицинских услуг и визуальный слой доверия."
         )
     elif audit_profile == "beauty":
         summary_text = (
@@ -3633,12 +3899,12 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
     elif audit_profile == "wellness":
         summary_text = (
             f"{health_label}. Карточка уже может опираться на доверие из отзывов, но пока недорабатывает в локальном SEO и конверсии. "
-            f"Главные зоны роста сейчас — сильное описание, услуги как SEO-единицы и конверсионные фото пространства и процедур."
+            f"Главные зоны роста сейчас — понятные процедуры, услуги как SEO-единицы и конверсионные фото пространства."
         )
     elif audit_profile == "food":
         summary_text = (
             f"{health_label}. Карточка уже может приводить гостей из локального поиска, но пока слабо продаёт формат заведения, меню и повод прийти именно сейчас. "
-            f"Главные зоны роста сейчас — сильное описание, хиты меню как SEO-единицы и визуально сильные фото еды и атмосферы."
+            f"Главные зоны роста сейчас — понятный формат заведения, хиты меню как SEO-единицы и фото еды и атмосферы."
         )
     elif audit_profile == "fitness":
         summary_text = (
@@ -3685,7 +3951,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         )
     elif audit_profile == "medical":
         action_plan = _build_medical_action_plan(
-            has_description=bool(snapshot.get("description_present")),
+            has_description=bool(snapshot.get("description_present") or lead.get("description")),
             services_count=services_count,
             priced_services_count=priced_services_count,
             photos_count=photos_count,
@@ -3785,6 +4051,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             "last_parse_retry_after": snapshot.get("last_parse_retry_after"),
             "last_parse_error": snapshot.get("last_parse_error"),
             "no_new_services_found": no_new_services_found,
+            "services_preview_limited": services_preview_limited,
         },
         "summary_score": summary_score,
         "health_level": health_level,
@@ -3967,49 +4234,23 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
                 }
             )
 
-        unanswered_reviews_count = 0
+        reviews_count = int(metrics_card.get("reviews_count") or 0)
+        review_metrics = _load_preferred_review_metrics(
+            cursor,
+            business_id,
+            last_parse_at=latest_parse.get("updated_at"),
+            expected_reviews_count=reviews_count,
+        )
+        unanswered_reviews_count = int(metrics_card.get("unanswered_reviews_count") or latest_card.get("unanswered_reviews_count") or 0)
+        if review_metrics.get("is_reliable"):
+            unanswered_reviews_count = int(review_metrics.get("unanswered_count") or 0)
         recent_review_rows: List[Dict[str, Any]] = []
-        if _table_exists(cursor, "externalbusinessreviews"):
-            cursor.execute(
-                """
-                WITH preferred_source AS (
-                    SELECT CASE
-                        WHEN EXISTS (
-                            SELECT 1
-                            FROM externalbusinessreviews r2
-                            WHERE r2.business_id = %s
-                              AND r2.source = 'yandex_maps'
-                        ) THEN 'yandex_maps'
-                        ELSE 'yandex_business'
-                    END AS source
-                )
-                SELECT COUNT(*) AS cnt
-                FROM externalbusinessreviews r, preferred_source ps
-                WHERE r.business_id = %s
-                  AND r.source = ps.source
-                  AND (r.response_text IS NULL OR TRIM(COALESCE(r.response_text, '')) = '')
-                """,
-                (business_id, business_id),
-            )
-            unanswered_reviews_count = int((_to_dict(cursor, cursor.fetchone()) or {}).get("cnt") or 0)
-            cursor.execute(
-                """
-                SELECT text AS review_text, response_text, rating, published_at, source
-                FROM externalbusinessreviews
-                WHERE business_id = %s
-                ORDER BY published_at DESC NULLS LAST, created_at DESC
-                LIMIT 200
-                """,
-                (business_id,),
-            )
-            recent_review_rows = []
-            for row in cursor.fetchall() or []:
-                review_row = _to_dict(cursor, row) or {}
-                review_text = str(review_row.get("review_text") or "").strip()
-                response_text = str(review_row.get("response_text") or "").strip()
-                if not review_text or _is_placeholder_review_entry(review_text, response_text):
-                    continue
-                recent_review_rows.append(review_row)
+        for review_row in review_metrics.get("rows") or []:
+            review_text = str(review_row.get("review_text") or "").strip()
+            response_text = str(review_row.get("response_text") or "").strip()
+            if not review_text or _is_placeholder_review_entry(review_text, response_text):
+                continue
+            recent_review_rows.append(review_row)
 
         cursor.execute(
             """
@@ -4039,7 +4280,8 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
 
         rating = metrics_card.get("rating")
         rating_value = float(rating) if rating is not None else None
-        reviews_count = int(metrics_card.get("reviews_count") or 0)
+        if review_metrics.get("is_reliable") and int(review_metrics.get("total_count") or 0) > 0:
+            reviews_count = int(review_metrics.get("total_count") or 0)
         total_services = int(services_row.get("total_services") or 0)
         services_count = int(services_row.get("active_services") or 0)
         if services_count <= 0 and total_services > 0:
@@ -4190,6 +4432,7 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
                 unanswered_reviews_count=unanswered_reviews_count,
             )
         elif audit_profile == "medical":
+            medical_focus_terms = _derive_medical_focus_terms(profile_service_names, description_text)
             issue_blocks = _build_medical_issue_blocks(
                 business_name=str(business.get("name") or "").strip(),
                 city=str(business.get("city") or "").strip(),
@@ -4199,6 +4442,7 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
                 photos_count=photos_count,
                 reviews_count=reviews_count,
                 unanswered_reviews_count=unanswered_reviews_count,
+                focus_terms=medical_focus_terms,
             )
         elif audit_profile == "beauty":
             issue_blocks = _build_beauty_issue_blocks(
@@ -4479,12 +4723,12 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
         elif audit_profile == "wellness":
             summary_text = (
                 f"{health_label}. Карточка уже может опираться на доверие из отзывов, но пока недорабатывает в локальном SEO и конверсии. "
-                f"Главные зоны роста сейчас — сильное описание, услуги как SEO-единицы и конверсионные фото пространства и процедур."
+                f"Главные зоны роста сейчас — понятные процедуры, услуги как SEO-единицы и конверсионные фото пространства."
             )
         elif audit_profile == "medical":
             summary_text = (
                 f"{health_label}. Карточка уже может собирать доверие через отзывы, но пока недостаточно хорошо объясняет специализацию, маршрут пациента и ключевые услуги. "
-                f"Главные зоны роста сейчас — сильное описание, структура медицинских услуг и визуальный слой доверия."
+                f"Главные зоны роста сейчас — понятная специализация, структура медицинских услуг и визуальный слой доверия."
             )
         elif audit_profile == "beauty":
             summary_text = (
@@ -4494,7 +4738,7 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
         elif audit_profile == "food":
             summary_text = (
                 f"{health_label}. Карточка уже может приводить гостей из локального поиска, но пока слабо продаёт формат заведения, меню и повод прийти именно сейчас. "
-                f"Главные зоны роста сейчас — сильное описание, хиты меню как SEO-единицы и визуально сильные фото еды и атмосферы."
+                f"Главные зоны роста сейчас — понятный формат заведения, хиты меню как SEO-единицы и фото еды и атмосферы."
             )
         elif audit_profile == "fitness":
             summary_text = (

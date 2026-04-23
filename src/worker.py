@@ -40,6 +40,7 @@ from parsed_payload_validation import (
 from parsing_failure_taxonomy import with_reason_code_prefix
 from core.action_orchestrator import ActionOrchestrator
 from core.parsing_runtime_config import get_use_apify_map_parsing, resolve_map_source_for_queue
+from core.review_response_utils import extract_review_response_text
 from yookassa_integration import run_due_renewals
 from api.admin_prospecting import dispatch_due_outreach_queue
 from core.card_automation import (
@@ -4284,7 +4285,7 @@ def process_queue():
                                 if 'reviews_list' in locals() and reviews_list:
                                     unanswered_reviews_count = sum(
                                         1 for r in reviews_list
-                                        if not r.get("org_reply")
+                                        if not extract_review_response_text(r)
                                     )
                                 else:
                                     unanswered_reviews_count = 0
@@ -4338,8 +4339,7 @@ def process_queue():
                                             published_at = _parse_date_string(date_value)
                                     
                                     # Ответ организации
-                                    response_text = review.get('org_reply') or review.get('response_text') or ''
-                                    response_text = response_text.strip() if response_text else None
+                                    response_text = extract_review_response_text(review)
                                     response_at = None
                                     
                                     if review.get('response_date'):
