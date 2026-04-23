@@ -7,6 +7,134 @@ from datetime import datetime
 
 metrics_history_bp = Blueprint('metrics_history_api', __name__)
 
+
+def _table_exists(cursor, table_name: str) -> bool:
+    cursor.execute("SELECT to_regclass(%s) IS NOT NULL AS exists_flag", (f"public.{table_name}",))
+    row = cursor.fetchone() or {}
+    return bool(row.get("exists_flag")) if isinstance(row, dict) else bool(row[0])
+
+
+def _aggregate_network_history(cursor, network_id: str):
+    history_by_date = {}
+
+    def _ensure_item(date_key: str):
+        current = history_by_date.get(date_key)
+        if current is None:
+            current = {
+                "id": None,
+                "date": date_key,
+                "rating_sum": 0.0,
+                "rating_count": 0,
+                "reviews_count": 0,
+                "photos_count": 0,
+                "news_count": 0,
+                "unanswered_reviews_count": 0,
+                "source": "network",
+            }
+            history_by_date[date_key] = current
+        return current
+
+    if _table_exists(cursor, "externalbusinessstats"):
+        cursor.execute(
+            """
+            SELECT date, rating, reviews_total, photos_count, news_count, unanswered_reviews_count
+            FROM externalbusinessstats
+            WHERE business_id IN (
+                SELECT id FROM businesses WHERE network_id = %s
+            )
+              AND source IN ('yandex_business', 'yandex_maps')
+            ORDER BY date DESC, created_at DESC
+            LIMIT 5000
+            """,
+            (network_id,),
+        )
+        for row in cursor.fetchall() or []:
+            rd = row if isinstance(row, dict) else dict(zip([d[0] for d in cursor.description], row))
+            date_key = str(rd.get("date") or "").strip()[:10]
+            if not date_key:
+                continue
+            item = _ensure_item(date_key)
+            if rd.get("rating") not in (None, ""):
+                item["rating_sum"] += float(rd.get("rating") or 0)
+                item["rating_count"] += 1
+            item["reviews_count"] += int(rd.get("reviews_total") or 0)
+            item["photos_count"] += int(rd.get("photos_count") or 0)
+            item["news_count"] += int(rd.get("news_count") or 0)
+            item["unanswered_reviews_count"] += int(rd.get("unanswered_reviews_count") or 0)
+
+    if not history_by_date and _table_exists(cursor, "cards"):
+        cursor.execute(
+            """
+            SELECT created_at, rating, reviews_count, overview, photos, news
+            FROM cards
+            WHERE business_id IN (
+                SELECT id FROM businesses WHERE network_id = %s
+            )
+            ORDER BY created_at DESC
+            LIMIT 5000
+            """,
+            (network_id,),
+        )
+
+        def _parse_json(value):
+            if value is None:
+                return None
+            if isinstance(value, (dict, list)):
+                return value
+            if isinstance(value, str):
+                raw = value.strip()
+                if not raw:
+                    return None
+                try:
+                    return json.loads(raw)
+                except Exception:
+                    return None
+            return None
+
+        for row in cursor.fetchall() or []:
+            rd = row if isinstance(row, dict) else dict(zip([d[0] for d in cursor.description], row))
+            created_at = rd.get("created_at")
+            if not created_at:
+                continue
+            date_key = created_at.date().isoformat() if hasattr(created_at, "date") else str(created_at)[:10]
+            item = _ensure_item(date_key)
+            if rd.get("rating") not in (None, ""):
+                item["rating_sum"] += float(rd.get("rating") or 0)
+                item["rating_count"] += 1
+            item["reviews_count"] += int(rd.get("reviews_count") or 0)
+            overview = _parse_json(rd.get("overview")) or {}
+            photos = _parse_json(rd.get("photos"))
+            news = _parse_json(rd.get("news"))
+            item["photos_count"] += max(
+                len(photos) if isinstance(photos, list) else 0,
+                int(overview.get("photos_count") or 0),
+            )
+            item["news_count"] += max(
+                len(news) if isinstance(news, list) else 0,
+                int(overview.get("news_count") or 0),
+            )
+
+    history = []
+    for date_key, item in history_by_date.items():
+        rating = None
+        if item["rating_count"] > 0:
+            rating = round(item["rating_sum"] / item["rating_count"], 1)
+        history.append(
+            {
+                "id": None,
+                "date": date_key,
+                "rating": rating,
+                "reviews_count": item["reviews_count"],
+                "photos_count": item["photos_count"],
+                "news_count": item["news_count"],
+                "unanswered_reviews_count": item["unanswered_reviews_count"],
+                "source": item["source"],
+            }
+        )
+
+    history.sort(key=lambda x: str(x.get("date") or ""), reverse=True)
+    return history[:100]
+
 @metrics_history_bp.route('/api/business/<business_id>/metrics-history', methods=['GET'])
 def get_metrics_history(business_id):
     """Получить историю метрик бизнеса"""
@@ -23,6 +151,25 @@ def get_metrics_history(business_id):
         if not has_access:
             db.close()
             return jsonify({"error": "Нет доступа" if owner_id else "Бизнес не найден"}), 403 if owner_id else 404
+
+        requested_scope = str(request.args.get("scope") or "").strip().lower()
+        cursor.execute(
+            """
+            SELECT id, network_id
+            FROM businesses
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (business_id,),
+        )
+        business_row = cursor.fetchone() or {}
+        row_network_id = business_row.get("network_id") if isinstance(business_row, dict) else business_row[1] if business_row else None
+        aggregate_network = requested_scope == "network" and bool(row_network_id)
+
+        if aggregate_network:
+            history = _aggregate_network_history(cursor, str(row_network_id))
+            db.close()
+            return jsonify({"success": True, "history": history})
 
         def _as_dict(row):
             if row is None:

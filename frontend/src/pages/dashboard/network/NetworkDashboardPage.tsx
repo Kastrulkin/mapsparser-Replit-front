@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DashboardHeader } from './components/DashboardHeader';
 import { KPIGrid } from './components/KPIGrid';
 import { AnalyticsTimeline } from './components/AnalyticsTimeline';
@@ -43,13 +44,16 @@ interface NetworkLocation {
 
 interface NetworkLocationsResponse {
     success: boolean;
+    network_id?: string | null;
     locations?: NetworkLocation[];
 }
 
 export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embedded = false, businessId }) => {
+    const navigate = useNavigate();
+    const today = new Date();
     const [date, setDate] = useState<DateRange | undefined>({
-        from: new Date(2023, 0, 20),
-        to: addDays(new Date(2023, 0, 20), 20),
+        from: addDays(today, -20),
+        to: today,
     });
 
     const [viewMode, setViewMode] = useState<'list' | 'map' | 'grid'>('list');
@@ -57,6 +61,13 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
     const [health, setHealth] = useState<HealthResponse['data'] | null>(null);
     const [timeline, setTimeline] = useState<Array<{ date: string; rating: number; reviews: number }>>([]);
     const [salons, setSalons] = useState<SalonData[]>([]);
+
+    const roundRating = (value: number) => {
+        if (!Number.isFinite(value)) {
+            return 0;
+        }
+        return Math.round(value * 100) / 100;
+    };
 
     useEffect(() => {
         const loadDashboard = async () => {
@@ -71,15 +82,47 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
                 const token = localStorage.getItem('auth_token');
                 const headers = { Authorization: `Bearer ${token || ''}` };
 
-                const [healthRes, historyRes, locationsRes] = await Promise.all([
-                    fetch(`/api/network/health?business_id=${businessId}`, { headers }),
-                    fetch(`/api/business/${businessId}/metrics-history`, { headers }),
-                    fetch(`/api/business/${businessId}/network-locations`, { headers }),
+                const locationsRes = await fetch(`/api/business/${businessId}/network-locations`, { headers });
+                const locationsJson: NetworkLocationsResponse = await locationsRes.json().catch(() => ({ success: false, locations: [] }));
+                const locations = (locationsJson.locations || []);
+                const networkId = String(locationsJson.network_id || '').trim();
+                const isNetworkView = Boolean(networkId) && locations.length > 1;
+
+                const mappedSalons: SalonData[] = locations.map((loc) => {
+                    const lat = parseFloat(String(loc.geo_lat || '').replace(',', '.'));
+                    const lon = parseFloat(String(loc.geo_lon || '').replace(',', '.'));
+                    const rating = Number(loc.rating || 0);
+                    const reviews = Number(loc.reviews_count || 0);
+                    return {
+                        id: loc.id,
+                        name: loc.name || 'Точка',
+                        address: loc.address || '—',
+                        lat: Number.isFinite(lat) ? lat : NaN,
+                        lon: Number.isFinite(lon) ? lon : NaN,
+                        rating: roundRating(rating),
+                        ratingTrend: 0,
+                        status: 'active',
+                        reviews: Number.isFinite(reviews) ? reviews : 0,
+                        negativePercent: 0,
+                        recentReviews: [],
+                    };
+                });
+
+                const [healthRes, historyRes] = await Promise.all([
+                    fetch(
+                        isNetworkView
+                            ? `/api/network/health?network_id=${encodeURIComponent(networkId)}`
+                            : `/api/network/health?business_id=${businessId}`,
+                        { headers }
+                    ),
+                    fetch(
+                        `/api/business/${businessId}/metrics-history${isNetworkView ? '?scope=network' : ''}`,
+                        { headers }
+                    ),
                 ]);
 
                 const healthJson: HealthResponse = await healthRes.json().catch(() => ({ success: false }));
                 const historyJson: MetricsHistoryResponse = await historyRes.json().catch(() => ({ history: [] }));
-                const locationsJson: NetworkLocationsResponse = await locationsRes.json().catch(() => ({ success: false, locations: [] }));
 
                 setHealth(healthJson.data || null);
 
@@ -92,27 +135,6 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
                         reviews: Number(item.reviews_count || 0),
                     }));
                 setTimeline(timelinePoints);
-
-                const locations = (locationsJson.locations || []);
-                const mappedSalons: SalonData[] = locations.map((loc) => {
-                    const lat = parseFloat(String(loc.geo_lat || '').replace(',', '.'));
-                    const lon = parseFloat(String(loc.geo_lon || '').replace(',', '.'));
-                    const rating = Number(loc.rating || 0);
-                    const reviews = Number(loc.reviews_count || 0);
-                    return {
-                        id: loc.id,
-                        name: loc.name || 'Точка',
-                        address: loc.address || '—',
-                        lat: Number.isFinite(lat) ? lat : NaN,
-                        lon: Number.isFinite(lon) ? lon : NaN,
-                        rating: Number.isFinite(rating) ? rating : 0,
-                        ratingTrend: 0,
-                        status: 'active',
-                        reviews: Number.isFinite(reviews) ? reviews : 0,
-                        negativePercent: 0,
-                        recentReviews: [],
-                    };
-                });
 
                 if (mappedSalons.length === 0) {
                     const avgRating = Number(healthJson.data?.avg_rating || 0);
@@ -197,6 +219,12 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
         return salons.length <= 1;
     }, [health?.locations_count, salons.length]);
 
+    const handleOpenDashboard = (targetBusinessId: string) => {
+        if (!targetBusinessId) return;
+        localStorage.setItem('selectedBusinessId', targetBusinessId);
+        navigate('/dashboard/card');
+    };
+
     return (
         <div className={embedded ? "space-y-4" : "flex-1 space-y-4 p-8 pt-6"}>
             <DashboardHeader
@@ -216,7 +244,7 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
                 </div>
 
                 <div className="space-y-4">
-                    <SalonTable salons={salons} />
+                    <SalonTable salons={salons} onOpenDashboard={handleOpenDashboard} />
                 </div>
             </div>
         </div>
