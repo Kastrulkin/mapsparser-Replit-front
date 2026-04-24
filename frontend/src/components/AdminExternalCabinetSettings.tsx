@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { newAuth } from '@/lib/auth_new';
 import { Settings } from 'lucide-react';
+import { AdminBusinessCardAutomation } from './AdminBusinessCardAutomation';
 
 interface ExternalAccount {
   id: string;
@@ -345,20 +346,23 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Settings className="h-5 w-5" />
-          Настройки внешних кабинетов для бизнеса: {businessName}
-        </CardTitle>
-        <CardDescription>
-          Подключите личные кабинеты Яндекс.Бизнес и 2ГИС для автоматической синхронизации данных
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
+    <div className="space-y-6">
+      <AdminBusinessCardAutomation businessId={businessId} businessName={businessName} />
+
+      <Card className="border-slate-200 shadow-sm">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Settings className="h-5 w-5" />
+            Настройки внешних кабинетов для бизнеса: {businessName}
+          </CardTitle>
+          <CardDescription>
+            Подключите личные кабинеты Яндекс.Бизнес и 2ГИС для автоматической синхронизации данных
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
         {/* Яндекс.Бизнес */}
-        <div className="border rounded-lg p-4">
-          <h3 className="text-lg font-semibold mb-4">Яндекс.Бизнес</h3>
+        <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+          <h3 className="mb-4 text-lg font-semibold text-slate-950">Яндекс.Бизнес</h3>
           <div className="space-y-4">
             <div>
               <Label htmlFor="yandex-external-id">ID организации (рекомендуется)</Label>
@@ -391,7 +395,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                 const isOld = daysSinceSync > 14;
 
                 return (
-                  <div className={`mb-2 p-2 border rounded text-sm ${isOld
+                  <div className={`mb-2 rounded-lg border p-2 text-sm ${isOld
                     ? 'bg-yellow-50 border-yellow-200 text-yellow-800'
                     : 'bg-green-50 border-green-200 text-green-800'
                     }`}>
@@ -435,12 +439,12 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                 <button
                   type="button"
                   onClick={() => setShowInstructions(!showInstructions)}
-                  className="text-sm text-blue-600 hover:text-blue-800 underline"
+                  className="text-sm font-medium text-slate-700 underline-offset-4 hover:text-slate-950 hover:underline"
                 >
                   {showInstructions ? '▼ Скрыть инструкцию' : '▶ Показать инструкцию по копированию cookies'}
                 </button>
                 {showInstructions && (
-                  <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded text-xs text-gray-700">
+                  <div className="mt-2 rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-700">
                     <strong className="block mb-2">📋 Пошаговая инструкция:</strong>
                     <ol className="list-decimal list-inside space-y-1 ml-2">
                       <li>Откройте личный кабинет Яндекс.Бизнес в браузере: <code className="bg-gray-100 px-1 rounded">https://yandex.ru/sprav/</code></li>
@@ -475,7 +479,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                 )}
               </div>
             )}
-            <div className="flex gap-2 items-center">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
                 onClick={() => testCookies('yandex_business', yandexForm)}
@@ -496,7 +500,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                 onClick={() => handleRunParser('yandex', 'single')}
                 disabled={parseStatus === 'processing' || !businessId || !yandexAccount}
                 variant="default"
-                className="ml-auto"
+                className="lg:ml-auto"
               >
                 {parseStatus === 'processing' ? 'Синхронизация...' : 'Запустить парсер'}
               </Button>
@@ -525,8 +529,8 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
         </div>
 
         {/* 2ГИС */}
-        <div className="border rounded-lg p-4">
-          <h3 className="text-lg font-semibold mb-4">2ГИС</h3>
+        <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+          <h3 className="mb-4 text-lg font-semibold text-slate-950">2ГИС</h3>
           <div className="space-y-4">
             <div>
               <Label htmlFor="2gis-external-id">ID организации (опционально)</Label>
@@ -581,7 +585,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                 )}
               </div>
             )}
-            <div className="flex gap-2 items-center">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
                 onClick={() => saveAccount('2gis', twoGisForm)}
@@ -594,7 +598,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                 onClick={() => handleRunParser('2gis')}
                 disabled={parseStatus === 'processing' || !businessId}
                 variant="default"
-                className="ml-auto"
+                className="lg:ml-auto"
               >
                 {parseStatus === 'processing' ? 'Синхронизация...' : 'Запустить парсер'}
               </Button>
@@ -610,13 +614,13 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
           </div>
         </div>
 
-        {/* Google / Apple через Apify */}
-        <div className="border rounded-lg p-4">
-          <h3 className="text-lg font-semibold mb-2">Google / Apple Maps</h3>
-          <p className="text-sm text-gray-600 mb-4">
-            Запуск Apify-парсинга по ссылкам Google Maps и Apple Maps, добавленным в профиль бизнеса.
+        {/* Google Maps через Apify */}
+        <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+          <h3 className="mb-2 text-lg font-semibold text-slate-950">Google Maps</h3>
+          <p className="mb-4 text-sm text-slate-600">
+            Запуск Apify-парсинга по ссылке Google Maps, добавленной в профиль бизнеса.
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
               onClick={() => handleRunApifyParser('apify_google')}
@@ -625,6 +629,16 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
             >
               {parseStatus === 'processing' ? 'Запуск...' : 'Парсинг Apify (Google)'}
             </Button>
+          </div>
+        </div>
+
+        {/* Apple Maps через Apify */}
+        <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+          <h3 className="mb-2 text-lg font-semibold text-slate-950">Apple Maps</h3>
+          <p className="mb-4 text-sm text-slate-600">
+            Запуск Apify-парсинга по ссылке Apple Maps, добавленной в профиль бизнеса.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
               onClick={() => handleRunApifyParser('apify_apple')}
@@ -635,7 +649,8 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
             </Button>
           </div>
         </div>
-      </CardContent>
-    </Card >
+        </CardContent>
+      </Card>
+    </div>
   );
 };

@@ -1,0 +1,281 @@
+
+> vite_react_shadcn_ts@0.0.0 build:all
+> npm run build && npm run build:public
+
+
+> vite_react_shadcn_ts@0.0.0 build
+> vite build
+
+vite v7.3.1 building client environment for production...
+transforming...
+Browserslist: browsers data (caniuse-lite) is 8 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+node_modules/@pbe/react-yandex-maps/dist/react-yandex-maps.esm.js (1:4471): A comment
+
+"/*#__PURE__*/"
+
+in "node_modules/@pbe/react-yandex-maps/dist/react-yandex-maps.esm.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+node_modules/@pbe/react-yandex-maps/dist/react-yandex-maps.esm.js (1:6197): A comment
+
+"/*#__PURE__*/"
+
+in "node_modules/@pbe/react-yandex-maps/dist/react-yandex-maps.esm.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+node_modules/@pbe/react-yandex-maps/dist/react-yandex-maps.esm.js (1:7493): A comment
+
+"/*#__PURE__*/"
+
+in "node_modules/@pbe/react-yandex-maps/dist/react-yandex-maps.esm.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+node_modules/@pbe/react-yandex-maps/dist/react-yandex-maps.esm.js (1:10459): A comment
+
+"/*#__PURE__*/"
+
+in "node_modules/@pbe/react-yandex-maps/dist/react-yandex-maps.esm.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+✓ 3334 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                               4.17 kB │ gzip:   1.70 kB
+dist/assets/hero-image-BXgvVNKj.jpg                          62.88 kB
+dist/assets/logo-BY03Vnee.png                               431.60 kB
+dist/assets/index-CNr4qw6E.css                              148.57 kB │ gzip:  22.47 kB
+dist/assets/api-Bhbs2s3U.js                                   0.17 kB │ gzip:   0.15 kB
+dist/assets/design-tokens-BHpcWfux.js                         0.19 kB │ gzip:   0.18 kB
+dist/assets/label-C5xrCaPv.js                                 0.36 kB │ gzip:   0.26 kB
+dist/assets/subscriptionAccess-B3ig_O45.js                    0.47 kB │ gzip:   0.33 kB
+dist/assets/textarea-ChZkGNNS.js                              0.52 kB │ gzip:   0.34 kB
+dist/assets/input-V-8TvsgM.js                                 0.62 kB │ gzip:   0.37 kB
+dist/assets/NotFound-DjfC4rz3.js                              0.66 kB │ gzip:   0.39 kB
+dist/assets/badge-BKGzH1ZM.js                                 0.75 kB │ gzip:   0.39 kB
+dist/assets/scroll-area-rN8TzXR7.js                           0.84 kB │ gzip:   0.44 kB
+dist/assets/switch-BiulHVFk.js                                0.84 kB │ gzip:   0.46 kB
+dist/assets/alert-DfWYbU8l.js                                 0.95 kB │ gzip:   0.49 kB
+dist/assets/card-BJLpcbGi.js                                  1.03 kB │ gzip:   0.40 kB
+dist/assets/ServicePhrases-CLGN2JT7.js                        1.09 kB │ gzip:   0.59 kB
+dist/assets/tabs-C8wBRknq.js                                  1.14 kB │ gzip:   0.49 kB
+dist/assets/networkRepresentative-CRdnvs4A.js                 1.16 kB │ gzip:   0.55 kB
+dist/assets/CardRecommendations-CcFwetCp.js                   1.16 kB │ gzip:   0.64 kB
+dist/assets/ArticleDetailPage-XzX8JZCe.js                     1.56 kB │ gzip:   0.85 kB
+dist/assets/sticky-bottom-horizontal-scrollbar-DsbXyisO.js    1.70 kB │ gzip:   0.88 kB
+dist/assets/table-Czk5X9r0.js                                 1.71 kB │ gzip:   0.66 kB
+dist/assets/LeadDetailSections-acwOk6wl.js                    1.72 kB │ gzip:   0.77 kB
+dist/assets/Requisites-Cu0WljLP.js                            1.83 kB │ gzip:   0.67 kB
+dist/assets/DocumentDetailPage-C8trSfau.js                    1.92 kB │ gzip:   1.01 kB
+dist/assets/CasesPage-Dr4Y0I1W.js                             2.17 kB │ gzip:   1.16 kB
+dist/assets/ArticlesPage-AyTwRVjq.js                          2.18 kB │ gzip:   1.13 kB
+dist/assets/query-4qgXgvfz.js                                 2.19 kB │ gzip:   1.08 kB
+dist/assets/dialog-BLFPb2Ng.js                                2.23 kB │ gzip:   0.88 kB
+dist/assets/DocumentsPage-DJoO7Q68.js                         2.28 kB │ gzip:   1.15 kB
+dist/assets/CaseDetailPage-BTj1WyKb.js                        2.73 kB │ gzip:   1.18 kB
+dist/assets/BusinessSwitcher-BzL6I7Ff.js                      2.76 kB │ gzip:   1.23 kB
+dist/assets/Footer-DqRzQPGh.js                                2.97 kB │ gzip:   1.20 kB
+dist/assets/select-GrNPKyVH.js                                3.02 kB │ gzip:   1.11 kB
+dist/assets/DashboardPrimitives-BYd_PWGZ.js                   3.30 kB │ gzip:   1.02 kB
+dist/assets/Contact-BJxDBY75.js                               3.45 kB │ gzip:   1.34 kB
+dist/assets/CheckoutReturn-kRi-MP5V.js                        4.00 kB │ gzip:   1.75 kB
+dist/assets/Sprint-Bh3PQKHZ.js                                4.18 kB │ gzip:   1.74 kB
+dist/assets/SetPassword-CscMLkVF.js                           4.23 kB │ gzip:   1.66 kB
+dist/assets/LanguageSwitcher-C9v7w7CA.js                      4.68 kB │ gzip:   1.48 kB
+dist/assets/Policy-BE6mX5w6.js                                4.78 kB │ gzip:   1.55 kB
+dist/assets/documents-snr1RFrQ.js                             5.69 kB │ gzip:   1.99 kB
+dist/assets/AIChatPromotionPage-BXyJymAW.js                   5.71 kB │ gzip:   1.73 kB
+dist/assets/BookingsPage-D-BaU361.js                          5.91 kB │ gzip:   1.91 kB
+dist/assets/Header--Mae-0yz.js                                6.00 kB │ gzip:   1.97 kB
+dist/assets/auth_new-DOoKjhdf.js                              6.37 kB │ gzip:   1.87 kB
+dist/assets/NetworkHealthDashboard-6OwH7-aF.js                6.81 kB │ gzip:   2.44 kB
+dist/assets/PartnershipLeadDetailDrawer-CCnfJon0.js           7.01 kB │ gzip:   2.70 kB
+dist/assets/FinancePage-CrOyohUV.js                           7.41 kB │ gzip:   2.66 kB
+dist/assets/cases-CgO-mO5h.js                                 7.62 kB │ gzip:   2.56 kB
+dist/assets/WizardYandex-mAhzjma-.js                          7.77 kB │ gzip:   2.00 kB
+dist/assets/ContentShared-DfESir-B.js                         8.84 kB │ gzip:   3.06 kB
+dist/assets/TokenUsageStats-BxRuqfGH.js                       9.18 kB │ gzip:   1.72 kB
+dist/assets/PartnershipAnalyticsPanels-BFjtzLoQ.js           10.62 kB │ gzip:   2.94 kB
+dist/assets/GrowthPlanEditor-BNY6giZW.js                     10.86 kB │ gzip:   3.08 kB
+dist/assets/ProxyManagement-Fs6cDNNw.js                      11.10 kB │ gzip:   3.33 kB
+dist/assets/router-0HhFJHfj.js                               12.18 kB │ gzip:   4.50 kB
+dist/assets/ChatsPage-D36CCXZi.js                            12.54 kB │ gzip:   3.32 kB
+dist/assets/prospectingAsync-CyYovlpt.js                     13.26 kB │ gzip:   3.86 kB
+dist/assets/maps-D3XnRG9c.js                                 13.51 kB │ gzip:   3.81 kB
+dist/assets/Login-DgHjqSY2.js                                14.17 kB │ gzip:   3.89 kB
+dist/assets/About-B2m1hXeR.js                                15.76 kB │ gzip:   3.31 kB
+dist/assets/DashboardLayout-Dis65X2e.js                      19.44 kB │ gzip:   6.70 kB
+dist/assets/articles-BHx4tuLW.js                             21.65 kB │ gzip:   6.21 kB
+dist/assets/index-I8c4NR98.js                                21.90 kB │ gzip:   7.45 kB
+dist/assets/PromptsManagement-DjaIoSXQ.js                    22.48 kB │ gzip:   5.95 kB
+dist/assets/TransactionForm-B_eVqebB.js                      23.23 kB │ gzip:   5.69 kB
+dist/assets/AIAgentsManagement-C9B1fFS9.js                   23.65 kB │ gzip:   6.68 kB
+dist/assets/LeadCardPreviewPanel-t2Stt8s-.js                 25.46 kB │ gzip:   6.95 kB
+dist/assets/icons-SxydZyhG.js                                26.99 kB │ gzip:   8.84 kB
+dist/assets/Index-DfptBCQg.js                                28.67 kB │ gzip:   4.50 kB
+dist/assets/NetworkDashboardPage-11uMhD40.js                 31.19 kB │ gzip:   9.78 kB
+dist/assets/SettingsPage-BKTYYxs1.js                         34.99 kB │ gzip:   9.38 kB
+dist/assets/ha-CRwond7f.js                                   41.29 kB │ gzip:  15.52 kB
+dist/assets/es-BAkT2wXd.js                                   43.83 kB │ gzip:  16.36 kB
+dist/assets/de-C9KtXHTa.js                                   44.05 kB │ gzip:  16.60 kB
+dist/assets/Dashboard-BUanbciC.js                            45.93 kB │ gzip:  11.60 kB
+dist/assets/fr-DAu6oJ3m.js                                   46.15 kB │ gzip:  16.86 kB
+dist/assets/ar-DIRxlEZf.js                                   48.05 kB │ gzip:  16.65 kB
+dist/assets/en-CTrHCRWS.js                                   49.01 kB │ gzip:  17.48 kB
+dist/assets/tr-C_01Nfj2.js                                   51.06 kB │ gzip:  17.94 kB
+dist/assets/ParsingManagement-vkq6zDE0.js                    53.25 kB │ gzip:  10.62 kB
+dist/assets/NewsGenerator-CyPv4dXW.js                        54.83 kB │ gzip:  12.84 kB
+dist/assets/ProgressPage-BumWeS61.js                         58.74 kB │ gzip:  15.31 kB
+dist/assets/el-CEZ57LjK.js                                   58.81 kB │ gzip:  18.87 kB
+dist/assets/ProfilePage-CFomV6z6.js                          59.63 kB │ gzip:  16.37 kB
+dist/assets/ru-vNwBxKOM.js                                   61.09 kB │ gzip:  17.61 kB
+dist/assets/th-BrUfQbVQ.js                                   62.43 kB │ gzip:  17.49 kB
+dist/assets/CardOverviewPage-TmrZlNfe.js                     82.78 kB │ gzip:  21.44 kB
+dist/assets/ExternalIntegrations-8PYcaeo3.js                 96.22 kB │ gzip:  19.48 kB
+dist/assets/PartnershipSearchPage-XQzXsC15.js               109.25 kB │ gzip:  26.50 kB
+dist/assets/radix-D7mXbKDg.js                               113.26 kB │ gzip:  32.82 kB
+dist/assets/PublicPartnershipOfferPage-BuquWhjU.js          164.37 kB │ gzip:  45.46 kB
+dist/assets/AdminPage-BCrCmA4M.js                           184.78 kB │ gzip:  46.66 kB
+dist/assets/charts-BLi57adS.js                              298.32 kB │ gzip:  67.18 kB
+dist/assets/vendor-Bd6D5Py9.js                              482.82 kB │ gzip: 155.13 kB
+✓ built in 6.73s
+
+> vite_react_shadcn_ts@0.0.0 build:public
+> vite build --config vite.public.config.ts
+
+vite v7.3.1 building client environment for production...
+transforming...
+Browserslist: browsers data (caniuse-lite) is 8 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+✓ 1602 modules transformed.
+rendering chunks...
+computing gzip size...
+public-dist/public-audit/index.html      0.51 kB │ gzip:  0.31 kB
+public-dist/assets/index-CNr4qw6E.css  148.57 kB │ gzip: 22.47 kB
+public-dist/assets/ha-CRwond7f.js       41.29 kB │ gzip: 15.52 kB
+public-dist/assets/es-BAkT2wXd.js       43.83 kB │ gzip: 16.36 kB
+public-dist/assets/de-C9KtXHTa.js       44.05 kB │ gzip: 16.60 kB
+public-dist/assets/fr-DAu6oJ3m.js       46.15 kB │ gzip: 16.86 kB
+public-dist/assets/ar-DIRxlEZf.js       48.05 kB │ gzip: 16.65 kB
+public-dist/assets/en-CTrHCRWS.js       49.01 kB │ gzip: 17.48 kB
+public-dist/assets/tr-C_01Nfj2.js       51.06 kB │ gzip: 17.94 kB
+public-dist/assets/el-CEZ57LjK.js       58.81 kB │ gzip: 18.87 kB
+public-dist/assets/ru-vNwBxKOM.js       61.09 kB │ gzip: 17.61 kB
+public-dist/assets/th-BrUfQbVQ.js       62.43 kB │ gzip: 17.49 kB
+public-dist/assets/index-CturYOXE.js   178.23 kB │ gzip: 50.30 kB
+public-dist/assets/vendor-Fz8WdEts.js  187.13 kB │ gzip: 61.78 kB
+✓ built in 3.55s
+OK: frontend/dist integrity check passed
+JS: /assets/index-I8c4NR98.js
+CSS: /assets/index-CNr4qw6E.css
+OK: frontend/dist integrity check passed
+JS: /public-audit/assets/index-CturYOXE.js
+CSS: /public-audit/assets/index-CNr4qw6E.css
+Deploying frontend dist to root@80.78.242.105:/opt/seo-app
+Keeping previous asset files in place to avoid breaking open tabs that still reference older lazy chunks.
+ Container seo-app-postgres-1 Running
+ Container seo-app-app-1 Running
+ Container seo-app-postgres-1 Waiting
+ Container seo-app-postgres-1 Healthy
+tar: ./assets: file changed as we read it
+tar: .: file changed as we read it
+tar: ./assets: file changed as we read it
+tar: .: file changed as we read it
+Verification:
+1) docker compose ps
+NAME                 IMAGE            COMMAND                  SERVICE    CREATED        STATUS                  PORTS
+seo-app-app-1        seo-app-app      "/app/entrypoint.sh …"   app        26 hours ago   Up 2 hours              0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp
+seo-app-postgres-1   postgres:16      "docker-entrypoint.s…"   postgres   8 days ago     Up 11 hours (healthy)   5432/tcp
+seo-app-worker-1     seo-app-worker   "/app/entrypoint.sh …"   worker     26 hours ago   Up 3 hours
+2) docker compose logs --since 10m app
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:05:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/parse-status HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:05:42] "GET /api/services/list?business_id=55602996-cc00-4f1e-b017-38fa3b4d5965&scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:05:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/external/posts?scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:05:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/map-parses?refresh=144 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:05:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/external/summary?scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:05:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/card-audit?refresh=144 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:05:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/parse-status HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:06:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/parse-status HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:06:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/parse-status HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:06:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/external/posts?scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:06:42] "GET /api/services/list?business_id=55602996-cc00-4f1e-b017-38fa3b4d5965&scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:06:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/map-parses?refresh=145 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:06:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/card-audit?refresh=145 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:06:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/external/summary?scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:07:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/parse-status HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:07:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/card-audit?refresh=146 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:07:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/map-parses?refresh=146 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:07:43] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/parse-status HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:07:43] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/external/summary?scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:07:43] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/external/posts?scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:07:43] "GET /api/services/list?business_id=55602996-cc00-4f1e-b017-38fa3b4d5965&scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:08:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/parse-status HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:08:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/external/posts?scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:08:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/external/summary?scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:08:42] "GET /api/services/list?business_id=55602996-cc00-4f1e-b017-38fa3b4d5965&scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:08:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/parse-status HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:08:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/map-parses?refresh=147 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:08:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/card-audit?refresh=147 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:09:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/parse-status HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:09:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/map-parses?refresh=148 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:09:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/external/posts?scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:09:42] "GET /api/services/list?business_id=55602996-cc00-4f1e-b017-38fa3b4d5965&scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:09:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/external/summary?scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:09:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/card-audit?refresh=148 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:09:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/parse-status HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:10:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/parse-status HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:10:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/external/summary?scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:10:42] "GET /api/services/list?business_id=55602996-cc00-4f1e-b017-38fa3b4d5965&scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:10:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/map-parses?refresh=149 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:10:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/external/posts?scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:10:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/card-audit?refresh=149 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:10:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/parse-status HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:11:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/parse-status HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:11:42] "GET /api/services/list?business_id=55602996-cc00-4f1e-b017-38fa3b4d5965&scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:11:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/external/posts?scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:11:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/map-parses?refresh=150 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:11:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/external/summary?scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:11:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/card-audit?refresh=150 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:11:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/parse-status HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:12:07] "GET / HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:12:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/parse-status HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:12:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/map-parses?refresh=151 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:12:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/external/posts?scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:12:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/external/summary?scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:12:42] "GET /api/services/list?business_id=55602996-cc00-4f1e-b017-38fa3b4d5965&scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:12:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/card-audit?refresh=151 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:12:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/parse-status HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:13:35] "GET /robots.txt HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:13:36] "GET / HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:13:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/parse-status HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:13:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/external/posts?scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:13:42] "GET /api/services/list?business_id=55602996-cc00-4f1e-b017-38fa3b4d5965&scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:13:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/map-parses?refresh=152 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:13:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/external/summary?scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:13:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/card-audit?refresh=152 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:13:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/parse-status HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:14:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/parse-status HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:14:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/external/posts?scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:14:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/map-parses?refresh=153 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:14:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/external/summary?scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:14:42] "GET /api/services/list?business_id=55602996-cc00-4f1e-b017-38fa3b4d5965&scope=network HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:14:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/card-audit?refresh=153 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [23/Apr/2026 21:14:42] "GET /api/business/55602996-cc00-4f1e-b017-38fa3b4d5965/parse-status HTTP/1.0" 200 -
+3) curl -I http://localhost:8000
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0HTTP/1.1 200 OK
+Server: Werkzeug/3.1.8 Python/3.11.15
+Date: Thu, 23 Apr 2026 21:14:56 GMT
+Content-Disposition: inline; filename=index.html
+Content-Type: text/html; charset=utf-8
+Content-Length: 4166
+Last-Modified: Thu, 23 Apr 2026 21:14:54 GMT
+Cache-Control: no-cache
+ETag: "1776978894.0-4166-2731084557"
+Date: Thu, 23 Apr 2026 21:14:56 GMT
+Accept-Ranges: bytes
+Connection: close
+
+  0  4166    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+4) targeted frontend checks
+53:  <script type="module" crossorigin src="/assets/index-I8c4NR98.js"></script>
+59:  <link rel="stylesheet" crossorigin href="/assets/index-CNr4qw6E.css">
+7:    <script type="module" crossorigin src="/public-audit/assets/index-CturYOXE.js"></script>
+9:    <link rel="stylesheet" crossorigin href="/public-audit/assets/index-CNr4qw6E.css">
+53:  <script type="module" crossorigin src="/assets/index-I8c4NR98.js"></script>
+Frontend dist deployed to /opt/seo-app/frontend/dist and /opt/seo-app/frontend/public-dist

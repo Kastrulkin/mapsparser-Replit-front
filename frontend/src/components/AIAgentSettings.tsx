@@ -84,6 +84,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
     { value: 'es', label: 'Español' },
     { value: 'de', label: 'Deutsch' },
     { value: 'fr', label: 'Français' },
+    { value: 'tr', label: 'Türkçe' },
   ];
 
   useEffect(() => {
@@ -351,26 +352,22 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
 
   return (
     <div className="space-y-6">
-      {/* Hero Header */}
       <div className={cn(
-        "relative overflow-hidden rounded-2xl shadow-xl",
-        "bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900", // Keep the dark theme for this hero card as it looks good
-        "p-8"
+        "rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
       )}>
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0icmdiYSgyNTUsMjU1LDI1NSwwLjAzKSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')] opacity-40"></div>
-        <div className="relative z-10">
-          <div className="flex items-center justify-between">
+        <div>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-3xl font-bold text-white mb-2 tracking-tight">
+              <h2 className="text-xl font-semibold text-slate-950">
                 {t.dashboard.settings.ai.title}
               </h2>
-              <p className="text-purple-200 text-lg">
+              <p className="mt-1 text-sm leading-6 text-slate-600">
                 {t.dashboard.settings.ai.subtitle}
               </p>
             </div>
-            <div className="text-right">
-              <div className="text-5xl font-black text-white mb-1">{activeCount}/{AGENT_TYPES.length}</div>
-              <div className="text-purple-300 text-sm uppercase tracking-wider font-semibold">{t.dashboard.settings.ai.active}</div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-right">
+              <div className="text-2xl font-semibold text-slate-950">{activeCount}/{AGENT_TYPES.length}</div>
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.dashboard.settings.ai.active}</div>
             </div>
           </div>
         </div>
@@ -378,7 +375,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
 
       {/* Agent Cards Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {AGENT_TYPES.map(({ key, label, icon: Icon, description, gradient, bgGradient }) => {
+        {AGENT_TYPES.map(({ key, label, icon: Icon, description }) => {
           const config: AgentConfig = agentsConfig[key] || {
             enabled: false,
             agent_id: null,
@@ -392,22 +389,21 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
           return (
             <div
               key={key}
-              className={`group relative overflow-hidden rounded-2xl border-2 transition-all duration-500 ${config.enabled
-                ? 'border-transparent shadow-xl scale-[1.02]'
-                : 'border-gray-200 hover:border-gray-300 shadow-md hover:shadow-lg'
+              className={`group relative overflow-hidden rounded-xl border transition-all duration-300 ${config.enabled
+                ? 'border-emerald-200 bg-emerald-50/40 shadow-sm'
+                : 'border-slate-200 bg-white shadow-sm hover:border-slate-300'
                 }`}
             >
-              {/* Gradient Background (visible when enabled) */}
               {config.enabled && (
-                <div className={`absolute inset-0 bg-gradient-to-br ${bgGradient} opacity-60`}></div>
+                <div className="absolute inset-0 bg-emerald-50/60"></div>
               )}
 
-              <div className="relative z-10 p-6 bg-white/80 backdrop-blur-sm">
+              <div className="relative z-10 bg-white/85 p-6">
                 {/* Card Header */}
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-4">
-                    <div className={`p-3 rounded-xl bg-gradient-to-br ${gradient} shadow-lg group-hover:scale-110 transition-transform duration-300`}>
-                      <Icon className="w-7 h-7 text-white" />
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-slate-700">
+                      <Icon className="w-6 h-6" />
                     </div>
                     <div>
                       <h3 className="text-xl font-bold text-gray-900 mb-1">{label}</h3>
@@ -541,7 +537,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
           onClick={handleSave}
           disabled={saving}
           size="lg"
-          className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-semibold px-8 shadow-lg hover:shadow-xl transition-all duration-300"
+          className="bg-slate-900 px-8 font-semibold text-white shadow-sm hover:bg-slate-800"
         >
           {saving ? (
             <>

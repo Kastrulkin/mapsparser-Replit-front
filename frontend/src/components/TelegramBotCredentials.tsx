@@ -157,9 +157,9 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
   };
 
   return (
-    <Card>
+    <Card className="border-slate-200 shadow-sm">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle className="flex items-center gap-2 text-slate-950">
           <Bot className="h-5 w-5" />
           {t.dashboard.settings.telegram2.title}
         </CardTitle>
@@ -168,7 +168,7 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Alert>
+        <Alert className="border-slate-200 bg-slate-50">
           <AlertDescription>
             {t.dashboard.settings.telegram2.subtitle}
             {t.dashboard.settings.telegram2.alert}
@@ -177,7 +177,7 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
 
         <div className="space-y-2">
           <Label htmlFor="telegram-bot-token">{t.dashboard.settings.telegram2.tokenLabel}</Label>
-          <div className="text-xs text-gray-500">
+          <div className="text-xs text-slate-500">
             {loadingStatus
               ? 'Проверка статуса токена...'
               : configured
@@ -203,7 +203,7 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
               {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </Button>
           </div>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-slate-500">
             {t.dashboard.settings.telegram2.tokenHelp}
           </p>
         </div>

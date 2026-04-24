@@ -1,0 +1,114 @@
+{
+  "task_id": "dashboard-inner-polish-20260423",
+  "overall_verdict": "PASS",
+  "verified_at": "2026-04-24T08:05:00+03:00",
+  "criteria": [
+    {
+      "id": "AC1",
+      "text": "PartnershipSearchPage has a smaller workspace shell and extracted top control blocks, with the recent /dashboard/partnerships UX/UI polish present.",
+      "status": "PASS",
+      "proof": [
+        "frontend/src/pages/dashboard/PartnershipSearchPage.tsx delegates workspace header/tabs to PartnershipWorkspaceOverview.",
+        "PartnershipRawIntakeControls owns the import-links, import-file, and geo-search control panels.",
+        "PartnershipOperationalSections owns drafts, queue, and sent/outcome operational sections.",
+        "PartnershipPipelineSections owns lead cards, board/list pipeline body, and the bulk action bar.",
+        "PartnershipAnalyticsWorkspace owns the analytics workspace body.",
+        "partnershipApi centralizes partnership endpoint wrappers; remaining newAuth.makeRequest references in PartnershipSearchPage are callback injection into partnershipFlowHelpers.",
+        "usePartnershipWorkspaceDerivedData and partnershipExport extract derived data and export/template formatting.",
+        "Current UI copy includes the operator-facing partnerships labels: Поиск партнёров, Поиск лидов, Воронка, Черновики, Отправка, Отправлено."
+      ],
+      "reason": "frontend/src/pages/dashboard/PartnershipSearchPage.tsx delegates workspace header/tabs to PartnershipWorkspaceOverview. PartnershipRawIntakeControls owns the import-links, import-file, and geo-search control panels. PartnershipOperationa..."
+    },
+    {
+      "id": "AC2",
+      "text": "CardOverviewPage inner tab content has a calmer section structure.",
+      "status": "PASS",
+      "proof": [
+        "CardOverviewPage imports and uses DashboardSection for rating and services sections.",
+        "CardServicesTable owns the services table, SEO proposal editing UI, row actions, and sticky horizontal scrollbar.",
+        "CardServicesControls owns add/edit forms, optimizer panel, meta strip, and filters.",
+        "CardOverviewTabs owns competitors, reviews, news, and keywords tab bodies.",
+        "cardOverviewApi centralizes card overview API helpers, and cardServicesLogic/useCardServiceController extract service formatting/comparison and service mutation/optimization orchestration."
+      ],
+      "reason": "CardOverviewPage imports and uses DashboardSection for rating and services sections. CardServicesTable owns the services table, SEO proposal editing UI, row actions, and sticky horizontal scrollbar. CardServicesControls owns add/edit for..."
+    },
+    {
+      "id": "AC3",
+      "text": "Settings nested components have fewer legacy visual patterns.",
+      "status": "PASS",
+      "proof": [
+        "AIAgentSettings now uses a calm white header card and quieter enabled-agent surfaces instead of the former dark hero treatment.",
+        "TelegramConnection uses a neutral card shell and slate primary button, with no btn-iridescent class.",
+        "WhatsAppConnection, ExternalIntegrations, AdminExternalCabinetSettings, WABACredentials, TelegramBotCredentials, and NetworkManagement use quieter borders/surfaces in the inspected current files.",
+        "AIAgentSettings still has a gradient switch accent and unused gradient metadata, but the acceptance target was fewer legacy visual patterns, not complete removal of every gradient token."
+      ],
+      "reason": "AIAgentSettings now uses a calm white header card and quieter enabled-agent surfaces instead of the former dark hero treatment. TelegramConnection uses a neutral card shell and slate primary button, with no btn-iridescent class. WhatsApp..."
+    },
+    {
+      "id": "AC4",
+      "text": "Build and deployment-facing checks are verified.",
+      "status": "PASS",
+      "proof": [
+        "Fresh verifier build passed: cd frontend && npm run build.",
+        "Build output includes dist/assets/index-2B07cX0O.js, dist/assets/index-C9yd13QI.css, dist/assets/CardOverviewPage-B3Lsn7Fj.js, and dist/assets/PartnershipSearchPage-Dz32OMGj.js.",
+        "https://localos.pro currently serves HTML referencing /assets/index-2B07cX0O.js and /assets/index-C9yd13QI.css, matching the fresh local build output.",
+        "https://localos.pro/dashboard/partnerships returned HTTP/2 200.",
+        "scripts/proof_loop.sh validate dashboard-inner-polish-20260423 returned valid=true."
+      ],
+      "notes": [
+        "Server-side docker compose ps/log inspection was not rerun in this local verifier session; live HTTP/assets and the fresh production build were verified."
+      ],
+      "reason": "Fresh verifier build passed: cd frontend && npm run build. Build output includes dist/assets/index-2B07cX0O.js, dist/assets/index-C9yd13QI.css, dist/assets/CardOverviewPage-B3Lsn7Fj.js, and dist/assets/PartnershipSearchPage-Dz32OMGj.js. ..."
+    }
+  ],
+  "commands_run": [
+    "sed -n '1,220p' README.md",
+    "sed -n '1,240p' .agent/tasks/dashboard-inner-polish-20260423/spec.md",
+    "sed -n '1,260p' .agent/tasks/dashboard-inner-polish-20260423/evidence.md",
+    "sed -n '1,260p' .agent/tasks/dashboard-inner-polish-20260423/evidence.json",
+    "rg -n \"makeRequest|/partnership|fetch\\\\(\" frontend/src/pages/dashboard/PartnershipSearchPage.tsx frontend/src/components/prospecting frontend/src/pages/dashboard/CardOverviewPage.tsx frontend/src/components/dashboard frontend/src/components/AIAgentSettings.tsx frontend/src/components/TelegramConnection.tsx frontend/src/components/WhatsAppConnection.tsx frontend/src/components/ExternalIntegrations.tsx frontend/src/components/AdminExternalCabinetSettings.tsx frontend/src/components/WABACredentials.tsx frontend/src/components/TelegramBotCredentials.tsx frontend/src/components/NetworkManagement.tsx",
+    "rg -n \"btn-iridescent|bg-gradient|from-|to-|gradient|iridescent\" frontend/src/components/AIAgentSettings.tsx frontend/src/components/TelegramConnection.tsx frontend/src/components/WhatsAppConnection.tsx frontend/src/components/ExternalIntegrations.tsx frontend/src/components/AdminExternalCabinetSettings.tsx frontend/src/components/WABACredentials.tsx frontend/src/components/TelegramBotCredentials.tsx frontend/src/components/NetworkManagement.tsx",
+    "cd frontend && npm run build",
+    "scripts/proof_loop.sh validate dashboard-inner-polish-20260423",
+    "scripts/proof_loop.sh status dashboard-inner-polish-20260423",
+    "curl -sS -L https://localos.pro",
+    "curl -I -sS -L https://localos.pro/dashboard/partnerships"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/dashboard-inner-polish-20260423/spec.md",
+    ".agent/tasks/dashboard-inner-polish-20260423/evidence.md",
+    ".agent/tasks/dashboard-inner-polish-20260423/evidence.json",
+    ".agent/tasks/dashboard-inner-polish-20260423/raw/verifier-build.txt",
+    ".agent/tasks/dashboard-inner-polish-20260423/raw/verifier-build.exit",
+    ".agent/tasks/dashboard-inner-polish-20260423/raw/verifier-validate.txt",
+    ".agent/tasks/dashboard-inner-polish-20260423/raw/verifier-status.txt",
+    ".agent/tasks/dashboard-inner-polish-20260423/raw/verifier-live-home.html",
+    ".agent/tasks/dashboard-inner-polish-20260423/raw/verifier-live-partnerships-headers.txt"
+  ],
+  "files_inspected": [
+    "frontend/src/pages/dashboard/PartnershipSearchPage.tsx",
+    "frontend/src/components/prospecting/PartnershipWorkspaceOverview.tsx",
+    "frontend/src/components/prospecting/PartnershipRawIntakeControls.tsx",
+    "frontend/src/components/prospecting/PartnershipOperationalSections.tsx",
+    "frontend/src/components/prospecting/PartnershipPipelineSections.tsx",
+    "frontend/src/components/prospecting/PartnershipAnalyticsWorkspace.tsx",
+    "frontend/src/components/prospecting/partnershipApi.ts",
+    "frontend/src/components/prospecting/usePartnershipWorkspaceDerivedData.ts",
+    "frontend/src/components/prospecting/partnershipExport.ts",
+    "frontend/src/pages/dashboard/CardOverviewPage.tsx",
+    "frontend/src/components/dashboard/CardServicesTable.tsx",
+    "frontend/src/components/dashboard/CardServicesControls.tsx",
+    "frontend/src/components/dashboard/CardOverviewTabs.tsx",
+    "frontend/src/components/dashboard/cardOverviewApi.ts",
+    "frontend/src/components/dashboard/cardServicesLogic.ts",
+    "frontend/src/components/dashboard/useCardServiceController.ts",
+    "frontend/src/components/AIAgentSettings.tsx",
+    "frontend/src/components/TelegramConnection.tsx",
+    "frontend/src/components/WhatsAppConnection.tsx",
+    "frontend/src/components/ExternalIntegrations.tsx",
+    "frontend/src/components/AdminExternalCabinetSettings.tsx",
+    "frontend/src/components/WABACredentials.tsx",
+    "frontend/src/components/TelegramBotCredentials.tsx",
+    "frontend/src/components/NetworkManagement.tsx"
+  ]
+}

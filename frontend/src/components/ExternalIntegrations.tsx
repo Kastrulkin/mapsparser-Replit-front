@@ -167,14 +167,14 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
   };
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="overflow-hidden rounded-2xl border-slate-200 bg-white shadow-sm">
+      <CardHeader className="pb-4">
         <CardTitle>{t.dashboard.settings.external.title}</CardTitle>
-        <CardDescription>{t.dashboard.settings.external.title}</CardDescription>
+        <CardDescription>Подключённые внешние аккаунты, ключи и служебные каналы автоматизации.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Maton.ai */}
-        <div className="border rounded-lg p-6 bg-gray-50 flex flex-col gap-4">
+        <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-6">
           <div>
             <h3 className="font-medium text-lg">Maton.ai</h3>
             <p className="text-sm text-gray-600 mt-1">
@@ -223,7 +223,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
         <ChannelControlCenter businessId={currentBusinessId} />
 
         {/* Список подключённых аккаунтов */}
-        <div className="space-y-3 pt-4 border-t">
+        <div className="space-y-3 border-t border-slate-100 pt-4">
           <h3 className="text-sm font-semibold text-gray-800">{t.dashboard.settings.external.connectedAccounts}</h3>
           {loading ? (
             <p className="text-sm text-gray-500">{t.dashboard.subscription.processing}</p>
@@ -234,7 +234,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
               {accounts.map((acc) => (
                 <div
                   key={acc.id}
-                  className="flex flex-col md:flex-row md:items-center md:justify-between border rounded-md px-4 py-3 bg-white shadow-sm"
+                  className="flex flex-col rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm md:flex-row md:items-center md:justify-between"
                 >
                   <div className="flex items-start gap-3">
                     <div className="mt-1">

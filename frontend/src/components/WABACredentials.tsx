@@ -89,9 +89,9 @@ export const WABACredentials = ({ businessId, business }: WABACredentialsProps) 
   };
 
   return (
-    <Card>
+    <Card className="border-slate-200 shadow-sm">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle className="flex items-center gap-2 text-slate-950">
           <MessageCircle className="h-5 w-5" />
           {t.dashboard.settings.whatsapp.title}
         </CardTitle>
@@ -102,7 +102,7 @@ export const WABACredentials = ({ businessId, business }: WABACredentialsProps) 
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Alert>
+        <Alert className="border-slate-200 bg-slate-50">
           <AlertDescription>
             {t.dashboard.settings.whatsapp.subtitle}
             {t.dashboard.settings.whatsapp.alert}
@@ -119,7 +119,7 @@ export const WABACredentials = ({ businessId, business }: WABACredentialsProps) 
             onChange={(e) => setPhoneId(e.target.value)}
             disabled={saving}
           />
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-slate-500">
             {t.dashboard.settings.whatsapp.phoneIdHelp}
           </p>
         </div>
@@ -145,7 +145,7 @@ export const WABACredentials = ({ businessId, business }: WABACredentialsProps) 
               {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </Button>
           </div>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-slate-500">
             {t.dashboard.settings.whatsapp.accessTokenHelp}
           </p>
         </div>

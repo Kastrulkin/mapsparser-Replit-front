@@ -87,14 +87,14 @@ const WhatsAppConnection: React.FC<WhatsAppConnectionProps> = ({ currentBusiness
   };
 
   return (
-    <Card className="relative overflow-hidden">
-      <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/65 backdrop-blur-[2px]">
-        <div className="rounded-xl border border-orange-200 bg-orange-50 px-5 py-3 text-orange-800 shadow-sm flex items-center gap-2 font-semibold">
+    <Card className="relative overflow-hidden rounded-2xl border-slate-200 bg-white shadow-sm">
+      <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/70 backdrop-blur-[2px]">
+        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-5 py-3 font-semibold text-amber-800 shadow-sm">
           <Clock3 className="h-4 w-4" />
           Скоро
         </div>
       </div>
-      <CardHeader>
+      <CardHeader className="pb-4">
         <CardTitle className="flex items-center gap-2">
           <MessageCircle className="h-5 w-5" />
           Подключение WhatsApp
@@ -103,7 +103,7 @@ const WhatsAppConnection: React.FC<WhatsAppConnectionProps> = ({ currentBusiness
           Укажите номер WhatsApp для получения уведомлений о новых заявках
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-5">
         {error && (
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
@@ -155,7 +155,7 @@ const WhatsAppConnection: React.FC<WhatsAppConnectionProps> = ({ currentBusiness
           )}
         </Button>
 
-        <div className="pt-4 border-t">
+        <div className="border-t border-slate-100 pt-4">
           <h4 className="text-sm font-medium mb-2">Возможности:</h4>
           <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
             <li>🔔 Уведомления о новых заявках из ChatGPT</li>

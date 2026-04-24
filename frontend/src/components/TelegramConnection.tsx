@@ -40,8 +40,6 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
       const url = new URL(`${window.location.origin}/api/telegram/bind/status`);
       url.searchParams.append('business_id', currentBusinessId);
 
-      console.log('Checking Telegram status for business:', currentBusinessId);
-
       const response = await fetch(url.toString(), {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -50,7 +48,6 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
 
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ Telegram status for business', currentBusinessId, ':', data);
         // Явно проверяем, что is_linked === true (не просто truthy значение)
         setIsLinked(data.is_linked === true);
       } else {
@@ -118,8 +115,8 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
   };
 
   return (
-    <Card key={currentBusinessId || 'no-business'}>
-      <CardHeader>
+    <Card key={currentBusinessId || 'no-business'} className="overflow-hidden rounded-2xl border-slate-200 bg-white shadow-sm">
+      <CardHeader className="pb-4">
         <CardTitle className="flex items-center gap-2">
           <Bot className="w-5 h-5" />
           {t.dashboard.settings.telegram.title}
@@ -128,7 +125,7 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
           {t.dashboard.settings.telegram.description}
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-5">
         {isLinked && currentBusinessId ? (
           <Alert>
             <AlertDescription>
@@ -160,7 +157,7 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
                   <li>{t.dashboard.settings.telegram.step3} <code className="bg-gray-100 px-1 rounded">/start &lt;code&gt;</code></li>
                   <li>{t.dashboard.settings.telegram.step4}</li>
                 </ol>
-                <Button className="btn-iridescent" onClick={generateToken} disabled={loading}>
+                <Button className="bg-slate-900 text-white shadow-sm hover:bg-slate-800" onClick={generateToken} disabled={loading}>
                   {loading ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -223,7 +220,7 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
                   </div>
                 </div>
 
-                <div className="p-4 bg-blue-50 rounded-lg">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                   <p className="text-sm font-medium mb-2">{t.dashboard.settings.telegram.instructionTitle}</p>
                   <ol className="list-decimal list-inside space-y-1 text-sm text-gray-700">
                     <li>{t.dashboard.settings.telegram.manualStep1}</li>
@@ -246,7 +243,7 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
           </>
         )}
 
-        <div className="pt-4 border-t">
+        <div className="border-t border-slate-100 pt-4">
           <Button variant="outline" className="mb-3" onClick={checkStatus} disabled={!currentBusinessId || loading}>
             Проверить подключение
           </Button>

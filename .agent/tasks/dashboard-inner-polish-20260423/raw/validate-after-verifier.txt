@@ -1,0 +1,15 @@
+{
+  "repo_root": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435",
+  "task_id": "dashboard-inner-polish-20260423",
+  "task_dir": "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/.agent/tasks/dashboard-inner-polish-20260423",
+  "valid": false,
+  "missing_files": [
+    "/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/\u0412\u0441\u044f\u043a\u043e\u0435/SEO \u0441 \u0420\u0435\u043f\u043b\u0438\u0442 \u043d\u0430 \u041a\u0443\u0440\u0441\u043e\u0440\u0435/.agent/tasks/dashboard-inner-polish-20260423/problems.md"
+  ],
+  "errors": [
+    "verdict.json criteria[0] missing key: reason",
+    "verdict.json criteria[1] missing key: reason",
+    "verdict.json criteria[2] missing key: reason",
+    "verdict.json criteria[3] missing key: reason"
+  ]
+}

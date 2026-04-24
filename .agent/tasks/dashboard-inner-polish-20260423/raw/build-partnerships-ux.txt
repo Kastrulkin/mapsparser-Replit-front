@@ -1,0 +1,34 @@
+
+> vite_react_shadcn_ts@0.0.0 build
+> vite build
+
+vite v7.3.1 building client environment for production...
+transforming...
+Browserslist: browsers data (caniuse-lite) is 8 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+✓ 2178 modules transformed.
+✗ Build failed in 3.52s
+error during build:
+[vite:esbuild] Transform failed with 1 error:
+/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/components/prospecting/PartnershipPipelineSections.tsx:526:140: ERROR: Expected "}" but found "очереди"
+file: /Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/src/components/prospecting/PartnershipPipelineSections.tsx:526:140
+
+Expected "}" but found "очереди"
+524 |                  <span className="rounded-full border border-indigo-200 bg-white px-2 py-0.5">черновик готов {lastGeoS...
+525 |                  <span className="rounded-full border border-indigo-200 bg-white px-2 py-0.5">черновик утверждён {last...
+526 |  ...px-2 py-0.5">в очереди {lastGeoSearchFlowSummary.в очереди}</span>
+    |                                                                 ^
+527 |                  <span className="rounded-full border border-indigo-200 bg-white px-2 py-0.5">отправлено {lastGeoSearc...
+528 |                  <span className="rounded-full border border-indigo-200 bg-white px-2 py-0.5">интерес {lastGeoSearchFl...
+
+    at failureErrorWithLog (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/node_modules/esbuild/lib/main.js:1467:15)
+    at /Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/node_modules/esbuild/lib/main.js:736:50
+    at responseCallbacks.<computed> (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/node_modules/esbuild/lib/main.js:603:9)
+    at handleIncomingPacket (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/node_modules/esbuild/lib/main.js:658:12)
+    at Socket.readFromStdout (/Users/alexdemyanov/Yandex.Disk-demyanovap.localized/Всякое/SEO с Реплит на Курсоре/frontend/node_modules/esbuild/lib/main.js:581:7)
+    at Socket.emit (node:events:519:28)
+    at addChunk (node:internal/streams/readable:561:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+    at Readable.push (node:internal/streams/readable:392:5)
+    at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)

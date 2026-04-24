@@ -1,0 +1,12 @@
+HTTP/2 200
+server: nginx/1.24.0 (Ubuntu)
+date: Fri, 24 Apr 2026 05:04:31 GMT
+content-type: text/html; charset=utf-8
+content-length: 4166
+content-disposition: inline; filename=index.html
+last-modified: Fri, 24 Apr 2026 05:00:45 GMT
+cache-control: no-cache, no-store, must-revalidate
+etag: "1777006845.0-4166-2731084557"
+accept-ranges: bytes
+pragma: no-cache
+expires: 0
