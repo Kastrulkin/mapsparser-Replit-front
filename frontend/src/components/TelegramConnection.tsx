@@ -91,8 +91,9 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
         const errorData = await response.json();
         setError(errorData.error || t.dashboard.settings.telegram.errorToken);
       }
-    } catch (e: any) {
-      setError(t.common.error + ': ' + e.message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t.common.error;
+      setError(`${t.common.error}: ${message}`);
     } finally {
       setLoading(false);
     }
@@ -115,19 +116,28 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
   };
 
   return (
-    <Card key={currentBusinessId || 'no-business'} className="overflow-hidden rounded-2xl border-slate-200 bg-white shadow-sm">
+    <Card key={currentBusinessId || 'no-business'} className="overflow-hidden rounded-3xl border-slate-200/80 bg-white shadow-sm">
       <CardHeader className="pb-4">
-        <CardTitle className="flex items-center gap-2">
-          <Bot className="w-5 h-5" />
-          {t.dashboard.settings.telegram.title}
-        </CardTitle>
-        <CardDescription>
-          {t.dashboard.settings.telegram.description}
-        </CardDescription>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-slate-950">
+              <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-900 text-white">
+                <Bot className="h-4 w-4" />
+              </span>
+              {t.dashboard.settings.telegram.title}
+            </CardTitle>
+            <CardDescription className="mt-2 leading-6">
+              {t.dashboard.settings.telegram.description}
+            </CardDescription>
+          </div>
+          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isLinked ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'}`}>
+            {isLinked ? 'Подключено' : 'Нужна привязка'}
+          </span>
+        </div>
       </CardHeader>
       <CardContent className="space-y-5">
         {isLinked && currentBusinessId ? (
-          <Alert>
+          <Alert className="border-emerald-200 bg-emerald-50 text-emerald-900">
             <AlertDescription>
               {t.dashboard.settings.telegram.connected}
             </AlertDescription>
@@ -148,13 +158,13 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
 
             {!bindToken ? (
               <div className="space-y-4">
-                <p className="text-sm text-gray-600">
+                <p className="text-sm leading-6 text-slate-600">
                   {t.dashboard.settings.telegram.instruction}
                 </p>
-                <ol className="list-decimal list-inside space-y-2 text-sm text-gray-600">
+                <ol className="list-decimal space-y-2 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 pl-8 text-sm text-slate-700">
                   <li>{t.dashboard.settings.telegram.step1}</li>
                   <li>{t.dashboard.settings.telegram.step2}</li>
-                  <li>{t.dashboard.settings.telegram.step3} <code className="bg-gray-100 px-1 rounded">/start &lt;code&gt;</code></li>
+                  <li>{t.dashboard.settings.telegram.step3} <code className="rounded bg-white px-1.5 py-0.5 font-mono text-xs ring-1 ring-slate-200">/start &lt;code&gt;</code></li>
                   <li>{t.dashboard.settings.telegram.step4}</li>
                 </ol>
                 <Button className="bg-slate-900 text-white shadow-sm hover:bg-slate-800" onClick={generateToken} disabled={loading}>
@@ -170,14 +180,14 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
               </div>
             ) : (
               <div className="space-y-4">
-                <Alert>
+                <Alert className="border-sky-200 bg-sky-50 text-sky-900">
                   <AlertDescription>
                     {t.dashboard.settings.telegram.tokenExpires} {new Date(tokenExpiresAt || '').toLocaleString(language === 'ru' ? 'ru-RU' : 'en-US')}
                   </AlertDescription>
                 </Alert>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">{t.dashboard.settings.telegram.bindCode}</label>
+                  <label className="text-sm font-semibold text-slate-800">{t.dashboard.settings.telegram.bindCode}</label>
                   <div className="flex gap-2">
                     <Input
                       value={bindToken}
@@ -199,7 +209,7 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">{t.dashboard.settings.telegram.directLink}</label>
+                  <label className="text-sm font-semibold text-slate-800">{t.dashboard.settings.telegram.directLink}</label>
                   <div className="flex gap-2">
                     <Input
                       value={getBotLink()}
@@ -220,12 +230,12 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
                   </div>
                 </div>
 
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-sm font-medium mb-2">{t.dashboard.settings.telegram.instructionTitle}</p>
-                  <ol className="list-decimal list-inside space-y-1 text-sm text-gray-700">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                  <p className="mb-2 text-sm font-semibold text-slate-900">{t.dashboard.settings.telegram.instructionTitle}</p>
+                  <ol className="list-decimal space-y-1 pl-5 text-sm leading-6 text-slate-700">
                     <li>{t.dashboard.settings.telegram.manualStep1}</li>
                     <li>{t.dashboard.settings.telegram.manualStep2}</li>
-                    <li>{t.dashboard.settings.telegram.manualStep3} <code className="bg-white px-1 rounded">/start {bindToken}</code></li>
+                    <li>{t.dashboard.settings.telegram.manualStep3} <code className="rounded bg-white px-1.5 py-0.5 font-mono text-xs ring-1 ring-slate-200">/start {bindToken}</code></li>
                     <li>{t.dashboard.settings.telegram.manualStep4}</li>
                   </ol>
                 </div>
@@ -243,12 +253,17 @@ const TelegramConnection: React.FC<TelegramConnectionProps> = ({ currentBusiness
           </>
         )}
 
-        <div className="border-t border-slate-100 pt-4">
-          <Button variant="outline" className="mb-3" onClick={checkStatus} disabled={!currentBusinessId || loading}>
-            Проверить подключение
-          </Button>
-          <h4 className="text-sm font-medium mb-2">{t.dashboard.settings.telegram.featuresTitle}</h4>
-          <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h4 className="text-sm font-semibold text-slate-900">{t.dashboard.settings.telegram.featuresTitle}</h4>
+              <p className="mt-1 text-xs leading-5 text-slate-500">Проверьте привязку, если бот не отвечает или бизнес был переключён.</p>
+            </div>
+            <Button variant="outline" onClick={checkStatus} disabled={!currentBusinessId || loading}>
+              Проверить подключение
+            </Button>
+          </div>
+          <ul className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
             <li>{t.dashboard.settings.telegram.feature1}</li>
             <li>{t.dashboard.settings.telegram.feature2}</li>
             <li>{t.dashboard.settings.telegram.feature3}</li>

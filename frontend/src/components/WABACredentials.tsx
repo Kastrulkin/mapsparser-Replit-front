@@ -89,20 +89,22 @@ export const WABACredentials = ({ businessId, business }: WABACredentialsProps) 
   };
 
   return (
-    <Card className="border-slate-200 shadow-sm">
-      <CardHeader>
+    <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
+      <CardHeader className="pb-4">
         <CardTitle className="flex items-center gap-2 text-slate-950">
-          <MessageCircle className="h-5 w-5" />
+          <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+            <MessageCircle className="h-4 w-4" />
+          </span>
           {t.dashboard.settings.whatsapp.title}
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="leading-6">
           {t.dashboard.settings.whatsapp.description}
           <br />
-          Подключение WABA выполняется через Maton.ai в разделе Integrations.
+          Подключение WABA выполняется через Maton.ai в разделе «Интеграции».
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Alert className="border-slate-200 bg-slate-50">
+        <Alert className="rounded-2xl border-slate-200 bg-slate-50/80">
           <AlertDescription>
             {t.dashboard.settings.whatsapp.subtitle}
             {t.dashboard.settings.whatsapp.alert}
@@ -150,20 +152,22 @@ export const WABACredentials = ({ businessId, business }: WABACredentialsProps) 
           </p>
         </div>
 
-        <Button
-          onClick={handleSave}
-          disabled={saving || !phoneId || !accessToken}
-          className="w-full"
-        >
-          {saving ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              {t.dashboard.settings.whatsapp.saving}
-            </>
-          ) : (
-            t.dashboard.settings.whatsapp.saveButton
-          )}
-        </Button>
+        <div className="flex justify-end border-t border-slate-100 pt-4">
+          <Button
+            onClick={handleSave}
+            disabled={saving || !phoneId || !accessToken}
+            className="bg-slate-900 text-white hover:bg-slate-800"
+          >
+            {saving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {t.dashboard.settings.whatsapp.saving}
+              </>
+            ) : (
+              t.dashboard.settings.whatsapp.saveButton
+            )}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

@@ -65,16 +65,12 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
       label: t.dashboard.settings.ai.types.booking,
       icon: Bot,
       description: t.dashboard.settings.ai.types.bookingDesc,
-      gradient: 'from-blue-500 to-indigo-600',
-      bgGradient: 'from-blue-50 to-indigo-50',
     },
     {
       key: 'marketing_agent',
       label: t.dashboard.settings.ai.types.marketing,
       icon: Zap,
       description: t.dashboard.settings.ai.types.marketingDesc,
-      gradient: 'from-orange-500 to-pink-600',
-      bgGradient: 'from-orange-50 to-pink-50',
     },
   ];
 
@@ -351,9 +347,9 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 p-5">
       <div className={cn(
-        "rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
+        "rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
       )}>
         <div>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -365,7 +361,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
                 {t.dashboard.settings.ai.subtitle}
               </p>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-right">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-right">
               <div className="text-2xl font-semibold text-slate-950">{activeCount}/{AGENT_TYPES.length}</div>
               <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.dashboard.settings.ai.active}</div>
             </div>
@@ -374,7 +370,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
       </div>
 
       {/* Agent Cards Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         {AGENT_TYPES.map(({ key, label, icon: Icon, description }) => {
           const config: AgentConfig = agentsConfig[key] || {
             enabled: false,
@@ -389,8 +385,8 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
           return (
             <div
               key={key}
-              className={`group relative overflow-hidden rounded-xl border transition-all duration-300 ${config.enabled
-                ? 'border-emerald-200 bg-emerald-50/40 shadow-sm'
+              className={`group relative overflow-hidden rounded-3xl border transition-all duration-300 ${config.enabled
+                ? 'border-emerald-200 bg-emerald-50/50 shadow-sm'
                 : 'border-slate-200 bg-white shadow-sm hover:border-slate-300'
                 }`}
             >
@@ -398,27 +394,27 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
                 <div className="absolute inset-0 bg-emerald-50/60"></div>
               )}
 
-              <div className="relative z-10 bg-white/85 p-6">
+              <div className="relative z-10 bg-white/85 p-5">
                 {/* Card Header */}
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-4">
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-slate-700">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-slate-700">
                       <Icon className="w-6 h-6" />
                     </div>
                     <div>
-                      <h3 className="text-xl font-bold text-gray-900 mb-1">{label}</h3>
-                      <p className="text-sm text-gray-600">{description}</p>
+                      <h3 className="mb-1 text-lg font-semibold text-slate-950">{label}</h3>
+                      <p className="text-sm leading-6 text-slate-600">{description}</p>
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-2">
                     <Switch
                       checked={config.enabled}
                       onCheckedChange={() => toggleAgent(key)}
-                      className="data-[state=checked]:bg-gradient-to-r data-[state=checked]:from-green-500 data-[state=checked]:to-emerald-600"
+                      className="data-[state=checked]:bg-emerald-600"
                     />
                     <div className="flex items-center gap-2">
-                      <Circle className={`w-2 h-2 ${config.enabled ? 'fill-green-500 text-green-500' : 'fill-gray-300 text-gray-300'}`} />
-                      <span className={`text-xs font-semibold uppercase tracking-wide ${config.enabled ? 'text-green-700' : 'text-gray-500'}`}>
+                      <Circle className={`w-2 h-2 ${config.enabled ? 'fill-emerald-500 text-emerald-500' : 'fill-slate-300 text-slate-300'}`} />
+                      <span className={`text-xs font-semibold uppercase tracking-wide ${config.enabled ? 'text-emerald-700' : 'text-slate-500'}`}>
                         {config.enabled ? t.dashboard.settings.ai.status.active : t.dashboard.settings.ai.status.disabled}
                       </span>
                     </div>
@@ -430,22 +426,22 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
                   <>
                     <button
                       onClick={() => toggleExpand(key)}
-                      className="w-full flex items-center justify-between py-3 px-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors mb-4"
+                      className="mb-4 flex w-full items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-left transition-colors hover:bg-slate-100"
                     >
-                      <span className="font-semibold text-gray-700">{t.dashboard.settings.ai.agentSettings}</span>
+                      <span className="font-semibold text-slate-700">{t.dashboard.settings.ai.agentSettings}</span>
                       {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                     </button>
 
                     {isExpanded && (
-                      <div className="space-y-4 animate-in slide-in-from-top duration-300">
+                      <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 animate-in slide-in-from-top duration-300">
                         {/* Tone Selection */}
                         <div className="space-y-2">
-                          <Label className="text-sm font-semibold text-gray-700">{t.dashboard.settings.ai.tone}</Label>
+                          <Label className="text-sm font-semibold text-slate-700">{t.dashboard.settings.ai.tone}</Label>
                           <Select
                             value={config.tone}
                             onValueChange={(value) => updateAgentConfig(key, { tone: value })}
                           >
-                            <SelectTrigger className="bg-white border-gray-300">
+                            <SelectTrigger className="border-slate-200 bg-white">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -458,12 +454,12 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
 
                         {/* Language Selection */}
                         <div className="space-y-2">
-                          <Label className="text-sm font-semibold text-gray-700">{t.dashboard.settings.ai.language}</Label>
+                          <Label className="text-sm font-semibold text-slate-700">{t.dashboard.settings.ai.language}</Label>
                           <Select
                             value={config.language}
                             onValueChange={(value) => updateAgentConfig(key, { language: value })}
                           >
-                            <SelectTrigger className="bg-white border-gray-300">
+                            <SelectTrigger className="border-slate-200 bg-white">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -476,14 +472,14 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
 
                         {/* Agent Selection */}
                         <div className="space-y-2">
-                          <Label className="text-sm font-semibold text-gray-700">{t.dashboard.settings.ai.selectAgent}</Label>
+                          <Label className="text-sm font-semibold text-slate-700">{t.dashboard.settings.ai.selectAgent}</Label>
                           <Select
                             value={config.agent_id || DEFAULT_AGENT_VALUE}
                             onValueChange={(value) =>
                               updateAgentConfig(key, { agent_id: value === DEFAULT_AGENT_VALUE ? null : value })
                             }
                           >
-                            <SelectTrigger className="bg-white border-gray-300">
+                            <SelectTrigger className="border-slate-200 bg-white">
                               <SelectValue placeholder={t.dashboard.settings.ai.defaultAgent} />
                             </SelectTrigger>
                             <SelectContent>
@@ -501,7 +497,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
 
                         {/* Variables (Future Enhancement) */}
                         {Object.keys(config.variables || {}).length > 0 && (
-                          <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
                             <Label className="text-sm font-semibold text-amber-900 mb-2 block">{t.dashboard.settings.ai.variables}</Label>
                             <div className="space-y-2">
                               {Object.entries(config.variables).map(([varKey, varValue]) => (
@@ -532,7 +528,7 @@ export const AIAgentSettings = ({ businessId, business }: AIAgentSettingsProps) 
       </div>
 
       {/* Save Button */}
-      <div className="flex justify-end">
+      <div className="flex justify-end border-t border-slate-100 pt-5">
         <Button
           onClick={handleSave}
           disabled={saving}

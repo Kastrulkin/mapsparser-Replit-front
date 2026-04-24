@@ -73,8 +73,9 @@ const WhatsAppConnection: React.FC<WhatsAppConnectionProps> = ({ currentBusiness
           variant: 'destructive',
         });
       }
-    } catch (e: any) {
-      const errorMsg = 'Ошибка подключения к серверу: ' + e.message;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'неизвестная ошибка';
+      const errorMsg = `Ошибка подключения к серверу: ${message}`;
       setError(errorMsg);
       toast({
         title: 'Ошибка',
@@ -87,23 +88,31 @@ const WhatsAppConnection: React.FC<WhatsAppConnectionProps> = ({ currentBusiness
   };
 
   return (
-    <Card className="relative overflow-hidden rounded-2xl border-slate-200 bg-white shadow-sm">
-      <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/70 backdrop-blur-[2px]">
-        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-5 py-3 font-semibold text-amber-800 shadow-sm">
-          <Clock3 className="h-4 w-4" />
-          Скоро
-        </div>
-      </div>
+    <Card className="relative overflow-hidden rounded-3xl border-slate-200/80 bg-white shadow-sm">
       <CardHeader className="pb-4">
-        <CardTitle className="flex items-center gap-2">
-          <MessageCircle className="h-5 w-5" />
-          Подключение WhatsApp
-        </CardTitle>
-        <CardDescription>
-          Укажите номер WhatsApp для получения уведомлений о новых заявках
-        </CardDescription>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-slate-950">
+              <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+                <MessageCircle className="h-4 w-4" />
+              </span>
+              Подключение WhatsApp
+            </CardTitle>
+            <CardDescription className="mt-2 leading-6">
+              Канал для уведомлений и будущей автоматической отправки сообщений клиентам.
+            </CardDescription>
+          </div>
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 ring-1 ring-amber-200">
+            <Clock3 className="h-3.5 w-3.5" />
+            Скоро
+          </span>
+        </div>
       </CardHeader>
       <CardContent className="space-y-5">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-sm leading-6 text-amber-900">
+          WhatsApp сейчас показан как будущий канал. Настройка номера сохранена в интерфейсе, но отправка будет доступна после подключения WABA/провайдера.
+        </div>
+
         {error && (
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
@@ -128,7 +137,7 @@ const WhatsAppConnection: React.FC<WhatsAppConnectionProps> = ({ currentBusiness
             onChange={(e) => setWhatsappPhone(e.target.value)}
             disabled
           />
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-slate-500">
             Введите номер в международном формате (например, +1234567890)
           </p>
         </div>
@@ -155,12 +164,12 @@ const WhatsAppConnection: React.FC<WhatsAppConnectionProps> = ({ currentBusiness
           )}
         </Button>
 
-        <div className="border-t border-slate-100 pt-4">
-          <h4 className="text-sm font-medium mb-2">Возможности:</h4>
-          <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
-            <li>🔔 Уведомления о новых заявках из ChatGPT</li>
-            <li>📱 Получение информации о клиентах</li>
-            <li>⏰ Напоминания о предстоящих записях</li>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+          <h4 className="mb-2 text-sm font-semibold text-slate-900">Что даст подключение</h4>
+          <ul className="space-y-1 text-sm leading-6 text-slate-600">
+            <li>Уведомления о новых заявках из каналов LocalOS</li>
+            <li>Передача клиентского контекста в карточку бизнеса</li>
+            <li>Напоминания и последующие сообщения после записи</li>
           </ul>
         </div>
       </CardContent>

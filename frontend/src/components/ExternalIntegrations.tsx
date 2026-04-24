@@ -167,28 +167,40 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
   };
 
   return (
-    <Card className="overflow-hidden rounded-2xl border-slate-200 bg-white shadow-sm">
+    <Card className="overflow-hidden rounded-3xl border-slate-200/80 bg-white shadow-sm">
       <CardHeader className="pb-4">
-        <CardTitle>{t.dashboard.settings.external.title}</CardTitle>
-        <CardDescription>Подключённые внешние аккаунты, ключи и служебные каналы автоматизации.</CardDescription>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle className="text-slate-950">{t.dashboard.settings.external.title}</CardTitle>
+            <CardDescription className="mt-2 leading-6">Подключённые внешние аккаунты, ключи и служебные каналы автоматизации.</CardDescription>
+          </div>
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
+            {accounts.length} подключено
+          </span>
+        </div>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Maton.ai */}
-        <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-6">
-          <div>
-            <h3 className="font-medium text-lg">Maton.ai</h3>
-            <p className="text-sm text-gray-600 mt-1">
+        <div className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h3 className="text-base font-semibold text-slate-950">Maton.ai</h3>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
               Maton позволяет подключить множество сторонних сервисов через один API-ключ.
               {' '}
               <a
                 href="https://www.maton.ai/"
                 target="_blank"
                 rel="noreferrer"
-                className="text-blue-600 underline hover:text-blue-700"
+                className="font-medium text-slate-900 underline underline-offset-4 hover:text-slate-700"
               >
                 https://www.maton.ai/
               </a>
-            </p>
+              </p>
+            </div>
+            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${matonAccount ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'}`}>
+              {matonAccount ? 'Подключён' : 'Не подключён'}
+            </span>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3">
@@ -202,39 +214,42 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
             <Button
               onClick={handleSaveMaton}
               disabled={saving || !currentBusinessId || !matonApiKey.trim()}
-              className="sm:min-w-[180px]"
+              className="bg-slate-900 text-white hover:bg-slate-800 sm:min-w-[180px]"
             >
               {saving ? t.dashboard.subscription.processing : "Сохранить ключ"}
             </Button>
           </div>
 
-          <p className="text-xs text-gray-500">
+          <p className="text-xs leading-5 text-slate-500">
             Ключ хранится в зашифрованном виде. После сохранения в интерфейсе не отображается.
           </p>
-
-          {matonAccount ? (
-            <div className="text-sm text-emerald-700">Maton.ai подключён</div>
-          ) : (
-            <div className="text-sm text-gray-500">Maton.ai пока не подключён</div>
-          )}
         </div>
 
-        <OpenClawOutboxMetrics businessId={currentBusinessId || undefined} />
-        <ChannelControlCenter businessId={currentBusinessId} />
+        <div className="grid gap-5 xl:grid-cols-2">
+          <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
+            <OpenClawOutboxMetrics businessId={currentBusinessId || undefined} />
+          </div>
+          <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
+            <ChannelControlCenter businessId={currentBusinessId} />
+          </div>
+        </div>
 
         {/* Список подключённых аккаунтов */}
-        <div className="space-y-3 border-t border-slate-100 pt-4">
-          <h3 className="text-sm font-semibold text-gray-800">{t.dashboard.settings.external.connectedAccounts}</h3>
+        <div className="space-y-3 border-t border-slate-100 pt-5">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-950">{t.dashboard.settings.external.connectedAccounts}</h3>
+            <p className="mt-1 text-xs leading-5 text-slate-500">Здесь видны реальные подключённые источники данных и их последний статус.</p>
+          </div>
           {loading ? (
-            <p className="text-sm text-gray-500">{t.dashboard.subscription.processing}</p>
+            <p className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">{t.dashboard.subscription.processing}</p>
           ) : accounts.length === 0 ? (
-            <p className="text-sm text-gray-500">{t.dashboard.settings.external.noIntegrations}</p>
+            <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500">{t.dashboard.settings.external.noIntegrations}</p>
           ) : (
             <div className="space-y-2">
               {accounts.map((acc) => (
                 <div
                   key={acc.id}
-                  className="flex flex-col rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm md:flex-row md:items-center md:justify-between"
+                  className="flex flex-col rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm md:flex-row md:items-center md:justify-between"
                 >
                   <div className="flex items-start gap-3">
                     <div className="mt-1">
@@ -246,7 +261,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
                           <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                         </svg>
                       ) : (
-                        <div className="w-5 h-5 bg-gray-200 rounded-full" />
+                        <div className="w-5 h-5 rounded-full bg-slate-200" />
                       )}
                     </div>
                     <div className="space-y-0.5">
@@ -262,15 +277,15 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
                               : acc.source}
                       </div>
                       {acc.display_name && (
-                        <div className="text-sm text-gray-700">{acc.display_name}</div>
+                        <div className="text-sm text-slate-700">{acc.display_name}</div>
                       )}
                       {acc.external_id && (
-                        <div className="text-xs text-gray-400">ID: {acc.external_id}</div>
+                        <div className="text-xs text-slate-400">ID: {acc.external_id}</div>
                       )}
 
                       <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
                         {acc.last_sync_at && (
-                          <div className="text-xs text-gray-500 flex items-center gap-1">
+                          <div className="flex items-center gap-1 text-xs text-slate-500">
                             <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
                             {t.dashboard.settings.external.sync} {new Date(acc.last_sync_at).toLocaleString(language === 'ru' ? 'ru-RU' : 'en-US')}
                           </div>
@@ -286,7 +301,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
                   </div>
 
                   <div className="mt-3 md:mt-0 flex gap-2 justify-end items-center">
-                    <div className={`px-2 py-1 rounded text-xs font-medium ${acc.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                    <div className={`rounded-full px-3 py-1 text-xs font-semibold ${acc.is_active ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'}`}>
                       {acc.is_active ? t.dashboard.settings.external.active : t.dashboard.settings.external.disabled}
                     </div>
                     <Button

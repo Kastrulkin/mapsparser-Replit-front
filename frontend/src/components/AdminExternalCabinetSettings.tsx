@@ -361,7 +361,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
         </CardHeader>
         <CardContent className="space-y-6">
         {/* Яндекс.Бизнес */}
-        <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+        <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
           <h3 className="mb-4 text-lg font-semibold text-slate-950">Яндекс.Бизнес</h3>
           <div className="space-y-4">
             <div>
@@ -372,7 +372,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                 onChange={(e) => setYandexForm({ ...yandexForm, external_id: e.target.value })}
                 placeholder="Например: 1234567890"
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-slate-500 mt-1">
                 Найти ID: откройте организацию в кабинете → посмотрите URL (https://business.yandex.ru/organizations/<strong>1234567890</strong>/...)
                 <br />
                 Если у вас несколько организаций, укажите ID нужной организации
@@ -447,12 +447,12 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                   <div className="mt-2 rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-700">
                     <strong className="block mb-2">📋 Пошаговая инструкция:</strong>
                     <ol className="list-decimal list-inside space-y-1 ml-2">
-                      <li>Откройте личный кабинет Яндекс.Бизнес в браузере: <code className="bg-gray-100 px-1 rounded">https://yandex.ru/sprav/</code></li>
+                      <li>Откройте личный кабинет Яндекс.Бизнес в браузере: <code className="bg-slate-100 px-1 rounded">https://yandex.ru/sprav/</code></li>
                       <li>Убедитесь, что вы авторизованы (вошли в аккаунт)</li>
-                      <li>Откройте DevTools: нажмите <kbd className="bg-gray-200 px-1 rounded">F12</kbd> или <kbd className="bg-gray-200 px-1 rounded">Cmd+Option+I</kbd> (Mac)</li>
+                      <li>Откройте DevTools: нажмите <kbd className="bg-slate-200 px-1 rounded">F12</kbd> или <kbd className="bg-slate-200 px-1 rounded">Cmd+Option+I</kbd> (Mac)</li>
                       <li>Перейдите на вкладку <strong>"Application"</strong> (Chrome) или <strong>"Storage"</strong> (Firefox)</li>
-                      <li>В левом меню найдите <strong>"Cookies"</strong> → выберите домен <code className="bg-gray-100 px-1 rounded">yandex.ru</code></li>
-                      <li>Скопируйте все cookies в формате: <code className="bg-gray-100 px-1 rounded">key1=value1; key2=value2; ...</code></li>
+                      <li>В левом меню найдите <strong>"Cookies"</strong> → выберите домен <code className="bg-slate-100 px-1 rounded">yandex.ru</code></li>
+                      <li>Скопируйте все cookies в формате: <code className="bg-slate-100 px-1 rounded">key1=value1; key2=value2; ...</code></li>
                       <li>Вставьте скопированную строку в поле выше</li>
                       <li>Нажмите <strong>"Проверить cookies"</strong> для тестирования перед сохранением</li>
                     </ol>
@@ -460,7 +460,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                       <strong>⚠️ Важно:</strong>
                       <ul className="list-disc list-inside ml-2 mt-1 space-y-1">
                         <li>Cookies должны быть скопированы <strong>после входа</strong> в личный кабинет</li>
-                        <li>Рекомендуемые cookies: <code className="bg-gray-100 px-1 rounded">Session_id</code>, <code className="bg-gray-100 px-1 rounded">yandexuid</code>, <code className="bg-gray-100 px-1 rounded">sessionid2</code></li>
+                        <li>Рекомендуемые cookies: <code className="bg-slate-100 px-1 rounded">Session_id</code>, <code className="bg-slate-100 px-1 rounded">yandexuid</code>, <code className="bg-slate-100 px-1 rounded">sessionid2</code></li>
                         <li>Обновляйте cookies раз в 1-2 недели или при ошибках 401/302</li>
                       </ul>
                     </div>
@@ -469,7 +469,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
               </div>
             </div>
             {yandexAccount && (
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-slate-600">
                 <p>Статус: {yandexAccount.is_active ? 'Активен' : 'Неактивен'}</p>
                 {yandexAccount.last_sync_at && (
                   <p>Последняя синхронизация: {new Date(yandexAccount.last_sync_at).toLocaleString('ru-RU')}</p>
@@ -529,7 +529,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
         </div>
 
         {/* 2ГИС */}
-        <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+        <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
           <h3 className="mb-4 text-lg font-semibold text-slate-950">2ГИС</h3>
           <div className="space-y-4">
             <div>
@@ -570,12 +570,12 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
                 placeholder="Вставьте cookies из браузера или токен сессии 2ГИС"
                 rows={4}
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-slate-500 mt-1">
                 Скопируйте cookies из браузера после входа в личный кабинет 2ГИС
               </p>
             </div>
             {twoGisAccount && (
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-slate-600">
                 <p>Статус: {twoGisAccount.is_active ? 'Активен' : 'Неактивен'}</p>
                 {twoGisAccount.last_sync_at && (
                   <p>Последняя синхронизация: {new Date(twoGisAccount.last_sync_at).toLocaleString('ru-RU')}</p>
@@ -615,7 +615,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
         </div>
 
         {/* Google Maps через Apify */}
-        <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+        <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
           <h3 className="mb-2 text-lg font-semibold text-slate-950">Google Maps</h3>
           <p className="mb-4 text-sm text-slate-600">
             Запуск Apify-парсинга по ссылке Google Maps, добавленной в профиль бизнеса.
@@ -633,7 +633,7 @@ export const AdminExternalCabinetSettings = ({ businessId, businessName }: Admin
         </div>
 
         {/* Apple Maps через Apify */}
-        <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+        <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
           <h3 className="mb-2 text-lg font-semibold text-slate-950">Apple Maps</h3>
           <p className="mb-4 text-sm text-slate-600">
             Запуск Apify-парсинга по ссылке Apple Maps, добавленной в профиль бизнеса.

@@ -145,10 +145,11 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
           variant: 'destructive',
         });
       }
-    } catch (e: any) {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Не удалось проверить подключение Telegram бота.';
       toast({
         title: t.common.error,
-        description: e?.message || 'Не удалось проверить подключение Telegram бота.',
+        description: message,
         variant: 'destructive',
       });
     } finally {
@@ -157,18 +158,20 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
   };
 
   return (
-    <Card className="border-slate-200 shadow-sm">
-      <CardHeader>
+    <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
+      <CardHeader className="pb-4">
         <CardTitle className="flex items-center gap-2 text-slate-950">
-          <Bot className="h-5 w-5" />
+          <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+            <Bot className="h-4 w-4" />
+          </span>
           {t.dashboard.settings.telegram2.title}
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="leading-6">
           {t.dashboard.settings.telegram2.description}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Alert className="border-slate-200 bg-slate-50">
+        <Alert className="rounded-2xl border-slate-200 bg-slate-50/80">
           <AlertDescription>
             {t.dashboard.settings.telegram2.subtitle}
             {t.dashboard.settings.telegram2.alert}
@@ -177,7 +180,7 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
 
         <div className="space-y-2">
           <Label htmlFor="telegram-bot-token">{t.dashboard.settings.telegram2.tokenLabel}</Label>
-          <div className="text-xs text-slate-500">
+          <div className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${configured ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'}`}>
             {loadingStatus
               ? 'Проверка статуса токена...'
               : configured
@@ -208,30 +211,30 @@ export const TelegramBotCredentials = ({ businessId, business }: TelegramBotCred
           </p>
         </div>
 
-        <Button
-          onClick={handleSave}
-          disabled={saving || !botToken}
-          className="w-full"
-        >
-          {saving ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              {t.dashboard.settings.telegram2.saving}
-            </>
-          ) : (
-            t.dashboard.settings.telegram2.saveButton
-          )}
-        </Button>
-
-        <Button
-          type="button"
-          variant="outline"
-          onClick={handleTestConnection}
-          disabled={loadingStatus || !businessId}
-          className="w-full"
-        >
-          {loadingStatus ? 'Проверка...' : 'Проверить подключение'}
-        </Button>
+        <div className="flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleTestConnection}
+            disabled={loadingStatus || !businessId}
+          >
+            {loadingStatus ? 'Проверка...' : 'Проверить подключение'}
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={saving || !botToken}
+            className="bg-slate-900 text-white hover:bg-slate-800"
+          >
+            {saving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {t.dashboard.settings.telegram2.saving}
+              </>
+            ) : (
+              t.dashboard.settings.telegram2.saveButton
+            )}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

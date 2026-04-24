@@ -248,10 +248,10 @@ export const NetworkManagement: React.FC = () => {
   };
 
   return (
-    <Card className="border-slate-200 shadow-sm">
-      <CardHeader>
+    <Card className="rounded-3xl border-slate-200/80 bg-white shadow-sm">
+      <CardHeader className="pb-4">
         <CardTitle className="text-slate-950">{t.dashboard.network.title}</CardTitle>
-        <CardDescription>
+        <CardDescription className="leading-6">
           {t.dashboard.network.subtitle}
         </CardDescription>
       </CardHeader>
@@ -259,10 +259,11 @@ export const NetworkManagement: React.FC = () => {
         {/* Выбор типа */}
         <div className="space-y-4">
           <Label>{t.dashboard.network.type}</Label>
-          <div className="flex flex-wrap gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-2">
+          <div className="grid gap-2 rounded-3xl border border-slate-200 bg-slate-50/70 p-2 sm:grid-cols-2">
             <Button
               variant={!isNetwork ? 'default' : 'outline'}
               onClick={() => setIsNetwork(false)}
+              className={!isNetwork ? 'bg-slate-900 text-white hover:bg-slate-800' : 'bg-white'}
             >
               {t.dashboard.network.singlePoint}
             </Button>
@@ -297,6 +298,7 @@ export const NetworkManagement: React.FC = () => {
                   }
                 }
               }}
+              className={isNetwork ? 'bg-slate-900 text-white hover:bg-slate-800' : 'bg-white'}
             >
               {t.dashboard.network.network}
             </Button>
@@ -305,10 +307,10 @@ export const NetworkManagement: React.FC = () => {
 
         {/* Форма создания сети */}
         {isNetwork && (
-          <div className="space-y-4 border-t border-slate-100 pt-4">
+          <div className="space-y-5 border-t border-slate-100 pt-5">
             <div>
               <Label>{t.dashboard.network.create.title}</Label>
-              <div className="mt-2 space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+              <div className="mt-2 space-y-3 rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
                 <div>
                   <Label htmlFor="network-name">{t.dashboard.network.create.name}</Label>
                   <Input
@@ -330,6 +332,7 @@ export const NetworkManagement: React.FC = () => {
                 <Button
                   onClick={handleCreateNetwork}
                   disabled={creatingNetwork || !networkName.trim()}
+                  className="bg-slate-900 text-white hover:bg-slate-800"
                 >
                   {creatingNetwork ? t.dashboard.network.create.creating : t.dashboard.network.create.submit}
                 </Button>
@@ -341,7 +344,7 @@ export const NetworkManagement: React.FC = () => {
               <div>
                 <Label>{t.dashboard.network.select.label}</Label>
                 <select
-                  className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2"
+                className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2"
                   value={selectedNetworkId}
                   onChange={(e) => setSelectedNetworkId(e.target.value)}
                 >
@@ -356,7 +359,7 @@ export const NetworkManagement: React.FC = () => {
 
             {/* XML Import для сети */}
             {selectedNetworkId && (
-              <div className="border-t border-slate-100 pt-4">
+              <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
                 <NetworkXMLImport
                   networkId={selectedNetworkId}
                   onImportComplete={() => {
@@ -372,7 +375,7 @@ export const NetworkManagement: React.FC = () => {
 
             {/* Добавление точек сети */}
             {(selectedNetworkId || networks.length > 0) && (
-              <div className="space-y-4 border-t border-slate-100 pt-4">
+              <div className="space-y-4 border-t border-slate-100 pt-5">
                 <div className="flex items-center justify-between">
                   <Label>{t.dashboard.network.points.title}</Label>
                   <Button
@@ -386,7 +389,7 @@ export const NetworkManagement: React.FC = () => {
                 </div>
 
                 {locations.map((location, index) => (
-                  <Card key={index} className="border-slate-200 bg-slate-50/60 p-4 shadow-none">
+                  <Card key={index} className="rounded-3xl border-slate-200 bg-slate-50/60 p-4 shadow-none">
                     <div className="flex items-start justify-between mb-3">
                       <h4 className="font-medium">{t.dashboard.network.points.point} {index + 1}</h4>
                       {locations.length > 1 && (
@@ -444,7 +447,7 @@ export const NetworkManagement: React.FC = () => {
                 <Button
                   onClick={handleSaveLocations}
                   disabled={loading || !selectedNetworkId}
-                  className="w-full"
+                  className="w-full bg-slate-900 text-white hover:bg-slate-800"
                 >
                   {loading ? t.dashboard.network.points.saving : t.dashboard.network.points.save}
                 </Button>
@@ -454,7 +457,7 @@ export const NetworkManagement: React.FC = () => {
         )}
 
         {!isNetwork && (
-          <div className="border-t border-slate-100 pt-4 text-sm text-slate-500">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-sm leading-6 text-slate-600">
             {t.dashboard.network.singlePointMessage}
           </div>
         )}
