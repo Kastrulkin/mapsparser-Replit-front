@@ -37,8 +37,8 @@ export const AnalyticsTimeline: React.FC<AnalyticsTimelineProps> = ({
     customRange,
     onCustomRangeChange,
 }) => {
-    const { t } = useLanguage();
-    const isRu = typeof document !== 'undefined' ? document.documentElement.lang !== 'en' : true;
+    const { t, language } = useLanguage();
+    const isRu = language === 'ru';
     const dateLocale = isRu ? ru : enUS;
     const timelineData = data.length > 0
         ? data
