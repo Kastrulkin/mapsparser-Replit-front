@@ -65,6 +65,7 @@ export interface SalonData {
     address: string;
     lat: number;
     lon: number;
+    mapUrl?: string | null;
     rating: number;
     ratingTrend: number;
     status: 'active' | 'problem' | 'offline';

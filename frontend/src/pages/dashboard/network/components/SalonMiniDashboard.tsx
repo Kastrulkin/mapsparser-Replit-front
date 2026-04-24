@@ -1,15 +1,19 @@
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SalonData } from '../data/mockData';
-import { AlertCircle, ArrowRight, ExternalLink, MapPin } from 'lucide-react';
+import { ExternalLink, MapPin } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 
 interface SalonMiniDashboardProps {
     salon: SalonData;
+    onOpenDashboard?: (businessId: string) => void;
 }
 
-export const SalonMiniDashboard: React.FC<SalonMiniDashboardProps> = ({ salon }) => {
+export const SalonMiniDashboard: React.FC<SalonMiniDashboardProps> = ({ salon, onOpenDashboard }) => {
+    const resolvedMapUrl = salon.mapUrl || (Number.isFinite(salon.lat) && Number.isFinite(salon.lon)
+        ? `https://yandex.ru/maps/?pt=${salon.lon},${salon.lat}&z=15&l=map`
+        : null);
+
     return (
         <div className="p-4 bg-muted/30 rounded-lg border space-y-4 animate-in fade-in zoom-in-95 duration-200">
 
@@ -17,27 +21,40 @@ export const SalonMiniDashboard: React.FC<SalonMiniDashboardProps> = ({ salon })
                 {/* Left: Info & Actions */}
                 <div className="w-full md:w-1/3 space-y-4">
                     <div>
-                        <h4 className="font-semibold text-sm mb-1">Location Details</h4>
+                        <h4 className="font-semibold text-sm mb-1">Детали точки</h4>
                         <div className="flex items-start text-sm text-muted-foreground">
                             <MapPin className="h-4 w-4 mr-1 mt-0.5 shrink-0" />
                             <span>{salon.address}</span>
                         </div>
                     </div>
 
-                    <div className="flex gap-2">
-                        <Button size="sm" variant="outline" className="w-full justify-start">
+                    <div className="flex flex-wrap gap-2">
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="justify-start"
+                            onClick={() => onOpenDashboard && onOpenDashboard(salon.id)}
+                        >
                             <ExternalLink className="mr-2 h-3 w-3" />
-                            Open Dashboard
+                            Открыть в LocalOS
                         </Button>
-                        <Button size="sm" variant="destructive" className="w-auto px-2">
-                            <AlertCircle className="h-3 w-3" />
-                        </Button>
+                        {resolvedMapUrl ? (
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="justify-start"
+                                onClick={() => window.open(resolvedMapUrl, '_blank', 'noopener,noreferrer')}
+                            >
+                                <MapPin className="mr-2 h-3 w-3" />
+                                Открыть на карте
+                            </Button>
+                        ) : null}
                     </div>
                 </div>
 
                 {/* Right: Recent Reviews */}
                 <div className="w-full md:w-2/3">
-                    <h4 className="font-semibold text-sm mb-3">Recent Feedback</h4>
+                    <h4 className="font-semibold text-sm mb-3">Последние отзывы</h4>
                     <div className="grid gap-3">
                         {salon.recentReviews.length > 0 ? (
                             salon.recentReviews.map((review) => (
@@ -56,14 +73,14 @@ export const SalonMiniDashboard: React.FC<SalonMiniDashboardProps> = ({ salon })
                                     <p className="text-muted-foreground line-clamp-2">{review.text}</p>
                                     <div className="mt-2 text-xs">
                                         <Badge variant={review.sentiment === 'positive' ? 'outline' : review.sentiment === 'negative' ? 'destructive' : 'secondary'} className="text-[10px] h-5 px-1.5 font-normal">
-                                            {review.sentiment}
+                                            {review.sentiment === 'positive' ? 'Позитивный' : review.sentiment === 'negative' ? 'Негативный' : 'Нейтральный'}
                                         </Badge>
                                     </div>
                                 </div>
                             ))
                         ) : (
                             <div className="text-sm text-muted-foreground italic p-2">
-                                No recent reviews found.
+                                Свежих отзывов пока нет.
                             </div>
                         )}
                     </div>

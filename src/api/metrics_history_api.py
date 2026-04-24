@@ -3,7 +3,7 @@ from database_manager import DatabaseManager
 from core.auth_helpers import require_auth_from_request, verify_business_access
 import uuid
 import json
-from datetime import datetime
+from datetime import date, datetime
 
 metrics_history_bp = Blueprint('metrics_history_api', __name__)
 
@@ -14,7 +14,44 @@ def _table_exists(cursor, table_name: str) -> bool:
     return bool(row.get("exists_flag")) if isinstance(row, dict) else bool(row[0])
 
 
-def _aggregate_network_history(cursor, network_id: str):
+def _parse_history_date(value) -> date | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw[:10]).date()
+    except ValueError:
+        return None
+
+
+def _parse_request_date(value: str | None) -> date | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.strptime(raw[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _filter_history_by_period(history_items: list[dict], from_date: date | None, to_date: date | None) -> list[dict]:
+    if not from_date and not to_date:
+        return history_items
+
+    filtered: list[dict] = []
+    for item in history_items:
+        item_date = _parse_history_date(item.get("date"))
+        if not item_date:
+            continue
+        if from_date and item_date < from_date:
+            continue
+        if to_date and item_date > to_date:
+            continue
+        filtered.append(item)
+    return filtered
+
+
+def _aggregate_network_history(cursor, network_id: str, from_date: date | None = None, to_date: date | None = None):
     history_by_date = {}
 
     def _ensure_item(date_key: str):
@@ -44,7 +81,6 @@ def _aggregate_network_history(cursor, network_id: str):
             )
               AND source IN ('yandex_business', 'yandex_maps')
             ORDER BY date DESC, created_at DESC
-            LIMIT 5000
             """,
             (network_id,),
         )
@@ -71,7 +107,6 @@ def _aggregate_network_history(cursor, network_id: str):
                 SELECT id FROM businesses WHERE network_id = %s
             )
             ORDER BY created_at DESC
-            LIMIT 5000
             """,
             (network_id,),
         )
@@ -133,7 +168,7 @@ def _aggregate_network_history(cursor, network_id: str):
         )
 
     history.sort(key=lambda x: str(x.get("date") or ""), reverse=True)
-    return history[:100]
+    return _filter_history_by_period(history, from_date, to_date)
 
 @metrics_history_bp.route('/api/business/<business_id>/metrics-history', methods=['GET'])
 def get_metrics_history(business_id):
@@ -153,6 +188,8 @@ def get_metrics_history(business_id):
             return jsonify({"error": "Нет доступа" if owner_id else "Бизнес не найден"}), 403 if owner_id else 404
 
         requested_scope = str(request.args.get("scope") or "").strip().lower()
+        from_date = _parse_request_date(request.args.get("from"))
+        to_date = _parse_request_date(request.args.get("to"))
         cursor.execute(
             """
             SELECT id, network_id
@@ -167,7 +204,7 @@ def get_metrics_history(business_id):
         aggregate_network = requested_scope == "network" and bool(row_network_id)
 
         if aggregate_network:
-            history = _aggregate_network_history(cursor, str(row_network_id))
+            history = _aggregate_network_history(cursor, str(row_network_id), from_date=from_date, to_date=to_date)
             db.close()
             return jsonify({"success": True, "history": history})
 
@@ -239,7 +276,6 @@ def get_metrics_history(business_id):
                     FROM cards
                     WHERE business_id = %s
                     ORDER BY created_at DESC
-                    LIMIT 365
                     """,
                     (business_id,),
                 )
@@ -284,7 +320,6 @@ def get_metrics_history(business_id):
               AND source IN ('yandex_business', 'yandex_maps')
               AND (rating IS NOT NULL OR reviews_total IS NOT NULL)
             ORDER BY created_at DESC
-            LIMIT 365
             """,
             (business_id,),
         )
@@ -352,7 +387,6 @@ def get_metrics_history(business_id):
                     FROM businessmetricshistory
                     WHERE business_id = %s
                     ORDER BY metric_date DESC, created_at DESC
-                    LIMIT 365
                     """,
                     (business_id,),
                 )
@@ -423,7 +457,6 @@ def get_metrics_history(business_id):
                 FROM mapparseresults
                 WHERE business_id = %s
                 ORDER BY created_at DESC
-                LIMIT 180
                 """,
                 (business_id,),
             )
@@ -519,7 +552,7 @@ def get_metrics_history(business_id):
                     }
                 )
 
-        history = history[:100]
+        history = _filter_history_by_period(history, from_date, to_date)
 
         db.close()
         

@@ -2,12 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardHeader } from './components/DashboardHeader';
 import { KPIGrid } from './components/KPIGrid';
-import { AnalyticsTimeline } from './components/AnalyticsTimeline';
+import { AnalyticsTimeline, TimelinePeriodPreset } from './components/AnalyticsTimeline';
 import { NetworkMap } from './components/NetworkMap';
 import { SalonTable } from './components/SalonTable';
 import { NetworkStats, SalonData } from './data/mockData';
 import { DateRange } from "react-day-picker";
-import { addDays } from "date-fns";
+import { addDays, format } from "date-fns";
 
 interface NetworkDashboardPageProps {
     embedded?: boolean;
@@ -40,6 +40,9 @@ interface NetworkLocation {
     geo_lon?: string;
     rating?: string | number;
     reviews_count?: string | number;
+    yandex_url?: string | null;
+    website?: string | null;
+    site?: string | null;
 }
 
 interface NetworkLocationsResponse {
@@ -50,11 +53,8 @@ interface NetworkLocationsResponse {
 
 export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embedded = false, businessId }) => {
     const navigate = useNavigate();
-    const today = new Date();
-    const [date, setDate] = useState<DateRange | undefined>({
-        from: addDays(today, -20),
-        to: today,
-    });
+    const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>();
+    const [periodPreset, setPeriodPreset] = useState<TimelinePeriodPreset>('all');
 
     const [viewMode, setViewMode] = useState<'list' | 'map' | 'grid'>('list');
     const [crmConnected] = useState(false);
@@ -68,6 +68,28 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
         }
         return Math.round(value * 100) / 100;
     };
+
+    const metricsHistoryQuery = useMemo(() => {
+        const params = new URLSearchParams();
+        const today = new Date();
+
+        if (periodPreset === 'month') {
+            params.set('from', format(addDays(today, -30), 'yyyy-MM-dd'));
+            params.set('to', format(today, 'yyyy-MM-dd'));
+        } else if (periodPreset === 'quarter') {
+            params.set('from', format(addDays(today, -90), 'yyyy-MM-dd'));
+            params.set('to', format(today, 'yyyy-MM-dd'));
+        } else if (periodPreset === 'custom') {
+            if (customDateRange?.from) {
+                params.set('from', format(customDateRange.from, 'yyyy-MM-dd'));
+            }
+            if (customDateRange?.to) {
+                params.set('to', format(customDateRange.to, 'yyyy-MM-dd'));
+            }
+        }
+
+        return params;
+    }, [customDateRange, periodPreset]);
 
     useEffect(() => {
         const loadDashboard = async () => {
@@ -99,6 +121,7 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
                         address: loc.address || '—',
                         lat: Number.isFinite(lat) ? lat : NaN,
                         lon: Number.isFinite(lon) ? lon : NaN,
+                        mapUrl: String(loc.yandex_url || '').trim() || null,
                         rating: roundRating(rating),
                         ratingTrend: 0,
                         status: 'active',
@@ -116,7 +139,14 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
                         { headers }
                     ),
                     fetch(
-                        `/api/business/${businessId}/metrics-history${isNetworkView ? '?scope=network' : ''}`,
+                        (() => {
+                            const params = new URLSearchParams(metricsHistoryQuery);
+                            if (isNetworkView) {
+                                params.set('scope', 'network');
+                            }
+                            const query = params.toString();
+                            return `/api/business/${businessId}/metrics-history${query ? `?${query}` : ''}`;
+                        })(),
                         { headers }
                     ),
                 ]);
@@ -127,10 +157,9 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
                 setHealth(healthJson.data || null);
 
                 const timelinePoints = (historyJson.history || [])
-                    .slice(0, 7)
                     .reverse()
                     .map((item) => ({
-                        date: item.date?.slice(5) || '—',
+                        date: item.date ? new Date(item.date).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) : '—',
                         rating: Number(item.rating || 0),
                         reviews: Number(item.reviews_count || 0),
                     }));
@@ -145,6 +174,7 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
                         address: '—',
                         lat: NaN,
                         lon: NaN,
+                        mapUrl: null,
                         rating: avgRating,
                         ratingTrend: 0,
                         status: 'active',
@@ -163,7 +193,7 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
         };
 
         loadDashboard();
-    }, [businessId]);
+    }, [businessId, metricsHistoryQuery]);
 
     const stats: NetworkStats = useMemo(() => {
         const totalSalons = salons.length;
@@ -228,8 +258,6 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
     return (
         <div className={embedded ? "space-y-4" : "flex-1 space-y-4 p-8 pt-6"}>
             <DashboardHeader
-                date={date}
-                setDate={setDate}
                 viewMode={viewMode}
                 setViewMode={setViewMode}
                 isSingleBusiness={isSingleBusinessView}
@@ -239,8 +267,14 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
                 <KPIGrid stats={stats} crmConnected={crmConnected} />
 
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                    <AnalyticsTimeline data={timeline} />
-                    <NetworkMap locations={salons} />
+                    <AnalyticsTimeline
+                        data={timeline}
+                        periodPreset={periodPreset}
+                        onPeriodPresetChange={setPeriodPreset}
+                        customRange={customDateRange}
+                        onCustomRangeChange={setCustomDateRange}
+                    />
+                    <NetworkMap locations={salons} onOpenDashboard={handleOpenDashboard} />
                 </div>
 
                 <div className="space-y-4">
