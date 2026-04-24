@@ -14,6 +14,8 @@ interface NetworkDashboardPageProps {
     businessId?: string | null;
 }
 
+type ReviewDrilldownFilter = 'all' | 'negative' | 'needs_reply';
+
 interface HealthResponse {
     success: boolean;
     data?: {
@@ -255,6 +257,15 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
         navigate('/dashboard/card');
     };
 
+    const handleOpenReviewDrilldown = (targetBusinessId: string, filter: ReviewDrilldownFilter) => {
+        if (!targetBusinessId) return;
+        localStorage.setItem('selectedBusinessId', targetBusinessId);
+        const params = new URLSearchParams();
+        params.set('tab', 'reviews');
+        params.set('review_filter', filter);
+        navigate(`/dashboard/card?${params.toString()}`);
+    };
+
     return (
         <div className={embedded ? "space-y-4" : "flex-1 space-y-4 p-8 pt-6"}>
             <DashboardHeader
@@ -274,11 +285,19 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
                         customRange={customDateRange}
                         onCustomRangeChange={setCustomDateRange}
                     />
-                    <NetworkMap locations={salons} onOpenDashboard={handleOpenDashboard} />
+                    <NetworkMap
+                        locations={salons}
+                        onOpenDashboard={handleOpenDashboard}
+                        onOpenReviewDrilldown={handleOpenReviewDrilldown}
+                    />
                 </div>
 
                 <div className="space-y-4">
-                    <SalonTable salons={salons} onOpenDashboard={handleOpenDashboard} />
+                    <SalonTable
+                        salons={salons}
+                        onOpenDashboard={handleOpenDashboard}
+                        onOpenReviewDrilldown={handleOpenReviewDrilldown}
+                    />
                 </div>
             </div>
         </div>

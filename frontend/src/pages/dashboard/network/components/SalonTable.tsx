@@ -25,12 +25,21 @@ import { Input } from "@/components/ui/input";
 
 interface SalonTableProps {
     salons: SalonData[];
+    onOpenDashboard?: (businessId: string) => void;
+    onOpenReviewDrilldown?: (businessId: string, filter: 'all' | 'negative' | 'needs_reply') => void;
 }
 
-export const SalonTable: React.FC<SalonTableProps> = ({ salons }) => {
+export const SalonTable: React.FC<SalonTableProps> = ({ salons, onOpenDashboard, onOpenReviewDrilldown }) => {
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
     const [sortConfig, setSortConfig] = useState<{ key: keyof SalonData; direction: 'asc' | 'desc' } | null>(null);
     const [filter, setFilter] = useState("");
+
+    const formatRating = (value: number) => {
+        if (!Number.isFinite(value) || value <= 0) {
+            return '0';
+        }
+        return Number(value.toFixed(2)).toString();
+    };
 
     const toggleRow = (id: string) => {
         const newExpanded = new Set(expandedRows);
@@ -62,22 +71,22 @@ export const SalonTable: React.FC<SalonTableProps> = ({ salons }) => {
     const getStatusBadge = (status: SalonData['status']) => {
         switch (status) {
             case 'active':
-                return <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-emerald-500/20"><CheckCircle2 className="w-3 h-3 mr-1" /> Active</Badge>;
+                return <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-emerald-500/20"><CheckCircle2 className="w-3 h-3 mr-1" /> Активна</Badge>;
             case 'problem':
-                return <Badge variant="destructive" className="bg-red-500/10 text-red-600 hover:bg-red-500/20 border-red-500/20"><AlertTriangle className="w-3 h-3 mr-1" /> Attention</Badge>;
+                return <Badge variant="destructive" className="bg-red-500/10 text-red-600 hover:bg-red-500/20 border-red-500/20"><AlertTriangle className="w-3 h-3 mr-1" /> Нужна проверка</Badge>;
             case 'offline':
-                return <Badge variant="secondary" className="text-muted-foreground"><WifiOff className="w-3 h-3 mr-1" /> Offline</Badge>;
+                return <Badge variant="secondary" className="text-muted-foreground"><WifiOff className="w-3 h-3 mr-1" /> Оффлайн</Badge>;
         }
     };
 
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
-                <h3 className="text-xl font-semibold tracking-tight">Detailed Performance</h3>
+                <h3 className="text-xl font-semibold tracking-tight">Список точек</h3>
                 <div className="relative w-[250px]">
                     <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
-                        placeholder="Search salons..."
+                        placeholder="Поиск по точкам..."
                         className="pl-8"
                         value={filter}
                         onChange={(e) => setFilter(e.target.value)}
@@ -95,21 +104,21 @@ export const SalonTable: React.FC<SalonTableProps> = ({ salons }) => {
                             <TableHead className="w-[50px]"></TableHead>
                             <TableHead className="w-[250px]">
                                 <Button variant="ghost" className="-ml-4 h-8 text-xs font-semibold" onClick={() => handleSort('name')}>
-                                    Salon Name <ArrowUpDown className="ml-2 h-3 w-3" />
+                                    Точка <ArrowUpDown className="ml-2 h-3 w-3" />
                                 </Button>
                             </TableHead>
                             <TableHead>
                                 <Button variant="ghost" className="-ml-4 h-8 text-xs font-semibold" onClick={() => handleSort('status')}>
-                                    Status <ArrowUpDown className="ml-2 h-3 w-3" />
+                                    Статус <ArrowUpDown className="ml-2 h-3 w-3" />
                                 </Button>
                             </TableHead>
                             <TableHead className="text-right">
                                 <Button variant="ghost" className="-mr-4 h-8 text-xs font-semibold" onClick={() => handleSort('rating')}>
-                                    Rating <ArrowUpDown className="ml-2 h-3 w-3" />
+                                    Рейтинг <ArrowUpDown className="ml-2 h-3 w-3" />
                                 </Button>
                             </TableHead>
-                            <TableHead className="text-right">Reviews</TableHead>
-                            <TableHead className="text-right">% Negative</TableHead>
+                            <TableHead className="text-right">Отзывы</TableHead>
+                            <TableHead className="text-right">% негатива</TableHead>
                             <TableHead className="w-[50px]"></TableHead>
                         </TableRow>
                     </TableHeader>
@@ -129,7 +138,7 @@ export const SalonTable: React.FC<SalonTableProps> = ({ salons }) => {
                                     </TableCell>
                                     <TableCell>{getStatusBadge(salon.status)}</TableCell>
                                     <TableCell className="text-right font-bold">
-                                        {salon.rating} <span className="text-muted-foreground text-xs font-normal">/ 5</span>
+                                        {formatRating(salon.rating)} <span className="text-muted-foreground text-xs font-normal">/ 5</span>
                                     </TableCell>
                                     <TableCell className="text-right">{salon.reviews}</TableCell>
                                     <TableCell className="text-right">
@@ -146,7 +155,11 @@ export const SalonTable: React.FC<SalonTableProps> = ({ salons }) => {
                                 {expandedRows.has(salon.id) && (
                                     <TableRow className="bg-muted/50 border-t-0 hover:bg-muted/50">
                                         <TableCell colSpan={7} className="p-4 pt-0">
-                                            <SalonMiniDashboard salon={salon} />
+                                            <SalonMiniDashboard
+                                                salon={salon}
+                                                onOpenDashboard={onOpenDashboard}
+                                                onOpenReviewDrilldown={onOpenReviewDrilldown}
+                                            />
                                         </TableCell>
                                     </TableRow>
                                 )}

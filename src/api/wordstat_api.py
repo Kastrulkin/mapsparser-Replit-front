@@ -6,6 +6,7 @@ import sys
 from datetime import datetime
 import re
 import uuid
+import difflib
 
 # Adjust path to import modules from src/
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -31,7 +32,23 @@ BUSINESS_TYPE_HINTS = {
     "cosmetology": ["косметология", "чистка лица", "пилинг", "уход за лицом"],
     "brows_lashes": ["брови", "ресницы", "ламинирование ресниц"],
     "auto_service": ["автосервис", "сто", "ремонт авто", "диагностика авто", "техобслуживание"],
-    "gas_station": ["азс", "заправка", "бензин", "дизель", "топливо"],
+    "gas_station": [
+        "азс",
+        "азс рядом",
+        "заправка",
+        "заправка рядом",
+        "заправка на карте",
+        "круглосуточная азс",
+        "бензин",
+        "бензин 92",
+        "бензин 95",
+        "дизель",
+        "дт",
+        "топливо",
+        "цены на бензин",
+        "цены на дизель",
+        "заправиться рядом",
+    ],
     "cafe": ["кафе", "кофе", "обед", "завтрак", "доставка еды"],
     "school": ["школа", "обучение", "курсы", "уроки", "дети"],
     "workshop": ["мастерская", "ремонт", "изготовление", "срочный ремонт"],
@@ -71,6 +88,10 @@ def _row_get(row, key: str, idx: int = 0, default=None):
     if isinstance(row, (tuple, list)):
         return row[idx] if len(row) > idx else default
     return default
+
+
+def _normalize_keyword_search_text(value: str) -> str:
+    return str(value or "").strip().lower().replace("ё", "е")
 
 
 def _score_keyword(keyword_text: str, terms):
@@ -292,6 +313,7 @@ def search_keywords():
 
     business_id = (request.args.get('business_id') or '').strip()
     query = (request.args.get('q') or '').strip()
+    normalized_query = _normalize_keyword_search_text(query)
     try:
         limit = int(request.args.get('limit') or 10)
     except Exception:
@@ -338,7 +360,7 @@ def search_keywords():
             for r in (cursor.fetchall() or [])
         }
 
-        like_q = f"%{query.lower()}%"
+        like_q = f"%{normalized_query}%"
         cursor.execute(
             """
             SELECT keyword, views, category, updated_at
@@ -371,6 +393,58 @@ def search_keywords():
             if len(items) >= limit:
                 break
 
+        if len(items) == 0 and normalized_query:
+            fuzzy_seed = normalized_query[: max(4, len(normalized_query) - 2)]
+            cursor.execute(
+                """
+                SELECT keyword, views, category, updated_at
+                FROM wordstatkeywords
+                WHERE LOWER(keyword) LIKE %s
+                ORDER BY views DESC
+                LIMIT 500
+                """,
+                (f"%{fuzzy_seed}%",),
+            )
+            fuzzy_rows = cursor.fetchall() or []
+            scored_items = []
+            for row in fuzzy_rows:
+                item = dict(row) if not isinstance(row, dict) else row
+                keyword_value = str(item.get('keyword') or '').strip()
+                keyword_lower = keyword_value.lower()
+                if not keyword_lower:
+                    continue
+                if keyword_lower in excluded or keyword_lower in custom_existing:
+                    continue
+                reason = _negative_reason_for(keyword_value, item.get('category') or '', negative_rows)
+                if reason and not include_blocked:
+                    continue
+
+                ratio = difflib.SequenceMatcher(
+                    None,
+                    normalized_query,
+                    _normalize_keyword_search_text(keyword_value),
+                ).ratio()
+                if ratio < 0.55 and fuzzy_seed not in _normalize_keyword_search_text(keyword_value):
+                    continue
+
+                item['negative_blocked'] = bool(reason)
+                item['negative_reason'] = reason or ''
+                item['_score'] = ratio
+                scored_items.append(item)
+
+            scored_items.sort(
+                key=lambda item: (
+                    -float(item.get('_score') or 0),
+                    -int(item.get('views') or 0),
+                )
+            )
+            items = []
+            for item in scored_items:
+                item.pop('_score', None)
+                items.append(item)
+                if len(items) >= limit:
+                    break
+
         return jsonify({'success': True, 'count': len(items), 'items': items})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -380,6 +454,7 @@ def search_keywords():
 @wordstat_bp.route('/update', methods=['POST'])
 def trigger_update():
     """Trigger the background update script"""
+    conn = None
     try:
         user_data, auth_error = _require_auth()
         if auth_error:
@@ -397,11 +472,7 @@ def trigger_update():
                     return access_error
             finally:
                 conn.close()
-
-            return jsonify({
-                'success': True,
-                'message': 'Данные обновлены для текущего бизнеса'
-            })
+                conn = None
 
         script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'update_wordstat_data.py')
         oauth_token = os.getenv('YANDEX_WORDSTAT_OAUTH_TOKEN', '').strip()
@@ -442,11 +513,14 @@ def trigger_update():
             
         return jsonify({
             'success': True, 
-            'message': 'Update started manually. Check back in a few minutes.'
+            'message': 'Обновление Wordstat запущено. Проверьте данные через несколько минут.'
         })
         
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 @wordstat_bp.route('/keywords', methods=['DELETE'])

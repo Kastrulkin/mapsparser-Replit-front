@@ -1,15 +1,16 @@
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { SalonData } from '../data/mockData';
-import { ExternalLink, MapPin } from 'lucide-react';
+import { AlertTriangle, ExternalLink, MapPin, MessageSquare, Reply } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 
 interface SalonMiniDashboardProps {
     salon: SalonData;
     onOpenDashboard?: (businessId: string) => void;
+    onOpenReviewDrilldown?: (businessId: string, filter: 'all' | 'negative' | 'needs_reply') => void;
 }
 
-export const SalonMiniDashboard: React.FC<SalonMiniDashboardProps> = ({ salon, onOpenDashboard }) => {
+export const SalonMiniDashboard: React.FC<SalonMiniDashboardProps> = ({ salon, onOpenDashboard, onOpenReviewDrilldown }) => {
     const resolvedMapUrl = salon.mapUrl || (Number.isFinite(salon.lat) && Number.isFinite(salon.lon)
         ? `https://yandex.ru/maps/?pt=${salon.lon},${salon.lat}&z=15&l=map`
         : null);
@@ -49,6 +50,33 @@ export const SalonMiniDashboard: React.FC<SalonMiniDashboardProps> = ({ salon, o
                                 Открыть на карте
                             </Button>
                         ) : null}
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="justify-start"
+                            onClick={() => onOpenReviewDrilldown && onOpenReviewDrilldown(salon.id, 'all')}
+                        >
+                            <MessageSquare className="mr-2 h-3 w-3" />
+                            Отзывы
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="justify-start border-rose-200 text-rose-700 hover:bg-rose-50"
+                            onClick={() => onOpenReviewDrilldown && onOpenReviewDrilldown(salon.id, 'negative')}
+                        >
+                            <AlertTriangle className="mr-2 h-3 w-3" />
+                            Негатив
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="justify-start border-amber-200 text-amber-700 hover:bg-amber-50"
+                            onClick={() => onOpenReviewDrilldown && onOpenReviewDrilldown(salon.id, 'needs_reply')}
+                        >
+                            <Reply className="mr-2 h-3 w-3" />
+                            Нужны ответы
+                        </Button>
                     </div>
                 </div>
 

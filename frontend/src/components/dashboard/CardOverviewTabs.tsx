@@ -157,6 +157,7 @@ type ReviewsTabProps = {
   selectedSource: string;
   aggregateScope: 'business' | 'network';
   onOpenLocation?: (businessId: string) => void;
+  initialFilter?: 'all' | 'negative' | 'needs_reply';
 };
 
 export const ReviewsTab = ({
@@ -166,6 +167,7 @@ export const ReviewsTab = ({
   selectedSource,
   aggregateScope,
   onOpenLocation,
+  initialFilter,
 }: ReviewsTabProps) => (
   automationAllowed ? (
     <ReviewReplyAssistant
@@ -173,6 +175,7 @@ export const ReviewsTab = ({
       selectedSource={selectedSource}
       aggregateScope={aggregateScope}
       onOpenLocation={onOpenLocation}
+      initialFilter={initialFilter}
     />
   ) : <AutomationLockedNotice message={automationLockedMessage} />
 );

@@ -29,6 +29,8 @@ import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
 import { newAuth } from '@/lib/auth_new';
 
 type Tone = 'friendly' | 'professional' | 'premium' | 'youth' | 'business';
+type ReviewFilterPreset = 'all' | 'negative' | 'needs_reply';
+type ReviewSortPreset = 'newest' | 'rating_asc';
 
 // Tones will be translated inside component using t()
 
@@ -51,15 +53,20 @@ interface ReviewReplyAssistantProps {
   selectedSource?: string;
   aggregateScope?: 'business' | 'network';
   onOpenLocation?: (businessId: string) => void;
+  initialFilter?: ReviewFilterPreset;
 }
+
+const isReviewFilterPreset = (value: string): value is ReviewFilterPreset =>
+  value === 'all' || value === 'negative' || value === 'needs_reply';
 
 export default function ReviewReplyAssistant({
   businessName,
   selectedSource = 'all',
   aggregateScope = 'business',
   onOpenLocation,
+  initialFilter = 'all',
 }: ReviewReplyAssistantProps) {
-  const { currentBusinessId } = useOutletContext<any>();
+  const { currentBusinessId, onBusinessChange } = useOutletContext<any>();
   const { language: interfaceLanguage, t } = useLanguage();
   const [tone, setTone] = useState<Tone>('professional');
   const [review, setReview] = useState('');
@@ -77,6 +84,8 @@ export default function ReviewReplyAssistant({
   const [generatingForReviewId, setGeneratingForReviewId] = useState<string | null>(null);
   const [generatedReplies, setGeneratedReplies] = useState<Record<string, string>>({});
   const [currentPage, setCurrentPage] = useState(1);
+  const [reviewFilter, setReviewFilter] = useState<ReviewFilterPreset>(initialFilter);
+  const [reviewSort, setReviewSort] = useState<ReviewSortPreset>('newest');
   const itemsPerPage = 10;
 
   const LANGUAGE_OPTIONS = [
@@ -85,6 +94,7 @@ export default function ReviewReplyAssistant({
     { value: 'es', label: 'Español' },
     { value: 'de', label: 'Deutsch' },
     { value: 'fr', label: 'Français' },
+    { value: 'tr', label: 'Türkçe' },
     { value: 'it', label: 'Italiano' },
     { value: 'pt', label: 'Português' },
     { value: 'zh', label: '中文' },
@@ -119,6 +129,27 @@ export default function ReviewReplyAssistant({
     loadExamples();
     loadExternalReviews();
   }, [currentBusinessId, aggregateScope]);
+
+  useEffect(() => {
+    setReviewFilter(initialFilter);
+    setCurrentPage(1);
+  }, [initialFilter]);
+
+  const openLocation = (locationBusinessId?: string | null) => {
+    const locationId = String(locationBusinessId || '').trim();
+    if (!locationId || locationId === String(currentBusinessId || '').trim()) {
+      return;
+    }
+
+    if (typeof onOpenLocation === 'function') {
+      onOpenLocation(locationId);
+      return;
+    }
+
+    if (typeof onBusinessChange === 'function') {
+      onBusinessChange(locationId);
+    }
+  };
 
   const addExample = async () => {
     const text = exampleInput.trim();
@@ -260,6 +291,39 @@ export default function ReviewReplyAssistant({
     { key: 'youth', label: t.dashboard.card.reviewReply.tones.youth },
     { key: 'business', label: t.dashboard.card.reviewReply.tones.business },
   ];
+
+  const sourceMatchedReviews = externalReviews.filter((reviewItem) => (
+    selectedSource === 'all' || (reviewItem.source && reviewItem.source.toLowerCase().includes(selectedSource))
+  ));
+  const negativeReviewsCount = sourceMatchedReviews.filter((reviewItem) => {
+    const rating = Number(reviewItem.rating || 0);
+    return rating > 0 && rating <= 3;
+  }).length;
+  const needsReplyReviewsCount = sourceMatchedReviews.filter((reviewItem) => !reviewItem.has_response).length;
+  const filteredExternalReviews = sourceMatchedReviews.filter((reviewItem) => {
+    const sourceMatches = selectedSource === 'all' || (reviewItem.source && reviewItem.source.toLowerCase().includes(selectedSource));
+    if (!sourceMatches) {
+      return false;
+    }
+    if (reviewFilter === 'negative') {
+      return Number(reviewItem.rating || 0) > 0 && Number(reviewItem.rating || 0) <= 3;
+    }
+    if (reviewFilter === 'needs_reply') {
+      return !reviewItem.has_response;
+    }
+    return true;
+  }).sort((left, right) => {
+    if (reviewSort === 'rating_asc') {
+      const leftRating = Number(left.rating || 0) || 99;
+      const rightRating = Number(right.rating || 0) || 99;
+      if (leftRating !== rightRating) {
+        return leftRating - rightRating;
+      }
+    }
+    const leftDate = new Date(left.published_at || '').getTime() || 0;
+    const rightDate = new Date(right.published_at || '').getTime() || 0;
+    return rightDate - leftDate;
+  });
 
   return (
     <div className="space-y-8">
@@ -455,24 +519,76 @@ export default function ReviewReplyAssistant({
 
       {/* External Reviews List */}
       <div className="pt-8 border-t border-gray-100">
-        <h4 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-          <Globe className="w-5 h-5 text-gray-400" />
-          {t.dashboard.card.reviewReply.externalTitle}
-        </h4>
+        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <h4 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+            <Globe className="w-5 h-5 text-gray-400" />
+            {t.dashboard.card.reviewReply.externalTitle}
+          </h4>
+          <div className="flex flex-wrap items-center gap-2">
+            {[
+              { key: 'all', label: `Все отзывы · ${sourceMatchedReviews.length}` },
+              { key: 'negative', label: `Негатив · ${negativeReviewsCount}` },
+              { key: 'needs_reply', label: `Без ответа · ${needsReplyReviewsCount}` },
+            ].map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => {
+                  if (isReviewFilterPreset(item.key)) {
+                    setReviewFilter(item.key);
+                    setCurrentPage(1);
+                  }
+                }}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-sm font-medium transition-colors",
+                  reviewFilter === item.key
+                    ? "border-slate-900 bg-slate-900 text-white"
+                    : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
+            <Select
+              value={reviewSort}
+              onValueChange={(value) => {
+                if (value === 'newest' || value === 'rating_asc') {
+                  setReviewSort(value);
+                  setCurrentPage(1);
+                }
+              }}
+            >
+              <SelectTrigger className="h-9 w-[210px] rounded-full border-slate-200 bg-white text-sm">
+                <SelectValue placeholder="Порядок" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="rating_asc">Сначала низкая оценка</SelectItem>
+                <SelectItem value="newest">Сначала новые</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {aggregateScope === 'network' && (
+          <div className="mb-6 rounded-2xl border border-indigo-100 bg-indigo-50/70 px-4 py-3 text-sm text-indigo-900">
+            Материнская точка показывает общую ленту отзывов по всей сети. У каждого отзыва указана конкретная точка, и её можно открыть одним кликом.
+          </div>
+        )}
 
         {loadingReviews ? (
           <div className="flex justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent"></div>
           </div>
-        ) : externalReviews.length === 0 ? (
+        ) : filteredExternalReviews.length === 0 ? (
           <div className="text-center py-12 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
             <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500 font-medium">{t.dashboard.card.reviewReply.noReviews}</p>
+            <p className="text-gray-500 font-medium">
+              {reviewFilter === 'all' ? t.dashboard.card.reviewReply.noReviews : 'По этому фильтру отзывов пока нет'}
+            </p>
           </div>
         ) : (
           <div className="space-y-6">
-            {externalReviews
-              .filter(r => selectedSource === 'all' || (r.source && r.source.toLowerCase().includes(selectedSource)))
+            {filteredExternalReviews
               .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
               .map((reviewItem) => (
                 <div key={reviewItem.id} className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
@@ -485,10 +601,14 @@ export default function ReviewReplyAssistant({
                         <div className="font-semibold text-gray-900">{reviewItem.author_name || t.dashboard.card.reviewReply.anonymous}</div>
                         <div className="flex items-center gap-2 text-xs text-gray-500">
                           {aggregateScope === 'network' && reviewItem.location_name && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-700 border border-indigo-100">
+                            <button
+                              type="button"
+                              onClick={() => openLocation(reviewItem.location_business_id)}
+                              className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-700 border border-indigo-100 transition-colors hover:bg-indigo-100"
+                            >
                               <MapPin className="w-3 h-3" />
                               {reviewItem.location_name}
-                            </span>
+                            </button>
                           )}
                           {reviewItem.published_at && (
                             <span className="flex items-center gap-1">
@@ -496,29 +616,34 @@ export default function ReviewReplyAssistant({
                               {new Date(reviewItem.published_at).toLocaleDateString(interfaceLanguage === 'ru' ? 'ru-RU' : 'en-US')}
                             </span>
                           )}
+                          {aggregateScope === 'network' && reviewItem.location_address && (
+                            <span className="truncate max-w-[320px]">
+                              {reviewItem.location_address}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
-                    {reviewItem.rating && (
-                      <div className="flex items-center gap-2">
-                        {aggregateScope === 'network' && reviewItem.location_business_id && reviewItem.location_business_id !== currentBusinessId && onOpenLocation && (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-8 rounded-lg border-indigo-200 text-indigo-700 hover:bg-indigo-50"
-                            onClick={() => onOpenLocation(reviewItem.location_business_id || '')}
-                          >
-                            Открыть точку
-                          </Button>
-                        )}
+                    <div className="flex items-center gap-2">
+                      {aggregateScope === 'network' && reviewItem.location_business_id && reviewItem.location_business_id !== currentBusinessId && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-8 rounded-lg border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                          onClick={() => openLocation(reviewItem.location_business_id)}
+                        >
+                          Открыть точку
+                        </Button>
+                      )}
+                      {reviewItem.rating && (
                         <div className="flex items-center gap-1 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100">
-                        {[...Array(5)].map((_, i) => (
-                          <Star key={i} className={cn("w-3.5 h-3.5", i < reviewItem.rating! ? "text-amber-500 fill-amber-500" : "text-gray-200 fill-gray-200")} />
-                        ))}
+                          {[...Array(5)].map((_, i) => (
+                            <Star key={i} className={cn("w-3.5 h-3.5", i < reviewItem.rating! ? "text-amber-500 fill-amber-500" : "text-gray-200 fill-gray-200")} />
+                          ))}
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -592,7 +717,7 @@ export default function ReviewReplyAssistant({
 
             {/* Pagination */}
             {(() => {
-              const filteredCount = externalReviews.filter(r => selectedSource === 'all' || (r.source && r.source.toLowerCase().includes(selectedSource))).length;
+              const filteredCount = filteredExternalReviews.length;
               const totalPages = Math.ceil(filteredCount / itemsPerPage);
 
               if (filteredCount <= itemsPerPage) return null;

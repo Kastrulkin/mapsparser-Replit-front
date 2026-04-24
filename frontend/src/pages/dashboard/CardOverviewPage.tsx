@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate, useOutletContext } from 'react-router-dom';
+import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/i18n/LanguageContext';
 import {
@@ -145,6 +145,14 @@ const CARD_FIRST_RUN_COPY: Record<string, {
 };
 
 type ServicesSort = 'default' | 'name_asc' | 'name_desc' | 'updated_desc' | 'updated_asc' | 'price_asc' | 'price_desc';
+type CardTabValue = 'services' | 'reviews' | 'news' | 'keywords' | 'competitors';
+type ReviewFocusValue = 'all' | 'negative' | 'needs_reply';
+
+const isCardTabValue = (value: string): value is CardTabValue =>
+  value === 'services' || value === 'reviews' || value === 'news' || value === 'keywords' || value === 'competitors';
+
+const isReviewFocusValue = (value: string): value is ReviewFocusValue =>
+  value === 'all' || value === 'negative' || value === 'needs_reply';
 
 const toServicesSort = (value: string): ServicesSort => {
   if (
@@ -163,6 +171,7 @@ const toServicesSort = (value: string): ServicesSort => {
 
 export const CardOverviewPage = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const servicesTableScrollRef = useRef<HTMLDivElement | null>(null);
   const context = useOutletContext<any>();
   const { user, currentBusinessId, currentBusiness, businesses, onBusinessChange } = context || {};
@@ -174,6 +183,10 @@ export const CardOverviewPage = () => {
   const firstRunCopy = CARD_FIRST_RUN_COPY[language] ?? CARD_FIRST_RUN_COPY.en;
   const automationAccess = getAutomationAccessForBusiness(currentBusiness);
   const automationLockedMessage = automationAccess.message || 'Автоматизация доступна только после оплаты тарифа.';
+  const initialTabParam = String(searchParams.get('tab') || '').trim().toLowerCase();
+  const initialReviewFocusParam = String(searchParams.get('review_filter') || '').trim().toLowerCase();
+  const [activeTab, setActiveTab] = useState<CardTabValue>(isCardTabValue(initialTabParam) ? initialTabParam : 'services');
+  const reviewFocus = isReviewFocusValue(initialReviewFocusParam) ? initialReviewFocusParam : 'all';
 
   // Состояния для рейтинга и отзывов
   const [rating, setRating] = useState<number | null>(null);
@@ -230,10 +243,28 @@ export const CardOverviewPage = () => {
   const [isNetworkMaster, setIsNetworkMaster] = useState(false);
   const [operationsLearning, setOperationsLearning] = useState<Record<string, any>>({});
 
+  useEffect(() => {
+    const nextTabParam = String(searchParams.get('tab') || '').trim().toLowerCase();
+    if (isCardTabValue(nextTabParam) && nextTabParam !== activeTab) {
+      setActiveTab(nextTabParam);
+    }
+    if (!nextTabParam && activeTab !== 'services') {
+      setActiveTab('services');
+    }
+  }, [activeTab, searchParams]);
+
   const isNetworkRepresentative = useMemo(() => {
     const businessId = String(currentBusinessId || '').trim();
     const networkId = String(currentBusiness?.network_id || '').trim();
-    if (!businessId || !networkId || !Array.isArray(businesses)) {
+    if (!businessId || !networkId) {
+      return false;
+    }
+
+    if (businessId === networkId) {
+      return true;
+    }
+
+    if (!Array.isArray(businesses)) {
       return false;
     }
 
@@ -993,7 +1024,26 @@ export const CardOverviewPage = () => {
           </div>
         )}
 
-        <Tabs defaultValue="services" className="space-y-8">
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => {
+            const nextTab = isCardTabValue(value) ? value : 'services';
+            setActiveTab(nextTab);
+            const nextParams = new URLSearchParams(searchParams);
+            if (nextTab === 'services') {
+              nextParams.delete('tab');
+            } else {
+              nextParams.set('tab', nextTab);
+            }
+            if (nextTab !== 'reviews') {
+              nextParams.delete('review_filter');
+            } else if (!nextParams.get('review_filter')) {
+              nextParams.set('review_filter', 'all');
+            }
+            setSearchParams(nextParams, { replace: true });
+          }}
+          className="space-y-8"
+        >
           <TabsList className="flex w-full justify-start overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50/80 p-1.5 [&::-webkit-scrollbar]:hidden">
             <TabsTrigger value="services" className="gap-2 rounded-xl px-5 py-2.5 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm">
               <List className="w-4 h-4" />
@@ -1263,6 +1313,7 @@ export const CardOverviewPage = () => {
               selectedSource={selectedSource}
               aggregateScope={isNetworkRepresentative ? 'network' : 'business'}
               onOpenLocation={onBusinessChange}
+              initialFilter={reviewFocus}
             />
           </TabsContent>
 

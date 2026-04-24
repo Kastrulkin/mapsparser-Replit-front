@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { YMaps, Map, Placemark, ZoomControl } from '@pbe/react-yandex-maps';
-import { Expand, ExternalLink, MapPin } from 'lucide-react';
+import { AlertTriangle, Expand, ExternalLink, MapPin, MessageSquare, Reply } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -18,6 +18,7 @@ import { SalonData } from '../data/mockData';
 interface NetworkMapProps {
     locations: SalonData[];
     onOpenDashboard?: (businessId: string) => void;
+    onOpenReviewDrilldown?: (businessId: string, filter: 'all' | 'negative' | 'needs_reply') => void;
 }
 
 interface MapViewport {
@@ -231,7 +232,7 @@ const NetworkMapCanvas: React.FC<{
     );
 };
 
-export const NetworkMap: React.FC<NetworkMapProps> = ({ locations, onOpenDashboard }) => {
+export const NetworkMap: React.FC<NetworkMapProps> = ({ locations, onOpenDashboard, onOpenReviewDrilldown }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const validLocations = useMemo(
         () => locations.filter((location) => Number.isFinite(location.lat) && Number.isFinite(location.lon)),
@@ -329,6 +330,36 @@ export const NetworkMap: React.FC<NetworkMapProps> = ({ locations, onOpenDashboa
                                                         <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
                                                         В LocalOS
                                                     </Button>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        className="h-8 rounded-full px-3 text-xs"
+                                                        onClick={() => onOpenReviewDrilldown && onOpenReviewDrilldown(location.id, 'all')}
+                                                    >
+                                                        <MessageSquare className="mr-1.5 h-3.5 w-3.5" />
+                                                        Отзывы
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        className="h-8 rounded-full px-3 text-xs text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+                                                        onClick={() => onOpenReviewDrilldown && onOpenReviewDrilldown(location.id, 'negative')}
+                                                    >
+                                                        <AlertTriangle className="mr-1.5 h-3.5 w-3.5" />
+                                                        Негатив
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        className="h-8 rounded-full px-3 text-xs text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+                                                        onClick={() => onOpenReviewDrilldown && onOpenReviewDrilldown(location.id, 'needs_reply')}
+                                                    >
+                                                        <Reply className="mr-1.5 h-3.5 w-3.5" />
+                                                        Нужны ответы
+                                                    </Button>
                                                 </div>
                                             </div>
                                         );
@@ -412,6 +443,36 @@ export const NetworkMap: React.FC<NetworkMapProps> = ({ locations, onOpenDashboa
                                                     >
                                                         <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
                                                         Открыть в LocalOS
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        className="h-8 rounded-full px-3 text-xs"
+                                                        onClick={() => onOpenReviewDrilldown && onOpenReviewDrilldown(location.id, 'all')}
+                                                    >
+                                                        <MessageSquare className="mr-1.5 h-3.5 w-3.5" />
+                                                        Отзывы
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        className="h-8 rounded-full px-3 text-xs text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+                                                        onClick={() => onOpenReviewDrilldown && onOpenReviewDrilldown(location.id, 'negative')}
+                                                    >
+                                                        <AlertTriangle className="mr-1.5 h-3.5 w-3.5" />
+                                                        Негатив
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        className="h-8 rounded-full px-3 text-xs text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+                                                        onClick={() => onOpenReviewDrilldown && onOpenReviewDrilldown(location.id, 'needs_reply')}
+                                                    >
+                                                        <Reply className="mr-1.5 h-3.5 w-3.5" />
+                                                        Нужны ответы
                                                     </Button>
                                                 </div>
                                             </div>
