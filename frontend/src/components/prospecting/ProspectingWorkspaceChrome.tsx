@@ -2,9 +2,8 @@ import { ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { Check, ChevronDown, LayoutGrid, List, Plus, Search, SlidersHorizontal } from 'lucide-react';
+import { Check, LayoutGrid, List, Plus, Search, SlidersHorizontal } from 'lucide-react';
 
 type WorkspaceTab = {
   value: string;
@@ -135,28 +134,7 @@ type ProspectingIntakePanelProps = {
   children: ReactNode;
 };
 
-type TriStateFilterOption = {
-  value: string;
-  label: string;
-};
-
-const triStateFilterOptions = (label: string): TriStateFilterOption[] => [
-  { value: '', label: `${label}: любой` },
-  { value: 'yes', label: `Есть ${label}` },
-  { value: 'no', label: `Нет ${label}` },
-];
-
-const triStateFilterLabel = (label: string, value: string) => {
-  if (value === 'yes') {
-    return `${label}: есть`;
-  }
-  if (value === 'no') {
-    return `${label}: нет`;
-  }
-  return `${label}: любой`;
-};
-
-function InlineFilterMenu({
+function InlinePresenceToggle({
   label,
   value,
   onChange,
@@ -165,32 +143,24 @@ function InlineFilterMenu({
   value: string;
   onChange: (value: string) => void;
 }) {
+  const checked = value === 'yes';
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="h-10 min-w-[180px] justify-between font-normal">
-          <span>{triStateFilterLabel(label, value)}</span>
-          <ChevronDown className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-[220px]">
-        {triStateFilterOptions(label).map((option) => {
-          const checked = option.value === value;
-          return (
-            <DropdownMenuItem
-              key={`${label}-${option.value || 'any'}`}
-              onSelect={() => onChange(option.value)}
-              className="gap-2"
-            >
-              <span className="flex h-4 w-4 items-center justify-center rounded-sm border border-border bg-background">
-                {checked ? <Check className="h-3 w-3" /> : null}
-              </span>
-              <span>{option.label}</span>
-            </DropdownMenuItem>
-          );
-        })}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <button
+      type="button"
+      onClick={() => onChange(checked ? '' : 'yes')}
+      className={[
+        'inline-flex h-10 items-center gap-2 rounded-md border px-3 text-sm transition-colors',
+        checked
+          ? 'border-primary/30 bg-primary/10 text-foreground'
+          : 'border-input bg-background text-muted-foreground hover:border-border hover:text-foreground',
+      ].join(' ')}
+      aria-pressed={checked}
+    >
+      <span className="flex h-4 w-4 items-center justify-center rounded-sm border border-current/40 bg-background">
+        {checked ? <Check className="h-3 w-3" /> : null}
+      </span>
+      <span>{label}</span>
+    </button>
   );
 }
 
@@ -290,12 +260,6 @@ export function ProspectingPipelineHeader({
             <option value="external_import">Внешний импорт</option>
             <option value="openclaw">OpenClaw</option>
           </select>
-          <InlineFilterMenu label="Telegram" value={filters.hasTelegram} onChange={onHasTelegramChange} />
-          <InlineFilterMenu label="WhatsApp" value={filters.hasWhatsApp} onChange={onHasWhatsAppChange} />
-          <InlineFilterMenu label="Max" value={filters.hasMax} onChange={onHasMaxChange} />
-          <InlineFilterMenu label="Email" value={filters.hasEmail} onChange={onHasEmailChange} />
-          <InlineFilterMenu label="Сайт" value={filters.hasWebsite} onChange={onHasWebsiteChange} />
-          <InlineFilterMenu label="VK" value={filters.hasVk} onChange={onHasVkChange} />
           <Button variant="outline" onClick={onOpenFilters}>
             <SlidersHorizontal className="mr-2 h-4 w-4" />
             Фильтры
@@ -314,6 +278,15 @@ export function ProspectingPipelineHeader({
               Список
             </Button>
           </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Каналы</span>
+          <InlinePresenceToggle label="Telegram" value={filters.hasTelegram} onChange={onHasTelegramChange} />
+          <InlinePresenceToggle label="WhatsApp" value={filters.hasWhatsApp} onChange={onHasWhatsAppChange} />
+          <InlinePresenceToggle label="Max" value={filters.hasMax} onChange={onHasMaxChange} />
+          <InlinePresenceToggle label="Email" value={filters.hasEmail} onChange={onHasEmailChange} />
+          <InlinePresenceToggle label="Сайт" value={filters.hasWebsite} onChange={onHasWebsiteChange} />
+          <InlinePresenceToggle label="VK" value={filters.hasVk} onChange={onHasVkChange} />
         </div>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant={quickFilter === 'all' ? 'secondary' : 'outline'} onClick={() => onQuickFilterChange('all')}>Все</Button>

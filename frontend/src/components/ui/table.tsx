@@ -1,19 +1,29 @@
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
+import { StickyBottomHorizontalScrollbar } from "@/components/ui/sticky-bottom-horizontal-scrollbar"
+
+type TableProps = React.HTMLAttributes<HTMLTableElement> & {
+  containerClassName?: string
+  enableStickyScrollbar?: boolean
+}
 
 const Table = React.forwardRef<
   HTMLTableElement,
-  React.HTMLAttributes<HTMLTableElement>
->(({ className, ...props }, ref) => (
-  <div className="relative w-full overflow-auto">
-    <table
-      ref={ref}
-      className={cn("w-full caption-bottom text-sm", className)}
-      {...props}
-    />
-  </div>
-))
+  TableProps
+>(({ className, containerClassName, enableStickyScrollbar = false, ...props }, ref) => {
+  const containerRef = React.useRef<HTMLDivElement | null>(null)
+  return (
+    <div ref={containerRef} className={cn("relative w-full overflow-auto", containerClassName)}>
+      <table
+        ref={ref}
+        className={cn("w-full caption-bottom text-sm", className)}
+        {...props}
+      />
+      {enableStickyScrollbar ? <StickyBottomHorizontalScrollbar targetRef={containerRef} /> : null}
+    </div>
+  )
+})
 Table.displayName = "Table"
 
 const TableHeader = React.forwardRef<

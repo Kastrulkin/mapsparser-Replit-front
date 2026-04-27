@@ -41,6 +41,7 @@ def create_app():
     from chatgpt_search_api import chatgpt_search_bp
     from stripe_integration import stripe_bp
     from yookassa_integration import billing_bp
+    from crypto_pay_api import crypto_pay_bp
     from admin_moderation import admin_moderation_bp
     from bookings_api import bookings_bp
     from ai_agent_webhooks import ai_webhooks_bp
@@ -51,6 +52,7 @@ def create_app():
     app.register_blueprint(chatgpt_search_bp)
     app.register_blueprint(stripe_bp)
     app.register_blueprint(billing_bp)
+    app.register_blueprint(crypto_pay_bp)
     app.register_blueprint(admin_moderation_bp)
     app.register_blueprint(bookings_bp)
     app.register_blueprint(ai_webhooks_bp)

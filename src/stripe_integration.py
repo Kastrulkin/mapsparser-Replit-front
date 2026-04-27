@@ -3,16 +3,24 @@
 Stripe интеграция для обработки платежей и подписок
 """
 import os
+import logging
+from typing import Any, Dict
 try:
     import stripe
 except ImportError:
     stripe = None
-    print("⚠️ Модуль stripe не установлен. Функции Stripe будут недоступны.")
 from flask import Blueprint, request, jsonify
 from database_manager import DatabaseManager
 from auth_system import verify_session
 from datetime import datetime, timedelta
 import uuid
+from services.checkout_session_service import (
+    complete_checkout,
+    load_checkout_session,
+    mark_checkout_created,
+    mark_checkout_failed,
+    mark_checkout_paid,
+)
 
 # Загружаем переменные окружения
 try:
@@ -24,12 +32,17 @@ except ImportError:
 STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY', '')
 STRIPE_PUBLISHABLE_KEY = os.getenv('STRIPE_PUBLISHABLE_KEY', '')
 STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET', '')
+VERBOSE_OPTIONAL_STARTUP = os.getenv('LOCALOS_VERBOSE_STARTUP_WARNINGS', '').strip().lower() in {'1', 'true', 'yes'}
+
+logger = logging.getLogger(__name__)
 
 # Инициализируем Stripe
 if STRIPE_SECRET_KEY and stripe:
     stripe.api_key = STRIPE_SECRET_KEY
 elif STRIPE_SECRET_KEY and not stripe:
-    print("⚠️ STRIPE_SECRET_KEY установлен, но модуль stripe не установлен. Установите: pip install stripe")
+    logger.warning("Stripe disabled: STRIPE_SECRET_KEY set but python package 'stripe' is not installed.")
+elif VERBOSE_OPTIONAL_STARTUP and not stripe:
+    logger.info("Stripe integration is not configured in this runtime.")
 
 stripe_bp = Blueprint('stripe', __name__)
 
@@ -111,6 +124,83 @@ def require_auth():
     token = auth_header.split(' ')[1]
     user_data = verify_session(token)
     return user_data
+
+
+def _normalize_checkout_tariff_for_stripe(tariff_id: str) -> str:
+    raw = str(tariff_id or "").strip().lower()
+    mapping = {
+        "starter": "starter",
+        "starter_monthly": "starter",
+        "professional": "professional",
+        "pro": "professional",
+        "pro_monthly": "professional",
+        "concierge": "concierge",
+        "concierge_monthly": "concierge",
+    }
+    normalized = mapping.get(raw)
+    if not normalized or normalized not in TIERS:
+        raise RuntimeError(f"Неверный тариф для Stripe: {tariff_id}")
+    return normalized
+
+
+def create_stripe_checkout_for_checkout_session(session_id: str) -> Dict[str, Any]:
+    if not stripe:
+        raise RuntimeError("Stripe не настроен. Установите модуль: pip install stripe")
+    if not STRIPE_SECRET_KEY:
+        raise RuntimeError("Stripe не настроен")
+
+    session = load_checkout_session(session_id)
+    if not session:
+        raise RuntimeError(f"Checkout session not found: {session_id}")
+
+    stripe_tier = _normalize_checkout_tariff_for_stripe(str(session.get("tariff_id") or ""))
+    tier_info = TIERS.get(stripe_tier) or {}
+    price_id = str(tier_info.get("price_id") or "").strip()
+    if not price_id:
+        raise RuntimeError(f"Для тарифа '{stripe_tier}' не настроен price_id")
+
+    frontend_base = (os.getenv("FRONTEND_BASE_URL") or "http://localhost:8000").rstrip("/")
+    success_url = f"{frontend_base}/checkout/return?session_id={session_id}&provider=stripe"
+    cancel_url = f"{frontend_base}/checkout/return?session_id={session_id}&provider=stripe&status=cancelled"
+    metadata = {
+        "checkout_session_id": session_id,
+        "entry_point": str(session.get("entry_point") or ""),
+        "tariff_id": str(session.get("tariff_id") or ""),
+        "kind": "checkout_session_payment",
+    }
+    checkout = stripe.checkout.Session.create(
+        payment_method_types=['card'],
+        line_items=[{'price': price_id, 'quantity': 1}],
+        mode='subscription',
+        success_url=success_url,
+        cancel_url=cancel_url,
+        metadata=metadata,
+        subscription_data={'metadata': metadata},
+        customer_email=str(session.get("email") or "").strip() or None,
+    )
+    mark_checkout_created(
+        session_id,
+        provider_invoice_id=str(checkout.id),
+        provider_status=str(getattr(checkout, "status", "") or ""),
+        payload_patch={"stripe_tier": stripe_tier},
+    )
+    return {
+        "checkout_id": str(checkout.id),
+        "url": str(checkout.url),
+        "payment_status": str(getattr(checkout, "payment_status", "") or ""),
+    }
+
+
+def get_stripe_checkout_session_status(checkout_id: str) -> Dict[str, Any]:
+    if not stripe:
+        raise RuntimeError("Stripe не настроен. Установите модуль: pip install stripe")
+    session = stripe.checkout.Session.retrieve(str(checkout_id))
+    return {
+        "id": str(getattr(session, "id", "") or ""),
+        "status": str(getattr(session, "status", "") or ""),
+        "payment_status": str(getattr(session, "payment_status", "") or ""),
+        "payment_intent": str(getattr(session, "payment_intent", "") or ""),
+    }
 
 @stripe_bp.route('/api/stripe/create-checkout', methods=['POST'])
 def create_stripe_checkout():
@@ -274,9 +364,29 @@ def stripe_webhook():
         print(f"📨 Получено событие Stripe: {event_type}")
         
         if event_type == 'checkout.session.completed':
-            # Платёж успешен, активируем подписку
-            handle_checkout_completed(data)
-        
+            metadata = dict(data.get('metadata') or {})
+            checkout_session_id = str(metadata.get('checkout_session_id') or '').strip()
+            if checkout_session_id:
+                mark_checkout_paid(
+                    checkout_session_id,
+                    provider_payment_id=str(data.get('payment_intent') or data.get('id') or '').strip() or None,
+                    provider_status=str(data.get('payment_status') or data.get('status') or 'paid').strip() or 'paid',
+                )
+                complete_checkout(checkout_session_id)
+            else:
+                # Платёж успешен, активируем подписку
+                handle_checkout_completed(data)
+
+        elif event_type == 'checkout.session.expired':
+            metadata = dict(data.get('metadata') or {})
+            checkout_session_id = str(metadata.get('checkout_session_id') or '').strip()
+            if checkout_session_id:
+                mark_checkout_failed(
+                    checkout_session_id,
+                    provider_status=str(data.get('status') or 'expired').strip() or 'expired',
+                    error_message='checkout expired',
+                )
+
         elif event_type == 'customer.subscription.created':
             # Подписка создана
             handle_subscription_created(data)
@@ -579,4 +689,3 @@ def stripe_cancel():
         "success": False,
         "message": "Оплата отменена"
     })
-

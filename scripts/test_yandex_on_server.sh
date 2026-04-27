@@ -1,46 +1,29 @@
 #!/bin/bash
-# Скрипт для тестирования парсера Яндекс.Бизнес на реальном сервере
+set -euo pipefail
 
-echo "🧪 Тестирование парсера Яндекс.Бизнес на сервере"
-echo "=================================================="
+echo "🧪 Тестирование Яндекс-скрипта в текущем production runtime"
+echo "==========================================================="
 echo ""
 
-# Проверяем, что мы на сервере
-if [ ! -d "/root/mapsparser-Replit-front" ]; then
-    echo "❌ Директория проекта не найдена!"
-    echo "   Ожидается: /root/mapsparser-Replit-front"
-    echo "   Текущая директория: $(pwd)"
+if [ ! -f "/opt/seo-app/docker-compose.yml" ]; then
+    echo "❌ Не найден /opt/seo-app/docker-compose.yml"
+    echo "   Этот скрипт рассчитан на текущий Docker production runtime."
     exit 1
 fi
 
-# Переходим в директорию проекта
-cd /root/mapsparser-Replit-front
+cd /opt/seo-app
 
-# Активируем виртуальное окружение
-if [ ! -d "venv" ]; then
-    echo "❌ Виртуальное окружение не найдено!"
-    exit 1
-fi
-
-source venv/bin/activate
-
-# Проверяем наличие тестового скрипта
 if [ ! -f "scripts/test_oliver_yandex.py" ]; then
-    echo "❌ Тестовый скрипт не найден: scripts/test_oliver_yandex.py"
+    echo "❌ Не найден scripts/test_oliver_yandex.py"
     exit 1
 fi
 
-echo "✅ Окружение готово"
-echo "📋 Запускаю тест для бизнеса 'Оливер'..."
+echo "✅ Проект найден: /opt/seo-app"
+echo "✅ Запускаю тест внутри app container"
 echo ""
 
-# Запускаем тест
-python3 scripts/test_oliver_yandex.py
+docker compose exec -T app python3 scripts/test_oliver_yandex.py
 
 echo ""
-echo "=================================================="
+echo "==========================================================="
 echo "✅ Тест завершён"
-echo ""
-echo "💡 Если видите ошибки SSL/Permission, это нормально для sandbox"
-echo "   На реальном сервере запросы должны работать"
-

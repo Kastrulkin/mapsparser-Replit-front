@@ -11,6 +11,7 @@ from psycopg2.extras import RealDictCursor
 from api.admin_prospecting import DRAFT_GENERATED
 from api.admin_prospecting import _attach_admin_prospecting_public_offer_metadata
 from api.admin_prospecting import _build_admin_lead_offer_payload
+from api.admin_prospecting import _build_deterministic_dense_audit_enrichment
 from api.admin_prospecting import _build_offer_slug
 from api.admin_prospecting import _drop_mismatched_explicit_business_link
 from api.admin_prospecting import _generate_superadmin_deterministic_first_message
@@ -127,23 +128,24 @@ def main() -> None:
                         enabled_languages=["ru"],
                     )
                 )
+                dense_audit = _build_deterministic_dense_audit_enrichment(display_lead, preview, "ru")
                 audit_payload = page_json.get("audit") if isinstance(page_json.get("audit"), dict) else {}
-                audit_payload["ai_enrichment"] = {
-                    "source": "deterministic",
-                    "prompt_source": "local_fallback",
-                    "prompt_key": "lead_audit_enrichment",
-                    "prompt_version": "deterministic_v1",
-                }
+                if audit_payload:
+                    enriched_summary = str(dense_audit.get("summary_text") or "").strip()
+                    enriched_actions = dense_audit.get("recommended_actions") if isinstance(dense_audit.get("recommended_actions"), list) else []
+                    why_now = str(dense_audit.get("why_now") or "").strip()
+                    if enriched_summary:
+                        audit_payload["summary_text"] = enriched_summary
+                    if enriched_actions:
+                        audit_payload["recommended_actions"] = enriched_actions
+                    if why_now:
+                        audit_payload["why_now"] = why_now
+                audit_payload["ai_enrichment"] = dense_audit.get("meta") if isinstance(dense_audit.get("meta"), dict) else {}
                 page_json["audit"] = audit_payload
                 page_json["preferred_language"] = "ru"
                 page_json["primary_language"] = "ru"
                 page_json["enabled_languages"] = ["ru"]
-                page_json["ai_enrichment"] = {
-                    "source": "deterministic",
-                    "prompt_source": "local_fallback",
-                    "prompt_key": "lead_audit_enrichment",
-                    "prompt_version": "deterministic_v1",
-                }
+                page_json["ai_enrichment"] = dense_audit.get("meta") if isinstance(dense_audit.get("meta"), dict) else {}
 
                 cur.execute(
                     "SELECT slug FROM adminprospectingleadpublicoffers WHERE lead_id = %s LIMIT 1",

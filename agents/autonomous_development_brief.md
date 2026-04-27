@@ -75,6 +75,29 @@ Stop and ask user only when:
 Use this template when starting autonomous work:
 
 ```
+
+## 11) Repo Task Proof Loop Integration (Default in autonomous mode)
+- Trigger `Автономная разработка` implies proof-loop workflow by default.
+- Start rule:
+  - if no task bundle exists: `scripts/proof_loop.sh init <TASK_ID> "<task text>"`
+  - if bundle exists: continue current `<TASK_ID>` without re-init
+- During execution, keep artifacts in:
+  - `.agent/tasks/<TASK_ID>/`
+- Minimum proof discipline before final sign-off:
+  1) `scripts/proof_loop.sh validate <TASK_ID>`
+  2) `scripts/proof_loop.sh status <TASK_ID>`
+  3) fresh verifier pass (separate from implementer role)
+
+Suggested TASK_ID format:
+- `<area>-<goal>-<yyyymmdd>`
+
+## 12) Autonomous Control Phrases
+- `Статус автономной разработки`
+  - execute: `scripts/proof_loop.sh status <TASK_ID>`
+  - report current state + next action
+- `Проверка автономной разработки`
+  - execute: `scripts/proof_loop.sh validate <TASK_ID>`
+  - report valid/invalid + concrete errors
 Автономная разработка
 
 Цель:

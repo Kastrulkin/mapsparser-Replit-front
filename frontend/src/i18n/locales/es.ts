@@ -160,7 +160,7 @@ export const es = {
     support: "Soporte personal",
     supportDesc1: "Ayudamos en cada etapa — guiamos hacia resultados",
     supportDesc2: "Disponible en chat, correo, teléfono",
-    finalText: "¡Desarrollo completo del salón — pago solo de nuevos ingresos!",
+    finalText: "Desarrollo completo del salón - ¡Lo haremos todo por usted!",
     contactExpert: "Contactar un experto"
   },
 
@@ -601,6 +601,8 @@ export const es = {
         brows_lashes: "Brows & Lashes",
         makeup: "Makeup",
         tanning: "Tanning",
+        hotel: "Hotel",
+        guest_house: "Casa de huéspedes",
         other: "Other"
       },
       workSchedule: {

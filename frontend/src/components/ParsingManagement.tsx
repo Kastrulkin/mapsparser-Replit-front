@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Switch } from './ui/switch';
+import { StickyBottomHorizontalScrollbar } from './ui/sticky-bottom-horizontal-scrollbar';
 import { RefreshCw, Play, Trash2, AlertTriangle, ArrowLeftRight, Copy, Loader2, ExternalLink, CircleSlash, X } from 'lucide-react';
 import { newAuth } from '../lib/auth_new';
 import { useToast } from '../hooks/use-toast';
@@ -167,6 +168,7 @@ const SidePanel: React.FC<SidePanelProps> = ({
 };
 
 export const ParsingManagement: React.FC = () => {
+  const rawTasksScrollRef = useRef<HTMLDivElement | null>(null);
   const { t } = useLanguage();
   const [tasks, setTasks] = useState<ParsingTask[]>([]);
   const [tasksTotal, setTasksTotal] = useState(0);
@@ -1259,6 +1261,7 @@ export const ParsingManagement: React.FC = () => {
       ) : null}
 
       {isRawTableVisible ? (
+      <>
       <Card>
         <CardHeader>
           <CardTitle>{viewMode === 'technical' ? `${t.dashboard.parsing.table.title} (тех. режим)` : `${t.dashboard.parsing.table.title} (сырой список)`}</CardTitle>
@@ -1285,8 +1288,8 @@ export const ParsingManagement: React.FC = () => {
           ) : filteredTasks.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">{t.dashboard.parsing.table.noTasks}</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-border">
+            <div ref={rawTasksScrollRef} className="overflow-x-auto">
+              <table className="min-w-[1700px] divide-y divide-border">
                 <thead className="bg-muted">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t.dashboard.parsing.table.id}</th>
@@ -1488,6 +1491,8 @@ export const ParsingManagement: React.FC = () => {
           )}
         </CardContent>
       </Card>
+      <StickyBottomHorizontalScrollbar targetRef={rawTasksScrollRef} />
+      </>
       ) : null}
 
       <SidePanel

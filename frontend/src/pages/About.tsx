@@ -13,17 +13,52 @@ const About = () => {
   const { t, language } = useLanguage();
   const isRu = language === "ru";
 
-  const handleSubscribeLanding = (tierId: "starter" | "professional" | "concierge") => {
+  const handleSubscribeLanding = async (tierId: "starter" | "professional" | "concierge") => {
     const token = newAuth.getToken();
 
-    // Если пользователь не авторизован — ведём на регистрацию с выбранным тарифом
-    if (!token) {
-      navigate(`/login?tab=register&tier=${tierId}&source=pricing`);
-      return;
+    let paymentProvider = "yookassa";
+    try {
+      const providerResp = await fetch("/api/geo/payment-provider");
+      const providerData = await providerResp.json();
+      const detected = String(providerData?.payment_provider || "").trim().toLowerCase();
+      paymentProvider = detected === "stripe" ? "stripe" : "yookassa";
+    } catch {
+      paymentProvider = "yookassa";
     }
 
-    // Если уже авторизован — ведём в личный кабинет на страницу подписки
-    navigate(`/dashboard/settings?payment=required&tier=${tierId}&source=pricing`);
+    let email = "";
+    if (!token) {
+      email = window.prompt("Введите email, на который оформить доступ к LocalOS")?.trim() || "";
+      if (!email) {
+        return;
+      }
+    }
+
+    try {
+      const response = await fetch("/api/billing/checkout/session/start", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          provider: paymentProvider,
+          entry_point: "pricing_page",
+          channel: "web",
+          tariff_id: tierId,
+          email: email || undefined,
+          source: "about_pricing_page",
+        }),
+      });
+      const data = await response.json();
+      const redirectUrl = String(data?.confirmation_url || data?.url || "").trim();
+      if (!response.ok || !redirectUrl) {
+        throw new Error(String(data?.error || "Не удалось создать сессию оплаты"));
+      }
+      window.location.href = redirectUrl;
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Не удалось перейти к оплате");
+    }
   };
 
   useEffect(() => {

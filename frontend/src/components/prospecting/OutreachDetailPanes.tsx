@@ -150,6 +150,36 @@ const toWorkflowActions = (actions?: DetailAction[]) =>
     variant: action.variant,
   }));
 
+const renderDetailStatusBadge = (
+  label?: string,
+  tone?: 'default' | 'success' | 'warning' | 'danger',
+) => (label ? <LeadStatusBadge label={label} tone={tone} /> : null);
+
+const renderDetailWarning = ({
+  warning,
+  canOpenLeadCard,
+  onOpenLeadCard,
+  onFixChannel,
+}: {
+  warning?: string;
+  canOpenLeadCard: boolean;
+  onOpenLeadCard: () => void;
+  onFixChannel?: () => void;
+}) => (
+  warning ? (
+    <ChannelWarning
+      description={warning}
+      action={<DetailWarningActions canOpenLeadCard={canOpenLeadCard} onOpenLeadCard={onOpenLeadCard} onFixChannel={onFixChannel} />}
+    />
+  ) : null
+);
+
+const renderDetailActions = (primaryAction?: DetailAction, secondaryActions?: DetailAction[]) => {
+  const primary = toWorkflowAction(primaryAction);
+  const secondary = toWorkflowActions(secondaryActions);
+  return primary ? <WorkflowActionRow primary={primary} secondary={secondary} /> : null;
+};
+
 const DetailContextSection = ({ children }: { children: ReactNode }) => (
   <div className="rounded-xl border p-4">
     <div className="text-sm font-semibold">Ссылки и контекст</div>
@@ -234,20 +264,17 @@ const DetailStatusCards = ({
 );
 
 export function DraftDetailPanel(props: DraftDetailPaneProps) {
-  const primary = toWorkflowAction(props.primaryAction);
-  const secondary = toWorkflowActions(props.secondaryActions);
-
   return (
     <LeadDetailPane
       title={props.title}
       description={props.description}
-      statusBadge={props.statusLabel ? <LeadStatusBadge label={props.statusLabel} tone={props.statusTone} /> : null}
-      warning={props.warning ? (
-        <ChannelWarning
-          description={props.warning}
-          action={<DetailWarningActions canOpenLeadCard={props.canOpenLeadCard} onOpenLeadCard={props.onOpenLeadCard} onFixChannel={props.onFixChannel} />}
-        />
-      ) : null}
+      statusBadge={renderDetailStatusBadge(props.statusLabel, props.statusTone)}
+      warning={renderDetailWarning({
+        warning: props.warning,
+        canOpenLeadCard: props.canOpenLeadCard,
+        onOpenLeadCard: props.onOpenLeadCard,
+        onFixChannel: props.onFixChannel,
+      })}
       topMeta={props.leadContacts ? (
         <>
           <ContactPresenceBadges
@@ -282,7 +309,7 @@ export function DraftDetailPanel(props: DraftDetailPaneProps) {
           </div>
         ) : null
       }
-      actions={primary ? <WorkflowActionRow primary={primary} secondary={secondary} /> : null}
+      actions={renderDetailActions(props.primaryAction, props.secondaryActions)}
       editor={
         <FollowUpEditor
           label="Текст сообщения"
@@ -309,20 +336,17 @@ export function DraftDetailPanel(props: DraftDetailPaneProps) {
 }
 
 export function QueueDetailPanel(props: QueueDetailPaneProps) {
-  const primary = toWorkflowAction(props.primaryAction);
-  const secondary = toWorkflowActions(props.secondaryActions);
-
   return (
     <LeadDetailPane
       title={props.title}
       description={props.description}
-      statusBadge={props.statusLabel ? <LeadStatusBadge label={props.statusLabel} tone={props.statusTone} /> : null}
-      warning={props.warning ? (
-        <ChannelWarning
-          description={props.warning}
-          action={<DetailWarningActions canOpenLeadCard={props.canOpenLeadCard} onOpenLeadCard={props.onOpenLeadCard} onFixChannel={props.onFixChannel} />}
-        />
-      ) : null}
+      statusBadge={renderDetailStatusBadge(props.statusLabel, props.statusTone)}
+      warning={renderDetailWarning({
+        warning: props.warning,
+        canOpenLeadCard: props.canOpenLeadCard,
+        onOpenLeadCard: props.onOpenLeadCard,
+        onFixChannel: props.onFixChannel,
+      })}
       errorSummary={props.topErrorSummary}
       topMeta={props.leadContacts ? (
         <>
@@ -354,7 +378,7 @@ export function QueueDetailPanel(props: QueueDetailPaneProps) {
           <DetailContextSection>{props.contextLinks}</DetailContextSection>
         ) : null
       }
-      actions={primary ? <WorkflowActionRow primary={primary} secondary={secondary} /> : null}
+      actions={renderDetailActions(props.primaryAction, props.secondaryActions)}
       review={
         <div className="space-y-3">
           <ReviewChecklist items={props.checklistItems} />
@@ -383,20 +407,17 @@ export function QueueDetailPanel(props: QueueDetailPaneProps) {
 }
 
 export function SentDetailPanel(props: SentDetailPaneProps) {
-  const primary = toWorkflowAction(props.primaryAction);
-  const secondary = toWorkflowActions(props.secondaryActions);
-
   return (
     <LeadDetailPane
       title={props.title}
       description={props.description}
-      statusBadge={props.statusLabel ? <LeadStatusBadge label={props.statusLabel} tone={props.statusTone} /> : null}
-      warning={props.warning ? (
-        <ChannelWarning
-          description={props.warning}
-          action={<DetailWarningActions canOpenLeadCard={props.canOpenLeadCard} onOpenLeadCard={props.onOpenLeadCard} onFixChannel={props.onFixChannel} />}
-        />
-      ) : null}
+      statusBadge={renderDetailStatusBadge(props.statusLabel, props.statusTone)}
+      warning={renderDetailWarning({
+        warning: props.warning,
+        canOpenLeadCard: props.canOpenLeadCard,
+        onOpenLeadCard: props.onOpenLeadCard,
+        onFixChannel: props.onFixChannel,
+      })}
       topMeta={props.leadContacts ? (
         <>
           <ContactPresenceBadges
@@ -427,7 +448,7 @@ export function SentDetailPanel(props: SentDetailPaneProps) {
           <DetailContextSection>{props.contextLinks}</DetailContextSection>
         ) : null
       }
-      actions={primary ? <WorkflowActionRow primary={primary} secondary={secondary} /> : null}
+      actions={renderDetailActions(props.primaryAction, props.secondaryActions)}
       editor={
         <FollowUpEditor
           label="Follow-up сообщение"

@@ -12,7 +12,21 @@
 
 ## 🐳 Запуск и обновление с Docker (локально и на VPS)
 
-Если проект запускается через **Docker Compose** (контейнеры `postgres`, `app`, `worker`), порядок действий другой: не используются systemd, venv и копирование фронтенда в `/var/www/html`. Ниже — единый сценарий для локального запуска и обновления на сервере.
+Если проект запускается через **Docker Compose** (контейнеры `postgres`, `app`, `worker`), порядок действий другой: не используются legacy systemd/venv-сценарии и внешний web-root. Ниже — единый сценарий для локального запуска и обновления на сервере.
+
+### Каноническая раздача фронтенда
+
+- Production source of truth для фронтенда: `/opt/seo-app/frontend/dist`
+- Runtime path в `app` container: `/app/frontend/dist`
+- `localos.pro` должен получать SPA только через Flask на `127.0.0.1:8000`
+- Для hotfix фронтенда используйте:
+
+```bash
+cd /opt/seo-app
+bash scripts/deploy_frontend_dist.sh
+```
+
+Старые пути вроде legacy web-root, `/opt/seo-app/dist` и `tmp_frontend_dist*` не должны участвовать в production deploy.
 
 ### Требования
 
@@ -85,7 +99,7 @@ npm run dev
 |----------|--------|
 | Локальная разработка с единым окружением (Postgres + app + worker) | **Docker**: `./scripts/docker-compose-build.sh up -d --build` + фронт `npm run dev` |
 | Деплой на VPS с контейнерами | **Docker**: на сервере `git pull` и `./scripts/docker-compose-build.sh up -d --build` |
-| Сервер без Docker (systemd, venv, Nginx, скрипт обновления) | **Классический**: см. разделы 1–4 ниже и `update_server.sh` |
+| Сервер без Docker (systemd, venv, Nginx) | **Legacy-only**: не использовать для текущего `localos.pro`; см. разделы ниже только как исторический контекст |
 
 ### Если Docker build падает (BuildKit / buildx)
 
@@ -139,9 +153,9 @@ ps aux | grep "telegram_bot.py\|telegram_reviews_bot.py" | grep -v grep
 
 ### 1️⃣ Изменения в **Frontend** (React/TypeScript)
 
-*При запуске через Docker фронтенд для разработки запускают на хосте (`npm run dev`); обновление бэкенда — через `docker compose up -d --build` (см. раздел «Запуск и обновление с Docker» выше). Ниже — порядок для деплоя без Docker (systemd, Nginx, копирование в `/var/www/html`).*
+*При запуске через Docker фронтенд для разработки запускают на хосте (`npm run dev`); production deploy выполняется только через канонический Docker-путь из раздела выше. Старый non-Docker сценарий больше не является актуальным runbook и не должен использоваться.*
 
-**⚠️ КРИТИЧЕСКИ ВАЖНО:** После **ЛЮБЫХ** изменений в `frontend/src/*` **ОБЯЗАТЕЛЬНО** пересобрать фронтенд, иначе изменения не появятся в браузере!
+**⚠️ КРИТИЧЕСКИ ВАЖНО:** После **ЛЮБЫХ** изменений в `frontend/src/*` **ОБЯЗАТЕЛЬНО** пересобрать фронтенд и обновить канонический `frontend/dist`, иначе изменения не появятся в браузере!
 
 #### Шаг 1: Пересобрать фронтенд
 ```bash
@@ -158,25 +172,27 @@ ls -lh dist/assets/index-*.js
 ```
 
 #### Шаг 3: Автоматическое обновление (РЕКОМЕНДУЕТСЯ)
-Вместо ручной сборки используйте скрипт `update_server.sh` в корне проекта. Он сам соберет фронтенд, скопирует файлы в `/var/www/html` и перезапустит сервисы.
+Вместо legacy server-update wrapper используйте канонический deploy-скрипт. Он собирает фронтенд, синхронизирует `/opt/seo-app/frontend/dist` и проверяет live runtime path `/app/frontend/dist`.
 
 ```bash
-cd /root/mapsparser-Replit-front
-bash update_server.sh
+cd /opt/seo-app
+bash scripts/deploy_frontend_dist.sh --build
 ```
 
-**Почему только скрипт?**
-- `npm run build` обновляет папку `dist` внутри `frontend`, но Nginx смотрит в `/var/www/html`.
-- Скрипт копирует файлы из `dist` в `/var/www/html`.
-- Без этого действия вы будете видеть старую версию сайта даже после успешного билда!
+**Почему именно так?**
+- `npm run build` обновляет локальный `frontend/dist`, но прод использует bind mount `/opt/seo-app/frontend/dist -> /app/frontend/dist`.
+- Скрипт синхронизирует именно канонический dist и проверяет live HTML внутри контейнера.
+- Старые пути legacy web-root, `/opt/seo-app/dist` и `tmp_frontend_dist*` не участвуют в production deploy.
 
 #### Шаг 4 (опционально): Если скрипт недоступен — ручное обновление
-Если нужно обновить вручную, не забудьте скопировать файлы:
+Если нужно обновить вручную, не пропускайте синхронизацию в канонический dist:
 ```bash
-cd frontend
+cd /opt/seo-app/frontend
 npm run build
-cp -r dist/* /var/www/html/  # <-- КРИТИЧЕСКИ ВАЖНО!
-service nginx reload
+cd /opt/seo-app
+bash scripts/verify_frontend_dist_integrity.sh frontend/dist
+docker cp frontend/dist/. seo-app-app-1:/app/frontend/dist/
+docker compose exec -T app sh -lc 'grep -n "/assets/index-" /app/frontend/dist/index.html'
 ```
 
 #### Шаг 5: Очистить кеш браузера
@@ -220,7 +236,7 @@ git push origin main
 #### Шаг 2: Обновить код на сервере (если на сервере)
 ```bash
 # На сервере: получить последние изменения
-cd /root/mapsparser-Replit-front
+cd /opt/seo-app
 git pull origin main
 
 # ⚠️ КРИТИЧЕСКИ ВАЖНО: Проверить, что код действительно обновился!
@@ -240,19 +256,22 @@ systemctl status telegram-bot telegram-reviews-bot
 # Должны быть "active (running)"
 ```
 
-#### Шаг 4: Перезапуск через Systemd (РЕКОМЕНДУЕТСЯ)
+#### Шаг 4: Перезапуск контейнеров
 
-На сервере настроены systemd сервисы:
-- `seo-api` — основной Flask сервер (порт 8000)
-- `seo-worker` — фоновый обработчик задач
+На текущем production runtime используйте Docker Compose:
 
-Для перезапуска используйте:
 ```bash
-systemctl restart seo-api
-systemctl restart seo-worker
+cd /opt/seo-app
+docker compose restart app
+docker compose restart worker
 ```
 
-Или используйте `bash update_server.sh`, который сделает это за вас.
+Если задача связана только с frontend deploy, используйте канонический:
+
+```bash
+cd /opt/seo-app
+bash scripts/deploy_frontend_dist.sh --build
+```
 
 **⚠️ ВАЖНО:** Сервиса с именем `mapsparser` не существует! Используйте `seo-api`.
 
@@ -478,17 +497,15 @@ journalctl -u telegram-reviews-bot -n 20
   git push origin main
   
   # 2. На сервере: обновить код
-  cd /root/mapsparser-Replit-front
+  cd /opt/seo-app
   git pull origin main
   
   # 3. Проверить, что код обновился
   git log --oneline -1
   # Должен быть последний коммит
   
-  # 4. Перезапустить Flask
-  pkill -9 -f "python.*main.py"
-  sleep 2
-  source venv/bin/activate
+  # 4. Перезапустить app container
+  docker compose restart app
   python src/main.py >/tmp/seo_main.out 2>&1 &
   sleep 3
   ```
@@ -582,23 +599,20 @@ journalctl -u telegram-reviews-bot -n 20
 
 ## 🚀 Автоматизация (рекомендуется)
 
-### ✅ Используй готовый скрипт `update_server.sh`
+### ✅ Используй канонический deploy-скрипт `scripts/deploy_frontend_dist.sh`
 
 **Скрипт уже включает:**
-- ✅ Git pull для получения последних изменений
-- ✅ Пересборку фронтенда (`npm run build`) с удалением старого `dist`
-- ✅ Перезапуск Flask API через systemd (`seo-api.service`)
-- ✅ **Перезапуск Nginx** (`systemctl reload nginx`)
-- ✅ **Очистку кэша Nginx** (`rm -rf /var/cache/nginx/*`)
-- ✅ Проверку статусов всех сервисов
-- ✅ Показ логов для диагностики
-- ✅ Инструкции для пользователя о браузерном кэше
+- ✅ локальную пересборку фронтенда (`npm run build`) при запуске с `--build`
+- ✅ синхронизацию канонического `frontend/dist` на сервер
+- ✅ обновление runtime path `/app/frontend/dist`
+- ✅ быструю проверку live `index.html`
+- ✅ защиту от рассинхрона между host dist и container dist
 
 ### Команда для запуска:
 
 ```bash
-cd /root/mapsparser-Replit-front
-bash update_server.sh
+cd /opt/seo-app
+bash scripts/deploy_frontend_dist.sh --build
 ```
 
 ### Что делать, если есть локальные изменения на сервере:
@@ -608,7 +622,7 @@ bash update_server.sh
 git reset --hard origin/main
 
 # Затем запустить скрипт:
-bash update_server.sh
+bash scripts/deploy_frontend_dist.sh --build
 ```
 
 ### После выполнения скрипта:
@@ -619,4 +633,4 @@ bash update_server.sh
 
 ---
 
-**Скрипт находится в:** `update_server.sh` в корне проекта
+**Скрипт находится в:** `scripts/deploy_frontend_dist.sh`

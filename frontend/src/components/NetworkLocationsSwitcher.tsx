@@ -1,11 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
 import { Building2, ChevronDown, MapPin } from 'lucide-react';
+import { pickNetworkRepresentative } from '@/lib/networkRepresentative';
+import { useClickOutside } from '@/hooks/useClickOutside';
 
 interface NetworkLocation {
     id: string;
     name: string;
     address?: string;
     description?: string;
+    network_id?: string;
+    created_at?: string;
 }
 
 interface NetworkLocationsSwitcherProps {
@@ -21,6 +25,36 @@ export const NetworkLocationsSwitcher: React.FC<NetworkLocationsSwitcherProps> =
     const [locations, setLocations] = useState<NetworkLocation[]>([]);
     const [selectedLocation, setSelectedLocation] = useState<NetworkLocation | null>(null);
     const [loading, setLoading] = useState(true);
+    const switcherRef = useRef<HTMLDivElement | null>(null);
+    const closeSwitcher = useCallback(() => setIsOpen(false), []);
+    useClickOutside(switcherRef, closeSwitcher, { enabled: isOpen });
+
+    const parentLocationId = (() => {
+        const networkId = String(locations[0]?.network_id || '').trim();
+        if (!networkId) return '';
+        return String(pickNetworkRepresentative(locations, networkId)?.id || '').trim();
+    })();
+
+    const getLocationLabel = (location: NetworkLocation | null) => {
+        if (!location) return 'Выберите точку';
+        const baseName = String(location.name || '').trim() || 'Точка';
+        if (parentLocationId && String(location.id || '').trim() === parentLocationId) {
+            return `👑 ${baseName}`;
+        }
+        return baseName;
+    };
+
+    const getLocationSubtitle = (location: NetworkLocation | null) => {
+        const rawAddress = String(location?.address || '').trim();
+        const normalizedAddress = rawAddress.toLowerCase();
+        if (!rawAddress) {
+            return '';
+        }
+        if (normalizedAddress === 'материнская точка сети') {
+            return '';
+        }
+        return rawAddress;
+    };
 
     useEffect(() => {
         loadNetworkLocations();
@@ -78,7 +112,7 @@ export const NetworkLocationsSwitcher: React.FC<NetworkLocationsSwitcherProps> =
     }
 
     return (
-        <div className="relative">
+        <div ref={switcherRef} className="relative">
             <button
                 onClick={() => setIsOpen(!isOpen)}
                 className="flex items-center space-x-2 px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
@@ -86,11 +120,11 @@ export const NetworkLocationsSwitcher: React.FC<NetworkLocationsSwitcherProps> =
                 <MapPin className="w-4 h-4 text-blue-600" />
                 <div className="text-left">
                     <div className="text-sm font-medium text-gray-900">
-                        {selectedLocation?.name || 'Выберите точку'}
+                        {getLocationLabel(selectedLocation)}
                     </div>
-                    {selectedLocation?.address && (
+                    {getLocationSubtitle(selectedLocation) && (
                         <div className="text-xs text-gray-500 truncate max-w-[200px]">
-                            {selectedLocation.address}
+                            {getLocationSubtitle(selectedLocation)}
                         </div>
                     )}
                 </div>
@@ -110,12 +144,12 @@ export const NetworkLocationsSwitcher: React.FC<NetworkLocationsSwitcherProps> =
                                 }`} />
                             <div>
                                 <div className={`text-sm font-medium ${selectedLocation?.id === location.id ? 'text-blue-900' : 'text-gray-900'
-                                    }`}>
-                                    {location.name}
+                                        }`}>
+                                    {getLocationLabel(location)}
                                 </div>
-                                {location.address && (
+                                {getLocationSubtitle(location) && (
                                     <div className="text-xs text-gray-500 mt-0.5">
-                                        {location.address}
+                                        {getLocationSubtitle(location)}
                                     </div>
                                 )}
                             </div>

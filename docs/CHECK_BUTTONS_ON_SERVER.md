@@ -1,111 +1,51 @@
-# Проверка кнопок управления пользователями на сервере
+# Проверка UI-правок на сервере
 
-## Проблема
-Кнопки удаления/паузы пользователей есть локально, но не появились на сервере.
+## Цель
 
-## Диагностика
+Подтвердить, что фронтенд-изменение реально доехало до production bundle и раздаётся из канонического runtime path.
 
-### Шаг 1: Проверить, что код обновлен на сервере
-```bash
-# На сервере
-cd /root/mapsparser-Replit-front
-git log --oneline -3
-# Должен быть коммит "Исправлена видимость кнопок управления пользователями"
-```
+## Проверка на сервере
 
-### Шаг 2: Проверить дату JS файла
-```bash
-# На сервере
-ls -lh frontend/dist/assets/index-*.js
-# Должна быть ТЕКУЩАЯ дата/время (после последней сборки)
-```
-
-### Шаг 3: Проверить содержимое JS файла (наличие кнопок)
-```bash
-# На сервере
-grep -o "handleDeleteUser\|handlePauseUser" frontend/dist/assets/index-*.js | head -5
-# Должны быть оба метода
-```
-
-### Шаг 4: Проверить в браузере
-1. Откройте DevTools (F12) → Network
-2. Найдите запрос `index-*.js`
-3. Проверьте:
-   - **URL файла** - должен быть новый (например, `index-wAe_HY0M.js`)
-   - **Дата модификации** - должна быть текущая
-   - **Размер** - должен быть ~1.3MB
-
-### Шаг 5: Очистить кеш браузера
-- **Жесткая перезагрузка:** `Cmd + Shift + R` (Mac) / `Ctrl + Shift + R` (Windows)
-- **Или режим инкогнито:** `Cmd + Shift + N` (Mac) / `Ctrl + Shift + N` (Windows)
-- **Или очистить кеш вручную:** DevTools → Application → Clear storage → Clear site data
-
-## Решение
-
-### Вариант 1: Если код не обновлен на сервере
-
-Сначала запушите изменения локально:
-```bash
-git push
-```
-
-Затем на сервере:
-```bash
-cd /root/mapsparser-Replit-front
-git pull origin main
-cd frontend
-rm -rf dist
-npm run build
-cd ..
-systemctl restart seo-worker
-```
-
-### Вариант 2: Если код обновлен, но кнопки не видны
-
-1. **Проверьте консоль браузера** (F12 → Console):
-   - Нет ли ошибок JavaScript
-   - Нет ли ошибок загрузки модулей
-
-2. **Проверьте Network** (F12 → Network):
-   - Загружается ли новый JS файл
-   - Нет ли 404 ошибок
-
-3. **Проверьте элементы** (F12 → Elements):
-   - Найдите карточку пользователя
-   - Проверьте, есть ли элементы с классами `h-8 w-8` (кнопки)
-   - Проверьте, не скрыты ли они через CSS (`display: none`, `opacity: 0`)
-
-### Вариант 3: Принудительная пересборка
+### 1. Проверить свежий bundle в контейнере
 
 ```bash
-# На сервере
-cd /root/mapsparser-Replit-front/frontend
-rm -rf dist node_modules/.vite
-npm run build
-cd ..
-systemctl restart seo-worker
+cd /opt/seo-app
+docker compose exec -T app sh -lc 'grep -n "/assets/index-" /app/frontend/dist/index.html'
 ```
 
-## Проверка после исправления
+### 2. Проверить, что сервис жив
 
-1. Откройте админ-панель в режиме инкогнито
-2. Наведите курсор на карточку пользователя
-3. Справа должны быть ДВЕ кнопки:
-   - 🚫 Ban/User (пауза/возобновление)
-   - 🗑️ Trash2 (удаление)
-
-## Если кнопки все еще не появились
-
-Проверьте в консоли браузера:
-```javascript
-// В консоли браузера (F12 → Console)
-document.querySelectorAll('[title="Удалить пользователя"]').length
-// Должно быть > 0, если кнопки есть в DOM
+```bash
+cd /opt/seo-app
+docker compose ps
+docker compose logs --since 10m app | tail -n 120
+curl -I http://localhost:8000
 ```
 
-Если результат 0 - кнопки не рендерятся. Проверьте:
-- Нет ли ошибок в консоли
-- Правильно ли загружается компонент AdminPage
-- Нет ли условий, которые скрывают кнопки
+### 3. Проверить live HTML
 
+```bash
+curl -s https://localos.pro | rg '/assets/index-|/assets/index-.*\\.css'
+```
 
+### 4. Если bundle старый
+
+```bash
+cd /opt/seo-app
+bash scripts/deploy_frontend_dist.sh --build
+```
+
+## Проверка в браузере
+
+1. Открыть `DevTools -> Network`
+2. Найти `index-*.js`
+3. Убедиться, что имя совпадает с тем, что лежит в `/app/frontend/dist/index.html`
+4. Сделать hard refresh
+
+## Чего больше не делать
+
+Не использовать старую схему:
+
+- старый путь проекта вне `/opt/seo-app`
+- restart старого systemd worker как способ применить frontend
+- ручную пересборку с копированием в legacy web-root

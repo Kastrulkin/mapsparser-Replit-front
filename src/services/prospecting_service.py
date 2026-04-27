@@ -2,6 +2,7 @@ import os
 import re
 import time
 import json
+import unicodedata
 from difflib import SequenceMatcher
 from decimal import Decimal
 import requests
@@ -179,9 +180,27 @@ class ProspectingService:
     @classmethod
     def _normalize_identity_text(cls, value: Any) -> str:
         text = cls._normalize_text(value).lower().replace("ё", "е")
+        text = "".join(
+            ch for ch in unicodedata.normalize("NFKD", text) if not unicodedata.combining(ch)
+        )
         text = re.sub(r"https?://", "", text)
         text = re.sub(r"[^a-z0-9а-я]+", " ", text, flags=re.IGNORECASE)
         return re.sub(r"\s+", " ", text).strip()
+
+    @staticmethod
+    def _transliterate_ru_to_latin(value: Any) -> str:
+        text = str(value or "").strip().lower().replace("ё", "е")
+        mapping = {
+            "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e",
+            "ж": "zh", "з": "z", "и": "i", "й": "j", "к": "k", "л": "l",
+            "м": "m", "н": "n", "о": "o", "п": "p", "р": "r", "с": "s",
+            "т": "t", "у": "u", "ф": "f", "х": "h", "ц": "c", "ч": "ch",
+            "ш": "sh", "щ": "sch", "ъ": "", "ы": "y", "ь": "", "э": "e",
+            "ю": "yu", "я": "ya",
+        }
+        converted = "".join(mapping.get(ch, ch) for ch in text)
+        converted = re.sub(r"[^a-z0-9]+", " ", converted, flags=re.IGNORECASE)
+        return re.sub(r"\s+", " ", converted).strip()
 
     @classmethod
     def _text_similarity(cls, left: Any, right: Any) -> float:
@@ -192,6 +211,18 @@ class ProspectingService:
         if left_text == right_text:
             return 1.0
         return SequenceMatcher(None, left_text, right_text).ratio()
+
+    @classmethod
+    def _map_query_name_similarity(cls, query: Any, name: Any) -> float:
+        base_score = cls._text_similarity(query, name)
+        query_latin = cls._transliterate_ru_to_latin(query)
+        name_latin = cls._transliterate_ru_to_latin(name)
+        if not query_latin or not name_latin:
+            return base_score
+        if query_latin == name_latin:
+            return 1.0
+        return max(base_score, SequenceMatcher(None, query_latin, name_latin).ratio())
+
 
     @classmethod
     def _coerce_scalar_text(cls, value: Any) -> Optional[str]:
@@ -220,6 +251,20 @@ class ProspectingService:
             return int(digits) if digits else None
         if isinstance(value, list):
             return len(value)
+        return None
+
+    @staticmethod
+    def _coerce_bool(value: Any) -> Optional[bool]:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)) and value in (0, 1):
+            return bool(value)
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"true", "1", "yes", "y", "да"}:
+                return True
+            if normalized in {"false", "0", "no", "n", "нет"}:
+                return False
         return None
 
     @staticmethod
@@ -506,9 +551,14 @@ class ProspectingService:
         if isinstance(location_value, (dict, list)):
             location_value = str(location_value)
         location_value = self._coerce_scalar_text(location_value)
+        geo_lat = self._coerce_geo_coordinate(self._pick(item, "latitude", "lat"))
+        geo_lon = self._coerce_geo_coordinate(self._pick(item, "longitude", "lon"))
 
         reviews_count = self._coerce_reviews_count(
             self._pick(item, "reviewsCount", "reviews_count", "reviewCount", "ratingsCount", "reviews")
+        )
+        is_verified = self._coerce_bool(
+            self._pick(item, "isVerifiedOwner", "is_verified", "isVerified", "verified")
         )
         description = self._coerce_scalar_text(
             self._pick(item, "description", "hotelDescription", "hotelReviewSummary", "subTitle")
@@ -528,9 +578,12 @@ class ProspectingService:
             "category": category_text,
             "location": location_value,
             "city": self._coerce_scalar_text(self._pick(item, "city", "locality")),
+            "geo_lat": geo_lat,
+            "geo_lon": geo_lon,
             "telegram_url": telegram_url,
             "whatsapp_url": whatsapp_url,
             "messenger_links": normalized_messenger_links,
+            "is_verified": is_verified,
         }
         if compact:
             return normalized
@@ -563,9 +616,19 @@ class ProspectingService:
             "reviews_preview": reviews_preview,
             "social_links": social_links,
             "reviews_count": reviews_count,
+            "is_verified": is_verified,
         }
         normalized["raw_payload_json"] = item
         return normalized
+
+    @staticmethod
+    def _coerce_geo_coordinate(value: Any) -> Optional[float]:
+        if value in (None, ""):
+            return None
+        try:
+            return float(str(value).strip().replace(",", "."))
+        except (TypeError, ValueError):
+            return None
 
     def normalize_results(self, items: List[Dict[str, Any]], *, compact: bool = False) -> List[Dict[str, Any]]:
         normalized: List[Dict[str, Any]] = []
@@ -691,9 +754,22 @@ class ProspectingService:
         ]
         for pattern in patterns:
             match = re.search(pattern, value, flags=re.IGNORECASE)
-            if match:
-                return str(match.group(1)).strip()
+        if match:
+            return str(match.group(1)).strip()
         return None
+
+    @staticmethod
+    def _google_url_supports_start_urls(map_url: str) -> bool:
+        value = str(map_url or "").strip().lower()
+        if not value:
+            return False
+        if "share.google/" in value:
+            return False
+        if "google.com/search" in value:
+            return False
+        if "query_place_id=" in value:
+            return True
+        return "/maps/" in value
 
     @classmethod
     def _matches_requested_map_entity(
@@ -707,23 +783,29 @@ class ProspectingService:
         normalized_url = normalize_map_url(map_url)
         source = str(cls._normalize_text(normalized_item.get("source")) or "").lower()
         source_url = str(normalized_item.get("source_url") or "").strip()
+        expected_yandex_org_id = cls._extract_yandex_org_id(normalized_url) if source == "apify_yandex" else None
+        candidate_yandex_org_id = ""
         expected_city = cls._normalize_identity_text(city)
         candidate_city = cls._normalize_identity_text(
             normalized_item.get("city") or normalized_item.get("address")
         )
+        candidate_address = cls._normalize_identity_text(normalized_item.get("address"))
         exact_external_match = False
 
         if source == "apify_yandex":
-            expected_org_id = cls._extract_yandex_org_id(normalized_url)
-            candidate_org_id = cls._normalize_text(
+            candidate_yandex_org_id = cls._normalize_text(
                 normalized_item.get("source_external_id")
                 or raw_item.get("businessId")
                 or raw_item.get("id")
                 or raw_item.get("oid")
                 or raw_item.get("organizationId")
             )
-            exact_external_match = bool(expected_org_id and candidate_org_id and expected_org_id == candidate_org_id)
-            if expected_org_id and candidate_org_id and expected_org_id != candidate_org_id:
+            exact_external_match = bool(
+                expected_yandex_org_id
+                and candidate_yandex_org_id
+                and expected_yandex_org_id == candidate_yandex_org_id
+            )
+            if expected_yandex_org_id and candidate_yandex_org_id and expected_yandex_org_id != candidate_yandex_org_id:
                 return False
         elif source == "apify_google":
             expected_place_id = cls._extract_google_place_id(map_url) or cls._extract_google_place_id(normalized_url)
@@ -745,18 +827,22 @@ class ProspectingService:
             and candidate_city
             and expected_city not in candidate_city
             and candidate_city not in expected_city
+            and expected_city not in candidate_address
         ):
             return False
 
         query_text = cls._extract_query_from_map_url(map_url) or cls._extract_query_from_map_url(normalized_url)
         candidate_name = normalized_item.get("name")
         if not exact_external_match and query_text and candidate_name:
-            if cls._text_similarity(query_text, candidate_name) < 0.42:
+            threshold = 0.70 if expected_yandex_org_id and not candidate_yandex_org_id else 0.42
+            if cls._map_query_name_similarity(query_text, candidate_name) < threshold:
                 return False
 
-        if source_url and normalized_url and source == "apify_yandex":
-            expected_org_id = cls._extract_yandex_org_id(normalized_url)
-            if expected_org_id and expected_org_id not in source_url:
+        if not exact_external_match and source_url and normalized_url and source == "apify_yandex":
+            expected_slug = cls._extract_yandex_org_slug(normalized_url)
+            candidate_slug = cls._extract_yandex_org_slug(source_url)
+            slug_matches = bool(expected_slug and candidate_slug and expected_slug == candidate_slug)
+            if expected_yandex_org_id and expected_yandex_org_id not in source_url and not slug_matches:
                 return False
 
         return True
@@ -806,7 +892,7 @@ class ProspectingService:
         match = re.search(r"/org/([^/?#]+)/", value)
         if match:
             slug = unquote(str(match.group(1))).replace("_", " ").replace("-", " ").strip()
-            if slug:
+            if slug and not slug.isdigit():
                 return slug
         match = re.search(r"/place/([^/?#]+)", value)
         if match:
@@ -814,6 +900,19 @@ class ProspectingService:
             if slug:
                 return slug
         return ""
+
+    @staticmethod
+    def _extract_yandex_org_slug(map_url: str) -> str:
+        value = str(map_url or "").strip()
+        if not value:
+            return ""
+        match = re.search(r"/org/([^/?#]+)/", value)
+        if not match:
+            return ""
+        slug = unquote(str(match.group(1) or "")).strip().lower()
+        if not slug or slug.isdigit():
+            return ""
+        return slug
 
     @staticmethod
     def _extract_2gis_city_hint(map_url: str) -> str:
@@ -847,6 +946,7 @@ class ProspectingService:
                 or map_url_text
             )
             place_id = self._extract_google_place_id(raw_map_url_text) or self._extract_google_place_id(map_url_text)
+            supports_start_urls = self._google_url_supports_start_urls(raw_map_url_text or map_url_text)
             return self._strip_none_values(
                 {
                     "searchStringsArray": [query_text],
@@ -859,7 +959,7 @@ class ProspectingService:
                     "maxImages": 20,
                     "searchMatching": "only_exact",
                     "placeIds": [place_id] if place_id else [],
-                    "startUrls": [{"url": raw_map_url_text or map_url_text}],
+                    "startUrls": [{"url": raw_map_url_text or map_url_text}] if supports_start_urls else [],
                 }
             )
 
@@ -1035,6 +1135,7 @@ class ProspectingService:
             )
             location_text = str(city or "").strip()
             place_id = self._extract_google_place_id(raw_map_url) or self._extract_google_place_id(normalized_map_url)
+            supports_start_urls = self._google_url_supports_start_urls(raw_map_url or normalized_map_url)
             run_input_candidates = [
                 self._strip_none_values(
                     {
@@ -1048,31 +1149,36 @@ class ProspectingService:
                         "maxImages": 20,
                         "searchMatching": "only_exact",
                         "placeIds": [place_id] if place_id else [],
-                        "startUrls": [{"url": raw_map_url or normalized_map_url}],
-                    }
-                ),
-                self._strip_none_values(
-                    {
-                        "startUrls": [{"url": raw_map_url or normalized_map_url}],
-                        "language": str(os.environ.get("APIFY_GOOGLE_LANGUAGE", "en") or "en"),
-                        "scrapePlaceDetailPage": True,
-                        "maxCrawledPlacesPerSearch": max(1, int(limit or 1)),
-                        "maxReviews": 50,
-                        "maxImages": 20,
-                        "searchMatching": "only_exact",
-                    }
-                ),
-                self._strip_none_values(
-                    {
-                        "startUrls": [{"url": normalized_map_url}],
-                        "language": str(os.environ.get("APIFY_GOOGLE_LANGUAGE", "en") or "en"),
-                        "scrapePlaceDetailPage": True,
-                        "maxCrawledPlacesPerSearch": max(1, int(limit or 1)),
-                        "maxReviews": 50,
-                        "maxImages": 20,
+                        "startUrls": [{"url": raw_map_url or normalized_map_url}] if supports_start_urls else [],
                     }
                 ),
             ]
+            if supports_start_urls:
+                run_input_candidates.extend(
+                    [
+                        self._strip_none_values(
+                            {
+                                "startUrls": [{"url": raw_map_url or normalized_map_url}],
+                                "language": str(os.environ.get("APIFY_GOOGLE_LANGUAGE", "en") or "en"),
+                                "scrapePlaceDetailPage": True,
+                                "maxCrawledPlacesPerSearch": max(1, int(limit or 1)),
+                                "maxReviews": 50,
+                                "maxImages": 20,
+                                "searchMatching": "only_exact",
+                            }
+                        ),
+                        self._strip_none_values(
+                            {
+                                "startUrls": [{"url": normalized_map_url}],
+                                "language": str(os.environ.get("APIFY_GOOGLE_LANGUAGE", "en") or "en"),
+                                "scrapePlaceDetailPage": True,
+                                "maxCrawledPlacesPerSearch": max(1, int(limit or 1)),
+                                "maxReviews": 50,
+                                "maxImages": 20,
+                            }
+                        ),
+                    ]
+                )
         elif self.source == "apify_apple":
             run_input_candidates.append(
                 self._strip_none_values(
@@ -1424,26 +1530,18 @@ class ProspectingService:
         """
         Search for businesses using Apify Yandex Maps scraper.
         """
-        if not self.client:
+        if not self.api_token:
             raise ValueError("APIFY_TOKEN is not set")
 
         try:
-            run = self.client.actor(self.actor_id).call(
-                run_input=self._build_run_input(query, location, limit),
-                timeout_secs=APIFY_SEARCH_TIMEOUT_SEC,
-                wait_secs=APIFY_SEARCH_TIMEOUT_SEC,
-                max_items=limit,
-                max_total_charge_usd=APIFY_SEARCH_MAX_CHARGE_USD,
-            )
+            run = self.run_search(query, location, limit=limit, timeout_sec=APIFY_SEARCH_TIMEOUT_SEC)
         except Exception as e:
             print(f"Error running Apify actor: {e}")
             raise
 
         if not run:
             raise TimeoutError(f"Apify actor did not finish within {APIFY_SEARCH_TIMEOUT_SEC} seconds")
-
-        results = []
-        for item in self.client.dataset(run["defaultDatasetId"]).iterate_items():
-            results.append(self._normalize_result(item))
-        
-        return results
+        items = run.get("items")
+        if not isinstance(items, list):
+            return []
+        return [item for item in items if isinstance(item, dict)]

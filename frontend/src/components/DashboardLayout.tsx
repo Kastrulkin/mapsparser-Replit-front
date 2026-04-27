@@ -1,16 +1,24 @@
 import { Outlet, Navigate } from 'react-router-dom';
 import { DashboardSidebar } from './DashboardSidebar';
 import { DashboardHeader } from './DashboardHeader';
-import { useState, useEffect } from 'react';
-import { newAuth } from '../lib/auth_new';
-import { BusinessSwitcher } from './BusinessSwitcher';
+import { useState, useEffect, useCallback } from 'react';
+import { newAuth, type User } from '../lib/auth_new';
+
+type DashboardBusiness = {
+  id: string;
+  name: string;
+  description?: string;
+  moderation_status?: string;
+  entity_group?: string;
+  is_lead_business?: boolean;
+};
 
 export const DashboardLayout = () => {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [businesses, setBusinesses] = useState<any[]>([]);
+  const [businesses, setBusinesses] = useState<DashboardBusiness[]>([]);
   const [currentBusinessId, setCurrentBusinessId] = useState<string | null>(null);
-  const [currentBusiness, setCurrentBusiness] = useState<any>(null);
+  const [currentBusiness, setCurrentBusiness] = useState<DashboardBusiness | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === 'undefined') {
@@ -18,7 +26,7 @@ export const DashboardLayout = () => {
     }
     return window.localStorage.getItem('dashboard_sidebar_collapsed') === 'true';
   });
-  const isLeadBusiness = (business: any) => {
+  const isLeadBusiness = useCallback((business: DashboardBusiness) => {
     const moderationStatus = String(business?.moderation_status || '').trim().toLowerCase();
     const entityGroup = String(business?.entity_group || '').trim().toLowerCase();
     const description = String(business?.description || '').trim().toLowerCase();
@@ -28,8 +36,8 @@ export const DashboardLayout = () => {
       entityGroup === 'lead' ||
       description.startsWith('lead shadow business for outreach lead')
     );
-  };
-  const filterOutLeads = (items: any[]) => (items || []).filter((business) => !isLeadBusiness(business));
+  }, []);
+  const filterOutLeads = useCallback((items: DashboardBusiness[]) => (items || []).filter((business) => !isLeadBusiness(business)), [isLeadBusiness]);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -51,37 +59,26 @@ export const DashboardLayout = () => {
         // Используем данные, полученные из newAuth.getCurrentUser(), вместо повторного запроса
         const businessesData = filterOutLeads(currentUser.businesses || []);
 
-        console.log('📊 Загружены данные пользователя:', {
-          is_superadmin: currentUser.is_superadmin,
-          businesses_count: businessesData.length
-        });
-
         if (businessesData.length > 0) {
-          console.log('✅ Бизнесы загружены:', businessesData.length);
           setBusinesses(businessesData);
 
           // Приоритет: бизнес из админской страницы > сохраненный > первый
           let businessToSelect;
           if (adminSelectedBusinessId) {
-            businessToSelect = businessesData.find((b: any) => b.id === adminSelectedBusinessId);
-            if (businessToSelect) {
-              console.log('✅ Выбран бизнес из админской страницы:', businessToSelect.id, businessToSelect.name);
-            }
+            businessToSelect = businessesData.find((business) => business.id === adminSelectedBusinessId);
           }
 
           if (!businessToSelect) {
             const savedBusinessId = localStorage.getItem('selectedBusinessId');
             businessToSelect = savedBusinessId
-              ? businessesData.find((b: any) => b.id === savedBusinessId) || businessesData[0]
+              ? businessesData.find((business) => business.id === savedBusinessId) || businessesData[0]
               : businessesData[0];
           }
 
-          console.log('✅ Выбран бизнес:', businessToSelect.id, businessToSelect.name);
           setCurrentBusinessId(businessToSelect.id);
           setCurrentBusiness(businessToSelect);
           localStorage.setItem('selectedBusinessId', businessToSelect.id);
         } else {
-          console.warn('⚠️ Бизнесы не загружены или список пуст');
           setBusinesses([]);
         }
       } catch (error) {
@@ -91,8 +88,8 @@ export const DashboardLayout = () => {
       }
     };
 
-    fetchUser();
-  }, []);
+    void fetchUser();
+  }, [filterOutLeads]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -110,7 +107,7 @@ export const DashboardLayout = () => {
     }
   };
 
-  const updateBusiness = (businessId: string, updates: Partial<any>) => {
+  const updateBusiness = (businessId: string, updates: Partial<DashboardBusiness>) => {
     const updatedBusinesses = businesses.map(b =>
       b.id === businessId ? { ...b, ...updates } : b
     );
@@ -127,14 +124,14 @@ export const DashboardLayout = () => {
 
   const reloadBusinesses = async () => {
     try {
-      const data = await newAuth.makeRequest('/auth/me');
+      const data = await newAuth.makeRequest('/auth/me') as { businesses?: DashboardBusiness[] };
 
       const businessesData = filterOutLeads(data.businesses || []);
       if (Array.isArray(businessesData) && businessesData.length > 0) {
         setBusinesses(businessesData);
         // Обновляем текущий бизнес, если он был изменен
         if (currentBusinessId) {
-          const updatedBusiness = businessesData.find((b: any) => b.id === currentBusinessId);
+          const updatedBusiness = businessesData.find((business) => business.id === currentBusinessId);
           if (updatedBusiness) {
             setCurrentBusiness(updatedBusiness);
           }
@@ -149,10 +146,10 @@ export const DashboardLayout = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.08),_transparent_32%),linear-gradient(180deg,_#f8fafc_0%,_#eef2ff_100%)]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Загрузка...</p>
+          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-b-2 border-slate-900"></div>
+          <p className="mt-4 text-sm font-medium text-slate-600">Загрузка кабинета...</p>
         </div>
       </div>
     );
@@ -163,7 +160,7 @@ export const DashboardLayout = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.06),_transparent_30%),linear-gradient(180deg,_#f8fafc_0%,_#f6f8fc_100%)] text-slate-900">
       <DashboardSidebar isMobile={false} collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)} />
       <div className={`flex flex-col min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'md:pl-24' : 'md:pl-72'}`}>
         <DashboardHeader
@@ -174,8 +171,10 @@ export const DashboardLayout = () => {
           isSuperadmin={user.is_superadmin}
           user={user}
         />
-        <main className="flex-1 p-6">
-          <Outlet context={{ user, currentBusinessId, currentBusiness, businesses, updateBusiness, reloadBusinesses, setBusinesses, onBusinessChange: handleBusinessChange }} />
+        <main className="flex-1 p-3 sm:p-4 lg:p-6">
+          <div className="mx-auto w-full max-w-[1600px]">
+            <Outlet context={{ user, currentBusinessId, currentBusiness, businesses, updateBusiness, reloadBusinesses, setBusinesses, onBusinessChange: handleBusinessChange }} />
+          </div>
         </main>
       </div>
       {/* Mobile sidebar overlay */}

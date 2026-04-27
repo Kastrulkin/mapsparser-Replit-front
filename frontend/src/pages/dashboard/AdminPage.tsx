@@ -8,6 +8,12 @@ import { useToast } from '../../hooks/use-toast';
 import { CreateBusinessModal } from '../../components/CreateBusinessModal';
 import { AdminExternalCabinetSettings } from '../../components/AdminExternalCabinetSettings';
 import { ProspectingManagement } from '../../components/ProspectingManagement';
+import {
+  DashboardCompactMetricsRow,
+  DashboardEmptyState,
+  DashboardPageHeader,
+  DashboardSection,
+} from '../../components/dashboard/DashboardPrimitives';
 
 const AIAgentsManagement = lazy(() =>
   import('../../components/AIAgentsManagement').then((module) => ({ default: module.AIAgentsManagement })),
@@ -80,12 +86,26 @@ type AdminTabConfig = {
 const adminTabs: AdminTabConfig[] = [
   { id: 'businesses', label: 'Пользователи и бизнесы', icon: User },
   { id: 'agents', label: 'ИИ агенты', icon: Bot },
+  { id: 'prospecting', label: 'Поиск клиентов', icon: Search },
   { id: 'tokens', label: 'Статистика кредитов', icon: BarChart3 },
   { id: 'growth', label: 'Схема роста', icon: TrendingUp },
   { id: 'prompts', label: 'Промпты анализа', icon: FileText },
   { id: 'proxies', label: 'Прокси', icon: Network },
   { id: 'parsing', label: 'Парсинг', icon: MapPin },
+];
+
+const primaryAdminTabs: AdminTabConfig[] = [
+  { id: 'businesses', label: 'Пользователи', icon: User },
+  { id: 'agents', label: 'ИИ агенты', icon: Bot },
   { id: 'prospecting', label: 'Поиск клиентов', icon: Search },
+];
+
+const toolsAdminTabs: AdminTabConfig[] = [
+  { id: 'parsing', label: 'Парсинг', icon: MapPin },
+  { id: 'proxies', label: 'Прокси', icon: Network },
+  { id: 'prompts', label: 'Промпты анализа', icon: FileText },
+  { id: 'tokens', label: 'Статистика кредитов', icon: BarChart3 },
+  { id: 'growth', label: 'Схема роста', icon: TrendingUp },
 ];
 
 const LEAD_OUTREACH_STATUS = 'lead_outreach';
@@ -131,6 +151,20 @@ const filterUsersBySearch = (users: UserWithBusinesses[], normalizedSearchQuery:
       ].join(' ').toLowerCase().includes(normalizedSearchQuery)
     );
   });
+
+const closeConfirmDialog = (
+  setConfirmDialog: React.Dispatch<React.SetStateAction<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText: string;
+    cancelText: string;
+    onConfirm: () => void;
+    variant?: 'delete' | 'block';
+  }>>,
+) => {
+  setConfirmDialog((previous) => ({ ...previous, isOpen: false }));
+};
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -259,6 +293,37 @@ export const AdminPage: React.FC = () => {
     }
   }, [navigate, toast]);
 
+  const runReloadingMutation = useCallback(async (
+    request: () => Promise<unknown>,
+    successDescription: string,
+    fallbackError: string,
+    options?: { closeDialog?: boolean },
+  ) => {
+    try {
+      const response = await request();
+      const payload = typeof response === 'object' && response !== null ? response : null;
+      const isSuccess = payload !== null && 'success' in payload && payload.success === true;
+
+      if (isSuccess) {
+        toast({
+          title: 'Успешно',
+          description: successDescription,
+        });
+        await loadUsers();
+      }
+    } catch (error: unknown) {
+      toast({
+        title: 'Ошибка',
+        description: getErrorMessage(error, fallbackError),
+        variant: 'destructive',
+      });
+    } finally {
+      if (options?.closeDialog) {
+        closeConfirmDialog(setConfirmDialog);
+      }
+    }
+  }, [loadUsers, toast]);
+
   useEffect(() => {
     const checkAccess = async () => {
       try {
@@ -319,27 +384,14 @@ export const AdminPage: React.FC = () => {
       cancelText: 'Отмена',
       variant: 'delete',
       onConfirm: async () => {
-        try {
-          const data = await newAuth.makeRequest(`/superadmin/businesses/${businessId}`, {
+        await runReloadingMutation(
+          () => newAuth.makeRequest(`/superadmin/businesses/${businessId}`, {
             method: 'DELETE',
-          });
-
-          if (data.success) {
-            toast({
-              title: 'Успешно',
-              description: 'Бизнес удалён',
-            });
-            loadUsers();
-          }
-        } catch (error: unknown) {
-          toast({
-            title: 'Ошибка',
-            description: getErrorMessage(error, 'Не удалось удалить бизнес'),
-            variant: 'destructive',
-          });
-        } finally {
-          setConfirmDialog(prev => ({ ...prev, isOpen: false }));
-        }
+          }),
+          'Бизнес удалён',
+          'Не удалось удалить бизнес',
+          { closeDialog: true },
+        );
       },
     });
   };
@@ -355,28 +407,15 @@ export const AdminPage: React.FC = () => {
       cancelText: 'Отмена',
       variant: 'block',
       onConfirm: async () => {
-        try {
-          const data = await newAuth.makeRequest(`/admin/businesses/${businessId}/block`, {
+        await runReloadingMutation(
+          () => newAuth.makeRequest(`/admin/businesses/${businessId}/block`, {
             method: 'POST',
             body: JSON.stringify({ is_blocked: isBlocked }),
-          });
-
-          if (data.success) {
-            toast({
-              title: 'Успешно',
-              description: isBlocked ? 'Бизнес заблокирован' : 'Бизнес разблокирован',
-            });
-            loadUsers();
-          }
-        } catch (error: unknown) {
-          toast({
-            title: 'Ошибка',
-            description: getErrorMessage(error, 'Не удалось изменить статус бизнеса'),
-            variant: 'destructive',
-          });
-        } finally {
-          setConfirmDialog(prev => ({ ...prev, isOpen: false }));
-        }
+          }),
+          isBlocked ? 'Бизнес заблокирован' : 'Бизнес разблокирован',
+          'Не удалось изменить статус бизнеса',
+          { closeDialog: true },
+        );
       },
     });
   };
@@ -392,28 +431,15 @@ export const AdminPage: React.FC = () => {
       cancelText: 'Отмена',
       variant: 'block',
       onConfirm: async () => {
-        try {
-          const endpoint = isPaused ? `/superadmin/users/${userId}/pause` : `/superadmin/users/${userId}/unpause`;
-          const data = await newAuth.makeRequest(endpoint, {
+        const endpoint = isPaused ? `/superadmin/users/${userId}/pause` : `/superadmin/users/${userId}/unpause`;
+        await runReloadingMutation(
+          () => newAuth.makeRequest(endpoint, {
             method: 'POST',
-          });
-
-          if (data.success) {
-            toast({
-              title: 'Успешно',
-              description: isPaused ? 'Пользователь приостановлен' : 'Пользователь возобновлен',
-            });
-            loadUsers();
-          }
-        } catch (error: unknown) {
-          toast({
-            title: 'Ошибка',
-            description: getErrorMessage(error, 'Не удалось изменить статус пользователя'),
-            variant: 'destructive',
-          });
-        } finally {
-          setConfirmDialog(prev => ({ ...prev, isOpen: false }));
-        }
+          }),
+          isPaused ? 'Пользователь приостановлен' : 'Пользователь возобновлен',
+          'Не удалось изменить статус пользователя',
+          { closeDialog: true },
+        );
       },
     });
   };
@@ -427,76 +453,38 @@ export const AdminPage: React.FC = () => {
       cancelText: 'Отмена',
       variant: 'delete',
       onConfirm: async () => {
-        // Закрываем диалог сразу после подтверждения
-        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
-
-        try {
-          const data = await newAuth.makeRequest(`/superadmin/users/${userId}`, {
+        closeConfirmDialog(setConfirmDialog);
+        await runReloadingMutation(
+          () => newAuth.makeRequest(`/superadmin/users/${userId}`, {
             method: 'DELETE',
-          });
-
-          if (data.success) {
-            toast({
-              title: 'Успешно',
-              description: 'Пользователь удалён',
-            });
-            loadUsers();
-          }
-        } catch (error: unknown) {
-          toast({
-            title: 'Ошибка',
-            description: getErrorMessage(error, 'Не удалось удалить пользователя'),
-            variant: 'destructive',
-          });
-        }
+          }),
+          'Пользователь удалён',
+          'Не удалось удалить пользователя',
+        );
       },
     });
   };
 
   const handlePromo = async (businessId: string, businessName: string, isPromo: boolean) => {
-    try {
-      const data = await newAuth.makeRequest(`/admin/businesses/${businessId}/promo`, {
+    await runReloadingMutation(
+      () => newAuth.makeRequest(`/admin/businesses/${businessId}/promo`, {
         method: 'POST',
         body: JSON.stringify({ is_promo: !isPromo }),
-      });
-
-      if (data.success) {
-        toast({
-          title: 'Успешно',
-          description: !isPromo ? 'Промо тариф установлен' : 'Промо тариф отключен',
-        });
-        loadUsers();
-      }
-    } catch (error: unknown) {
-      toast({
-        title: 'Ошибка',
-        description: getErrorMessage(error, 'Не удалось изменить промо тариф'),
-        variant: 'destructive',
-      });
-    }
+      }),
+      !isPromo ? `Промо тариф установлен для "${businessName}"` : `Промо тариф отключен для "${businessName}"`,
+      'Не удалось изменить промо тариф',
+    );
   };
 
   const handleNetworkPromo = async (networkId: string, networkName: string, isPromo: boolean) => {
-    try {
-      const data = await newAuth.makeRequest(`/admin/networks/${networkId}/promo`, {
+    await runReloadingMutation(
+      () => newAuth.makeRequest(`/admin/networks/${networkId}/promo`, {
         method: 'POST',
         body: JSON.stringify({ is_promo: !isPromo }),
-      });
-
-      if (data.success) {
-        toast({
-          title: 'Успешно',
-          description: !isPromo ? 'Промо тариф установлен для всей сети' : 'Промо тариф отключен для всей сети',
-        });
-        loadUsers();
-      }
-    } catch (error: unknown) {
-      toast({
-        title: 'Ошибка',
-        description: getErrorMessage(error, `Не удалось изменить промо тариф для сети "${networkName}"`),
-        variant: 'destructive',
-      });
-    }
+      }),
+      !isPromo ? `Промо тариф установлен для сети "${networkName}"` : `Промо тариф отключен для сети "${networkName}"`,
+      `Не удалось изменить промо тариф для сети "${networkName}"`,
+    );
   };
 
   const handleCreateSuccess = () => {
@@ -509,6 +497,38 @@ export const AdminPage: React.FC = () => {
     () => filterUsersBySearch(users, normalizedSearchQuery),
     [users, normalizedSearchQuery],
   );
+  const adminStats = useMemo(() => {
+    let businessCount = 0;
+    let networkCount = 0;
+    let pausedUserCount = 0;
+    let leadBusinessCount = 0;
+
+    users.forEach((user) => {
+      if (user.is_active === 0) {
+        pausedUserCount += 1;
+      }
+
+      const directBusinesses = user.direct_businesses || [];
+      businessCount += directBusinesses.length;
+      leadBusinessCount += directBusinesses.filter((business) => isLeadBusiness(business)).length;
+
+      const networks = user.networks || [];
+      networkCount += networks.length;
+      networks.forEach((network) => {
+        const businesses = network.businesses || [];
+        businessCount += businesses.length;
+        leadBusinessCount += businesses.filter((business) => isLeadBusiness(business)).length;
+      });
+    });
+
+    return {
+      businessCount,
+      leadBusinessCount,
+      networkCount,
+      pausedUserCount,
+    };
+  }, [users]);
+  const activeTabConfig = adminTabs.find((tab) => tab.id === activeTab) || adminTabs[0];
 
   if (loading) {
     return (
@@ -525,112 +545,205 @@ export const AdminPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
-      <div className="w-full px-3 py-4 sm:px-4 lg:px-6 xl:px-8 2xl:px-10">
-        {/* Header */}
-        <div className="mb-8 space-y-2">
-          <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-            Административная панель
-          </h1>
-          <p className="text-muted-foreground text-lg">Управление пользователями, бизнесами и ИИ агентами</p>
-        </div>
+    <div className="min-h-screen bg-slate-50/60">
+      <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+        <DashboardPageHeader
+          eyebrow="Bazich admin"
+          title="Панель администратора"
+          description="Единое место для контроля пользователей, бизнесов, агентов, парсинга и операционных настроек."
+          icon={Settings}
+          actions={(
+            <Button
+              onClick={() => setShowCreateModal(true)}
+              className="rounded-2xl bg-slate-950 px-5 text-white shadow-sm hover:bg-slate-800"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Создать аккаунт
+            </Button>
+          )}
+        />
 
-        {/* Modern Tab Navigation */}
-        <div className="mb-8">
-          <div className="flex flex-wrap gap-2 p-1 bg-card/50 backdrop-blur-sm rounded-xl border border-border/50 shadow-sm">
-            {adminTabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`
-                    relative flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm
-                    transition-all duration-200 ease-out
-                    ${isActive
-                      ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                    }
-                  `}
-                >
-                  <Icon className={`w-4 h-4 ${isActive ? 'scale-110' : ''} transition-transform duration-200`} />
-                  <span>{tab.label}</span>
-                  {isActive && (
-                    <div className="absolute inset-0 rounded-lg bg-primary/10 animate-pulse" />
-                  )}
-                </button>
-              );
-            })}
+        <DashboardCompactMetricsRow
+          items={[
+            {
+              label: 'Пользователи',
+              value: users.length,
+              hint: filteredUsers.length === users.length ? 'Всего в панели' : `Показано ${filteredUsers.length}`,
+            },
+            {
+              label: 'Бизнесы',
+              value: adminStats.businessCount,
+              hint: adminStats.leadBusinessCount > 0 ? `Лид-бизнесы скрыты: ${adminStats.leadBusinessCount}` : 'Рабочие аккаунты',
+              tone: 'positive',
+            },
+            {
+              label: 'Сети',
+              value: adminStats.networkCount,
+              hint: 'Сетевые аккаунты и точки',
+            },
+            {
+              label: 'Требуют внимания',
+              value: adminStats.pausedUserCount,
+              hint: 'Приостановленные пользователи',
+              tone: adminStats.pausedUserCount > 0 ? 'warning' : 'default',
+            },
+          ]}
+        />
+
+        <div className="rounded-[2rem] border border-slate-200/80 bg-white/95 p-2.5 shadow-sm">
+          <div className="flex flex-col gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              {primaryAdminTabs.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                const isProspecting = tab.id === 'prospecting';
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex items-center justify-center gap-2 rounded-[1.4rem] px-4 py-3 text-sm font-semibold transition ${
+                      isActive
+                        ? isProspecting
+                          ? 'bg-orange-500 text-white shadow-sm shadow-orange-200'
+                          : 'bg-slate-950 text-white shadow-sm'
+                        : isProspecting
+                          ? 'bg-orange-50 text-orange-700 hover:bg-orange-100'
+                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span>{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 border-t border-slate-100 pt-2 sm:grid-cols-2 lg:grid-cols-5">
+              {toolsAdminTabs.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex items-center justify-center gap-2 rounded-[1.2rem] px-3 py-2.5 text-xs font-semibold transition ${
+                      isActive
+                        ? 'bg-slate-900 text-white shadow-sm'
+                        : 'bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-950'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span>{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
         <Suspense fallback={<AdminTabFallback />}>
         {activeTab === 'agents' ? (
-          <AIAgentsManagement />
+          <DashboardSection
+            title={activeTabConfig.label}
+            description="Настройки и контроль ИИ-агентов без лишнего административного шума."
+            contentClassName="p-0"
+          >
+            <AIAgentsManagement />
+          </DashboardSection>
         ) : activeTab === 'tokens' ? (
-          <TokenUsageStats />
+          <DashboardSection
+            title={activeTabConfig.label}
+            description="Расход кредитов, аномалии и контроль нагрузки в одном рабочем блоке."
+            contentClassName="p-0"
+          >
+            <TokenUsageStats />
+          </DashboardSection>
         ) : activeTab === 'growth' ? (
-          <GrowthPlanEditor />
+          <DashboardSection
+            title={activeTabConfig.label}
+            description="Редактор схемы роста для клиентских сценариев и рекомендаций."
+            contentClassName="p-0"
+          >
+            <GrowthPlanEditor />
+          </DashboardSection>
         ) : activeTab === 'prompts' ? (
-          <PromptsManagement />
+          <DashboardSection
+            title={activeTabConfig.label}
+            description="Управление промптами анализа и рабочими версиями генерации."
+            contentClassName="p-0"
+          >
+            <PromptsManagement />
+          </DashboardSection>
         ) : activeTab === 'proxies' ? (
-          <ProxyManagement />
+          <DashboardSection
+            title={activeTabConfig.label}
+            description="Прокси и технические настройки парсинга в отдельном контуре."
+            contentClassName="p-0"
+          >
+            <ProxyManagement />
+          </DashboardSection>
         ) : activeTab === 'parsing' ? (
-          <ParsingManagement />
+          <DashboardSection
+            title={activeTabConfig.label}
+            description="Очереди, источники и статусы сбора данных по картам."
+            contentClassName="p-0"
+          >
+            <ParsingManagement />
+          </DashboardSection>
         ) : activeTab === 'prospecting' ? (
-          <ProspectingManagement />
+          <DashboardSection
+            title={activeTabConfig.label}
+            description="Лиды, воронка, аутрич и аналитика поиска клиентов."
+            contentClassName="p-0"
+          >
+            <ProspectingManagement />
+          </DashboardSection>
         ) : (
           <>
             {(() => {
               return (
                 <>
-            {/* Action Bar */}
-            <div className="mb-6 flex items-center justify-between">
-              <div className="flex w-full items-center justify-between gap-4">
-                <div className="text-sm text-muted-foreground">
-                  Всего пользователей: <span className="font-semibold text-foreground">{users.length}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="relative w-[320px] max-w-full">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <DashboardSection
+              title="Пользователи и бизнесы"
+              description="Сначала найдите аккаунт, затем откройте бизнес или управляйте доступом прямо из строки."
+              actions={(
+                <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+                  <div className="relative w-full sm:w-[360px]">
+                    <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <input
                       value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Поиск по бизнесам, адресам и email"
-                      className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm"
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                      placeholder="Поиск по бизнесу, адресу или email"
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-4 focus:ring-slate-100"
                     />
                   </div>
                   <Button
                     onClick={() => setShowCreateModal(true)}
-                    className="shadow-md hover:shadow-lg transition-shadow duration-200"
+                    variant="outline"
+                    className="h-11 rounded-2xl border-slate-200 bg-white px-4 text-slate-800 shadow-sm hover:bg-slate-50"
                   >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Создать аккаунт
+                    <Plus className="mr-2 h-4 w-4" />
+                    Новый аккаунт
                   </Button>
                 </div>
-              </div>
-            </div>
-
-            {/* Modern Card-based Layout */}
-            <div className="space-y-6">
+              )}
+              contentClassName="space-y-5"
+            >
               {filteredUsers.length === 0 ? (
-                <Card className="border-dashed">
-                  <CardContent className="flex flex-col items-center justify-center py-16">
-                    <div className="p-4 rounded-full bg-muted mb-4">
-                      <User className="w-8 h-8 text-muted-foreground" />
-                    </div>
-                    <p className="text-muted-foreground font-medium">Пользователи не найдены</p>
+                <DashboardEmptyState
+                  title="Пользователи не найдены"
+                  description={normalizedSearchQuery ? 'Попробуйте изменить запрос или очистить поиск.' : 'Создайте первый аккаунт, чтобы добавить бизнес и подключить рабочие кабинеты.'}
+                  action={(
                     <Button
                       onClick={() => setShowCreateModal(true)}
                       variant="outline"
-                      className="mt-4"
+                      className="rounded-2xl"
                     >
-                      <Plus className="w-4 h-4 mr-2" />
-                      Создать первого пользователя
+                      <Plus className="mr-2 h-4 w-4" />
+                      Создать аккаунт
                     </Button>
-                  </CardContent>
-                </Card>
+                  )}
+                />
               ) : (
                 filteredUsers.map((user) => {
                   const allBusinesses: BusinessListItem[] = [];
@@ -693,43 +806,49 @@ export const AdminPage: React.FC = () => {
                       {item.type === 'network' ? (
                         <div className="space-y-3">
                           {(() => {
-                            const networkBusinesses = user.networks.find(n => n.id === item.networkId)?.businesses || [];
+                            const networkId = item.networkId || '';
+                            const networkName = item.networkName || item.name;
+                            const networkBusinesses = user.networks.find((network) => network.id === networkId)?.businesses || [];
                             const allPromo = networkBusinesses.length > 0 && networkBusinesses.every((business) => business.subscription_tier === 'promo');
                             return (
                               <div
-                                className="flex items-center justify-between p-4 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
-                                onClick={() => toggleNetwork(item.networkId!)}
+                                className="flex cursor-pointer flex-col gap-4 rounded-3xl border border-slate-200 bg-slate-50/70 p-4 transition hover:border-slate-300 hover:bg-white sm:flex-row sm:items-center sm:justify-between"
+                                onClick={() => toggleNetwork(networkId)}
                               >
-                                <div className="flex items-center gap-3">
-                                  <div className="p-2 rounded-lg bg-primary/10">
-                                    <Network className="w-4 h-4 text-primary" />
+                                <div className="flex min-w-0 items-center gap-3">
+                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-white">
+                                    <Network className="h-4 w-4" />
                                   </div>
-                                  <div>
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <h4 className="font-semibold text-foreground">{item.networkName}</h4>
+                                  <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <h4 className="break-words font-semibold text-slate-950">{networkName}</h4>
                                       <Button
                                         variant="ghost"
                                         size="sm"
-                                        onClick={() => handleNetworkPromo(item.networkId!, item.networkName!, allPromo)}
-                                        className={`h-7 px-2.5 text-xs ${allPromo ? 'text-primary bg-primary/10 hover:bg-primary/15' : 'text-muted-foreground bg-background/80 hover:bg-background'}`}
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          handleNetworkPromo(networkId, networkName, allPromo);
+                                        }}
+                                        className={`h-7 rounded-full px-2.5 text-xs ${allPromo ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
                                         title={allPromo ? 'Отключить Промо для сети' : 'Включить Промо для сети'}
                                       >
-                                        <Gift className="w-3.5 h-3.5 mr-1.5" />
+                                        <Gift className="mr-1.5 h-3.5 w-3.5" />
                                         {allPromo ? 'Промо сеть' : 'Промо'}
                                       </Button>
                                     </div>
-                                    <p className="text-xs text-muted-foreground">
-                                      {user.networks.find(n => n.id === item.networkId)?.businesses.length || 0} точек сети
+                                    <p className="text-xs font-medium text-slate-500">
+                                      {networkBusinesses.length} точек сети
                                     </p>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center gap-1.5" onClick={(event) => event.stopPropagation()}>
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="h-8 w-8 p-0"
+                                    className="h-9 w-9 rounded-full p-0 text-slate-500 hover:bg-white hover:text-slate-950"
+                                    onClick={() => toggleNetwork(networkId)}
                                   >
-                                    {expandedNetworks.has(item.networkId!) ? (
+                                    {expandedNetworks.has(networkId) ? (
                                       <ChevronDown className="h-4 w-4" />
                                     ) : (
                                       <ChevronRight className="h-4 w-4" />
@@ -739,9 +858,9 @@ export const AdminPage: React.FC = () => {
                               </div>
                             );
                           })()}
-                          {expandedNetworks.has(item.networkId!) && (
-                            <div className="ml-4 space-y-2 pl-4 border-l-2 border-primary/20">
-                              {user.networks.find(n => n.id === item.networkId)?.businesses.map((business) => (
+                          {expandedNetworks.has(item.networkId || '') && (
+                            <div className="space-y-2 border-l border-slate-200 pl-4 sm:ml-5">
+                              {user.networks.find((network) => network.id === item.networkId)?.businesses.map((business) => (
                                 <BusinessCard
                                   key={business.id}
                                   business={business}
@@ -787,42 +906,42 @@ export const AdminPage: React.FC = () => {
                   return (
                     <Card
                       key={user.id}
-                      className="overflow-hidden border-0 shadow-md hover:shadow-xl transition-all duration-300 bg-card/50 backdrop-blur-sm"
+                      className="overflow-hidden rounded-3xl border-slate-200/80 bg-white shadow-sm transition hover:border-slate-300 hover:shadow-md"
                     >
-                      <CardHeader className="pb-4 border-b border-border/50">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2.5 rounded-xl bg-primary/10">
-                              <User className="w-5 h-5 text-primary" />
+                      <CardHeader className="border-b border-slate-100 px-5 py-4">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+                              <User className="h-5 w-5" />
                             </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h3 className={`text-lg font-semibold ${user.is_active === 0 ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h3 className={`break-words text-lg font-semibold ${user.is_active === 0 ? 'text-slate-400 line-through' : 'text-slate-950'}`}>
                                   {user.name || user.email}
                                 </h3>
                                 {user.is_superadmin && (
-                                  <span className="px-2 py-0.5 text-xs font-medium bg-primary/20 text-primary rounded-full">
+                                  <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700">
                                     Админ
                                   </span>
                                 )}
                                 {user.is_active === 0 && (
-                                  <span className="px-2 py-0.5 text-xs font-medium bg-destructive/10 text-destructive rounded-full">
+                                  <span className="rounded-full bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700">
                                     Приостановлен
                                   </span>
                                 )}
                               </div>
-                              <p className="text-sm text-muted-foreground mt-0.5">{user.email}</p>
+                              <p className="mt-0.5 truncate text-sm text-slate-500">{user.email}</p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <div className="text-xs text-muted-foreground">
+                          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                            <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
                               {visibleBusinesses.length} {visibleBusinesses.length === 1 ? 'бизнес' : 'бизнесов'}
                             </div>
-                            <div className="flex items-center gap-1 opacity-100">
+                            <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1">
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                                className="h-8 w-8 rounded-full p-0 text-slate-500 hover:bg-slate-100 hover:text-slate-950"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handlePauseUser(user.id, user.email, user.is_active !== 0);
@@ -838,7 +957,7 @@ export const AdminPage: React.FC = () => {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                className="h-8 w-8 rounded-full p-0 text-rose-500 hover:bg-rose-50 hover:text-rose-700"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleDeleteUser(user.id, user.email);
@@ -851,7 +970,7 @@ export const AdminPage: React.FC = () => {
                           </div>
                         </div>
                       </CardHeader>
-                      <CardContent className="pt-6">
+                      <CardContent className="px-5 py-5">
                         <div className="space-y-4">
                           {renderBusinessItems(visibleBusinesses)}
                         </div>
@@ -860,7 +979,7 @@ export const AdminPage: React.FC = () => {
                   );
                 })
               )}
-            </div>
+            </DashboardSection>
                 </>
               );
             })()}
@@ -946,80 +1065,80 @@ const BusinessCard: React.FC<BusinessCardProps> = ({
 
   return (
     <div
-      className="group relative p-4 rounded-lg border border-border/50 bg-card hover:border-primary/50 hover:shadow-md transition-all duration-200 cursor-pointer"
+      className="group relative cursor-pointer rounded-3xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 hover:bg-slate-50/60"
       onClick={onClick}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="p-1.5 rounded-md bg-primary/10">
-              <Building2 className="w-4 h-4 text-primary" />
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+              <Building2 className="h-4 w-4" />
             </div>
-            <h4 className={`font-semibold text-foreground ${isBlocked ? 'line-through text-muted-foreground' : ''}`}>
+            <h4 className={`break-words font-semibold ${isBlocked ? 'text-slate-400 line-through' : 'text-slate-950'}`}>
               {business.name}
             </h4>
             {isBlocked && (
-              <span className="px-2 py-0.5 text-xs font-medium bg-destructive/10 text-destructive rounded-full">
+              <span className="rounded-full bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700">
                 Заблокирован
               </span>
             )}
             {isPromo && (
-              <span className="px-2 py-0.5 text-xs font-medium bg-primary/20 text-primary rounded-full">
+              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
                 Промо
               </span>
             )}
             {isPinned && (
-              <span className="px-2 py-0.5 text-xs font-medium bg-sky-100 text-sky-700 rounded-full">
+              <span className="rounded-full bg-sky-50 px-2 py-0.5 text-xs font-semibold text-sky-700">
                 Выбран сейчас
               </span>
             )}
           </div>
           {business.address && (
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground ml-7">
-              <MapPin className="w-3.5 h-3.5" />
+            <div className="ml-10 flex items-center gap-1.5 text-sm text-slate-500">
+              <MapPin className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">{business.address}</span>
             </div>
           )}
         </div>
         <div
-          className="flex items-center gap-1.5"
-          onClick={(e) => e.stopPropagation()}
+          className="flex w-full items-center justify-end gap-1 rounded-2xl border border-slate-200 bg-slate-50 p-1 lg:w-auto"
+          onClick={(event) => event.stopPropagation()}
         >
           <Button
             variant="ghost"
             size="sm"
             onClick={onSettingsClick}
-            className="h-8 w-8 p-0"
+            className="h-8 w-8 rounded-xl p-0 text-slate-500 hover:bg-white hover:text-slate-950"
             title="Настройки"
           >
-            <Settings className="w-4 h-4" />
+            <Settings className="h-4 w-4" />
           </Button>
           <Button
             variant="ghost"
             size="sm"
             onClick={onPromoClick}
-            className={`h-8 w-8 p-0 ${isPromo ? 'text-primary bg-primary/10' : ''}`}
+            className={`h-8 w-8 rounded-xl p-0 ${isPromo ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100' : 'text-slate-500 hover:bg-white hover:text-slate-950'}`}
             title={isPromo ? 'Отключить Промо' : 'Включить Промо'}
           >
-            <Gift className="w-4 h-4" />
+            <Gift className="h-4 w-4" />
           </Button>
           <Button
             variant="ghost"
             size="sm"
             onClick={onBlockClick}
-            className={`h-8 w-8 p-0 ${!isBlocked ? 'hover:text-destructive' : 'text-green-600 hover:text-green-700'}`}
+            className={`h-8 w-8 rounded-xl p-0 ${!isBlocked ? 'text-slate-500 hover:bg-rose-50 hover:text-rose-700' : 'text-emerald-600 hover:bg-white hover:text-emerald-700'}`}
             title={isBlocked ? 'Разблокировать' : 'Заблокировать'}
           >
-            <Ban className="w-4 h-4" />
+            <Ban className="h-4 w-4" />
           </Button>
           <Button
             variant="ghost"
             size="sm"
             onClick={onDeleteClick}
-            className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10"
+            className="h-8 w-8 rounded-xl p-0 text-rose-500 hover:bg-rose-50 hover:text-rose-700"
             title="Удалить"
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       </div>

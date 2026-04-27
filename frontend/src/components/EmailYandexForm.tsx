@@ -12,7 +12,7 @@ const EmailYandexForm: React.FC = () => {
     setLoading(true);
     setSuccess(null);
     setError(null);
-    
+
     try {
       const response = await fetch('/api/public/request-report', {
         method: 'POST',
@@ -24,9 +24,13 @@ const EmailYandexForm: React.FC = () => {
       if (!response.ok) {
         throw new Error(result?.error || 'Ошибка при отправке заявки');
       }
-
+      const targetUrl = String(result?.public_url || '').trim();
+      if (targetUrl) {
+        window.location.href = targetUrl;
+        return;
+      }
       setSuccess('Спасибо! Мы приняли вашу заявку и скоро с вами свяжемся.');
-      
+
     } catch (error) {
       console.error('Общая ошибка:', error);
       setError(error instanceof Error ? error.message : 'Произошла ошибка. Попробуйте ещё раз.');
@@ -70,4 +74,4 @@ const EmailYandexForm: React.FC = () => {
   );
 };
 
-export default EmailYandexForm; 
+export default EmailYandexForm;

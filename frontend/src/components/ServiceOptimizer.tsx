@@ -29,6 +29,7 @@ const languageOptions = [
   { value: 'es', label: 'Español' },
   { value: 'de', label: 'Deutsch' },
   { value: 'fr', label: 'Français' },
+  { value: 'tr', label: 'Türkçe' },
   { value: 'it', label: 'Italiano' },
   { value: 'pt', label: 'Português' },
   { value: 'zh', label: '中文' },

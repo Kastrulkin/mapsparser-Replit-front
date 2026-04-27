@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useRef, useState, useEffect } from 'react';
 import { getApiEndpoint } from '../config/api';
 import { ChevronDown, Building2, Network } from 'lucide-react';
+import { useClickOutside } from '@/hooks/useClickOutside';
 
 interface NetworkLocation {
   id: string;
@@ -24,6 +25,9 @@ export const NetworkSwitcher: React.FC<NetworkSwitcherProps> = ({
   const [locations, setLocations] = useState<NetworkLocation[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<NetworkLocation | null>(null);
   const [loading, setLoading] = useState(true);
+  const switcherRef = useRef<HTMLDivElement | null>(null);
+  const closeSwitcher = useCallback(() => setIsOpen(false), []);
+  useClickOutside(switcherRef, closeSwitcher, { enabled: isOpen });
 
   useEffect(() => {
     if (networkId) {
@@ -81,7 +85,7 @@ export const NetworkSwitcher: React.FC<NetworkSwitcherProps> = ({
   }
 
   return (
-    <div className="relative">
+    <div ref={switcherRef} className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center space-x-2 px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
@@ -134,4 +138,3 @@ export const NetworkSwitcher: React.FC<NetworkSwitcherProps> = ({
     </div>
   );
 };
-

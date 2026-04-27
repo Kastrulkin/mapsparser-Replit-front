@@ -1,10 +1,15 @@
 import asyncio
 import json
 import os
+from datetime import datetime, timezone
 from typing import Any
 
-from telethon import TelegramClient
-from telethon.sessions import StringSession
+try:
+    from telethon import TelegramClient
+    from telethon.sessions import StringSession
+except Exception:
+    TelegramClient = None
+    StringSession = None
 try:
     from telethon.network.connection.tcpmtproxy import (
         ConnectionTcpMTProxyAbridged,
@@ -22,6 +27,9 @@ try:
     import socks
 except Exception:
     socks = None
+
+REQUEST_TIMEOUT_SEC = max(5, int(os.getenv("TELEGRAM_USERBOT_REQUEST_TIMEOUT_SEC", "8")))
+CONNECT_ATTEMPT_TIMEOUT_SEC = max(5, int(os.getenv("TELEGRAM_USERBOT_CONNECT_ATTEMPT_TIMEOUT_SEC", "10")))
 
 
 def _parse_auth_data(raw: str | None) -> dict[str, Any]:
@@ -119,13 +127,71 @@ def _resolve_mtproxy():
     return (host, int(port), _normalize_mtproxy_secret(secret))
 
 
-def load_userbot_account(cursor, business_id: str | None = None) -> dict[str, Any] | None:
+def _build_mtproxy_attempts(mtproxy: tuple[str, int, str] | None) -> list[dict[str, Any]]:
+    if mtproxy is None:
+        return []
+    attempts: list[dict[str, Any]] = []
+    preferred_mode = os.getenv("TELEGRAM_USERBOT_MTPROXY_MODE", "randomized").strip().lower()
+    connection_options = {
+        "randomized": ConnectionTcpMTProxyRandomizedIntermediate,
+        "classic": ConnectionTcpMTProxyIntermediate,
+        "abridged": ConnectionTcpMTProxyAbridged,
+    }
+
+    ordered_modes = [preferred_mode] + [mode for mode in ("randomized", "classic", "abridged") if mode != preferred_mode]
+    seen_modes: set[str] = set()
+    for mode in ordered_modes:
+        if mode in seen_modes:
+            continue
+        seen_modes.add(mode)
+        connection_class = connection_options.get(mode)
+        if connection_class is None:
+            continue
+        attempts.append({"connection": connection_class, "proxy": mtproxy})
+    return attempts
+
+
+def _describe_attempt(config: dict[str, Any]) -> dict[str, str]:
+    if "connection" in config and "proxy" in config:
+        proxy_host = str(config["proxy"][0])
+        proxy_port = str(config["proxy"][1])
+        connection_name = getattr(config["connection"], "__name__", "mtproxy")
+        mode = "randomized"
+        if "Abridged" in connection_name:
+            mode = "abridged"
+        elif "Intermediate" in connection_name and "Randomized" not in connection_name:
+            mode = "classic"
+        return {
+            "route_kind": "mtproxy",
+            "route_label": f"mtproxy:{mode}",
+            "route_target": f"{proxy_host}:{proxy_port}",
+        }
+    if "proxy" in config:
+        proxy = config["proxy"]
+        proxy_host = str(proxy[1])
+        proxy_port = str(proxy[2])
+        return {
+            "route_kind": "proxy",
+            "route_label": "socks5",
+            "route_target": f"{proxy_host}:{proxy_port}",
+        }
+    return {
+        "route_kind": "direct",
+        "route_label": "direct",
+        "route_target": "telegram_dc",
+    }
+
+
+def load_userbot_account(cursor, business_id: str | None = None, account_id: str | None = None) -> dict[str, Any] | None:
     query = """
         SELECT id, business_id, auth_data_encrypted, is_active
         FROM externalbusinessaccounts
         WHERE source = %s AND is_active = TRUE
     """
     params: list[Any] = ["telegram_app"]
+    if account_id:
+        query += " AND id = %s"
+        params.append(account_id)
     if business_id:
         query += " AND business_id = %s"
         params.append(business_id)
@@ -164,31 +230,58 @@ def update_userbot_session(cursor, account_id: str, auth_data: dict[str, Any]) -
 
 
 async def _connect_client(auth_data: dict[str, Any]) -> TelegramClient:
+    if TelegramClient is None or StringSession is None:
+        raise RuntimeError("telethon is not installed")
     api_id = int(auth_data.get("api_id") or 0)
     api_hash = str(auth_data.get("api_hash") or "").strip()
     session_string = str(auth_data.get("session_string") or auth_data.get("pending_session_string") or "")
     proxy = _resolve_proxy()
     mtproxy = _resolve_mtproxy()
-    if mtproxy:
-        mode = os.getenv("TELEGRAM_USERBOT_MTPROXY_MODE", "randomized").strip().lower()
-        connection_class = (
-            ConnectionTcpMTProxyIntermediate
-            if mode == "classic"
-            else ConnectionTcpMTProxyRandomizedIntermediate
-        )
+    client_kwargs = {
+        "connection_retries": 1,
+        "retry_delay": 0,
+        "auto_reconnect": False,
+        "request_retries": 1,
+    }
+    attempts: list[dict[str, Any]] = _build_mtproxy_attempts(mtproxy)
+    if proxy:
+        attempts.append({"proxy": proxy})
+    attempts.append({})
+
+    last_error: Exception | None = None
+    for config in attempts:
+        route_info = _describe_attempt(config)
         client = TelegramClient(
             StringSession(session_string),
             api_id,
             api_hash,
-            connection=connection_class,
-            proxy=mtproxy,
+            **config,
+            **client_kwargs,
         )
-    elif proxy:
-        client = TelegramClient(StringSession(session_string), api_id, api_hash, proxy=proxy)
-    else:
-        client = TelegramClient(StringSession(session_string), api_id, api_hash)
-    await client.connect()
-    return client
+        try:
+            await asyncio.wait_for(client.connect(), timeout=CONNECT_ATTEMPT_TIMEOUT_SEC)
+            setattr(client, "_localos_route_info", route_info)
+            print(
+                "[telegram_userbot] connect_ok "
+                f"route={route_info['route_label']} target={route_info['route_target']}",
+                flush=True,
+            )
+            return client
+        except Exception as exc:
+            last_error = exc
+            print(
+                "[telegram_userbot] connect_fail "
+                f"route={route_info['route_label']} target={route_info['route_target']} "
+                f"error={type(exc).__name__}:{str(exc)[:160]}",
+                flush=True,
+            )
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("Telegram client connection failed")
 
 
 async def _send_code_async(auth_data: dict[str, Any]) -> dict[str, Any]:
@@ -231,14 +324,98 @@ async def _confirm_code_async(auth_data: dict[str, Any], code: str) -> dict[str,
         await client.disconnect()
 
 
-async def _send_message_async(auth_data: dict[str, Any], phone: str, message: str) -> dict[str, Any]:
-    normalized = _normalize_phone(phone)
+async def _send_message_async(auth_data: dict[str, Any], recipient: str, message: str) -> dict[str, Any]:
+    raw_recipient = str(recipient or "").strip()
+    normalized = _normalize_phone(raw_recipient) if raw_recipient.startswith("+") or raw_recipient.isdigit() else raw_recipient
+    client = await _connect_client(auth_data)
+    try:
+        route_info = getattr(client, "_localos_route_info", None) or {
+            "route_kind": "unknown",
+            "route_label": "unknown",
+            "route_target": "unknown",
+        }
+        if not await client.is_user_authorized():
+            return {
+                "status": "not_authorized",
+                "recipient": normalized,
+                **route_info,
+            }
+        sent_message = await asyncio.wait_for(client.send_message(normalized, message), timeout=REQUEST_TIMEOUT_SEC)
+        return {
+            "status": "sent",
+            "recipient": normalized,
+            "message_id": getattr(sent_message, "id", None),
+            **route_info,
+        }
+    finally:
+        await client.disconnect()
+
+
+def _normalize_datetime_utc(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
+async def _fetch_recent_replies_async(
+    auth_data: dict[str, Any],
+    recipient: str,
+    *,
+    sent_after: Any = None,
+    after_message_id: Any = None,
+    limit: int = 20,
+) -> dict[str, Any]:
+    raw_recipient = str(recipient or "").strip()
+    normalized = _normalize_phone(raw_recipient) if raw_recipient.startswith("+") or raw_recipient.isdigit() else raw_recipient
+    safe_limit = max(1, min(int(limit or 20), 50))
+    cutoff = _normalize_datetime_utc(sent_after)
+    try:
+        min_message_id = int(str(after_message_id or "").strip()) if str(after_message_id or "").strip() else None
+    except Exception:
+        min_message_id = None
+
     client = await _connect_client(auth_data)
     try:
         if not await client.is_user_authorized():
-            return {"status": "not_authorized", "phone": normalized}
-        await client.send_message(normalized, message)
-        return {"status": "sent", "phone": normalized}
+            return {"status": "not_authorized", "recipient": normalized, "replies": []}
+
+        messages = await asyncio.wait_for(client.get_messages(normalized, limit=safe_limit), timeout=REQUEST_TIMEOUT_SEC)
+        replies: list[dict[str, Any]] = []
+        for message in reversed(messages):
+            if bool(getattr(message, "out", False)):
+                continue
+            message_id = getattr(message, "id", None)
+            if min_message_id is not None:
+                try:
+                    if int(message_id or 0) <= min_message_id:
+                        continue
+                except Exception:
+                    pass
+            message_date = _normalize_datetime_utc(getattr(message, "date", None))
+            if cutoff and message_date and message_date <= cutoff:
+                continue
+            text = str(
+                getattr(message, "message", None)
+                or getattr(message, "text", None)
+                or ""
+            ).strip()
+            if not text:
+                text = "[non-text reply]"
+            replies.append(
+                {
+                    "message_id": message_id,
+                    "text": text,
+                    "created_at": message_date.isoformat() if message_date else None,
+                    "sender_id": getattr(getattr(message, "from_id", None), "user_id", None),
+                }
+            )
+        return {"status": "ok", "recipient": normalized, "replies": replies}
     finally:
         await client.disconnect()
 
@@ -251,5 +428,24 @@ def confirm_code(auth_data: dict[str, Any], code: str) -> dict[str, Any]:
     return asyncio.run(_confirm_code_async(auth_data, code))
 
 
-def send_message(auth_data: dict[str, Any], phone: str, message: str) -> dict[str, Any]:
-    return asyncio.run(_send_message_async(auth_data, phone, message))
+def send_message(auth_data: dict[str, Any], recipient: str, message: str) -> dict[str, Any]:
+    return asyncio.run(_send_message_async(auth_data, recipient, message))
+
+
+def fetch_recent_replies(
+    auth_data: dict[str, Any],
+    recipient: str,
+    *,
+    sent_after: Any = None,
+    after_message_id: Any = None,
+    limit: int = 20,
+) -> dict[str, Any]:
+    return asyncio.run(
+        _fetch_recent_replies_async(
+            auth_data,
+            recipient,
+            sent_after=sent_after,
+            after_message_id=after_message_id,
+            limit=limit,
+        )
+    )

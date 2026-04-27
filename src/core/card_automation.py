@@ -743,9 +743,14 @@ def _update_action_runtime(
 
 def _business_context(conn, business_id: str) -> dict[str, Any]:
     cursor = conn.cursor()
+    language_select = (
+        "ai_agent_language AS language,"
+        if _table_has_column(cursor, "businesses", "ai_agent_language")
+        else ("language," if _table_has_column(cursor, "businesses", "language") else "'ru' AS language,")
+    )
     cursor.execute(
-        """
-        SELECT id, owner_id, name, language, address
+        f"""
+        SELECT id, owner_id, name, {language_select} address
         FROM businesses
         WHERE id = %s
         LIMIT 1
@@ -1282,23 +1287,33 @@ def run_card_automation_action(
         }
     except Exception as exc:
         error_message = str(exc or "").strip() or "automation_error"
-        _record_event(
-            conn,
-            business_id=business_id,
-            action_type=action_type,
-            status="error",
-            triggered_by=triggered_by,
-            message=error_message,
-            payload={"error": error_message},
-        )
-        _update_action_runtime(
-            conn,
-            business_id=business_id,
-            action_type=action_type,
-            status="error",
-            interval_hours=interval_hours,
-        )
-        conn.commit()
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        try:
+            _record_event(
+                conn,
+                business_id=business_id,
+                action_type=action_type,
+                status="error",
+                triggered_by=triggered_by,
+                message=error_message,
+                payload={"error": error_message},
+            )
+            _update_action_runtime(
+                conn,
+                business_id=business_id,
+                action_type=action_type,
+                status="error",
+                interval_hours=interval_hours,
+            )
+            conn.commit()
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
         return {
             "success": False,
             "status": "error",

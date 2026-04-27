@@ -11,6 +11,7 @@ REASON_INVALID_ORG_URL = "invalid_org_url"
 REASON_QUALITY_GATE_FAIL = "quality_gate_fail"
 REASON_RETRY_EXHAUSTED = "retry_exhausted"
 REASON_TASK_TTL_EXCEEDED = "task_ttl_exceeded"
+REASON_CLOSED_BUSINESS = "closed_business"
 REASON_UNKNOWN = "unknown"
 
 
@@ -25,6 +26,9 @@ def classify_failure_reason(status: Any, error_message: Any) -> str:
 
     if "invalid_org_url" in text or "invalid org url" in text:
         return REASON_INVALID_ORG_URL
+
+    if text.startswith("business_closed:"):
+        return REASON_CLOSED_BUSINESS
 
     if "dlq_reason=task_ttl_exceeded" in text:
         return REASON_TASK_TTL_EXCEEDED

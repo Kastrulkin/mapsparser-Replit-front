@@ -11,18 +11,17 @@ export const ActiveSalonsCard: React.FC<ActiveSalonsCardProps> = ({ stats }) => 
     const { totalSalons, activeSalons, problemSalons, offlineSalons } = stats;
 
     const data = [
-        { name: 'Active', value: activeSalons, color: '#10b981' }, // emerald-500
-        { name: 'Problem', value: problemSalons, color: '#eab308' }, // yellow-500
-        { name: 'Offline', value: offlineSalons, color: '#ef4444' }, // red-500
+        { name: 'Активные', value: activeSalons, color: '#10b981' },
+        { name: 'Нужна проверка', value: problemSalons, color: '#eab308' },
+        { name: 'Оффлайн', value: offlineSalons, color: '#ef4444' },
     ];
 
     const coveragePercent = Math.round((activeSalons / totalSalons) * 100);
-    const isHealthy = coveragePercent >= 90;
 
     return (
         <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Coverage</CardTitle>
+                <CardTitle className="text-sm font-medium">Покрытие сети</CardTitle>
             </CardHeader>
             <CardContent className="flex items-center justify-between">
                 <div>
@@ -30,7 +29,7 @@ export const ActiveSalonsCard: React.FC<ActiveSalonsCardProps> = ({ stats }) => 
                         {activeSalons}<span className="text-gray-400 text-lg">/{totalSalons}</span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
-                        {problemSalons > 0 ? `${problemSalons} require attention` : "All systems operational"}
+                        {problemSalons > 0 ? `${problemSalons} точек требуют внимания` : "Все точки работают штатно"}
                     </p>
                 </div>
                 <div className="h-[50px] w-[50px]">

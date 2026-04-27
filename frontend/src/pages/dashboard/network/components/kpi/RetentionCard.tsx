@@ -17,15 +17,15 @@ export const RetentionCard: React.FC<RetentionCardProps> = ({ stats }) => {
             {!hasData && (
                 <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background/50 backdrop-blur-sm p-4 text-center">
                     <Lock className="h-6 w-6 mb-2 text-muted-foreground" />
-                    <p className="text-xs font-semibold mb-2">CRM Integration Required</p>
+                    <p className="text-xs font-semibold mb-2">Нужна CRM-интеграция</p>
                     <Button size="sm" variant="outline" className="h-7 text-xs">
-                        Connect CRM
+                        Подключить CRM
                     </Button>
                 </div>
             )}
 
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Retention Potential</CardTitle>
+                <CardTitle className="text-sm font-medium">Потенциал возврата</CardTitle>
             </CardHeader>
             <CardContent className={!hasData ? "opacity-40" : ""}>
                 <div className="text-2xl font-bold">
@@ -41,11 +41,11 @@ export const RetentionCard: React.FC<RetentionCardProps> = ({ stats }) => {
                         <span className={retentionTrend > 0 ? "text-emerald-500" : "text-red-500"}>
                             {Math.abs(retentionTrend)}%
                         </span>
-                        <span className="ml-1">returning clients</span>
+                        <span className="ml-1">возвращаются снова</span>
                     </div>
                 )}
                 <p className="text-xs text-muted-foreground mt-2">
-                    Benchmarks: &gt;6%
+                    Ориентир: &gt;6%
                 </p>
             </CardContent>
         </Card>

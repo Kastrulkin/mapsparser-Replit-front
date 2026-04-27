@@ -46,6 +46,13 @@ export class NewAuth {
       ...options.headers,
     };
 
+    // Всегда синхронизируем токен с localStorage перед запросом,
+    // чтобы singleton не жил со stale-токеном после повторного логина/refresh в другой вкладке.
+    const liveToken = localStorage.getItem('auth_token');
+    if (liveToken && liveToken !== this.token) {
+      this.token = liveToken;
+    }
+
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
@@ -80,6 +87,13 @@ export class NewAuth {
       }
 
       if (!response.ok) {
+        const backendError = String(data.error || '');
+        if (response.status === 401 && backendError.toLowerCase().includes('invalid token')) {
+          this.currentUser = null;
+          this.token = null;
+          localStorage.removeItem('auth_token');
+          throw new Error('Сессия истекла. Войдите снова.');
+        }
         throw new Error(data.error || `Ошибка запроса (${response.status})`);
       }
 

@@ -55,9 +55,59 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [registrationComplete, setRegistrationComplete] = useState(false);
   const navigate = useNavigate();
   const { language } = useLanguage();
   const isRu = language === 'ru';
+  const copy = {
+    loginTitle: isRu ? 'Вход в систему' : 'Sign in',
+    loginSubtitle: isRu ? 'Новые клиенты для вашего бизнеса' : 'New clients for your business',
+    loginTab: isRu ? 'Вход' : 'Login',
+    registerTab: isRu ? 'Регистрация' : 'Register',
+    resetTab: isRu ? 'Восстановление' : 'Reset',
+    loginError: isRu ? 'Ошибка входа: ' : 'Sign-in error: ',
+    registerError: isRu ? 'Ошибка регистрации: ' : 'Registration error: ',
+    registerRequired: isRu ? 'Email и пароль обязательны' : 'Email and password are required',
+    businessRequired: isRu ? 'Название бизнеса, адрес и город обязательны' : 'Business name, address, and city are required',
+    registerSuccess: isRu ? 'Регистрация прошла успешно. Перенаправляем в личный кабинет...' : 'Registration successful. Redirecting to your dashboard...',
+    registerPending: isRu ? 'Регистрация успешна! Ваш бизнес ожидает модерации. Перенаправляем в личный кабинет...' : 'Registration successful. Your business is pending moderation. Redirecting to your dashboard...',
+    resetSent: isRu ? 'Инструкции по восстановлению пароля отправлены на email. Проверьте почту!' : 'Password reset instructions were sent to your email.',
+    resetError: isRu ? 'Ошибка восстановления пароля: ' : 'Password reset error: ',
+    email: 'Email',
+    password: isRu ? 'Пароль' : 'Password',
+    personalData: isRu ? 'Личные данные' : 'Personal details',
+    businessData: isRu ? 'Данные бизнеса' : 'Business details',
+    name: isRu ? 'Имя' : 'Name',
+    phone: isRu ? 'Телефон' : 'Phone',
+    businessName: isRu ? 'Название бизнеса *' : 'Business name *',
+    address: isRu ? 'Адрес *' : 'Address *',
+    addressPlaceholder: isRu ? 'Например: Невский проспект, 10' : 'Example: 123 Main St',
+    city: isRu ? 'Город *' : 'City *',
+    country: isRu ? 'Страна' : 'Country',
+    countryPlaceholder: isRu ? 'Начните вводить название страны' : 'Start typing a country',
+    countryHint: isRu ? 'Можно выбрать из списка или вписать страну вручную.' : 'Choose from the list or enter the country manually.',
+    signIn: isRu ? 'Войти' : 'Sign in',
+    signingIn: isRu ? 'Вход...' : 'Signing in...',
+    signUp: isRu ? 'Зарегистрироваться' : 'Sign up',
+    signingUp: isRu ? 'Регистрация...' : 'Registering...',
+    postRegisterHint: isRu ? 'После регистрации вам будет предложено выбрать тариф и оплатить подписку' : 'After registration you will be able to choose a plan and pay for your subscription.',
+    sendReset: isRu ? 'Восстановить пароль' : 'Reset password',
+    sendingReset: isRu ? 'Отправка...' : 'Sending...',
+  };
+
+  const looksLikeUrl = (value: string) => {
+    const text = value.trim().toLowerCase();
+    if (!text) return false;
+    return (
+      text.includes('://') ||
+      text.startsWith('www.') ||
+      text.includes('maps.app.goo.gl') ||
+      text.includes('yandex.') ||
+      text.includes('2gis.') ||
+      text.includes('google.com/maps') ||
+      text.includes('maps.apple.com')
+    );
+  };
 
   // Инициализация вкладки и запоминание выбранного тарифа из URL
   useEffect(() => {
@@ -79,6 +129,7 @@ const Login = () => {
     setLoading(true);
     setError(null);
     setInfo(null);
+    setRegistrationComplete(false);
 
     try {
       const { user, error } = await newAuth.signIn(loginForm.email, loginForm.password);
@@ -102,7 +153,7 @@ const Login = () => {
         }
       }
     } catch (error) {
-      setError('Ошибка входа: ' + (error as Error).message);
+      setError(copy.loginError + (error as Error).message);
     } finally {
       setLoading(false);
     }
@@ -113,16 +164,27 @@ const Login = () => {
     setLoading(true);
     setError(null);
     setInfo(null);
+    setRegistrationComplete(false);
 
     // Валидация
     if (!registerForm.email || !registerForm.password) {
-      setError('Email и пароль обязательны');
+      setError(copy.registerRequired);
       setLoading(false);
       return;
     }
 
     if (!registerForm.business_name || !registerForm.business_address || !registerForm.business_city) {
-      setError('Название бизнеса, адрес и город обязательны');
+      setError(copy.businessRequired);
+      setLoading(false);
+      return;
+    }
+    if (looksLikeUrl(registerForm.business_address)) {
+      setError(isRu ? 'Поле «Адрес» не должно содержать ссылку на карту' : 'The address field must not contain a map link');
+      setLoading(false);
+      return;
+    }
+    if (looksLikeUrl(registerForm.business_city)) {
+      setError(isRu ? 'Поле «Город» не должно содержать ссылку на карту' : 'The city field must not contain a map link');
       setLoading(false);
       return;
     }
@@ -150,6 +212,7 @@ const Login = () => {
 
       if (response.ok && data.success) {
         const tierFromUrl = searchParams.get('tier');
+        setRegistrationComplete(true);
 
         // Сохраняем токен
         if (data.token) {
@@ -160,24 +223,27 @@ const Login = () => {
           localStorage.setItem('selectedTier', tierFromUrl);
         }
 
-        // Перенаправляем на страницу оплаты/подписки
+        // Первый вход должен вести в стартовый first-run сценарий, а не в разрозненные разделы
         const targetUrl = tierFromUrl
-          ? `/dashboard/settings?payment=required&tier=${tierFromUrl}`
-          : '/dashboard/settings?payment=required';
+          ? `/dashboard/profile?payment=required&tier=${tierFromUrl}`
+          : '/dashboard/profile?payment=required';
 
         if (data.business?.moderation_status === 'pending') {
-          setInfo('Регистрация успешна! Ваш бизнес ожидает модерации. Перенаправляем в личный кабинет...');
+          setInfo(copy.registerPending);
           setTimeout(() => {
             navigate(targetUrl);
-          }, 2000);
+          }, 1500);
         } else {
-          navigate(targetUrl);
+          setInfo(copy.registerSuccess);
+          setTimeout(() => {
+            navigate(targetUrl);
+          }, 1200);
         }
       } else {
-        setError(data.error || 'Ошибка регистрации');
+        setError(data.error || (isRu ? 'Ошибка регистрации' : 'Registration failed'));
       }
     } catch (error) {
-      setError('Ошибка регистрации: ' + (error as Error).message);
+      setError(copy.registerError + (error as Error).message);
     } finally {
       setLoading(false);
     }
@@ -203,12 +269,12 @@ const Login = () => {
       const data = await response.json();
 
       if (response.ok) {
-        setInfo('Инструкции по восстановлению пароля отправлены на email. Проверьте почту!');
+        setInfo(copy.resetSent);
       } else {
-        setError(data.error || 'Ошибка восстановления пароля');
+        setError(data.error || (isRu ? 'Ошибка восстановления пароля' : 'Password reset failed'));
       }
     } catch (error) {
-      setError('Ошибка восстановления пароля: ' + (error as Error).message);
+      setError(copy.resetError + (error as Error).message);
     } finally {
       setLoading(false);
     }
@@ -219,10 +285,10 @@ const Login = () => {
       <div className="max-w-md w-full space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            {isRu ? 'Вход в систему' : 'Sign in'}
+            {copy.loginTitle}
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            {isRu ? 'Новые клиенты для вашего бизнеса' : 'New clients for your business'}
+            {copy.loginSubtitle}
           </p>
         </div>
 
@@ -236,7 +302,7 @@ const Login = () => {
                   : 'text-gray-500 hover:text-gray-700'
                 }`}
             >
-              {isRu ? 'Вход' : 'Login'}
+              {copy.loginTab}
             </button>
             <button
               onClick={() => setTab('register')}
@@ -245,7 +311,7 @@ const Login = () => {
                   : 'text-gray-500 hover:text-gray-700'
                 }`}
             >
-              {isRu ? 'Регистрация' : 'Register'}
+              {copy.registerTab}
             </button>
             <button
               onClick={() => setTab('reset')}
@@ -254,7 +320,7 @@ const Login = () => {
                   : 'text-gray-500 hover:text-gray-700'
                 }`}
             >
-              {isRu ? 'Восстановление' : 'Reset'}
+              {copy.resetTab}
             </button>
           </div>
 
@@ -275,7 +341,7 @@ const Login = () => {
             <form className="space-y-6" onSubmit={handleLogin}>
               <div>
                 <label htmlFor="login-email" className="block text-sm font-medium text-gray-700">
-                  Email
+                  {copy.email}
                 </label>
                 <input
                   id="login-email"
@@ -288,7 +354,7 @@ const Login = () => {
               </div>
               <div>
                 <label htmlFor="login-password" className="block text-sm font-medium text-gray-700">
-                  Пароль
+                  {copy.password}
                 </label>
                 <input
                   id="login-password"
@@ -304,7 +370,7 @@ const Login = () => {
                 className="w-full btn-iridescent"
                 disabled={loading}
               >
-                {loading ? (isRu ? 'Вход...' : 'Signing in...') : (isRu ? 'Войти' : 'Sign in')}
+                {loading ? copy.signingIn : copy.signIn}
               </Button>
             </form>
           )}
@@ -313,11 +379,11 @@ const Login = () => {
           {tab === 'register' && (
             <form className="space-y-4" onSubmit={handleRegister}>
               <div className="border-b border-gray-200 pb-4">
-                <h3 className="text-sm font-medium text-gray-700 mb-3">Личные данные</h3>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">{copy.personalData}</h3>
                 <div className="space-y-4">
                   <div>
                     <label htmlFor="register-name" className="block text-sm font-medium text-gray-700">
-                      Имя
+                      {copy.name}
                     </label>
                     <input
                       id="register-name"
@@ -329,7 +395,7 @@ const Login = () => {
                   </div>
                   <div>
                     <label htmlFor="register-email" className="block text-sm font-medium text-gray-700">
-                      Email *
+                      {copy.email} *
                     </label>
                     <input
                       id="register-email"
@@ -342,7 +408,7 @@ const Login = () => {
                   </div>
                   <div>
                     <label htmlFor="register-password" className="block text-sm font-medium text-gray-700">
-                      Пароль *
+                      {copy.password} *
                     </label>
                     <input
                       id="register-password"
@@ -355,7 +421,7 @@ const Login = () => {
                   </div>
                   <div>
                     <label htmlFor="register-phone" className="block text-sm font-medium text-gray-700">
-                      Телефон
+                      {copy.phone}
                     </label>
                     <input
                       id="register-phone"
@@ -369,11 +435,11 @@ const Login = () => {
               </div>
 
               <div className="border-b border-gray-200 pb-4">
-                <h3 className="text-sm font-medium text-gray-700 mb-3">Данные бизнеса</h3>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">{copy.businessData}</h3>
                 <div className="space-y-4">
                   <div>
                     <label htmlFor="register-business-name" className="block text-sm font-medium text-gray-700">
-                      Название бизнеса *
+                      {copy.businessName}
                     </label>
                     <input
                       id="register-business-name"
@@ -386,7 +452,7 @@ const Login = () => {
                   </div>
                   <div>
                     <label htmlFor="register-business-address" className="block text-sm font-medium text-gray-700">
-                      Адрес *
+                      {copy.address}
                     </label>
                     <input
                       id="register-business-address"
@@ -394,14 +460,14 @@ const Login = () => {
                       required
                       value={registerForm.business_address}
                       onChange={(e) => setRegisterForm({ ...registerForm, business_address: e.target.value })}
-                      placeholder="Например: 123 Main St"
+                      placeholder={copy.addressPlaceholder}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label htmlFor="register-business-city" className="block text-sm font-medium text-gray-700">
-                        Город *
+                        {copy.city}
                       </label>
                       <input
                         id="register-business-city"
@@ -414,7 +480,7 @@ const Login = () => {
                     </div>
                     <div>
                       <label htmlFor="register-business-country" className="block text-sm font-medium text-gray-700">
-                        Страна
+                        {copy.country}
                       </label>
                       <input
                         id="register-business-country"
@@ -423,7 +489,7 @@ const Login = () => {
                         onChange={(e) =>
                           setRegisterForm({ ...registerForm, business_country: e.target.value })
                         }
-                        placeholder="Начните вводить название страны"
+                        placeholder={copy.countryPlaceholder}
                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                       />
                       <datalist id="business-country-options">
@@ -432,7 +498,7 @@ const Login = () => {
                         ))}
                       </datalist>
                       <p className="mt-1 text-xs text-gray-500">
-                        Можно выбрать из списка или вписать страну вручную.
+                        {copy.countryHint}
                       </p>
                     </div>
                   </div>
@@ -444,12 +510,15 @@ const Login = () => {
                 className="w-full"
                 disabled={loading}
               >
-                {loading ? (isRu ? 'Регистрация...' : 'Registering...') : (isRu ? 'Зарегистрироваться' : 'Sign up')}
+                {loading ? copy.signingUp : copy.signUp}
               </Button>
+              {registrationComplete && (
+                <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                  {info || copy.registerSuccess}
+                </div>
+              )}
               <p className="text-xs text-gray-500 text-center">
-                {isRu
-                  ? 'После регистрации вам будет предложено выбрать тариф и оплатить подписку'
-                  : 'After registration you will be able to choose a plan and pay for your subscription.'}
+                {copy.postRegisterHint}
               </p>
             </form>
           )}
@@ -459,7 +528,7 @@ const Login = () => {
             <form className="space-y-6" onSubmit={handleResetPassword}>
               <div>
                 <label htmlFor="reset-email" className="block text-sm font-medium text-gray-700">
-                  Email
+                  {copy.email}
                 </label>
                 <input
                   id="reset-email"
@@ -475,7 +544,7 @@ const Login = () => {
                 className="w-full"
                 disabled={loading}
               >
-                {loading ? 'Отправка...' : 'Восстановить пароль'}
+                {loading ? copy.sendingReset : copy.sendReset}
               </Button>
             </form>
           )}

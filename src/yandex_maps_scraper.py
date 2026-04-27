@@ -806,7 +806,7 @@ def parse_overview_data(page):
     try:
         social_links = []
         # General search + WhatsApp
-        social_els = page.query_selector_all("a[href*='vk.com'], a[href*='instagram.com'], a[href*='facebook.com'], a[href*='twitter.com'], a[href*='ok.ru'], a[href*='t.me'], a[href*='whatsapp.com'], a[href*='wa.me']")
+        social_els = page.query_selector_all("a[href*='vk.com'], a[href*='instagram.com'], a[href*='facebook.com'], a[href*='twitter.com'], a[href*='ok.ru'], a[href*='t.me'], a[href*='whatsapp.com'], a[href*='wa.me'], a[href*='max.ru'], a[href*='web.max.ru']")
         for el in social_els:
             href = el.get_attribute('href')
             if href and href not in social_links:

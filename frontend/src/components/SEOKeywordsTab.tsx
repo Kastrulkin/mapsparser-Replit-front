@@ -43,6 +43,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
     const [viewsFilter, setViewsFilter] = useState<'all' | 'high' | 'mid' | 'low'>('all');
     const [searching, setSearching] = useState(false);
     const [suggestions, setSuggestions] = useState<Keyword[]>([]);
+    const [hasSearchedSuggestions, setHasSearchedSuggestions] = useState(false);
     const [rejectedSuggestions, setRejectedSuggestions] = useState<Set<string>>(new Set());
     const [showBlocked, setShowBlocked] = useState(false);
     const [negativeKeywords, setNegativeKeywords] = useState<NegativeKeyword[]>([]);
@@ -274,9 +275,12 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
         const q = searchQuery.trim();
         if (q.length < 2) {
             setSuggestions([]);
+            setHasSearchedSuggestions(false);
             return;
         }
         setSearching(true);
+        setHasSearchedSuggestions(true);
+        setError(null);
         try {
             const token = localStorage.getItem('auth_token');
             const response = await fetch(
@@ -489,6 +493,12 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                     <input
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                                event.preventDefault();
+                                void searchWordstat();
+                            }
+                        }}
                         placeholder="Поиск запросов Wordstat, например: EMS массаж"
                         className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm"
                     />
@@ -517,6 +527,11 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                                 </div>
                             </div>
                         ))}
+                    </div>
+                )}
+                {hasSearchedSuggestions && !searching && suggestions.length === 0 && searchQuery.trim().length >= 2 && (
+                    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-800">
+                        По запросу ничего не найдено. Проверьте опечатки или попробуйте более широкую формулировку.
                     </div>
                 )}
             </div>

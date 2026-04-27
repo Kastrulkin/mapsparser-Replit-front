@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ContactPresenceBadges, StatusSummaryCard, WorkflowActionRow } from '@/components/prospecting/LeadWorkflowBlocks';
 import { LeadDetailMetaList, LeadDetailSection } from '@/components/prospecting/LeadDetailSections';
+import AdminAuditEditorPanel from '@/components/AdminAuditEditorPanel';
 
 export type LeadPreviewLead = {
   id?: string;
@@ -153,6 +154,7 @@ interface LeadCardPreviewPanelProps {
   parseBusy?: boolean;
   parseAutoRefreshing?: boolean;
   onGenerateAuditPage?: () => void;
+  onAuditEditorPublished?: () => void;
   onSaveContacts?: (payload: { telegram_url: string; whatsapp_url: string; email: string }) => void;
   onRunLiveParse?: () => void;
   onRefreshPreview?: () => void;
@@ -222,6 +224,7 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
   parseBusy = false,
   parseAutoRefreshing = false,
   onGenerateAuditPage,
+  onAuditEditorPublished,
   onSaveContacts,
   onRunLiveParse,
   onRefreshPreview,
@@ -509,6 +512,14 @@ const LeadCardPreviewPanel: React.FC<LeadCardPreviewPanelProps> = ({
             )}
           </LeadDetailSection>
         )}
+
+        <LeadDetailSection title="Ручная редактура аудита">
+          <AdminAuditEditorPanel
+            leadId={lead.id}
+            enabled={Boolean(canonicalAuditUrl)}
+            onPublished={onAuditEditorPublished}
+          />
+        </LeadDetailSection>
 
         {loading && (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

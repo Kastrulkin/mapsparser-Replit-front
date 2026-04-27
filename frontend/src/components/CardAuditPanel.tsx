@@ -2,9 +2,11 @@ import React from 'react';
 import { AlertCircle, ArrowUpRight, Camera, Globe, MessageSquare, ReceiptText, Star, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useApiData } from '@/hooks/useApiData';
+import { useLanguage } from '@/i18n/LanguageContext';
 
 interface CardAuditPanelProps {
   businessId?: string | null;
+  refreshKey?: number;
 }
 
 interface CardAuditResponse {
@@ -26,6 +28,38 @@ interface CardAuditResponse {
       title: string;
       description: string;
     }>;
+    issue_blocks?: Array<{
+      id?: string;
+      section?: string;
+      priority?: 'critical' | 'high' | 'medium' | 'low' | string;
+      title?: string;
+      problem?: string;
+      evidence?: string;
+      impact?: string;
+      fix?: string;
+    }>;
+    top_3_issues?: Array<{
+      id?: string;
+      title?: string;
+      priority?: string;
+      problem?: string;
+    }>;
+    action_plan?: {
+      next_24h?: string[];
+      next_7d?: string[];
+      ongoing?: string[];
+    };
+    audit_profile?: string;
+    audit_profile_label?: string;
+    best_fit_customer_profile?: string[];
+    weak_fit_customer_profile?: string[];
+    best_fit_guest_profile?: string[];
+    weak_fit_guest_profile?: string[];
+    search_intents_to_target?: string[];
+    photo_shots_missing?: string[];
+    positioning_focus?: string[];
+    strength_themes?: string[];
+    objection_themes?: string[];
     subscores: {
       profile: number;
       reputation: number;
@@ -64,18 +98,22 @@ interface CardAuditResponse {
     parse_context: {
       last_parse_at?: string | null;
       last_parse_status?: string | null;
+      last_successful_parse_at?: string | null;
+      has_successful_parse?: boolean;
       no_new_services_found: boolean;
     };
   };
 }
 
 const severityClasses: Record<string, string> = {
+  critical: 'border-red-200 bg-red-50 text-red-800',
   high: 'border-orange-200 bg-orange-50 text-orange-800',
   medium: 'border-amber-200 bg-amber-50 text-amber-800',
   low: 'border-slate-200 bg-slate-50 text-slate-800',
 };
 
 const priorityClasses: Record<string, string> = {
+  critical: 'bg-red-200 text-red-900',
   high: 'bg-red-100 text-red-800',
   medium: 'bg-amber-100 text-amber-800',
   low: 'bg-slate-100 text-slate-700',
@@ -141,19 +179,25 @@ const photosStateLabel = (value: string) => {
   }
 };
 
-const CardAuditPanel: React.FC<CardAuditPanelProps> = ({ businessId }) => {
+const CardAuditPanel: React.FC<CardAuditPanelProps> = ({ businessId, refreshKey = 0 }) => {
+  const { language } = useLanguage();
+  const isRu = language === 'ru';
   const { data, loading, error } = useApiData<CardAuditResponse>(
-    businessId ? `${window.location.origin}/api/business/${businessId}/card-audit` : null
+    businessId ? `${window.location.origin}/api/business/${businessId}/card-audit?refresh=${refreshKey}` : null
   );
 
   const audit = data?.audit;
+  const hasSuccessfulParse = Boolean(audit?.parse_context?.has_successful_parse);
+  const showPreParsePlaceholder = !loading && !error && audit && !hasSuccessfulParse;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Аудит карточки</CardTitle>
+        <CardTitle>{isRu ? 'Аудит карточки' : 'Card audit'}</CardTitle>
         <CardDescription>
-          Текущее состояние карточки, ключевые точки роста и ориентировочный потенциал выручки.
+          {isRu
+            ? 'Текущее состояние карточки, ключевые точки роста и ориентировочный потенциал выручки.'
+            : 'Current listing state, key growth opportunities, and estimated revenue potential.'}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -167,12 +211,44 @@ const CardAuditPanel: React.FC<CardAuditPanelProps> = ({ businessId }) => {
 
         {!loading && error && (
           <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            Не удалось загрузить аудит карточки: {error}
+            {isRu ? 'Не удалось загрузить аудит карточки:' : 'Could not load the card audit:'} {error}
           </div>
         )}
 
-        {!loading && !error && audit && (
+        {showPreParsePlaceholder && (
+          <div className="rounded-xl border border-sky-200 bg-sky-50 p-5 text-sm text-sky-900">
+            <div className="font-semibold">
+              {isRu ? 'Аудит появится после первого успешного сбора данных' : 'The audit will appear after the first successful data collection'}
+            </div>
+            <div className="mt-2 leading-6">
+              {isRu
+                ? 'Сначала перейдите во вкладку «Работа с картами» и запустите «Обновить данные карточки». Пока сбор не завершён, здесь не показываем полноценный аудит, чтобы не вводить в заблуждение.'
+                : 'First go to “Maps Management” and run “Refresh card data”. Until that collection finishes, we do not show a full audit here to avoid misleading first-time users.'}
+            </div>
+          </div>
+        )}
+
+        {!loading && !error && audit && hasSuccessfulParse && (
           <>
+            {Array.isArray(audit.top_3_issues) && audit.top_3_issues.length > 0 && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-5">
+                <div className="text-sm font-semibold text-slate-900">Топ-3 главные проблемы карточки</div>
+                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                  {audit.top_3_issues.map((item, idx) => (
+                    <div key={`${item.id || item.title || 'top'}-${idx}`} className="rounded-xl border border-amber-200 bg-white p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-sm font-semibold text-slate-900">{item.title || 'Проблема'}</div>
+                        <div className={`rounded-full px-2 py-1 text-xs font-medium ${priorityClasses[item.priority || 'medium'] || priorityClasses.medium}`}>
+                          {String(item.priority || 'medium').toUpperCase()}
+                        </div>
+                      </div>
+                      <div className="mt-2 text-xs leading-5 text-slate-600">{item.problem || 'Требуется проверка карточки.'}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
               <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -192,6 +268,88 @@ const CardAuditPanel: React.FC<CardAuditPanelProps> = ({ businessId }) => {
                   </div>
                 </div>
                 <p className="mt-4 text-sm leading-6 text-slate-700">{audit.summary_text}</p>
+                {(
+                  (audit.best_fit_customer_profile && audit.best_fit_customer_profile.length > 0) ||
+                  (audit.best_fit_guest_profile && audit.best_fit_guest_profile.length > 0) ||
+                  (audit.weak_fit_customer_profile && audit.weak_fit_customer_profile.length > 0) ||
+                  (audit.weak_fit_guest_profile && audit.weak_fit_guest_profile.length > 0) ||
+                  (audit.search_intents_to_target && audit.search_intents_to_target.length > 0) ||
+                  (audit.photo_shots_missing && audit.photo_shots_missing.length > 0) ||
+                  (audit.positioning_focus && audit.positioning_focus.length > 0) ||
+                  (audit.strength_themes && audit.strength_themes.length > 0) ||
+                  (audit.objection_themes && audit.objection_themes.length > 0)
+                ) && (
+                  <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-sm font-semibold text-slate-900">Позиционирование и сценарии поиска</div>
+                      <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700">
+                        {audit.audit_profile_label || audit.audit_profile || 'Локальный бизнес'}
+                      </div>
+                    </div>
+                    {(audit.positioning_focus || []).length > 0 && (
+                      <div className="mt-3 space-y-1 text-sm text-slate-700">
+                        {(audit.positioning_focus || []).slice(0, 3).map((line, idx) => <div key={`position-${idx}`}>• {line}</div>)}
+                      </div>
+                    )}
+                    {(audit.search_intents_to_target || []).length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {(audit.search_intents_to_target || []).slice(0, 5).map((line, idx) => (
+                          <div key={`intent-${idx}`} className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs text-slate-700">
+                            {line}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {(((audit.weak_fit_customer_profile || []).length > 0) || ((audit.weak_fit_guest_profile || []).length > 0)) && (
+                      <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50/60 p-4 text-sm text-slate-700">
+                        <div className="font-semibold text-slate-900">Где ожидания чаще всего расходятся</div>
+                        <div className="mt-2 space-y-1">
+                          {(((audit.weak_fit_customer_profile || []).length > 0) ? (audit.weak_fit_customer_profile || []) : (audit.weak_fit_guest_profile || [])).slice(0, 4).map((line, idx) => (
+                            <div key={`weak-${idx}`}>• {line}</div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {(audit.photo_shots_missing || []).length > 0 && (
+                      <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/60 p-4 text-sm text-slate-700">
+                        <div className="font-semibold text-slate-900">Каких фото не хватает</div>
+                        <div className="mt-2 space-y-1">
+                          {(audit.photo_shots_missing || []).slice(0, 5).map((line, idx) => (
+                            <div key={`photo-${idx}`}>• {line}</div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {((audit.strength_themes || []).length > 0 || (audit.objection_themes || []).length > 0) && (
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        {(audit.strength_themes || []).length > 0 && (
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                            <div className="font-semibold text-slate-900">Что уже работает</div>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {(audit.strength_themes || []).slice(0, 6).map((line, idx) => (
+                                <div key={`strength-${idx}`} className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs text-slate-700">
+                                  {line}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {(audit.objection_themes || []).length > 0 && (
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                            <div className="font-semibold text-slate-900">Что нужно снять заранее</div>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {(audit.objection_themes || []).slice(0, 6).map((line, idx) => (
+                                <div key={`objection-${idx}`} className="rounded-full border border-rose-200 bg-white px-3 py-1 text-xs text-slate-700">
+                                  {line}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   <div className="rounded-xl border border-slate-200 bg-white p-3">
                     <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Последний парсинг карточки</div>
@@ -282,10 +440,36 @@ const CardAuditPanel: React.FC<CardAuditPanelProps> = ({ businessId }) => {
                   Ключевые точки роста
                 </div>
                 <div className="mt-4 space-y-3">
-                  {audit.findings.length === 0 ? (
+                  {(audit.issue_blocks || []).length === 0 && audit.findings.length === 0 ? (
                     <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
                       Критичных проблем не найдено. Карточка выглядит стабильно.
                     </div>
+                  ) : (audit.issue_blocks || []).length > 0 ? (
+                    (audit.issue_blocks || []).map((issue, idx) => (
+                      <div
+                        key={`${issue.id || issue.title || 'issue'}-${idx}`}
+                        className={`rounded-xl border p-4 ${severityClasses[(issue.priority || 'medium').toLowerCase()] || severityClasses.medium}`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-sm font-semibold">{issue.title || 'Проблема карточки'}</div>
+                          <div className={`rounded-full px-2 py-1 text-xs font-medium ${priorityClasses[(issue.priority || 'medium').toLowerCase()] || priorityClasses.medium}`}>
+                            {String(issue.priority || 'medium').toUpperCase()}
+                          </div>
+                        </div>
+                        <div className="mt-2 text-sm leading-6">
+                          <span className="font-medium">Проблема:</span> {issue.problem || 'Не указана'}
+                        </div>
+                        <div className="mt-1 text-sm leading-6">
+                          <span className="font-medium">Факт:</span> {issue.evidence || 'Нет данных'}
+                        </div>
+                        <div className="mt-1 text-sm leading-6">
+                          <span className="font-medium">Влияние:</span> {issue.impact || 'Требуется проверка'}
+                        </div>
+                        <div className="mt-1 text-sm leading-6">
+                          <span className="font-medium">Что сделать:</span> {issue.fix || 'Нет рекомендации'}
+                        </div>
+                      </div>
+                    ))
                   ) : (
                     audit.findings.map((finding) => (
                       <div
@@ -306,6 +490,37 @@ const CardAuditPanel: React.FC<CardAuditPanelProps> = ({ businessId }) => {
                   Что сделать дальше
                 </div>
                 <div className="mt-4 space-y-3">
+                  {audit.action_plan && (
+                    <div className="rounded-xl border border-slate-200 p-4">
+                      <div className="text-sm font-semibold text-slate-900">План действий</div>
+                      <div className="mt-3 space-y-3 text-sm text-slate-700">
+                        <div>
+                          <div className="font-medium text-slate-900">За 24 часа</div>
+                          <div className="mt-1 space-y-1">
+                            {(audit.action_plan.next_24h || []).map((line, idx) => (
+                              <div key={`d1-${idx}`}>• {line}</div>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="font-medium text-slate-900">За 7 дней</div>
+                          <div className="mt-1 space-y-1">
+                            {(audit.action_plan.next_7d || []).map((line, idx) => (
+                              <div key={`d7-${idx}`}>• {line}</div>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="font-medium text-slate-900">Регулярно</div>
+                          <div className="mt-1 space-y-1">
+                            {(audit.action_plan.ongoing || []).map((line, idx) => (
+                              <div key={`ongoing-${idx}`}>• {line}</div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {audit.recommended_actions.length === 0 ? (
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
                       Сейчас карточка не требует срочных действий.

@@ -147,7 +147,7 @@ export const ha = {
     support: "Tallafi na kashin kai",
     supportDesc1: "Muna taimako a kowane mataki — har zuwa sakamako",
     supportDesc2: "Ana samuwa ta tattaunawa, imel, waya",
-    finalText: "Ci gaban salon cikakke — biya ne kawai daga sabbin kudaden shiga!",
+    finalText: "Ci gaban salon cikakke - Za mu yi komai a gare ku!",
     contactExpert: "Tuntuɓi ƙwararre"
   },
   about: {
@@ -586,6 +586,8 @@ export const ha = {
         brows_lashes: "Brows & Lashes",
         makeup: "Makeup",
         tanning: "Tanning",
+        hotel: "Hotel",
+        guest_house: "Gidan Baƙi",
         other: "Other"
       },
       workSchedule: {

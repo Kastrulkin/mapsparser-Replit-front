@@ -8,7 +8,7 @@ echo "🧹 Очистка ненужных файлов на сервере"
 echo "========================================"
 echo ""
 
-cd /root/mapsparser-Replit-front || {
+cd /opt/seo-app || {
     echo "❌ Директория проекта не найдена!"
     exit 1
 }
@@ -75,12 +75,18 @@ rm -f *.tmp 2>/dev/null || true
 echo "   ✅ Временные файлы удалены"
 echo ""
 
-# 6. Очистка старых сборок фронтенда (если есть несколько)
+# 6. Проверка дублирующих фронтенд-сборок
 echo "🗑️  6. Проверка сборок фронтенда..."
 if [ -d "frontend/dist" ]; then
     DIST_SIZE=$(du -sh frontend/dist 2>/dev/null | cut -f1)
-    echo "   ℹ️  Размер frontend/dist: $DIST_SIZE (оставляем)"
+    echo "   ℹ️  Канонический dist: frontend/dist ($DIST_SIZE)"
 fi
+for legacy_dir in dist tmp_frontend_dist tmp_frontend_dist_fix; do
+    if [ -d "$legacy_dir" ]; then
+        LEGACY_SIZE=$(du -sh "$legacy_dir" 2>/dev/null | cut -f1)
+        echo "   ⚠️  Найден legacy-каталог: $legacy_dir ($LEGACY_SIZE)"
+    fi
+done
 echo ""
 
 # 7. Очистка старых uploads (если есть)
@@ -109,4 +115,3 @@ echo "   - Если node_modules очень большой (>500MB), можно 
 echo "     cd frontend && rm -rf node_modules && npm install"
 echo "   - Если .git большой, можно почистить историю (осторожно!)"
 echo "   - Проверьте размер БД: ls -lh src/reports.db"
-

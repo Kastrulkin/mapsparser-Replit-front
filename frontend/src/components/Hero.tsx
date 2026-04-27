@@ -80,7 +80,11 @@ const Hero = () => {
                       const msg = (result && (result.error || result.message)) || t.hero.errorMessage;
                       throw new Error(msg);
                     }
-
+                    const targetUrl = String((result && result.public_url) || '').trim();
+                    if (targetUrl) {
+                      window.location.href = targetUrl;
+                      return;
+                    }
                     form.reset();
                     alert(t.hero.successMessage);
 

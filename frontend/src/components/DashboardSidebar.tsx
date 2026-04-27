@@ -138,29 +138,49 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
 
   const sidebarContent = (
     <div className={cn(
-      "h-full flex flex-col border-r border-white/20 transition-all duration-300",
-      "bg-white/70 backdrop-blur-xl supports-[backdrop-filter]:bg-white/60", // More translucent glass
-      "shadow-[4px_0_24px_-4px_rgba(0,0,0,0.05)]" // Subtle shadow
+      "h-full flex flex-col border-r border-slate-200/70 transition-all duration-300",
+      "bg-white/86 backdrop-blur-xl supports-[backdrop-filter]:bg-white/78",
+      "shadow-[8px_0_32px_-20px_rgba(15,23,42,0.18)]"
     )}>
       {/* Logo Area */}
-      <div className="p-6 border-b border-gray-100/50 backdrop-blur-lg">
+      <div className={cn("border-b border-slate-100", collapsed && !isMobile ? "px-3 py-5" : "p-6")}>
         <div className={cn("flex items-center gap-3", collapsed && !isMobile ? "justify-center" : "justify-between")}>
-          <div className="flex items-center gap-3 min-w-0">
-          <div className="relative">
-            <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full" />
-            <img
-              src={logo}
-              alt="LocalOS"
-              className="h-10 w-auto relative z-10 drop-shadow-sm transition-transform hover:scale-105 duration-300"
-            />
-          </div>
-          <span className={cn(
-            "font-bold text-xl bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 hidden lg:block",
-            collapsed && !isMobile && "hidden"
-          )}>
-            LocalOS
-          </span>
-        </div>
+          <Link
+            to="/dashboard/profile"
+            onClick={handleLinkClick}
+            className={cn(
+              "flex min-w-0 items-center gap-3 rounded-xl outline-none ring-blue-500/30 transition focus-visible:ring-2",
+              collapsed && !isMobile ? "h-12 w-12 justify-center" : "overflow-hidden"
+            )}
+            aria-label="LocalOS"
+          >
+            {collapsed && !isMobile ? (
+                <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+                  <span className="absolute inset-0 rounded-2xl bg-slate-900/5 blur-md" />
+                  <img
+                  src="/favicon.svg"
+                  alt=""
+                  aria-hidden="true"
+                  className="relative z-10 h-8 w-8"
+                />
+              </span>
+            ) : (
+              <>
+                <span className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+                  <span className="absolute inset-0 bg-slate-900/5 blur-md" />
+                  <img
+                    src={logo}
+                    alt=""
+                    aria-hidden="true"
+                    className="relative z-10 h-11 w-11 object-cover object-top drop-shadow-sm transition-transform duration-300 hover:scale-105"
+                  />
+                </span>
+                <span className="hidden truncate text-xl font-semibold tracking-tight text-slate-950 lg:block">
+                  LocalOS
+                </span>
+              </>
+            )}
+          </Link>
           {!isMobile && onToggleCollapse ? (
             <Button
               type="button"
@@ -190,7 +210,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto custom-scrollbar">
+      <nav className="flex-1 space-y-1.5 overflow-y-auto p-4 custom-scrollbar">
         {menuItems.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.path);
@@ -202,22 +222,22 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
                   onClick={handleLinkClick}
                   className={cn(
                     "group relative flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-300",
-                    collapsed && !isMobile ? "justify-center px-2 py-3 hover:translate-x-0" : "px-4 py-3 hover:translate-x-1",
+                    collapsed && !isMobile ? "justify-center px-2 py-3 hover:translate-x-0" : "px-4 py-3",
                     active
-                      ? "bg-gradient-to-r from-blue-600/10 to-blue-500/5 text-blue-700 shadow-sm ring-1 ring-blue-600/20"
-                      : "text-gray-600 hover:bg-gray-50/80 hover:text-gray-900"
+                      ? "bg-slate-900 text-white shadow-sm"
+                      : "text-slate-600 hover:bg-slate-100/90 hover:text-slate-950"
                   )}
                 >
                   <div className={cn(
                     "p-2 rounded-lg transition-colors duration-300",
-                    active ? "bg-white shadow-sm text-blue-600" : "bg-transparent text-gray-500 group-hover:text-gray-700 group-hover:bg-gray-100"
+                    active ? "bg-white/14 text-white" : "bg-transparent text-slate-500 group-hover:bg-white group-hover:text-slate-700"
                   )}>
-                    <Icon className={cn("w-5 h-5", active && "animate-pulse-slow")} />
+                    <Icon className="w-5 h-5" />
                   </div>
                   <span className={cn("tracking-wide", collapsed && !isMobile && "hidden")}>{item.label}</span>
 
                   {active && (
-                    <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-600 rounded-l-full shadow-[0_0_8px_rgba(37,99,235,0.5)]" />
+                    <div className="absolute right-3 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-white/90" />
                   )}
                 </Link>
               </TooltipTrigger>
@@ -229,16 +249,15 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
         })}
       </nav>
 
-      {/* Pro Badge (Decorative) */}
       <div className={cn(
-        "p-4 m-4 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/20",
+        "m-4 rounded-2xl border border-slate-200 bg-slate-50/90 p-4",
         collapsed && !isMobile && "mx-3 px-2 py-3"
       )}>
-        <div className="flex items-center gap-2 mb-2">
-          <Sparkles className="w-4 h-4 text-yellow-200" />
-          <span className={cn("text-xs font-bold uppercase tracking-wider text-white/90", collapsed && !isMobile && "hidden")}>Pro Max</span>
+        <div className="mb-2 flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-slate-700" />
+          <span className={cn("text-xs font-semibold uppercase tracking-[0.16em] text-slate-700", collapsed && !isMobile && "hidden")}>LocalOS</span>
         </div>
-        <p className={cn("text-xs text-white/80 leading-relaxed", collapsed && !isMobile && "hidden")}>
+        <p className={cn("text-xs leading-relaxed text-slate-500", collapsed && !isMobile && "hidden")}>
           {t.dashboard.sidebar.greeting}
         </p>
       </div>

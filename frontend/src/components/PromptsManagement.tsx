@@ -139,6 +139,18 @@ export const PromptsManagement: React.FC = () => {
     news_social_generation: {
       label: 'Посты для соцсетей',
       description: 'Промпт для генерации контента в соцсети'
+    },
+    lead_audit_enrichment: {
+      label: 'AI-усиление аудита лида',
+      description: 'Промпт для summary и приоритетных рекомендаций в аудите лидов'
+    },
+    outreach_first_message: {
+      label: 'Первое outreach-сообщение',
+      description: 'Промпт для AI-генерации первого письма/сообщения лиду'
+    },
+    outreach_reply_classification: {
+      label: 'Классификация ответов лида',
+      description: 'Промпт для AI-классификации ответов на первое сообщение'
     }
   };
   const [prompts, setPrompts] = useState<Prompt[]>([]);

@@ -405,7 +405,6 @@ type DashboardOverviewSectionProps = {
   onNewServiceChange: (next: NewServiceState) => void;
   onAddService: () => void;
   onDeleteService: (serviceId: string) => void;
-  onEditService: (serviceId: string) => void;
 };
 
 export const DashboardOverviewSection = ({
@@ -418,7 +417,6 @@ export const DashboardOverviewSection = ({
   onNewServiceChange,
   onAddService,
   onDeleteService,
-  onEditService,
 }: DashboardOverviewSectionProps) => (
   <div className="mb-8 bg-gradient-to-br from-white via-orange-50/20 to-white rounded-lg border-2 border-orange-200/50 shadow-md p-4">
     <div className="flex justify-between items-center mb-4">
@@ -526,13 +524,6 @@ export const DashboardOverviewSection = ({
                 <td className="px-4 py-3 text-sm text-gray-600">{service.price || '—'}</td>
                 <td className="px-4 py-3 text-sm">
                   <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => onEditService(service.id)}
-                    >
-                      Редактировать
-                    </Button>
                     <Button
                       size="sm"
                       variant="outline"
@@ -695,7 +686,6 @@ type DashboardTabContentProps = {
   onNewServiceChange: (next: NewServiceState) => void;
   onAddService: () => void;
   onDeleteService: (serviceId: string) => void;
-  onEditService: (serviceId: string) => void;
 };
 
 export const DashboardTabContent = ({
@@ -717,7 +707,6 @@ export const DashboardTabContent = ({
   onNewServiceChange,
   onAddService,
   onDeleteService,
-  onEditService,
 }: DashboardTabContentProps) => {
   if (activeTab === 'finance') {
     return (
@@ -764,7 +753,6 @@ export const DashboardTabContent = ({
       onNewServiceChange={onNewServiceChange}
       onAddService={onAddService}
       onDeleteService={onDeleteService}
-      onEditService={onEditService}
     />
   );
 };

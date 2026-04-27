@@ -79,19 +79,19 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
 
   return (
     <header className={cn(
-      "sticky top-0 z-30 px-6 py-4 transition-all duration-300",
-      "bg-white/70 backdrop-blur-xl border-b border-white/20 supports-[backdrop-filter]:bg-white/60"
+      "sticky top-0 z-30 px-4 py-4 transition-all duration-300 sm:px-6",
+      "border-b border-slate-200/70 bg-white/82 backdrop-blur-xl supports-[backdrop-filter]:bg-white/74"
     )}>
       <div className="flex items-center justify-between gap-4">
         {/* Left Side: Context Switchers */}
         <div className="flex items-center gap-3 flex-1">
           {isSuperadmin && (
             <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-4 duration-500">
-              <span className="px-2 py-1 text-[10px] font-bold text-indigo-500 uppercase tracking-wider bg-indigo-50 rounded-md border border-indigo-100">
+              <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-indigo-700">
                 SuperAdmin
               </span>
               {currentBusiness?.network_id && (
-                <span className="hidden lg:inline-flex text-[10px] font-mono text-gray-500 bg-gray-50 px-2 py-1 rounded border border-gray-100">
+                <span className="hidden rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-medium text-slate-500 lg:inline-flex">
                   NetID: {currentBusiness.network_id.substring(0, 8)}...
                 </span>
               )}
@@ -113,7 +113,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
 
           {/* Fallback Title if no switchers active */}
           {!isSuperadmin && !currentBusiness?.network_id && currentBusiness && (
-            <h1 className="text-lg font-semibold text-gray-800 hidden md:block">
+            <h1 className="hidden text-lg font-semibold text-slate-800 md:block">
               {currentBusiness.name}
             </h1>
           )}
@@ -121,26 +121,26 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
 
         {/* Right Side: Actions & Profile */}
         <div className="flex items-center gap-3">
-          {/* Quick Actions for Demianov */}
-          {currentUser?.email === 'demyanovap@yandex.ru' && (
+          {/* Quick Actions for superadmins */}
+          {currentUser?.is_superadmin && (
             <Button
               variant="ghost"
               size="icon"
               onClick={() => navigate('/dashboard/bazich')}
-              className="text-gray-500 hover:text-indigo-600 hover:bg-indigo-50"
+              className="text-slate-500 hover:bg-slate-100 hover:text-slate-900"
               title="Bazich Settings"
             >
               <Settings className="w-5 h-5" />
             </Button>
           )}
 
-          <div className="h-6 w-px bg-gray-200/60 hidden sm:block"></div>
+          <div className="hidden h-6 w-px bg-slate-200 sm:block"></div>
 
           <LanguageSwitcher />
 
           <Select value={currency} onValueChange={(value) => setCurrency(value as 'RUB' | 'USD' | 'EUR')}>
-            <SelectTrigger className="w-14 h-9 bg-transparent border-0 hover:bg-gray-100/50 focus:ring-0">
-              <span className="text-base font-medium text-gray-700">
+            <SelectTrigger className="h-9 w-14 border-0 bg-transparent hover:bg-slate-100/80 focus:ring-0">
+              <span className="text-base font-medium text-slate-700">
                 {currency === 'RUB' ? '₽' : currency === 'USD' ? '$' : '€'}
               </span>
             </SelectTrigger>
@@ -151,17 +151,17 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             </SelectContent>
           </Select>
 
-          <div className="h-6 w-px bg-gray-200/60 hidden sm:block"></div>
+          <div className="hidden h-6 w-px bg-slate-200 sm:block"></div>
 
           {isAuthenticated && currentUser ? (
             <div className="flex items-center gap-3 pl-2">
               <Link to="/dashboard/profile" className="flex items-center gap-2 group">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-purple-600 p-[2px] shadow-sm group-hover:shadow-md transition-all">
-                  <div className="w-full h-full rounded-full bg-white flex items-center justify-center">
-                    <UserCircle className="w-5 h-5 text-gray-600" />
+                <div className="h-9 w-9 rounded-full border border-slate-200 bg-white p-[2px] shadow-sm transition-all group-hover:border-slate-300 group-hover:shadow-md">
+                  <div className="flex h-full w-full items-center justify-center rounded-full bg-slate-50">
+                    <UserCircle className="h-5 w-5 text-slate-600" />
                   </div>
                 </div>
-                <span className="text-sm font-medium text-gray-700 hidden lg:block group-hover:text-blue-600 transition-colors">
+                <span className="hidden text-sm font-medium text-slate-700 transition-colors group-hover:text-slate-950 lg:block">
                   {currentUser.email?.split('@')[0]}
                 </span>
               </Link>
@@ -169,7 +169,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                 variant="ghost"
                 size="icon"
                 onClick={handleLogout}
-                className="text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                className="text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-500"
               >
                 <LogOut className="w-5 h-5" />
               </Button>
@@ -177,7 +177,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           ) : (
             <Button
               onClick={handleLoginClick}
-              className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md transition-all rounded-xl"
+              className="rounded-xl bg-slate-900 text-white shadow-sm transition-all hover:bg-slate-800 hover:shadow-md"
             >
               <LogIn className="w-4 h-4 mr-2" />
               <span className="hidden sm:inline">Вход</span>
@@ -194,10 +194,10 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
               Для получения доступа к системе обратитесь к нам по электронной почте:
               <br />
               <a
-                href="mailto:info@localos.pro"
+                href="mailto:info@local.pro"
                 className="text-blue-600 hover:text-blue-800 underline font-medium"
               >
-                info@localos.pro
+                info@local.pro
               </a>
             </AlertDialogDescription>
           </AlertDialogHeader>

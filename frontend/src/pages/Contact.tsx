@@ -83,7 +83,9 @@ const Contact = () => {
                   </div>
                   <div>
                     <h3 className="font-semibold text-foreground">{t.contact.emailTitle}</h3>
-                    <p className="text-muted-foreground">info@local</p>
+                    <a href="mailto:info@local.pro" className="text-muted-foreground hover:text-foreground transition-colors">
+                      info@local.pro
+                    </a>
                   </div>
                 </div>
               </div>

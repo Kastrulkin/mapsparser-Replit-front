@@ -22,7 +22,7 @@ export const NegativeFeedbackCard: React.FC<NegativeFeedbackCardProps> = ({ stat
     return (
         <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Negative Feedback</CardTitle>
+                <CardTitle className="text-sm font-medium">Негативные отзывы</CardTitle>
             </CardHeader>
             <CardContent>
                 <div className={`text-2xl font-bold ${textColor}`}>
@@ -31,10 +31,10 @@ export const NegativeFeedbackCard: React.FC<NegativeFeedbackCardProps> = ({ stat
                 <div className="flex items-center text-xs text-muted-foreground mt-1">
                     <TrendIcon className={`h-4 w-4 mr-1 ${trendColor}`} />
                     <span className={trendColor}>{Math.abs(negativeFeedbackTrend)}%</span>
-                    <span className="ml-1">vs last period</span>
+                    <span className="ml-1">к прошлому периоду</span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                    Target: &lt;5%
+                    Цель: &lt;5%
                 </p>
             </CardContent>
         </Card>

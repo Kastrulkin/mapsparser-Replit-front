@@ -242,15 +242,28 @@ export const SubscriptionManagement = ({ businessId, business }: { businessId: s
     setProcessing(true);
     try {
       const token = localStorage.getItem('auth_token');
-      const response = await fetch('/api/billing/checkout/start', {
+      let paymentProvider = 'yookassa';
+      try {
+        const providerResp = await fetch('/api/geo/payment-provider');
+        const providerData = await providerResp.json();
+        paymentProvider = String(providerData?.payment_provider || '').trim().toLowerCase() === 'stripe' ? 'stripe' : 'yookassa';
+      } catch {
+        paymentProvider = 'yookassa';
+      }
+
+      const response = await fetch('/api/billing/checkout/session/start', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
+          provider: paymentProvider,
+          entry_point: 'registered_paywall',
+          channel: 'web',
           business_id: businessId,
-          tariff_id: tierId
+          tariff_id: tierId,
+          source: 'dashboard_subscription_management',
         })
       });
 

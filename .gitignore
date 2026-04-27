@@ -17,11 +17,13 @@ node_modules/
 *.log
 
 # Other
+*.tgz
 *.sqlite3
 *.sqlite
 *.db
 *.db-shm
 *.db-wal
+tmp_*.py
 data/backups/
 debug_data/
 legacy.sqlite
@@ -31,6 +33,7 @@ seo-images.tar.gz
 
 # Frontend Build
 frontend/dist/
+frontend/public-dist/
 frontend/node_modules/
 
 # Sync conflict backups / duplicate suffix files

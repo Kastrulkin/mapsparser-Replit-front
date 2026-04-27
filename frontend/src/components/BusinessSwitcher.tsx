@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useRef, useState, useEffect } from 'react';
 import { ChevronDown, Building2, Users } from 'lucide-react';
+import { getNetworkRepresentativeIds, pickNetworkRepresentative } from '@/lib/networkRepresentative';
+import { useClickOutside } from '@/hooks/useClickOutside';
 
 interface Business {
   id: string;
@@ -30,6 +32,9 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
+  const switcherRef = useRef<HTMLDivElement | null>(null);
+  const closeSwitcher = useCallback(() => setIsOpen(false), []);
+  useClickOutside(switcherRef, closeSwitcher, { enabled: isOpen });
   const isLeadBusiness = (business?: Business | null) => {
     const moderationStatus = String(business?.moderation_status || '').trim().toLowerCase();
     const entityGroup = String(business?.entity_group || '').trim().toLowerCase();
@@ -47,43 +52,13 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
   );
 
   const networkRepresentativeIds = React.useMemo(() => {
-    const groups: Record<string, Business[]> = {};
-    const ids: Record<string, boolean> = {};
-
-    for (const business of visibleBusinesses) {
-      const networkId = String(business.network_id || '').trim();
-      if (!networkId) continue;
-      if (!groups[networkId]) {
-        groups[networkId] = [];
-      }
-      groups[networkId].push(business);
-    }
-
-    for (const networkId of Object.keys(groups)) {
-      const group = groups[networkId] || [];
-      const explicitParent = group.find((item) => String(item.id) === networkId);
-      if (explicitParent) {
-        ids[explicitParent.id] = true;
-        continue;
-      }
-      const sortedGroup = [...group].sort((left, right) => {
-        const leftCreated = String(left.created_at || '');
-        const rightCreated = String(right.created_at || '');
-        return leftCreated.localeCompare(rightCreated);
-      });
-      const head = sortedGroup[0];
-      if (head?.id) {
-        ids[head.id] = true;
-      }
-    }
-
-    return ids;
+    return getNetworkRepresentativeIds(visibleBusinesses);
   }, [visibleBusinesses]);
 
   const getBusinessDisplayName = (business: Business) => {
     const baseName = String(business.name || '').trim() || 'Без названия';
     if (networkRepresentativeIds[business.id]) {
-      return `${baseName} (материнская)`;
+      return `👑 ${baseName}`;
     }
     return baseName;
   };
@@ -107,17 +82,9 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
     }
 
     // Выбираем "главные" точки из сетей (сортировка по дате создания, если есть, или просто первый)
-    const networkHeads = Object.entries(networks).map(([networkId, group]) => {
-      const explicitParent = group.find((business) => String(business.id) === String(networkId));
-      if (explicitParent) {
-        return explicitParent;
-      }
-      return [...group].sort((a, b) => {
-        const leftCreated = String(a.created_at || '');
-        const rightCreated = String(b.created_at || '');
-        return leftCreated.localeCompare(rightCreated);
-      })[0];
-    });
+    const networkHeads = Object.entries(networks)
+      .map(([networkId, group]) => pickNetworkRepresentative(group, networkId))
+      .filter(Boolean) as Business[];
 
     return [...independent, ...networkHeads];
   }, [visibleBusinesses]);
@@ -154,7 +121,7 @@ export const BusinessSwitcher: React.FC<BusinessSwitcherProps> = ({
   const hasBusinesses = mainBusinesses.length > 0;
 
   return (
-    <div className="relative">
+    <div ref={switcherRef} className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center space-x-2 px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"

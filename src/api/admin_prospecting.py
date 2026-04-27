@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import os
 import csv
@@ -25,8 +26,23 @@ from core.channel_delivery import normalize_phone, send_maton_bridge_message
 from core.card_audit import build_lead_card_preview_snapshot
 from core.telegram_userbot import load_userbot_account, send_message as userbot_send_message
 from core.ai_learning import ensure_ai_learning_events_table, record_ai_learning_event
+from core.public_audit_editor import (
+    ACTION_PLAN_BLOCK_KEY,
+    EDITOR_BLOCK_KEYS,
+    SUMMARY_BLOCK_KEY,
+    TOP_ISSUES_BLOCK_KEY,
+    apply_editor_blocks_to_page_json,
+    blocks_equal,
+    build_generated_editor_blocks,
+    build_learning_metadata,
+    classify_edit_kind,
+    compute_editor_diff,
+    normalize_editor_blocks,
+    normalize_editor_state,
+    render_block_text,
+)
 from core.helpers import get_business_id_from_user
-from core.map_url_normalizer import normalize_map_url
+from core.map_url_normalizer import is_google_map_url, normalize_map_url
 from core.parsing_runtime_config import get_use_apify_map_parsing, resolve_map_source_for_queue
 try:
     from src.database_manager import DatabaseManager
@@ -1582,6 +1598,11 @@ def _normalize_partnership_file_row(
             ["reviews_count", "reviewCount", "ratingsCount", "reviews", "отзывов", "количество_отзывов"],
         )
     )
+    is_verified = row.get("isVerifiedOwner")
+    if not isinstance(is_verified, bool):
+        is_verified = row.get("is_verified")
+    if not isinstance(is_verified, bool):
+        is_verified = None
 
     logo_url = _normalize_media_url(_pick_first_value(row, ["logo_url", "logoUrl", "logo", "avatar"]))
     photos_raw = row.get("photos")
@@ -1648,6 +1669,7 @@ def _normalize_partnership_file_row(
             "social_links": row.get("socialLinks") if isinstance(row.get("socialLinks"), list) else [],
             "source_row_url": row.get("url"),
             "source_business_id": row.get("businessId"),
+            "is_verified": is_verified,
         },
     }
     return normalized, None
@@ -3078,7 +3100,7 @@ def _enqueue_parse_task_for_business(business_id: str, user_id: str, source_url:
             source_hint = "2gis"
         elif "maps.apple.com/" in normalized_url:
             source_hint = "apple_maps"
-        elif "google.com/maps/" in normalized_url or "maps.app.goo.gl/" in normalized_url:
+        elif is_google_map_url(normalized_url):
             source_hint = "google_maps"
         parse_source = resolve_map_source_for_queue(source_hint, bool(get_use_apify_map_parsing(conn)))
         cur.execute(
@@ -3925,6 +3947,15 @@ def _generate_outreach_message_ai(
             message = str(parsed.get("message") or parsed.get("text") or "").strip()
         if not message:
             raise ValueError("AI outreach draft returned empty message")
+        if language == "ru" and "Можем внедрить это под ключ" not in message:
+            message = re.sub(
+                r"Можем\s+быстро\s+внедрить[^\n.?!]*под\s+ключ",
+                "Можем внедрить это под ключ",
+                message,
+                flags=re.IGNORECASE,
+            )
+            if "Можем внедрить это под ключ" not in message and re.search(r"\bМожем\b|под\s+ключ|внедр|устранить", message, flags=re.IGNORECASE):
+                message = f"{message.rstrip()}\n\nМожем внедрить это под ключ."
         return {
             "angle_type": str(parsed.get("angle_type") or fallback_angle_type).strip() or fallback_angle_type,
             "tone": str(parsed.get("tone") or fallback_tone).strip() or fallback_tone,
@@ -6017,6 +6048,7 @@ def queue_business_parse_apify():
                   AND (
                     map_type = 'google'
                     OR LOWER(url) LIKE '%%google.com/maps/%%'
+                    OR LOWER(url) LIKE '%%google.com/search%%'
                     OR LOWER(url) LIKE '%%maps.app.goo.gl/%%'
                   )
                 ORDER BY created_at DESC
@@ -9062,6 +9094,29 @@ def _ensure_admin_prospecting_public_offers_table(conn) -> None:
         ON adminprospectingleadpublicoffers (is_active)
         """
     )
+    cur.execute("ALTER TABLE adminprospectingleadpublicoffers ADD COLUMN IF NOT EXISTS business_id UUID")
+    cur.execute("ALTER TABLE adminprospectingleadpublicoffers ADD COLUMN IF NOT EXISTS business_profile TEXT")
+    cur.execute("ALTER TABLE adminprospectingleadpublicoffers ADD COLUMN IF NOT EXISTS source_type TEXT NOT NULL DEFAULT 'admin_prospecting_public_audit'")
+    cur.execute("ALTER TABLE adminprospectingleadpublicoffers ADD COLUMN IF NOT EXISTS generated_json JSONB")
+    cur.execute("ALTER TABLE adminprospectingleadpublicoffers ADD COLUMN IF NOT EXISTS edited_json JSONB")
+    cur.execute("ALTER TABLE adminprospectingleadpublicoffers ADD COLUMN IF NOT EXISTS published_json JSONB")
+    cur.execute("ALTER TABLE adminprospectingleadpublicoffers ADD COLUMN IF NOT EXISTS edit_status TEXT NOT NULL DEFAULT 'generated'")
+    cur.execute("ALTER TABLE adminprospectingleadpublicoffers ADD COLUMN IF NOT EXISTS edited_by UUID")
+    cur.execute("ALTER TABLE adminprospectingleadpublicoffers ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ")
+    cur.execute("ALTER TABLE adminprospectingleadpublicoffers ADD COLUMN IF NOT EXISTS published_by UUID")
+    cur.execute("ALTER TABLE adminprospectingleadpublicoffers ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ")
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_adminprospectingleadpublicoffers_edit_status
+        ON adminprospectingleadpublicoffers (edit_status, updated_at DESC)
+        """
+    )
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_adminprospectingleadpublicoffers_business_id
+        ON adminprospectingleadpublicoffers (business_id)
+        """
+    )
 
 
 def _build_admin_lead_offer_payload(
@@ -9274,7 +9329,7 @@ def _attach_admin_prospecting_public_offer_metadata(conn, lead: dict[str, Any]) 
     cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute(
         """
-        SELECT slug, is_active, updated_at, page_json
+        SELECT slug, is_active, updated_at, page_json, published_json, generated_json
         FROM adminprospectingleadpublicoffers
         WHERE lead_id = %s
         LIMIT 1
@@ -9284,7 +9339,7 @@ def _attach_admin_prospecting_public_offer_metadata(conn, lead: dict[str, Any]) 
     offer = cur.fetchone()
     if offer and bool(offer.get("is_active")) and str(offer.get("slug") or "").strip():
         slug = str(offer.get("slug") or "").strip()
-        page_json = offer.get("page_json") if isinstance(offer.get("page_json"), dict) else {}
+        page_json = _resolve_admin_public_offer_row_page_json(offer)
         primary_language, enabled_languages = _normalize_public_audit_languages(
             page_json.get("preferred_language"),
             page_json.get("enabled_languages"),
@@ -9310,6 +9365,173 @@ def _append_public_offer_language(url: str, language: str | None) -> str:
         return url
     delimiter = "&" if "?" in url else "?"
     return f"{url}{delimiter}lang={normalized_language}"
+
+
+def _resolve_admin_public_offer_row_page_json(row: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(row, dict):
+        return {}
+    published_json = row.get("published_json")
+    if isinstance(published_json, dict) and published_json:
+        return published_json
+    page_json = row.get("page_json")
+    if isinstance(page_json, dict) and page_json:
+        return page_json
+    generated_json = row.get("generated_json")
+    if isinstance(generated_json, dict):
+        return generated_json
+    return {}
+
+
+def _fetch_admin_public_offer_row(cur, lead_id: str) -> dict[str, Any] | None:
+    cur.execute(
+        """
+        SELECT
+            lead_id,
+            slug,
+            page_json,
+            generated_json,
+            edited_json,
+            published_json,
+            business_id,
+            business_profile,
+            source_type,
+            edit_status,
+            created_by,
+            created_at,
+            updated_at,
+            edited_by,
+            edited_at,
+            published_by,
+            published_at
+        FROM adminprospectingleadpublicoffers
+        WHERE lead_id = %s
+        LIMIT 1
+        """,
+        (lead_id,),
+    )
+    row = cur.fetchone()
+    return dict(row) if row and hasattr(row, "keys") else None
+
+
+def _normalize_admin_public_offer_row(row: dict[str, Any]) -> dict[str, Any]:
+    generated_json = row.get("generated_json") if isinstance(row.get("generated_json"), dict) else {}
+    page_json = row.get("page_json") if isinstance(row.get("page_json"), dict) else {}
+    published_json = row.get("published_json") if isinstance(row.get("published_json"), dict) else {}
+    if not generated_json:
+        generated_json = page_json or published_json
+    if not published_json:
+        published_json = page_json or generated_json
+    edited_json = row.get("edited_json") if isinstance(row.get("edited_json"), dict) else None
+    edit_status = str(row.get("edit_status") or "").strip() or "generated"
+    if not row.get("business_profile") and isinstance(generated_json, dict):
+        audit = generated_json.get("audit") if isinstance(generated_json.get("audit"), dict) else {}
+        row["business_profile"] = str(audit.get("audit_profile") or "").strip() or None
+    row["generated_json"] = generated_json
+    row["published_json"] = published_json
+    row["page_json"] = published_json
+    row["edited_json"] = edited_json
+    row["edit_status"] = edit_status
+    return row
+
+
+def _build_admin_public_offer_editor_response(
+    *,
+    row: dict[str, Any],
+    lead: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    normalized_row = _normalize_admin_public_offer_row(dict(row))
+    generated_json = normalized_row.get("generated_json") if isinstance(normalized_row.get("generated_json"), dict) else {}
+    published_json = normalized_row.get("published_json") if isinstance(normalized_row.get("published_json"), dict) else {}
+    edited_json = normalized_row.get("edited_json") if isinstance(normalized_row.get("edited_json"), dict) else None
+    state = normalize_editor_state(
+        generated_page_json=generated_json,
+        edited_json=edited_json,
+        published_page_json=published_json,
+    )
+    diff = compute_editor_diff(state["generated"], state["edited"], state["published"])
+    return _to_json_compatible(
+        {
+            "success": True,
+            "audit_id": f"admin_public_offer:{normalized_row.get('lead_id')}",
+            "lead_id": normalized_row.get("lead_id"),
+            "slug": normalized_row.get("slug"),
+            "public_url": _append_public_offer_language(
+                _make_public_offer_url(str(normalized_row.get("slug") or "")),
+                (published_json.get("preferred_language") if isinstance(published_json, dict) else None),
+            ) if normalized_row.get("slug") else None,
+            "edit_status": normalized_row.get("edit_status"),
+            "business_id": normalized_row.get("business_id"),
+            "business_profile": normalized_row.get("business_profile"),
+            "source_type": normalized_row.get("source_type") or "admin_prospecting_public_audit",
+            "generated": state["generated"],
+            "edited": state["edited"],
+            "published": state["published"],
+            "diff": diff,
+            "meta": {
+                "created_at": normalized_row.get("created_at"),
+                "updated_at": normalized_row.get("updated_at"),
+                "edited_at": normalized_row.get("edited_at"),
+                "published_at": normalized_row.get("published_at"),
+                "edited_by": normalized_row.get("edited_by"),
+                "published_by": normalized_row.get("published_by"),
+                "lead_name": str((lead or {}).get("name") or published_json.get("name") or "").strip() or None,
+            },
+        }
+    )
+
+
+def _apply_admin_public_offer_edited_snapshot(
+    *,
+    row: dict[str, Any],
+    edited_blocks: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any], str]:
+    normalized_row = _normalize_admin_public_offer_row(dict(row))
+    generated_json = normalized_row.get("generated_json") if isinstance(normalized_row.get("generated_json"), dict) else {}
+    generated_blocks = build_generated_editor_blocks(generated_json)
+    normalized_blocks = normalize_editor_blocks(edited_blocks)
+    if blocks_equal(generated_blocks, normalized_blocks):
+        return generated_blocks, {}, "generated"
+    return generated_blocks, {"blocks": normalized_blocks}, "draft_edited"
+
+
+def _record_admin_public_audit_learning_events(
+    *,
+    conn,
+    user_id: str | None,
+    lead_id: str,
+    audit_id: str,
+    business_id: str | None,
+    generated_page_json: dict[str, Any],
+    generated_blocks: dict[str, Any],
+    published_blocks: dict[str, Any],
+) -> None:
+    for block_key in EDITOR_BLOCK_KEYS:
+        generated_text = render_block_text(block_key, generated_blocks.get(block_key))
+        final_text = render_block_text(block_key, published_blocks.get(block_key))
+        if generated_text == final_text:
+            continue
+        edit_kind = classify_edit_kind(generated_text, final_text)
+        record_ai_learning_event(
+            capability="lead.audit_block_editor",
+            event_type="accepted",
+            intent="client_outreach",
+            user_id=user_id,
+            business_id=business_id,
+            accepted=True,
+            edited_before_accept=True,
+            prompt_key=block_key,
+            prompt_version="manual_editor_v1",
+            draft_text=generated_text[:3000],
+            final_text=final_text[:3000],
+            metadata=build_learning_metadata(
+                page_json=generated_page_json,
+                lead_id=lead_id,
+                audit_id=audit_id,
+                block_key=block_key,
+                edit_kind=edit_kind,
+            ),
+            conn=conn,
+        )
 
 
 def _load_partnership_lead(cur, *, lead_id: str, business_id: str):
@@ -10069,7 +10291,7 @@ def partnership_public_offer_page(slug):
             if not row:
                 cur.execute(
                     """
-                    SELECT slug, page_json, updated_at
+                    SELECT slug, page_json, generated_json, published_json, updated_at
                     FROM adminprospectingleadpublicoffers
                     WHERE slug = %s
                       AND is_active = TRUE
@@ -10080,7 +10302,10 @@ def partnership_public_offer_page(slug):
                 row = cur.fetchone()
             if not row:
                 return jsonify({"error": "Offer page not found"}), 404
-            page_json = row.get("page_json") if hasattr(row, "get") else (row[1] if isinstance(row, (list, tuple)) and len(row) > 1 else {})
+            row_dict = dict(row) if row and hasattr(row, "keys") else {}
+            page_json = _resolve_admin_public_offer_row_page_json(row_dict) if row_dict else (
+                row.get("page_json") if hasattr(row, "get") else (row[1] if isinstance(row, (list, tuple)) and len(row) > 1 else {})
+            )
             updated_at = row.get("updated_at") if hasattr(row, "get") else (row[2] if isinstance(row, (list, tuple)) and len(row) > 2 else None)
             payload = _to_json_compatible(page_json) if isinstance(page_json, dict) else {}
             payload["slug"] = normalized_slug
@@ -12961,6 +13186,7 @@ def generate_admin_prospecting_offer_page(lead_id):
         try:
             _ensure_admin_prospecting_public_offers_table(conn)
             cur = conn.cursor()
+            existing_row = _fetch_admin_public_offer_row(cur, lead_id)
             base_slug = _build_offer_slug(
                 str(display_lead.get("name") or "lead"),
                 str(display_lead.get("city") or ""),
@@ -12987,18 +13213,75 @@ def generate_admin_prospecting_offer_page(lead_id):
                 suffix += 1
                 slug = f"{base_slug}-{suffix}"
 
+            generated_json = copy.deepcopy(page_json)
+            existing_edited_json = existing_row.get("edited_json") if isinstance((existing_row or {}).get("edited_json"), dict) else None
+            existing_status = str((existing_row or {}).get("edit_status") or "").strip() or "generated"
+            next_published_json = copy.deepcopy(generated_json)
+            next_page_json = copy.deepcopy(generated_json)
+            next_edit_status = "generated"
+            if existing_edited_json:
+                editor_blocks = normalize_editor_blocks(existing_edited_json.get("blocks"))
+                if existing_status == "published":
+                    next_published_json = apply_editor_blocks_to_page_json(generated_json, editor_blocks)
+                    next_page_json = copy.deepcopy(next_published_json)
+                    next_edit_status = "published"
+                else:
+                    existing_published_json = existing_row.get("published_json") if isinstance((existing_row or {}).get("published_json"), dict) else None
+                    if existing_published_json:
+                        next_published_json = existing_published_json
+                        next_page_json = copy.deepcopy(existing_published_json)
+                    next_edit_status = "draft_edited"
+
             cur.execute(
                 """
                 INSERT INTO adminprospectingleadpublicoffers (
-                    lead_id, slug, page_json, is_active, created_by, created_at, updated_at
-                ) VALUES (%s, %s, %s, TRUE, %s, NOW(), NOW())
+                    lead_id, business_id, business_profile, source_type,
+                    slug, page_json, generated_json, edited_json, published_json,
+                    edit_status, is_active, created_by, published_by, published_at, created_at, updated_at
+                ) VALUES (%s, NULLIF(%s, '')::uuid, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, NULLIF(%s, '')::uuid, NULLIF(%s, '')::uuid, %s, NOW(), NOW())
                 ON CONFLICT (lead_id) DO UPDATE
                 SET slug = EXCLUDED.slug,
                     page_json = EXCLUDED.page_json,
+                    business_id = EXCLUDED.business_id,
+                    business_profile = EXCLUDED.business_profile,
+                    source_type = EXCLUDED.source_type,
+                    generated_json = EXCLUDED.generated_json,
+                    edited_json = COALESCE(adminprospectingleadpublicoffers.edited_json, EXCLUDED.edited_json),
+                    published_json = CASE
+                        WHEN COALESCE(adminprospectingleadpublicoffers.edit_status, 'generated') = 'published' THEN EXCLUDED.published_json
+                        ELSE COALESCE(adminprospectingleadpublicoffers.published_json, EXCLUDED.published_json)
+                    END,
+                    edit_status = CASE
+                        WHEN COALESCE(adminprospectingleadpublicoffers.edit_status, 'generated') = 'published' THEN 'published'
+                        WHEN adminprospectingleadpublicoffers.edited_json IS NOT NULL THEN 'draft_edited'
+                        ELSE EXCLUDED.edit_status
+                    END,
                     is_active = TRUE,
+                    published_by = CASE
+                        WHEN COALESCE(adminprospectingleadpublicoffers.edit_status, 'generated') = 'published' THEN EXCLUDED.published_by
+                        ELSE adminprospectingleadpublicoffers.published_by
+                    END,
+                    published_at = CASE
+                        WHEN COALESCE(adminprospectingleadpublicoffers.edit_status, 'generated') = 'published' THEN EXCLUDED.published_at
+                        ELSE adminprospectingleadpublicoffers.published_at
+                    END,
                     updated_at = NOW()
                 """,
-                (lead_id, slug, Json(page_json), user_data.get("user_id")),
+                (
+                    lead_id,
+                    str(display_lead.get("business_id") or ""),
+                    str(page_json.get("audit", {}).get("audit_profile") or "").strip() or None,
+                    "admin_prospecting_public_audit",
+                    slug,
+                    Json(next_page_json),
+                    Json(generated_json),
+                    Json(existing_edited_json) if existing_edited_json else None,
+                    Json(next_published_json),
+                    next_edit_status,
+                    user_data.get("user_id"),
+                    user_data.get("user_id") if next_edit_status == "published" else None,
+                    datetime.now(timezone.utc) if next_edit_status == "published" else None,
+                ),
             )
             conn.commit()
             display_lead = _attach_admin_prospecting_public_offer_metadata(conn, display_lead)
@@ -13031,6 +13314,260 @@ def generate_admin_prospecting_offer_page(lead_id):
         )
     except Exception as e:
         print(f"Error generating admin prospecting offer page: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/lead/<string:lead_id>/audit-editor", methods=["GET"])
+def get_admin_public_audit_editor(lead_id):
+    user_data, error = _require_superadmin()
+    if error:
+        return error
+    try:
+        lead = _load_prospecting_lead(lead_id)
+        if not lead:
+            return jsonify({"error": "Lead not found"}), 404
+        conn = get_db_connection()
+        try:
+            _ensure_admin_prospecting_public_offers_table(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            row = _fetch_admin_public_offer_row(cur, lead_id)
+            if not row:
+                return jsonify({"error": "Public audit page is not generated yet"}), 404
+            response_payload = _build_admin_public_offer_editor_response(row=row, lead=lead)
+            response_payload["viewer"] = {"user_id": user_data.get("user_id")}
+            return jsonify(response_payload)
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"Error loading admin public audit editor: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/lead/<string:lead_id>/audit-editor", methods=["PUT"])
+def save_admin_public_audit_editor(lead_id):
+    user_data, error = _require_superadmin()
+    if error:
+        return error
+    try:
+        data = request.get_json(silent=True) or {}
+        blocks = data.get("blocks")
+        if not isinstance(blocks, dict):
+            return jsonify({"error": "blocks object is required"}), 400
+        lead = _load_prospecting_lead(lead_id)
+        if not lead:
+            return jsonify({"error": "Lead not found"}), 404
+        conn = get_db_connection()
+        try:
+            _ensure_admin_prospecting_public_offers_table(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            row = _fetch_admin_public_offer_row(cur, lead_id)
+            if not row:
+                return jsonify({"error": "Public audit page is not generated yet"}), 404
+            generated_blocks, edited_json, edit_status = _apply_admin_public_offer_edited_snapshot(
+                row=row,
+                edited_blocks=blocks,
+            )
+            cur.execute(
+                """
+                UPDATE adminprospectingleadpublicoffers
+                SET edited_json = %s,
+                    edit_status = %s,
+                    edited_by = NULLIF(%s, '')::uuid,
+                    edited_at = CASE WHEN %s = 'generated' THEN NULL ELSE NOW() END,
+                    updated_at = NOW()
+                WHERE lead_id = %s
+                RETURNING
+                    lead_id, slug, page_json, generated_json, edited_json, published_json,
+                    business_id, business_profile, source_type, edit_status,
+                    created_by, created_at, updated_at, edited_by, edited_at, published_by, published_at
+                """,
+                (
+                    Json(edited_json) if edited_json else None,
+                    edit_status,
+                    user_data.get("user_id"),
+                    edit_status,
+                    lead_id,
+                ),
+            )
+            updated_row = cur.fetchone()
+            conn.commit()
+            if not updated_row:
+                return jsonify({"error": "Failed to save audit editor draft"}), 500
+            response_payload = _build_admin_public_offer_editor_response(row=dict(updated_row), lead=lead)
+            response_payload["saved"] = True
+            response_payload["generated_blocks"] = generated_blocks
+            return jsonify(response_payload)
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"Error saving admin public audit editor: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/lead/<string:lead_id>/audit-editor/diff", methods=["GET"])
+def get_admin_public_audit_editor_diff(lead_id):
+    _, error = _require_superadmin()
+    if error:
+        return error
+    try:
+        conn = get_db_connection()
+        try:
+            _ensure_admin_prospecting_public_offers_table(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            row = _fetch_admin_public_offer_row(cur, lead_id)
+            if not row:
+                return jsonify({"error": "Public audit page is not generated yet"}), 404
+            normalized_row = _normalize_admin_public_offer_row(row)
+            state = normalize_editor_state(
+                generated_page_json=normalized_row.get("generated_json") if isinstance(normalized_row.get("generated_json"), dict) else {},
+                edited_json=normalized_row.get("edited_json") if isinstance(normalized_row.get("edited_json"), dict) else None,
+                published_page_json=normalized_row.get("published_json") if isinstance(normalized_row.get("published_json"), dict) else {},
+            )
+            return jsonify({"success": True, "diff": compute_editor_diff(state["generated"], state["edited"], state["published"])})
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"Error loading admin public audit editor diff: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/lead/<string:lead_id>/audit-editor/reset-block", methods=["POST"])
+def reset_admin_public_audit_editor_block(lead_id):
+    user_data, error = _require_superadmin()
+    if error:
+        return error
+    try:
+        data = request.get_json(silent=True) or {}
+        block_key = str(data.get("block") or "").strip()
+        if block_key not in EDITOR_BLOCK_KEYS:
+            return jsonify({"error": "Unknown block"}), 400
+        lead = _load_prospecting_lead(lead_id)
+        if not lead:
+            return jsonify({"error": "Lead not found"}), 404
+        conn = get_db_connection()
+        try:
+            _ensure_admin_prospecting_public_offers_table(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            row = _fetch_admin_public_offer_row(cur, lead_id)
+            if not row:
+                return jsonify({"error": "Public audit page is not generated yet"}), 404
+            normalized_row = _normalize_admin_public_offer_row(row)
+            generated_blocks = build_generated_editor_blocks(
+                normalized_row.get("generated_json") if isinstance(normalized_row.get("generated_json"), dict) else {}
+            )
+            current_edited_blocks = normalize_editor_blocks(
+                (normalized_row.get("edited_json") or {}).get("blocks")
+                if isinstance(normalized_row.get("edited_json"), dict)
+                else None
+            )
+            current_edited_blocks[block_key] = copy.deepcopy(generated_blocks[block_key])
+            _, next_edited_json, next_status = _apply_admin_public_offer_edited_snapshot(
+                row=normalized_row,
+                edited_blocks=current_edited_blocks,
+            )
+            cur.execute(
+                """
+                UPDATE adminprospectingleadpublicoffers
+                SET edited_json = %s,
+                    edit_status = %s,
+                    edited_by = NULLIF(%s, '')::uuid,
+                    edited_at = CASE WHEN %s = 'generated' THEN NULL ELSE NOW() END,
+                    updated_at = NOW()
+                WHERE lead_id = %s
+                RETURNING
+                    lead_id, slug, page_json, generated_json, edited_json, published_json,
+                    business_id, business_profile, source_type, edit_status,
+                    created_by, created_at, updated_at, edited_by, edited_at, published_by, published_at
+                """,
+                (
+                    Json(next_edited_json) if next_edited_json else None,
+                    next_status,
+                    user_data.get("user_id"),
+                    next_status,
+                    lead_id,
+                ),
+            )
+            updated_row = cur.fetchone()
+            conn.commit()
+            if not updated_row:
+                return jsonify({"error": "Failed to reset block"}), 500
+            response_payload = _build_admin_public_offer_editor_response(row=dict(updated_row), lead=lead)
+            response_payload["reset_block"] = block_key
+            return jsonify(response_payload)
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"Error resetting admin public audit block: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_prospecting_bp.route("/api/admin/prospecting/lead/<string:lead_id>/audit-editor/publish", methods=["POST"])
+def publish_admin_public_audit_editor(lead_id):
+    user_data, error = _require_superadmin()
+    if error:
+        return error
+    try:
+        lead = _load_prospecting_lead(lead_id)
+        if not lead:
+            return jsonify({"error": "Lead not found"}), 404
+        conn = get_db_connection()
+        try:
+            _ensure_admin_prospecting_public_offers_table(conn)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            row = _fetch_admin_public_offer_row(cur, lead_id)
+            if not row:
+                return jsonify({"error": "Public audit page is not generated yet"}), 404
+            normalized_row = _normalize_admin_public_offer_row(row)
+            generated_json = normalized_row.get("generated_json") if isinstance(normalized_row.get("generated_json"), dict) else {}
+            generated_blocks = build_generated_editor_blocks(generated_json)
+            edited_json = normalized_row.get("edited_json") if isinstance(normalized_row.get("edited_json"), dict) else None
+            edited_blocks = normalize_editor_blocks(edited_json.get("blocks") if edited_json else generated_blocks)
+            next_published_json = apply_editor_blocks_to_page_json(generated_json, edited_blocks)
+            audit_id = f"admin_public_offer:{lead_id}"
+            cur.execute(
+                """
+                UPDATE adminprospectingleadpublicoffers
+                SET published_json = %s,
+                    page_json = %s,
+                    edit_status = 'published',
+                    published_by = NULLIF(%s, '')::uuid,
+                    published_at = NOW(),
+                    updated_at = NOW()
+                WHERE lead_id = %s
+                RETURNING
+                    lead_id, slug, page_json, generated_json, edited_json, published_json,
+                    business_id, business_profile, source_type, edit_status,
+                    created_by, created_at, updated_at, edited_by, edited_at, published_by, published_at
+                """,
+                (
+                    Json(next_published_json),
+                    Json(next_published_json),
+                    user_data.get("user_id"),
+                    lead_id,
+                ),
+            )
+            updated_row = cur.fetchone()
+            if not updated_row:
+                conn.rollback()
+                return jsonify({"error": "Failed to publish audit"}), 500
+            _record_admin_public_audit_learning_events(
+                conn=conn,
+                user_id=str(user_data.get("user_id") or ""),
+                lead_id=lead_id,
+                audit_id=audit_id,
+                business_id=str(updated_row.get("business_id") or ""),
+                generated_page_json=generated_json,
+                generated_blocks=generated_blocks,
+                published_blocks=edited_blocks,
+            )
+            conn.commit()
+            response_payload = _build_admin_public_offer_editor_response(row=dict(updated_row), lead=lead)
+            response_payload["publish_success"] = True
+            return jsonify(response_payload)
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"Error publishing admin public audit editor: {e}")
         return jsonify({"error": str(e)}), 500
 
 

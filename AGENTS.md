@@ -98,7 +98,11 @@ Legacy details remain in git history and must not be used as default runbook.
 ## 11. Autonomous Development Trigger
 - Trigger phrase: `Автономная разработка`.
 - When this phrase appears in a user request, the agent must switch to autonomous execution mode for the current task.
+- Autonomous mode is proof-loop based by default (mandatory).
 - In autonomous mode, the agent must use the canonical brief from `agents/autonomous_development_brief.md`.
+- Proof-loop entrypoint:
+  - `scripts/proof_loop.sh init <TASK_ID> "<TASK_TEXT>"`
+- If task bundle already exists, do not re-init; continue same `<TASK_ID>`.
 - Task-specific profiles are optional and are loaded only when relevant to the task domain:
   - parser/network reliability: `agents/profiles/parsing_network_stability.md`
 - If the user provides task-specific constraints, treat them as higher priority than defaults in the brief.
@@ -108,6 +112,14 @@ Legacy details remain in git history and must not be used as default runbook.
   3) evaluate against DoD
   4) iterate until success criteria are met or a hard blocker is found
 - Hard blocker policy: stop only for destructive/irreversible actions, risky DB schema/data operations, or missing required access.
+
+## 11.1 Autonomous Control Phrases
+- `Статус автономной разработки`
+  - Run: `scripts/proof_loop.sh status <TASK_ID>`
+  - Return concise status of current proof bundle and next step.
+- `Проверка автономной разработки`
+  - Run: `scripts/proof_loop.sh validate <TASK_ID>`
+  - Return `valid/invalid` and exact missing files/errors when invalid.
 
 ## 12. Curated Subagent Profiles
 - Curated third-party profiles are stored in `agents/subagents/`.

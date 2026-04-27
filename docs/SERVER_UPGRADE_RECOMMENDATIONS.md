@@ -1,5 +1,8 @@
 # Рекомендации по апгрейду сервера
 
+> Примечание: документ исторический по ресурсам, но текущий production runtime работает через Docker Compose в `/opt/seo-app`.
+> Если нужна сборка фронтенда, используйте локальный билд и `bash scripts/deploy_frontend_dist.sh --build`, а не ручные серверные шаги из старой схемы.
+
 ## ✅ Текущие характеристики (HP C2-M4-D20) - ОБНОВЛЕНО
 - **CPU**: 2 vCPU ✅
 - **RAM**: 4 ГБ ✅
@@ -69,12 +72,10 @@ systemctl start seo-worker
 # Локально
 cd frontend
 npm run build
-tar czf dist.tar.gz dist/
 
-# На сервере (через веб-консоль)
-cd /root/mapsparser-Replit-front
-rm -rf frontend/dist
-tar xzf dist.tar.gz -C frontend/
+# Затем канонический deploy
+cd /opt/seo-app
+bash scripts/deploy_frontend_dist.sh
 ```
 
 ### 3. Ограничить использование памяти для процессов
@@ -157,4 +158,3 @@ swapon --show
 - Обработкой запросов
 
 **Рекомендация**: После апгрейда **перезапустить все процессы** для использования новых ресурсов.
-

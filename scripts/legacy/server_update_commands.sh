@@ -1,64 +1,15 @@
-#!/bin/bash
-# Скрипт для обновления проекта на сервере и очистки диска
+#!/usr/bin/env bash
+set -euo pipefail
 
-set -e
-
-echo "🚀 Начинаем обновление проекта на сервере..."
+echo "DEPRECATED: scripts/legacy/server_update_commands.sh"
+echo "Этот сценарий больше не использует legacy web-root и старый non-Docker project root."
+echo "Канонический путь для frontend dist: /opt/seo-app/frontend/dist"
+echo "Канонический deploy-командой: cd /opt/seo-app && bash scripts/deploy_frontend_dist.sh --build"
 echo ""
 
-# 1. Переходим в директорию проекта
-cd /root/mapsparser-Replit-front || {
-    echo "❌ Директория проекта не найдена!"
-    exit 1
-}
+if [[ "$(pwd)" != "/opt/seo-app" ]]; then
+  echo "Перехожу в /opt/seo-app"
+  cd /opt/seo-app
+fi
 
-# 2. Получаем последние изменения из GitHub
-echo "📥 Получаем изменения из GitHub..."
-git pull origin main
-echo "✅ Изменения получены"
-echo ""
-
-# 3. Обновляем зависимости frontend
-echo "📦 Обновляем зависимости frontend..."
-cd frontend
-npm cache clean --force 2>/dev/null || true
-npm install --legacy-peer-deps
-echo "✅ Зависимости обновлены"
-echo ""
-
-# 4. Собираем frontend
-echo "🔨 Собираем frontend..."
-npm run build
-echo "✅ Frontend собран"
-echo ""
-
-# 5. Копируем собранные файлы в /var/www/html
-echo "📋 Копируем файлы в /var/www/html..."
-cd ..
-rm -rf /var/www/html/*
-cp -r frontend/dist/* /var/www/html/
-chown -R www-data:www-data /var/www/html
-echo "✅ Файлы скопированы"
-echo ""
-
-# 6. Перезапускаем сервисы
-echo "🔄 Перезапускаем сервисы..."
-systemctl restart nginx
-systemctl restart seo-api 2>/dev/null || echo "⚠️  seo-api не найден (это нормально)"
-systemctl restart seo-worker 2>/dev/null || echo "⚠️  seo-worker не найден (это нормально)"
-echo "✅ Сервисы перезапущены"
-echo ""
-
-# 7. Запускаем очистку диска
-echo "🧹 Запускаем очистку диска..."
-bash cleanup_server.sh
-echo ""
-
-echo "✅ Обновление и очистка завершены!"
-echo ""
-echo "📊 Проверка статуса сервисов:"
-systemctl status nginx --no-pager -l | head -5
-systemctl status seo-api --no-pager -l | head -5 2>/dev/null || echo "⚠️  seo-api не найден"
-echo ""
-echo "🌐 Сайт должен быть доступен на local"
-
+bash scripts/deploy_frontend_dist.sh --build

@@ -1,71 +1,11 @@
-# 🔄 Инструкция по обновлению на VPS
+# Legacy VPS Update
 
-## На VPS выполните следующие команды:
+Этот файл сохранён только как архивная отметка о старом VPS-процессе без Docker.
 
-### 1. Перейдите в директорию проекта
-```bash
-cd /root/mapsparser-Replit-front
-```
+Для текущего production:
 
-### 2. Проверьте статус git
-```bash
-git status
-```
+- проект живёт в `/opt/seo-app`
+- runtime основан на `docker compose`
+- канонический deploy/runbook описан в [docs/SERVER_UPDATE_COMMANDS.md](../SERVER_UPDATE_COMMANDS.md)
 
-### 3. Обновите код с GitHub
-```bash
-git pull origin main
-```
-
-### 4. Перезапустите воркер
-```bash
-systemctl restart seo-worker
-```
-
-### 5. Проверьте статус воркера
-```bash
-systemctl status seo-worker
-```
-
-### 6. Проверьте логи воркера
-```bash
-journalctl -u seo-worker -f
-```
-
-## 🔍 Если возникают проблемы:
-
-### Проверьте, что воркер запущен:
-```bash
-ps aux | grep worker.py
-```
-
-### Проверьте переменные окружения:
-```bash
-cat .env
-```
-
-### Проверьте права доступа:
-```bash
-ls -la
-```
-
-## ✅ После обновления система должна:
-
-- Исправить ошибку "no tools or prompts"
-- Работать с Hugging Face API
-- Корректно выполнять AI-анализ
-- Генерировать отчёты
-
-## 📝 Что изменилось в этом обновлении:
-
-1. **Исправлен model_config.py** - убрана ссылка на несуществующую модель
-2. **Добавлена MCP конфигурация** для Hugging Face
-3. **Улучшен AI-анализ** с использованием facebook/bart-base
-4. **Добавлены тестовые файлы** для проверки системы
-
----
-
-**Команда для быстрого обновления:**
-```bash
-cd /root/mapsparser-Replit-front && git pull origin main && systemctl restart seo-worker
-``` 
+Старые команды из прежней VPS-схемы намеренно удалены, чтобы они не воспринимались как актуальная инструкция.

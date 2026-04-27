@@ -13,39 +13,21 @@ import requests
 from flask import Blueprint, jsonify, request
 
 from auth_system import verify_session
+from billing_constants import TARIFFS, TARIFF_ALIASES
 from database_manager import DatabaseManager
+from services.checkout_session_service import (
+    complete_checkout,
+    create_checkout_session,
+    get_checkout_session_by_provider_invoice,
+    get_checkout_status,
+    load_checkout_session,
+    mark_checkout_created,
+    mark_checkout_failed,
+    mark_checkout_paid,
+)
 
 
 billing_bp = Blueprint("billing", __name__)
-
-
-TARIFFS: Dict[str, Dict[str, Any]] = {
-    "starter_monthly": {
-        "amount": Decimal("1200.00"),
-        "currency": "RUB",
-        "credits": 240,
-        "business_tier": "starter",
-    },
-    "pro_monthly": {
-        "amount": Decimal("5000.00"),
-        "currency": "RUB",
-        "credits": 1000,
-        "business_tier": "professional",
-    },
-    "concierge_monthly": {
-        "amount": Decimal("25000.00"),
-        "currency": "RUB",
-        "credits": None,
-        "business_tier": "concierge",
-    },
-}
-
-TARIFF_ALIASES = {
-    "starter": "starter_monthly",
-    "professional": "pro_monthly",
-    "pro": "pro_monthly",
-    "concierge": "concierge_monthly",
-}
 
 RETRY_DELAYS_DAYS = (1, 2)  # D1, D3 relative to initial D0
 
@@ -143,6 +125,33 @@ def _normalize_tariff_id(tariff_id: str) -> Optional[str]:
     return TARIFF_ALIASES.get(raw)
 
 
+def _normalize_checkout_provider(provider: str) -> str:
+    raw = str(provider or "").strip().lower()
+    if raw in {"russia", "ru", "yookassa"}:
+        return "yookassa"
+    if raw == "stripe":
+        return "stripe"
+    raise RuntimeError(f"Unsupported checkout provider: {provider}")
+
+
+def _resolve_checkout_amount_and_currency(provider: str, tariff_id: str) -> Tuple[Decimal, str]:
+    normalized_provider = _normalize_checkout_provider(provider)
+    normalized_tariff = _normalize_tariff_id(tariff_id or "")
+    if not normalized_tariff or normalized_tariff not in TARIFFS:
+        raise RuntimeError(f"Неверный тариф: {tariff_id}")
+
+    if normalized_provider == "stripe":
+        from stripe_integration import TIERS, _normalize_checkout_tariff_for_stripe
+
+        stripe_tier = _normalize_checkout_tariff_for_stripe(normalized_tariff)
+        stripe_info = TIERS.get(stripe_tier) or {}
+        cents = int(stripe_info.get("amount") or 0)
+        return (Decimal(cents) / Decimal("100"), "USD")
+
+    tariff = TARIFFS[normalized_tariff]
+    return (Decimal(str(tariff["amount"])), str(tariff["currency"]))
+
+
 def _require_auth() -> Optional[Dict[str, Any]]:
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
@@ -158,6 +167,19 @@ def _row_to_dict(cursor, row) -> Dict[str, Any]:
         return row
     cols = [d[0] for d in (cursor.description or [])]
     return dict(zip(cols, row))
+
+
+def _load_business_checkout_context(cursor, business_id: str) -> Dict[str, Any]:
+    cursor.execute(
+        """
+        SELECT id, owner_id, name, yandex_url, city, address
+        FROM businesses
+        WHERE id = %s
+        LIMIT 1
+        """,
+        (business_id,),
+    )
+    return _row_to_dict(cursor, cursor.fetchone())
 
 
 def _ensure_subscription_row(cursor, *, user_id: str, business_id: Optional[str], tariff_id: str) -> Dict[str, Any]:
@@ -309,6 +331,56 @@ def _build_payment_payload(*, amount: Decimal, currency: str, return_url: str, d
         payload["description"] = f"{description} (recurring)"
 
     return payload
+
+
+def _build_checkout_return_url(session: Dict[str, Any]) -> str:
+    frontend_base = (os.getenv("FRONTEND_BASE_URL") or "http://localhost:8000").rstrip("/")
+    if str(session.get("entry_point") or "").strip() == "registered_paywall" and str(session.get("business_id") or "").strip():
+        return f"{frontend_base}/dashboard/profile?yookassa_return=1&checkout_session={session.get('id')}"
+    return f"{frontend_base}/checkout/return?session_id={session.get('id')}"
+
+
+def create_yookassa_payment_for_checkout_session(session_id: str) -> Dict[str, Any]:
+    session = load_checkout_session(session_id)
+    tariff_id = _normalize_tariff_id(str(session.get("tariff_id") or ""))
+    if not tariff_id or tariff_id not in TARIFFS:
+        raise RuntimeError(f"Неверный тариф: {session.get('tariff_id')}")
+    client = YooKassaClient()
+    if not client.configured():
+        raise RuntimeError("YooKassa is not configured")
+
+    amount = TARIFFS[tariff_id]["amount"]
+    currency = TARIFFS[tariff_id]["currency"]
+    payment = client.create_payment(
+        payload=_build_payment_payload(
+            amount=amount,
+            currency=currency,
+            return_url=_build_checkout_return_url(session),
+            description=f"LocalOS {tariff_id} checkout",
+            metadata={
+                "checkout_session_id": str(session.get("id") or ""),
+                "tariff_id": tariff_id,
+                "entry_point": str(session.get("entry_point") or ""),
+                "kind": "checkout_session_payment",
+                "env": os.getenv("YOOKASSA_ENV", "prod"),
+            },
+            payment_method_id=None,
+            save_payment_method=True,
+            recurring=False,
+        ),
+        idempotency_key=_short_idempotency_key("cs", str(session.get("id") or ""), uuid.uuid4().hex[:10]),
+    )
+    updated = mark_checkout_created(
+        str(session.get("id") or ""),
+        provider_invoice_id=str(payment.get("id") or "").strip() or None,
+        provider_status=str(payment.get("status") or "").strip() or None,
+    )
+    return {
+        "session": updated,
+        "payment_id": payment.get("id"),
+        "confirmation_url": ((payment.get("confirmation") or {}).get("confirmation_url")),
+        "payment_status": payment.get("status"),
+    }
 
 
 def _create_billing_attempt(cursor, *, subscription_id: str, attempt_type: str, attempt_no: int, status: str, scheduled_at: Optional[datetime], amount: Decimal, currency: str, idempotency_key: str, payment_id: Optional[str], error_message: Optional[str], metadata: Optional[Dict[str, Any]] = None) -> None:
@@ -612,6 +684,178 @@ def run_due_renewals(batch_size: int = 25) -> Dict[str, Any]:
     return summary
 
 
+@billing_bp.route("/api/billing/checkout/session/start", methods=["POST", "OPTIONS"])
+def billing_checkout_session_start():
+    if request.method == "OPTIONS":
+        return ("", 204)
+
+    client_payload = request.get_json(silent=True) or {}
+    user_data = _require_auth()
+    raw_provider = str(client_payload.get("provider") or client_payload.get("payment_provider") or "yookassa").strip()
+    raw_entry_point = str(client_payload.get("entry_point") or "pricing_page").strip()
+    raw_tariff = str(client_payload.get("tariff_id") or client_payload.get("tier") or "").strip()
+    tariff_id = _normalize_tariff_id(raw_tariff)
+
+    if not tariff_id or tariff_id not in TARIFFS:
+        return jsonify({"error": f"Неверный тариф: {raw_tariff}"}), 400
+    if raw_entry_point not in {"public_audit", "registered_paywall", "pricing_page"}:
+        return jsonify({"error": f"Неверная точка входа: {raw_entry_point}"}), 400
+
+    auth_user_id = str((user_data or {}).get("user_id") or (user_data or {}).get("id") or "").strip()
+    business_id = str(client_payload.get("business_id") or "").strip()
+    email = str(client_payload.get("email") or "").strip() or None
+    phone = str(client_payload.get("phone") or "").strip() or None
+    maps_url = str(client_payload.get("maps_url") or "").strip() or None
+    normalized_maps_url = str(client_payload.get("normalized_maps_url") or maps_url or "").strip() or None
+    audit_slug = str(client_payload.get("audit_slug") or "").strip() or None
+    audit_public_url = str(client_payload.get("audit_public_url") or "").strip() or None
+    competitor_maps_url = str(client_payload.get("competitor_maps_url") or "").strip() or None
+    competitor_audit_url = str(client_payload.get("competitor_audit_url") or "").strip() or None
+    source = str(client_payload.get("source") or raw_entry_point).strip() or raw_entry_point
+
+    if raw_entry_point == "registered_paywall" and not auth_user_id:
+        return jsonify({"error": "Требуется авторизация"}), 401
+    if not auth_user_id and not email:
+        return jsonify({"error": "Для оплаты без аккаунта нужен email"}), 400
+
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        provider = _normalize_checkout_provider(raw_provider)
+        checkout_amount, checkout_currency = _resolve_checkout_amount_and_currency(provider, tariff_id)
+        resolved_user_id = auth_user_id or None
+        resolved_business_id = business_id or None
+
+        if business_id:
+            business_row = _load_business_checkout_context(cursor, business_id)
+            if not business_row:
+                return jsonify({"error": "Бизнес не найден"}), 404
+            owner_id = str(business_row.get("owner_id") or "").strip()
+            if auth_user_id and owner_id and owner_id != auth_user_id and not (user_data or {}).get("is_superadmin"):
+                return jsonify({"error": "Нет доступа к бизнесу"}), 403
+            resolved_user_id = owner_id or resolved_user_id
+            resolved_business_id = str(business_row.get("id") or "").strip() or resolved_business_id
+            maps_url = maps_url or str(business_row.get("yandex_url") or "").strip() or None
+            normalized_maps_url = normalized_maps_url or maps_url
+            payload_json = {
+                "business_name": str(business_row.get("name") or "").strip(),
+                "city": str(business_row.get("city") or "").strip(),
+                "address": str(business_row.get("address") or "").strip(),
+            }
+        else:
+            payload_json = dict(client_payload.get("payload_json") or {})
+
+        if resolved_user_id and not email:
+            cursor.execute("SELECT email FROM users WHERE id = %s LIMIT 1", (resolved_user_id,))
+            owner_row = _row_to_dict(cursor, cursor.fetchone())
+            email = str(owner_row.get("email") or "").strip() or None
+
+        session = create_checkout_session(
+            provider=provider,
+            channel="web",
+            entry_point=raw_entry_point,
+            tariff_id=tariff_id,
+            amount=checkout_amount,
+            currency=checkout_currency,
+            user_id=resolved_user_id,
+            business_id=resolved_business_id,
+            email=email,
+            phone=phone,
+            maps_url=maps_url,
+            normalized_maps_url=normalized_maps_url,
+            audit_slug=audit_slug,
+            audit_public_url=audit_public_url,
+            competitor_maps_url=competitor_maps_url,
+            competitor_audit_url=competitor_audit_url,
+            source=source,
+            payload_json=payload_json,
+        )
+
+        if provider == "yookassa":
+            payment = create_yookassa_payment_for_checkout_session(str(session.get("id") or ""))
+            response_payload = {
+                "success": True,
+                "provider": "yookassa",
+                "checkout_session_id": session.get("id"),
+                "payment_id": payment.get("payment_id"),
+                "confirmation_url": payment.get("confirmation_url"),
+                "payment_status": payment.get("payment_status"),
+            }
+        else:
+            from stripe_integration import create_stripe_checkout_for_checkout_session
+
+            checkout = create_stripe_checkout_for_checkout_session(str(session.get("id") or ""))
+            response_payload = {
+                "success": True,
+                "provider": "stripe",
+                "checkout_session_id": session.get("id"),
+                "checkout_id": checkout.get("checkout_id"),
+                "url": checkout.get("url"),
+                "payment_status": checkout.get("payment_status"),
+            }
+
+        db.conn.commit()
+        return jsonify(response_payload)
+    except Exception as e:
+        db.conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        db.close()
+
+
+@billing_bp.route("/api/billing/checkout/session/status", methods=["GET", "OPTIONS"])
+def billing_checkout_session_status():
+    if request.method == "OPTIONS":
+        return ("", 204)
+
+    session_id = str(request.args.get("session_id") or "").strip()
+    if not session_id:
+        return jsonify({"error": "session_id обязателен"}), 400
+
+    try:
+        status_payload = get_checkout_status(session_id)
+        provider = str(status_payload.get("provider") or "").strip()
+        current_status = str(status_payload.get("status") or "").strip()
+        provider_invoice_id = str((load_checkout_session(session_id) or {}).get("provider_invoice_id") or "").strip()
+
+        if current_status not in {"completed", "failed", "expired"} and provider_invoice_id:
+            if provider == "yookassa":
+                client = YooKassaClient()
+                if client.configured():
+                    payment = client.get_payment(provider_invoice_id)
+                    payment_status = str(payment.get("status") or "").strip().lower()
+                    if payment_status == "succeeded":
+                        mark_checkout_paid(
+                            session_id,
+                            provider_payment_id=str(payment.get("id") or provider_invoice_id),
+                            provider_status=payment_status,
+                        )
+                        status_payload = complete_checkout(session_id)
+                    elif payment_status == "canceled":
+                        mark_checkout_failed(session_id, provider_status=payment_status, error_message="payment canceled")
+                        status_payload = get_checkout_status(session_id)
+            elif provider == "stripe":
+                from stripe_integration import get_stripe_checkout_session_status
+
+                checkout = get_stripe_checkout_session_status(provider_invoice_id)
+                checkout_status = str(checkout.get("status") or "").strip().lower()
+                payment_status = str(checkout.get("payment_status") or "").strip().lower()
+                if checkout_status == "complete" or payment_status == "paid":
+                    mark_checkout_paid(
+                        session_id,
+                        provider_payment_id=str(checkout.get("payment_intent") or provider_invoice_id),
+                        provider_status=payment_status or checkout_status,
+                    )
+                    status_payload = complete_checkout(session_id)
+                elif checkout_status == "expired":
+                    mark_checkout_failed(session_id, provider_status=checkout_status, error_message="checkout expired")
+                    status_payload = get_checkout_status(session_id)
+
+        return jsonify({"success": True, "checkout": status_payload})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @billing_bp.route("/api/billing/checkout/start", methods=["POST", "OPTIONS"])
 def billing_checkout_start():
     if request.method == "OPTIONS":
@@ -650,101 +894,39 @@ def billing_checkout_start():
         if business_owner_id != user_id and not user_data.get("is_superadmin"):
             return jsonify({"error": "Нет доступа к бизнесу"}), 403
 
-        # Subscription must belong to the business owner, not to an operator/superadmin
         effective_user_id = business_owner_id or user_id
-        sub = _ensure_subscription_row(cursor, user_id=effective_user_id, business_id=business_id, tariff_id=tariff_id)
         cursor.execute(
-            """
-            UPDATE subscriptions
-            SET tariff_id = COALESCE(tariff_id, %s),
-                pending_tariff_id = %s,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = %s
-            RETURNING *
-            """,
-            (tariff_id, tariff_id, sub["id"]),
+            "SELECT email FROM users WHERE id = %s LIMIT 1",
+            (effective_user_id,),
         )
-        sub = _row_to_dict(cursor, cursor.fetchone())
-
-        return_url = (os.getenv("YOOKASSA_RETURN_URL") or "").strip()
-        if not return_url:
-            frontend_base = (os.getenv("FRONTEND_BASE_URL") or "http://localhost:8000").rstrip("/")
-            return_url = f"{frontend_base}/dashboard/profile?yookassa_return=1"
-
-        amount = TARIFFS[tariff_id]["amount"]
-        currency = TARIFFS[tariff_id]["currency"]
-        idem_key = _short_idempotency_key("fr", str(sub["id"]), uuid.uuid4().hex[:10])
-        payload = _build_payment_payload(
-            amount=amount,
-            currency=currency,
-            return_url=return_url,
-            description=f"LocalOS {tariff_id} subscription first payment",
-            metadata={
-                "subscription_id": sub.get("id"),
-                "user_id": effective_user_id,
-                "business_id": business_id,
-                "tariff_id": tariff_id,
-                "kind": "subscription_first_payment",
-                "env": os.getenv("YOOKASSA_ENV", "prod"),
-            },
-            payment_method_id=None,
-            save_payment_method=True,
-            recurring=False,
+        owner_row = _row_to_dict(cursor, cursor.fetchone())
+        cursor.execute(
+            "SELECT yandex_url FROM businesses WHERE id = %s LIMIT 1",
+            (business_id,),
         )
-
-        used_idem_key = idem_key
-        try:
-            payment = client.create_payment(payload=payload, idempotency_key=idem_key)
-        except Exception as e:
-            # Некоторые магазины YooKassa не имеют права на recurring/save_payment_method.
-            # В таком случае не блокируем первый платёж и пробуем одноразовый checkout.
-            if "can't make recurring payments" not in str(e).lower():
-                raise
-            fallback_payload = _build_payment_payload(
-                amount=amount,
-                currency=currency,
-                return_url=return_url,
-                description=f"LocalOS {tariff_id} subscription first payment (one-time fallback)",
-                metadata={
-                    "subscription_id": sub.get("id"),
-                    "user_id": effective_user_id,
-                    "business_id": business_id,
-                    "tariff_id": tariff_id,
-                    "kind": "subscription_first_payment_onetime_fallback",
-                    "env": os.getenv("YOOKASSA_ENV", "prod"),
-                },
-                payment_method_id=None,
-                save_payment_method=False,
-                recurring=False,
-            )
-            fallback_idem_key = _short_idempotency_key("fb", str(sub["id"]), idem_key)
-            payment = client.create_payment(payload=fallback_payload, idempotency_key=fallback_idem_key)
-            used_idem_key = fallback_idem_key
-        confirmation_url = ((payment.get("confirmation") or {}).get("confirmation_url"))
-
-        _create_billing_attempt(
-            cursor,
-            subscription_id=str(sub["id"]),
-            attempt_type="first",
-            attempt_no=0,
-            status=str(payment.get("status") or "pending"),
-            scheduled_at=_utcnow(),
-            amount=amount,
-            currency=currency,
-            idempotency_key=used_idem_key,
-            payment_id=str(payment.get("id") or ""),
-            error_message=None,
-            metadata={"source": "checkout_start"},
+        business_row = _row_to_dict(cursor, cursor.fetchone())
+        session = create_checkout_session(
+            provider="yookassa",
+            channel="web",
+            entry_point="registered_paywall",
+            tariff_id=tariff_id,
+            user_id=effective_user_id,
+            business_id=business_id,
+            email=str(owner_row.get("email") or "").strip() or None,
+            maps_url=str(business_row.get("yandex_url") or "").strip() or None,
+            normalized_maps_url=str(business_row.get("yandex_url") or "").strip() or None,
+            source=str(data.get("source") or "registered_paywall").strip(),
+            payload_json={},
         )
+        payment = create_yookassa_payment_for_checkout_session(str(session.get("id") or ""))
         db.conn.commit()
-
         return jsonify(
             {
                 "success": True,
-                "subscription_id": sub.get("id"),
-                "payment_id": payment.get("id"),
-                "confirmation_url": confirmation_url,
-                "payment_status": payment.get("status"),
+                "checkout_session_id": session.get("id"),
+                "payment_id": payment.get("payment_id"),
+                "confirmation_url": payment.get("confirmation_url"),
+                "payment_status": payment.get("payment_status"),
             }
         )
     except Exception as e:
@@ -972,8 +1154,27 @@ def yookassa_webhook():
 
         api_payment = client.get_payment(payment_id)
         api_status = str(api_payment.get("status") or "")
+        metadata = dict(api_payment.get("metadata") or {})
+        checkout_session_id = str(metadata.get("checkout_session_id") or "").strip()
 
-        if event_name == "payment.succeeded":
+        if checkout_session_id and event_name == "payment.succeeded":
+            if api_status != "succeeded":
+                raise RuntimeError(f"payment status mismatch: webhook={event_name} api={api_status}")
+            mark_checkout_paid(
+                checkout_session_id,
+                provider_payment_id=payment_id,
+                provider_status=api_status,
+            )
+            result = complete_checkout(checkout_session_id)
+        elif checkout_session_id and event_name == "payment.canceled":
+            if api_status != "canceled":
+                raise RuntimeError(f"payment status mismatch: webhook={event_name} api={api_status}")
+            result = mark_checkout_failed(
+                checkout_session_id,
+                provider_status=api_status,
+                error_message=str(((api_payment.get("cancellation_details") or {}).get("reason") or "payment canceled")).strip(),
+            )
+        elif event_name == "payment.succeeded":
             if api_status != "succeeded":
                 raise RuntimeError(f"payment status mismatch: webhook={event_name} api={api_status}")
             result = _apply_payment_succeeded(cursor, payment=api_payment, source_event=event_name)

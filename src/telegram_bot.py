@@ -12,18 +12,53 @@ import json
 import re
 import uuid
 import base64
+import logging
 import requests
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlparse
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
+from telegram.request import HTTPXRequest
 from database_manager import get_db_connection
 from core.action_orchestrator import ActionOrchestrator
 from core.helpers import get_user_language
 from core.telegram_network import build_requests_proxy_kwargs, resolve_telegram_http_proxy
+from crypto_pay_client import (
+    CryptoPayClient,
+    apply_crypto_invoice_paid,
+    create_crypto_invoice_for_business,
+    create_crypto_invoice_for_checkout_session,
+)
 from services.bot_feature_requests import save_bot_feature_request
+from services.telegram_dashboard import (
+    build_automation_text,
+    build_card_text,
+    build_growth_text,
+    build_reviews_text,
+    build_subscription_text,
+    build_today_text,
+)
+from services.telegram_compare_flow import build_guest_compare_result
 from services.telegram_lead_intake import parse_map_links_from_text
+from services.telegram_response_router import classify_client_intent, classify_guest_intent
+from services.telegram_static_answers import (
+    ask_localos_intro_text,
+    automation_intro_text,
+    billing_help_text,
+    client_fallback_text,
+    client_welcome_text,
+    get_web_urls,
+    guest_about_text,
+    guest_compare_text,
+    guest_connect_account_text,
+    guest_fallback_text,
+    guest_tariffs_text,
+    guest_welcome_text,
+    tariff_detail_text,
+)
 from services.gigachat_client import analyze_screenshot_with_gigachat, analyze_text_with_gigachat
+from subscription_manager import get_subscription_info
 
 # Автоматически подгружаем переменные окружения из .env,
 # как это сделано в main.py, чтобы GigaChat-ключи и другие
@@ -34,9 +69,15 @@ try:
 except ImportError:
     print("⚠️ Для автоматической загрузки .env установите пакет python-dotenv")
 
+logging.basicConfig(
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    level=logging.INFO,
+)
+
 # Токен бота и базовый URL API из переменных окружения
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
 API_BASE_URL = os.getenv('API_BASE_URL', 'http://localhost:8000')
+logger = logging.getLogger(__name__)
 
 # Словарь для хранения состояния пользователей (telegram_id -> state)
 user_states = {}
@@ -511,6 +552,27 @@ OPENCLAW_ORCHESTRATOR.handlers["reviews.reply"] = _telegram_capability_reviews_r
 OPENCLAW_ORCHESTRATOR.handlers["services.optimize"] = _telegram_capability_services_optimize
 OPENCLAW_ORCHESTRATOR.handlers["news.generate"] = _telegram_capability_news_generate
 
+
+async def _reply_effective_message(update: Update, text: str, **kwargs):
+    effective_message = update.effective_message
+    if effective_message is not None:
+        return await effective_message.reply_text(text, **kwargs)
+    callback_query = update.callback_query
+    if callback_query is not None:
+        return await callback_query.message.reply_text(text, **kwargs)
+    raise RuntimeError("No effective Telegram message available for reply")
+
+
+async def _telegram_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    logger.exception("Unhandled telegram bot error", exc_info=context.error)
+    try:
+        if isinstance(update, Update) and update.effective_message is not None:
+            await update.effective_message.reply_text(
+                "❌ Что-то пошло не так. Попробуйте ещё раз через /start."
+            )
+    except Exception:
+        logger.exception("Failed to send fallback error message")
+
 def get_user_id_from_telegram(telegram_id: str):
     """Получить user_id из telegram_id"""
     conn = get_db_connection()
@@ -667,23 +729,226 @@ def _is_bound_user(telegram_id: str) -> bool:
 def _build_guest_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("🔍 Сделать аудит карточки", callback_data="guest_audit_start")],
+            [InlineKeyboardButton("🔍 Получить бесплатный аудит", callback_data="guest_audit_start")],
             [InlineKeyboardButton("⚔️ Сравнить с конкурентом", callback_data="guest_compare_start")],
-            [InlineKeyboardButton("ℹ️ Что умеет LocalOS", callback_data="guest_about")],
-            [InlineKeyboardButton("🧩 Подключить аккаунт", callback_data="guest_bind_help")],
+            [InlineKeyboardButton("📈 Как LocalOS помогает бизнесу", callback_data="guest_more")],
+        ]
+    )
+
+
+def _build_guest_more_menu() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("✨ Что будет после аудита", callback_data="guest_about")],
+            [InlineKeyboardButton("💳 Тарифы и цена входа", callback_data="guest_tariffs")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")],
+        ]
+    )
+
+
+def _build_guest_audit_result_menu(public_url: str = "") -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    if public_url:
+        rows.append([InlineKeyboardButton("📊 Открыть аудит", url=public_url)])
+    rows.append([InlineKeyboardButton("🛠 Исправить это в LocalOS", callback_data="guest_fix_localos")])
+    rows.append([InlineKeyboardButton("⚔️ Сравнить с конкурентом", callback_data="guest_compare_start")])
+    rows.append([InlineKeyboardButton("💳 Посмотреть Starter за 1200 ₽", callback_data="tariff_info_starter")])
+    rows.append([InlineKeyboardButton("🧩 Подключить LocalOS", callback_data="guest_bind_help")])
+    rows.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")])
+    return InlineKeyboardMarkup(rows)
+
+
+def _build_guest_compare_result_menu(own_report_url: str = "", competitor_report_url: str = "") -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    if own_report_url:
+        rows.append([InlineKeyboardButton("📊 Открыть мой аудит", url=own_report_url)])
+    if competitor_report_url:
+        rows.append([InlineKeyboardButton("⚔️ Открыть аудит конкурента", url=competitor_report_url)])
+    rows.append([InlineKeyboardButton("🛠 Исправить разрыв в LocalOS", callback_data="guest_fix_localos")])
+    rows.append([InlineKeyboardButton("💳 Starter за 1200 ₽", callback_data="tariff_info_starter")])
+    rows.append([InlineKeyboardButton("🧩 Подключить LocalOS", callback_data="guest_bind_help")])
+    rows.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")])
+    return InlineKeyboardMarkup(rows)
+
+
+def _absolute_public_url(value: str) -> str:
+    url = str(value or "").strip()
+    if not url:
+        return ""
+    parsed = urlparse(url)
+    if parsed.scheme and parsed.netloc:
+        return url
+    base = (
+        str(os.getenv("FRONTEND_BASE_URL") or "")
+        or str(os.getenv("PUBLIC_DOMAIN") or "")
+        or "https://localos.pro"
+    ).strip().rstrip("/")
+    return f"{base}/{url.lstrip('/')}" if base else url
+
+
+def _build_tariffs_menu(back_callback: str = "back_to_menu") -> InlineKeyboardMarkup:
+    urls = get_web_urls()
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("🟠 Начальный", callback_data="tariff_info_starter")],
+            [InlineKeyboardButton("🟣 Профессиональный", callback_data="tariff_info_professional")],
+            [InlineKeyboardButton("🔶 Консьерж", callback_data="tariff_info_concierge")],
+            [InlineKeyboardButton("🌐 Все тарифы на сайте", url=urls["pricing"])],
+            [InlineKeyboardButton("🔙 Назад", callback_data=back_callback)],
+        ]
+    )
+
+
+def _build_tariff_detail_menu(tier_key: str, back_callback: str = "guest_tariffs") -> InlineKeyboardMarkup:
+    urls = get_web_urls()
+    normalized = str(tier_key or "").strip().lower()
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("💳 Оплата в рублях", url=f"{urls['profile']}?payment=required&tier={normalized}")],
+            [InlineKeyboardButton("💎 Оплата внутри Телеграм", callback_data=f"crypto_pay_{normalized}")],
+            [InlineKeyboardButton("📋 Назад к тарифам", callback_data=back_callback)],
+        ]
+    )
+
+
+def _build_client_main_menu() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("📍 Что важно сегодня", callback_data="client_today")],
+            [
+                InlineKeyboardButton("🗺 Карточка", callback_data="client_card"),
+                InlineKeyboardButton("💬 Отзывы", callback_data="client_reviews"),
+            ],
+            [
+                InlineKeyboardButton("📈 Рост", callback_data="client_growth"),
+                InlineKeyboardButton("⚙️ Автоматизация", callback_data="client_automation"),
+            ],
+            [
+                InlineKeyboardButton("💳 Подписка", callback_data="client_subscription"),
+                InlineKeyboardButton("🧠 Спросить LocalOS", callback_data="client_ask"),
+            ],
+            [InlineKeyboardButton("➕ Ещё", callback_data="client_more")],
+        ]
+    )
+
+
+def _build_client_more_menu() -> InlineKeyboardMarkup:
+    urls = get_web_urls()
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("🏢 Мои бизнесы", callback_data="openclaw_businesses")],
+            [InlineKeyboardButton("⚡ Быстрые действия", callback_data="menu_openclaw")],
+            [InlineKeyboardButton("🛠 Сервис и диагностика", callback_data="menu_diagnostics")],
+            [InlineKeyboardButton("🌐 Открыть кабинет", url=urls["profile"])],
+            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")],
+        ]
+    )
+
+
+def _build_card_menu() -> InlineKeyboardMarkup:
+    urls = get_web_urls()
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("📊 Открыть аудит и прогресс", url=urls["progress"])],
+            [InlineKeyboardButton("👤 Профиль и бизнес", url=urls["profile"])],
+            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")],
+        ]
+    )
+
+
+def _build_reviews_menu() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("💬 Подготовить ответ", callback_data="openclaw_review_start")],
+            [InlineKeyboardButton("⏳ Ждут подтверждения", callback_data="openclaw_pending_approvals")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")],
+        ]
+    )
+
+
+def _build_growth_menu() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("📰 Подготовить новость", callback_data="openclaw_news_generate_start")],
+            [InlineKeyboardButton("🤝 Партнёрства", callback_data="menu_partnerships")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")],
+        ]
+    )
+
+
+def _build_automation_menu() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("✨ Что автоматизировать?", callback_data="menu_feature_request")],
+            [InlineKeyboardButton("💳 Посмотреть подписку", callback_data="client_subscription")],
+            [InlineKeyboardButton("⏳ Ждут подтверждения", callback_data="openclaw_pending_approvals")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")],
+        ]
+    )
+
+
+def _build_diagnostics_menu() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("📊 Статус автоматизации", callback_data="openclaw_status")],
+            [InlineKeyboardButton("📚 Последние действия", callback_data="openclaw_actions")],
+            [InlineKeyboardButton("📤 Отчёт для поддержки", callback_data="openclaw_support_export")],
+            [InlineKeyboardButton("🛠 Восстановление очереди", callback_data="openclaw_recovery_report")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="client_more")],
+        ]
+    )
+
+
+def _suggested_upgrade_tier(business_ctx: dict | None) -> str:
+    business_id = str((business_ctx or {}).get("business_id") or "").strip()
+    if not business_id:
+        return "starter"
+    info = get_subscription_info(business_id)
+    tier = str(info.get("tier") or "trial").strip().lower()
+    if tier == "trial":
+        return "starter"
+    if tier == "starter":
+        return "professional"
+    if tier == "professional":
+        return "concierge"
+    if tier in {"promo", "elite", "concierge"}:
+        return "concierge"
+    return tier or "starter"
+
+
+def _build_subscription_menu(business_ctx: dict | None = None) -> InlineKeyboardMarkup:
+    urls = get_web_urls()
+    suggested_tier = _suggested_upgrade_tier(business_ctx)
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("🚀 Продлить или улучшить тариф", url=f"{urls['profile']}?payment=required&tier={suggested_tier}")],
+            [InlineKeyboardButton("💎 Оплатить криптой в Telegram", callback_data=f"crypto_pay_{suggested_tier}")],
+            [InlineKeyboardButton("⭐ Рекомендованный тариф", callback_data=f"tariff_info_{suggested_tier}")],
+            [InlineKeyboardButton("📋 Сравнить тарифы", callback_data="client_tariffs")],
+            [InlineKeyboardButton("🟠 Подобрать тариф", callback_data="client_tariffs")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")],
+        ]
+    )
+
+
+def _build_ask_localos_menu() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("📍 Сегодня", callback_data="client_today"),
+                InlineKeyboardButton("🗺 Карточка", callback_data="client_card"),
+            ],
+            [
+                InlineKeyboardButton("💬 Отзывы", callback_data="client_reviews"),
+                InlineKeyboardButton("⚙️ Автоматизация", callback_data="client_automation"),
+            ],
+            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")],
         ]
     )
 
 
 def _guest_welcome_text() -> str:
-    return (
-        "👋 Это бот LocalOS.\n\n"
-        "Я могу быстро проверить карточку бизнеса на картах и показать, где теряются клиенты.\n\n"
-        "Что можно сделать сейчас:\n"
-        "• получить быстрый аудит карточки\n"
-        "• позже сравнить себя с конкурентом\n"
-        "• после привязки аккаунта — управлять LocalOS из Telegram"
-    )
+    return guest_welcome_text()
 
 
 def _build_feature_request_markup() -> InlineKeyboardMarkup:
@@ -733,6 +998,57 @@ def _save_feature_request_from_telegram(
         conn.close()
 
 
+def _start_public_report_request(telegram_id: str, normalized_url: str, source_name: str = "") -> tuple[bool, dict[str, str]]:
+    if not normalized_url:
+        return False, {"error": "Не удалось распознать ссылку на карточку."}
+    pseudo_email = f"telegram-{str(telegram_id or '').strip()}@localos.bot"
+    payload = {
+        "email": pseudo_email,
+        "url": normalized_url,
+        "name": "",
+        "city": "",
+        "address": "",
+        "source": "telegram_bot",
+        "telegram_chat_id": str(telegram_id or "").strip(),
+        "telegram_notify_when_ready": True,
+    }
+    try:
+        response = requests.post(
+            f"{API_BASE_URL}/api/public/request-report",
+            json=payload,
+            timeout=20,
+        )
+        data = response.json() if response.content else {}
+    except Exception as exc:
+        return False, {"error": f"Не удалось запустить аудит: {exc}"}
+
+    if response.status_code >= 400 or not data.get("success"):
+        return False, {"error": str(data.get("error") or f"HTTP {response.status_code}")}
+
+    return True, {
+        "public_url": _absolute_public_url(str(data.get("public_url") or "").strip()),
+        "slug": str(data.get("slug") or "").strip(),
+        "normalized_url": normalized_url,
+        "source_name": str(source_name or "").strip(),
+    }
+
+
+def _store_guest_checkout_context(telegram_id: str, **kwargs) -> None:
+    state_ref = user_states.setdefault(str(telegram_id), {})
+    context = dict(state_ref.get("checkout_context") or {})
+    for key, value in kwargs.items():
+        text = str(value or "").strip()
+        if text:
+            context[key] = text
+    if context:
+        state_ref["checkout_context"] = context
+
+
+def _guest_checkout_context(telegram_id: str) -> dict[str, str]:
+    state_ref = user_states.setdefault(str(telegram_id), {})
+    return dict(state_ref.get("checkout_context") or {})
+
+
 def _request_public_report_from_telegram(telegram_id: str, raw_text: str) -> tuple[bool, str]:
     parsed = parse_map_links_from_text(raw_text)
     if not parsed.get("ok"):
@@ -746,37 +1062,24 @@ def _request_public_report_from_telegram(telegram_id: str, raw_text: str) -> tup
     if not normalized_url:
         return False, "Не удалось распознать ссылку на карточку."
 
-    pseudo_email = f"telegram-{str(telegram_id or '').strip()}@localos.bot"
-    payload = {
-        "email": pseudo_email,
-        "url": normalized_url,
-        "name": "",
-        "city": "",
-        "address": "",
-        "source": "telegram_bot",
-    }
-    try:
-        response = requests.post(
-            f"{API_BASE_URL}/api/public/request-report",
-            json=payload,
-            timeout=20,
-        )
-        data = response.json() if response.content else {}
-    except Exception as exc:
-        return False, f"Не удалось запустить аудит: {exc}"
-
-    if response.status_code >= 400 or not data.get("success"):
-        return False, str(data.get("error") or f"HTTP {response.status_code}")
-
-    public_url = str(data.get("public_url") or "").strip()
-    slug = str(data.get("slug") or "").strip()
     source_name = str((valid_items[0] or {}).get("source") or "").strip()
+    ok, payload = _start_public_report_request(telegram_id, normalized_url, source_name)
+    if not ok:
+        return False, str(payload.get("error") or "Не удалось запустить аудит.")
+
+    slug = str(payload.get("slug") or "").strip()
+    _store_guest_checkout_context(
+        telegram_id,
+        maps_url=normalized_url,
+        normalized_maps_url=normalized_url,
+        audit_slug=slug,
+    )
     return True, (
-        "✅ Запустил аудит карточки.\n\n"
-        f"Источник: {source_name or 'maps'}\n"
+        "✅ Карточку приняли в аудит.\n\n"
+        f"Источник: {source_name or 'карты'}\n"
         f"Нормализованная ссылка:\n{normalized_url}\n\n"
-        "Сейчас собираем данные и формируем публичную страницу.\n"
-        f"Ссылка на аудит:\n{public_url or slug or 'скоро появится'}"
+        "Сейчас подтягиваем реальные данные карточки: видимость, доверие, отзывы, фото, услуги и активность.\n\n"
+        "Это займёт несколько минут. Я напишу сюда, когда аудит будет готов."
     )
 
 
@@ -1103,7 +1406,7 @@ def _build_openclaw_status_text(business_ctx: dict) -> tuple[bool, str]:
         str(business_ctx["business_id"]),
     )
     if not bundle.get("success"):
-        return False, "❌ Не удалось получить OpenClaw статус."
+        return False, "❌ Не удалось получить статус автоматизации."
 
     metrics = dict(bundle.get("metrics") or {})
     retry_items = list(bundle.get("retry_items") or [])
@@ -1111,7 +1414,7 @@ def _build_openclaw_status_text(business_ctx: dict) -> tuple[bool, str]:
     recovery_items = list(bundle.get("recovery_items") or [])
 
     lines = [
-        "🤖 OpenClaw status",
+        "📊 Статус автоматизации",
         f"Бизнес: {business_ctx['business_name']}",
         f"Tenant: {business_ctx['business_id']}",
         "",
@@ -1140,9 +1443,7 @@ def _build_openclaw_status_text(business_ctx: dict) -> tuple[bool, str]:
     lines.extend(
         [
             "",
-            "Команды:",
-            "/support_export — отправить support snapshot суперадмину",
-            "/recovery_report — выполнить recovery callback и вернуть отчёт",
+            "Подробные служебные действия доступны в разделе «Сервис и диагностика».",
         ]
     )
     return True, "\n".join(lines)
@@ -1634,7 +1935,7 @@ def _format_pending_human_text(title: str, business_ctx: dict, action_id: str) -
             f"Action: {action_id}",
             "",
             "Действие отправлено на подтверждение.",
-            "Используйте /pending_approvals или кнопку '⏳ Pending approvals'.",
+            "Используйте /pending_approvals или кнопку '⏳ Ждут подтверждения'.",
         ]
     )
 
@@ -1654,8 +1955,8 @@ def _compose_openclaw_followup(telegram_id: str, lead_text: str) -> tuple[str, I
                 InlineKeyboardButton("✖️ Отклонить", callback_data=f"approval_rejected_{action_id}"),
             ],
             [InlineKeyboardButton("ℹ️ Статус action", callback_data=f"approval_status_{action_id}")],
-            [InlineKeyboardButton("⏳ Pending approvals", callback_data="openclaw_pending_approvals")],
-            [InlineKeyboardButton("🤖 OpenClaw menu", callback_data="menu_openclaw")],
+            [InlineKeyboardButton("⏳ Ждут подтверждения", callback_data="openclaw_pending_approvals")],
+            [InlineKeyboardButton("⚡ Быстрые действия", callback_data="menu_openclaw")],
         ]
         return lead_text, InlineKeyboardMarkup(keyboard)
     return _compose_openclaw_panel(telegram_id, lead_text)
@@ -1676,13 +1977,13 @@ def _build_pending_approvals_view(business_ctx: dict, limit: int = 6) -> tuple[b
     if not result.get("success"):
         text, fallback_markup = _compose_openclaw_panel(
             str(business_ctx.get("telegram_id") or ""),
-            f"❌ Не удалось загрузить pending approvals: {result.get('error') or 'неизвестная ошибка'}",
+            f"❌ Не удалось загрузить очередь подтверждений: {result.get('error') or 'неизвестная ошибка'}",
         )
         return False, text, fallback_markup
 
     items = list(result.get("items") or [])
     lines = [
-        "⏳ Pending approvals",
+        "⏳ Ждут подтверждения",
         f"Бизнес: {business_ctx['business_name']}",
         "",
     ]
@@ -1753,22 +2054,19 @@ def build_openclaw_menu(telegram_id: str) -> tuple[str, InlineKeyboardMarkup]:
     active_name = str((ctx or {}).get("business_name") or "Не выбран")
     active_id = str((ctx or {}).get("business_id") or "")
     text = (
-        "🤖 OpenClaw Control\n\n"
+        "⚡ Быстрые действия LocalOS\n\n"
         f"Активный бизнес: {active_name}\n"
         f"{active_id}\n\n"
-        "Доступны быстрые действия:"
+        "Здесь собраны короткие рабочие сценарии без лишней навигации."
     )
     keyboard = [
-        [InlineKeyboardButton("📊 Статус", callback_data="openclaw_status")],
         [InlineKeyboardButton("💬 Ответ на отзыв", callback_data="openclaw_review_start")],
         [InlineKeyboardButton("🧩 Оптимизировать услугу", callback_data="openclaw_service_optimize_start")],
         [InlineKeyboardButton("📰 Сгенерировать новость", callback_data="openclaw_news_generate_start")],
-        [InlineKeyboardButton("⏳ Pending approvals", callback_data="openclaw_pending_approvals")],
-        [InlineKeyboardButton("📚 Последние actions", callback_data="openclaw_actions")],
-        [InlineKeyboardButton("📤 Support snapshot", callback_data="openclaw_support_export")],
-        [InlineKeyboardButton("🛠 Recovery report", callback_data="openclaw_recovery_report")],
+        [InlineKeyboardButton("⏳ Ждут подтверждения", callback_data="openclaw_pending_approvals")],
         [InlineKeyboardButton("🏢 Выбрать бизнес", callback_data="openclaw_businesses")],
-        [InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")],
+        [InlineKeyboardButton("🛠 Сервис и диагностика", callback_data="menu_diagnostics")],
+        [InlineKeyboardButton("🔙 Назад", callback_data="client_more")],
     ]
     return text, InlineKeyboardMarkup(keyboard)
 
@@ -1782,7 +2080,7 @@ def _compose_openclaw_panel(telegram_id: str, lead_text: str = "") -> tuple[str,
 
 
 async def openclaw_status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Краткий статус OpenClaw для привязанного бизнеса."""
+    """Краткий статус автоматизации для привязанного бизнеса."""
     business_ctx = await _require_bound_business(update, context)
     if not business_ctx:
         return
@@ -1792,18 +2090,18 @@ async def openclaw_status_command(update: Update, context: ContextTypes.DEFAULT_
         panel_text, reply_markup = _compose_openclaw_followup(str(update.effective_user.id), text)
         await update.message.reply_text(panel_text, reply_markup=reply_markup)
     except Exception as e:
-        await update.message.reply_text(f"❌ Ошибка OpenClaw status: {e}")
+        await update.message.reply_text(f"❌ Ошибка статуса автоматизации: {e}")
 
 
 async def control_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Единая точка входа в Telegram control panel для OpenClaw."""
+    """Единая точка входа в панель быстрых действий."""
     business_ctx = await _require_bound_business(update, context)
     if not business_ctx:
         return
     user_states.setdefault(str(update.effective_user.id), {})["active_business_id"] = str(business_ctx["business_id"])
     panel_text, reply_markup = _compose_openclaw_panel(
         str(update.effective_user.id),
-        f"🧭 OpenClaw control center\nБизнес: {business_ctx['business_name']}",
+        f"🧭 Панель быстрых действий\nБизнес: {business_ctx['business_name']}",
     )
     await update.message.reply_text(panel_text, reply_markup=reply_markup)
 
@@ -2086,22 +2384,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
     user_id = str(update.effective_user.id)
     args = context.args
-    
-    # Если передан токен привязки
-    if args and len(args) > 0:
-        bind_token = args[0]
-        await handle_bind_token(update, context, bind_token, user_id)
-        return
-    
-    # Проверяем, привязан ли аккаунт
-    db_user_id = get_user_id_from_telegram(user_id)
-    
-    if not db_user_id:
-        await update.message.reply_text(_guest_welcome_text(), reply_markup=_build_guest_menu())
-        return
-    
-    # Показываем главное меню
-    await show_main_menu(update, context, user_id, db_user_id)
+    logger.info("Received /start from telegram_id=%s args=%s", user_id, args)
+    try:
+        if args and len(args) > 0:
+            bind_token = args[0]
+            await handle_bind_token(update, context, bind_token, user_id)
+            return
+
+        db_user_id = get_user_id_from_telegram(user_id)
+        if not db_user_id:
+            await _reply_effective_message(update, _guest_welcome_text(), reply_markup=_build_guest_menu())
+            return
+
+        await show_main_menu(update, context, user_id, db_user_id)
+    except Exception:
+        logger.exception("Failed to handle /start for telegram_id=%s", user_id)
+        await _reply_effective_message(
+            update,
+            "❌ Не удалось открыть меню. Попробуйте ещё раз через /start."
+        )
 
 async def handle_bind_token(update: Update, context: ContextTypes.DEFAULT_TYPE, bind_token: str, telegram_id: str):
     """Обработка токена привязки"""
@@ -2115,7 +2416,8 @@ async def handle_bind_token(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         
         if response.status_code == 200:
             data = response.json()
-            await update.message.reply_text(
+            await _reply_effective_message(
+                update,
                 f"✅ Аккаунт успешно привязан!\n\n"
                 f"👤 Пользователь: {data.get('user', {}).get('name', 'Не указано')}\n"
                 f"📧 Email: {data.get('user', {}).get('email', 'Не указано')}\n\n"
@@ -2124,9 +2426,10 @@ async def handle_bind_token(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             await show_main_menu(update, context, telegram_id, data.get('user', {}).get('id'))
         else:
             error_data = response.json()
-            await update.message.reply_text(f"❌ Ошибка привязки: {error_data.get('error', 'Неизвестная ошибка')}")
+            await _reply_effective_message(update, f"❌ Ошибка привязки: {error_data.get('error', 'Неизвестная ошибка')}")
     except Exception as e:
-        await update.message.reply_text(f"❌ Ошибка подключения к серверу: {str(e)}")
+        logger.exception("Bind token verification failed for telegram_id=%s", telegram_id)
+        await _reply_effective_message(update, f"❌ Ошибка подключения к серверу: {str(e)}")
 
 async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, telegram_id: str, db_user_id: str = None):
     """Показать главное меню"""
@@ -2135,25 +2438,23 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, tel
         if not db_user_id:
             await update.message.reply_text("❌ Аккаунт не привязан. Используйте /start <код_привязки>")
             return
-    
-    keyboard = [
-        [InlineKeyboardButton("🤖 OpenClaw Control", callback_data="menu_openclaw")],
-        [InlineKeyboardButton("📈 Статус бизнеса", callback_data="menu_stats")],
-        [InlineKeyboardButton("📊 Оптимизировать услуги", callback_data="menu_optimize")],
-        [InlineKeyboardButton("💰 Добавить транзакцию", callback_data="menu_transaction")],
-        [InlineKeyboardButton("🤝 Поиск партнёрств", callback_data="menu_partnerships")],
-        [InlineKeyboardButton("✨ Что автоматизировать?", callback_data="menu_feature_request")],
-        [InlineKeyboardButton("⚙️ Настройки компании", callback_data="menu_settings")],
-    ]
-    
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    text = "🏠 *Главное меню*\n\nВыберите действие:"
-    
-    if hasattr(update, 'message') and update.message:
-        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
-    elif hasattr(update, 'callback_query') and update.callback_query:
+
+    ctx = resolve_business_context(telegram_id)
+    business_name = str((ctx or {}).get("business_name") or "Бизнес не выбран")
+    text = client_welcome_text(business_name)
+    reply_markup = _build_client_main_menu()
+
+    if update.callback_query:
         await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+    else:
+        await _reply_effective_message(update, text, reply_markup=reply_markup, parse_mode='Markdown')
+
+
+async def _show_client_section(update: Update, text: str, reply_markup: InlineKeyboardMarkup):
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
+    else:
+        await _reply_effective_message(update, text, reply_markup=reply_markup)
 
 
 async def show_optimize_business_selection(update: Update, context: ContextTypes.DEFAULT_TYPE, telegram_id: str, db_user_id: str):
@@ -2217,41 +2518,244 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if data == "guest_audit_start":
             state_ref["state"] = "waiting_guest_audit_link"
             await query.edit_message_text(
-                "🔍 Пришлите ссылку на карточку бизнеса.\n\n"
-                "Поддерживаются Яндекс Карты, 2ГИС и Google Maps."
+                "Пришлите ссылку на вашу карточку бизнеса.\n\n"
+                "Подойдут Яндекс Карты, 2ГИС и Google Maps.\n\n"
+                "Я покажу, где карточка теряет клиентов: отзывы, фото, описание, услуги и активность."
             )
             return
         if data == "guest_compare_start":
+            state_ref["state"] = "waiting_guest_compare_own_link"
             await query.edit_message_text(
-                "⚔️ Сравнение с конкурентом будет следующим этапом.\n\n"
-                "Сейчас уже можно получить аудит одной карточки и использовать его как lead magnet.",
+                f"{guest_compare_text()}\n\nСначала пришлите ссылку на вашу карточку.",
                 reply_markup=_build_guest_menu(),
             )
+            return
+        if data == "guest_more":
+            await query.edit_message_text("Что можно сделать после бесплатного аудита", reply_markup=_build_guest_more_menu())
             return
         if data == "guest_about":
-            await query.edit_message_text(
-                "LocalOS помогает локальному бизнесу расти через карты, отзывы, новости, партнёрства и автоматизацию.\n\n"
-                "Что уже умеем:\n"
-                "• аудит карточки\n"
-                "• ответы на отзывы\n"
-                "• генерация новостей\n"
-                "• управление задачами из Telegram после привязки аккаунта",
-                reply_markup=_build_guest_menu(),
-            )
+            await query.edit_message_text(guest_about_text(), reply_markup=_build_guest_more_menu())
+            return
+        if data == "guest_tariffs":
+            await query.edit_message_text(guest_tariffs_text(), reply_markup=_build_tariffs_menu("guest_more"))
+            return
+        if data == "guest_fix_localos":
+            await query.edit_message_text(tariff_detail_text("starter"), reply_markup=_build_tariff_detail_menu("starter", "guest_more"))
             return
         if data == "guest_bind_help":
+            await query.edit_message_text(guest_connect_account_text(), reply_markup=_build_guest_more_menu())
+            return
+        if data.startswith("crypto_pay_"):
+            tier_key = data.replace("crypto_pay_", "", 1)
+            guest_checkout = _guest_checkout_context(user_id)
+            try:
+                invoice = create_crypto_invoice_for_checkout_session(
+                    tariff_id=tier_key,
+                    source="telegram_guest_checkout",
+                    telegram_id=user_id,
+                    telegram_username=str(getattr(update.effective_user, "username", "") or ""),
+                    telegram_name=str(getattr(update.effective_user, "full_name", "") or ""),
+                    maps_url=str(guest_checkout.get("maps_url") or "").strip() or None,
+                    normalized_maps_url=str(guest_checkout.get("normalized_maps_url") or "").strip() or None,
+                    audit_slug=str(guest_checkout.get("audit_slug") or "").strip() or None,
+                    audit_public_url=str(guest_checkout.get("audit_public_url") or "").strip() or None,
+                    competitor_maps_url=str(guest_checkout.get("competitor_maps_url") or "").strip() or None,
+                    competitor_audit_url=str(guest_checkout.get("competitor_audit_url") or "").strip() or None,
+                    payload_json=guest_checkout,
+                )
+                invoice_url = str(
+                    invoice.get("bot_invoice_url")
+                    or invoice.get("mini_app_invoice_url")
+                    or invoice.get("web_app_invoice_url")
+                    or ""
+                ).strip()
+                if not invoice_url:
+                    raise RuntimeError("Crypto invoice URL is missing")
+                await query.edit_message_text(
+                    "💎 Оплата внутри Telegram\n\n"
+                    "Я подготовил invoice на выбранный тариф.\n"
+                    "Откройте его по кнопке ниже и завершите оплату. После этого нажмите «Я оплатил, проверить».",
+                    reply_markup=InlineKeyboardMarkup(
+                        [
+                            [InlineKeyboardButton("💎 Открыть crypto invoice", url=invoice_url)],
+                            [InlineKeyboardButton("✅ Я оплатил, проверить", callback_data=f"crypto_check_{invoice.get('invoice_id') or invoice.get('id')}")],
+                            [InlineKeyboardButton("🔙 Назад", callback_data="guest_more")],
+                        ]
+                    ),
+                )
+            except Exception as exc:
+                await query.edit_message_text(
+                    "Не удалось подготовить оплату внутри Telegram.\n\n"
+                    f"Причина: {exc}",
+                    reply_markup=_build_guest_menu(),
+                )
+            return
+        if data.startswith("crypto_check_"):
+            invoice_id = data.replace("crypto_check_", "", 1).strip()
+            try:
+                client = CryptoPayClient()
+                invoices = client.get_invoices(invoice_ids=[invoice_id])
+                invoice = invoices[0] if invoices else {}
+                status = str(invoice.get("status") or "").strip().lower()
+                if status != "paid":
+                    await query.edit_message_text(
+                        "Платёж ещё не подтверждён.\n\n"
+                        "Если вы уже оплатили, подождите немного и нажмите проверку ещё раз.",
+                        reply_markup=InlineKeyboardMarkup(
+                            [
+                                [InlineKeyboardButton("🔄 Проверить ещё раз", callback_data=f"crypto_check_{invoice_id}")],
+                                [InlineKeyboardButton("🔙 Назад", callback_data="guest_more")],
+                            ]
+                        ),
+                    )
+                    return
+                checkout_result = apply_crypto_invoice_paid(invoice)
+                audit_url = str(checkout_result.get("audit_public_url") or "").strip()
+                lines = [
+                    "✅ Оплата подтверждена.",
+                    "Аккаунт LocalOS создан и привязан к вашему Telegram.",
+                    "Теперь платные функции можно запускать без отдельной регистрации.",
+                ]
+                if audit_url:
+                    lines.extend(["", f"Ваш аудит: {audit_url}"])
+                await query.edit_message_text(
+                    "\n".join(lines),
+                    reply_markup=InlineKeyboardMarkup(
+                        [
+                            *([[InlineKeyboardButton("🔍 Открыть аудит", url=audit_url)]] if audit_url else []),
+                            [InlineKeyboardButton("✨ Что будет после аудита", callback_data="guest_more")],
+                        ]
+                    ),
+                )
+            except Exception as exc:
+                await query.edit_message_text(
+                    "Не удалось подтвердить оплату.\n\n"
+                    f"Причина: {exc}",
+                    reply_markup=_build_guest_menu(),
+                )
+            return
+        if data.startswith("tariff_info_"):
+            tier_key = data.replace("tariff_info_", "", 1)
             await query.edit_message_text(
-                "🧩 Чтобы связать Telegram с кабинетом:\n\n"
-                "1. В LocalOS откройте Настройки → Интеграции.\n"
-                "2. Сгенерируйте код привязки.\n"
-                "3. Отправьте сюда:\n/start <код_привязки>",
-                reply_markup=_build_guest_menu(),
+                tariff_detail_text(tier_key),
+                reply_markup=_build_tariff_detail_menu(tier_key),
             )
             return
         await query.edit_message_text("❌ Аккаунт не привязан. Используйте /start <код_привязки> или вернитесь в гостевое меню.", reply_markup=_build_guest_menu())
         return
     
-    if data == "menu_transaction":
+    business_ctx = resolve_business_context(user_id)
+    if business_ctx:
+        business_ctx = {**business_ctx, "telegram_id": user_id, "telegram_name": update.effective_user.full_name}
+
+    if data.startswith("client_") and (not business_ctx or not business_ctx.get("business_id")):
+        await query.edit_message_text(
+            "❌ Для аккаунта пока не найден активный бизнес. Сначала добавьте бизнес в кабинете LocalOS.",
+            reply_markup=_build_client_more_menu(),
+        )
+        return
+
+    if data == "client_today":
+        await _show_client_section(update, build_today_text(business_ctx), _build_client_main_menu())
+    elif data.startswith("crypto_pay_"):
+        tier_key = data.replace("crypto_pay_", "", 1)
+        try:
+            invoice = create_crypto_invoice_for_business(
+                user_id=str(business_ctx.get("user_id") or ""),
+                business_id=str(business_ctx.get("business_id") or ""),
+                tariff_id=tier_key,
+                source="telegram_bot",
+            )
+            invoice_url = str(
+                invoice.get("bot_invoice_url")
+                or invoice.get("mini_app_invoice_url")
+                or invoice.get("web_app_invoice_url")
+                or ""
+            ).strip()
+            if not invoice_url:
+                raise RuntimeError("Crypto invoice URL is missing")
+            await query.edit_message_text(
+                "Оплата криптой в Telegram\n\n"
+                f"Я подготовил invoice на тариф {tier_key}.\n"
+                "Откройте его по кнопке ниже и завершите оплату. После этого нажмите «Я оплатил, проверить».",
+                reply_markup=InlineKeyboardMarkup(
+                    [
+                        [InlineKeyboardButton("💎 Открыть crypto invoice", url=invoice_url)],
+                        [InlineKeyboardButton("✅ Я оплатил, проверить", callback_data=f"crypto_check_{invoice.get('invoice_id') or invoice.get('id')}")],
+                        [InlineKeyboardButton("🔙 Назад к подписке", callback_data="client_subscription")],
+                    ]
+                ),
+            )
+        except Exception as exc:
+            await query.edit_message_text(
+                "Не удалось подготовить crypto invoice.\n\n"
+                f"Причина: {exc}",
+                reply_markup=_build_subscription_menu(business_ctx),
+            )
+    elif data.startswith("crypto_check_"):
+        invoice_id = data.replace("crypto_check_", "", 1).strip()
+        try:
+            client = CryptoPayClient()
+            invoices = client.get_invoices(invoice_ids=[invoice_id])
+            invoice = invoices[0] if invoices else {}
+            status = str(invoice.get("status") or "").strip().lower()
+            if status != "paid":
+                await query.edit_message_text(
+                    "Платёж ещё не подтверждён.\n\n"
+                    "Если вы уже оплатили, подождите немного и нажмите проверку ещё раз.",
+                    reply_markup=InlineKeyboardMarkup(
+                        [
+                            [InlineKeyboardButton("🔄 Проверить снова", callback_data=f"crypto_check_{invoice_id}")],
+                            [InlineKeyboardButton("🔙 Назад к подписке", callback_data="client_subscription")],
+                        ]
+                    ),
+                )
+            else:
+                result = apply_crypto_invoice_paid(invoice)
+                await query.edit_message_text(
+                    "Оплата подтверждена.\n\n"
+                    "Подписка обновлена, тариф активирован. Можно возвращаться к работе в LocalOS.",
+                    reply_markup=InlineKeyboardMarkup(
+                        [
+                            [InlineKeyboardButton("💳 Открыть подписку", callback_data="client_subscription")],
+                            [InlineKeyboardButton("📍 Что важно сегодня", callback_data="client_today")],
+                        ]
+                    ),
+                )
+        except Exception as exc:
+            await query.edit_message_text(
+                "Не удалось проверить crypto payment.\n\n"
+                f"Причина: {exc}",
+                reply_markup=_build_subscription_menu(business_ctx),
+            )
+    elif data == "client_card":
+        await _show_client_section(update, build_card_text(business_ctx), _build_card_menu())
+    elif data == "client_reviews":
+        await _show_client_section(update, build_reviews_text(business_ctx), _build_reviews_menu())
+    elif data == "client_growth":
+        await _show_client_section(update, build_growth_text(business_ctx), _build_growth_menu())
+    elif data == "client_automation":
+        section_text = "\n\n".join([automation_intro_text(), build_automation_text(business_ctx)])
+        await _show_client_section(update, section_text, _build_automation_menu())
+    elif data == "client_subscription":
+        await _show_client_section(update, build_subscription_text(business_ctx), _build_subscription_menu(business_ctx))
+    elif data == "client_tariffs":
+        await query.edit_message_text(
+            "💳 Выберите тариф LocalOS\n\n"
+            "Ниже можно открыть детали каждого тарифа и сразу перейти к оплате.",
+            reply_markup=_build_tariffs_menu("client_subscription"),
+        )
+    elif data == "client_ask":
+        await _show_client_section(update, ask_localos_intro_text(), _build_ask_localos_menu())
+    elif data == "client_more":
+        await _show_client_section(update, "Дополнительные действия и системные разделы.", _build_client_more_menu())
+    elif data.startswith("tariff_info_"):
+        tier_key = data.replace("tariff_info_", "", 1)
+        await query.edit_message_text(
+            tariff_detail_text(tier_key),
+            reply_markup=_build_tariff_detail_menu(tier_key),
+        )
+    elif data == "menu_transaction":
         await show_business_selection(update, context, user_id, db_user_id, "transaction")
     elif data == "menu_optimize":
         await show_optimize_business_selection(update, context, user_id, db_user_id)
@@ -2288,6 +2792,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "menu_openclaw":
         text, reply_markup = build_openclaw_menu(user_id)
         await query.edit_message_text(text, reply_markup=reply_markup)
+    elif data == "menu_diagnostics":
+        await query.edit_message_text(
+            "🛠 Сервис и диагностика\n\n"
+            "Здесь собраны служебные статусы и технические действия. "
+            "Если вам не нужно разбираться с внутренней работой системы, этот раздел можно не открывать.",
+            reply_markup=_build_diagnostics_menu(),
+        )
     elif data == "menu_stats":
         business_ctx = resolve_business_context(user_id)
         if not business_ctx or not business_ctx.get("business_id"):
@@ -2513,7 +3024,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             keyboard.append(
                 [InlineKeyboardButton(f"{marker}{item['name']}", callback_data=f"openclaw_use_{item['id']}")]
             )
-        keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="menu_openclaw")])
+        keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="client_more")])
         reply_markup = InlineKeyboardMarkup(keyboard)
         lines = ["🏢 Выберите активный бизнес"]
         for item in items[:10]:
@@ -2958,18 +3469,107 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_states[user_id] = {'state': 'idle'}
         await update.message.reply_text("❌ Операция отменена. Используйте /start для возврата в меню.")
         return
-    
+
     if user_id not in user_states:
+        user_states[user_id] = {'state': 'idle'}
+
+    state = user_states[user_id].get('state', '')
+
+    if state in {'', 'idle'}:
         if not _is_bound_user(user_id):
             ok, response_text = _request_public_report_from_telegram(user_id, text)
             if ok:
-                await update.message.reply_text(response_text, reply_markup=_build_guest_menu())
+                await update.message.reply_text(
+                    response_text
+                )
+                user_states[user_id] = {'state': 'idle'}
                 return
-        await update.message.reply_text("Используйте /start для начала работы")
-        return
-    
-    state = user_states[user_id].get('state', '')
-    
+            guest_intent = classify_guest_intent(text)
+            if guest_intent == "about":
+                await update.message.reply_text(guest_about_text(), reply_markup=_build_guest_menu())
+                return
+            if guest_intent == "tariffs":
+                await update.message.reply_text(guest_tariffs_text(), reply_markup=_build_tariffs_menu())
+                return
+            if guest_intent == "connect":
+                await update.message.reply_text(guest_connect_account_text(), reply_markup=_build_guest_menu())
+                return
+            if guest_intent == "compare":
+                user_states[user_id] = {'state': 'waiting_guest_compare_own_link'}
+                await update.message.reply_text(
+                    f"{guest_compare_text()}\n\nСначала пришлите ссылку на вашу карточку.",
+                    reply_markup=_build_guest_menu(),
+                )
+                return
+            if guest_intent == "audit":
+                user_states[user_id] = {'state': 'waiting_guest_audit_link'}
+                await update.message.reply_text(
+                    "Пришлите ссылку на карточку бизнеса.\n\n"
+                    "Поддерживаются Яндекс Карты, 2ГИС и Google Maps.\n"
+                    "Я покажу, где карточка может терять клиентов.",
+                    reply_markup=_build_guest_menu(),
+                )
+                return
+            await update.message.reply_text(guest_fallback_text(), reply_markup=_build_guest_menu())
+            return
+
+        business_ctx = resolve_business_context(user_id)
+        if business_ctx and business_ctx.get("business_id"):
+            business_ctx = {**business_ctx, "telegram_id": user_id, "telegram_name": update.effective_user.full_name}
+        else:
+            await update.message.reply_text(
+                "Для аккаунта пока не найден активный бизнес. Добавьте бизнес в кабинете LocalOS.",
+                reply_markup=_build_client_more_menu(),
+            )
+            return
+        client_intent = classify_client_intent(text)
+        if client_intent == "today":
+            await update.message.reply_text(build_today_text(business_ctx), reply_markup=_build_client_main_menu())
+            return
+        if client_intent == "card":
+            await update.message.reply_text(build_card_text(business_ctx), reply_markup=_build_card_menu())
+            return
+        if client_intent == "reviews":
+            await update.message.reply_text(build_reviews_text(business_ctx), reply_markup=_build_reviews_menu())
+            return
+        if client_intent == "growth":
+            await update.message.reply_text(build_growth_text(business_ctx), reply_markup=_build_growth_menu())
+            return
+        if client_intent == "automation":
+            await update.message.reply_text(
+                "\n\n".join([automation_intro_text(), build_automation_text(business_ctx)]),
+                reply_markup=_build_automation_menu(),
+            )
+            return
+        if client_intent == "subscription":
+            await update.message.reply_text(build_subscription_text(business_ctx), reply_markup=_build_subscription_menu(business_ctx))
+            return
+        if client_intent == "help":
+            await update.message.reply_text(ask_localos_intro_text(), reply_markup=_build_ask_localos_menu())
+            return
+        if client_intent == "approvals":
+            business_ctx_with_actor = {
+                **business_ctx,
+                "telegram_id": user_id,
+                "telegram_name": update.effective_user.full_name,
+            }
+            _ok, approvals_text, approvals_markup = _build_pending_approvals_view(business_ctx_with_actor)
+            await update.message.reply_text(approvals_text, reply_markup=approvals_markup)
+            return
+        if client_intent == "businesses":
+            await businesses_command(update, context)
+            return
+        if client_intent == "cabin":
+            urls = get_web_urls()
+            await update.message.reply_text(
+                f"Изменять данные бизнеса лучше в личном кабинете.\n\nОткрыть: {urls['profile']}",
+                reply_markup=_build_client_more_menu(),
+            )
+            return
+        if client_intent == "":
+            await update.message.reply_text(client_fallback_text(), reply_markup=_build_ask_localos_menu())
+            return
+
     if state == 'waiting_transaction':
         await handle_transaction_text(update, context, user_id, text)
     elif state == 'waiting_optimize':
@@ -2978,9 +3578,85 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ok, response_text = _request_public_report_from_telegram(user_id, text)
         if ok:
             user_states[user_id] = {'state': 'idle'}
-            await update.message.reply_text(response_text, reply_markup=_build_guest_menu())
+            await update.message.reply_text(
+                response_text
+            )
         else:
             await update.message.reply_text(f"❌ {response_text}")
+    elif state == 'waiting_guest_compare_own_link':
+        parsed = parse_map_links_from_text(text)
+        if not parsed.get("ok"):
+            await update.message.reply_text(f"❌ {parsed.get('message') or 'Не удалось распознать ссылку.'}")
+            return
+        valid_items = list(parsed.get("valid_items") or [])
+        if len(valid_items) != 1:
+            await update.message.reply_text("❌ Для первого шага пришлите одну ссылку на вашу карточку.")
+            return
+        own_item = valid_items[0] or {}
+        own_url = str(own_item.get("normalized_url") or "").strip()
+        if not own_url:
+            await update.message.reply_text("❌ Не удалось распознать ссылку на вашу карточку.")
+            return
+        user_states[user_id] = {
+            'state': 'waiting_guest_compare_competitor_link',
+            'guest_compare_own_url': own_url,
+            'guest_compare_own_source': str(own_item.get("source") or "").strip(),
+        }
+        await update.message.reply_text(
+            "Отлично. Теперь пришлите ссылку на карточку конкурента.\n\n"
+            "Я сравню карточки и, если данных уже достаточно, сразу покажу короткий разбор.",
+            reply_markup=_build_guest_menu(),
+        )
+    elif state == 'waiting_guest_compare_competitor_link':
+        parsed = parse_map_links_from_text(text)
+        if not parsed.get("ok"):
+            await update.message.reply_text(f"❌ {parsed.get('message') or 'Не удалось распознать ссылку.'}")
+            return
+        valid_items = list(parsed.get("valid_items") or [])
+        if len(valid_items) != 1:
+            await update.message.reply_text("❌ Для второго шага пришлите одну ссылку на карточку конкурента.")
+            return
+        competitor_item = valid_items[0] or {}
+        competitor_url = str(competitor_item.get("normalized_url") or "").strip()
+        own_url = str(user_states.get(user_id, {}).get("guest_compare_own_url") or "").strip()
+        own_source = str(user_states.get(user_id, {}).get("guest_compare_own_source") or "").strip()
+        competitor_source = str(competitor_item.get("source") or "").strip()
+        if not competitor_url:
+            await update.message.reply_text("❌ Не удалось распознать ссылку на карточку конкурента.")
+            return
+        if competitor_url == own_url:
+            await update.message.reply_text("❌ Похоже, вы прислали одну и ту же карточку. Нужна отдельная ссылка на конкурента.")
+            return
+        own_ok, own_payload = _start_public_report_request(user_id, own_url, own_source)
+        if not own_ok:
+            await update.message.reply_text(f"❌ {own_payload.get('error') or 'Не удалось запустить аудит по вашей карточке.'}")
+            return
+        competitor_ok, competitor_payload = _start_public_report_request(user_id, competitor_url, competitor_source)
+        if not competitor_ok:
+            await update.message.reply_text(f"❌ {competitor_payload.get('error') or 'Не удалось запустить аудит по карточке конкурента.'}")
+            return
+        own_report_url = str(own_payload.get("public_url") or own_payload.get("slug") or "").strip()
+        competitor_report_url = str(competitor_payload.get("public_url") or competitor_payload.get("slug") or "").strip()
+        _store_guest_checkout_context(
+            user_id,
+            maps_url=own_url,
+            normalized_maps_url=own_url,
+            audit_slug=str(own_payload.get("slug") or "").strip(),
+            audit_public_url=own_report_url,
+            competitor_maps_url=competitor_url,
+            competitor_audit_url=competitor_report_url,
+        )
+        compare_text = build_guest_compare_result(
+            own_url=own_url,
+            competitor_url=competitor_url,
+            own_report_url=own_report_url,
+            competitor_report_url=competitor_report_url,
+        )
+        user_states[user_id] = {'state': 'idle'}
+        await update.message.reply_text(
+            compare_text,
+            reply_markup=_build_guest_compare_result_menu(own_report_url, competitor_report_url),
+        )
     elif state == 'waiting_feature_request_text':
         category = str(user_states.setdefault(user_id, {}).get("feature_request_category") or "other").strip().lower()
         payload = _save_feature_request_from_telegram(
@@ -3424,50 +4100,52 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = """
 🤖 *LocalOS Telegram-бот*
 
-Этот бот нужен для:
-- управления возможностями LocalOS из Telegram,
-- подтверждения спорных действий (approval loop),
-- получения уведомлений по бизнесу.
+Это не просто бот, а помощник для малого бизнеса в кармане.
+
+Он умеет:
+- подсказывать, что важно сегодня,
+- помогать с карточкой, отзывами, новостями и ростом,
+- показывать статус подписки,
+- подтверждать подготовленные действия,
+- принимать быстрые запросы на автоматизацию.
 
 *Команды:*
 /start - Главное меню
-/control - Основная guided-панель OpenClaw
+/control - Панель быстрых действий
 /help - Справка
 /cancel - Отменить текущую операцию
 /businesses - Показать ваши бизнесы
 /use_business - Выбрать активный бизнес
-/status - Статус OpenClaw по вашему бизнесу
+/status - Статус автоматизации
 /reply_review - Сгенерировать ответ на отзыв
 /optimize_service - Оптимизировать одну услугу
 /generate_news - Сгенерировать новость
 /partnerships - Краткий статус партнёрского потока
 /feature_request - Запросить новую автоматизацию
-/actions - Показать последние actions
+/actions - Последние действия системы
 /action_status - Статус конкретного action
-/pending_approvals - Очередь действий на подтверждение
+/pending_approvals - Очередь на подтверждение
 /approve_action - Подтвердить action по ID
 /reject_action - Отклонить action по ID
-/support_export - Отправить support snapshot суперадмину
-/recovery_report - Выполнить recovery callback-очереди
+/support_export - Отправить отчёт для поддержки суперадмину
+/recovery_report - Выполнить восстановление callback-очереди
 
-*Подключение:*
-1. В LocalOS откройте *Настройки → Интеграции*.
+*Для новых пользователей:*
+- можно просто прислать ссылку на карточку и получить быстрый аудит,
+- можно спросить про возможности LocalOS и тарифы.
+
+*Для клиентов:*
+- используйте разделы `Сегодня`, `Карточка`, `Отзывы`, `Рост`, `Автоматизация`,
+- или просто напишите вопрос: `что делать сегодня?`, `где аудит?`, `как оплатить подписку?`
+
+*Подключение аккаунта:*
+1. В LocalOS откройте *Профиль / Интеграции*.
 2. Сгенерируйте код привязки владельца.
 3. Отправьте `/start <код>`.
-4. Для общения с клиентами подключите *токен Telegram-бота бизнеса* в том же разделе.
+4. Данные бизнеса лучше редактировать в личном кабинете, а не в боте.
 
-*Функции:*
-🔍 Guest mode: аудит карточки по ссылке прямо в чате
-💰 Добавление транзакций (фото/текст)
-📊 Оптимизация услуг (guided + legacy режим для файлов)
-⚙️ Настройки компании
-📈 Статус бизнеса через OpenClaw
-🤖 Guided OpenClaw control panel
-🤝 Быстрый вход в партнёрский поток
-✨ Сбор запросов на новые фичи и автоматизации
-
-*Рекомендуемый сценарий:*
-Используйте /control — это основной вход для ИИ-функций и управления бизнесом.
+*Оплата:*
+Сейчас подписка оплачивается через кабинет LocalOS. Бот подскажет текущий статус и даст переход в оплату.
 
 *Поддержка:*
 Если возникли проблемы, обратитесь в поддержку через личный кабинет на сайте.
@@ -3488,13 +4166,29 @@ def main():
         return
     
     try:
-        builder = Application.builder().token(TELEGRAM_BOT_TOKEN)
         proxy_url = resolve_telegram_http_proxy()
+        builder = Application.builder().token(TELEGRAM_BOT_TOKEN)
         if proxy_url:
-            try:
-                builder = builder.proxy(proxy_url).get_updates_proxy(proxy_url)
-            except AttributeError:
-                builder = builder.proxy_url(proxy_url).get_updates_proxy_url(proxy_url)
+            # PTB/httpx can hang on long polling through the HTTP proxy when
+            # getUpdates shares the same request transport. Separate request
+            # objects keep regular bot calls and long polling stable.
+            request = HTTPXRequest(
+                proxy=proxy_url,
+                connection_pool_size=20,
+                connect_timeout=20.0,
+                read_timeout=30.0,
+                write_timeout=30.0,
+                pool_timeout=60.0,
+            )
+            get_updates_request = HTTPXRequest(
+                proxy=proxy_url,
+                connection_pool_size=4,
+                connect_timeout=20.0,
+                read_timeout=45.0,
+                write_timeout=30.0,
+                pool_timeout=60.0,
+            )
+            builder = builder.request(request).get_updates_request(get_updates_request)
         application = builder.build()
         
         # Регистрируем обработчики
@@ -3520,6 +4214,7 @@ def main():
         application.add_handler(CallbackQueryHandler(button_callback))
         application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+        application.add_error_handler(_telegram_error_handler)
         
         print("🤖 Telegram-бот запущен...")
         print(f"📡 API Base URL: {API_BASE_URL}")

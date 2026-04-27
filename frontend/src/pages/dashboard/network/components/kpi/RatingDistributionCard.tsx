@@ -10,6 +10,7 @@ interface RatingDistributionCardProps {
 
 export const RatingDistributionCard: React.FC<RatingDistributionCardProps> = ({ stats }) => {
     const { ratingDistribution } = stats;
+    const formatRating = (value: number) => Number.isFinite(value) ? Number(value.toFixed(2)).toString() : '0';
 
     const getBarColor = (val: number) => {
         if (val >= 4.5) return "bg-emerald-500";
@@ -19,20 +20,20 @@ export const RatingDistributionCard: React.FC<RatingDistributionCardProps> = ({ 
     };
 
     const items = [
-        { label: 'P50 (Median)', value: ratingDistribution.p50, desc: "50% of feedback is above this score" },
-        { label: 'P90', value: ratingDistribution.p90, desc: "90% of feedback is above this score (excludes bottom 10%)" },
-        { label: 'P99 (Risk)', value: ratingDistribution.p99, desc: "Only bottom 1% is worse than this. WATCH THIS." },
+        { label: 'P50 (медиана)', value: ratingDistribution.p50, desc: "У половины точек рейтинг выше этого уровня." },
+        { label: 'P90', value: ratingDistribution.p90, desc: "Почти вся сеть держится выше этого уровня." },
+        { label: 'P99 (риск)', value: ratingDistribution.p99, desc: "Крайний риск-сегмент: самые слабые точки сети." },
     ];
 
     return (
         <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <div className="flex items-center gap-2">
-                    <CardTitle className="text-sm font-medium">Rating Distribution</CardTitle>
+                    <CardTitle className="text-sm font-medium">Распределение рейтинга</CardTitle>
                     <TooltipProvider>
                         <Tooltip>
                             <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
-                            <TooltipContent><p className="max-w-[200px] text-xs">Statistical spread of reviews. P99 shows the worst 1% of experiences.</p></TooltipContent>
+                            <TooltipContent><p className="max-w-[200px] text-xs">Показывает разброс рейтингов по сети. P99 помогает быстро увидеть самые рискованные точки.</p></TooltipContent>
                         </Tooltip>
                     </TooltipProvider>
                 </div>
@@ -42,7 +43,7 @@ export const RatingDistributionCard: React.FC<RatingDistributionCardProps> = ({ 
                     <div key={idx} className="space-y-1">
                         <div className="flex justify-between text-xs">
                             <span className="text-muted-foreground">{item.label}</span>
-                            <span className="font-semibold">{item.value} ⭐</span>
+                            <span className="font-semibold">{formatRating(item.value)} ⭐</span>
                         </div>
                         <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
                             <div

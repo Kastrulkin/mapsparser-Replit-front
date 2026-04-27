@@ -160,7 +160,7 @@ export const el = {
     support: "Προσωπική υποστήριξη",
     supportDesc1: "Βοηθάμε σε κάθε στάδιο — οδηγούμε προς αποτελέσματα",
     supportDesc2: "Διαθέσιμο σε chat, email, τηλέφωνο",
-    finalText: "Πλήρης ανάπτυξη σαλονιού — πληρωμή μόνο από νέα έσοδα!",
+    finalText: "Πλήρης ανάπτυξη σαλονιού - Θα τα κάνουμε όλα για εσάς!",
     contactExpert: "Επικοινώνησε με ειδικό"
   },
 
@@ -601,6 +601,8 @@ export const el = {
         brows_lashes: "Brows & Lashes",
         makeup: "Makeup",
         tanning: "Tanning",
+        hotel: "Ξενοδοχείο",
+        guest_house: "Ξενώνας",
         other: "Other"
       },
       workSchedule: {

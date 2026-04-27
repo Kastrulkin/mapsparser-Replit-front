@@ -17,6 +17,7 @@ const languages: { code: Language; name: string; flag: string }[] = [
   { code: 'fr', name: 'Français', flag: '🇫🇷' },
   { code: 'el', name: 'Ελληνικά', flag: '🇬🇷' },
   { code: 'th', name: 'ไทย', flag: '🇹🇭' },
+  { code: 'tr', name: 'Türkçe', flag: '🇹🇷' },
   { code: 'ar', name: 'العربية', flag: '🇸🇦' },
   { code: 'ha', name: 'Hausa', flag: '🇳🇬' },
 ];
@@ -52,4 +53,3 @@ export const LanguageSwitcher = () => {
     </DropdownMenu>
   );
 };
-

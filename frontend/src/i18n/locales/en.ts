@@ -39,6 +39,7 @@ export const en = {
     company: "Company",
     whoWeAre: "Who We Are?",
     contacts: "Contacts",
+    requisites: "Requisites",
     copyright: "© 2026 LocalOS.pro. All rights reserved."
   },
 
@@ -173,7 +174,7 @@ export const en = {
     support: "Personal support",
     supportDesc1: "We help at every stage — we guide to results",
     supportDesc2: "Available in chat, email, phone",
-    finalText: "Full salon development — payment only from new revenue!",
+    finalText: "Full salon development - We will do everything for you!",
     contactExpert: "Contact an expert"
   },
 
@@ -280,6 +281,7 @@ export const en = {
       progress: "Progress",
       bookings: "Bookings",
       chats: "Chats",
+      partnerships: "Partner Search",
       finance: "Finance",
       aiChatPromotion: "AI Chat Promotion",
       settings: "Settings",
@@ -557,6 +559,9 @@ export const en = {
         brows_lashes: "Brows & Lashes",
         makeup: "Makeup",
         tanning: "Tanning",
+        hotel: "Hotel",
+        guest_house: "Guest House",
+        transport: "Transport",
         other: "Other"
       },
       workSchedule: {

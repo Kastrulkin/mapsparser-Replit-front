@@ -27,7 +27,7 @@ export const NetworkRatingCard: React.FC<NetworkRatingCardProps> = ({ stats }) =
     return (
         <Card className="overflow-hidden">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Network Rating</CardTitle>
+                <CardTitle className="text-sm font-medium">Средний рейтинг</CardTitle>
             </CardHeader>
             <CardContent>
                 <div className="flex items-baseline space-x-2">
@@ -39,7 +39,7 @@ export const NetworkRatingCard: React.FC<NetworkRatingCardProps> = ({ stats }) =
                         <span className={ratingTrend > 0 ? "text-green-500" : ratingTrend < 0 ? "text-red-500" : ""}>
                             {Math.abs(ratingTrend)}%
                         </span>
-                        <span className="ml-1">vs last period</span>
+                        <span className="ml-1">к прошлому периоду</span>
                     </div>
                 </div>
                 <div className="h-[40px] mt-2">

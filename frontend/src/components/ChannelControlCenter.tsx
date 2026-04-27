@@ -177,7 +177,7 @@ export const ChannelControlCenter = ({ businessId }: ChannelControlCenterProps) 
   };
 
   return (
-    <Card className="border-slate-200 shadow-sm">
+    <Card className="overflow-hidden rounded-3xl border-slate-200/80 bg-white shadow-sm">
       <CardHeader className="pb-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
@@ -197,7 +197,7 @@ export const ChannelControlCenter = ({ businessId }: ChannelControlCenterProps) 
         </div>
       </CardHeader>
       <CardContent className="space-y-5">
-        <div className="rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-orange-50 p-4">
+        <div className="rounded-3xl border border-amber-200 bg-amber-50/70 p-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <div className="text-sm font-medium text-slate-700">
@@ -210,7 +210,7 @@ export const ChannelControlCenter = ({ businessId }: ChannelControlCenterProps) 
             <div className="flex flex-wrap items-center gap-2">
               <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-medium text-slate-700">
                 <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                Multi-channel readiness
+                Готовность каналов
               </div>
               <Button size="sm" onClick={handleAutoRouteTest} disabled={!businessId || sendingChannelId === "auto"}>
                 {sendingChannelId === "auto" ? (
@@ -255,18 +255,18 @@ export const ChannelControlCenter = ({ businessId }: ChannelControlCenterProps) 
             Каналы ещё не настроены.
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid min-w-0 gap-4 xl:grid-cols-2">
             {channels.map((channel) => (
               <div
                 key={channel.channel_id}
-                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+                className="flex min-w-0 flex-col rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-semibold text-slate-900">{channel.label}</div>
+                <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="break-words text-sm font-semibold leading-6 text-slate-900">{channel.label}</div>
                     <div className="mt-1 text-xs uppercase tracking-wide text-slate-400">{channel.provider}</div>
                   </div>
-                  <div className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getBadgeClass(channel.status)}`}>
+                  <div className={`w-fit shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getBadgeClass(channel.status)}`}>
                     {channel.status === "ready"
                       ? "Готов"
                       : channel.configured
@@ -279,13 +279,13 @@ export const ChannelControlCenter = ({ businessId }: ChannelControlCenterProps) 
                   </div>
                 </div>
 
-                <div className="mt-4 text-sm text-slate-600">{channel.detail}</div>
+                <div className="mt-4 min-h-[72px] break-words text-sm leading-6 text-slate-600">{channel.detail}</div>
                 {channel.target ? (
-                  <div className="mt-3 text-xs text-slate-500">Цель теста: {channel.target}</div>
+                  <div className="mt-3 break-words text-xs leading-5 text-slate-500">Цель теста: {channel.target}</div>
                 ) : null}
 
-                <div className="mt-5 flex items-center justify-between gap-3">
-                  <div className="text-xs text-slate-400">
+                <div className="mt-auto flex flex-col gap-3 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="text-xs leading-5 text-slate-400">
                     {channel.configured ? "Конфигурация найдена" : "Конфигурации пока нет"}
                   </div>
                   <Button
@@ -293,6 +293,7 @@ export const ChannelControlCenter = ({ businessId }: ChannelControlCenterProps) 
                     variant={channel.testable ? "default" : "outline"}
                     disabled={!channel.testable || sendingChannelId === channel.channel_id}
                     onClick={() => handleTestSend(channel.channel_id)}
+                    className="w-full justify-center sm:w-auto sm:min-w-[132px]"
                   >
                     {sendingChannelId === channel.channel_id ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />

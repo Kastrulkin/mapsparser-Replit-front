@@ -21,7 +21,21 @@ _DROP_QUERY_KEYS = {
     "si",
 }
 
-_KEEP_GOOGLE_KEYS = {"cid", "q", "query", "place_id"}
+_KEEP_GOOGLE_KEYS = {"cid", "kgmid", "ludocid", "q", "query", "place_id", "stick"}
+
+_DROP_TRAILING_MAP_SECTIONS = {
+    "reviews",
+    "photos",
+    "photo",
+    "gallery",
+    "menu",
+    "prices",
+    "price",
+    "services",
+    "features",
+    "inside",
+    "panorama",
+}
 
 
 def _normalize_google_path(path: str) -> str:
@@ -39,6 +53,34 @@ def _normalize_google_path(path: str) -> str:
     return "/maps/place/" + "/".join(kept)
 
 
+def is_google_map_url(raw_url: Any) -> bool:
+    value = str(raw_url or "").strip().lower()
+    if not value:
+        return False
+    if "maps.app.goo.gl" in value or "share.google" in value:
+        return True
+    parsed = urlparse(value)
+    host = parsed.netloc.lower()
+    path = parsed.path.lower()
+    query_keys = {key.lower() for key, _ in parse_qsl(parsed.query, keep_blank_values=False)}
+    if "google." not in host:
+        return False
+    if "/maps" in path:
+        return True
+    if path == "/search" and query_keys.intersection({"cid", "kgmid", "ludocid", "stick"}):
+        return True
+    return False
+
+
+def _drop_trailing_map_section(path: str) -> str:
+    parts = [part for part in str(path or "").split("/") if part]
+    if not parts:
+        return "/"
+    while parts and parts[-1].lower() in _DROP_TRAILING_MAP_SECTIONS:
+        parts.pop()
+    return "/" + "/".join(parts) if parts else "/"
+
+
 def normalize_map_url(raw_url: Any) -> str:
     value = str(raw_url or "").strip()
     if not value:
@@ -53,8 +95,9 @@ def normalize_map_url(raw_url: Any) -> str:
     query_pairs = parse_qsl(parsed.query, keep_blank_values=False)
 
     # Normalize Google Maps URLs to a stable place format.
-    if "google." in netloc and "/maps" in path:
-        path = _normalize_google_path(path)
+    if is_google_map_url(value):
+        if "google." in netloc and "/maps" in path:
+            path = _normalize_google_path(path)
         filtered_pairs = []
         for key, val in query_pairs:
             lowered_key = str(key or "").lower()
@@ -62,6 +105,8 @@ def normalize_map_url(raw_url: Any) -> str:
                 filtered_pairs.append((key, val))
         query_pairs = filtered_pairs
     else:
+        if "yandex." in netloc or "2gis." in netloc or "maps.apple." in netloc or "maps.apple.com" in netloc:
+            path = _drop_trailing_map_section(path)
         filtered_pairs = []
         for key, val in query_pairs:
             lowered_key = str(key or "").lower()

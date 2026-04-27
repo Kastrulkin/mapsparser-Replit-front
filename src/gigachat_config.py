@@ -4,6 +4,26 @@
 """
 import os
 
+
+def _env_float(name: str, default: float) -> float:
+    raw = str(os.getenv(name, "") or "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = str(os.getenv(name, "") or "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
 class GigaChatConfig:
     """Конфигурация для GigaChat API"""
     
@@ -77,12 +97,12 @@ class GigaChatConfig:
         self.model = model_mapping.get(default_model, default_model)
         
         # Параметры генерации
-        self.temperature = float(os.getenv('GIGACHAT_TEMPERATURE', '0.1'))
-        self.max_tokens = int(os.getenv('GIGACHAT_MAX_TOKENS', '4000'))
+        self.temperature = _env_float('GIGACHAT_TEMPERATURE', 0.1)
+        self.max_tokens = _env_int('GIGACHAT_MAX_TOKENS', 4000)
         
         # Таймауты
-        self.request_timeout = int(os.getenv('GIGACHAT_TIMEOUT', '60'))
-        self.retry_attempts = int(os.getenv('GIGACHAT_RETRY_ATTEMPTS', '3'))
+        self.request_timeout = _env_int('GIGACHAT_TIMEOUT', 60)
+        self.retry_attempts = _env_int('GIGACHAT_RETRY_ATTEMPTS', 3)
         
         # Валидация модели
         if self.model not in self.AVAILABLE_MODELS:

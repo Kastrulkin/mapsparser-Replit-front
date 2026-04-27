@@ -48,6 +48,20 @@ def require_auth():
     user_data = verify_session(token)
     return user_data
 
+def _looks_like_url(value: str) -> bool:
+    text = str(value or '').strip().lower()
+    if not text:
+        return False
+    return (
+        '://' in text
+        or text.startswith('www.')
+        or 'maps.app.goo.gl' in text
+        or 'yandex.' in text
+        or '2gis.' in text
+        or 'google.com/maps' in text
+        or 'maps.apple.com' in text
+    )
+
 @messengers_bp.route('/api/auth/register-with-business', methods=['POST'])
 def register_with_business():
     """Регистрация пользователя с автоматическим созданием бизнеса"""
@@ -69,6 +83,12 @@ def register_with_business():
         
         if not business_name or not business_address or not business_city:
             return jsonify({"error": "Название бизнеса, адрес и город обязательны"}), 400
+
+        if _looks_like_url(business_address):
+            return jsonify({"error": "Поле «Адрес» не должно содержать ссылку на карту"}), 400
+
+        if _looks_like_url(business_city):
+            return jsonify({"error": "Поле «Город» не должно содержать ссылку на карту"}), 400
         
         # Создаём пользователя
         from auth_system import create_user

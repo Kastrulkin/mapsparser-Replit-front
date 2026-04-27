@@ -5,8 +5,45 @@ from flask import Blueprint, request, jsonify
 from database_manager import DatabaseManager
 from auth_system import verify_session
 from core.helpers import get_business_owner_id
+import json
 
 services_bp = Blueprint('services', __name__)
+
+
+def _cell(row, key_or_index, default=None):
+    if row is None:
+        return default
+    if isinstance(row, dict):
+        return row.get(key_or_index, default)
+    try:
+        return row[key_or_index]
+    except Exception:
+        return default
+
+
+def _resolve_network_scope(cursor, business_id, requested_scope):
+    cursor.execute(
+        """
+        SELECT network_id
+        FROM businesses
+        WHERE id = %s
+        LIMIT 1
+        """,
+        (business_id,),
+    )
+    business_row = cursor.fetchone()
+    network_id = _cell(business_row, 'network_id', _cell(business_row, 0))
+    network_id_value = str(network_id or '').strip()
+    if not network_id_value:
+        cursor.execute("SELECT id FROM networks WHERE id = %s LIMIT 1", (business_id,))
+        network_row = cursor.fetchone()
+        network_id_value = str(_cell(network_row, 'id', _cell(network_row, 0, '')) or '').strip()
+    aggregate_network = bool(network_id_value) and requested_scope == 'network'
+    return aggregate_network, network_id_value or None
+
+
+def _network_business_where(column_name):
+    return f"({column_name} IN (SELECT id FROM businesses WHERE network_id = %s) OR {column_name} = %s)"
 
 @services_bp.route('/api/services/add', methods=['POST', 'OPTIONS'])
 def add_service():
@@ -49,8 +86,8 @@ def add_service():
         import uuid
         service_id = str(uuid.uuid4())
         cursor.execute("""
-            INSERT INTO UserServices (id, user_id, business_id, category, name, description, keywords, price, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            INSERT INTO userservices (id, user_id, business_id, category, name, description, keywords, price, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
         """, (
             service_id,
             user_data["user_id"],
@@ -96,6 +133,7 @@ def get_services():
 
         # Получаем business_id из query параметров
         business_id = request.args.get('business_id')
+        requested_scope = str(request.args.get('scope') or '').strip().lower()
         source_filter_raw = str(request.args.get('source') or '').strip().lower()
 
         # PostgreSQL: список колонок таблицы userservices
@@ -123,14 +161,17 @@ def get_services():
         def _service_source_condition(alias: str = ''):
             prefix = f"{alias}." if alias else ""
             if source_filter_raw in ('2gis', 'two_gis'):
-                return f"LOWER(COALESCE({prefix}source, '')) = '2gis'", []
+                return f"LOWER(COALESCE({prefix}source, '')) IN ('2gis', 'apify_2gis', 'two_gis')", []
             if source_filter_raw in ('yandex', 'yandex_maps', 'yandex_business'):
-                return f"LOWER(COALESCE({prefix}source, '')) IN ('yandex_maps', 'yandex_business')", []
+                return f"LOWER(COALESCE({prefix}source, '')) IN ('yandex_maps', 'yandex_business', 'apify_yandex')", []
             if source_filter_raw in ('google', 'google_maps', 'google_business'):
-                return f"LOWER(COALESCE({prefix}source, '')) IN ('google_maps', 'google_business')", []
+                return f"LOWER(COALESCE({prefix}source, '')) IN ('google_maps', 'google_business', 'apify_google')", []
             if source_filter_raw in ('apple', 'apple_maps', 'apple_business'):
-                return f"LOWER(COALESCE({prefix}source, '')) IN ('apple_maps', 'apple_business')", []
+                return f"LOWER(COALESCE({prefix}source, '')) IN ('apple_maps', 'apple_business', 'apify_apple')", []
             return None, []
+
+        aggregate_network = False
+        network_id = None
 
         # Если передан business_id — фильтруем по нему и is_active, иначе по user_id
         if business_id:
@@ -142,16 +183,25 @@ def get_services():
                 db.close()
                 return jsonify({"error": "Нет доступа к этому бизнесу"}), 403
 
+            aggregate_network, network_id = _resolve_network_scope(cursor, business_id, requested_scope)
+
             order_by = "ORDER BY category NULLS LAST, name NULLS LAST"
             if has_price_from:
                 order_by += ", price_from NULLS LAST"
             order_by += ", updated_at DESC NULLS LAST"
 
-            where_parts = [
-                "business_id = %s",
-                "(is_active IS TRUE OR is_active IS NULL)",
-            ]
-            params = [business_id]
+            if aggregate_network:
+                where_parts = [
+                    _network_business_where("business_id"),
+                    "(is_active IS TRUE OR is_active IS NULL)",
+                ]
+                params = [network_id, network_id]
+            else:
+                where_parts = [
+                    "business_id = %s",
+                    "(is_active IS TRUE OR is_active IS NULL)",
+                ]
+                params = [business_id]
             source_condition, source_params = _service_source_condition()
             if source_condition:
                 where_parts.append(source_condition)
@@ -179,24 +229,120 @@ def get_services():
 
         services_rows = cursor.fetchall()
         col_names = [d[0] for d in cursor.description] if cursor.description else select_fields
+        external_services = []
+
+        if business_id:
+            try:
+                cursor.execute("SELECT to_regclass('public.externalbusinessservices') AS table_ref")
+                table_ref_row = cursor.fetchone()
+                table_ref = _cell(table_ref_row, 'table_ref', _cell(table_ref_row, 0))
+                if table_ref:
+                    cursor.execute(
+                        """
+                        SELECT column_name
+                        FROM information_schema.columns
+                        WHERE table_schema = 'public' AND table_name = 'externalbusinessservices'
+                        ORDER BY ordinal_position
+                        """
+                    )
+                    external_columns = [
+                        _cell(column_row, 'column_name', _cell(column_row, 0))
+                        for column_row in cursor.fetchall()
+                    ]
+                    external_has_updated_at = 'updated_at' in external_columns
+                    external_has_source = 'source' in external_columns
+                    external_has_keywords = 'keywords' in external_columns
+
+                    external_select_fields = ['id', 'business_id', 'category', 'name', 'description', 'price', 'created_at']
+                    if external_has_updated_at:
+                        external_select_fields.append('updated_at')
+                    if external_has_source:
+                        external_select_fields.append('source')
+                    if external_has_keywords:
+                        external_select_fields.append('keywords')
+
+                    if aggregate_network:
+                        external_where_parts = [
+                            _network_business_where("business_id"),
+                        ]
+                        external_params = [network_id, network_id]
+                    else:
+                        external_where_parts = ["business_id = %s"]
+                        external_params = [business_id]
+
+                    source_condition, source_params = _service_source_condition()
+                    if source_condition:
+                        external_where_parts.append(source_condition)
+                        external_params.extend(source_params)
+
+                    external_query = (
+                        f"SELECT {', '.join(external_select_fields)} "
+                        f"FROM externalbusinessservices "
+                        f"WHERE {' AND '.join(external_where_parts)} "
+                        f"ORDER BY category NULLS LAST, name NULLS LAST, created_at DESC NULLS LAST"
+                    )
+                    cursor.execute(external_query, tuple(external_params))
+                    external_rows = cursor.fetchall()
+                    external_col_names = [d[0] for d in cursor.description] if cursor.description else external_select_fields
+
+                    for service_row in external_rows:
+                        if hasattr(service_row, 'keys'):
+                            service_dict = dict(service_row)
+                        else:
+                            service_dict = dict(zip(external_col_names, service_row)) if external_col_names else {}
+
+                        if service_dict.get('description') is None:
+                            service_dict['description'] = ''
+                        if service_dict.get('category') is None:
+                            service_dict['category'] = ''
+                        if service_dict.get('name') is None:
+                            service_dict['name'] = ''
+                        if service_dict.get('price') is None:
+                            service_dict['price'] = ''
+
+                        raw_keywords = service_dict.get('keywords')
+                        parsed_keywords = []
+                        if raw_keywords:
+                            try:
+                                parsed_keywords = json.loads(raw_keywords) if isinstance(raw_keywords, str) else raw_keywords
+                                if not isinstance(parsed_keywords, list):
+                                    parsed_keywords = []
+                            except Exception:
+                                parsed_keywords = [item.strip() for item in str(raw_keywords).split(',') if item.strip()]
+
+                        service_dict['keywords'] = parsed_keywords
+                        service_dict['source'] = service_dict.get('source') or 'external'
+                        service_dict['is_external'] = True
+                        external_services.append(service_dict)
+            except Exception:
+                external_services = []
+
         last_parse_date = None
         no_new_services_found = False
         if business_id:
             try:
-                parse_where = [
-                    "business_id = %s",
-                    "status IN ('completed', 'done')",
-                    "task_type = 'parse_card'",
-                ]
-                parse_params = [business_id]
+                if aggregate_network:
+                    parse_where = [
+                        _network_business_where("business_id"),
+                        "status IN ('completed', 'done')",
+                        "task_type = 'parse_card'",
+                    ]
+                    parse_params = [network_id, network_id]
+                else:
+                    parse_where = [
+                        "business_id = %s",
+                        "status IN ('completed', 'done')",
+                        "task_type = 'parse_card'",
+                    ]
+                    parse_params = [business_id]
                 if source_filter_raw in ('2gis', 'two_gis'):
-                    parse_where.append("source = '2gis'")
+                    parse_where.append("source IN ('2gis', 'apify_2gis', 'two_gis')")
                 elif source_filter_raw in ('yandex', 'yandex_maps', 'yandex_business'):
-                    parse_where.append("source IN ('yandex_maps', 'yandex_business')")
+                    parse_where.append("source IN ('yandex_maps', 'yandex_business', 'apify_yandex')")
                 elif source_filter_raw in ('google', 'google_maps', 'google_business'):
-                    parse_where.append("source IN ('google_maps', 'google_business')")
+                    parse_where.append("source IN ('google_maps', 'google_business', 'apify_google')")
                 elif source_filter_raw in ('apple', 'apple_maps', 'apple_business'):
-                    parse_where.append("source IN ('apple_maps', 'apple_business')")
+                    parse_where.append("source IN ('apple_maps', 'apple_business', 'apify_apple')")
                 cursor.execute(
                     f"""
                     SELECT MAX(COALESCE(updated_at, created_at)) AS ts
@@ -216,6 +362,7 @@ def get_services():
         db.close()
 
         services = []
+        seen_network_services = set()
         for service in services_rows:
             if hasattr(service, 'keys'):
                 service_dict = dict(service)
@@ -236,13 +383,26 @@ def get_services():
                 except Exception:
                     parsed_kw = [k.strip() for k in str(raw_kw).split(',') if k.strip()]
             service_dict['keywords'] = parsed_kw
+            if aggregate_network:
+                service_key = (
+                    str(service_dict.get('category') or '').strip().lower(),
+                    str(service_dict.get('name') or '').strip().lower(),
+                    str(service_dict.get('description') or '').strip().lower(),
+                    str(service_dict.get('price') or '').strip().lower(),
+                )
+                if service_key in seen_network_services:
+                    continue
+                seen_network_services.add(service_key)
             services.append(service_dict)
 
         return jsonify({
             "success": True,
             "services": services,
+            "external_services": external_services,
             "last_parse_date": last_parse_date,
             "no_new_services_found": no_new_services_found,
+            "scope": "network" if aggregate_network else "business",
+            "network_id": network_id if aggregate_network else None,
         })
     
     except Exception as e:
@@ -275,21 +435,20 @@ def update_service(service_id):
         cursor = db.conn.cursor()
         
         # Проверяем, что услуга принадлежит пользователю
-        cursor.execute("SELECT user_id, business_id FROM UserServices WHERE id = ?", (service_id,))
+        cursor.execute("SELECT user_id, business_id FROM userservices WHERE id = %s", (service_id,))
         row = cursor.fetchone()
         if not row:
             db.close()
             return jsonify({"error": "Услуга не найдена"}), 404
         
-        service_user_id = row[0]
-        service_business_id = row[1]
+        service_user_id = _cell(row, 'user_id', _cell(row, 0))
+        service_business_id = _cell(row, 'business_id', _cell(row, 1))
         
         if service_user_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
             db.close()
             return jsonify({"error": "Нет доступа к этой услуге"}), 403
         
         # Преобразуем keywords в строку JSON, если это массив
-        import json
         keywords = data.get('keywords', [])
         if isinstance(keywords, list):
             keywords_str = json.dumps(keywords, ensure_ascii=False)
@@ -299,8 +458,13 @@ def update_service(service_id):
             keywords_str = json.dumps([])
         
         # Проверяем, есть ли поля optimized_description и optimized_name в таблице
-        cursor.execute("PRAGMA table_info(UserServices)")
-        columns = [col[1] for col in cursor.fetchall()]
+        cursor.execute("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'userservices'
+            ORDER BY ordinal_position
+        """)
+        columns = [_cell(column_row, 'column_name', _cell(column_row, 0)) for column_row in cursor.fetchall()]
         has_optimized_description = 'optimized_description' in columns
         has_optimized_name = 'optimized_name' in columns
         
@@ -315,9 +479,10 @@ def update_service(service_id):
         if has_optimized_description and has_optimized_name:
             print(f"🔍 DEBUG services_api.update_service: Обновление с optimized_description и optimized_name", flush=True)
             cursor.execute("""
-                UPDATE UserServices 
-                SET category = ?, name = ?, optimized_name = ?, description = ?, optimized_description = ?, keywords = ?, price = ?
-                WHERE id = ?
+                UPDATE userservices
+                SET category = %s, name = %s, optimized_name = %s, description = %s,
+                    optimized_description = %s, keywords = %s, price = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
             """, (
                 data.get('category', ''),
                 data.get('name', ''),
@@ -331,17 +496,20 @@ def update_service(service_id):
             print(f"✅ DEBUG services_api.update_service: UPDATE выполнен, rowcount = {cursor.rowcount}", flush=True)
             
             # Проверяем, что данные сохранились
-            cursor.execute("SELECT optimized_name, optimized_description FROM UserServices WHERE id = ?", (service_id,))
+            cursor.execute("SELECT optimized_name, optimized_description FROM userservices WHERE id = %s", (service_id,))
             check_row = cursor.fetchone()
             if check_row:
-                print(f"✅ DEBUG services_api.update_service: Проверка после UPDATE - optimized_name = '{check_row[0]}', optimized_description = '{check_row[1][:50] if check_row[1] else ''}...'", flush=True)
+                check_optimized_name = _cell(check_row, 'optimized_name', _cell(check_row, 0, ''))
+                check_optimized_description = _cell(check_row, 'optimized_description', _cell(check_row, 1, ''))
+                print(f"✅ DEBUG services_api.update_service: Проверка после UPDATE - optimized_name = '{check_optimized_name}', optimized_description = '{check_optimized_description[:50] if check_optimized_description else ''}...'", flush=True)
             else:
                 print(f"❌ DEBUG services_api.update_service: Услуга не найдена после UPDATE!", flush=True)
         elif has_optimized_description:
             cursor.execute("""
-                UPDATE UserServices 
-                SET category = ?, name = ?, description = ?, optimized_description = ?, keywords = ?, price = ?
-                WHERE id = ?
+                UPDATE userservices
+                SET category = %s, name = %s, description = %s, optimized_description = %s,
+                    keywords = %s, price = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
             """, (
                 data.get('category', ''),
                 data.get('name', ''),
@@ -353,9 +521,10 @@ def update_service(service_id):
             ))
         elif has_optimized_name:
             cursor.execute("""
-                UPDATE UserServices 
-                SET category = ?, name = ?, optimized_name = ?, description = ?, keywords = ?, price = ?
-                WHERE id = ?
+                UPDATE userservices
+                SET category = %s, name = %s, optimized_name = %s, description = %s,
+                    keywords = %s, price = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
             """, (
                 data.get('category', ''),
                 data.get('name', ''),
@@ -367,9 +536,10 @@ def update_service(service_id):
             ))
         else:
             cursor.execute("""
-                UPDATE UserServices 
-                SET category = ?, name = ?, description = ?, keywords = ?, price = ?
-                WHERE id = ?
+                UPDATE userservices
+                SET category = %s, name = %s, description = %s, keywords = %s,
+                    price = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
             """, (
                 data.get('category', ''),
                 data.get('name', ''),
@@ -381,6 +551,11 @@ def update_service(service_id):
         
         db.conn.commit()
         db.close()
+        return jsonify({
+            "success": True,
+            "service_id": service_id,
+            "business_id": service_business_id,
+        })
     except Exception as e:
         print(f"❌ Ошибка обновления услуги: {e}")
         import traceback
@@ -407,19 +582,19 @@ def delete_service(service_id):
         cursor = db.conn.cursor()
         
         # Проверяем, что услуга принадлежит пользователю
-        cursor.execute("SELECT user_id FROM UserServices WHERE id = ?", (service_id,))
+        cursor.execute("SELECT user_id FROM userservices WHERE id = %s", (service_id,))
         row = cursor.fetchone()
         if not row:
             db.close()
             return jsonify({"error": "Услуга не найдена"}), 404
         
-        service_user_id = row[0]
+        service_user_id = _cell(row, 'user_id', _cell(row, 0))
         if service_user_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
             db.close()
             return jsonify({"error": "Нет доступа к этой услуге"}), 403
         
         # Удаляем услугу
-        cursor.execute("DELETE FROM UserServices WHERE id = ?", (service_id,))
+        cursor.execute("DELETE FROM userservices WHERE id = %s", (service_id,))
         db.conn.commit()
         db.close()
         

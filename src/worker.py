@@ -40,6 +40,7 @@ from parsed_payload_validation import (
 from parsing_failure_taxonomy import with_reason_code_prefix
 from core.action_orchestrator import ActionOrchestrator
 from core.parsing_runtime_config import get_use_apify_map_parsing, resolve_map_source_for_queue
+from core.map_url_normalizer import is_google_map_url
 from core.review_response_utils import extract_review_response_text
 from yookassa_integration import run_due_renewals
 from api.admin_prospecting import dispatch_due_outreach_queue
@@ -872,7 +873,7 @@ def _detect_map_source(queue_dict: Dict[str, Any], url: str) -> str:
         return "2gis"
     if "maps.apple.com/" in url_lower:
         return "apple_maps"
-    if "google.com/maps/" in url_lower or "maps.app.goo.gl/" in url_lower:
+    if is_google_map_url(url_lower):
         return "google_maps"
     return "yandex_maps"
 
@@ -975,6 +976,10 @@ def _parse_card_via_apify(
     raw_payload = item.get("raw_payload_json") if isinstance(item, dict) else {}
     if not isinstance(raw_payload, dict):
         raw_payload = {}
+    raw_is_verified = raw_payload.get("isVerifiedOwner")
+    is_verified = raw_is_verified if isinstance(raw_is_verified, bool) else None
+    if is_verified is None and isinstance(item.get("is_verified"), bool):
+        is_verified = item.get("is_verified")
     services_preview = item.get("services_json") if isinstance(item, dict) else []
     reviews_preview = item.get("reviews_json") if isinstance(item, dict) else []
     photos = item.get("photos_json") if isinstance(item, dict) else []
@@ -1021,7 +1026,9 @@ def _parse_card_via_apify(
             "rating": item.get("rating"),
             "reviews_count": item.get("reviews_count") or 0,
             "description": str(item.get("description") or "").strip(),
+            "is_verified": is_verified,
         },
+        "is_verified": is_verified,
         "raw_payload_json": raw_payload,
         "business_status": str(raw_payload.get("status") or "").strip().lower(),
         "_apify_debug": {
@@ -4124,6 +4131,8 @@ def process_queue():
                         'news_count': len(news_list),
                         'snapshot_type': 'metrics_update' if sparse_apify_snapshot else 'full',
                     }
+                    if isinstance(card_data.get("is_verified"), bool):
+                        overview_payload["is_verified"] = card_data.get("is_verified")
                     if card_data.get("_meta"):
                         overview_payload["_meta"] = card_data["_meta"]
                     if sparse_apify_snapshot:

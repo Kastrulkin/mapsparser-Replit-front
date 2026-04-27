@@ -323,7 +323,7 @@ type TelegramReplySyncSummary = {
 };
 
 type LeadFilters = {
-    category: string;
+    pipelineStatus: string;
     city: string;
     source: string;
     minRating: string;
@@ -627,7 +627,7 @@ const buildLeadAuditLanguageLinks = (lead: Lead) => {
 };
 
 const emptyFilters: LeadFilters = {
-    category: '',
+    pipelineStatus: '',
     city: '',
     source: '',
     minRating: '',
@@ -642,6 +642,55 @@ const emptyFilters: LeadFilters = {
     hasWhatsApp: '',
     hasVk: '',
     hasMax: '',
+};
+
+const toggleYesFilterValue = (value: string) => (value === 'yes' ? '' : 'yes');
+
+const applyLeadFilterPreset = (
+    prev: LeadFilters,
+    preset: 'best' | 'messengers' | 'website' | 'no_contacts' | 'low_rating' | 'many_reviews'
+): LeadFilters => {
+    switch (preset) {
+        case 'best':
+            return {
+                ...prev,
+                minRating: '4.5',
+                minReviews: '50',
+            };
+        case 'messengers':
+            return {
+                ...prev,
+                hasMessengers: 'yes',
+            };
+        case 'website':
+            return {
+                ...prev,
+                hasWebsite: 'yes',
+            };
+        case 'no_contacts':
+            return {
+                ...prev,
+                hasWebsite: 'no',
+                hasPhone: 'no',
+                hasEmail: 'no',
+                hasTelegram: 'no',
+                hasWhatsApp: 'no',
+                hasVk: 'no',
+                hasMax: 'no',
+            };
+        case 'low_rating':
+            return {
+                ...prev,
+                maxRating: '3.5',
+            };
+        case 'many_reviews':
+            return {
+                ...prev,
+                minReviews: '100',
+            };
+        default:
+            return prev;
+    }
 };
 
 const shortlistApproved = 'shortlist_approved';
@@ -781,7 +830,7 @@ const nextKanbanColumn = (columnId: KanbanColumnId): KanbanColumnId | null => {
     return kanbanColumnOrder[idx + 1];
 };
 
-const pipelineBoardColumnOrder: PipelineBoardColumnId[] = ['in_progress', 'postponed', 'not_relevant', 'contacted', 'waiting_reply', 'replied', 'converted'];
+const pipelineBoardColumnOrder: PipelineBoardColumnId[] = ['in_progress', 'contacted', 'waiting_reply', 'replied', 'converted', 'postponed', 'not_relevant'];
 
 const pipelineBoardColumnMeta: Record<PipelineBoardColumnId, { label: string; description: string; statusToSet: string }> = {
     in_progress: {
@@ -1394,6 +1443,9 @@ const ContactStack: React.FC<{ lead: Lead }> = ({ lead }) => (
 
 const LeadMetaSummary: React.FC<{ lead: Lead; showChannel?: boolean }> = ({ lead, showChannel = false }) => (
     <div className="space-y-2">
+        <div className="text-lg font-semibold leading-tight text-slate-900">
+            {lead.name || 'Лид без названия'}
+        </div>
         <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline" className="text-[11px] font-normal">
                 {formatLeadSource(lead.source)}
@@ -1477,6 +1529,7 @@ export const ProspectingManagement: React.FC = () => {
     const [searchJobId, setSearchJobId] = useState<string | null>(null);
     const [searchJob, setSearchJob] = useState<SearchJob | null>(null);
     const [filters, setFilters] = useState<LeadFilters>(emptyFilters);
+    const [pendingFilters, setPendingFilters] = useState<LeadFilters>(emptyFilters);
     const [shortlistLoading, setShortlistLoading] = useState<Record<string, string>>({});
     const [languageLoading, setLanguageLoading] = useState<Record<string, boolean>>({});
     const [selectionLoading, setSelectionLoading] = useState<Record<string, string>>({});
@@ -1695,7 +1748,7 @@ export const ProspectingManagement: React.FC = () => {
 
     const activeFilters = useMemo(() => {
         const params: Record<string, string> = {};
-        if (filters.category.trim()) params.category = filters.category.trim();
+        if (filters.pipelineStatus.trim()) params.pipeline_status = filters.pipelineStatus.trim();
         if (filters.city.trim()) params.city = filters.city.trim();
         if (filters.minRating.trim()) params.min_rating = filters.minRating.trim();
         if (filters.maxRating.trim()) params.max_rating = filters.maxRating.trim();
@@ -2112,7 +2165,7 @@ export const ProspectingManagement: React.FC = () => {
         if (normalized === 'new') {
             return PIPELINE_UNPROCESSED;
         }
-        if ([shortlistApproved, selectedForOutreach, channelSelected, 'draft_ready', queuedForSend].includes(normalized)) {
+        if ([shortlistApproved, selectedForOutreach, channelSelected, 'draft_ready', 'queued_for_send'].includes(normalized)) {
             return PIPELINE_IN_PROGRESS;
         }
         if (normalized === 'deferred') {
@@ -2724,61 +2777,61 @@ export const ProspectingManagement: React.FC = () => {
         });
     };
 
-    const resetFilters = () => setFilters(emptyFilters);
+    const resetFilters = () => {
+        setFilters(emptyFilters);
+        setPendingFilters(emptyFilters);
+    };
 
     const applyPreset = (preset: 'best' | 'messengers' | 'website' | 'no_contacts' | 'low_rating' | 'many_reviews') => {
-        switch (preset) {
-            case 'best':
-                setFilters((prev) => ({
-                    ...prev,
-                    minRating: '4.5',
-                    minReviews: '50',
-                }));
-                break;
-            case 'messengers':
-                setFilters((prev) => ({
-                    ...prev,
-                    hasMessengers: 'yes',
-                }));
-                break;
-            case 'website':
-                setFilters((prev) => ({
-                    ...prev,
-                    hasWebsite: 'yes',
-                }));
-                break;
-            case 'no_contacts':
-                setFilters((prev) => ({
-                    ...prev,
-                    hasWebsite: 'no',
-                    hasPhone: 'no',
-                    hasEmail: 'no',
-                    hasTelegram: 'no',
-                    hasWhatsApp: 'no',
-                    hasVk: 'no',
-                    hasMax: 'no',
-                }));
-                break;
-            case 'low_rating':
-                setFilters((prev) => ({
-                    ...prev,
-                    maxRating: '3.5',
-                }));
-                break;
-            case 'many_reviews':
-                setFilters((prev) => ({
-                    ...prev,
-                    minReviews: '100',
-                }));
-                break;
-            default:
-                break;
-        }
+        setFilters((prev) => applyLeadFilterPreset(prev, preset));
+        setPendingFilters((prev) => applyLeadFilterPreset(prev, preset));
+    };
+
+    const applyPendingFilters = () => {
+        setFilters(pendingFilters);
+        setFiltersOpen(false);
     };
 
     const sourceFilteredLeads = useMemo(
         () => pipelineEligibleLeads
+            .filter((lead) => !filters.pipelineStatus || getLeadPipelineStatus(lead) === filters.pipelineStatus)
             .filter((lead) => !filters.source || (lead.source || '') === filters.source)
+            .filter((lead) => {
+                const cityFilter = filters.city.trim().toLowerCase();
+                if (!cityFilter) {
+                    return true;
+                }
+                const haystack = [lead.city, lead.address].filter(Boolean).join(' ').toLowerCase();
+                return haystack.includes(cityFilter);
+            })
+            .filter((lead) => {
+                const minRating = Number.parseFloat(filters.minRating);
+                if (!Number.isFinite(minRating)) {
+                    return true;
+                }
+                return Number(lead.rating || 0) >= minRating;
+            })
+            .filter((lead) => {
+                const maxRating = Number.parseFloat(filters.maxRating);
+                if (!Number.isFinite(maxRating)) {
+                    return true;
+                }
+                return Number(lead.rating || 0) <= maxRating;
+            })
+            .filter((lead) => {
+                const minReviews = Number.parseInt(filters.minReviews, 10);
+                if (!Number.isFinite(minReviews)) {
+                    return true;
+                }
+                return Number(lead.reviews_count || 0) >= minReviews;
+            })
+            .filter((lead) => {
+                const maxReviews = Number.parseInt(filters.maxReviews, 10);
+                if (!Number.isFinite(maxReviews)) {
+                    return true;
+                }
+                return Number(lead.reviews_count || 0) <= maxReviews;
+            })
             .filter((lead) => matchesBooleanFilter(filters.hasWebsite, Boolean(lead.website)))
             .filter((lead) => matchesBooleanFilter(filters.hasPhone, Boolean(lead.phone)))
             .filter((lead) => matchesBooleanFilter(filters.hasEmail, Boolean(lead.email)))
@@ -2789,7 +2842,13 @@ export const ProspectingManagement: React.FC = () => {
             .filter((lead) => matchesBooleanFilter(filters.hasMax, extractHasMax(lead))),
         [
             pipelineEligibleLeads,
+            filters.pipelineStatus,
             filters.source,
+            filters.city,
+            filters.minRating,
+            filters.maxRating,
+            filters.minReviews,
+            filters.maxReviews,
             filters.hasWebsite,
             filters.hasPhone,
             filters.hasEmail,
@@ -2830,6 +2889,14 @@ export const ProspectingManagement: React.FC = () => {
             return haystack.includes(normalizedSearch);
         });
     }, [sourceFilteredLeads, quickFilter, pipelineSearch]);
+    const visiblePipelineLeadIds = useMemo(
+        () => visiblePipelineLeads.map((lead) => String(lead.id || '')).filter(Boolean),
+        [visiblePipelineLeads]
+    );
+    const allVisiblePipelineSelected = useMemo(
+        () => visiblePipelineLeadIds.length > 0 && visiblePipelineLeadIds.every((leadId) => selectedPipelineLeadIds.includes(leadId)),
+        [visiblePipelineLeadIds, selectedPipelineLeadIds]
+    );
     const contactLeads = useMemo(
         () => sourceFilteredLeads.filter((lead) => lead.status === selectedForOutreach),
         [sourceFilteredLeads]
@@ -2885,6 +2952,29 @@ export const ProspectingManagement: React.FC = () => {
             leads: buckets[columnId],
         }));
     }, [visiblePipelineLeads]);
+    const selectAllVisiblePipelineLeads = useCallback(() => {
+        if (visiblePipelineLeadIds.length === 0) {
+            return;
+        }
+        setSelectedPipelineLeadIds((prev) => Array.from(new Set([...prev, ...visiblePipelineLeadIds])));
+    }, [visiblePipelineLeadIds]);
+    const clearPipelineSelection = useCallback(() => {
+        setSelectedPipelineLeadIds([]);
+    }, []);
+    const toggleAllVisiblePipelineLeads = useCallback(() => {
+        if (allVisiblePipelineSelected) {
+            setSelectedPipelineLeadIds((prev) => prev.filter((leadId) => !visiblePipelineLeadIds.includes(leadId)));
+            return;
+        }
+        setSelectedPipelineLeadIds((prev) => Array.from(new Set([...prev, ...visiblePipelineLeadIds])));
+    }, [allVisiblePipelineSelected, visiblePipelineLeadIds]);
+    const selectPipelineStageLeads = useCallback((leadIds: string[]) => {
+        const normalizedIds = leadIds.filter(Boolean);
+        if (normalizedIds.length === 0) {
+            return;
+        }
+        setSelectedPipelineLeadIds((prev) => Array.from(new Set([...prev, ...normalizedIds])));
+    }, []);
     const pipelineBoardTotals = useMemo(() => {
         const totals: Record<PipelineBoardColumnId, number> = {
             in_progress: 0,
@@ -3530,6 +3620,11 @@ export const ProspectingManagement: React.FC = () => {
             return;
         }
         await fetchLeadPreview(previewLead.id, { silent: true });
+    };
+
+    const openFiltersPanel = () => {
+        setPendingFilters(filters);
+        setFiltersOpen(true);
     };
 
     useEffect(() => {
@@ -4660,6 +4755,7 @@ export const ProspectingManagement: React.FC = () => {
                                     parseBusy={previewParseBusy}
                                     parseAutoRefreshing={previewAutoRefreshing}
                                     onGenerateAuditPage={generateAuditPageFromLeadPreview}
+                                    onAuditEditorPublished={previewLead.id ? () => refreshSavedLeadsAndPreview(previewLead.id, { silentPreview: true }) : undefined}
                                     onSaveContacts={saveLeadContactsFromPreview}
                                     onRunLiveParse={runLiveParseFromPreview}
                                     onRefreshPreview={refreshPreviewStatus}
@@ -4787,67 +4883,72 @@ export const ProspectingManagement: React.FC = () => {
             </Sheet>
 
             <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
-                <SheetContent side="right" className="w-[96vw] overflow-y-auto sm:max-w-2xl">
-                    <SheetHeader>
-                        <SheetTitle>Все фильтры</SheetTitle>
-                        <SheetDescription>
-                            Расширенные фильтры для pipeline. Основной экран остаётся лёгким, а детальный отбор — здесь.
-                        </SheetDescription>
-                    </SheetHeader>
-                    <div className="mt-6 space-y-4">
-                        <div className="grid gap-3 md:grid-cols-2">
-                            <Input placeholder="Категория" value={filters.category} onChange={(e) => setFilters(prev => ({ ...prev, category: e.target.value }))} />
-                            <Input placeholder="Город" value={filters.city} onChange={(e) => setFilters(prev => ({ ...prev, city: e.target.value }))} />
-                            <Input placeholder="Мин. рейтинг" type="number" min="0" max="5" step="0.1" value={filters.minRating} onChange={(e) => setFilters(prev => ({ ...prev, minRating: e.target.value }))} />
-                            <Input placeholder="Макс. рейтинг" type="number" min="0" max="5" step="0.1" value={filters.maxRating} onChange={(e) => setFilters(prev => ({ ...prev, maxRating: e.target.value }))} />
-                            <Input placeholder="Мин. отзывов" type="number" min="0" value={filters.minReviews} onChange={(e) => setFilters(prev => ({ ...prev, minReviews: e.target.value }))} />
-                            <Input placeholder="Макс. отзывов" type="number" min="0" value={filters.maxReviews} onChange={(e) => setFilters(prev => ({ ...prev, maxReviews: e.target.value }))} />
-                            <select className="border rounded-md px-3 py-2 bg-background text-sm" value={filters.hasWebsite} onChange={(e) => setFilters(prev => ({ ...prev, hasWebsite: e.target.value }))}>
+            <SheetContent side="right" className="w-[96vw] overflow-y-auto sm:max-w-2xl">
+                <SheetHeader>
+                    <SheetTitle>Все фильтры</SheetTitle>
+                    <SheetDescription>
+                        Расширенные фильтры для pipeline. Основной экран остаётся лёгким, а детальный отбор — здесь.
+                    </SheetDescription>
+                </SheetHeader>
+                <div className="mt-6 space-y-4">
+                    <div className="grid gap-3 md:grid-cols-2">
+                            <select className="border rounded-md px-3 py-2 bg-background text-sm" value={pendingFilters.pipelineStatus} onChange={(e) => setPendingFilters(prev => ({ ...prev, pipelineStatus: e.target.value }))}>
+                                <option value="">Этап воронки: любой</option>
+                                <option value={PIPELINE_IN_PROGRESS}>В работе</option>
+                                <option value={PIPELINE_POSTPONED}>Отложенные</option>
+                                <option value={PIPELINE_NOT_RELEVANT}>Неактуален</option>
+                                <option value={PIPELINE_CONTACTED}>Отправлено</option>
+                                <option value={PIPELINE_WAITING_REPLY}>Ждём ответ</option>
+                                <option value={PIPELINE_REPLIED}>Ответил</option>
+                                <option value={PIPELINE_CONVERTED}>Конвертирован</option>
+                            </select>
+                            <Input placeholder="Город" value={pendingFilters.city} onChange={(e) => setPendingFilters(prev => ({ ...prev, city: e.target.value }))} />
+                            <Input placeholder="Мин. рейтинг" type="number" min="0" max="5" step="0.1" value={pendingFilters.minRating} onChange={(e) => setPendingFilters(prev => ({ ...prev, minRating: e.target.value }))} />
+                            <Input placeholder="Макс. рейтинг" type="number" min="0" max="5" step="0.1" value={pendingFilters.maxRating} onChange={(e) => setPendingFilters(prev => ({ ...prev, maxRating: e.target.value }))} />
+                            <Input placeholder="Мин. отзывов" type="number" min="0" value={pendingFilters.minReviews} onChange={(e) => setPendingFilters(prev => ({ ...prev, minReviews: e.target.value }))} />
+                            <Input placeholder="Макс. отзывов" type="number" min="0" value={pendingFilters.maxReviews} onChange={(e) => setPendingFilters(prev => ({ ...prev, maxReviews: e.target.value }))} />
+                            <select className="border rounded-md px-3 py-2 bg-background text-sm" value={pendingFilters.hasWebsite} onChange={(e) => setPendingFilters(prev => ({ ...prev, hasWebsite: e.target.value }))}>
                                 <option value="">Сайт: любой</option>
                                 <option value="yes">Есть сайт</option>
                                 <option value="no">Нет сайта</option>
                             </select>
-                            <select className="border rounded-md px-3 py-2 bg-background text-sm" value={filters.hasPhone} onChange={(e) => setFilters(prev => ({ ...prev, hasPhone: e.target.value }))}>
+                            <select className="border rounded-md px-3 py-2 bg-background text-sm" value={pendingFilters.hasPhone} onChange={(e) => setPendingFilters(prev => ({ ...prev, hasPhone: e.target.value }))}>
                                 <option value="">Телефон: любой</option>
                                 <option value="yes">Есть телефон</option>
                                 <option value="no">Нет телефона</option>
                             </select>
-                            <select className="border rounded-md px-3 py-2 bg-background text-sm" value={filters.hasEmail} onChange={(e) => setFilters(prev => ({ ...prev, hasEmail: e.target.value }))}>
-                                <option value="">Email: любой</option>
-                                <option value="yes">Есть email</option>
-                                <option value="no">Нет email</option>
-                            </select>
-                            <select className="border rounded-md px-3 py-2 bg-background text-sm" value={filters.hasTelegram} onChange={(e) => setFilters(prev => ({ ...prev, hasTelegram: e.target.value }))}>
-                                <option value="">Telegram: любой</option>
-                                <option value="yes">Есть Telegram</option>
-                                <option value="no">Нет Telegram</option>
-                            </select>
-                            <select className="border rounded-md px-3 py-2 bg-background text-sm" value={filters.hasWhatsApp} onChange={(e) => setFilters(prev => ({ ...prev, hasWhatsApp: e.target.value }))}>
-                                <option value="">WhatsApp: любой</option>
-                                <option value="yes">Есть WhatsApp</option>
-                                <option value="no">Нет WhatsApp</option>
-                            </select>
-                            <select className="border rounded-md px-3 py-2 bg-background text-sm" value={filters.hasMax} onChange={(e) => setFilters(prev => ({ ...prev, hasMax: e.target.value }))}>
-                                <option value="">Max: любой</option>
-                                <option value="yes">Есть Max</option>
-                                <option value="no">Нет Max</option>
-                            </select>
-                            <select className="border rounded-md px-3 py-2 bg-background text-sm" value={filters.hasVk} onChange={(e) => setFilters(prev => ({ ...prev, hasVk: e.target.value }))}>
-                                <option value="">VK: любой</option>
-                                <option value="yes">Есть VK</option>
-                                <option value="no">Нет VK</option>
-                            </select>
-                            <select className="border rounded-md px-3 py-2 bg-background text-sm" value={filters.hasMessengers} onChange={(e) => setFilters(prev => ({ ...prev, hasMessengers: e.target.value }))}>
+                            <select className="border rounded-md px-3 py-2 bg-background text-sm" value={pendingFilters.hasMessengers} onChange={(e) => setPendingFilters(prev => ({ ...prev, hasMessengers: e.target.value }))}>
                                 <option value="">Мессенджеры: любые</option>
                                 <option value="yes">Есть мессенджеры</option>
                                 <option value="no">Нет мессенджеров</option>
                             </select>
                         </div>
+                        <div className="space-y-2">
+                            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Каналы связи</div>
+                            <div className="flex flex-wrap gap-2">
+                                <Button type="button" variant={pendingFilters.hasTelegram === 'yes' ? 'secondary' : 'outline'} onClick={() => setPendingFilters(prev => ({ ...prev, hasTelegram: toggleYesFilterValue(prev.hasTelegram) }))}>
+                                    {pendingFilters.hasTelegram === 'yes' ? '✓ ' : ''}Telegram
+                                </Button>
+                                <Button type="button" variant={pendingFilters.hasWhatsApp === 'yes' ? 'secondary' : 'outline'} onClick={() => setPendingFilters(prev => ({ ...prev, hasWhatsApp: toggleYesFilterValue(prev.hasWhatsApp) }))}>
+                                    {pendingFilters.hasWhatsApp === 'yes' ? '✓ ' : ''}WhatsApp
+                                </Button>
+                                <Button type="button" variant={pendingFilters.hasMax === 'yes' ? 'secondary' : 'outline'} onClick={() => setPendingFilters(prev => ({ ...prev, hasMax: toggleYesFilterValue(prev.hasMax) }))}>
+                                    {pendingFilters.hasMax === 'yes' ? '✓ ' : ''}Max
+                                </Button>
+                                <Button type="button" variant={pendingFilters.hasEmail === 'yes' ? 'secondary' : 'outline'} onClick={() => setPendingFilters(prev => ({ ...prev, hasEmail: toggleYesFilterValue(prev.hasEmail) }))}>
+                                    {pendingFilters.hasEmail === 'yes' ? '✓ ' : ''}Email
+                                </Button>
+                                <Button type="button" variant={pendingFilters.hasVk === 'yes' ? 'secondary' : 'outline'} onClick={() => setPendingFilters(prev => ({ ...prev, hasVk: toggleYesFilterValue(prev.hasVk) }))}>
+                                    {pendingFilters.hasVk === 'yes' ? '✓ ' : ''}VK
+                                </Button>
+                            </div>
+                        </div>
                         <div className="flex flex-wrap gap-2">
-                            <Button variant="outline" onClick={resetFilters}>Сбросить фильтры</Button>
-                            <Button variant="secondary" onClick={() => applyPreset('best')}>Лучшие лиды</Button>
-                            <Button variant="secondary" onClick={() => applyPreset('many_reviews')}>Много отзывов</Button>
-                            <Button variant="secondary" onClick={() => applyPreset('low_rating')}>Низкий рейтинг</Button>
+                            <Button variant="default" onClick={applyPendingFilters}>Применить фильтр</Button>
+                            <Button variant="outline" onClick={() => setPendingFilters(emptyFilters)}>Сбросить в форме</Button>
+                            <Button variant="secondary" onClick={() => setPendingFilters((prev) => applyLeadFilterPreset(prev, 'best'))}>Лучшие лиды</Button>
+                            <Button variant="secondary" onClick={() => setPendingFilters((prev) => applyLeadFilterPreset(prev, 'many_reviews'))}>Много отзывов</Button>
+                            <Button variant="secondary" onClick={() => setPendingFilters((prev) => applyLeadFilterPreset(prev, 'low_rating'))}>Низкий рейтинг</Button>
                         </div>
                     </div>
                 </SheetContent>
@@ -4910,7 +5011,7 @@ export const ProspectingManagement: React.FC = () => {
                         onHasEmailChange={(value) => setFilters(prev => ({ ...prev, hasEmail: value }))}
                         onHasWebsiteChange={(value) => setFilters(prev => ({ ...prev, hasWebsite: value }))}
                         onHasVkChange={(value) => setFilters(prev => ({ ...prev, hasVk: value }))}
-                        onOpenFilters={() => setFiltersOpen(true)}
+                        onOpenFilters={openFiltersPanel}
                         onOpenIntake={() => setIntakeOpen(true)}
                         pipelineView={pipelineView}
                         onPipelineViewChange={setPipelineView}
@@ -4920,6 +5021,21 @@ export const ProspectingManagement: React.FC = () => {
                         onApplyBestPreset={() => applyPreset('best')}
                         onApplyManyReviewsPreset={() => applyPreset('many_reviews')}
                     />
+
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Button size="sm" variant={allVisiblePipelineSelected ? 'secondary' : 'outline'} onClick={toggleAllVisiblePipelineLeads} disabled={visiblePipelineLeadIds.length === 0}>
+                            {allVisiblePipelineSelected ? 'Снять выбор с отображаемых' : 'Выбрать все по фильтру'}
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={selectAllVisiblePipelineLeads} disabled={visiblePipelineLeadIds.length === 0 || allVisiblePipelineSelected}>
+                            Добавить все отображаемые в выбор
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={clearPipelineSelection} disabled={selectedPipelineLeadIds.length === 0}>
+                            Снять весь выбор
+                        </Button>
+                        <div className="text-sm text-muted-foreground">
+                            Отображается {visiblePipelineLeadIds.length} · выбрано {selectedPipelineLeadIds.length}
+                        </div>
+                    </div>
 
                     {pipelineView === 'kanban' ? (
                         <div className="flex gap-4 overflow-x-auto pb-6">
@@ -4936,7 +5052,18 @@ export const ProspectingManagement: React.FC = () => {
                                             <div className="text-sm font-semibold">{column.label}</div>
                                             <div className="text-xs text-muted-foreground">{column.description}</div>
                                         </div>
-                                        <Badge variant="secondary">{column.leads.length}</Badge>
+                                        <div className="flex flex-col items-end gap-2">
+                                            <Badge variant="secondary">{column.leads.length}</Badge>
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                className="h-7 px-2 text-xs"
+                                                onClick={() => selectPipelineStageLeads(column.leads.map((lead) => String(lead.id || '')).filter(Boolean))}
+                                                disabled={column.leads.length === 0}
+                                            >
+                                                Выбрать этап
+                                            </Button>
+                                        </div>
                                     </div>
                                     <div className="mt-3 space-y-3">
                                         {loadingLeads ? (

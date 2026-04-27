@@ -60,6 +60,7 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
     { value: 'es', label: 'Español' },
     { value: 'de', label: 'Deutsch' },
     { value: 'fr', label: 'Français' },
+    { value: 'tr', label: 'Türkçe' },
     { value: 'it', label: 'Italiano' },
     { value: 'pt', label: 'Português' },
     { value: 'zh', label: '中文' },
@@ -70,7 +71,12 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
     setCurrentPage(1);
     try {
       const token = localStorage.getItem('auth_token');
-      const res = await fetch(`${window.location.origin}/api/news/list`, {
+      const params = new URLSearchParams();
+      if (businessId) {
+        params.set('business_id', businessId);
+      }
+      const query = params.toString() ? `?${params.toString()}` : '';
+      const res = await fetch(`${window.location.origin}/api/news/list${query}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();

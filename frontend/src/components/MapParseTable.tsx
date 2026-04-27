@@ -28,15 +28,16 @@ interface MapParseItem {
 
 interface MapParseTableProps {
   businessId?: string | null;
+  refreshKey?: number;
 }
 
-const MapParseTable: React.FC<MapParseTableProps> = ({ businessId }) => {
+const MapParseTable: React.FC<MapParseTableProps> = ({ businessId, refreshKey = 0 }) => {
   const { t } = useLanguage();
   const [viewHtml, setViewHtml] = useState<string | null>(null);
   const [viewData, setViewData] = useState<MapParseItem | null>(null);
 
   const { data, loading, error } = useApiData<MapParseItem[]>(
-    businessId ? `${window.location.origin}/api/business/${businessId}/map-parses` : null,
+    businessId ? `${window.location.origin}/api/business/${businessId}/map-parses?refresh=${refreshKey}` : null,
     {
       transform: (data) => data.items || []
     }
@@ -146,4 +147,3 @@ const MapParseTable: React.FC<MapParseTableProps> = ({ businessId }) => {
 };
 
 export default MapParseTable;
-

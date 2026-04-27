@@ -147,7 +147,7 @@ export const ar = {
     support: "دعم شخصي",
     supportDesc1: "نساعد في كل مرحلة — حتى النتائج",
     supportDesc2: "متاحون عبر الدردشة والبريد والهاتف",
-    finalText: "تطوير كامل للصالون — الدفع فقط من الإيرادات الجديدة!",
+    finalText: "تطوير كامل للصالون - سنقوم بكل شيء من أجلك!",
     contactExpert: "تواصل مع خبير"
   },
   about: {
@@ -586,6 +586,8 @@ export const ar = {
         brows_lashes: "Brows & Lashes",
         makeup: "Makeup",
         tanning: "Tanning",
+        hotel: "فندق",
+        guest_house: "دار ضيافة",
         other: "Other"
       },
       workSchedule: {

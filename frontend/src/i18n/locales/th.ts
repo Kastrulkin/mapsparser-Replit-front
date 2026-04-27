@@ -149,7 +149,7 @@ export const th = {
     support: "การสนับสนุนส่วนบุคคล",
     supportDesc1: "ช่วยเหลือทุกขั้นตอน — พาไปสู่ผลลัพธ์",
     supportDesc2: "ติดต่อได้ผ่านแชต อีเมล โทรศัพท์",
-    finalText: "พัฒนาซาลอนแบบครบวงจร — จ่ายเฉพาะจากรายได้ใหม่!",
+    finalText: "พัฒนาซาลอนแบบครบวงจร - เราจะทำทุกอย่างให้คุณ!",
     contactExpert: "ติดต่อผู้เชี่ยวชาญ"
   },
   about: {
@@ -606,6 +606,8 @@ export const th = {
         brows_lashes: "Brows & Lashes",
         makeup: "Makeup",
         tanning: "Tanning",
+        hotel: "โรงแรม",
+        guest_house: "เกสต์เฮาส์",
         other: "Other"
       },
       workSchedule: {

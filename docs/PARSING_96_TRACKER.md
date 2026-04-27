@@ -17,6 +17,15 @@
 Текущий baseline-срез заполнен в отдельном файле:
 `docs/PARSING_96_BASELINE.md`
 
+Каноничный D0 SQL-пакет и daily-операционка:
+- `docs/PARSING_96_SQL_PACKAGE.md`
+- `docs/PARSING_96_DAILY_REPORT_TEMPLATE.md`
+- `scripts/sql/parsing96/d0_batch_baseline.sql`
+- `scripts/sql/parsing96/d0_top_failure_reasons.sql`
+- `scripts/sql/parsing96/d0_proxy_layer.sql`
+- `scripts/sql/parsing96/d0_ai_learning_baseline.sql`
+- `scripts/sql/parsing96/d0_golden_set_candidates.sql`
+
 1. Зафиксировать baseline на последнем полном batch:
    `valid_success_rate`, `captcha_rate`, `proxy_fail_rate`, `cost_per_valid_card`, `p50_latency`, `p95_latency`, `throughput_per_hour`.
 2. Включить taxonomy причин фейла:
@@ -38,6 +47,7 @@
 |---|---|---|---|---|---|---|---|---|---|
 | EXP-00 | D0 | Нужен baseline и taxonomy | KPI + failure reasons + golden set | Alex + AI | 100% (read-only) | - | baseline captured | Ship | Diagnostic foundation |
 | EXP-01 | D1 | Proxy score снизит captcha/proxy fail | Health-gate + proxy ranking | AI | 10% -> 20% -> 100% | from D0 | fill | Ship/Rollback |  |
+| EXP-01A | D1 | Ложные success по sparse Apify payload режут valid_strict | Quality-gate для `apify_yandex_sparse_payload` + retry вместо completed | AI | targeted replay | 10 completed with 0 active_services | sparse cases moved to transient retry/pending | Ship | Verified on production replay batch `exp01_services_gap_20260406` |
 | EXP-02 | D2 | Retry discipline снизит потери | max_attempts + DLQ + TTL + age monitor | AI | 10% -> 20% -> 100% | from D1 | fill | Ship/Rollback |  |
 | EXP-03 | D3 | Extraction fix поднимет valid | services/address/rating normalization | AI | 10% -> 20% -> 100% | from D2 | fill | Ship/Rollback |  |
 | EXP-04 | D4 | Anti-captcha behavior улучшит проход | concurrency shaping + warmup + jitter | AI | 10% -> 20% -> 100% | from D3 | fill | Ship/Rollback |  |
@@ -46,15 +56,19 @@
 | EXP-07 | D7 | Готовность к прод KPI | Full run x2 | Alex + AI | 100% | from D6 | fill | Accept/Not accept |  |
 
 ## Daily Report Template
-1. `Date:`
-2. `Experiment ID:`
-3. `Hypothesis:`
-4. `Change applied:`
-5. `Traffic slice: 10% / 20% / 100%`
-6. `KPI: valid_success_rate, captcha_rate, proxy_fail_rate, cost_per_valid_card, p50/p95_latency, throughput_per_hour`
-7. `Top-5 failure reasons (count, %):`
+Use:
+- `docs/PARSING_96_DAILY_REPORT_TEMPLATE.md`
+
+Mandatory fields:
+1. `Date`
+2. `Experiment ID`
+3. `Hypothesis`
+4. `Traffic slice`
+5. `KPI gate table`
+6. `Failure Pareto`
+7. `Golden set audit`
 8. `Decision: Ship / Rollback / Continue`
-9. `Next step (one hypothesis only):`
+9. `Next hypothesis (one only)`
 
 ## Operational Notes
 1. Нельзя делать больше одной основной гипотезы за раз.

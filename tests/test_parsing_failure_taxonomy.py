@@ -1,5 +1,6 @@
 from parsing_failure_taxonomy import (
     REASON_CAPTCHA,
+    REASON_CLOSED_BUSINESS,
     REASON_EMPTY_PAYLOAD,
     REASON_PROXY_TRANSPORT,
     REASON_QUALITY_GATE_FAIL,
@@ -42,3 +43,8 @@ def test_classify_dlq_reasons():
     retry_msg = "reason_code=unknown; dlq_reason=captcha_retry_exhausted; attempt=5"
     assert classify_failure_reason("error", ttl_msg) == REASON_TASK_TTL_EXCEEDED
     assert classify_failure_reason("error", retry_msg) == REASON_RETRY_EXHAUSTED
+
+
+def test_classify_closed_business_reason():
+    msg = "business_closed:permanent_closed bundle=/app/debug_data/yandex_x"
+    assert classify_failure_reason("error", msg) == REASON_CLOSED_BUSINESS
