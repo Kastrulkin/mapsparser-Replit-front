@@ -12653,7 +12653,8 @@ def send_email(to_email, subject, body, from_name="LocalOS"):
         msg.attach(MIMEText(body, 'plain', 'utf-8'))
 
         # Отправка
-        server = smtplib.SMTP(smtp_server, smtp_port)
+        # Bound SMTP waits so public flows do not hang on email delivery.
+        server = smtplib.SMTP(smtp_server, smtp_port, timeout=10)
         server.starttls()
         server.login(smtp_username, smtp_password)
         server.send_message(msg)
@@ -12950,23 +12951,7 @@ def public_request_report():
         frontend_base = str(os.getenv("FRONTEND_BASE_URL") or os.getenv("PUBLIC_DOMAIN") or "https://localos.pro").strip().rstrip("/")
         public_url = f"{frontend_base}/{slug}" if frontend_base else f"/{slug}"
 
-        # Отправляем email на info@localos.pro о новой заявке
-        contact_email = os.getenv("CONTACT_EMAIL", "info@localos.pro")
-        subject = f"Новая заявка с сайта LocalOS от {email}"
-        body = f"""
-Новая заявка с сайта LocalOS
-
-Email клиента: {email}
-Ссылка на бизнес: {url}
-Публичная страница отчёта: {public_url}
-
----
-Отправлено с сайта localos.pro
-        """
-
-        email_sent = send_email(contact_email, subject, body)
-        if not email_sent:
-            print("⚠️ Не удалось отправить email")
+        _notify_public_report_request_async(email, url, public_url)
 
         # Логирование в консоль
         print(f"📧 НОВАЯ ЗАЯВКА ОТ {email}:")
@@ -13735,6 +13720,31 @@ def _public_report_url(slug: str) -> str:
     return f"{frontend_base}/{str(slug or '').strip().lstrip('/')}" if frontend_base else f"/{str(slug or '').strip().lstrip('/')}"
 
 
+def _notify_public_report_request_async(email: str, url: str, public_url: str) -> None:
+    contact_email = os.getenv("CONTACT_EMAIL", "info@localos.pro")
+    subject = f"Новая заявка с сайта LocalOS от {email}"
+    body = f"""
+Новая заявка с сайта LocalOS
+
+Email клиента: {email}
+Ссылка на бизнес: {url}
+Публичная страница отчёта: {public_url}
+
+---
+Отправлено с сайта localos.pro
+    """
+
+    def _send() -> None:
+        try:
+            email_sent = send_email(contact_email, subject, body)
+            if not email_sent:
+                print("⚠️ Не удалось отправить email по новой публичной заявке")
+        except Exception as exc:
+            print(f"⚠️ Ошибка фонового email по публичной заявке: {exc}")
+
+    threading.Thread(target=_send, daemon=True).start()
+
+
 def _send_public_report_ready_telegram(page_json: dict[str, Any], slug: str) -> bool:
     notification = page_json.get("telegram_notification") if isinstance(page_json.get("telegram_notification"), dict) else {}
     if not notification or notification.get("sent_at"):
@@ -13870,7 +13880,7 @@ def _run_public_report_pipeline(slug: str) -> None:
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT slug, email, source_url, source
+            SELECT slug, email, source_url, source, page_json
             FROM publicreportrequests
             WHERE slug = %s
             LIMIT 1
@@ -13885,11 +13895,25 @@ def _run_public_report_pipeline(slug: str) -> None:
             "email": row[1],
             "source_url": row[2],
             "source": row[3],
+            "page_json": row[4],
         }
         raw_source_url = str(payload.get("source_url") or "").strip()
         source_url = normalize_map_url(raw_source_url) or raw_source_url
         source = str(payload.get("source") or "apify_yandex").strip().lower()
         email = str(payload.get("email") or "").strip()
+        existing_page_json = payload.get("page_json")
+        if isinstance(existing_page_json, str):
+            try:
+                existing_page_json = json.loads(existing_page_json)
+            except Exception:
+                existing_page_json = {}
+        if not isinstance(existing_page_json, dict):
+            existing_page_json = {}
+        existing_telegram_notification = (
+            existing_page_json.get("telegram_notification")
+            if isinstance(existing_page_json.get("telegram_notification"), dict)
+            else None
+        )
 
         cur.execute(
             "UPDATE publicreportrequests SET status = %s, updated_at = NOW() WHERE slug = %s",
@@ -14093,6 +14117,8 @@ def _run_public_report_pipeline(slug: str) -> None:
             },
             "updated_at": datetime.utcnow().isoformat(),
         }
+        if existing_telegram_notification:
+            page_json["telegram_notification"] = existing_telegram_notification
 
         _send_public_report_ready_telegram(page_json, slug)
 
@@ -14247,4 +14273,10 @@ if __name__ == "__main__":
     log_connection_info(prefix="BACKEND")
 
     print("SEO анализатор запущен на порту 8000")
-    app.run(host="0.0.0.0", port=8000, debug=False, request_handler=QuietWSGIRequestHandler)
+    app.run(
+        host="0.0.0.0",
+        port=8000,
+        debug=False,
+        threaded=True,
+        request_handler=QuietWSGIRequestHandler,
+    )

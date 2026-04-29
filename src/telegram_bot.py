@@ -1016,7 +1016,7 @@ def _start_public_report_request(telegram_id: str, normalized_url: str, source_n
         response = requests.post(
             f"{API_BASE_URL}/api/public/request-report",
             json=payload,
-            timeout=20,
+            timeout=(5, 45),
         )
         data = response.json() if response.content else {}
     except Exception as exc:
