@@ -110,6 +110,7 @@ type ContentMixKey = 'services' | 'seo' | 'sales' | 'audit' | 'seasonal';
 type ContentMixState = Record<ContentMixKey, boolean>;
 type ItemFilterKey = 'all' | 'urgent' | 'needs_draft' | 'has_draft' | 'news_created';
 type SignalFilterKey = 'all' | ContentMixKey;
+type ViewPresetKey = 'overview' | 'urgent' | 'ready' | 'published';
 
 const CONTENT_MIX_OPTIONS: Array<{ key: ContentMixKey; labelRu: string; labelEn: string }> = [
   { key: 'services', labelRu: 'Услуги', labelEn: 'Services' },
@@ -339,6 +340,36 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const bulkNewsCandidates = useMemo(() => (
     visibleItems.filter((item) => String(item.draft_text || '').trim() && !String(item.usernews_id || '').trim())
   ), [visibleItems]);
+  const viewPresets = useMemo<Array<{ key: ViewPresetKey; label: string; active: boolean }>>(() => ([
+    {
+      key: 'overview',
+      label: isRu ? 'Обзор' : 'Overview',
+      active: selectedItemFilter === 'all' && selectedSignalFilter === 'all' && selectedPlanTargetKey === 'all' && selectedItemLocationKey === 'all' && selectedWeekKey === 'all' && sortMode === 'priority',
+    },
+    {
+      key: 'urgent',
+      label: isRu ? 'Срочное' : 'Urgent',
+      active: selectedItemFilter === 'urgent' && selectedSignalFilter === 'all' && selectedItemLocationKey === 'all' && selectedWeekKey === 'all',
+    },
+    {
+      key: 'ready',
+      label: isRu ? 'К публикации' : 'Ready to publish',
+      active: selectedItemFilter === 'has_draft' && selectedSignalFilter === 'all' && selectedItemLocationKey === 'all' && selectedWeekKey === 'all',
+    },
+    {
+      key: 'published',
+      label: isRu ? 'Опубликовано' : 'Published',
+      active: selectedItemFilter === 'news_created' && selectedSignalFilter === 'all' && selectedItemLocationKey === 'all' && selectedWeekKey === 'all' && sortMode === 'date',
+    },
+  ]), [
+    isRu,
+    selectedItemFilter,
+    selectedSignalFilter,
+    selectedPlanTargetKey,
+    selectedItemLocationKey,
+    selectedWeekKey,
+    sortMode,
+  ]);
 
   const loadPlans = async () => {
     if (!businessId) return;
@@ -598,6 +629,29 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     setSelectedItemLocationKey('all');
     setSelectedWeekKey('all');
     setSortMode('priority');
+  };
+
+  const applyViewPreset = (preset: ViewPresetKey) => {
+    if (preset === 'overview') {
+      resetViewState();
+      return;
+    }
+    setSelectedSignalFilter('all');
+    setSelectedPlanTargetKey('all');
+    setSelectedItemLocationKey('all');
+    setSelectedWeekKey('all');
+    if (preset === 'urgent') {
+      setSelectedItemFilter('urgent');
+      setSortMode('priority');
+      return;
+    }
+    if (preset === 'ready') {
+      setSelectedItemFilter('has_draft');
+      setSortMode('priority');
+      return;
+    }
+    setSelectedItemFilter('news_created');
+    setSortMode('date');
   };
 
   if (!businessId) {
@@ -940,6 +994,23 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 </div>
               </div>
             ) : null}
+            <div className="flex flex-wrap gap-2">
+              {viewPresets.map((preset) => (
+                <button
+                  key={preset.key}
+                  type="button"
+                  onClick={() => applyViewPreset(preset.key)}
+                  className={[
+                    'rounded-full border px-3 py-1.5 text-sm transition-colors',
+                    preset.active
+                      ? 'border-indigo-300 bg-indigo-50 text-indigo-800'
+                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
+                  ].join(' ')}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
             <div className="flex flex-wrap gap-2">
               {ITEM_FILTER_OPTIONS.map((filterKey) => (
                 <button
