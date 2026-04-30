@@ -120,6 +120,7 @@ const CONTENT_MIX_OPTIONS: Array<{ key: ContentMixKey; labelRu: string; labelEn:
 ];
 const ITEM_FILTER_OPTIONS: ItemFilterKey[] = ['all', 'needs_draft', 'has_draft', 'news_created'];
 const SIGNAL_FILTER_OPTIONS: SignalFilterKey[] = ['all', 'seo', 'services', 'sales', 'audit', 'seasonal'];
+const CONTENT_PLAN_PREFERENCES_KEY = 'content_plan_preferences_v1';
 
 export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const navigate = useNavigate();
@@ -151,7 +152,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [selectedPlanTargetKey, setSelectedPlanTargetKey] = useState('all');
   const [selectedItemLocationKey, setSelectedItemLocationKey] = useState('all');
   const [selectedWeekKey, setSelectedWeekKey] = useState('all');
-  const [sortMode, setSortMode] = useState<'priority' | 'date'>('priority');
+  const [sortMode, setSortMode] = useState<'priority' | 'date'>(() => _readStoredSortMode());
 
   const allowedHorizons = context?.subscription?.allowed_horizons || [30];
   const scopeOptions = context?.scope?.scope_options || [];
@@ -412,6 +413,50 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     setSelectedWeekKey('all');
   }, [availableWeeks, selectedWeekKey]);
 
+  useEffect(() => {
+    if (!businessId) return;
+    const stored = _readStoredPreferences(businessId);
+    if (!stored) return;
+    if (_isValidItemFilterKey(stored.selectedItemFilter)) {
+      setSelectedItemFilter(stored.selectedItemFilter);
+    }
+    if (_isValidSignalFilterKey(stored.selectedSignalFilter)) {
+      setSelectedSignalFilter(stored.selectedSignalFilter);
+    }
+    if (typeof stored.selectedPlanTargetKey === 'string' && stored.selectedPlanTargetKey.trim()) {
+      setSelectedPlanTargetKey(stored.selectedPlanTargetKey);
+    }
+    if (typeof stored.selectedItemLocationKey === 'string' && stored.selectedItemLocationKey.trim()) {
+      setSelectedItemLocationKey(stored.selectedItemLocationKey);
+    }
+    if (typeof stored.selectedWeekKey === 'string' && stored.selectedWeekKey.trim()) {
+      setSelectedWeekKey(stored.selectedWeekKey);
+    }
+    if (stored.sortMode === 'priority' || stored.sortMode === 'date') {
+      setSortMode(stored.sortMode);
+    }
+  }, [businessId]);
+
+  useEffect(() => {
+    if (!businessId) return;
+    _writeStoredPreferences(businessId, {
+      selectedItemFilter,
+      selectedSignalFilter,
+      selectedPlanTargetKey,
+      selectedItemLocationKey,
+      selectedWeekKey,
+      sortMode,
+    });
+  }, [
+    businessId,
+    selectedItemFilter,
+    selectedSignalFilter,
+    selectedPlanTargetKey,
+    selectedItemLocationKey,
+    selectedWeekKey,
+    sortMode,
+  ]);
+
   const toggleMix = (key: ContentMixKey) => {
     setContentMix((prev) => ({ ...prev, [key]: !prev[key] }));
   };
@@ -543,6 +588,15 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     } finally {
       setBulkBusyAction('');
     }
+  };
+
+  const resetViewState = () => {
+    setSelectedItemFilter('all');
+    setSelectedSignalFilter('all');
+    setSelectedPlanTargetKey('all');
+    setSelectedItemLocationKey('all');
+    setSelectedWeekKey('all');
+    setSortMode('priority');
   };
 
   if (!businessId) {
@@ -1056,6 +1110,13 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 >
                   {isRu ? 'По дате' : 'By date'}
                 </button>
+                <button
+                  type="button"
+                  onClick={resetViewState}
+                  className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 transition-colors hover:bg-slate-50"
+                >
+                  {isRu ? 'Сбросить вид' : 'Reset view'}
+                </button>
               </div>
               <Button
                 variant="outline"
@@ -1260,6 +1321,57 @@ function _matchesItemLocationFilter(item: PlanItem, filterKey: string): boolean 
   if (filterKey === 'all') return true;
   const itemKey = String(item.location_scope || item.business_id || '').trim();
   return itemKey === filterKey;
+}
+
+function _readStoredSortMode(): 'priority' | 'date' {
+  if (typeof window === 'undefined') return 'priority';
+  try {
+    const raw = window.localStorage.getItem(CONTENT_PLAN_PREFERENCES_KEY);
+    if (!raw) return 'priority';
+    const parsed = JSON.parse(raw);
+    const sortMode = parsed && typeof parsed.sortMode === 'string' ? parsed.sortMode : '';
+    return sortMode === 'date' ? 'date' : 'priority';
+  } catch {
+    return 'priority';
+  }
+}
+
+function _readStoredPreferences(businessId: string): Record<string, string> | null {
+  if (!businessId || typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(`${CONTENT_PLAN_PREFERENCES_KEY}:${businessId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function _writeStoredPreferences(businessId: string, value: Record<string, string>): void {
+  if (!businessId || typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(`${CONTENT_PLAN_PREFERENCES_KEY}:${businessId}`, JSON.stringify(value));
+    window.localStorage.setItem(CONTENT_PLAN_PREFERENCES_KEY, JSON.stringify({ sortMode: value.sortMode || 'priority' }));
+  } catch {
+    // Ignore storage write failures to keep the UI operational.
+  }
+}
+
+function _isValidItemFilterKey(value: string): value is ItemFilterKey {
+  return value === 'all'
+    || value === 'needs_draft'
+    || value === 'has_draft'
+    || value === 'news_created';
+}
+
+function _isValidSignalFilterKey(value: string): value is SignalFilterKey {
+  return value === 'all'
+    || value === 'seo'
+    || value === 'services'
+    || value === 'sales'
+    || value === 'audit'
+    || value === 'seasonal';
 }
 
 function _itemPriorityRank(item: Pick<PlanItem, 'draft_text' | 'usernews_id'>): number {
