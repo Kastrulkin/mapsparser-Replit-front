@@ -108,7 +108,7 @@ type ContentPlanTabProps = {
 type ContentMixKey = 'services' | 'seo' | 'sales' | 'audit' | 'seasonal';
 
 type ContentMixState = Record<ContentMixKey, boolean>;
-type ItemFilterKey = 'all' | 'needs_draft' | 'has_draft' | 'news_created';
+type ItemFilterKey = 'all' | 'urgent' | 'needs_draft' | 'has_draft' | 'news_created';
 type SignalFilterKey = 'all' | ContentMixKey;
 
 const CONTENT_MIX_OPTIONS: Array<{ key: ContentMixKey; labelRu: string; labelEn: string }> = [
@@ -118,7 +118,7 @@ const CONTENT_MIX_OPTIONS: Array<{ key: ContentMixKey; labelRu: string; labelEn:
   { key: 'audit', labelRu: 'Аудит', labelEn: 'Audit' },
   { key: 'seasonal', labelRu: 'Сезонность', labelEn: 'Seasonal' },
 ];
-const ITEM_FILTER_OPTIONS: ItemFilterKey[] = ['all', 'needs_draft', 'has_draft', 'news_created'];
+const ITEM_FILTER_OPTIONS: ItemFilterKey[] = ['all', 'urgent', 'needs_draft', 'has_draft', 'news_created'];
 const SIGNAL_FILTER_OPTIONS: SignalFilterKey[] = ['all', 'seo', 'services', 'sales', 'audit', 'seasonal'];
 const CONTENT_PLAN_PREFERENCES_KEY = 'content_plan_preferences_v1';
 
@@ -235,6 +235,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       return acc;
     }, {
       all: 0,
+      urgent: 0,
       needs_draft: 0,
       has_draft: 0,
       news_created: 0,
@@ -1286,6 +1287,7 @@ function _itemLocationLabel(item: Pick<PlanItem, 'location_label' | 'location_ci
 }
 
 function _itemFilterLabel(filterKey: ItemFilterKey, isRu: boolean): string {
+  if (filterKey === 'urgent') return isRu ? 'Только срочное' : 'Urgent only';
   if (filterKey === 'needs_draft') return isRu ? 'Без текста' : 'No draft';
   if (filterKey === 'has_draft') return isRu ? 'Есть черновик' : 'Has draft';
   if (filterKey === 'news_created') return isRu ? 'Есть новость' : 'News created';
@@ -1295,6 +1297,7 @@ function _itemFilterLabel(filterKey: ItemFilterKey, isRu: boolean): string {
 function _matchesItemFilter(item: PlanItem, filterKey: ItemFilterKey): boolean {
   const hasNews = Boolean(String(item.usernews_id || '').trim());
   const hasDraft = Boolean(String(item.draft_text || '').trim());
+  if (filterKey === 'urgent') return !hasNews;
   if (filterKey === 'needs_draft') return !hasDraft;
   if (filterKey === 'has_draft') return hasDraft && !hasNews;
   if (filterKey === 'news_created') return hasNews;
@@ -1360,6 +1363,7 @@ function _writeStoredPreferences(businessId: string, value: Record<string, strin
 
 function _isValidItemFilterKey(value: string): value is ItemFilterKey {
   return value === 'all'
+    || value === 'urgent'
     || value === 'needs_draft'
     || value === 'has_draft'
     || value === 'news_created';
