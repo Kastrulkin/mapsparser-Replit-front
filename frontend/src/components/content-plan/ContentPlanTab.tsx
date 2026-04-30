@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, Lock, MapPinned, Sparkles, Wand2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -109,6 +110,7 @@ const CONTENT_MIX_OPTIONS: Array<{ key: ContentMixKey; labelRu: string; labelEn:
 ];
 
 export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
+  const navigate = useNavigate();
   const { language } = useLanguage();
   const isRu = language === 'ru';
   const [context, setContext] = useState<ContextPayload | null>(null);
@@ -369,6 +371,28 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
               <span className="rounded-full border border-amber-300 bg-white/80 px-3 py-1 text-xs font-medium text-amber-800">
                 {isRu ? 'Нет SEO-ключей по реальному спросу' : 'No grounded SEO keywords yet'}
               </span>
+            ) : null}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {missingInputs.includes('map_links') ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
+                onClick={() => navigate('/dashboard/profile')}
+              >
+                {isRu ? 'Добавить ссылку на карту' : 'Add map link'}
+              </Button>
+            ) : null}
+            {missingInputs.includes('services') ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
+                onClick={() => navigate('/dashboard/card?tab=services')}
+              >
+                {isRu ? 'Добавить услуги' : 'Add services'}
+              </Button>
             ) : null}
           </div>
         </div>
