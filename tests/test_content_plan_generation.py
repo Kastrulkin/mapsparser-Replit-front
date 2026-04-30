@@ -44,6 +44,36 @@ def test_content_plan_skeleton_respects_allowed_period_and_sources():
     assert any(item["content_type"] == "audit" for item in plan["items"])
 
 
+def test_content_plan_skeleton_uses_grounded_goals_for_each_signal_type():
+    context = {
+        "business": {"name": "LocalOS Cafe", "city": "Кудрово"},
+        "services": [{"id": "svc-1", "name": "Латте"}],
+        "seo_keywords": [{"keyword": "кофе рядом", "views": 1200}],
+        "sales_signals": [{"title": "Капучино", "transaction_id": "tx-1"}],
+        "audit_signals": [{"title": "Мало свежих новостей", "problem": "нет активности"}],
+    }
+
+    plan = build_content_plan_skeleton(
+        context,
+        period_days=30,
+        density="light",
+        content_mix={
+            "services": True,
+            "seo": True,
+            "sales": True,
+            "audit": True,
+            "seasonal": True,
+        },
+    )
+
+    items_by_type = {item["content_type"]: item for item in plan["items"]}
+
+    assert "«Латте»" in items_by_type["service"]["goal"]
+    assert "«кофе рядом»" in items_by_type["seo"]["goal"]
+    assert "«Капучино»" in items_by_type["sales"]["goal"]
+    assert "«Мало свежих новостей»" in items_by_type["audit"]["goal"]
+
+
 def test_content_plan_skeleton_falls_back_to_30_for_invalid_period():
     plan = build_content_plan_skeleton(
         {"business": {"name": "Fallback Biz"}},

@@ -93,6 +93,12 @@ type PlanPayload = {
   created_at?: string;
 };
 
+type ActionSummary = {
+  tone: 'neutral' | 'success';
+  text_ru: string;
+  text_en: string;
+};
+
 const PERIOD_OPTIONS = [30, 60, 90];
 
 const DENSITY_OPTIONS = [
@@ -148,6 +154,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [dateEdits, setDateEdits] = useState<Record<string, string>>({});
   const [busyItemId, setBusyItemId] = useState('');
   const [bulkBusyAction, setBulkBusyAction] = useState('');
+  const [actionSummary, setActionSummary] = useState<ActionSummary | null>(null);
   const [selectedItemFilter, setSelectedItemFilter] = useState<ItemFilterKey>('all');
   const [selectedSignalFilter, setSelectedSignalFilter] = useState<SignalFilterKey>('all');
   const [selectedPlanTargetKey, setSelectedPlanTargetKey] = useState('all');
@@ -596,6 +603,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (!businessId || !selectedScopeOption) return;
     setGenerating(true);
     setError('');
+    setActionSummary(null);
     try {
       const response = await newAuth.makeRequest('/content-plans/generate', {
         method: 'POST',
@@ -620,6 +628,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
 
   const saveItem = async (itemId: string) => {
     setBusyItemId(itemId);
+    setActionSummary(null);
     try {
       await persistItemEdits(itemId);
     } finally {
@@ -630,11 +639,17 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const generateDraft = async (itemId: string) => {
     setBusyItemId(itemId);
     setError('');
+    setActionSummary(null);
     try {
       const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(itemId)}/generate-draft`, {
         method: 'POST',
       });
       setCurrentPlan(response.plan || null);
+      setActionSummary({
+        tone: 'success',
+        text_ru: 'Черновик сгенерирован для выбранной публикации.',
+        text_en: 'Draft generated for the selected item.',
+      });
     } catch (draftError) {
       const message = draftError instanceof Error ? draftError.message : (isRu ? 'Не удалось сгенерировать черновик' : 'Could not generate draft');
       setError(message);
@@ -646,12 +661,18 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const createNews = async (itemId: string) => {
     setBusyItemId(itemId);
     setError('');
+    setActionSummary(null);
     try {
       await persistItemEdits(itemId);
       const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(itemId)}/create-news`, {
         method: 'POST',
       });
       setCurrentPlan(response.plan || null);
+      setActionSummary({
+        tone: 'success',
+        text_ru: 'Новость создана из выбранного элемента плана.',
+        text_en: 'News item created from the selected plan item.',
+      });
     } catch (publishError) {
       const message = publishError instanceof Error ? publishError.message : (isRu ? 'Не удалось создать новость' : 'Could not create news');
       setError(message);
@@ -682,15 +703,23 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (bulkDraftCandidates.length === 0) return;
     setBulkBusyAction('drafts');
     setError('');
+    setActionSummary(null);
     try {
       let nextPlan = currentPlan;
+      let generatedCount = 0;
       for (const item of bulkDraftCandidates) {
         const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}/generate-draft`, {
           method: 'POST',
         });
         nextPlan = response.plan || null;
         setCurrentPlan(nextPlan);
+        generatedCount += 1;
       }
+      setActionSummary({
+        tone: 'success',
+        text_ru: `По текущей выборке сгенерировано черновиков: ${generatedCount}.`,
+        text_en: `Generated drafts for the current filtered set: ${generatedCount}.`,
+      });
     } catch (draftError) {
       const message = draftError instanceof Error ? draftError.message : (isRu ? 'Не удалось сгенерировать черновики' : 'Could not generate drafts');
       setError(message);
@@ -703,8 +732,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (bulkNewsCandidates.length === 0) return;
     setBulkBusyAction('news');
     setError('');
+    setActionSummary(null);
     try {
       let nextPlan = currentPlan;
+      let createdCount = 0;
       for (const item of bulkNewsCandidates) {
         await persistItemEdits(item.id);
         const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}/create-news`, {
@@ -712,7 +743,13 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         });
         nextPlan = response.plan || null;
         setCurrentPlan(nextPlan);
+        createdCount += 1;
       }
+      setActionSummary({
+        tone: 'success',
+        text_ru: `По текущей выборке создано новостей: ${createdCount}.`,
+        text_en: `Created news items for the current filtered set: ${createdCount}.`,
+      });
     } catch (publishError) {
       const message = publishError instanceof Error ? publishError.message : (isRu ? 'Не удалось создать новости' : 'Could not create news items');
       setError(message);
@@ -789,15 +826,25 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (focusCandidates.length === 0) return;
     setBulkBusyAction(`focus-drafts:${locationKey}:${weekKey}`);
     setError('');
+    setActionSummary(null);
     try {
       let nextPlan = currentPlan;
+      let generatedCount = 0;
       for (const item of focusCandidates) {
         const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}/generate-draft`, {
           method: 'POST',
         });
         nextPlan = response.plan || null;
         setCurrentPlan(nextPlan);
+        generatedCount += 1;
       }
+      const locationLabel = _locationLabelByKey(currentPlan?.items || [], locationKey, isRu);
+      const weekLabel = _weekBucketLabel(weekKey, isRu);
+      setActionSummary({
+        tone: 'success',
+        text_ru: `${locationLabel} · ${weekLabel}: сгенерировано черновиков ${generatedCount}.`,
+        text_en: `${locationLabel} · ${weekLabel}: generated drafts ${generatedCount}.`,
+      });
     } catch (draftError) {
       const message = draftError instanceof Error ? draftError.message : (isRu ? 'Не удалось сгенерировать черновики' : 'Could not generate drafts');
       setError(message);
@@ -812,8 +859,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (focusCandidates.length === 0) return;
     setBulkBusyAction(`focus-news:${locationKey}:${weekKey}`);
     setError('');
+    setActionSummary(null);
     try {
       let nextPlan = currentPlan;
+      let createdCount = 0;
       for (const item of focusCandidates) {
         await persistItemEdits(item.id);
         const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}/create-news`, {
@@ -821,7 +870,15 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         });
         nextPlan = response.plan || null;
         setCurrentPlan(nextPlan);
+        createdCount += 1;
       }
+      const locationLabel = _locationLabelByKey(currentPlan?.items || [], locationKey, isRu);
+      const weekLabel = _weekBucketLabel(weekKey, isRu);
+      setActionSummary({
+        tone: 'success',
+        text_ru: `${locationLabel} · ${weekLabel}: создано новостей ${createdCount}.`,
+        text_en: `${locationLabel} · ${weekLabel}: created news items ${createdCount}.`,
+      });
     } catch (publishError) {
       const message = publishError instanceof Error ? publishError.message : (isRu ? 'Не удалось создать новости' : 'Could not create news items');
       setError(message);
@@ -833,12 +890,18 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const runItemSkip = async (itemId: string) => {
     setBusyItemId(itemId);
     setError('');
+    setActionSummary(null);
     try {
       const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(itemId)}`, {
         method: 'PUT',
         body: JSON.stringify({ status: 'skipped' }),
       });
       setCurrentPlan(response.plan || null);
+      setActionSummary({
+        tone: 'success',
+        text_ru: 'Элемент помечен как пропущенный.',
+        text_en: 'The item was marked as skipped.',
+      });
     } catch (skipError) {
       const message = skipError instanceof Error ? skipError.message : (isRu ? 'Не удалось пропустить элемент' : 'Could not skip item');
       setError(message);
@@ -850,6 +913,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const runItemReschedule = async (itemId: string, scheduledFor: string, daysDelta: number) => {
     setBusyItemId(itemId);
     setError('');
+    setActionSummary(null);
     try {
       const nextDate = _shiftIsoDate(scheduledFor, daysDelta);
       const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(itemId)}`, {
@@ -858,6 +922,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       });
       setCurrentPlan(response.plan || null);
       setDateEdits((prev) => ({ ...prev, [itemId]: nextDate }));
+      setActionSummary({
+        tone: 'success',
+        text_ru: `Элемент перенесён на ${nextDate}.`,
+        text_en: `The item was rescheduled to ${nextDate}.`,
+      });
     } catch (rescheduleError) {
       const message = rescheduleError instanceof Error ? rescheduleError.message : (isRu ? 'Не удалось перенести элемент' : 'Could not reschedule item');
       setError(message);
@@ -869,11 +938,17 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const runItemDuplicate = async (itemId: string) => {
     setBusyItemId(itemId);
     setError('');
+    setActionSummary(null);
     try {
       const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(itemId)}/duplicate`, {
         method: 'POST',
       });
       setCurrentPlan(response.plan || null);
+      setActionSummary({
+        tone: 'success',
+        text_ru: 'Элемент продублирован и добавлен в план.',
+        text_en: 'The item was duplicated and added to the plan.',
+      });
     } catch (duplicateError) {
       const message = duplicateError instanceof Error ? duplicateError.message : (isRu ? 'Не удалось дублировать элемент' : 'Could not duplicate item');
       setError(message);
@@ -1277,6 +1352,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     <div className="mt-4 flex flex-wrap gap-2">
                       <Button
                         type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => applyLocationWeekFocus(focus.locationKey, focus.weekKey)}
+                      >
+                        {isRu ? 'Открыть этот срез' : 'Open this slice'}
+                      </Button>
+                      <Button
+                        type="button"
                         variant="outline"
                         size="sm"
                         onClick={() => { void runLocationWeekFocusDrafts(focus.locationKey, focus.weekKey); }}
@@ -1299,6 +1382,18 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     </div>
                   </div>
                 ))}
+              </div>
+            ) : null}
+            {actionSummary ? (
+              <div
+                className={[
+                  'rounded-2xl border px-4 py-3 text-sm',
+                  actionSummary.tone === 'success'
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                    : 'border-slate-200 bg-slate-50 text-slate-700',
+                ].join(' ')}
+              >
+                {isRu ? actionSummary.text_ru : actionSummary.text_en}
               </div>
             ) : null}
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
@@ -1545,7 +1640,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       <div className="mt-2">{item.goal || '—'}</div>
                       <div className="mt-2 text-xs text-slate-500">
                         <MapPinned className="mr-1 inline h-3.5 w-3.5" />
-                        {item.source_kind || 'signal'} {item.source_ref ? `· ${item.source_ref}` : ''}
+                        {_sourceKindLabel(item.source_kind, isRu)} {item.source_ref ? `· ${item.source_ref}` : ''}
                         {item.seo_keyword ? ` · SEO: ${item.seo_keyword}` : ''}
                       </div>
                     </div>
@@ -1677,6 +1772,16 @@ function _itemLocationLabel(item: Pick<PlanItem, 'location_label' | 'location_ci
   return isRu ? 'Точка сети' : 'Network location';
 }
 
+function _locationLabelByKey(items: PlanItem[], locationKey: string, isRu: boolean): string {
+  for (const item of items) {
+    const currentKey = String(item.location_scope || item.business_id || '').trim();
+    if (currentKey === locationKey) {
+      return _itemLocationLabel(item, isRu);
+    }
+  }
+  return isRu ? 'Точка сети' : 'Network location';
+}
+
 function _itemFilterLabel(filterKey: ItemFilterKey, isRu: boolean): string {
   if (filterKey === 'urgent') return isRu ? 'Только срочное' : 'Urgent only';
   if (filterKey === 'needs_draft') return isRu ? 'Без текста' : 'No draft';
@@ -1704,6 +1809,17 @@ function _signalFilterLabel(filterKey: SignalFilterKey, isRu: boolean): string {
   if (filterKey === 'audit') return isRu ? 'Аудит' : 'Audit';
   if (filterKey === 'seasonal') return isRu ? 'Сезонность' : 'Seasonal';
   return isRu ? 'Все сигналы' : 'All signals';
+}
+
+function _sourceKindLabel(sourceKind: string, isRu: boolean): string {
+  const normalized = String(sourceKind || '').trim().toLowerCase();
+  if (normalized === 'seo_keyword') return isRu ? 'SEO-сигнал' : 'SEO signal';
+  if (normalized === 'service') return isRu ? 'Сигнал услуги' : 'Service signal';
+  if (normalized === 'transaction') return isRu ? 'Сигнал продаж' : 'Sales signal';
+  if (normalized === 'audit_signal') return isRu ? 'Сигнал аудита' : 'Audit signal';
+  if (normalized === 'seasonal') return isRu ? 'Сезонный сигнал' : 'Seasonal signal';
+  if (normalized === 'fallback') return isRu ? 'Базовый сигнал' : 'Baseline signal';
+  return isRu ? 'Сигнал' : 'Signal';
 }
 
 function _matchesSignalFilter(item: PlanItem, filterKey: SignalFilterKey): boolean {

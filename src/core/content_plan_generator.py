@@ -33,6 +33,95 @@ def _content_mix_value(content_mix: dict[str, Any], key: str, fallback: bool = T
     return bool(value)
 
 
+def _quoted(value: str) -> str:
+    clean = _safe_text(value)
+    return f"«{clean}»" if clean else ""
+
+
+def _city_suffix(city: str) -> str:
+    clean = _safe_text(city)
+    return f" в {clean}" if clean else ""
+
+
+def _service_goal(service_name: str, city: str) -> str:
+    location = _city_suffix(city)
+    return (
+        f"Помочь клиенту быстрее выбрать услугу {_quoted(service_name)}{location} "
+        "и дать понятный повод записаться без перехода в долгий поиск."
+    )
+
+
+def _service_cta(service_name: str) -> str:
+    return (
+        f"Покажите, для кого подходит {_quoted(service_name)}, что входит в услугу "
+        "и как записаться через карточку."
+    )
+
+
+def _seo_goal(keyword_text: str, city: str) -> str:
+    location = _city_suffix(city)
+    return (
+        f"Закрыть локальный сценарий спроса по запросу {_quoted(keyword_text)}{location} "
+        "и объяснить, почему эту карточку стоит открыть и сравнить первой."
+    )
+
+
+def _seo_cta(keyword_text: str) -> str:
+    return (
+        f"Свяжите запрос {_quoted(keyword_text)} с конкретной услугой, преимуществом "
+        "или понятным следующим действием."
+    )
+
+
+def _sales_goal(sale_name: str) -> str:
+    return (
+        f"Опирайтесь на уже подтверждённый интерес к {_quoted(sale_name)}: "
+        "покажите, что это не случайная тема, а реальный повторяющийся спрос."
+    )
+
+
+def _sales_cta(sale_name: str) -> str:
+    return (
+        f"Сделайте акцент на том, почему {_quoted(sale_name)} выбирают сейчас "
+        "и как быстро получить эту услугу или товар."
+    )
+
+
+def _audit_goal(theme: str) -> str:
+    return (
+        f"Закрыть слабое место карточки вокруг темы {_quoted(theme)} "
+        "и снизить сомнения перед звонком, визитом или записью."
+    )
+
+
+def _audit_cta(theme: str) -> str:
+    return (
+        f"Сделайте публикацию, которая прямо отвечает на пробел по теме {_quoted(theme)} "
+        "и усиливает доверие к карточке."
+    )
+
+
+def _seasonal_goal(topic: str) -> str:
+    return (
+        f"Дать карточке регулярный живой повод для обновления через тему {_quoted(topic)}, "
+        "чтобы бизнес не выглядел заброшенным."
+    )
+
+
+def _seasonal_cta(topic: str) -> str:
+    return (
+        f"Используйте тему {_quoted(topic)} как короткий актуальный повод: подборка, "
+        "обновление, акция или объяснение текущего спроса."
+    )
+
+
+def _fallback_goal(business_name: str) -> str:
+    return (
+        f"Показать, что карточка {_quoted(business_name)} ведётся регулярно, "
+        "даже если данных для более точной темы пока мало."
+    )
+
+
 def build_content_plan_skeleton(
     context: dict[str, Any],
     *,
@@ -65,11 +154,11 @@ def build_content_plan_skeleton(
                 {
                     "content_type": "service",
                     "theme": f"Подсветить услугу: {service_name}",
-                    "goal": "Упростить выбор услуги и повысить конверсию в обращение.",
+                    "goal": _service_goal(service_name, city),
                     "source_kind": "service",
                     "source_ref": service_name,
                     "service_id": _safe_text(service.get("id")),
-                    "cta_hint": "Напомнить, что услуга доступна и как записаться или приехать.",
+                    "cta_hint": _service_cta(service_name),
                 }
             )
 
@@ -83,11 +172,11 @@ def build_content_plan_skeleton(
                 {
                     "content_type": "seo",
                     "theme": f"Ответить на спрос: {keyword_text}{theme_suffix}",
-                    "goal": "Закрыть локальный поисковый сценарий и дать повод выбрать карточку.",
+                    "goal": _seo_goal(keyword_text, city),
                     "source_kind": "seo_keyword",
                     "source_ref": keyword_text,
                     "seo_keyword": keyword_text,
-                    "cta_hint": "Связать запрос с конкретным преимуществом, ассортиментом или услугой.",
+                    "cta_hint": _seo_cta(keyword_text),
                 }
             )
 
@@ -100,11 +189,11 @@ def build_content_plan_skeleton(
                 {
                     "content_type": "sales",
                     "theme": f"Продвижение на основе продаж: {sale_name}",
-                    "goal": "Подсветить востребованную категорию или повторяемый спрос.",
+                    "goal": _sales_goal(sale_name),
                     "source_kind": "transaction",
                     "source_ref": sale_name,
                     "transaction_id": _safe_text(sale.get("transaction_id")),
-                    "cta_hint": "Показать, что это популярно у клиентов и актуально сейчас.",
+                    "cta_hint": _sales_cta(sale_name),
                 }
             )
 
@@ -119,10 +208,10 @@ def build_content_plan_skeleton(
                 {
                     "content_type": "audit",
                     "theme": f"Закрыть слабую зону карточки: {theme}",
-                    "goal": "Усилить доверие и показать, что карточка активна и актуальна.",
+                    "goal": _audit_goal(theme),
                     "source_kind": "audit_signal",
                     "source_ref": theme,
-                    "cta_hint": "Сделать публикацию, которая закрывает возражение или пробел в карточке.",
+                    "cta_hint": _audit_cta(theme),
                 }
             )
 
@@ -137,10 +226,10 @@ def build_content_plan_skeleton(
                 {
                     "content_type": "seasonal",
                     "theme": topic,
-                    "goal": "Дать регулярный информационный повод для обновления карточки.",
+                    "goal": _seasonal_goal(topic),
                     "source_kind": "seasonal",
                     "source_ref": topic,
-                    "cta_hint": "Добавить актуальный повод, подборку, акцию или обновление.",
+                    "cta_hint": _seasonal_cta(topic),
                 }
             )
 
@@ -149,7 +238,7 @@ def build_content_plan_skeleton(
             {
                 "content_type": "seasonal",
                 "theme": f"Обновление карточки {business_name}",
-                "goal": "Показать, что карточка бизнеса ведётся регулярно.",
+                "goal": _fallback_goal(business_name),
                 "source_kind": "fallback",
                 "source_ref": business_name,
                 "cta_hint": "Дать понятный повод клиенту открыть карточку и связаться.",
