@@ -181,6 +181,18 @@ def get_automation_block_message(business_id: str) -> str:
     return info.get('reason') or 'Автоматизация доступна только после оплаты тарифа.'
 
 
+def get_allowed_content_plan_horizons(business_id: str) -> list[int]:
+    info = get_subscription_access(business_id)
+    if info.get('is_superadmin'):
+        return [30, 60, 90]
+    tier = _normalize_tier(info.get('tier'))
+    if tier in {'concierge', 'elite'}:
+        return [30, 60, 90]
+    if tier in {'starter', 'professional', 'promo'}:
+        return [30]
+    return [30]
+
+
 def check_access(business_id: str, feature: str) -> bool:
     """
     Проверка доступа к функции по тарифу.

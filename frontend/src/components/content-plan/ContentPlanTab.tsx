@@ -1,0 +1,602 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { CalendarDays, Lock, MapPinned, Sparkles, Wand2 } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useLanguage } from '@/i18n/LanguageContext';
+import { newAuth } from '@/lib/auth_new';
+
+type ScopeOption = {
+  scope_type: string;
+  scope_target_id: string;
+  label: string;
+  city?: string;
+  address?: string;
+  is_parent?: boolean;
+  is_current?: boolean;
+};
+
+type ContextPayload = {
+  business?: {
+    id?: string;
+    name?: string;
+    city?: string;
+  };
+  scope?: {
+    scope_type?: string;
+    scope_target_id?: string;
+    scope_options?: ScopeOption[];
+  };
+  subscription?: {
+    tier?: string;
+    allowed_horizons?: number[];
+    automation_access?: boolean;
+    reason?: string | null;
+  };
+  services?: Array<{ id: string; name: string }>;
+  seo_keywords?: Array<{ keyword: string; views?: number }>;
+  sales_signals?: Array<{ title: string; amount?: number }>;
+  recent_news?: Array<{ id: string; text: string }>;
+  audit_signals?: Array<{ title?: string; problem?: string }>;
+};
+
+type PlanItem = {
+  id: string;
+  scheduled_for: string;
+  theme: string;
+  goal: string;
+  source_kind: string;
+  source_ref: string;
+  seo_keyword: string;
+  draft_text: string;
+  status: string;
+  usernews_id: string;
+  content_type: string;
+};
+
+type PlanPayload = {
+  id: string;
+  title: string;
+  period_days: number;
+  scope_type: string;
+  scope_target_id: string;
+  items: PlanItem[];
+  created_at?: string;
+};
+
+const PERIOD_OPTIONS = [30, 60, 90];
+
+const DENSITY_OPTIONS = [
+  { value: 'light', labelRu: 'Спокойно', labelEn: 'Light' },
+  { value: 'standard', labelRu: 'Стандартно', labelEn: 'Standard' },
+  { value: 'active', labelRu: 'Активно', labelEn: 'Active' },
+];
+
+type ContentPlanTabProps = {
+  businessId?: string;
+};
+
+type ContentMixKey = 'services' | 'seo' | 'sales' | 'audit' | 'seasonal';
+
+type ContentMixState = Record<ContentMixKey, boolean>;
+
+const CONTENT_MIX_OPTIONS: Array<{ key: ContentMixKey; labelRu: string; labelEn: string }> = [
+  { key: 'services', labelRu: 'Услуги', labelEn: 'Services' },
+  { key: 'seo', labelRu: 'SEO', labelEn: 'SEO' },
+  { key: 'sales', labelRu: 'Продажи', labelEn: 'Sales' },
+  { key: 'audit', labelRu: 'Аудит', labelEn: 'Audit' },
+  { key: 'seasonal', labelRu: 'Сезонность', labelEn: 'Seasonal' },
+];
+
+export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
+  const { language } = useLanguage();
+  const isRu = language === 'ru';
+  const [context, setContext] = useState<ContextPayload | null>(null);
+  const [plans, setPlans] = useState<PlanPayload[]>([]);
+  const [currentPlan, setCurrentPlan] = useState<PlanPayload | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState('');
+  const [selectedScopeKey, setSelectedScopeKey] = useState('');
+  const [selectedPeriod, setSelectedPeriod] = useState('30');
+  const [selectedDensity, setSelectedDensity] = useState('standard');
+  const [contentMix, setContentMix] = useState<ContentMixState>({
+    services: true,
+    seo: true,
+    sales: true,
+    audit: true,
+    seasonal: true,
+  });
+  const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
+  const [themeEdits, setThemeEdits] = useState<Record<string, string>>({});
+  const [dateEdits, setDateEdits] = useState<Record<string, string>>({});
+  const [busyItemId, setBusyItemId] = useState('');
+
+  const allowedHorizons = context?.subscription?.allowed_horizons || [30];
+  const scopeOptions = context?.scope?.scope_options || [];
+
+  const selectedScopeOption = useMemo(() => (
+    scopeOptions.find((item) => `${item.scope_type}:${item.scope_target_id}` === selectedScopeKey) || null
+  ), [scopeOptions, selectedScopeKey]);
+
+  const loadPlans = async () => {
+    if (!businessId) return;
+    const response = await newAuth.makeRequest(`/content-plans?business_id=${encodeURIComponent(businessId)}`, {
+      method: 'GET',
+    });
+    const nextPlans = Array.isArray(response.plans) ? response.plans : [];
+    setPlans(nextPlans);
+    if (nextPlans.length > 0) {
+      const latestPlan = nextPlans[0];
+      const fullPlanResponse = await newAuth.makeRequest(`/content-plans/${encodeURIComponent(latestPlan.id)}`, {
+        method: 'GET',
+      });
+      setCurrentPlan(fullPlanResponse.plan || null);
+    } else {
+      setCurrentPlan(null);
+    }
+  };
+
+  const loadContext = async (scopeKey?: string) => {
+    if (!businessId) return;
+    setLoading(true);
+    setError('');
+    try {
+      const scopeValue = scopeKey || selectedScopeKey;
+      let scopeType = '';
+      let scopeTargetId = '';
+      if (scopeValue) {
+        const separatorIndex = scopeValue.indexOf(':');
+        if (separatorIndex >= 0) {
+          scopeType = scopeValue.slice(0, separatorIndex);
+          scopeTargetId = scopeValue.slice(separatorIndex + 1);
+        }
+      }
+      const query = new URLSearchParams({ business_id: businessId });
+      if (scopeType) query.set('scope_type', scopeType);
+      if (scopeTargetId) query.set('scope_target_id', scopeTargetId);
+      const response = await newAuth.makeRequest(`/content-plans/context?${query.toString()}`, { method: 'GET' });
+      const nextContext = response.context || null;
+      setContext(nextContext);
+      const nextScopeOptions = nextContext?.scope?.scope_options || [];
+      if (!scopeValue && nextScopeOptions.length > 0) {
+        const preferred = nextScopeOptions.find((item: ScopeOption) => item.is_current) || nextScopeOptions[0];
+        if (preferred) {
+          setSelectedScopeKey(`${preferred.scope_type}:${preferred.scope_target_id}`);
+        }
+      }
+      const nextAllowedHorizons = nextContext?.subscription?.allowed_horizons || [30];
+      if (!nextAllowedHorizons.includes(Number(selectedPeriod))) {
+        setSelectedPeriod(String(nextAllowedHorizons[0] || 30));
+      }
+    } catch (loadError) {
+      const message = loadError instanceof Error ? loadError.message : (isRu ? 'Не удалось загрузить контекст' : 'Could not load context');
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadContext();
+    void loadPlans();
+  }, [businessId]);
+
+  useEffect(() => {
+    if (!businessId) return;
+    if (!selectedScopeKey) return;
+    void loadContext(selectedScopeKey);
+  }, [selectedScopeKey, businessId]);
+
+  const toggleMix = (key: ContentMixKey) => {
+    setContentMix((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const generatePlan = async () => {
+    if (!businessId || !selectedScopeOption) return;
+    setGenerating(true);
+    setError('');
+    try {
+      const response = await newAuth.makeRequest('/content-plans/generate', {
+        method: 'POST',
+        body: JSON.stringify({
+          business_id: businessId,
+          scope_type: selectedScopeOption.scope_type,
+          scope_target_id: selectedScopeOption.scope_target_id,
+          period_days: Number(selectedPeriod),
+          density: selectedDensity,
+          content_mix: contentMix,
+        }),
+      });
+      setCurrentPlan(response.plan || null);
+      await loadPlans();
+    } catch (generationError) {
+      const message = generationError instanceof Error ? generationError.message : (isRu ? 'Не удалось собрать план' : 'Could not generate plan');
+      setError(message);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const saveItem = async (itemId: string) => {
+    setBusyItemId(itemId);
+    setError('');
+    try {
+      const payload: Record<string, string> = {};
+      if (themeEdits[itemId] !== undefined) payload.theme = themeEdits[itemId];
+      if (dateEdits[itemId] !== undefined) payload.scheduled_for = dateEdits[itemId];
+      if (draftEdits[itemId] !== undefined) payload.draft_text = draftEdits[itemId];
+      const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(itemId)}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+      setCurrentPlan(response.plan || null);
+    } catch (saveError) {
+      const message = saveError instanceof Error ? saveError.message : (isRu ? 'Не удалось сохранить элемент' : 'Could not save item');
+      setError(message);
+    } finally {
+      setBusyItemId('');
+    }
+  };
+
+  const generateDraft = async (itemId: string) => {
+    setBusyItemId(itemId);
+    setError('');
+    try {
+      const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(itemId)}/generate-draft`, {
+        method: 'POST',
+      });
+      setCurrentPlan(response.plan || null);
+    } catch (draftError) {
+      const message = draftError instanceof Error ? draftError.message : (isRu ? 'Не удалось сгенерировать черновик' : 'Could not generate draft');
+      setError(message);
+    } finally {
+      setBusyItemId('');
+    }
+  };
+
+  const createNews = async (itemId: string) => {
+    setBusyItemId(itemId);
+    setError('');
+    try {
+      const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(itemId)}/create-news`, {
+        method: 'POST',
+      });
+      setCurrentPlan(response.plan || null);
+    } catch (publishError) {
+      const message = publishError instanceof Error ? publishError.message : (isRu ? 'Не удалось создать новость' : 'Could not create news');
+      setError(message);
+    } finally {
+      setBusyItemId('');
+    }
+  };
+
+  if (!businessId) {
+    return (
+      <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-6 py-8 text-sm text-gray-600">
+        {isRu ? 'Сначала выберите бизнес, чтобы собрать контент-план.' : 'Select a business first to build a content plan.'}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+              <CalendarDays className="h-4 w-4" />
+              {isRu ? 'Контент-план' : 'Content plan'}
+            </div>
+            <h4 className="text-xl font-semibold text-slate-950">
+              {isRu ? 'План публикаций для карт' : 'Maps content plan'}
+            </h4>
+            <p className="max-w-3xl text-sm leading-6 text-slate-600">
+              {isRu
+                ? 'Соберите план на 30/60/90 дней на основе услуг, SEO-ключей, продаж, отзывов и слабых зон карточки.'
+                : 'Build a 30/60/90 day plan using services, SEO, sales, reviews, and listing weak spots.'}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <div className="font-semibold text-slate-900">
+              {isRu ? 'Тариф' : 'Plan access'}
+            </div>
+            <div className="mt-1">
+              {(context?.subscription?.tier || 'trial').toString()}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <div className="text-sm font-semibold text-slate-700">{isRu ? 'Куда строить план' : 'Scope'}</div>
+              <Select value={selectedScopeKey} onValueChange={setSelectedScopeKey}>
+                <SelectTrigger className="rounded-xl border-slate-200">
+                  <SelectValue placeholder={isRu ? 'Выберите точку или сеть' : 'Select scope'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {scopeOptions.map((item) => {
+                    const key = `${item.scope_type}:${item.scope_target_id}`;
+                    const labelPrefix = item.is_parent ? (isRu ? 'Сеть' : 'Network') : (isRu ? 'Точка' : 'Location');
+                    return (
+                      <SelectItem key={key} value={key}>
+                        {labelPrefix}: {item.label}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-sm font-semibold text-slate-700">{isRu ? 'Горизонт планирования' : 'Planning horizon'}</div>
+              <div className="grid grid-cols-3 gap-2">
+                {PERIOD_OPTIONS.map((period) => {
+                  const allowed = allowedHorizons.includes(period);
+                  return (
+                    <button
+                      key={period}
+                      type="button"
+                      disabled={!allowed}
+                      onClick={() => allowed && setSelectedPeriod(String(period))}
+                      className={[
+                        'rounded-xl border px-3 py-2 text-sm font-medium transition-colors',
+                        selectedPeriod === String(period) && allowed
+                          ? 'border-indigo-300 bg-indigo-50 text-indigo-800'
+                          : 'border-slate-200 bg-white text-slate-700',
+                        !allowed ? 'cursor-not-allowed opacity-60' : 'hover:bg-slate-50',
+                      ].join(' ')}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        {!allowed ? <Lock className="h-3.5 w-3.5" /> : null}
+                        {period}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              {!allowedHorizons.includes(60) || !allowedHorizons.includes(90) ? (
+                <div className="text-xs text-amber-700">
+                  {isRu
+                    ? 'Планы на 60 и 90 дней доступны на тарифах 25k и Elite.'
+                    : '60 and 90 day plans are available on 25k and Elite tiers.'}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-sm font-semibold text-slate-700">{isRu ? 'Плотность' : 'Density'}</div>
+              <Select value={selectedDensity} onValueChange={setSelectedDensity}>
+                <SelectTrigger className="rounded-xl border-slate-200">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DENSITY_OPTIONS.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {isRu ? item.labelRu : item.labelEn}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-sm font-semibold text-slate-700">{isRu ? 'Что использовать' : 'Use signals from'}</div>
+              <div className="flex flex-wrap gap-2">
+                {CONTENT_MIX_OPTIONS.map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => toggleMix(item.key)}
+                    className={[
+                      'rounded-full border px-3 py-1.5 text-sm transition-colors',
+                      contentMix[item.key]
+                        ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                        : 'border-slate-200 bg-white text-slate-600',
+                    ].join(' ')}
+                  >
+                    {isRu ? item.labelRu : item.labelEn}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <Button onClick={generatePlan} disabled={generating || loading || !selectedScopeOption}>
+              <Sparkles className="mr-2 h-4 w-4" />
+              {generating
+                ? (isRu ? 'Собираем план...' : 'Building plan...')
+                : (isRu ? 'Собрать план' : 'Build plan')}
+            </Button>
+            <Button variant="outline" onClick={() => { void loadContext(); void loadPlans(); }} disabled={loading}>
+              <Wand2 className="mr-2 h-4 w-4" />
+              {isRu ? 'Обновить контекст' : 'Refresh context'}
+            </Button>
+          </div>
+
+          {error ? (
+            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+            {isRu ? 'Контекст' : 'Planning context'}
+          </div>
+          <div className="mt-4 space-y-3 text-sm text-slate-700">
+            <div>
+              <div className="font-semibold text-slate-900">{isRu ? 'Услуги' : 'Services'}</div>
+              <div>{context?.services?.length || 0}</div>
+            </div>
+            <div>
+              <div className="font-semibold text-slate-900">{isRu ? 'SEO-ключи' : 'SEO keywords'}</div>
+              <div>{context?.seo_keywords?.length || 0}</div>
+            </div>
+            <div>
+              <div className="font-semibold text-slate-900">{isRu ? 'Продажи' : 'Sales signals'}</div>
+              <div>{context?.sales_signals?.length || 0}</div>
+            </div>
+            <div>
+              <div className="font-semibold text-slate-900">{isRu ? 'Сигналы аудита' : 'Audit signals'}</div>
+              <div>{context?.audit_signals?.length || 0}</div>
+            </div>
+            <div>
+              <div className="font-semibold text-slate-900">{isRu ? 'Последние новости' : 'Recent news'}</div>
+              <div>{context?.recent_news?.length || 0}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+              {isRu ? 'Последние планы' : 'Recent plans'}
+            </div>
+            <div className="mt-1 text-lg font-semibold text-slate-950">
+              {currentPlan?.title || (isRu ? 'План ещё не собран' : 'No plan yet')}
+            </div>
+          </div>
+          <div className="text-sm text-slate-600">
+            {plans.length > 0 ? `${plans.length}` : '0'}
+          </div>
+        </div>
+
+        {plans.length > 0 ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {plans.map((plan) => (
+              <button
+                key={plan.id}
+                type="button"
+                onClick={async () => {
+                  const response = await newAuth.makeRequest(`/content-plans/${encodeURIComponent(plan.id)}`, { method: 'GET' });
+                  setCurrentPlan(response.plan || null);
+                }}
+                className={[
+                  'rounded-full border px-3 py-1.5 text-sm transition-colors',
+                  currentPlan?.id === plan.id
+                    ? 'border-indigo-300 bg-indigo-50 text-indigo-800'
+                    : 'border-slate-200 bg-white text-slate-600',
+                ].join(' ')}
+              >
+                {plan.period_days} {isRu ? 'дней' : 'days'}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {currentPlan?.items && currentPlan.items.length > 0 ? (
+          <div className="mt-6 space-y-4">
+            {currentPlan.items.map((item) => {
+              const currentDraft = draftEdits[item.id] !== undefined ? draftEdits[item.id] : item.draft_text;
+              const currentTheme = themeEdits[item.id] !== undefined ? themeEdits[item.id] : item.theme;
+              const currentDate = dateEdits[item.id] !== undefined ? dateEdits[item.id] : item.scheduled_for;
+              return (
+                <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="grid flex-1 gap-3 md:grid-cols-[180px_1fr]">
+                      <div className="space-y-2">
+                        <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                          {isRu ? 'Дата' : 'Date'}
+                        </div>
+                        <Input
+                          type="date"
+                          value={currentDate}
+                          onChange={(event) => setDateEdits((prev) => ({ ...prev, [item.id]: event.target.value }))}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                          {isRu ? 'Тема' : 'Theme'}
+                        </div>
+                        <Input
+                          value={currentTheme}
+                          onChange={(event) => setThemeEdits((prev) => ({ ...prev, [item.id]: event.target.value }))}
+                        />
+                      </div>
+                    </div>
+                    <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
+                      {_contentTypeLabel(item.content_type, isRu)}
+                    </div>
+                  </div>
+                  <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700">
+                      <div className="font-semibold text-slate-900">{isRu ? 'Почему эта тема' : 'Why this theme'}</div>
+                      <div className="mt-2">{item.goal || '—'}</div>
+                      <div className="mt-2 text-xs text-slate-500">
+                        <MapPinned className="mr-1 inline h-3.5 w-3.5" />
+                        {item.source_kind || 'signal'} {item.source_ref ? `· ${item.source_ref}` : ''}
+                        {item.seo_keyword ? ` · SEO: ${item.seo_keyword}` : ''}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                        {isRu ? 'Черновик' : 'Draft'}
+                      </div>
+                      <Textarea
+                        rows={4}
+                        value={currentDraft}
+                        onChange={(event) => setDraftEdits((prev) => ({ ...prev, [item.id]: event.target.value }))}
+                        placeholder={isRu ? 'Здесь появится текст публикации' : 'Draft text will appear here'}
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => generateDraft(item.id)}
+                      disabled={busyItemId === item.id}
+                    >
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      {isRu ? 'Сгенерировать текст' : 'Generate draft'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => saveItem(item.id)}
+                      disabled={busyItemId === item.id}
+                    >
+                      {isRu ? 'Сохранить' : 'Save'}
+                    </Button>
+                    <Button
+                      onClick={() => createNews(item.id)}
+                      disabled={busyItemId === item.id || !currentDraft.trim()}
+                    >
+                      {item.usernews_id
+                        ? (isRu ? 'Новость уже создана' : 'News already created')
+                        : (isRu ? 'Создать новость' : 'Create news')}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="mt-6 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center text-sm text-slate-600">
+            {loading
+              ? (isRu ? 'Загружаем контекст и планы...' : 'Loading context and plans...')
+              : (isRu ? 'Соберите первый контент-план, чтобы здесь появился календарь публикаций.' : 'Build your first content plan to see planned posts here.')}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function _contentTypeLabel(contentType: string, isRu: boolean): string {
+  const normalized = String(contentType || '').trim().toLowerCase();
+  if (normalized === 'seo') return isRu ? 'SEO' : 'SEO';
+  if (normalized === 'service') return isRu ? 'Услуга' : 'Service';
+  if (normalized === 'sales') return isRu ? 'Продажи' : 'Sales';
+  if (normalized === 'audit') return isRu ? 'Аудит' : 'Audit';
+  if (normalized === 'seasonal') return isRu ? 'Сезонность' : 'Seasonal';
+  return isRu ? 'Контент' : 'Content';
+}

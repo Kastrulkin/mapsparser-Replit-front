@@ -23,11 +23,13 @@ import {
   Search
 } from 'lucide-react';
 import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
+import ContentPlanTab from '@/components/content-plan/ContentPlanTab';
 
 type ServiceLite = { id: string; name: string };
 type SeoKeywordLite = { keyword: string; views?: number };
 
 export default function NewsGenerator({ services, businessId, externalPosts }: { services: ServiceLite[]; businessId?: string; externalPosts?: any[] }) {
+  const [workspaceMode, setWorkspaceMode] = useState<'news' | 'plan'>('news');
   const [useService, setUseService] = useState(false);
   const [useTransaction, setUseTransaction] = useState(false);
   const [useSeoKeywords, setUseSeoKeywords] = useState(false);
@@ -278,6 +280,35 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
         </div>
       </div>
 
+      <div className="inline-flex rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+        <button
+          type="button"
+          onClick={() => setWorkspaceMode('news')}
+          className={cn(
+            'rounded-xl px-4 py-2 text-sm font-medium transition-colors',
+            workspaceMode === 'news' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
+          )}
+        >
+          {t.dashboard.card.newsGenerator.title}
+        </button>
+        <button
+          type="button"
+          onClick={() => setWorkspaceMode('plan')}
+          className={cn(
+            'rounded-xl px-4 py-2 text-sm font-medium transition-colors',
+            workspaceMode === 'plan' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
+          )}
+        >
+          Контент-план
+        </button>
+      </div>
+
+      {workspaceMode === 'plan' ? (
+        <ContentPlanTab businessId={businessId} />
+      ) : null}
+
+      {workspaceMode === 'news' ? (
+      <>
       {/* Generator Panel */}
       <div className={cn(DESIGN_TOKENS.glass.default, "rounded-2xl p-6 bg-gradient-to-br from-white/80 to-blue-50/30")}>
 
@@ -745,6 +776,8 @@ export default function NewsGenerator({ services, businessId, externalPosts }: {
           );
         })()}
       </div>
+      </>
+      ) : null}
     </div>
   );
 }
