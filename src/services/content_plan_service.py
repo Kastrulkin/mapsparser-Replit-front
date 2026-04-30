@@ -105,6 +105,24 @@ def _build_learning_metrics_summary(rows: list[Any]) -> dict[str, Any]:
     }
 
 
+def _build_learning_breakdown_summary(rows: list[Any], key_field: str) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        key = str(_row_get(row, key_field, 0, "") or "").strip() or "unknown"
+        accepted_total = int(_row_get(row, "accepted_total", 1, 0) or 0)
+        accepted_edited_total = int(_row_get(row, "accepted_edited_total", 2, 0) or 0)
+        edited_before_accept_pct = (accepted_edited_total / accepted_total * 100.0) if accepted_total else 0.0
+        items.append(
+            {
+                "key": key,
+                "accepted_total": accepted_total,
+                "accepted_edited_total": accepted_edited_total,
+                "edited_before_accept_pct": round(edited_before_accept_pct, 2),
+            }
+        )
+    return items
+
+
 def _table_has_column(cursor: Any, table_name: str, column_name: str) -> bool:
     cursor.execute(
         """
@@ -797,10 +815,52 @@ def get_content_plan_learning_metrics(user_id: str, business_id: str, window_day
             (str(business_id or "").strip(), normalized_window),
         )
         metrics = _build_learning_metrics_summary(cursor.fetchall() or [])
+        cursor.execute(
+            """
+            SELECT
+                COALESCE(NULLIF(metadata_json->>'source_kind', ''), 'unknown') AS source_kind,
+                COUNT(*) FILTER (WHERE event_type = 'accepted') AS accepted_total,
+                COUNT(*) FILTER (
+                    WHERE event_type = 'accepted'
+                      AND COALESCE(edited_before_accept, FALSE) = TRUE
+                ) AS accepted_edited_total
+            FROM ailearningevents
+            WHERE business_id = NULLIF(%s, '')::uuid
+              AND capability = 'content_plan.publish'
+              AND created_at >= NOW() - (%s * INTERVAL '1 day')
+            GROUP BY source_kind
+            HAVING COUNT(*) FILTER (WHERE event_type = 'accepted') > 0
+            ORDER BY accepted_edited_total DESC, accepted_total DESC, source_kind ASC
+            """,
+            (str(business_id or "").strip(), normalized_window),
+        )
+        source_kind_breakdown = _build_learning_breakdown_summary(cursor.fetchall() or [], "source_kind")
+        cursor.execute(
+            """
+            SELECT
+                COALESCE(NULLIF(metadata_json->>'content_type', ''), 'unknown') AS content_type,
+                COUNT(*) FILTER (WHERE event_type = 'accepted') AS accepted_total,
+                COUNT(*) FILTER (
+                    WHERE event_type = 'accepted'
+                      AND COALESCE(edited_before_accept, FALSE) = TRUE
+                ) AS accepted_edited_total
+            FROM ailearningevents
+            WHERE business_id = NULLIF(%s, '')::uuid
+              AND capability = 'content_plan.publish'
+              AND created_at >= NOW() - (%s * INTERVAL '1 day')
+            GROUP BY content_type
+            HAVING COUNT(*) FILTER (WHERE event_type = 'accepted') > 0
+            ORDER BY accepted_edited_total DESC, accepted_total DESC, content_type ASC
+            """,
+            (str(business_id or "").strip(), normalized_window),
+        )
+        content_type_breakdown = _build_learning_breakdown_summary(cursor.fetchall() or [], "content_type")
         return {
             "window_days": normalized_window,
             "items": metrics.get("items", []),
             "summary": metrics.get("summary", {}),
+            "source_kind_breakdown": source_kind_breakdown,
+            "content_type_breakdown": content_type_breakdown,
         }
     finally:
         db.close()
@@ -1043,7 +1103,8 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
         ensure_content_plan_tables(cursor)
         cursor.execute(
             """
-            SELECT i.id, i.plan_id, i.business_id, i.status, p.business_id AS root_business_id
+            SELECT i.id, i.plan_id, i.business_id, i.status, i.source_kind, i.content_type, i.theme,
+                   p.business_id AS root_business_id
             FROM contentplanitems i
             JOIN contentplans p ON p.id = i.plan_id
             WHERE i.id = %s
@@ -1108,6 +1169,9 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
                 "fields": sorted([str(key) for key in payload.keys()]),
                 "previous_status": previous_status,
                 "next_status": next_status,
+                "source_kind": str(data.get("source_kind") or "").strip(),
+                "content_type": str(data.get("content_type") or "").strip(),
+                "theme": str(payload.get("theme") or data.get("theme") or "").strip(),
             },
         )
         db.conn.commit()
@@ -1205,6 +1269,9 @@ def duplicate_content_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
                 "duplicated_item_id": duplicated_id,
                 "plan_id": str(item.get("plan_id") or ""),
                 "scheduled_for": str(next_scheduled_for or ""),
+                "source_kind": str(item.get("source_kind") or "").strip(),
+                "content_type": str(item.get("content_type") or "").strip(),
+                "theme": str(item.get("theme") or "").strip(),
             },
         )
         db.conn.commit()
@@ -1310,6 +1377,8 @@ def generate_draft_for_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
                 "plan_id": str(item.get("plan_id") or ""),
                 "source_kind": str(item.get("source_kind") or "").strip(),
                 "source_ref": str(item.get("source_ref") or "").strip(),
+                "content_type": str(item.get("content_type") or "").strip(),
+                "theme": str(item.get("theme") or "").strip(),
                 "seo_keyword": str(item.get("seo_keyword") or "").strip(),
             },
         )
@@ -1331,6 +1400,7 @@ def create_news_from_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
         cursor.execute(
             """
             SELECT i.id, i.plan_id, i.business_id, i.theme, i.goal, i.source_ref, i.draft_text, i.service_id, i.status,
+                   i.source_kind, i.content_type,
                    p.business_id AS root_business_id
             FROM contentplanitems i
             JOIN contentplans p ON p.id = i.plan_id
@@ -1407,6 +1477,9 @@ def create_news_from_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
                 "news_id": news_id,
                 "service_id": str(item.get("service_id") or "").strip(),
                 "source_ref": str(item.get("source_ref") or "").strip(),
+                "source_kind": str(item.get("source_kind") or "").strip(),
+                "content_type": str(item.get("content_type") or "").strip(),
+                "theme": str(item.get("theme") or "").strip(),
                 "created_via": "content_plan",
             },
         )

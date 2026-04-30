@@ -112,6 +112,18 @@ type LearningMetricsPayload = {
     rescheduled_total?: number;
     edited_before_accept_pct?: number;
   };
+  source_kind_breakdown?: Array<{
+    key: string;
+    accepted_total: number;
+    accepted_edited_total: number;
+    edited_before_accept_pct: number;
+  }>;
+  content_type_breakdown?: Array<{
+    key: string;
+    accepted_total: number;
+    accepted_edited_total: number;
+    edited_before_accept_pct: number;
+  }>;
 };
 
 type ActionSummary = {
@@ -1318,6 +1330,41 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 {_learningCapabilityLabel(item.capability, isRu)} · {isRu ? 'принято' : 'accepted'} {item.accepted_total} · {isRu ? 'сгенерировано' : 'generated'} {item.generated_total}
               </div>
             ))}
+          </div>
+        ) : null}
+        {(learningMetrics?.source_kind_breakdown && learningMetrics.source_kind_breakdown.length > 0)
+          || (learningMetrics?.content_type_breakdown && learningMetrics.content_type_breakdown.length > 0) ? (
+          <div className="mt-4 grid gap-4 xl:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                {isRu ? 'Чаще правят по сигналу' : 'Most edited by signal'}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {(learningMetrics?.source_kind_breakdown || []).slice(0, 5).map((item) => (
+                  <div
+                    key={item.key}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700"
+                  >
+                    {_sourceKindLabel(item.key, isRu)} · {Number(item.edited_before_accept_pct || 0).toFixed(0)}%
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                {isRu ? 'Чаще правят по типу темы' : 'Most edited by content type'}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {(learningMetrics?.content_type_breakdown || []).slice(0, 5).map((item) => (
+                  <div
+                    key={item.key}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700"
+                  >
+                    {_contentTypeLabel(item.key, isRu)} · {Number(item.edited_before_accept_pct || 0).toFixed(0)}%
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         ) : null}
       </div>

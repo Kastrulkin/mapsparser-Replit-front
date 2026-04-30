@@ -3,6 +3,7 @@ from datetime import date, datetime
 import src.services.content_plan_service as content_plan_service
 from src.core.content_plan_generator import build_content_plan_skeleton
 from src.services.content_plan_service import (
+    _build_learning_breakdown_summary,
     _build_learning_metrics_summary,
     _build_planning_readiness,
     _fetch_audit_signals,
@@ -334,3 +335,36 @@ def test_build_learning_metrics_summary_aggregates_content_plan_signals():
     }
     publish_metrics = next(item for item in metrics["items"] if item["capability"] == "content_plan.publish")
     assert publish_metrics["edited_before_accept_pct"] == 25.0
+
+
+def test_build_learning_breakdown_summary_calculates_edit_share():
+    breakdown = _build_learning_breakdown_summary(
+        [
+            {
+                "source_kind": "seo",
+                "accepted_total": 6,
+                "accepted_edited_total": 3,
+            },
+            {
+                "source_kind": "audit",
+                "accepted_total": 2,
+                "accepted_edited_total": 0,
+            },
+        ],
+        "source_kind",
+    )
+
+    assert breakdown == [
+        {
+            "key": "seo",
+            "accepted_total": 6,
+            "accepted_edited_total": 3,
+            "edited_before_accept_pct": 50.0,
+        },
+        {
+            "key": "audit",
+            "accepted_total": 2,
+            "accepted_edited_total": 0,
+            "edited_before_accept_pct": 0.0,
+        },
+    ]
