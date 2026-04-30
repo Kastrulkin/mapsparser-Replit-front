@@ -47,6 +47,20 @@ def _row_to_dict(cursor: Any, row: Any) -> dict[str, Any]:
     return {}
 
 
+def _json_ready(value: Any) -> Any:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {str(key): _json_ready(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_ready(item) for item in value]
+    if isinstance(value, tuple):
+        return [_json_ready(item) for item in value]
+    return value
+
+
 def _table_has_column(cursor: Any, table_name: str, column_name: str) -> bool:
     cursor.execute(
         """
@@ -269,7 +283,10 @@ def _fetch_seo_keywords(cursor: Any, user_id: str, business_id: str) -> list[dic
         user_id,
         limit=30,
         add_city_suffix=True,
-        fallback_global_when_empty_terms=True,
+        # Content planning should stay grounded in real business context.
+        # If the card has no services/business-type hints yet, returning empty
+        # is safer than proposing unrelated global demand topics.
+        fallback_global_when_empty_terms=False,
     )
     items = payload.get("items") if isinstance(payload.get("items"), list) else []
     return [
@@ -562,6 +579,8 @@ def create_generated_content_plan(
         target_id = str(scope_target_id or "").strip() or str(context.get("scope", {}).get("scope_target_id") or business_id)
         root_business = context.get("root_business") if isinstance(context.get("root_business"), dict) else {}
         scope_business = context.get("business") if isinstance(context.get("business"), dict) else {}
+        context_json = _json_ready(context)
+        skeleton_json = _json_ready(skeleton)
         title = str(skeleton.get("title") or "").strip() or f"Контент-план на {normalized_period} дней"
         period_start = str(skeleton.get("period_start") or date.today().isoformat())
         period_end = str(skeleton.get("period_end") or date.today().isoformat())
@@ -584,9 +603,9 @@ def create_generated_content_plan(
                 normalized_period,
                 period_start,
                 period_end,
-                json.dumps(context, ensure_ascii=False),
-                json.dumps(skeleton, ensure_ascii=False),
-                json.dumps(skeleton, ensure_ascii=False),
+                json.dumps(context_json, ensure_ascii=False),
+                json.dumps(skeleton_json, ensure_ascii=False),
+                json.dumps(skeleton_json, ensure_ascii=False),
                 user_id,
             ),
         )

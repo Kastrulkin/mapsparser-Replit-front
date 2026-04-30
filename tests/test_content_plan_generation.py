@@ -1,6 +1,8 @@
+from datetime import date, datetime
+
 import src.services.content_plan_service as content_plan_service
 from src.core.content_plan_generator import build_content_plan_skeleton
-from src.services.content_plan_service import _fetch_seo_keywords_isolated, _scope_target_business_id
+from src.services.content_plan_service import _fetch_seo_keywords, _fetch_seo_keywords_isolated, _json_ready, _scope_target_business_id
 
 
 def test_content_plan_skeleton_respects_allowed_period_and_sources():
@@ -91,3 +93,48 @@ def test_fetch_seo_keywords_isolated_returns_empty_list_when_optional_loader_fai
 
     assert _fetch_seo_keywords_isolated("user-1", "business-1") == []
     assert created_connections and created_connections[0].rolled_back is True
+
+
+def test_fetch_seo_keywords_disables_global_fallback_for_empty_business_context(monkeypatch):
+    observed: dict[str, object] = {}
+
+    def fake_collect_ranked_keywords(cursor, business_id, user_id, **kwargs):
+        observed["business_id"] = business_id
+        observed["user_id"] = user_id
+        observed["fallback_global_when_empty_terms"] = kwargs.get("fallback_global_when_empty_terms")
+        return {
+            "items": [
+                {"keyword": "маникюр", "views": 100, "category": "nails"},
+            ]
+        }
+
+    monkeypatch.setattr(content_plan_service, "collect_ranked_keywords", fake_collect_ranked_keywords)
+
+    result = _fetch_seo_keywords(cursor=None, user_id="user-42", business_id="business-42")
+
+    assert observed["business_id"] == "business-42"
+    assert observed["user_id"] == "user-42"
+    assert observed["fallback_global_when_empty_terms"] is False
+    assert result == [{"keyword": "маникюр", "views": 100, "category": "nails"}]
+
+
+def test_json_ready_serializes_nested_dates_and_datetimes():
+    payload = {
+        "created_at": datetime(2026, 4, 30, 15, 20, 0),
+        "scheduled_for": date(2026, 5, 1),
+        "items": [
+            {"when": datetime(2026, 5, 2, 9, 0, 0)},
+            date(2026, 5, 3),
+        ],
+    }
+
+    normalized = _json_ready(payload)
+
+    assert normalized == {
+        "created_at": "2026-04-30T15:20:00",
+        "scheduled_for": "2026-05-01",
+        "items": [
+            {"when": "2026-05-02T09:00:00"},
+            "2026-05-03",
+        ],
+    }
