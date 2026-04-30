@@ -274,6 +274,31 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }
     return Array.from(counts.values()).sort((left, right) => right.count - left.count);
   }, [currentPlan?.items, isRu]);
+  const locationOperationalSummary = useMemo(() => {
+    const buckets = new Map<string, { key: string; label: string; total: number; needsDraft: number; readyToPublish: number }>();
+    for (const item of filteredItems) {
+      const key = String(item.location_scope || item.business_id || '').trim();
+      if (!key) continue;
+      const existing = buckets.get(key) || {
+        key,
+        label: _itemLocationLabel(item, isRu),
+        total: 0,
+        needsDraft: 0,
+        readyToPublish: 0,
+      };
+      existing.total += 1;
+      const hasDraft = Boolean(String(item.draft_text || '').trim());
+      const hasNews = Boolean(String(item.usernews_id || '').trim());
+      if (!hasDraft) {
+        existing.needsDraft += 1;
+      }
+      if (hasDraft && !hasNews) {
+        existing.readyToPublish += 1;
+      }
+      buckets.set(key, existing);
+    }
+    return Array.from(buckets.values()).sort((left, right) => right.total - left.total);
+  }, [filteredItems, isRu]);
   const availablePlanTargets = useMemo(() => {
     const seen = new Set<string>();
     const options: Array<{ key: string; label: string }> = [
@@ -897,6 +922,38 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     ].join(' ')}
                   >
                     {location.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {locationOperationalSummary.length > 1 ? (
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {locationOperationalSummary.map((location) => (
+                  <button
+                    key={location.key}
+                    type="button"
+                    onClick={() => setSelectedItemLocationKey(location.key)}
+                    className={[
+                      'rounded-2xl border px-4 py-4 text-left transition-colors',
+                      selectedItemLocationKey === location.key
+                        ? 'border-sky-300 bg-sky-50'
+                        : 'border-slate-200 bg-white hover:bg-slate-50',
+                    ].join(' ')}
+                  >
+                    <div className="text-sm font-semibold text-slate-900">
+                      {location.label}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">
+                        {isRu ? 'Всего' : 'Total'} · {location.total}
+                      </span>
+                      <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800">
+                        {isRu ? 'Без текста' : 'No draft'} · {location.needsDraft}
+                      </span>
+                      <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-800">
+                        {isRu ? 'Готово к публикации' : 'Ready to publish'} · {location.readyToPublish}
+                      </span>
+                    </div>
                   </button>
                 ))}
               </div>
