@@ -121,6 +121,31 @@ def _fetch_business_row(cursor: Any, business_id: str) -> dict[str, Any]:
     return _row_to_dict(cursor, cursor.fetchone())
 
 
+def _resolve_scope_target_meta(cursor: Any, plan_business_id: str, scope_type: str, scope_target_id: str | None) -> dict[str, str]:
+    normalized_scope = _normalize_scope_type(scope_type)
+    target_id = str(scope_target_id or "").strip()
+    fallback_business_id = str(plan_business_id or "").strip()
+    lookup_id = target_id or fallback_business_id
+    row = _fetch_business_row(cursor, lookup_id) if lookup_id else {}
+    if not row and fallback_business_id and fallback_business_id != lookup_id:
+        row = _fetch_business_row(cursor, fallback_business_id)
+    label = str(row.get("name") or "").strip()
+    city = str(row.get("city") or "").strip()
+    address = str(row.get("address") or "").strip()
+    if not label:
+        if normalized_scope == "network_parent":
+            label = "Материнская точка"
+        elif normalized_scope == "network_location":
+            label = "Точка сети"
+        else:
+            label = "Текущий бизнес"
+    return {
+        "scope_target_label": label,
+        "scope_target_city": city,
+        "scope_target_address": address,
+    }
+
+
 def _fetch_network_scope_options(cursor: Any, business_row: dict[str, Any]) -> list[dict[str, Any]]:
     network_id = str(business_row.get("network_id") or "").strip()
     business_id = str(business_row.get("id") or "").strip()
@@ -584,22 +609,31 @@ def list_content_plans(user_id: str, business_id: str) -> list[dict[str, Any]]:
             (business_id,),
         )
         rows = cursor.fetchall() or []
-        return [
-            {
-                "id": str(_row_get(row, "id", 0, "") or "").strip(),
-                "title": str(_row_get(row, "title", 1, "") or "").strip(),
-                "scope_type": str(_row_get(row, "scope_type", 2, "") or "").strip(),
-                "scope_target_id": str(_row_get(row, "scope_target_id", 3, "") or "").strip(),
-                "period_days": int(_row_get(row, "period_days", 4, 30) or 30),
-                "period_start": _row_get(row, "period_start", 5),
-                "period_end": _row_get(row, "period_end", 6),
-                "plan_status": str(_row_get(row, "plan_status", 7, "") or "").strip(),
-                "generation_mode": str(_row_get(row, "generation_mode", 8, "") or "").strip(),
-                "created_at": _row_get(row, "created_at", 9),
-                "updated_at": _row_get(row, "updated_at", 10),
-            }
-            for row in rows
-        ]
+        plans = []
+        for row in rows:
+            plan_business_id = str(business_id or "").strip()
+            scope_type = str(_row_get(row, "scope_type", 2, "") or "").strip()
+            scope_target_id = str(_row_get(row, "scope_target_id", 3, "") or "").strip()
+            target_meta = _resolve_scope_target_meta(cursor, plan_business_id, scope_type, scope_target_id)
+            plans.append(
+                {
+                    "id": str(_row_get(row, "id", 0, "") or "").strip(),
+                    "title": str(_row_get(row, "title", 1, "") or "").strip(),
+                    "scope_type": scope_type,
+                    "scope_target_id": scope_target_id,
+                    "scope_target_label": str(target_meta.get("scope_target_label") or "").strip(),
+                    "scope_target_city": str(target_meta.get("scope_target_city") or "").strip(),
+                    "scope_target_address": str(target_meta.get("scope_target_address") or "").strip(),
+                    "period_days": int(_row_get(row, "period_days", 4, 30) or 30),
+                    "period_start": _row_get(row, "period_start", 5),
+                    "period_end": _row_get(row, "period_end", 6),
+                    "plan_status": str(_row_get(row, "plan_status", 7, "") or "").strip(),
+                    "generation_mode": str(_row_get(row, "generation_mode", 8, "") or "").strip(),
+                    "created_at": _row_get(row, "created_at", 9),
+                    "updated_at": _row_get(row, "updated_at", 10),
+                }
+            )
+        return plans
     finally:
         db.close()
 
@@ -765,12 +799,21 @@ def get_content_plan(user_id: str, plan_id: str) -> dict[str, Any]:
             }
             for row in item_rows
         ]
+        target_meta = _resolve_scope_target_meta(
+            cursor,
+            str(plan.get("business_id") or ""),
+            str(plan.get("scope_type") or ""),
+            str(plan.get("scope_target_id") or ""),
+        )
         return {
             "id": str(plan.get("id") or ""),
             "business_id": str(plan.get("business_id") or ""),
             "network_id": str(plan.get("network_id") or ""),
             "scope_type": str(plan.get("scope_type") or ""),
             "scope_target_id": str(plan.get("scope_target_id") or ""),
+            "scope_target_label": str(target_meta.get("scope_target_label") or "").strip(),
+            "scope_target_city": str(target_meta.get("scope_target_city") or "").strip(),
+            "scope_target_address": str(target_meta.get("scope_target_address") or "").strip(),
             "title": str(plan.get("title") or ""),
             "period_days": int(plan.get("period_days") or 30),
             "period_start": plan.get("period_start"),

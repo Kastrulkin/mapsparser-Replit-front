@@ -80,6 +80,9 @@ type PlanPayload = {
   period_days: number;
   scope_type: string;
   scope_target_id: string;
+  scope_target_label?: string;
+  scope_target_city?: string;
+  scope_target_address?: string;
   plan_status?: string;
   items: PlanItem[];
   created_at?: string;
@@ -139,6 +142,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [busyItemId, setBusyItemId] = useState('');
   const [selectedItemFilter, setSelectedItemFilter] = useState<ItemFilterKey>('all');
   const [selectedSignalFilter, setSelectedSignalFilter] = useState<SignalFilterKey>('all');
+  const [selectedPlanTargetKey, setSelectedPlanTargetKey] = useState('all');
 
   const allowedHorizons = context?.subscription?.allowed_horizons || [30];
   const scopeOptions = context?.scope?.scope_options || [];
@@ -183,6 +187,26 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       seasonal: 0,
     });
   }, [currentPlan?.items]);
+  const availablePlanTargets = useMemo(() => {
+    const seen = new Set<string>();
+    const options: Array<{ key: string; label: string }> = [
+      { key: 'all', label: isRu ? 'Все планы' : 'All plans' },
+    ];
+    for (const plan of plans) {
+      const key = `${plan.scope_type}:${plan.scope_target_id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      options.push({
+        key,
+        label: _planTargetLabel(plan, isRu),
+      });
+    }
+    return options;
+  }, [plans, isRu]);
+  const visiblePlans = useMemo(() => {
+    if (selectedPlanTargetKey === 'all') return plans;
+    return plans.filter((plan) => `${plan.scope_type}:${plan.scope_target_id}` === selectedPlanTargetKey);
+  }, [plans, selectedPlanTargetKey]);
 
   const loadPlans = async () => {
     if (!businessId) return;
@@ -616,8 +640,26 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         </div>
 
         {plans.length > 0 ? (
-          <div className="mt-4 flex flex-wrap gap-2">
-            {plans.map((plan) => (
+          <div className="mt-4 space-y-3">
+            <div className="flex flex-wrap gap-2">
+              {availablePlanTargets.map((target) => (
+                <button
+                  key={target.key}
+                  type="button"
+                  onClick={() => setSelectedPlanTargetKey(target.key)}
+                  className={[
+                    'rounded-full border px-3 py-1.5 text-sm transition-colors',
+                    selectedPlanTargetKey === target.key
+                      ? 'border-indigo-300 bg-indigo-50 text-indigo-800'
+                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
+                  ].join(' ')}
+                >
+                  {target.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {visiblePlans.map((plan) => (
               <button
                 key={plan.id}
                 type="button"
@@ -632,9 +674,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     : 'border-slate-200 bg-white text-slate-600',
                 ].join(' ')}
               >
-                {_scopeChipLabel(plan.scope_type, isRu)} · {plan.period_days} {isRu ? 'дней' : 'days'}
+                {_scopeChipLabel(plan.scope_type, isRu)} · {_planTargetLabel(plan, isRu)} · {plan.period_days} {isRu ? 'дней' : 'days'}
               </button>
             ))}
+            </div>
           </div>
         ) : null}
 
@@ -799,6 +842,16 @@ function _locationScopeLabel(scopeType: string, isRu: boolean): string {
   if (normalized === 'network_parent') return isRu ? 'материнский план' : 'parent plan';
   if (normalized === 'network_location') return isRu ? 'локальный план' : 'local plan';
   return isRu ? 'текущий бизнес' : 'current business';
+}
+
+function _planTargetLabel(plan: Pick<PlanPayload, 'scope_type' | 'scope_target_label' | 'scope_target_city' | 'scope_target_address'>, isRu: boolean): string {
+  const label = String(plan.scope_target_label || '').trim();
+  const city = String(plan.scope_target_city || '').trim();
+  const address = String(plan.scope_target_address || '').trim();
+  if (label && city) return `${label} · ${city}`;
+  if (label && address) return `${label} · ${address}`;
+  if (label) return label;
+  return _scopeChipLabel(plan.scope_type, isRu);
 }
 
 function _itemFilterLabel(filterKey: ItemFilterKey, isRu: boolean): string {

@@ -7,6 +7,7 @@ from src.services.content_plan_service import (
     _fetch_seo_keywords,
     _fetch_seo_keywords_isolated,
     _json_ready,
+    _resolve_scope_target_meta,
     _scope_target_business_id,
 )
 
@@ -161,3 +162,30 @@ def test_build_planning_readiness_marks_missing_grounding_inputs():
     assert readiness["has_audit_signals"] is True
     assert readiness["is_grounded_for_search"] is False
     assert readiness["missing_inputs"] == ["map_links", "services", "seo_keywords"]
+
+
+def test_resolve_scope_target_meta_uses_business_name_and_location():
+    business_rows = {
+        "parent-1": {
+            "id": "parent-1",
+            "name": "Сеть Север",
+            "city": "Санкт-Петербург",
+            "address": "Невский проспект, 10",
+        }
+    }
+
+    def fake_fetch_business_row(cursor, business_id):
+        return business_rows.get(business_id, {})
+
+    original = content_plan_service._fetch_business_row
+    content_plan_service._fetch_business_row = fake_fetch_business_row
+    try:
+        meta = _resolve_scope_target_meta(None, "biz-1", "network_parent", "parent-1")
+    finally:
+        content_plan_service._fetch_business_row = original
+
+    assert meta == {
+        "scope_target_label": "Сеть Север",
+        "scope_target_city": "Санкт-Петербург",
+        "scope_target_address": "Невский проспект, 10",
+    }
