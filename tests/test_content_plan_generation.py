@@ -4,6 +4,7 @@ import src.services.content_plan_service as content_plan_service
 from src.core.content_plan_generator import build_content_plan_skeleton
 from src.services.content_plan_service import (
     _build_planning_readiness,
+    _fetch_audit_signals,
     _fetch_seo_keywords,
     _fetch_seo_keywords_isolated,
     _network_location_targets_from_context,
@@ -72,6 +73,35 @@ def test_content_plan_skeleton_uses_grounded_goals_for_each_signal_type():
     assert "«кофе рядом»" in items_by_type["seo"]["goal"]
     assert "«Капучино»" in items_by_type["sales"]["goal"]
     assert "«Мало свежих новостей»" in items_by_type["audit"]["goal"]
+
+
+def test_content_plan_skeleton_prioritizes_stronger_seo_signal():
+    context = {
+        "business": {"name": "LocalOS Cafe", "city": "Кудрово"},
+        "services": [],
+        "seo_keywords": [
+            {"keyword": "кофе рядом", "views": 6000},
+            {"keyword": "десерты рядом", "views": 120},
+        ],
+        "sales_signals": [],
+        "audit_signals": [],
+    }
+
+    plan = build_content_plan_skeleton(
+        context,
+        period_days=30,
+        density="light",
+        content_mix={
+            "services": False,
+            "seo": True,
+            "sales": False,
+            "audit": False,
+            "seasonal": False,
+        },
+    )
+
+    assert plan["items"][0]["source_ref"] == "кофе рядом"
+    assert plan["items"][0]["strength_score"] > plan["items"][1]["strength_score"]
 
 
 def test_content_plan_skeleton_falls_back_to_30_for_invalid_period():
@@ -239,3 +269,25 @@ def test_network_location_targets_are_extracted_from_scope_options():
         {"business_id": "loc-1", "label": "Точка 1", "city": "СПб", "address": ""},
         {"business_id": "loc-2", "label": "Точка 2", "city": "", "address": "Лиговский, 5"},
     ]
+
+
+def test_fetch_audit_signals_includes_search_intents_from_audit():
+    original = content_plan_service.build_card_audit_snapshot
+    content_plan_service.build_card_audit_snapshot = lambda business_id: {
+        "issue_blocks": [
+            {"id": "reviews_unanswered", "title": "Есть отзывы без ответа", "problem": "Без ответа: 4", "priority": "high", "section": "reviews"},
+        ],
+        "reasoning": {
+            "search_intents_to_target": [
+                "кофе рядом",
+                "завтрак рядом",
+            ]
+        },
+    }
+    try:
+        signals = _fetch_audit_signals("business-1")
+    finally:
+        content_plan_service.build_card_audit_snapshot = original
+
+    assert any(item["section"] == "reviews" for item in signals)
+    assert any(item["section"] == "search" and "кофе рядом" in item["title"] for item in signals)

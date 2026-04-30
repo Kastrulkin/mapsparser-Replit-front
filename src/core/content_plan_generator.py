@@ -122,6 +122,129 @@ def _fallback_goal(business_name: str) -> str:
     )
 
 
+def _priority_weight(priority: str) -> int:
+    normalized = _safe_text(priority).lower()
+    if normalized == "critical":
+        return 130
+    if normalized == "high":
+        return 110
+    if normalized == "medium":
+        return 80
+    if normalized == "low":
+        return 50
+    return 60
+
+
+def _service_strength(service: dict[str, Any]) -> int:
+    score = 40
+    if _safe_text(service.get("price")):
+        score += 18
+    if _safe_text(service.get("category")):
+        score += 12
+    if _safe_text(service.get("description")):
+        score += 10
+    return score
+
+
+def _seo_strength(keyword: dict[str, Any]) -> int:
+    views = int(keyword.get("views") or 0)
+    score = 55
+    if views >= 5000:
+        score += 45
+    elif views >= 2000:
+        score += 35
+    elif views >= 800:
+        score += 25
+    elif views >= 200:
+        score += 15
+    elif views > 0:
+        score += 8
+    if _safe_text(keyword.get("category")):
+        score += 6
+    return score
+
+
+def _sales_strength(sale: dict[str, Any]) -> int:
+    amount = float(sale.get("amount") or 0)
+    score = 50
+    if amount >= 15000:
+        score += 35
+    elif amount >= 7000:
+        score += 28
+    elif amount >= 3000:
+        score += 18
+    elif amount > 0:
+        score += 10
+    if _safe_text(sale.get("transaction_date")):
+        score += 6
+    return score
+
+
+def _audit_strength(signal: dict[str, Any]) -> int:
+    score = _priority_weight(_safe_text(signal.get("priority")))
+    section = _safe_text(signal.get("section")).lower()
+    signal_id = _safe_text(signal.get("id")).lower()
+    evidence = _safe_text(signal.get("evidence"))
+    if section == "search":
+        score += 18
+    if section == "reviews":
+        score += 12
+    if "search_intent:" in signal_id:
+        score += 20
+    if evidence:
+        score += 4
+    return score
+
+
+def _seasonal_strength(topic: str) -> int:
+    if "сезон" in _safe_text(topic).lower():
+        return 38
+    return 34
+
+
+def _candidate_sort_key(candidate: dict[str, Any]) -> tuple[int, str]:
+    return (int(candidate.get("strength_score") or 0), _safe_text(candidate.get("theme")))
+
+
+def _pick_candidates(candidates: list[dict[str, Any]], items_target: int) -> list[dict[str, Any]]:
+    if not candidates:
+        return []
+    buckets: dict[str, list[dict[str, Any]]] = {}
+    for candidate in candidates:
+        content_type = _safe_text(candidate.get("content_type")) or "news"
+        buckets.setdefault(content_type, []).append(candidate)
+    for bucket in buckets.values():
+        bucket.sort(key=_candidate_sort_key, reverse=True)
+
+    type_order = sorted(
+        buckets.keys(),
+        key=lambda content_type: _candidate_sort_key(buckets[content_type][0]),
+        reverse=True,
+    )
+
+    selected: list[dict[str, Any]] = []
+    while len(selected) < items_target:
+        progress = False
+        for content_type in type_order:
+            bucket = buckets.get(content_type) or []
+            if not bucket:
+                continue
+            selected.append(bucket.pop(0))
+            progress = True
+            if len(selected) >= items_target:
+                break
+        if not progress:
+            break
+
+    if len(selected) < items_target:
+        refill_pool = sorted(candidates, key=_candidate_sort_key, reverse=True)
+        refill_index = 0
+        while len(selected) < items_target and refill_pool:
+            selected.append(refill_pool[refill_index % len(refill_pool)])
+            refill_index += 1
+    return selected
+
+
 def build_content_plan_skeleton(
     context: dict[str, Any],
     *,
@@ -159,6 +282,7 @@ def build_content_plan_skeleton(
                     "source_ref": service_name,
                     "service_id": _safe_text(service.get("id")),
                     "cta_hint": _service_cta(service_name),
+                    "strength_score": _service_strength(service),
                 }
             )
 
@@ -177,6 +301,7 @@ def build_content_plan_skeleton(
                     "source_ref": keyword_text,
                     "seo_keyword": keyword_text,
                     "cta_hint": _seo_cta(keyword_text),
+                    "strength_score": _seo_strength(keyword),
                 }
             )
 
@@ -194,6 +319,7 @@ def build_content_plan_skeleton(
                     "source_ref": sale_name,
                     "transaction_id": _safe_text(sale.get("transaction_id")),
                     "cta_hint": _sales_cta(sale_name),
+                    "strength_score": _sales_strength(sale),
                 }
             )
 
@@ -212,6 +338,7 @@ def build_content_plan_skeleton(
                     "source_kind": "audit_signal",
                     "source_ref": theme,
                     "cta_hint": _audit_cta(theme),
+                    "strength_score": _audit_strength(signal),
                 }
             )
 
@@ -230,6 +357,7 @@ def build_content_plan_skeleton(
                     "source_kind": "seasonal",
                     "source_ref": topic,
                     "cta_hint": _seasonal_cta(topic),
+                    "strength_score": _seasonal_strength(topic),
                 }
             )
 
@@ -242,15 +370,16 @@ def build_content_plan_skeleton(
                 "source_kind": "fallback",
                 "source_ref": business_name,
                 "cta_hint": "Дать понятный повод клиенту открыть карточку и связаться.",
+                "strength_score": 20,
             }
         )
 
+    selected_candidates = _pick_candidates(candidates, items_target)
     selected_items: list[dict[str, Any]] = []
     step_days = max(3, round(period_days / max(items_target, 1)))
     current_date = period_start
-    candidate_index = 0
     while len(selected_items) < items_target:
-        candidate = candidates[candidate_index % len(candidates)]
+        candidate = selected_candidates[len(selected_items) % len(selected_candidates)]
         scheduled_for = current_date.isoformat()
         selected_items.append(
             {
@@ -264,12 +393,12 @@ def build_content_plan_skeleton(
                 "service_id": candidate.get("service_id") or "",
                 "transaction_id": candidate.get("transaction_id") or "",
                 "cta_hint": candidate.get("cta_hint") or "",
+                "strength_score": int(candidate.get("strength_score") or 0),
             }
         )
         current_date = min(period_end, current_date + timedelta(days=step_days))
-        candidate_index += 1
         if current_date >= period_end and len(selected_items) < items_target:
-            current_date = period_start + timedelta(days=min(candidate_index, period_days - 1))
+            current_date = period_start + timedelta(days=min(len(selected_items), period_days - 1))
 
     weekly_summary: dict[str, list[dict[str, Any]]] = {}
     for item in selected_items:
@@ -297,5 +426,6 @@ def build_content_plan_skeleton(
                 for item in selected_items
                 if _safe_text(item.get("content_type"))
             }),
+            "max_strength_score": max(int(item.get("strength_score") or 0) for item in selected_items),
         },
     }

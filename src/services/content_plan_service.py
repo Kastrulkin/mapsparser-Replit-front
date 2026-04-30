@@ -389,15 +389,40 @@ def _fetch_audit_signals(scope_business_id: str) -> list[dict[str, Any]]:
     except Exception:
         return []
     issue_blocks = audit.get("issue_blocks") if isinstance(audit.get("issue_blocks"), list) else []
-    return [
+    signals = [
         {
+            "id": str(item.get("id") or "").strip(),
             "title": str(item.get("title") or "").strip(),
             "problem": str(item.get("problem") or "").strip(),
             "priority": str(item.get("priority") or "").strip(),
+            "section": str(item.get("section") or "").strip(),
+            "evidence": str(item.get("evidence") or "").strip(),
         }
         for item in issue_blocks[:10]
         if str(item.get("title") or item.get("problem") or "").strip()
     ]
+    reasoning = audit.get("reasoning") if isinstance(audit.get("reasoning"), dict) else {}
+    search_intents = (
+        reasoning.get("search_intents_to_target")
+        if isinstance(reasoning.get("search_intents_to_target"), list)
+        else audit.get("search_intents_to_target")
+    )
+    if isinstance(search_intents, list):
+        for intent in search_intents[:4]:
+            clean_intent = str(intent or "").strip()
+            if not clean_intent:
+                continue
+            signals.append(
+                {
+                    "id": f"search_intent:{clean_intent}",
+                    "title": f"Недопокрытый поисковый сценарий: {clean_intent}",
+                    "problem": "Карточке нужен отдельный контент под этот сценарий выбора.",
+                    "priority": "medium",
+                    "section": "search",
+                    "evidence": clean_intent,
+                }
+            )
+    return signals
 
 
 def _build_planning_readiness(
