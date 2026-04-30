@@ -187,6 +187,31 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }
     return options;
   }, [filteredItems, isRu]);
+  const weekSummary = useMemo(() => {
+    const buckets = new Map<string, { key: string; label: string; total: number; needsDraft: number; readyToPublish: number }>();
+    for (const item of filteredItems) {
+      const key = _weekBucketKey(item.scheduled_for);
+      if (!key) continue;
+      const existing = buckets.get(key) || {
+        key,
+        label: _weekBucketLabel(key, isRu),
+        total: 0,
+        needsDraft: 0,
+        readyToPublish: 0,
+      };
+      existing.total += 1;
+      const hasDraft = Boolean(String(item.draft_text || '').trim());
+      const hasNews = Boolean(String(item.usernews_id || '').trim());
+      if (!hasDraft) {
+        existing.needsDraft += 1;
+      }
+      if (hasDraft && !hasNews) {
+        existing.readyToPublish += 1;
+      }
+      buckets.set(key, existing);
+    }
+    return Array.from(buckets.values()).sort((left, right) => left.key.localeCompare(right.key));
+  }, [filteredItems, isRu]);
   const visibleItems = useMemo(() => (
     filteredItems.filter((item) => selectedWeekKey === 'all' || _weekBucketKey(item.scheduled_for) === selectedWeekKey)
   ), [filteredItems, selectedWeekKey]);
@@ -891,6 +916,38 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     ].join(' ')}
                   >
                     {week.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {weekSummary.length > 1 ? (
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {weekSummary.map((week) => (
+                  <button
+                    key={week.key}
+                    type="button"
+                    onClick={() => setSelectedWeekKey(week.key)}
+                    className={[
+                      'rounded-2xl border px-4 py-4 text-left transition-colors',
+                      selectedWeekKey === week.key
+                        ? 'border-violet-300 bg-violet-50'
+                        : 'border-slate-200 bg-white hover:bg-slate-50',
+                    ].join(' ')}
+                  >
+                    <div className="text-sm font-semibold text-slate-900">
+                      {week.label}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">
+                        {isRu ? 'Всего' : 'Total'} · {week.total}
+                      </span>
+                      <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800">
+                        {isRu ? 'Без текста' : 'No draft'} · {week.needsDraft}
+                      </span>
+                      <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-800">
+                        {isRu ? 'Готово к публикации' : 'Ready to publish'} · {week.readyToPublish}
+                      </span>
+                    </div>
                   </button>
                 ))}
               </div>
