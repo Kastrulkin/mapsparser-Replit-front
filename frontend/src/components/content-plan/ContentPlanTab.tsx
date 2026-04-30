@@ -211,6 +211,23 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }
     return options;
   }, [currentPlan?.items, isRu]);
+  const itemLocationSummary = useMemo(() => {
+    const counts = new Map<string, { label: string; count: number }>();
+    for (const item of currentPlan?.items || []) {
+      const key = String(item.location_scope || item.business_id || '').trim();
+      if (!key) continue;
+      const existing = counts.get(key);
+      if (existing) {
+        existing.count += 1;
+        continue;
+      }
+      counts.set(key, {
+        label: _itemLocationLabel(item, isRu),
+        count: 1,
+      });
+    }
+    return Array.from(counts.values()).sort((left, right) => right.count - left.count);
+  }, [currentPlan?.items, isRu]);
   const availablePlanTargets = useMemo(() => {
     const seen = new Set<string>();
     const options: Array<{ key: string; label: string }> = [
@@ -707,6 +724,23 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
 
         {currentPlan?.items && currentPlan.items.length > 0 ? (
           <div className="mt-6 space-y-4">
+            {itemLocationSummary.length > 1 ? (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  {isRu ? 'Распределение по точкам' : 'Distribution by location'}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {itemLocationSummary.map((entry) => (
+                    <div
+                      key={entry.label}
+                      className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700"
+                    >
+                      {entry.label} · {entry.count}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               {ITEM_FILTER_OPTIONS.map((filterKey) => (
                 <button
