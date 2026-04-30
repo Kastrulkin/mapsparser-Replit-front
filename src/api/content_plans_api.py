@@ -9,6 +9,7 @@ from services.content_plan_service import (
     duplicate_content_plan_item,
     generate_draft_for_plan_item,
     get_content_plan,
+    get_content_plan_learning_metrics,
     list_content_plans,
     load_plan_context_for_business,
     update_content_plan_item,
@@ -65,6 +66,31 @@ def content_plan_list():
     try:
         plans = list_content_plans(str(user_data.get("user_id") or ""), business_id)
         return jsonify({"success": True, "plans": plans})
+    except PermissionError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 403
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@content_plans_bp.route("/learning-metrics", methods=["GET"])
+def content_plan_learning_metrics():
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    business_id = str(request.args.get("business_id") or "").strip()
+    if not business_id:
+        return jsonify({"success": False, "error": "business_id обязателен"}), 400
+    try:
+        window_days = int(request.args.get("window_days") or 30)
+    except Exception:
+        window_days = 30
+    try:
+        metrics = get_content_plan_learning_metrics(
+            str(user_data.get("user_id") or ""),
+            business_id,
+            window_days,
+        )
+        return jsonify({"success": True, **metrics})
     except PermissionError as exc:
         return jsonify({"success": False, "error": str(exc)}), 403
     except Exception as exc:

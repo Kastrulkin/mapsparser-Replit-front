@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from database_manager import DatabaseManager
-from core.ai_learning import record_ai_learning_event
+from core.ai_learning import ensure_ai_learning_events_table, record_ai_learning_event
 from core.card_audit import build_card_audit_snapshot
 from core.helpers import get_business_owner_id
 from core.seo_keywords import collect_ranked_keywords
@@ -60,6 +60,49 @@ def _json_ready(value: Any) -> Any:
     if isinstance(value, tuple):
         return [_json_ready(item) for item in value]
     return value
+
+
+def _build_learning_metrics_summary(rows: list[Any]) -> dict[str, Any]:
+    items: list[dict[str, Any]] = []
+    totals = {
+        "generated_total": 0,
+        "accepted_total": 0,
+        "accepted_edited_total": 0,
+        "skipped_total": 0,
+        "rescheduled_total": 0,
+    }
+    for row in rows:
+        capability = str(_row_get(row, "capability", 0, "") or "").strip()
+        generated_total = int(_row_get(row, "generated_total", 1, 0) or 0)
+        accepted_total = int(_row_get(row, "accepted_total", 2, 0) or 0)
+        accepted_edited_total = int(_row_get(row, "accepted_edited_total", 3, 0) or 0)
+        skipped_total = int(_row_get(row, "skipped_total", 4, 0) or 0)
+        rescheduled_total = int(_row_get(row, "rescheduled_total", 5, 0) or 0)
+        edited_before_accept_pct = (accepted_edited_total / accepted_total * 100.0) if accepted_total else 0.0
+        items.append(
+            {
+                "capability": capability,
+                "generated_total": generated_total,
+                "accepted_total": accepted_total,
+                "accepted_edited_total": accepted_edited_total,
+                "skipped_total": skipped_total,
+                "rescheduled_total": rescheduled_total,
+                "edited_before_accept_pct": round(edited_before_accept_pct, 2),
+            }
+        )
+        totals["generated_total"] += generated_total
+        totals["accepted_total"] += accepted_total
+        totals["accepted_edited_total"] += accepted_edited_total
+        totals["skipped_total"] += skipped_total
+        totals["rescheduled_total"] += rescheduled_total
+    totals["edited_before_accept_pct"] = round(
+        (totals["accepted_edited_total"] / totals["accepted_total"] * 100.0) if totals["accepted_total"] else 0.0,
+        2,
+    )
+    return {
+        "items": items,
+        "summary": totals,
+    }
 
 
 def _table_has_column(cursor: Any, table_name: str, column_name: str) -> bool:
@@ -716,6 +759,49 @@ def list_content_plans(user_id: str, business_id: str) -> list[dict[str, Any]]:
                 }
             )
         return plans
+    finally:
+        db.close()
+
+
+def get_content_plan_learning_metrics(user_id: str, business_id: str, window_days: int = 30) -> dict[str, Any]:
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        ensure_content_plan_tables(cursor)
+        owner_id = get_business_owner_id(cursor, business_id)
+        if str(owner_id or "").strip() != str(user_id or "").strip():
+            cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
+            if not bool(_row_get(cursor.fetchone(), "coalesce", 0, False)):
+                raise PermissionError("Нет доступа к бизнесу")
+        normalized_window = max(1, min(int(window_days or 30), 365))
+        ensure_ai_learning_events_table(db.conn)
+        cursor.execute(
+            """
+            SELECT
+                capability,
+                COUNT(*) FILTER (WHERE event_type = 'generated') AS generated_total,
+                COUNT(*) FILTER (WHERE event_type = 'accepted') AS accepted_total,
+                COUNT(*) FILTER (
+                    WHERE event_type = 'accepted'
+                      AND COALESCE(edited_before_accept, FALSE) = TRUE
+                ) AS accepted_edited_total,
+                COUNT(*) FILTER (WHERE event_type = 'skipped') AS skipped_total,
+                COUNT(*) FILTER (WHERE event_type = 'rescheduled') AS rescheduled_total
+            FROM ailearningevents
+            WHERE business_id = NULLIF(%s, '')::uuid
+              AND capability LIKE 'content_plan.%%'
+              AND created_at >= NOW() - (%s * INTERVAL '1 day')
+            GROUP BY capability
+            ORDER BY capability
+            """,
+            (str(business_id or "").strip(), normalized_window),
+        )
+        metrics = _build_learning_metrics_summary(cursor.fetchall() or [])
+        return {
+            "window_days": normalized_window,
+            "items": metrics.get("items", []),
+            "summary": metrics.get("summary", {}),
+        }
     finally:
         db.close()
 

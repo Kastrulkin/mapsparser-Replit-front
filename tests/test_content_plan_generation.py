@@ -3,6 +3,7 @@ from datetime import date, datetime
 import src.services.content_plan_service as content_plan_service
 from src.core.content_plan_generator import build_content_plan_skeleton
 from src.services.content_plan_service import (
+    _build_learning_metrics_summary,
     _build_planning_readiness,
     _fetch_audit_signals,
     _fetch_seo_keywords,
@@ -291,3 +292,45 @@ def test_fetch_audit_signals_includes_search_intents_from_audit():
 
     assert any(item["section"] == "reviews" for item in signals)
     assert any(item["section"] == "search" and "кофе рядом" in item["title"] for item in signals)
+
+
+def test_build_learning_metrics_summary_aggregates_content_plan_signals():
+    metrics = _build_learning_metrics_summary(
+        [
+            {
+                "capability": "content_plan.generate",
+                "generated_total": 5,
+                "accepted_total": 0,
+                "accepted_edited_total": 0,
+                "skipped_total": 0,
+                "rescheduled_total": 0,
+            },
+            {
+                "capability": "content_plan.publish",
+                "generated_total": 0,
+                "accepted_total": 4,
+                "accepted_edited_total": 1,
+                "skipped_total": 0,
+                "rescheduled_total": 0,
+            },
+            {
+                "capability": "content_plan.item",
+                "generated_total": 0,
+                "accepted_total": 0,
+                "accepted_edited_total": 0,
+                "skipped_total": 3,
+                "rescheduled_total": 2,
+            },
+        ]
+    )
+
+    assert metrics["summary"] == {
+        "generated_total": 5,
+        "accepted_total": 4,
+        "accepted_edited_total": 1,
+        "skipped_total": 3,
+        "rescheduled_total": 2,
+        "edited_before_accept_pct": 25.0,
+    }
+    publish_metrics = next(item for item in metrics["items"] if item["capability"] == "content_plan.publish")
+    assert publish_metrics["edited_before_accept_pct"] == 25.0
