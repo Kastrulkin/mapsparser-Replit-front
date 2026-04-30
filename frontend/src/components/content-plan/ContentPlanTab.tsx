@@ -213,7 +213,16 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     return Array.from(buckets.values()).sort((left, right) => left.key.localeCompare(right.key));
   }, [filteredItems, isRu]);
   const visibleItems = useMemo(() => (
-    filteredItems.filter((item) => selectedWeekKey === 'all' || _weekBucketKey(item.scheduled_for) === selectedWeekKey)
+    filteredItems
+      .filter((item) => selectedWeekKey === 'all' || _weekBucketKey(item.scheduled_for) === selectedWeekKey)
+      .slice()
+      .sort((left, right) => {
+        const priorityDiff = _itemPriorityRank(left) - _itemPriorityRank(right);
+        if (priorityDiff !== 0) return priorityDiff;
+        const dateDiff = String(left.scheduled_for || '').localeCompare(String(right.scheduled_for || ''));
+        if (dateDiff !== 0) return dateDiff;
+        return String(left.theme || '').localeCompare(String(right.theme || ''));
+      })
   ), [filteredItems, selectedWeekKey]);
   const itemFilterCounts = useMemo(() => {
     const items = currentPlan?.items || [];
@@ -1010,6 +1019,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
               </div>
             ) : null}
             <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+              <div className="w-full text-xs font-medium text-slate-500">
+                {isRu
+                  ? 'Порядок внутри списка: сначала без текста, затем готовые к публикации, затем остальные.'
+                  : 'Items are ordered by next best action: no draft first, then ready to publish, then the rest.'}
+              </div>
               <Button
                 variant="outline"
                 onClick={() => { void runBulkGenerateDrafts(); }}
@@ -1213,6 +1227,14 @@ function _matchesItemLocationFilter(item: PlanItem, filterKey: string): boolean 
   if (filterKey === 'all') return true;
   const itemKey = String(item.location_scope || item.business_id || '').trim();
   return itemKey === filterKey;
+}
+
+function _itemPriorityRank(item: Pick<PlanItem, 'draft_text' | 'usernews_id'>): number {
+  const hasNews = Boolean(String(item.usernews_id || '').trim());
+  const hasDraft = Boolean(String(item.draft_text || '').trim());
+  if (!hasDraft) return 0;
+  if (hasDraft && !hasNews) return 1;
+  return 2;
 }
 
 function _weekBucketKey(dateValue: string): string {
