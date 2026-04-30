@@ -145,6 +145,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [themeEdits, setThemeEdits] = useState<Record<string, string>>({});
   const [dateEdits, setDateEdits] = useState<Record<string, string>>({});
   const [busyItemId, setBusyItemId] = useState('');
+  const [bulkBusyAction, setBulkBusyAction] = useState('');
   const [selectedItemFilter, setSelectedItemFilter] = useState<ItemFilterKey>('all');
   const [selectedSignalFilter, setSelectedSignalFilter] = useState<SignalFilterKey>('all');
   const [selectedPlanTargetKey, setSelectedPlanTargetKey] = useState('all');
@@ -248,6 +249,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (selectedPlanTargetKey === 'all') return plans;
     return plans.filter((plan) => `${plan.scope_type}:${plan.scope_target_id}` === selectedPlanTargetKey);
   }, [plans, selectedPlanTargetKey]);
+  const bulkDraftCandidates = useMemo(() => (
+    filteredItems.filter((item) => !String(item.draft_text || '').trim() && !String(item.usernews_id || '').trim())
+  ), [filteredItems]);
+  const bulkNewsCandidates = useMemo(() => (
+    filteredItems.filter((item) => String(item.draft_text || '').trim() && !String(item.usernews_id || '').trim())
+  ), [filteredItems]);
 
   const loadPlans = async () => {
     if (!businessId) return;
@@ -350,20 +357,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
 
   const saveItem = async (itemId: string) => {
     setBusyItemId(itemId);
-    setError('');
     try {
-      const payload: Record<string, string> = {};
-      if (themeEdits[itemId] !== undefined) payload.theme = themeEdits[itemId];
-      if (dateEdits[itemId] !== undefined) payload.scheduled_for = dateEdits[itemId];
-      if (draftEdits[itemId] !== undefined) payload.draft_text = draftEdits[itemId];
-      const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(itemId)}`, {
-        method: 'PUT',
-        body: JSON.stringify(payload),
-      });
-      setCurrentPlan(response.plan || null);
-    } catch (saveError) {
-      const message = saveError instanceof Error ? saveError.message : (isRu ? 'Не удалось сохранить элемент' : 'Could not save item');
-      setError(message);
+      await persistItemEdits(itemId);
     } finally {
       setBusyItemId('');
     }
@@ -389,6 +384,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     setBusyItemId(itemId);
     setError('');
     try {
+      await persistItemEdits(itemId);
       const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(itemId)}/create-news`, {
         method: 'POST',
       });
@@ -398,6 +394,67 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setError(message);
     } finally {
       setBusyItemId('');
+    }
+  };
+
+  const persistItemEdits = async (itemId: string) => {
+    setError('');
+    const payload: Record<string, string> = {};
+    if (themeEdits[itemId] !== undefined) payload.theme = themeEdits[itemId];
+    if (dateEdits[itemId] !== undefined) payload.scheduled_for = dateEdits[itemId];
+    if (draftEdits[itemId] !== undefined) payload.draft_text = draftEdits[itemId];
+    if (Object.keys(payload).length === 0) {
+      return currentPlan;
+    }
+    const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(itemId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+    const nextPlan = response.plan || null;
+    setCurrentPlan(nextPlan);
+    return nextPlan;
+  };
+
+  const runBulkGenerateDrafts = async () => {
+    if (bulkDraftCandidates.length === 0) return;
+    setBulkBusyAction('drafts');
+    setError('');
+    try {
+      let nextPlan = currentPlan;
+      for (const item of bulkDraftCandidates) {
+        const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}/generate-draft`, {
+          method: 'POST',
+        });
+        nextPlan = response.plan || null;
+        setCurrentPlan(nextPlan);
+      }
+    } catch (draftError) {
+      const message = draftError instanceof Error ? draftError.message : (isRu ? 'Не удалось сгенерировать черновики' : 'Could not generate drafts');
+      setError(message);
+    } finally {
+      setBulkBusyAction('');
+    }
+  };
+
+  const runBulkCreateNews = async () => {
+    if (bulkNewsCandidates.length === 0) return;
+    setBulkBusyAction('news');
+    setError('');
+    try {
+      let nextPlan = currentPlan;
+      for (const item of bulkNewsCandidates) {
+        await persistItemEdits(item.id);
+        const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}/create-news`, {
+          method: 'POST',
+        });
+        nextPlan = response.plan || null;
+        setCurrentPlan(nextPlan);
+      }
+    } catch (publishError) {
+      const message = publishError instanceof Error ? publishError.message : (isRu ? 'Не удалось создать новости' : 'Could not create news items');
+      setError(message);
+    } finally {
+      setBulkBusyAction('');
     }
   };
 
@@ -794,6 +851,26 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 ))}
               </div>
             ) : null}
+            <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+              <Button
+                variant="outline"
+                onClick={() => { void runBulkGenerateDrafts(); }}
+                disabled={Boolean(bulkBusyAction) || bulkDraftCandidates.length === 0}
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                {bulkBusyAction === 'drafts'
+                  ? (isRu ? 'Генерируем черновики...' : 'Generating drafts...')
+                  : `${isRu ? 'Сгенерировать по выборке' : 'Generate for filtered'} · ${bulkDraftCandidates.length}`}
+              </Button>
+              <Button
+                onClick={() => { void runBulkCreateNews(); }}
+                disabled={Boolean(bulkBusyAction) || bulkNewsCandidates.length === 0}
+              >
+                {bulkBusyAction === 'news'
+                  ? (isRu ? 'Создаём новости...' : 'Creating news...')
+                  : `${isRu ? 'Создать новости по выборке' : 'Create news for filtered'} · ${bulkNewsCandidates.length}`}
+              </Button>
+            </div>
             {filteredItems.map((item) => {
               const currentDraft = draftEdits[item.id] !== undefined ? draftEdits[item.id] : item.draft_text;
               const currentTheme = themeEdits[item.id] !== undefined ? themeEdits[item.id] : item.theme;
