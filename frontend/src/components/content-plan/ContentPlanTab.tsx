@@ -101,6 +101,7 @@ type ContentMixKey = 'services' | 'seo' | 'sales' | 'audit' | 'seasonal';
 
 type ContentMixState = Record<ContentMixKey, boolean>;
 type ItemFilterKey = 'all' | 'needs_draft' | 'has_draft' | 'news_created';
+type SignalFilterKey = 'all' | ContentMixKey;
 
 const CONTENT_MIX_OPTIONS: Array<{ key: ContentMixKey; labelRu: string; labelEn: string }> = [
   { key: 'services', labelRu: 'Услуги', labelEn: 'Services' },
@@ -110,6 +111,7 @@ const CONTENT_MIX_OPTIONS: Array<{ key: ContentMixKey; labelRu: string; labelEn:
   { key: 'seasonal', labelRu: 'Сезонность', labelEn: 'Seasonal' },
 ];
 const ITEM_FILTER_OPTIONS: ItemFilterKey[] = ['all', 'needs_draft', 'has_draft', 'news_created'];
+const SIGNAL_FILTER_OPTIONS: SignalFilterKey[] = ['all', 'seo', 'services', 'sales', 'audit', 'seasonal'];
 
 export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const navigate = useNavigate();
@@ -136,6 +138,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [dateEdits, setDateEdits] = useState<Record<string, string>>({});
   const [busyItemId, setBusyItemId] = useState('');
   const [selectedItemFilter, setSelectedItemFilter] = useState<ItemFilterKey>('all');
+  const [selectedSignalFilter, setSelectedSignalFilter] = useState<SignalFilterKey>('all');
 
   const allowedHorizons = context?.subscription?.allowed_horizons || [30];
   const scopeOptions = context?.scope?.scope_options || [];
@@ -150,8 +153,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   ), [scopeOptions, selectedScopeKey]);
   const filteredItems = useMemo(() => {
     const items = currentPlan?.items || [];
-    return items.filter((item) => _matchesItemFilter(item, selectedItemFilter));
-  }, [currentPlan?.items, selectedItemFilter]);
+    return items.filter((item) => (
+      _matchesItemFilter(item, selectedItemFilter) && _matchesSignalFilter(item, selectedSignalFilter)
+    ));
+  }, [currentPlan?.items, selectedItemFilter, selectedSignalFilter]);
   const itemFilterCounts = useMemo(() => {
     const items = currentPlan?.items || [];
     return ITEM_FILTER_OPTIONS.reduce<Record<ItemFilterKey, number>>((acc, filterKey) => {
@@ -162,6 +167,20 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       needs_draft: 0,
       has_draft: 0,
       news_created: 0,
+    });
+  }, [currentPlan?.items]);
+  const signalFilterCounts = useMemo(() => {
+    const items = currentPlan?.items || [];
+    return SIGNAL_FILTER_OPTIONS.reduce<Record<SignalFilterKey, number>>((acc, filterKey) => {
+      acc[filterKey] = items.filter((item) => _matchesSignalFilter(item, filterKey)).length;
+      return acc;
+    }, {
+      all: 0,
+      seo: 0,
+      services: 0,
+      sales: 0,
+      audit: 0,
+      seasonal: 0,
     });
   }, [currentPlan?.items]);
 
@@ -638,6 +657,23 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 </button>
               ))}
             </div>
+            <div className="flex flex-wrap gap-2">
+              {SIGNAL_FILTER_OPTIONS.map((filterKey) => (
+                <button
+                  key={filterKey}
+                  type="button"
+                  onClick={() => setSelectedSignalFilter(filterKey)}
+                  className={[
+                    'rounded-full border px-3 py-1.5 text-sm transition-colors',
+                    selectedSignalFilter === filterKey
+                      ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
+                  ].join(' ')}
+                >
+                  {_signalFilterLabel(filterKey, isRu)} · {signalFilterCounts[filterKey]}
+                </button>
+              ))}
+            </div>
             {filteredItems.map((item) => {
               const currentDraft = draftEdits[item.id] !== undefined ? draftEdits[item.id] : item.draft_text;
               const currentTheme = themeEdits[item.id] !== undefined ? themeEdits[item.id] : item.theme;
@@ -724,8 +760,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
             {filteredItems.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 py-8 text-sm text-slate-600">
                 {isRu
-                  ? 'Для выбранного фильтра пока нет публикаций. Переключите статус выше.'
-                  : 'There are no items for this filter yet. Switch the status filter above.'}
+                  ? 'Для выбранного сочетания фильтров пока нет публикаций. Переключите статус или источник сигнала выше.'
+                  : 'There are no items for this filter combination yet. Switch the status or signal filter above.'}
               </div>
             ) : null}
           </div>
@@ -779,4 +815,20 @@ function _matchesItemFilter(item: PlanItem, filterKey: ItemFilterKey): boolean {
   if (filterKey === 'has_draft') return hasDraft && !hasNews;
   if (filterKey === 'news_created') return hasNews;
   return true;
+}
+
+function _signalFilterLabel(filterKey: SignalFilterKey, isRu: boolean): string {
+  if (filterKey === 'seo') return 'SEO';
+  if (filterKey === 'services') return isRu ? 'Услуги' : 'Services';
+  if (filterKey === 'sales') return isRu ? 'Продажи' : 'Sales';
+  if (filterKey === 'audit') return isRu ? 'Аудит' : 'Audit';
+  if (filterKey === 'seasonal') return isRu ? 'Сезонность' : 'Seasonal';
+  return isRu ? 'Все сигналы' : 'All signals';
+}
+
+function _matchesSignalFilter(item: PlanItem, filterKey: SignalFilterKey): boolean {
+  if (filterKey === 'all') return true;
+  const normalizedContentType = String(item.content_type || '').trim().toLowerCase();
+  if (filterKey === 'services') return normalizedContentType === 'service';
+  return normalizedContentType === filterKey;
 }
