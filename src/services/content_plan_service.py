@@ -283,6 +283,21 @@ def _fetch_seo_keywords(cursor: Any, user_id: str, business_id: str) -> list[dic
     ]
 
 
+def _fetch_seo_keywords_isolated(user_id: str, business_id: str) -> list[dict[str, Any]]:
+    seo_db = DatabaseManager()
+    seo_cursor = seo_db.conn.cursor()
+    try:
+        return _fetch_seo_keywords(seo_cursor, user_id, business_id)
+    except Exception:
+        try:
+            seo_db.conn.rollback()
+        except Exception:
+            pass
+        return []
+    finally:
+        seo_db.close()
+
+
 def _fetch_audit_signals(scope_business_id: str) -> list[dict[str, Any]]:
     try:
         audit = build_card_audit_snapshot(scope_business_id)
@@ -420,7 +435,7 @@ def load_plan_context_for_business(user_id: str, business_id: str, scope_type: s
         scope_business_row = _build_scope_business_context(cursor, business_row, normalized_scope, target_id)
         scope_business_id = str(scope_business_row.get("id") or business_id)
         services = _fetch_services(cursor, scope_business_id)
-        seo_keywords = _fetch_seo_keywords(cursor, user_id, scope_business_id)
+        seo_keywords = _fetch_seo_keywords_isolated(user_id, scope_business_id)
         sales_signals = _fetch_sales_signals(cursor, user_id, scope_business_id)
         recent_news = _fetch_recent_news(cursor, user_id, scope_business_id)
         audit_signals = _fetch_audit_signals(scope_business_id)

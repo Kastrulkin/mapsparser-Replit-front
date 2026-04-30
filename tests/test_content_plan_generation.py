@@ -1,5 +1,6 @@
+import src.services.content_plan_service as content_plan_service
 from src.core.content_plan_generator import build_content_plan_skeleton
-from src.services.content_plan_service import _scope_target_business_id
+from src.services.content_plan_service import _fetch_seo_keywords_isolated, _scope_target_business_id
 
 
 def test_content_plan_skeleton_respects_allowed_period_and_sources():
@@ -50,3 +51,43 @@ def test_scope_target_business_id_uses_parent_for_network_parent():
     assert _scope_target_business_id(None, "child-1", "network_parent", "parent-1") == "parent-1"
     assert _scope_target_business_id(None, "child-1", "network_location", "location-1") == "location-1"
     assert _scope_target_business_id(None, "child-1", "single_business", "parent-1") == "child-1"
+
+
+def test_fetch_seo_keywords_isolated_returns_empty_list_when_optional_loader_fails(monkeypatch):
+    class FakeCursor:
+        pass
+
+    class FakeConn:
+        def __init__(self):
+            self.rolled_back = False
+
+        def cursor(self):
+            return FakeCursor()
+
+        def rollback(self):
+            self.rolled_back = True
+
+        def commit(self):
+            return None
+
+        def close(self):
+            return None
+
+    created_connections: list[FakeConn] = []
+
+    class FakeDatabaseManager:
+        def __init__(self):
+            self.conn = FakeConn()
+            created_connections.append(self.conn)
+
+        def close(self):
+            self.conn.close()
+
+    def fake_fetch_seo_keywords(cursor, user_id, business_id):
+        raise RuntimeError("wordstat exploded")
+
+    monkeypatch.setattr(content_plan_service, "DatabaseManager", FakeDatabaseManager)
+    monkeypatch.setattr(content_plan_service, "_fetch_seo_keywords", fake_fetch_seo_keywords)
+
+    assert _fetch_seo_keywords_isolated("user-1", "business-1") == []
+    assert created_connections and created_connections[0].rolled_back is True
