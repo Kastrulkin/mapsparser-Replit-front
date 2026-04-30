@@ -461,6 +461,9 @@ def _record_content_plan_event(
     business_id: str,
     capability: str,
     event_type: str,
+    accepted: bool | None = None,
+    edited_before_accept: bool | None = None,
+    outcome: str | None = None,
     draft_text: str | None = None,
     final_text: str | None = None,
     metadata: dict[str, Any] | None = None,
@@ -472,6 +475,9 @@ def _record_content_plan_event(
             intent="operations",
             user_id=user_id,
             business_id=business_id,
+            accepted=accepted,
+            edited_before_accept=edited_before_accept,
+            outcome=outcome,
             draft_text=draft_text,
             final_text=final_text,
             metadata=metadata or {},
@@ -997,12 +1003,17 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
             tuple(params),
         )
         next_status = str(payload.get("status") or "").strip() if "status" in payload else previous_status
+        event_type = "edited"
+        if "status" in payload and next_status == "skipped":
+            event_type = "skipped"
+        elif "scheduled_for" in payload and "draft_text" not in payload and "theme" not in payload:
+            event_type = "rescheduled"
         _record_content_plan_event(
             conn=db.conn,
             user_id=user_id,
             business_id=str(data.get("root_business_id") or data.get("business_id") or ""),
             capability="content_plan.item",
-            event_type="edited",
+            event_type=event_type,
             draft_text=str(payload.get("draft_text") or "").strip() if "draft_text" in payload else None,
             final_text=str(payload.get("theme") or "").strip() if "theme" in payload else None,
             metadata={
@@ -1233,7 +1244,8 @@ def create_news_from_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
         _ensure_usernews_table(cursor)
         cursor.execute(
             """
-            SELECT i.id, i.plan_id, i.business_id, i.theme, i.goal, i.source_ref, i.draft_text, i.service_id, p.business_id AS root_business_id
+            SELECT i.id, i.plan_id, i.business_id, i.theme, i.goal, i.source_ref, i.draft_text, i.service_id, i.status,
+                   p.business_id AS root_business_id
             FROM contentplanitems i
             JOIN contentplans p ON p.id = i.plan_id
             WHERE i.id = %s
@@ -1253,6 +1265,7 @@ def create_news_from_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
         generated_text = str(item.get("draft_text") or "").strip()
         if not generated_text:
             generated_text = _fallback_draft_text("Бизнес", item)
+        edited_before_accept = str(item.get("status") or "").strip() == "edited"
         news_id = str(uuid.uuid4())
         source_text = "\n".join(
             part
@@ -1296,7 +1309,10 @@ def create_news_from_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
             user_id=user_id,
             business_id=str(item.get("root_business_id") or item.get("business_id") or ""),
             capability="content_plan.publish",
-            event_type="created_news",
+            event_type="accepted",
+            accepted=True,
+            edited_before_accept=edited_before_accept,
+            outcome="news_created",
             draft_text=generated_text,
             final_text=generated_text,
             metadata={
@@ -1305,6 +1321,7 @@ def create_news_from_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
                 "news_id": news_id,
                 "service_id": str(item.get("service_id") or "").strip(),
                 "source_ref": str(item.get("source_ref") or "").strip(),
+                "created_via": "content_plan",
             },
         )
         db.conn.commit()
