@@ -155,6 +155,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [selectedWeekKey, setSelectedWeekKey] = useState('all');
   const [sortMode, setSortMode] = useState<'priority' | 'date'>(() => _readStoredSortMode());
   const [selectedViewPreset, setSelectedViewPreset] = useState<ViewPresetKey>('overview');
+  const [lastFocusLocationKey, setLastFocusLocationKey] = useState('all');
+  const [lastFocusWeekKey, setLastFocusWeekKey] = useState('all');
 
   const allowedHorizons = context?.subscription?.allowed_horizons || [30];
   const scopeOptions = context?.scope?.scope_options || [];
@@ -194,6 +196,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const weekSummary = useMemo(() => {
     const buckets = new Map<string, { key: string; label: string; total: number; needsDraft: number; readyToPublish: number }>();
     for (const item of filteredItems) {
+      if (String(item.status || '').trim() === 'skipped') continue;
       const key = _weekBucketKey(item.scheduled_for);
       if (!key) continue;
       const existing = buckets.get(key) || {
@@ -293,6 +296,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const locationOperationalSummary = useMemo(() => {
     const buckets = new Map<string, { key: string; label: string; total: number; needsDraft: number; readyToPublish: number }>();
     for (const item of filteredItems) {
+      if (String(item.status || '').trim() === 'skipped') continue;
       const key = String(item.location_scope || item.business_id || '').trim();
       if (!key) continue;
       const existing = buckets.get(key) || {
@@ -385,6 +389,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       readyToPublish: number;
     }>();
     for (const item of currentPlan?.items || []) {
+      if (String(item.status || '').trim() === 'skipped') continue;
       const locationKey = String(item.location_scope || item.business_id || '').trim();
       const weekKey = _weekBucketKey(item.scheduled_for);
       if (!locationKey || !weekKey) continue;
@@ -515,6 +520,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (typeof stored.selectedWeekKey === 'string' && stored.selectedWeekKey.trim()) {
       setSelectedWeekKey(stored.selectedWeekKey);
     }
+    if (typeof stored.lastFocusLocationKey === 'string' && stored.lastFocusLocationKey.trim()) {
+      setLastFocusLocationKey(stored.lastFocusLocationKey);
+    }
+    if (typeof stored.lastFocusWeekKey === 'string' && stored.lastFocusWeekKey.trim()) {
+      setLastFocusWeekKey(stored.lastFocusWeekKey);
+    }
     if (stored.sortMode === 'priority' || stored.sortMode === 'date') {
       setSortMode(stored.sortMode);
     }
@@ -522,6 +533,16 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setSelectedViewPreset(stored.selectedViewPreset);
     }
   }, [businessId]);
+
+  useEffect(() => {
+    if (selectedViewPreset !== 'focus') return;
+    if (selectedItemLocationKey !== 'all') {
+      setLastFocusLocationKey(selectedItemLocationKey);
+    }
+    if (selectedWeekKey !== 'all') {
+      setLastFocusWeekKey(selectedWeekKey);
+    }
+  }, [selectedViewPreset, selectedItemLocationKey, selectedWeekKey]);
 
   useEffect(() => {
     setSelectedViewPreset(_inferViewPresetKey({
@@ -545,6 +566,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (!businessId) return;
     _writeStoredPreferences(businessId, {
       selectedViewPreset,
+      lastFocusLocationKey,
+      lastFocusWeekKey,
       selectedItemFilter,
       selectedSignalFilter,
       selectedPlanTargetKey,
@@ -555,6 +578,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   }, [
     businessId,
     selectedViewPreset,
+    lastFocusLocationKey,
+    lastFocusWeekKey,
     selectedItemFilter,
     selectedSignalFilter,
     selectedPlanTargetKey,
@@ -725,12 +750,25 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setSortMode('priority');
       return;
     }
+    if (preset === 'focus') {
+      setSelectedItemFilter('urgent');
+      setSortMode('priority');
+      if (lastFocusLocationKey !== 'all') {
+        setSelectedItemLocationKey(lastFocusLocationKey);
+      }
+      if (lastFocusWeekKey !== 'all') {
+        setSelectedWeekKey(lastFocusWeekKey);
+      }
+      return;
+    }
     setSelectedItemFilter('news_created');
     setSortMode('date');
   };
 
   const applyLocationWeekFocus = (locationKey: string, weekKey: string) => {
     setSelectedViewPreset('focus');
+    setLastFocusLocationKey(locationKey);
+    setLastFocusWeekKey(weekKey);
     setSelectedItemFilter('urgent');
     setSelectedSignalFilter('all');
     setSelectedItemLocationKey(locationKey);
@@ -789,6 +827,58 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setError(message);
     } finally {
       setBulkBusyAction('');
+    }
+  };
+
+  const runItemSkip = async (itemId: string) => {
+    setBusyItemId(itemId);
+    setError('');
+    try {
+      const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(itemId)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: 'skipped' }),
+      });
+      setCurrentPlan(response.plan || null);
+    } catch (skipError) {
+      const message = skipError instanceof Error ? skipError.message : (isRu ? 'Не удалось пропустить элемент' : 'Could not skip item');
+      setError(message);
+    } finally {
+      setBusyItemId('');
+    }
+  };
+
+  const runItemReschedule = async (itemId: string, scheduledFor: string, daysDelta: number) => {
+    setBusyItemId(itemId);
+    setError('');
+    try {
+      const nextDate = _shiftIsoDate(scheduledFor, daysDelta);
+      const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(itemId)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ scheduled_for: nextDate, status: 'planned' }),
+      });
+      setCurrentPlan(response.plan || null);
+      setDateEdits((prev) => ({ ...prev, [itemId]: nextDate }));
+    } catch (rescheduleError) {
+      const message = rescheduleError instanceof Error ? rescheduleError.message : (isRu ? 'Не удалось перенести элемент' : 'Could not reschedule item');
+      setError(message);
+    } finally {
+      setBusyItemId('');
+    }
+  };
+
+  const runItemDuplicate = async (itemId: string) => {
+    setBusyItemId(itemId);
+    setError('');
+    try {
+      const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(itemId)}/duplicate`, {
+        method: 'POST',
+      });
+      setCurrentPlan(response.plan || null);
+    } catch (duplicateError) {
+      const message = duplicateError instanceof Error ? duplicateError.message : (isRu ? 'Не удалось дублировать элемент' : 'Could not duplicate item');
+      setError(message);
+    } finally {
+      setBusyItemId('');
     }
   };
 
@@ -1495,6 +1585,30 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                         ? (isRu ? 'Новость уже создана' : 'News already created')
                         : (isRu ? 'Создать новость' : 'Create news')}
                     </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => runItemReschedule(item.id, currentDate, 7)}
+                      disabled={busyItemId === item.id}
+                    >
+                      {isRu ? '+7 дней' : '+7 days'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => runItemDuplicate(item.id)}
+                      disabled={busyItemId === item.id}
+                    >
+                      {isRu ? 'Дублировать' : 'Duplicate'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => runItemSkip(item.id)}
+                      disabled={busyItemId === item.id}
+                    >
+                      {isRu ? 'Пропустить' : 'Skip'}
+                    </Button>
                   </div>
                 </div>
               );
@@ -1572,8 +1686,10 @@ function _itemFilterLabel(filterKey: ItemFilterKey, isRu: boolean): string {
 }
 
 function _matchesItemFilter(item: PlanItem, filterKey: ItemFilterKey): boolean {
+  const status = String(item.status || '').trim();
   const hasNews = Boolean(String(item.usernews_id || '').trim());
   const hasDraft = Boolean(String(item.draft_text || '').trim());
+  if (status === 'skipped') return filterKey === 'all';
   if (filterKey === 'urgent') return !hasNews;
   if (filterKey === 'needs_draft') return !hasDraft;
   if (filterKey === 'has_draft') return hasDraft && !hasNews;
@@ -1691,6 +1807,19 @@ function _inferViewPresetKey(value: {
     return 'published';
   }
   return 'custom';
+}
+
+function _shiftIsoDate(input: string, daysDelta: number): string {
+  const normalized = String(input || '').slice(0, 10);
+  if (!normalized) {
+    return new Date(Date.now() + daysDelta * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  }
+  const parsed = new Date(`${normalized}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) {
+    return normalized;
+  }
+  parsed.setUTCDate(parsed.getUTCDate() + daysDelta);
+  return parsed.toISOString().slice(0, 10);
 }
 
 function _itemPriorityRank(item: Pick<PlanItem, 'draft_text' | 'usernews_id'>): number {

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from database_manager import DatabaseManager
@@ -905,6 +905,11 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
             if field in payload:
                 updates.append(f"{field} = %s")
                 params.append(payload.get(field))
+        if "status" in payload:
+            next_status = str(payload.get("status") or "").strip()
+            if next_status in {"planned", "draft_generated", "edited", "approved", "published", "skipped"}:
+                updates.append("status = %s")
+                params.append(next_status)
         if "draft_text" in payload:
             updates.append("status = %s")
             params.append("edited")
@@ -922,6 +927,89 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
         )
         db.conn.commit()
         return get_content_plan(user_id, str(data.get("plan_id") or ""))
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+def duplicate_content_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        ensure_content_plan_tables(cursor)
+        cursor.execute(
+            """
+            SELECT i.id, i.plan_id, i.business_id, i.scheduled_for, i.content_type, i.theme, i.goal,
+                   i.source_kind, i.source_ref, i.seo_keyword, i.service_id, i.transaction_id,
+                   i.location_scope, p.business_id AS root_business_id
+            FROM contentplanitems i
+            JOIN contentplans p ON p.id = i.plan_id
+            WHERE i.id = %s
+            LIMIT 1
+            """,
+            (item_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise ValueError("Элемент плана не найден")
+        item = _row_to_dict(cursor, row)
+        owner_id = get_business_owner_id(cursor, str(item.get("root_business_id") or ""))
+        if str(owner_id or "").strip() != str(user_id or "").strip():
+            cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
+            if not bool(_row_get(cursor.fetchone(), "coalesce", 0, False)):
+                raise PermissionError("Нет доступа к элементу плана")
+
+        scheduled_for = item.get("scheduled_for")
+        next_scheduled_for: Any = scheduled_for
+        if isinstance(scheduled_for, datetime):
+            next_scheduled_for = (scheduled_for.date() + timedelta(days=7)).isoformat()
+        elif isinstance(scheduled_for, date):
+            next_scheduled_for = (scheduled_for + timedelta(days=7)).isoformat()
+        else:
+            raw_date = str(scheduled_for or "").strip()
+            if raw_date:
+                try:
+                    next_scheduled_for = (date.fromisoformat(raw_date) + timedelta(days=7)).isoformat()
+                except Exception:
+                    next_scheduled_for = raw_date
+
+        duplicated_id = str(uuid.uuid4())
+        cursor.execute(
+            """
+            INSERT INTO contentplanitems (
+                id, plan_id, business_id, scheduled_for, content_type, theme, goal,
+                source_kind, source_ref, seo_keyword, service_id, transaction_id,
+                location_scope, draft_text, status, usernews_id, created_at, updated_at
+            )
+            VALUES (
+                %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            )
+            """,
+            (
+                duplicated_id,
+                str(item.get("plan_id") or ""),
+                str(item.get("business_id") or ""),
+                next_scheduled_for,
+                str(item.get("content_type") or "").strip(),
+                str(item.get("theme") or "").strip(),
+                str(item.get("goal") or "").strip(),
+                str(item.get("source_kind") or "").strip(),
+                str(item.get("source_ref") or "").strip(),
+                str(item.get("seo_keyword") or "").strip(),
+                str(item.get("service_id") or "").strip() or None,
+                str(item.get("transaction_id") or "").strip() or None,
+                str(item.get("location_scope") or "").strip() or None,
+                "",
+                "planned",
+                None,
+            ),
+        )
+        db.conn.commit()
+        return get_content_plan(user_id, str(item.get("plan_id") or ""))
     except Exception:
         db.conn.rollback()
         raise

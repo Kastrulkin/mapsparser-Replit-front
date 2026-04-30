@@ -6,6 +6,7 @@ from auth_system import verify_session
 from services.content_plan_service import (
     create_generated_content_plan,
     create_news_from_plan_item,
+    duplicate_content_plan_item,
     generate_draft_for_plan_item,
     get_content_plan,
     list_content_plans,
@@ -154,6 +155,22 @@ def content_plan_item_create_news(item_id: str):
         return error_response
     try:
         plan = create_news_from_plan_item(str(user_data.get("user_id") or ""), item_id)
+        return jsonify({"success": True, "plan": plan})
+    except PermissionError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 404
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@content_plans_bp.route("/items/<item_id>/duplicate", methods=["POST"])
+def content_plan_item_duplicate(item_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    try:
+        plan = duplicate_content_plan_item(str(user_data.get("user_id") or ""), item_id)
         return jsonify({"success": True, "plan": plan})
     except PermissionError as exc:
         return jsonify({"success": False, "error": str(exc)}), 403
