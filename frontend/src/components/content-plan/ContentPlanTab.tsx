@@ -738,6 +738,60 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     setSortMode('priority');
   };
 
+  const getLocationWeekFocusItems = (locationKey: string, weekKey: string) => (
+    (currentPlan?.items || []).filter((item) => {
+      const itemLocationKey = String(item.location_scope || item.business_id || '').trim();
+      return itemLocationKey === locationKey && _weekBucketKey(item.scheduled_for) === weekKey;
+    })
+  );
+
+  const runLocationWeekFocusDrafts = async (locationKey: string, weekKey: string) => {
+    const focusCandidates = getLocationWeekFocusItems(locationKey, weekKey)
+      .filter((item) => !String(item.draft_text || '').trim() && !String(item.usernews_id || '').trim());
+    if (focusCandidates.length === 0) return;
+    setBulkBusyAction(`focus-drafts:${locationKey}:${weekKey}`);
+    setError('');
+    try {
+      let nextPlan = currentPlan;
+      for (const item of focusCandidates) {
+        const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}/generate-draft`, {
+          method: 'POST',
+        });
+        nextPlan = response.plan || null;
+        setCurrentPlan(nextPlan);
+      }
+    } catch (draftError) {
+      const message = draftError instanceof Error ? draftError.message : (isRu ? 'Не удалось сгенерировать черновики' : 'Could not generate drafts');
+      setError(message);
+    } finally {
+      setBulkBusyAction('');
+    }
+  };
+
+  const runLocationWeekFocusNews = async (locationKey: string, weekKey: string) => {
+    const focusCandidates = getLocationWeekFocusItems(locationKey, weekKey)
+      .filter((item) => String(item.draft_text || '').trim() && !String(item.usernews_id || '').trim());
+    if (focusCandidates.length === 0) return;
+    setBulkBusyAction(`focus-news:${locationKey}:${weekKey}`);
+    setError('');
+    try {
+      let nextPlan = currentPlan;
+      for (const item of focusCandidates) {
+        await persistItemEdits(item.id);
+        const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}/create-news`, {
+          method: 'POST',
+        });
+        nextPlan = response.plan || null;
+        setCurrentPlan(nextPlan);
+      }
+    } catch (publishError) {
+      const message = publishError instanceof Error ? publishError.message : (isRu ? 'Не удалось создать новости' : 'Could not create news items');
+      setError(message);
+    } finally {
+      setBulkBusyAction('');
+    }
+  };
+
   if (!businessId) {
     return (
       <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-6 py-8 text-sm text-gray-600">
@@ -1098,10 +1152,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
             {locationWeekFocusSummary.length > 0 ? (
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {locationWeekFocusSummary.map((focus) => (
-                  <button
+                  <div
                     key={focus.key}
-                    type="button"
-                    onClick={() => applyLocationWeekFocus(focus.locationKey, focus.weekKey)}
                     className={[
                       'rounded-2xl border px-4 py-4 text-left transition-colors',
                       selectedViewPreset === 'focus' && selectedItemLocationKey === focus.locationKey && selectedWeekKey === focus.weekKey
@@ -1109,24 +1161,53 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                         : 'border-slate-200 bg-white hover:bg-slate-50',
                     ].join(' ')}
                   >
-                    <div className="text-sm font-semibold text-slate-900">
-                      {focus.locationLabel}
+                    <button
+                      type="button"
+                      onClick={() => applyLocationWeekFocus(focus.locationKey, focus.weekKey)}
+                      className="w-full text-left"
+                    >
+                      <div className="text-sm font-semibold text-slate-900">
+                        {focus.locationLabel}
+                      </div>
+                      <div className="mt-1 text-xs font-medium text-slate-500">
+                        {focus.weekLabel}
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">
+                          {isRu ? 'Всего' : 'Total'} · {focus.total}
+                        </span>
+                        <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800">
+                          {isRu ? 'Без текста' : 'No draft'} · {focus.needsDraft}
+                        </span>
+                        <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-800">
+                          {isRu ? 'К публикации' : 'Ready'} · {focus.readyToPublish}
+                        </span>
+                      </div>
+                    </button>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => { void runLocationWeekFocusDrafts(focus.locationKey, focus.weekKey); }}
+                        disabled={Boolean(bulkBusyAction) || focus.needsDraft === 0}
+                      >
+                        {bulkBusyAction === `focus-drafts:${focus.locationKey}:${focus.weekKey}`
+                          ? (isRu ? 'Генерируем...' : 'Generating...')
+                          : `${isRu ? 'Сгенерировать' : 'Generate'} · ${focus.needsDraft}`}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => { void runLocationWeekFocusNews(focus.locationKey, focus.weekKey); }}
+                        disabled={Boolean(bulkBusyAction) || focus.readyToPublish === 0}
+                      >
+                        {bulkBusyAction === `focus-news:${focus.locationKey}:${focus.weekKey}`
+                          ? (isRu ? 'Публикуем...' : 'Publishing...')
+                          : `${isRu ? 'Создать новости' : 'Create news'} · ${focus.readyToPublish}`}
+                      </Button>
                     </div>
-                    <div className="mt-1 text-xs font-medium text-slate-500">
-                      {focus.weekLabel}
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">
-                        {isRu ? 'Всего' : 'Total'} · {focus.total}
-                      </span>
-                      <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800">
-                        {isRu ? 'Без текста' : 'No draft'} · {focus.needsDraft}
-                      </span>
-                      <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-800">
-                        {isRu ? 'К публикации' : 'Ready'} · {focus.readyToPublish}
-                      </span>
-                    </div>
-                  </button>
+                  </div>
                 ))}
               </div>
             ) : null}
