@@ -239,6 +239,26 @@ def _fetch_recent_news(cursor: Any, user_id: str, business_id: str) -> list[dict
     ]
 
 
+def _fetch_map_link_count(cursor: Any, business_id: str) -> int:
+    try:
+        cursor.execute("SELECT to_regclass('public.businessmaplinks')")
+        row = cursor.fetchone()
+        if not _row_get(row, "to_regclass", 0, None):
+            return 0
+        cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM businessmaplinks
+            WHERE business_id = %s
+            """,
+            (business_id,),
+        )
+        count_row = cursor.fetchone()
+        return int(_row_get(count_row, "count", 0, 0) or 0)
+    except Exception:
+        return 0
+
+
 def _fetch_sales_signals(cursor: Any, user_id: str, business_id: str) -> list[dict[str, Any]]:
     cursor.execute(
         """
@@ -330,6 +350,34 @@ def _fetch_audit_signals(scope_business_id: str) -> list[dict[str, Any]]:
         for item in issue_blocks[:10]
         if str(item.get("title") or item.get("problem") or "").strip()
     ]
+
+
+def _build_planning_readiness(
+    *,
+    map_links_count: int,
+    services_count: int,
+    seo_keywords_count: int,
+    sales_signals_count: int,
+    audit_signals_count: int,
+) -> dict[str, Any]:
+    missing_inputs: list[str] = []
+    if map_links_count <= 0:
+        missing_inputs.append("map_links")
+    if services_count <= 0:
+        missing_inputs.append("services")
+    if seo_keywords_count <= 0:
+        missing_inputs.append("seo_keywords")
+
+    return {
+        "map_links_count": int(map_links_count or 0),
+        "has_map_links": map_links_count > 0,
+        "has_services": services_count > 0,
+        "has_seo_keywords": seo_keywords_count > 0,
+        "has_sales_signals": sales_signals_count > 0,
+        "has_audit_signals": audit_signals_count > 0,
+        "missing_inputs": missing_inputs,
+        "is_grounded_for_search": map_links_count > 0 and services_count > 0 and seo_keywords_count > 0,
+    }
 
 
 def ensure_content_plan_tables(cursor: Any) -> None:
@@ -451,11 +499,19 @@ def load_plan_context_for_business(user_id: str, business_id: str, scope_type: s
         )
         scope_business_row = _build_scope_business_context(cursor, business_row, normalized_scope, target_id)
         scope_business_id = str(scope_business_row.get("id") or business_id)
+        map_links_count = _fetch_map_link_count(cursor, scope_business_id)
         services = _fetch_services(cursor, scope_business_id)
         seo_keywords = _fetch_seo_keywords_isolated(user_id, scope_business_id)
         sales_signals = _fetch_sales_signals(cursor, user_id, scope_business_id)
         recent_news = _fetch_recent_news(cursor, user_id, scope_business_id)
         audit_signals = _fetch_audit_signals(scope_business_id)
+        readiness = _build_planning_readiness(
+            map_links_count=map_links_count,
+            services_count=len(services),
+            seo_keywords_count=len(seo_keywords),
+            sales_signals_count=len(sales_signals),
+            audit_signals_count=len(audit_signals),
+        )
 
         return {
             "business": {
@@ -500,6 +556,7 @@ def load_plan_context_for_business(user_id: str, business_id: str, scope_type: s
             "sales_signals": sales_signals,
             "recent_news": recent_news,
             "audit_signals": audit_signals,
+            "readiness": readiness,
         }
     finally:
         db.close()

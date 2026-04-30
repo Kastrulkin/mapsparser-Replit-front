@@ -2,7 +2,13 @@ from datetime import date, datetime
 
 import src.services.content_plan_service as content_plan_service
 from src.core.content_plan_generator import build_content_plan_skeleton
-from src.services.content_plan_service import _fetch_seo_keywords, _fetch_seo_keywords_isolated, _json_ready, _scope_target_business_id
+from src.services.content_plan_service import (
+    _build_planning_readiness,
+    _fetch_seo_keywords,
+    _fetch_seo_keywords_isolated,
+    _json_ready,
+    _scope_target_business_id,
+)
 
 
 def test_content_plan_skeleton_respects_allowed_period_and_sources():
@@ -138,3 +144,20 @@ def test_json_ready_serializes_nested_dates_and_datetimes():
             "2026-05-03",
         ],
     }
+
+
+def test_build_planning_readiness_marks_missing_grounding_inputs():
+    readiness = _build_planning_readiness(
+        map_links_count=0,
+        services_count=0,
+        seo_keywords_count=0,
+        sales_signals_count=0,
+        audit_signals_count=3,
+    )
+
+    assert readiness["has_map_links"] is False
+    assert readiness["has_services"] is False
+    assert readiness["has_seo_keywords"] is False
+    assert readiness["has_audit_signals"] is True
+    assert readiness["is_grounded_for_search"] is False
+    assert readiness["missing_inputs"] == ["map_links", "services", "seo_keywords"]

@@ -47,6 +47,16 @@ type ContextPayload = {
   sales_signals?: Array<{ title: string; amount?: number }>;
   recent_news?: Array<{ id: string; text: string }>;
   audit_signals?: Array<{ title?: string; problem?: string }>;
+  readiness?: {
+    map_links_count?: number;
+    has_map_links?: boolean;
+    has_services?: boolean;
+    has_seo_keywords?: boolean;
+    has_sales_signals?: boolean;
+    has_audit_signals?: boolean;
+    missing_inputs?: string[];
+    is_grounded_for_search?: boolean;
+  };
 };
 
 type PlanItem = {
@@ -127,6 +137,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const isNetworkContext = Boolean(context?.scope?.network?.is_network);
   const selectedScopeDescription = context?.scope?.selected_scope_description || '';
   const selectedScopeLabel = context?.scope?.selected_scope_label || '';
+  const readiness = context?.readiness || null;
+  const missingInputs = Array.isArray(readiness?.missing_inputs) ? readiness?.missing_inputs : [];
 
   const selectedScopeOption = useMemo(() => (
     scopeOptions.find((item) => `${item.scope_type}:${item.scope_target_id}` === selectedScopeKey) || null
@@ -332,6 +344,36 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         </div>
       ) : null}
 
+      {readiness && !readiness.is_grounded_for_search ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-950">
+          <div className="font-semibold">
+            {isRu ? 'План пока строится не на полном наборе данных' : 'The plan is not yet using the full data set'}
+          </div>
+          <div className="mt-1 leading-6 text-amber-900/90">
+            {isRu
+              ? 'Сейчас контент-план опирается в основном на аудит и сезонные поводы. Чтобы получить темы по реальному спросу, добавьте карту и услуги.'
+              : 'Right now the plan relies mostly on audit signals and seasonal prompts. Add a map listing and services to ground it in real demand.'}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {missingInputs.includes('map_links') ? (
+              <span className="rounded-full border border-amber-300 bg-white/80 px-3 py-1 text-xs font-medium text-amber-800">
+                {isRu ? 'Нет ссылки на карту' : 'No map listing yet'}
+              </span>
+            ) : null}
+            {missingInputs.includes('services') ? (
+              <span className="rounded-full border border-amber-300 bg-white/80 px-3 py-1 text-xs font-medium text-amber-800">
+                {isRu ? 'Нет услуг в карточке' : 'No services yet'}
+              </span>
+            ) : null}
+            {missingInputs.includes('seo_keywords') ? (
+              <span className="rounded-full border border-amber-300 bg-white/80 px-3 py-1 text-xs font-medium text-amber-800">
+                {isRu ? 'Нет SEO-ключей по реальному спросу' : 'No grounded SEO keywords yet'}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
       <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="grid gap-4 md:grid-cols-2">
@@ -468,6 +510,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 </div>
               </div>
             ) : null}
+            <div>
+              <div className="font-semibold text-slate-900">{isRu ? 'Ссылки на карты' : 'Map listings'}</div>
+              <div>{readiness?.map_links_count || 0}</div>
+            </div>
             <div>
               <div className="font-semibold text-slate-900">{isRu ? 'Услуги' : 'Services'}</div>
               <div>{context?.services?.length || 0}</div>
