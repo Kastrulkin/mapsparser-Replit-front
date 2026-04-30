@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from database_manager import DatabaseManager
+from core.ai_learning import record_ai_learning_event
 from core.card_audit import build_card_audit_snapshot
 from core.helpers import get_business_owner_id
 from core.seo_keywords import collect_ranked_keywords
@@ -453,6 +454,33 @@ def _build_planning_readiness(
     }
 
 
+def _record_content_plan_event(
+    *,
+    conn: Any,
+    user_id: str,
+    business_id: str,
+    capability: str,
+    event_type: str,
+    draft_text: str | None = None,
+    final_text: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    try:
+        record_ai_learning_event(
+            capability=capability,
+            event_type=event_type,
+            intent="operations",
+            user_id=user_id,
+            business_id=business_id,
+            draft_text=draft_text,
+            final_text=final_text,
+            metadata=metadata or {},
+            conn=conn,
+        )
+    except Exception:
+        return
+
+
 def ensure_content_plan_tables(cursor: Any) -> None:
     cursor.execute(
         """
@@ -784,6 +812,23 @@ def create_generated_content_plan(
                     item_location_scope,
                 ),
             )
+        _record_content_plan_event(
+            conn=db.conn,
+            user_id=user_id,
+            business_id=business_id,
+            capability="content_plan.generate",
+            event_type="generated",
+            final_text=title,
+            metadata={
+                "plan_id": plan_id,
+                "scope_type": normalized_scope,
+                "scope_target_id": target_id,
+                "period_days": normalized_period,
+                "density": str(density or "standard"),
+                "items_count": len(items),
+                "sources_used": skeleton.get("meta", {}).get("sources_used") if isinstance(skeleton.get("meta"), dict) else [],
+            },
+        )
         db.conn.commit()
         return get_content_plan(user_id, plan_id)
     except Exception:
@@ -918,6 +963,7 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
         if not row:
             raise ValueError("Элемент плана не найден")
         data = _row_to_dict(cursor, row)
+        previous_status = str(data.get("status") or "").strip()
         owner_id = get_business_owner_id(cursor, str(data.get("root_business_id") or ""))
         if str(owner_id or "").strip() != str(user_id or "").strip():
             cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
@@ -949,6 +995,23 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
             WHERE id = %s
             """,
             tuple(params),
+        )
+        next_status = str(payload.get("status") or "").strip() if "status" in payload else previous_status
+        _record_content_plan_event(
+            conn=db.conn,
+            user_id=user_id,
+            business_id=str(data.get("root_business_id") or data.get("business_id") or ""),
+            capability="content_plan.item",
+            event_type="edited",
+            draft_text=str(payload.get("draft_text") or "").strip() if "draft_text" in payload else None,
+            final_text=str(payload.get("theme") or "").strip() if "theme" in payload else None,
+            metadata={
+                "item_id": item_id,
+                "plan_id": str(data.get("plan_id") or ""),
+                "fields": sorted([str(key) for key in payload.keys()]),
+                "previous_status": previous_status,
+                "next_status": next_status,
+            },
         )
         db.conn.commit()
         return get_content_plan(user_id, str(data.get("plan_id") or ""))
@@ -1032,6 +1095,20 @@ def duplicate_content_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
                 "planned",
                 None,
             ),
+        )
+        _record_content_plan_event(
+            conn=db.conn,
+            user_id=user_id,
+            business_id=str(item.get("root_business_id") or item.get("business_id") or ""),
+            capability="content_plan.item",
+            event_type="duplicated",
+            final_text=str(item.get("theme") or "").strip(),
+            metadata={
+                "source_item_id": item_id,
+                "duplicated_item_id": duplicated_id,
+                "plan_id": str(item.get("plan_id") or ""),
+                "scheduled_for": str(next_scheduled_for or ""),
+            },
         )
         db.conn.commit()
         return get_content_plan(user_id, str(item.get("plan_id") or ""))
@@ -1124,6 +1201,21 @@ def generate_draft_for_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
             """,
             (generated_text, item_id),
         )
+        _record_content_plan_event(
+            conn=db.conn,
+            user_id=user_id,
+            business_id=str(item.get("root_business_id") or item.get("business_id") or ""),
+            capability="content_plan.draft",
+            event_type="generated",
+            draft_text=generated_text,
+            metadata={
+                "item_id": item_id,
+                "plan_id": str(item.get("plan_id") or ""),
+                "source_kind": str(item.get("source_kind") or "").strip(),
+                "source_ref": str(item.get("source_ref") or "").strip(),
+                "seo_keyword": str(item.get("seo_keyword") or "").strip(),
+            },
+        )
         db.conn.commit()
         return get_content_plan(user_id, str(item.get("plan_id") or ""))
     except Exception:
@@ -1198,6 +1290,22 @@ def create_news_from_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
             WHERE id = %s
             """,
             (news_id, item_id),
+        )
+        _record_content_plan_event(
+            conn=db.conn,
+            user_id=user_id,
+            business_id=str(item.get("root_business_id") or item.get("business_id") or ""),
+            capability="content_plan.publish",
+            event_type="created_news",
+            draft_text=generated_text,
+            final_text=generated_text,
+            metadata={
+                "item_id": item_id,
+                "plan_id": str(item.get("plan_id") or ""),
+                "news_id": news_id,
+                "service_id": str(item.get("service_id") or "").strip(),
+                "source_ref": str(item.get("source_ref") or "").strip(),
+            },
         )
         db.conn.commit()
         return get_content_plan(user_id, str(item.get("plan_id") or ""))
