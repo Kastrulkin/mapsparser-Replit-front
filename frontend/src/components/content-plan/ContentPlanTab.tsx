@@ -150,6 +150,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [selectedSignalFilter, setSelectedSignalFilter] = useState<SignalFilterKey>('all');
   const [selectedPlanTargetKey, setSelectedPlanTargetKey] = useState('all');
   const [selectedItemLocationKey, setSelectedItemLocationKey] = useState('all');
+  const [selectedWeekKey, setSelectedWeekKey] = useState('all');
 
   const allowedHorizons = context?.subscription?.allowed_horizons || [30];
   const scopeOptions = context?.scope?.scope_options || [];
@@ -170,6 +171,25 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       && _matchesItemLocationFilter(item, selectedItemLocationKey)
     ));
   }, [currentPlan?.items, selectedItemFilter, selectedSignalFilter, selectedItemLocationKey]);
+  const availableWeeks = useMemo(() => {
+    const seen = new Set<string>();
+    const options: Array<{ key: string; label: string }> = [
+      { key: 'all', label: isRu ? 'Все недели' : 'All weeks' },
+    ];
+    for (const item of filteredItems) {
+      const key = _weekBucketKey(item.scheduled_for);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      options.push({
+        key,
+        label: _weekBucketLabel(key, isRu),
+      });
+    }
+    return options;
+  }, [filteredItems, isRu]);
+  const visibleItems = useMemo(() => (
+    filteredItems.filter((item) => selectedWeekKey === 'all' || _weekBucketKey(item.scheduled_for) === selectedWeekKey)
+  ), [filteredItems, selectedWeekKey]);
   const itemFilterCounts = useMemo(() => {
     const items = currentPlan?.items || [];
     return ITEM_FILTER_OPTIONS.reduce<Record<ItemFilterKey, number>>((acc, filterKey) => {
@@ -250,11 +270,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     return plans.filter((plan) => `${plan.scope_type}:${plan.scope_target_id}` === selectedPlanTargetKey);
   }, [plans, selectedPlanTargetKey]);
   const bulkDraftCandidates = useMemo(() => (
-    filteredItems.filter((item) => !String(item.draft_text || '').trim() && !String(item.usernews_id || '').trim())
-  ), [filteredItems]);
+    visibleItems.filter((item) => !String(item.draft_text || '').trim() && !String(item.usernews_id || '').trim())
+  ), [visibleItems]);
   const bulkNewsCandidates = useMemo(() => (
-    filteredItems.filter((item) => String(item.draft_text || '').trim() && !String(item.usernews_id || '').trim())
-  ), [filteredItems]);
+    visibleItems.filter((item) => String(item.draft_text || '').trim() && !String(item.usernews_id || '').trim())
+  ), [visibleItems]);
 
   const loadPlans = async () => {
     if (!businessId) return;
@@ -324,6 +344,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (!selectedScopeKey) return;
     void loadContext(selectedScopeKey);
   }, [selectedScopeKey, businessId]);
+
+  useEffect(() => {
+    if (availableWeeks.some((week) => week.key === selectedWeekKey)) return;
+    setSelectedWeekKey('all');
+  }, [availableWeeks, selectedWeekKey]);
 
   const toggleMix = (key: ContentMixKey) => {
     setContentMix((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -851,6 +876,25 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 ))}
               </div>
             ) : null}
+            {availableWeeks.length > 1 ? (
+              <div className="flex flex-wrap gap-2">
+                {availableWeeks.map((week) => (
+                  <button
+                    key={week.key}
+                    type="button"
+                    onClick={() => setSelectedWeekKey(week.key)}
+                    className={[
+                      'rounded-full border px-3 py-1.5 text-sm transition-colors',
+                      selectedWeekKey === week.key
+                        ? 'border-violet-300 bg-violet-50 text-violet-800'
+                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
+                    ].join(' ')}
+                  >
+                    {week.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3">
               <Button
                 variant="outline"
@@ -871,7 +915,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   : `${isRu ? 'Создать новости по выборке' : 'Create news for filtered'} · ${bulkNewsCandidates.length}`}
               </Button>
             </div>
-            {filteredItems.map((item) => {
+            {visibleItems.map((item) => {
               const currentDraft = draftEdits[item.id] !== undefined ? draftEdits[item.id] : item.draft_text;
               const currentTheme = themeEdits[item.id] !== undefined ? themeEdits[item.id] : item.theme;
               const currentDate = dateEdits[item.id] !== undefined ? dateEdits[item.id] : item.scheduled_for;
@@ -955,7 +999,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 </div>
               );
             })}
-            {filteredItems.length === 0 ? (
+            {visibleItems.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 py-8 text-sm text-slate-600">
                 {isRu
                   ? 'Для выбранного сочетания фильтров пока нет публикаций. Переключите статус или источник сигнала выше.'
@@ -1055,4 +1099,29 @@ function _matchesItemLocationFilter(item: PlanItem, filterKey: string): boolean 
   if (filterKey === 'all') return true;
   const itemKey = String(item.location_scope || item.business_id || '').trim();
   return itemKey === filterKey;
+}
+
+function _weekBucketKey(dateValue: string): string {
+  const value = String(dateValue || '').trim();
+  if (!value) return '';
+  const date = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return '';
+  const day = date.getUTCDay() || 7;
+  const monday = new Date(date);
+  monday.setUTCDate(date.getUTCDate() - day + 1);
+  return monday.toISOString().slice(0, 10);
+}
+
+function _weekBucketLabel(weekKey: string, isRu: boolean): string {
+  const value = String(weekKey || '').trim();
+  if (!value) return isRu ? 'Неделя' : 'Week';
+  const monday = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(monday.getTime())) return value;
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
+  const formatter = new Intl.DateTimeFormat(isRu ? 'ru-RU' : 'en-US', {
+    day: 'numeric',
+    month: 'short',
+  });
+  return `${formatter.format(monday)} - ${formatter.format(sunday)}`;
 }
