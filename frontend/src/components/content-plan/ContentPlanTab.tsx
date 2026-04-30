@@ -28,6 +28,13 @@ type ContextPayload = {
     scope_type?: string;
     scope_target_id?: string;
     scope_options?: ScopeOption[];
+    selected_scope_label?: string;
+    selected_scope_description?: string;
+    network?: {
+      is_network?: boolean;
+      locations_count?: number;
+      has_parent_scope?: boolean;
+    };
   };
   subscription?: {
     tier?: string;
@@ -62,6 +69,7 @@ type PlanPayload = {
   period_days: number;
   scope_type: string;
   scope_target_id: string;
+  plan_status?: string;
   items: PlanItem[];
   created_at?: string;
 };
@@ -116,6 +124,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
 
   const allowedHorizons = context?.subscription?.allowed_horizons || [30];
   const scopeOptions = context?.scope?.scope_options || [];
+  const isNetworkContext = Boolean(context?.scope?.network?.is_network);
+  const selectedScopeDescription = context?.scope?.selected_scope_description || '';
+  const selectedScopeLabel = context?.scope?.selected_scope_label || '';
 
   const selectedScopeOption = useMemo(() => (
     scopeOptions.find((item) => `${item.scope_type}:${item.scope_target_id}` === selectedScopeKey) || null
@@ -310,6 +321,17 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         </div>
       </div>
 
+      {selectedScopeDescription ? (
+        <div className="rounded-2xl border border-indigo-100 bg-indigo-50/70 px-5 py-4 text-sm text-indigo-950">
+          <div className="font-semibold">
+            {selectedScopeLabel || (isRu ? 'Выбранный сценарий' : 'Selected scope')}
+          </div>
+          <div className="mt-1 leading-6 text-indigo-900/90">
+            {selectedScopeDescription}
+          </div>
+        </div>
+      ) : null}
+
       <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="grid gap-4 md:grid-cols-2">
@@ -322,7 +344,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 <SelectContent>
                   {scopeOptions.map((item) => {
                     const key = `${item.scope_type}:${item.scope_target_id}`;
-                    const labelPrefix = item.is_parent ? (isRu ? 'Сеть' : 'Network') : (isRu ? 'Точка' : 'Location');
+                    const labelPrefix = item.is_parent
+                      ? (isRu ? 'Материнская точка' : 'Parent network')
+                      : item.scope_type === 'network_location'
+                        ? (isRu ? 'Точка сети' : 'Network location')
+                        : (isRu ? 'Текущий бизнес' : 'Current business');
                     return (
                       <SelectItem key={key} value={key}>
                         {labelPrefix}: {item.label}
@@ -432,6 +458,16 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
             {isRu ? 'Контекст' : 'Planning context'}
           </div>
           <div className="mt-4 space-y-3 text-sm text-slate-700">
+            {isNetworkContext ? (
+              <div>
+                <div className="font-semibold text-slate-900">{isRu ? 'Режим сети' : 'Network mode'}</div>
+                <div>
+                  {context?.scope?.network?.has_parent_scope
+                    ? `${isRu ? 'Точек в сети' : 'Locations in network'}: ${context?.scope?.network?.locations_count || 0}`
+                    : (isRu ? 'План строится по текущему бизнесу.' : 'Planning uses the current business.')}
+                </div>
+              </div>
+            ) : null}
             <div>
               <div className="font-semibold text-slate-900">{isRu ? 'Услуги' : 'Services'}</div>
               <div>{context?.services?.length || 0}</div>
@@ -488,7 +524,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     : 'border-slate-200 bg-white text-slate-600',
                 ].join(' ')}
               >
-                {plan.period_days} {isRu ? 'дней' : 'days'}
+                {_scopeChipLabel(plan.scope_type, isRu)} · {plan.period_days} {isRu ? 'дней' : 'days'}
               </button>
             ))}
           </div>
@@ -526,6 +562,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     </div>
                     <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
                       {_contentTypeLabel(item.content_type, isRu)}
+                      {item.location_scope ? ` · ${_locationScopeLabel(currentPlan?.scope_type || '', isRu)}` : ''}
                     </div>
                   </div>
                   <div className="mt-3 grid gap-3 lg:grid-cols-2">
@@ -599,4 +636,18 @@ function _contentTypeLabel(contentType: string, isRu: boolean): string {
   if (normalized === 'audit') return isRu ? 'Аудит' : 'Audit';
   if (normalized === 'seasonal') return isRu ? 'Сезонность' : 'Seasonal';
   return isRu ? 'Контент' : 'Content';
+}
+
+function _scopeChipLabel(scopeType: string, isRu: boolean): string {
+  const normalized = String(scopeType || '').trim().toLowerCase();
+  if (normalized === 'network_parent') return isRu ? 'Сеть' : 'Network';
+  if (normalized === 'network_location') return isRu ? 'Точка' : 'Location';
+  return isRu ? 'Бизнес' : 'Business';
+}
+
+function _locationScopeLabel(scopeType: string, isRu: boolean): string {
+  const normalized = String(scopeType || '').trim().toLowerCase();
+  if (normalized === 'network_parent') return isRu ? 'материнский план' : 'parent plan';
+  if (normalized === 'network_location') return isRu ? 'локальный план' : 'local plan';
+  return isRu ? 'текущий бизнес' : 'current business';
 }

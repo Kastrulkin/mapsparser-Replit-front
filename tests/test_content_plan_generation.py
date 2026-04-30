@@ -1,4 +1,5 @@
 from src.core.content_plan_generator import build_content_plan_skeleton
+from src.services.content_plan_service import _scope_target_business_id
 
 
 def test_content_plan_skeleton_respects_allowed_period_and_sources():
@@ -43,3 +44,9 @@ def test_content_plan_skeleton_falls_back_to_30_for_invalid_period():
     assert plan["period_days"] == 30
     assert len(plan["items"]) >= 4
     assert all(item["theme"] for item in plan["items"])
+
+
+def test_scope_target_business_id_uses_parent_for_network_parent():
+    assert _scope_target_business_id(None, "child-1", "network_parent", "parent-1") == "parent-1"
+    assert _scope_target_business_id(None, "child-1", "network_location", "location-1") == "location-1"
+    assert _scope_target_business_id(None, "child-1", "single_business", "parent-1") == "child-1"

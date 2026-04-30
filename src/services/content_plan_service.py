@@ -72,9 +72,26 @@ def _normalize_scope_type(raw_scope_type: str) -> str:
 def _scope_target_business_id(cursor: Any, business_id: str, scope_type: str, scope_target_id: str | None) -> str:
     normalized_scope = _normalize_scope_type(scope_type)
     target_id = str(scope_target_id or "").strip() or str(business_id or "").strip()
-    if normalized_scope == "network_location":
+    if normalized_scope in {"network_location", "network_parent"}:
         return target_id
     return str(business_id or "").strip()
+
+
+def _scope_description(scope_type: str, label: str, city: str, address: str) -> str:
+    normalized_scope = _normalize_scope_type(scope_type)
+    clean_label = str(label or "").strip()
+    clean_city = str(city or "").strip()
+    clean_address = str(address or "").strip()
+    if normalized_scope == "network_parent":
+        if clean_label:
+            return f"Общий план для сети {clean_label}: брендовые темы, сезонные акценты и единый ритм публикаций."
+        return "Общий план для всей сети: брендовые темы, сезонные акценты и единый ритм публикаций."
+    if normalized_scope == "network_location":
+        location_hint = clean_city or clean_address or clean_label
+        if location_hint:
+            return f"Локальный план для точки {location_hint}: адресные поводы, отзывы, локальный спрос и конкретные услуги."
+        return "Локальный план для отдельной точки: адресные поводы, отзывы, локальный спрос и конкретные услуги."
+    return "План для текущего бизнеса: новости, услуги, SEO-сценарии и регулярные обновления карточки."
 
 
 def _fetch_business_row(cursor: Any, business_id: str) -> dict[str, Any]:
@@ -391,6 +408,15 @@ def load_plan_context_for_business(user_id: str, business_id: str, scope_type: s
                 target_id = str(current_scope_option.get("scope_target_id") or business_id)
             else:
                 target_id = business_id
+        selected_scope_option = next(
+            (
+                item
+                for item in scope_options
+                if str(item.get("scope_type") or "") == normalized_scope
+                and str(item.get("scope_target_id") or "") == target_id
+            ),
+            None,
+        )
         scope_business_row = _build_scope_business_context(cursor, business_row, normalized_scope, target_id)
         scope_business_id = str(scope_business_row.get("id") or business_id)
         services = _fetch_services(cursor, scope_business_id)
@@ -417,6 +443,18 @@ def load_plan_context_for_business(user_id: str, business_id: str, scope_type: s
                 "scope_type": normalized_scope,
                 "scope_target_id": target_id,
                 "scope_options": scope_options,
+                "selected_scope_label": str(selected_scope_option.get("label") or "").strip() if selected_scope_option else str(scope_business_row.get("name") or "").strip(),
+                "selected_scope_description": _scope_description(
+                    normalized_scope,
+                    str(selected_scope_option.get("label") or scope_business_row.get("name") or "").strip(),
+                    str(selected_scope_option.get("city") or scope_business_row.get("city") or "").strip(),
+                    str(selected_scope_option.get("address") or scope_business_row.get("address") or "").strip(),
+                ),
+                "network": {
+                    "is_network": len(scope_options) > 1,
+                    "locations_count": len([item for item in scope_options if str(item.get("scope_type") or "") == "network_location"]),
+                    "has_parent_scope": any(str(item.get("scope_type") or "") == "network_parent" for item in scope_options),
+                },
             },
             "subscription": {
                 "tier": subscription.get("tier"),
