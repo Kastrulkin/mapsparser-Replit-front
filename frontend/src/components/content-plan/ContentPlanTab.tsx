@@ -93,6 +93,27 @@ type PlanPayload = {
   created_at?: string;
 };
 
+type LearningMetricsPayload = {
+  window_days: number;
+  items: Array<{
+    capability: string;
+    generated_total: number;
+    accepted_total: number;
+    accepted_edited_total: number;
+    skipped_total: number;
+    rescheduled_total: number;
+    edited_before_accept_pct: number;
+  }>;
+  summary: {
+    generated_total?: number;
+    accepted_total?: number;
+    accepted_edited_total?: number;
+    skipped_total?: number;
+    rescheduled_total?: number;
+    edited_before_accept_pct?: number;
+  };
+};
+
 type ActionSummary = {
   tone: 'neutral' | 'success';
   text_ru: string;
@@ -138,7 +159,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [currentPlan, setCurrentPlan] = useState<PlanPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [metricsLoading, setMetricsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [learningMetrics, setLearningMetrics] = useState<LearningMetricsPayload | null>(null);
   const [selectedScopeKey, setSelectedScopeKey] = useState('');
   const [selectedPeriod, setSelectedPeriod] = useState('30');
   const [selectedDensity, setSelectedDensity] = useState('standard');
@@ -452,6 +475,21 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }
   };
 
+  const loadLearningMetrics = async () => {
+    if (!businessId) return;
+    setMetricsLoading(true);
+    try {
+      const response = await newAuth.makeRequest(`/content-plans/learning-metrics?business_id=${encodeURIComponent(businessId)}`, {
+        method: 'GET',
+      });
+      setLearningMetrics(response || null);
+    } catch {
+      setLearningMetrics(null);
+    } finally {
+      setMetricsLoading(false);
+    }
+  };
+
   const loadContext = async (scopeKey?: string) => {
     if (!businessId) return;
     setLoading(true);
@@ -495,6 +533,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   useEffect(() => {
     void loadContext();
     void loadPlans();
+    void loadLearningMetrics();
   }, [businessId]);
 
   useEffect(() => {
@@ -618,6 +657,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       });
       setCurrentPlan(response.plan || null);
       await loadPlans();
+      await loadLearningMetrics();
     } catch (generationError) {
       const message = generationError instanceof Error ? generationError.message : (isRu ? 'Не удалось собрать план' : 'Could not generate plan');
       setError(message);
@@ -645,6 +685,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         method: 'POST',
       });
       setCurrentPlan(response.plan || null);
+      await loadLearningMetrics();
       setActionSummary({
         tone: 'success',
         text_ru: 'Черновик сгенерирован для выбранной публикации.',
@@ -668,6 +709,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         method: 'POST',
       });
       setCurrentPlan(response.plan || null);
+      await loadLearningMetrics();
       setActionSummary({
         tone: 'success',
         text_ru: 'Новость создана из выбранного элемента плана.',
@@ -715,6 +757,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         setCurrentPlan(nextPlan);
         generatedCount += 1;
       }
+      await loadLearningMetrics();
       setActionSummary({
         tone: 'success',
         text_ru: `По текущей выборке сгенерировано черновиков: ${generatedCount}.`,
@@ -745,6 +788,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         setCurrentPlan(nextPlan);
         createdCount += 1;
       }
+      await loadLearningMetrics();
       setActionSummary({
         tone: 'success',
         text_ru: `По текущей выборке создано новостей: ${createdCount}.`,
@@ -838,6 +882,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         setCurrentPlan(nextPlan);
         generatedCount += 1;
       }
+      await loadLearningMetrics();
       const locationLabel = _locationLabelByKey(currentPlan?.items || [], locationKey, isRu);
       const weekLabel = _weekBucketLabel(weekKey, isRu);
       setActionSummary({
@@ -872,6 +917,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         setCurrentPlan(nextPlan);
         createdCount += 1;
       }
+      await loadLearningMetrics();
       const locationLabel = _locationLabelByKey(currentPlan?.items || [], locationKey, isRu);
       const weekLabel = _weekBucketLabel(weekKey, isRu);
       setActionSummary({
@@ -897,6 +943,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         body: JSON.stringify({ status: 'skipped' }),
       });
       setCurrentPlan(response.plan || null);
+      await loadLearningMetrics();
       setActionSummary({
         tone: 'success',
         text_ru: 'Элемент помечен как пропущенный.',
@@ -921,6 +968,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         body: JSON.stringify({ scheduled_for: nextDate, status: 'planned' }),
       });
       setCurrentPlan(response.plan || null);
+      await loadLearningMetrics();
       setDateEdits((prev) => ({ ...prev, [itemId]: nextDate }));
       setActionSummary({
         tone: 'success',
@@ -944,6 +992,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         method: 'POST',
       });
       setCurrentPlan(response.plan || null);
+      await loadLearningMetrics();
       setActionSummary({
         tone: 'success',
         text_ru: 'Элемент продублирован и добавлен в план.',
@@ -1219,6 +1268,58 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+              {isRu ? 'Learning loop' : 'Learning loop'}
+            </div>
+            <div className="mt-1 text-lg font-semibold text-slate-950">
+              {isRu ? 'Как контент-план принимают в работу' : 'How the content plan gets accepted'}
+            </div>
+          </div>
+          <div className="text-xs text-slate-500">
+            {metricsLoading
+              ? (isRu ? 'Обновляем...' : 'Refreshing...')
+              : `${learningMetrics?.window_days || 30} ${isRu ? 'дней' : 'days'}`}
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{isRu ? 'Сгенерировано' : 'Generated'}</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-950">{learningMetrics?.summary?.generated_total || 0}</div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{isRu ? 'Принято' : 'Accepted'}</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-950">{learningMetrics?.summary?.accepted_total || 0}</div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{isRu ? 'Правили перед публикацией' : 'Edited before accept'}</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-950">{learningMetrics?.summary?.accepted_edited_total || 0}</div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{isRu ? 'Пропущено' : 'Skipped'}</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-950">{learningMetrics?.summary?.skipped_total || 0}</div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{isRu ? 'Правки до принятия' : 'Edited before accept'}</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-950">{Number(learningMetrics?.summary?.edited_before_accept_pct || 0).toFixed(0)}%</div>
+          </div>
+        </div>
+        {learningMetrics?.items && learningMetrics.items.length > 0 ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {learningMetrics.items.map((item) => (
+              <div
+                key={item.capability}
+                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700"
+              >
+                {_learningCapabilityLabel(item.capability, isRu)} · {isRu ? 'принято' : 'accepted'} {item.accepted_total} · {isRu ? 'сгенерировано' : 'generated'} {item.generated_total}
+              </div>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -1780,6 +1881,15 @@ function _locationLabelByKey(items: PlanItem[], locationKey: string, isRu: boole
     }
   }
   return isRu ? 'Точка сети' : 'Network location';
+}
+
+function _learningCapabilityLabel(capability: string, isRu: boolean): string {
+  const normalized = String(capability || '').trim().toLowerCase();
+  if (normalized === 'content_plan.generate') return isRu ? 'Генерация плана' : 'Plan generation';
+  if (normalized === 'content_plan.draft') return isRu ? 'Генерация черновика' : 'Draft generation';
+  if (normalized === 'content_plan.item') return isRu ? 'Действия с элементами' : 'Item actions';
+  if (normalized === 'content_plan.publish') return isRu ? 'Создание новостей' : 'News creation';
+  return isRu ? 'Контент-план' : 'Content plan';
 }
 
 function _itemFilterLabel(filterKey: ItemFilterKey, isRu: boolean): string {
