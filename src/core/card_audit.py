@@ -360,6 +360,45 @@ def _safe_json(value: Any) -> Any:
     return None
 
 
+def _contains_paid_promotion_signal(value: Any, depth: int = 0) -> bool:
+    if depth > 5:
+        return False
+    if isinstance(value, str):
+        normalized = value.lower()
+        return any(
+            marker in normalized
+            for marker in (
+                "geoadv_maps",
+                "yclid=",
+                "utm_source=geoadv",
+                "paid promotion",
+                "реклама",
+                "платное продвиж",
+                "продвижение",
+            )
+        )
+    if isinstance(value, dict):
+        for key, next_value in value.items():
+            normalized_key = str(key or "").lower()
+            if normalized_key in {"promo", "promoted", "promotion", "advertising", "ad", "ads", "paid"}:
+                if next_value not in (None, False, "", [], {}):
+                    return True
+            if _contains_paid_promotion_signal(next_value, depth + 1):
+                return True
+    if isinstance(value, list):
+        for item in value:
+            if _contains_paid_promotion_signal(item, depth + 1):
+                return True
+    return False
+
+
+def _has_paid_promotion_signal(*values: Any) -> bool:
+    for value in values:
+        if _contains_paid_promotion_signal(value):
+            return True
+    return False
+
+
 def _to_dict(cursor, row) -> Optional[Dict[str, Any]]:
     if not row:
         return None
@@ -1476,6 +1515,7 @@ def _extract_lead_import_payload(lead: Dict[str, Any]) -> Dict[str, Any]:
             "reviews_count": None,
             "social_links": [],
             "is_verified": None,
+            "paid_promotion_detected": False,
         }
     logo_url = _normalize_media_url(payload.get("logo_url")) or None
     lead_city = str(lead.get("city") or "").strip()
@@ -1600,6 +1640,7 @@ def _extract_lead_import_payload(lead: Dict[str, Any]) -> Dict[str, Any]:
         "reviews_count": _extract_numeric(payload.get("reviews_count")),
         "social_links": social_links,
         "is_verified": payload.get("is_verified"),
+        "paid_promotion_detected": _has_paid_promotion_signal(payload),
     }
 
 
@@ -3822,6 +3863,8 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
     )
     imported_is_verified = lead_import_payload.get("is_verified")
     is_verified = imported_is_verified if isinstance(imported_is_verified, bool) else None
+    paid_promotion_detected = bool(lead_import_payload.get("paid_promotion_detected"))
+    audit_is_verified = None if paid_promotion_detected and is_verified is False else is_verified
 
     imported_services_total_count = _extract_int(lead_import_payload.get("services_total_count") or len(imported_services_preview) or 0)
     imported_services_with_price_count = _extract_int(lead_import_payload.get("services_with_price_count") or 0)
@@ -3941,7 +3984,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         unanswered_reviews_count=unanswered_reviews_count,
         news_count=news_count,
         has_recent_activity=has_recent_activity,
-        is_verified=is_verified,
+        is_verified=audit_is_verified,
         reviews_target_min=reviews_target_min,
         include_pricing=baseline_is_default,
         include_photos=baseline_is_default,
@@ -3949,7 +3992,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         include_review_count=baseline_is_default,
         include_review_responses=baseline_is_fashion,
         include_news=baseline_is_hospitality,
-        include_verification=baseline_is_hospitality,
+        include_verification=baseline_is_hospitality and not paid_promotion_detected,
     )
 
     if hospitality_mode:
@@ -4006,7 +4049,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             reviews_count=reviews_count,
             news_count=news_count,
             has_recent_activity=has_recent_activity,
-            is_verified=is_verified,
+            is_verified=audit_is_verified,
         )
         issue_blocks = _merge_issue_blocks(issue_blocks, baseline_issue_blocks)
     elif audit_profile == "wellness":
@@ -4409,7 +4452,9 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             "unanswered_reviews_count": unanswered_reviews_count,
             "services_count": services_count,
             "services_with_price_count": priced_services_count,
-            "is_verified": is_verified,
+            "is_verified": audit_is_verified,
+            "raw_is_verified": is_verified,
+            "paid_promotion_detected": paid_promotion_detected,
             "has_website": has_website,
             "has_recent_activity": has_recent_activity,
             "photos_state": photos_state,
@@ -4608,7 +4653,11 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
         news = _safe_json(rich_card.get("news"))
         products_payload = _safe_json(rich_card.get("products"))
 
-        photos_count = len(photos) if isinstance(photos, list) else int(overview.get("photos_count") or 0)
+        overview_photos_count = int(overview.get("photos_count") or 0) if isinstance(overview, dict) else 0
+        if isinstance(photos, list):
+            photos_count = len(photos) or overview_photos_count
+        else:
+            photos_count = overview_photos_count
         if isinstance(news, list):
             news_count = len(news)
         elif isinstance(news, dict):
@@ -4729,8 +4778,26 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
         has_messenger = bool(messenger_value)
         raw_is_verified = overview.get("is_verified") if isinstance(overview, dict) else None
         is_verified = raw_is_verified if isinstance(raw_is_verified, bool) else None
+        raw_payload = overview.get("raw_payload") if isinstance(overview, dict) else None
+        paid_promotion_detected = _has_paid_promotion_signal(overview, raw_payload)
+        audit_is_verified = None if paid_promotion_detected and is_verified is False else is_verified
 
         raw_services_preview = _extract_services_from_products_payload(products_payload, limit=20)
+        if not raw_services_preview:
+            for service_row in service_name_rows[:20]:
+                service_name = str(service_row.get("name") or "").strip()
+                service_description = str(service_row.get("description") or "").strip()
+                if not service_name:
+                    continue
+                raw_services_preview.append(
+                    {
+                        "current_name": service_name,
+                        "suggested_name": service_name,
+                        "note": "Источник: услуги карточки",
+                        "description": service_description or None,
+                        "_price_present": True,
+                    }
+                )
         booking_offer_count = 0
         services_preview: List[Dict[str, Any]] = []
         for item in raw_services_preview:
@@ -4759,7 +4826,7 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
             unanswered_reviews_count=unanswered_reviews_count,
             news_count=news_count,
             has_recent_activity=has_recent_activity,
-            is_verified=is_verified,
+            is_verified=audit_is_verified,
             reviews_target_min=reviews_target_min,
             include_pricing=baseline_is_default,
             include_photos=baseline_is_default,
@@ -4767,7 +4834,7 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
             include_review_count=baseline_is_default,
             include_review_responses=baseline_is_fashion,
             include_news=baseline_is_hospitality,
-            include_verification=baseline_is_hospitality,
+            include_verification=baseline_is_hospitality and not paid_promotion_detected,
         )
         if hospitality_mode:
             hospitality_signals = _extract_hospitality_review_signals(recent_review_rows)
@@ -4835,7 +4902,7 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
                 reviews_count=reviews_count,
                 news_count=news_count,
                 has_recent_activity=has_recent_activity,
-                is_verified=is_verified,
+                is_verified=audit_is_verified,
             )
             issue_blocks = _merge_issue_blocks(issue_blocks, baseline_issue_blocks)
         elif audit_profile == "food":
@@ -5246,7 +5313,9 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
                 "services_with_price_count": priced_services_count,
                 "has_website": has_website,
                 "has_recent_activity": has_recent_activity,
-                "is_verified": is_verified,
+                "is_verified": audit_is_verified,
+                "raw_is_verified": is_verified,
+                "paid_promotion_detected": paid_promotion_detected,
                 "news_count": news_count,
                 "photos_state": photos_state,
                 "photos_count": photos_count,

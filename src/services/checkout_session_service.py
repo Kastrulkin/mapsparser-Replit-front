@@ -7,6 +7,7 @@ from decimal import Decimal
 from typing import Any
 
 from billing_constants import TARIFFS, TARIFF_ALIASES
+from auth_system import normalize_email
 from database_manager import get_db_connection
 
 CHECKOUT_PROVIDERS = {"telegram_crypto", "yookassa", "stripe"}
@@ -506,7 +507,7 @@ def find_or_create_user_for_checkout(session: dict[str, Any], cursor) -> dict[st
             return existing
 
     telegram_id = str(session.get("telegram_id") or "").strip()
-    email = str(session.get("email") or "").strip()
+    email = normalize_email(session.get("email") or "")
     phone = str(session.get("phone") or "").strip()
 
     if telegram_id:
@@ -516,7 +517,7 @@ def find_or_create_user_for_checkout(session: dict[str, Any], cursor) -> dict[st
             return existing
 
     if email:
-        cursor.execute("SELECT * FROM users WHERE email = %s LIMIT 1", (email,))
+        cursor.execute("SELECT * FROM users WHERE LOWER(email) = %s LIMIT 1", (email,))
         existing = _row_to_dict(cursor, cursor.fetchone())
         if existing:
             if telegram_id and not str(existing.get("telegram_id") or "").strip():

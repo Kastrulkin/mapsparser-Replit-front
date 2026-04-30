@@ -1,17 +1,23 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import {
+  AuditCtaPanel,
+  AuditHowToRead,
+  AuditProblemBlock,
+} from '@/components/audit/AuditDisplayPrimitives';
+import {
+  auditScoreBusinessLabel,
+  compactAuditText,
+  localosOperationalHelp,
+} from '@/components/audit/auditDisplayUtils';
 import { newAuth } from '@/lib/auth_new';
 import {
   AlertCircle,
-  ArrowRight,
   CheckCircle2,
-  CircleDollarSign,
   ExternalLink,
   Globe,
-  Mail,
   MapPin,
-  MessageCircle,
   ShieldCheck,
   Sparkles,
   Star,
@@ -231,7 +237,7 @@ const UI_TEXT_BASE = {
     newsMissing: 'Публикаций в срезе не найдено.',
     businessReply: 'Ответ бизнеса',
     nextTitle: 'Что делать дальше',
-    nextText: 'Можно внедрить улучшения самостоятельно по шагам выше. Если нужна помощь, подключимся и сделаем это вместе с вами - стоимость от 1500 рублей в месяц.',
+    nextText: 'Можно внедрить часть шагов самостоятельно. Если хотите, LocalOS возьмёт регулярную работу на себя: карточки, отзывы, новости, услуги и контроль изменений.',
     optimizeMaps: 'Оптимизировать карты',
     contactExpert: 'Связаться с экспертом',
     contactTelegram: 'Связаться в Telegram',
@@ -312,7 +318,7 @@ const UI_TEXT_BASE = {
     newsMissing: 'No publications were found in the snapshot.',
     businessReply: 'Business reply',
     nextTitle: 'What to do next',
-    nextText: 'You can implement the improvements yourself using the steps above. If you want help, we can do it with you — plans start from $15 per month.',
+    nextText: 'You can implement some steps yourself. If you want help, LocalOS can take the recurring work: listings, reviews, posts, services, and change control.',
     optimizeMaps: 'Optimize map listings',
     contactExpert: 'Talk to an expert',
     contactTelegram: 'Contact via Telegram',
@@ -393,7 +399,7 @@ const UI_TEXT_BASE = {
     newsMissing: 'Δεν βρέθηκαν δημοσιεύσεις στο στιγμιότυπο.',
     businessReply: 'Απάντηση επιχείρησης',
     nextTitle: 'Τι να κάνετε μετά',
-    nextText: 'Μπορείτε να εφαρμόσετε μόνοι σας τις βελτιώσεις με τα παραπάνω βήματα. Αν χρειάζεστε βοήθεια, μπορούμε να το κάνουμε μαζί σας — τα πλάνα ξεκινούν από $12 τον μήνα.',
+    nextText: 'Μπορείτε να εφαρμόσετε μερικά βήματα μόνοι σας. Αν χρειάζεστε βοήθεια, το LocalOS μπορεί να αναλάβει τη συνεχή εργασία: καταχωρίσεις, κριτικές, δημοσιεύσεις, υπηρεσίες και έλεγχο αλλαγών.',
     optimizeMaps: 'Βελτιστοποίηση χαρτών',
     contactExpert: 'Μιλήστε με ειδικό',
     contactTelegram: 'Επικοινωνία στο Telegram',
@@ -2148,59 +2154,20 @@ const PublicPartnershipOfferPage: React.FC = () => {
   })();
   const lang: PageLang = autoLang;
 
-  const startCheckoutFromAudit = async (tierId: 'starter' | 'professional' | 'concierge') => {
-    const token = newAuth.getToken();
-    let provider = 'yookassa';
-    try {
-      const providerResp = await fetch('/api/geo/payment-provider');
-      const providerData = await providerResp.json();
-      provider = String(providerData?.payment_provider || '').trim().toLowerCase() === 'stripe' ? 'stripe' : 'yookassa';
-    } catch {
-      provider = 'yookassa';
-    }
-
-    let email = '';
-    if (!token) {
-      email = window.prompt('Введите email, на который оформить доступ к LocalOS')?.trim() || '';
-      if (!email) {
-        return;
-      }
-    }
-
-    try {
-      const response = await fetch('/api/billing/checkout/session/start', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          provider,
-          entry_point: 'public_audit',
-          channel: 'web',
-          tariff_id: tierId,
-          email: email || undefined,
-          maps_url: String(page?.source_url || '').trim() || undefined,
-          normalized_maps_url: String(page?.source_url || '').trim() || undefined,
-          audit_slug: String(offerSlug || '').trim() || undefined,
-          audit_public_url: window.location.href,
-          source: 'public_audit_page',
-          payload_json: {
-            business_name: String(page?.display_name || page?.name || '').trim(),
-            city: String(page?.city || '').trim(),
-            address: String(page?.address || '').trim(),
-          },
-        }),
-      });
-      const data = await response.json();
-      const redirectUrl = String(data?.confirmation_url || data?.url || '').trim();
-      if (!response.ok || !redirectUrl) {
-        throw new Error(String(data?.error || 'Не удалось создать сессию оплаты'));
-      }
-      window.location.href = redirectUrl;
-    } catch (checkoutError) {
-      alert(checkoutError instanceof Error ? checkoutError.message : 'Не удалось перейти к оплате');
-    }
+  const openDashboardRegistration = () => {
+    const params = new URLSearchParams();
+    params.set('tab', 'register');
+    params.set('source', 'public_audit');
+    const slug = String(offerSlug || '').trim();
+    const companyName = String(page?.name || page?.display_name || '').trim();
+    const companyAddress = String(page?.address || '').trim();
+    const companyCity = String(page?.city || '').trim();
+    if (slug) params.set('audit_slug', slug);
+    if (companyName) params.set('business_name', companyName);
+    if (companyAddress) params.set('business_address', companyAddress);
+    if (companyCity) params.set('business_city', companyCity);
+    params.set('business_country', lang === 'ru' ? 'Россия' : 'Russia');
+    window.location.assign(`/login?${params.toString()}`);
   };
   const locale = lang === 'el' ? 'el-GR' : lang === 'tr' ? 'tr-TR' : lang === 'ar' ? 'ar-EG' : lang === 'ru' ? 'ru-RU' : 'en-GB';
   const text = UI_TEXT[lang] || UI_TEXT.en;
@@ -2488,6 +2455,7 @@ const PublicPartnershipOfferPage: React.FC = () => {
       : '',
   ].filter((item) => item.trim());
   const isCapriAudit = String(offerSlug || '').trim().toLowerCase() === 'dom-krasoty-capri-oblastnaya-ulitsa';
+  const hideMonthlyPotential = String(offerSlug || '').trim().toLowerCase() === 'tsentr-kosmetologii-tatyany-zhiborevoy-radischeva';
   const capriStrongDemand = ['педикюр', 'косметология', 'оформление бровей'];
   const capriWeakDemand = ['салон красоты рядом', 'выбор между направлениями услуг', 'поиск услуги по цене'];
   const capriWhy = [
@@ -2635,16 +2603,54 @@ const PublicPartnershipOfferPage: React.FC = () => {
               <div className="mt-1 text-xl font-semibold text-slate-900">{servicesMetricValue}</div>
               <div className="mt-2 text-xs text-slate-500">{servicesMetricHint}</div>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-xs text-slate-500">{text.monthlyPotential}</div>
-              <div className="mt-1 text-sm font-semibold text-slate-900">
-                {revenue.total_min || revenue.total_max
-                  ? `${formatMoney(lang, revenue.total_min)} — ${formatMoney(lang, revenue.total_max)}`
-                  : text.estimateUnavailable}
+            {!hideMonthlyPotential ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="text-xs text-slate-500">{text.monthlyPotential}</div>
+                <div className="mt-1 text-sm font-semibold text-slate-900">
+                  {revenue.total_min || revenue.total_max
+                    ? `${formatMoney(lang, revenue.total_min)} — ${formatMoney(lang, revenue.total_max)}`
+                    : text.estimateUnavailable}
+                </div>
               </div>
+            ) : null}
+          </div>
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+            <div className="text-sm font-semibold text-slate-900">
+              {lang === 'ru' ? 'Что означает эта оценка' : 'What this score means'}
             </div>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              {lang === 'ru'
+                ? auditScoreBusinessLabel(score, localizedHealth)
+                : auditScoreBusinessLabel(score, localizedHealth)}
+            </p>
           </div>
         </section>
+
+        <AuditHowToRead
+          title={lang === 'ru' ? 'Как читать этот аудит' : 'How to read this audit'}
+          items={[
+            {
+              title: lang === 'ru' ? 'Что проверили' : 'What we checked',
+              description: lang === 'ru'
+                ? 'Карточку на картах, отзывы, услуги, активность, сайт, фото и регулярность ведения.'
+                : 'Map listings, reviews, services, activity, website, photos, and operating cadence.',
+            },
+            {
+              title: lang === 'ru' ? 'Уровень данных' : 'Data level',
+              description: lang === 'ru'
+                ? isNetworkAudit
+                  ? 'Часть метрик относится ко всей сети, часть — к конкретным карточкам и последнему срезу данных.'
+                  : 'Часть метрик берётся из последнего среза карточки; ограничения данных явно отмечены там, где это важно.'
+                : 'Some metrics use the latest snapshot; limited data is shown explicitly where it matters.',
+            },
+            {
+              title: lang === 'ru' ? 'Что важно для бизнеса' : 'Why it matters',
+              description: lang === 'ru'
+                ? 'Смотрим не только на цифры, а на то, где клиенту сложнее выбрать вас и где теряется доверие.'
+                : 'The focus is not only on numbers, but on where customers lose trust or struggle to choose you.',
+            },
+          ]}
+        />
 
         <section className="rounded-2xl border bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
@@ -2803,30 +2809,16 @@ const PublicPartnershipOfferPage: React.FC = () => {
           <div className="mt-4 space-y-3">
             {issueBlocks.length > 0 ? (
               issueBlocks.slice(0, 6).map((item, idx) => (
-                <div key={`${item.id || item.title || 'item'}-${idx}`} className="rounded-xl border border-violet-100 bg-violet-50/50 p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-sm font-semibold text-slate-900">{idx + 1}. {item.title || text.issueFallback}</div>
-                    {item.priority ? <div className="text-xs font-semibold text-violet-700 uppercase">{item.priority}</div> : null}
-                  </div>
-                  <div className="text-sm text-slate-700 mt-1">
-                    <span className="font-medium">{text.problem}:</span> {item.problem || text.noDescription}
-                  </div>
-                  {item.evidence ? (
-                    <div className="text-sm text-slate-700 mt-1">
-                      <span className="font-medium">{text.fact}:</span> {item.evidence}
-                    </div>
-                  ) : null}
-                  {item.impact ? (
-                    <div className="text-sm text-slate-700 mt-1">
-                      <span className="font-medium">{text.impact}:</span> {item.impact}
-                    </div>
-                  ) : null}
-                  {item.fix ? (
-                    <div className="text-sm text-slate-700 mt-1">
-                      <span className="font-medium">{text.whatToDo}:</span> {item.fix}
-                    </div>
-                  ) : null}
-                </div>
+                <AuditProblemBlock
+                  key={`${item.id || item.title || 'item'}-${idx}`}
+                  title={`${idx + 1}. ${item.title || text.issueFallback}`}
+                  priority={item.priority}
+                  problem={compactAuditText(item.problem, text.noDescription)}
+                  evidence={item.evidence}
+                  meaning={compactAuditText(item.impact, lang === 'ru' ? 'Это может снижать доверие и мешать клиенту выбрать вас.' : 'This can reduce trust and make it harder for customers to choose you.')}
+                  action={compactAuditText(item.fix, text.noDescription)}
+                  help={lang === 'ru' ? localosOperationalHelp : 'LocalOS can turn this into recurring work: listing updates, replies, posts, service structure, and change control.'}
+                />
               ))
             ) : (
               (findings.length > 0 ? findings : actions).slice(0, 6).map((item, idx) => (
@@ -2981,56 +2973,38 @@ const PublicPartnershipOfferPage: React.FC = () => {
           </section>
         ) : null}
 
-        <section className="rounded-2xl border border-sky-200 bg-sky-50/70 p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-            <CircleDollarSign className="w-5 h-5 text-sky-700" />
-            {text.nextTitle}
-          </h2>
-          <p className="text-sm text-slate-700 mt-1">
-            {text.nextText}
-          </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button
-              className="bg-slate-900 text-white hover:bg-slate-800"
-              onClick={() => void startCheckoutFromAudit('starter')}
-            >
-              Оплатить и открыть кабинет
-              <ArrowRight className="w-4 h-4 ml-1" />
-            </Button>
-            <Button variant="outline" className="border-slate-300" onClick={() => navigate('/login')}>
+        <AuditCtaPanel
+          title={text.nextTitle}
+          description={text.nextText}
+          bullets={[
+            lang === 'ru' ? 'Выбрать первые правки по карточке' : 'Choose the first listing improvements',
+            lang === 'ru' ? 'Запустить регулярную работу с отзывами и новостями' : 'Start regular review and post work',
+            lang === 'ru' ? 'Контролировать изменения после новых сборов данных' : 'Track changes after new data snapshots',
+          ]}
+          primaryLabel={lang === 'ru' ? 'Открыть кабинет' : 'Open dashboard'}
+          secondaryLabel={text.contactExpert}
+          onPrimary={openDashboardRegistration}
+          secondaryHref="/contact"
+        />
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap gap-3 text-sm text-slate-600">
+            <button className="font-semibold text-slate-700 underline-offset-4 hover:underline" onClick={() => navigate('/login')}>
               {text.optimizeMaps}
-            </Button>
-            <a href="/contact">
-              <Button variant="outline" className="border-slate-300">
-                {text.contactExpert}
-              </Button>
+            </button>
+            <a className="font-semibold text-slate-700 underline-offset-4 hover:underline" href="https://t.me/Alexdemianov" target="_blank" rel="noreferrer">
+              {text.contactTelegram}
             </a>
-            <a href="https://t.me/Alexdemianov" target="_blank" rel="noreferrer">
-              <Button className="bg-sky-600 hover:bg-sky-700 text-white">
-                <MessageCircle className="w-4 h-4 mr-1" />
-                {text.contactTelegram}
-              </Button>
-            </a>
-            <a href="mailto:info@localos.pro">
-                <Button variant="outline">
-                  <Mail className="w-4 h-4 mr-1" />
-                  {text.contactEmail}
-                </Button>
+            <a className="font-semibold text-slate-700 underline-offset-4 hover:underline" href="mailto:info@localos.pro">
+              {text.contactEmail}
             </a>
             {page.cta?.website ? (
-              <a href={page.cta.website} target="_blank" rel="noreferrer">
-                <Button variant="outline">
-                  <Globe className="w-4 h-4 mr-1" />
-                  {text.goToWebsite}
-                </Button>
+              <a className="font-semibold text-slate-700 underline-offset-4 hover:underline" href={page.cta.website} target="_blank" rel="noreferrer">
+                {text.goToWebsite}
               </a>
             ) : null}
             {page.source_url ? (
-              <a href={page.source_url} target="_blank" rel="noreferrer">
-                <Button variant="ghost">
-                  <ExternalLink className="w-4 h-4 mr-1" />
-                  {text.openMapCard}
-                </Button>
+              <a className="font-semibold text-slate-700 underline-offset-4 hover:underline" href={page.source_url} target="_blank" rel="noreferrer">
+                {text.openMapCard}
               </a>
             ) : null}
           </div>

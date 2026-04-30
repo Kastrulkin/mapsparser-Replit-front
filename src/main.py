@@ -47,7 +47,7 @@ from report import generate_html_report
 from services.gigachat_client import analyze_screenshot_with_gigachat, analyze_text_with_gigachat
 from database_manager import DatabaseManager, get_db_connection
 from parsequeue_status import STATUS_COMPLETED, STATUS_ERROR, normalize_status
-from auth_system import authenticate_user, create_session, verify_session
+from auth_system import authenticate_user, create_session, normalize_email, verify_session
 from init_database_schema import init_database_schema
 from core.default_ai_prompts import get_default_ai_prompts
 from chatgpt_api import chatgpt_bp
@@ -10081,7 +10081,7 @@ def register():
     """Регистрация пользователя"""
     try:
         data = request.get_json()
-        email = data.get('email', '').strip()
+        email = normalize_email(data.get('email', ''))
         password = data.get('password', '').strip()
         name = data.get('name', '').strip()
         phone = data.get('phone', '').strip()
@@ -10156,7 +10156,7 @@ def login():
         if not data:
             return jsonify({"error": "Неверный формат запроса"}), 400
 
-        email = data.get('email', '').strip()
+        email = normalize_email(data.get('email', ''))
         password = data.get('password', '').strip()
 
         if not email or not password:
@@ -12694,7 +12694,7 @@ def reset_password():
     """Запрос на восстановление пароля"""
     try:
         data = request.get_json()
-        email = data.get('email')
+        email = normalize_email(data.get('email'))
 
         if not email:
             return jsonify({"error": "Email обязателен"}), 400
@@ -12702,7 +12702,7 @@ def reset_password():
         # Проверяем, существует ли пользователь
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id, name FROM Users WHERE email = ?", (email,))
+        cursor.execute("SELECT id, name FROM Users WHERE LOWER(email) = %s", (email,))
         user = cursor.fetchone()
 
         if not user:
@@ -12718,8 +12718,8 @@ def reset_password():
         # Сохраняем токен в базе
         cursor.execute("""
             UPDATE Users
-            SET reset_token = ?, reset_token_expires = ?
-            WHERE email = ?
+            SET reset_token = %s, reset_token_expires = %s
+            WHERE LOWER(email) = %s
         """, (reset_token, expires_at.isoformat(), email))
         conn.commit()
         conn.close()
@@ -12834,7 +12834,7 @@ def confirm_reset():
     """Подтверждение сброса пароля с новым паролем"""
     try:
         data = request.get_json()
-        email = data.get('email')
+        email = normalize_email(data.get('email'))
         token = data.get('token')
         new_password = data.get('password')
 
@@ -12847,7 +12847,7 @@ def confirm_reset():
         cursor.execute("""
             SELECT id, reset_token, reset_token_expires
             FROM Users
-            WHERE email = ? AND reset_token = ?
+            WHERE LOWER(email) = %s AND reset_token = %s
         """, (email, token))
         user = cursor.fetchone()
 
@@ -12870,7 +12870,7 @@ def confirm_reset():
         cursor.execute("""
             UPDATE Users
             SET reset_token = NULL, reset_token_expires = NULL
-            WHERE id = ?
+            WHERE id = %s
         """, (user[0],))
         conn.commit()
         conn.close()

@@ -1441,6 +1441,38 @@ def _safe_int(raw: Any) -> int | None:
         return None
 
 
+def _contains_paid_promotion_signal(value: Any, depth: int = 0) -> bool:
+    if depth > 5:
+        return False
+    if isinstance(value, str):
+        normalized = value.lower()
+        return any(
+            marker in normalized
+            for marker in (
+                "geoadv_maps",
+                "yclid=",
+                "utm_source=geoadv",
+                "paid promotion",
+                "реклама",
+                "платное продвиж",
+                "продвижение",
+            )
+        )
+    if isinstance(value, dict):
+        for key, next_value in value.items():
+            normalized_key = str(key or "").lower()
+            if normalized_key in {"promo", "promoted", "promotion", "advertising", "ad", "ads", "paid"}:
+                if next_value not in (None, False, "", [], {}):
+                    return True
+            if _contains_paid_promotion_signal(next_value, depth + 1):
+                return True
+    if isinstance(value, list):
+        for item in value:
+            if _contains_paid_promotion_signal(item, depth + 1):
+                return True
+    return False
+
+
 def _normalize_contact_url(raw: str | None) -> str | None:
     value = str(raw or "").strip()
     if not value:
@@ -1670,6 +1702,7 @@ def _normalize_partnership_file_row(
             "source_row_url": row.get("url"),
             "source_business_id": row.get("businessId"),
             "is_verified": is_verified,
+            "paid_promotion_detected": _contains_paid_promotion_signal(row),
         },
     }
     return normalized, None

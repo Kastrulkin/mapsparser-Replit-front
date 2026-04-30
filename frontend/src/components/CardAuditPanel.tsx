@@ -1,6 +1,23 @@
 import React from 'react';
 import { AlertCircle, ArrowUpRight, Camera, Globe, MessageSquare, ReceiptText, Star, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  AuditCtaPanel,
+  AuditHero,
+  AuditHowToRead,
+  AuditMetricCard,
+  AuditProblemBlock,
+} from '@/components/audit/AuditDisplayPrimitives';
+import {
+  auditScoreBusinessLabel,
+  compactAuditText,
+  formatAuditMoney,
+  formatAuditMoneyRange,
+  formatAuditNumber,
+  formatAuditRating,
+  formatAuditScore,
+  localosOperationalHelp,
+} from '@/components/audit/auditDisplayUtils';
 import { useApiData } from '@/hooks/useApiData';
 import { useLanguage } from '@/i18n/LanguageContext';
 
@@ -132,7 +149,7 @@ const confidenceLabels: Record<string, string> = {
 };
 
 const formatMoney = (value: number) =>
-  `${new Intl.NumberFormat('ru-RU').format(Math.round(value))} ₽`;
+  formatAuditMoney(value);
 
 const formatDate = (value?: string | null) =>
   value ? new Date(value).toLocaleString('ru-RU') : '—';
@@ -189,6 +206,15 @@ const CardAuditPanel: React.FC<CardAuditPanelProps> = ({ businessId, refreshKey 
   const audit = data?.audit;
   const hasSuccessfulParse = Boolean(audit?.parse_context?.has_successful_parse);
   const showPreParsePlaceholder = !loading && !error && audit && !hasSuccessfulParse;
+  const heroFindings = audit
+    ? [
+        ...(audit.top_3_issues || []).map((item) => item.problem || item.title || '').filter(Boolean),
+        ...(audit.findings || []).map((item) => item.description || item.title || '').filter(Boolean),
+      ].slice(0, 3)
+    : [];
+  const primaryIssueBlocks = audit?.issue_blocks && audit.issue_blocks.length > 0
+    ? audit.issue_blocks
+    : [];
 
   return (
     <Card>
@@ -230,6 +256,62 @@ const CardAuditPanel: React.FC<CardAuditPanelProps> = ({ businessId, refreshKey 
 
         {!loading && !error && audit && hasSuccessfulParse && (
           <>
+            <AuditHero
+              eyebrow="Аудит локального присутствия"
+              title={`Аудит карточки${audit.business?.name ? `: ${audit.business.name}` : ''}`}
+              summary={compactAuditText(
+                audit.summary_text,
+                'Проверили карточку на картах, репутацию, услуги, активность и базовые факторы, которые влияют на доверие и заявки.',
+              )}
+              score={formatAuditScore(audit.summary_score)}
+              scoreLabel={auditScoreBusinessLabel(audit.summary_score, audit.health_label)}
+              healthLabel={audit.health_label}
+              findings={heroFindings}
+              meta={[
+                {
+                  label: 'Уровень данных',
+                  value: 'Текущий срез карточки',
+                  scope: 'current_snapshot',
+                },
+                {
+                  label: 'Последнее обновление',
+                  value: formatDate(audit.parse_context.last_parse_at),
+                  scope: 'current_snapshot',
+                },
+              ]}
+              primaryAction={
+                <a href="/dashboard/card">
+                  <button className="rounded-full bg-slate-950 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800">
+                    Открыть работу с картами
+                  </button>
+                </a>
+              }
+              secondaryAction={
+                <a href="/dashboard/progress">
+                  <button className="rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
+                    Посмотреть прогресс
+                  </button>
+                </a>
+              }
+            />
+
+            <AuditHowToRead
+              items={[
+                {
+                  title: 'Что проверили',
+                  description: 'Карточку, отзывы, услуги, активность, сайт и признаки регулярного ведения.',
+                },
+                {
+                  title: 'Что означают цифры',
+                  description: 'Оценки показывают приоритеты работы. Сырые расчёты не меняются, здесь округлено только отображение.',
+                },
+                {
+                  title: 'Где есть ограничения',
+                  description: 'Потенциал выручки — модельная оценка, а не обещание продаж. Факты берём из последнего сбора данных.',
+                },
+              ]}
+            />
+
             {Array.isArray(audit.top_3_issues) && audit.top_3_issues.length > 0 && (
               <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-5">
                 <div className="text-sm font-semibold text-slate-900">Топ-3 главные проблемы карточки</div>
@@ -248,6 +330,37 @@ const CardAuditPanel: React.FC<CardAuditPanelProps> = ({ businessId, refreshKey 
                 </div>
               </div>
             )}
+
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <AuditMetricCard
+                label="Рейтинг"
+                value={<span>{formatAuditRating(audit.current_state.rating)} <span className="text-base text-slate-400">/ 5</span></span>}
+                hint={`${formatAuditNumber(audit.current_state.reviews_count)} отзывов, без ответа: ${formatAuditNumber(audit.current_state.unanswered_reviews_count)}`}
+                scope="current_snapshot"
+                tone={Number(audit.current_state.rating || 0) >= 4.5 ? 'good' : 'warning'}
+              />
+              <AuditMetricCard
+                label="Услуги"
+                value={formatAuditNumber(audit.current_state.services_count)}
+                hint={`С ценами: ${formatAuditNumber(audit.current_state.services_with_price_count)}. Это влияет на скорость выбора.`}
+                scope="current_snapshot"
+                tone={audit.current_state.services_count > 0 ? 'good' : 'risk'}
+              />
+              <AuditMetricCard
+                label="Активность"
+                value={audit.current_state.has_recent_activity ? 'Есть' : 'Нет'}
+                hint={audit.current_state.has_recent_activity ? 'Карточка выглядит живой.' : 'Новости и обновления не поддерживают спрос.'}
+                scope="current_snapshot"
+                tone={audit.current_state.has_recent_activity ? 'good' : 'warning'}
+              />
+              <AuditMetricCard
+                label="Потенциал"
+                value={formatAuditMoneyRange(audit.revenue_potential.total_min, audit.revenue_potential.total_max)}
+                hint="Оценка недобора, не прогноз продаж."
+                scope="model_estimate"
+                tone="neutral"
+              />
+            </div>
 
             <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
               <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5">
@@ -444,31 +557,18 @@ const CardAuditPanel: React.FC<CardAuditPanelProps> = ({ businessId, refreshKey 
                     <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
                       Критичных проблем не найдено. Карточка выглядит стабильно.
                     </div>
-                  ) : (audit.issue_blocks || []).length > 0 ? (
-                    (audit.issue_blocks || []).map((issue, idx) => (
-                      <div
+                  ) : primaryIssueBlocks.length > 0 ? (
+                    primaryIssueBlocks.map((issue, idx) => (
+                      <AuditProblemBlock
                         key={`${issue.id || issue.title || 'issue'}-${idx}`}
-                        className={`rounded-xl border p-4 ${severityClasses[(issue.priority || 'medium').toLowerCase()] || severityClasses.medium}`}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="text-sm font-semibold">{issue.title || 'Проблема карточки'}</div>
-                          <div className={`rounded-full px-2 py-1 text-xs font-medium ${priorityClasses[(issue.priority || 'medium').toLowerCase()] || priorityClasses.medium}`}>
-                            {String(issue.priority || 'medium').toUpperCase()}
-                          </div>
-                        </div>
-                        <div className="mt-2 text-sm leading-6">
-                          <span className="font-medium">Проблема:</span> {issue.problem || 'Не указана'}
-                        </div>
-                        <div className="mt-1 text-sm leading-6">
-                          <span className="font-medium">Факт:</span> {issue.evidence || 'Нет данных'}
-                        </div>
-                        <div className="mt-1 text-sm leading-6">
-                          <span className="font-medium">Влияние:</span> {issue.impact || 'Требуется проверка'}
-                        </div>
-                        <div className="mt-1 text-sm leading-6">
-                          <span className="font-medium">Что сделать:</span> {issue.fix || 'Нет рекомендации'}
-                        </div>
-                      </div>
+                        title={issue.title || 'Проблема карточки'}
+                        priority={String(issue.priority || 'medium').toUpperCase()}
+                        problem={compactAuditText(issue.problem, 'Нужно проверить этот блок карточки.')}
+                        evidence={compactAuditText(issue.evidence, 'Фактических деталей пока недостаточно.')}
+                        meaning={compactAuditText(issue.impact, 'Это может снижать доверие и усложнять выбор для клиента.')}
+                        action={compactAuditText(issue.fix, 'Сначала уточните данные карточки, затем обновите публичное описание.')}
+                        help={localosOperationalHelp}
+                      />
                     ))
                   ) : (
                     audit.findings.map((finding) => (
@@ -577,11 +677,27 @@ const CardAuditPanel: React.FC<CardAuditPanelProps> = ({ businessId, refreshKey 
                   <div className="mt-2 text-sm font-semibold text-slate-900">{audit.health_label}</div>
                   <div className="mt-1 text-sm text-slate-600">Баланс факторов: {audit.summary_score}/100</div>
                   <div className="mt-1 text-sm text-slate-600">
-                    Модель: deterministic audit v1
+                    Уровень данных: текущий срез карточки
                   </div>
                 </div>
               </div>
             </div>
+
+            <AuditCtaPanel
+              title="Перевести аудит в регулярную работу"
+              description="Аудит показывает, где карточка теряет доверие и спрос. Следующий шаг — выбрать приоритеты и держать их в операционном ритме: услуги, отзывы, новости, визуал и контроль изменений."
+              bullets={[
+                'Приоритизация правок без ручного разбора всего отчёта',
+                'Регулярные ответы, публикации и обновления карточки',
+                'Контроль изменений после каждого сбора данных',
+              ]}
+              primaryLabel="Открыть работу с картами"
+              secondaryLabel="Посмотреть прогресс"
+              onPrimary={() => {
+                window.location.href = '/dashboard/card';
+              }}
+              secondaryHref="/dashboard/progress"
+            />
           </>
         )}
       </CardContent>

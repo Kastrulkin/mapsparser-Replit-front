@@ -113,6 +113,7 @@ const Login = () => {
   useEffect(() => {
     const initialTab = searchParams.get('tab');
     const tierFromUrl = searchParams.get('tier');
+    const source = searchParams.get('source');
 
     if (initialTab === 'register') {
       setTab('register');
@@ -121,6 +122,20 @@ const Login = () => {
     if (tierFromUrl) {
       // Запоминаем выбранный тариф для последующего редиректа на оплату
       localStorage.setItem('selectedTier', tierFromUrl);
+    }
+
+    if (source === 'public_audit') {
+      const nextBusinessName = searchParams.get('business_name') || '';
+      const nextBusinessAddress = searchParams.get('business_address') || '';
+      const nextBusinessCity = searchParams.get('business_city') || '';
+      const nextBusinessCountry = searchParams.get('business_country') || '';
+      setRegisterForm((current) => ({
+        ...current,
+        business_name: nextBusinessName || current.business_name,
+        business_address: nextBusinessAddress || current.business_address,
+        business_city: nextBusinessCity || current.business_city,
+        business_country: nextBusinessCountry || current.business_country,
+      }));
     }
   }, [searchParams]);
 
@@ -204,7 +219,12 @@ const Login = () => {
           business_name: registerForm.business_name,
           business_address: registerForm.business_address,
           business_city: registerForm.business_city,
-          business_country: registerForm.business_country
+          business_country: registerForm.business_country,
+          source: searchParams.get('source') || undefined,
+          audit_slug: searchParams.get('audit_slug') || undefined,
+          audit_public_url: searchParams.get('audit_slug')
+            ? `${window.location.origin}/${searchParams.get('audit_slug') || ''}`
+            : undefined,
         })
       });
 
@@ -224,7 +244,10 @@ const Login = () => {
         }
 
         // Первый вход должен вести в стартовый first-run сценарий, а не в разрозненные разделы
-        const targetUrl = tierFromUrl
+        const fromPublicAudit = searchParams.get('source') === 'public_audit';
+        const targetUrl = fromPublicAudit
+          ? '/dashboard/profile'
+          : tierFromUrl
           ? `/dashboard/profile?payment=required&tier=${tierFromUrl}`
           : '/dashboard/profile?payment=required';
 

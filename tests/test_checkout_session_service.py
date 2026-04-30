@@ -12,7 +12,7 @@ class _FakeCursor:
     def execute(self, query, params=None):
         text = str(query)
         self.last_execute = (text, params)
-        if "FROM users WHERE email = %s" in text:
+        if "FROM users WHERE LOWER(email) = %s" in text:
             self._rows = [{"id": "user-1", "email": "demo@example.com", "telegram_id": ""}]
             self.description = [("id",), ("email",), ("telegram_id",)]
             return

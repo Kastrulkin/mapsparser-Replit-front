@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, RefreshCw } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, RefreshCw } from 'lucide-react';
 
 import { BusinessHealthWidget } from '@/components/business/BusinessHealthWidget';
 import CardAuditPanel from '@/components/CardAuditPanel';
@@ -109,6 +109,15 @@ const PROGRESS_FIRST_RUN_COPY: Record<string, {
 export const ProgressPage = () => {
   const navigate = useNavigate();
   const { currentBusinessId } = useOutletContext<any>();
+  const [publicAuditLinks, setPublicAuditLinks] = useState<Array<{
+    slug: string;
+    public_url: string;
+    title?: string | null;
+    kind?: string | null;
+    audit_profile_label?: string | null;
+    updated_at?: string | null;
+  }>>([]);
+  const [publicAuditLinksLoading, setPublicAuditLinksLoading] = useState(false);
   const [isNetworkMaster, setIsNetworkMaster] = useState(false);
   const [isNetworkMember, setIsNetworkMember] = useState(false);
   const [resolvedNetworkId, setResolvedNetworkId] = useState<string | null>(null);
@@ -155,6 +164,21 @@ export const ProgressPage = () => {
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
+    }).format(parsedDate);
+  };
+
+  const formatAuditUpdatedAt = (isoValue?: string | null) => {
+    if (!isoValue) {
+      return null;
+    }
+    const parsedDate = new Date(isoValue);
+    if (Number.isNaN(parsedDate.getTime())) {
+      return isoValue;
+    }
+    return new Intl.DateTimeFormat(language === 'ru' ? 'ru-RU' : 'en-US', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
     }).format(parsedDate);
   };
 
@@ -346,6 +370,109 @@ export const ProgressPage = () => {
     return () => window.clearInterval(timer);
   }, [currentBusinessId]);
 
+  useEffect(() => {
+    const loadPublicAuditLinks = async () => {
+      if (!currentBusinessId) {
+        setPublicAuditLinks([]);
+        setPublicAuditLinksLoading(false);
+        return;
+      }
+
+      try {
+        setPublicAuditLinksLoading(true);
+        const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+        const response = await fetch(`/api/business/${currentBusinessId}/public-audit-links`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.success) {
+          setPublicAuditLinks([]);
+          return;
+        }
+        const nextLinks = Array.isArray(data.links) ? data.links : [];
+        setPublicAuditLinks(nextLinks);
+      } catch (error) {
+        console.error('Error loading public audit links:', error);
+        setPublicAuditLinks([]);
+      } finally {
+        setPublicAuditLinksLoading(false);
+      }
+    };
+
+    void loadPublicAuditLinks();
+  }, [currentBusinessId, refreshKey]);
+
+  const renderPublicAuditLinksPanel = () => {
+    if (!publicAuditLinksLoading && publicAuditLinks.length === 0) {
+      return null;
+    }
+
+    const title = isRu ? 'Ссылки на опубликованные аудиты' : 'Published audit links';
+    const description = isNetworkMaster
+      ? (isRu
+        ? 'Здесь быстрый переход в внешний аудит сети. Его удобно открывать, пересылать и обсуждать отдельно от внутреннего кабинета.'
+        : 'Quick access to the external network audit. Open it, share it, or discuss it outside the internal dashboard.')
+      : (isRu
+        ? 'Здесь быстрый переход в внешний аудит этой точки. Его удобно открывать отдельно от внутреннего кабинета.'
+        : 'Quick access to the external audit for this location. Open it separately from the internal dashboard.');
+
+    return (
+      <DashboardActionPanel
+        tone="sky"
+        title={title}
+        description={description}
+        status={publicAuditLinksLoading
+          ? (isRu ? 'Ищем связанные аудиты…' : 'Looking for related audits...')
+          : (
+            <div className="flex flex-wrap gap-2">
+              {publicAuditLinks.map((item) => {
+                const updatedAt = formatAuditUpdatedAt(item.updated_at);
+                const label = item.kind === 'network'
+                  ? (isRu ? 'Аудит сети' : 'Network audit')
+                  : (isRu ? 'Аудит точки' : 'Location audit');
+                return (
+                  <div
+                    key={item.slug}
+                    className="rounded-2xl bg-white/80 px-4 py-3 text-sm text-slate-700 ring-1 ring-black/5"
+                  >
+                    <div className="font-semibold text-slate-900">
+                      {label}
+                    </div>
+                    <div className="mt-1">
+                      {item.title || (isRu ? 'Готовый аудит' : 'Ready audit')}
+                    </div>
+                    {updatedAt ? (
+                      <div className="mt-1 text-xs text-slate-500">
+                        {isRu ? `Обновлён: ${updatedAt}` : `Updated: ${updatedAt}`}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        actions={!publicAuditLinksLoading ? publicAuditLinks.map((item) => (
+          <Button
+            key={item.slug}
+            type="button"
+            variant="outline"
+            onClick={() => window.open(item.public_url, '_blank', 'noopener,noreferrer')}
+            className="border-slate-200 bg-white text-slate-800 hover:bg-slate-100"
+            title={isRu ? 'Открывает опубликованный аудит в новой вкладке.' : 'Opens the published audit in a new tab.'}
+          >
+            <ArrowUpRight className="mr-2 h-4 w-4" />
+            {item.kind === 'network'
+              ? (isRu ? 'Открыть аудит сети' : 'Open network audit')
+              : (isRu ? 'Открыть аудит точки' : 'Open location audit')}
+          </Button>
+        )) : undefined}
+      />
+    );
+  };
+
   if (networkStatusLoading && currentBusinessId) {
     return (
       <div className="space-y-6">
@@ -358,6 +485,8 @@ export const ProgressPage = () => {
   if (isNetworkMaster) {
     return (
       <div className="space-y-6">
+        {renderPublicAuditLinksPanel()}
+
         <div className="rounded-xl border bg-white p-4 md:p-6">
           <NetworkDashboardPage embedded businessId={currentBusinessId} />
         </div>
@@ -485,6 +614,8 @@ export const ProgressPage = () => {
       />
 
       <BusinessHealthWidget businessId={currentBusinessId} className="mb-0" />
+
+      {renderPublicAuditLinksPanel()}
 
       <CardAuditPanel businessId={currentBusinessId} refreshKey={refreshKey} />
 

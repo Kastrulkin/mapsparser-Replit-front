@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Any
 from psycopg2.extras import Json
 import psycopg2
+from auth_system import normalize_email
 from core.telegram_token_store import (
     is_telegram_bot_token_configured,
     mask_telegram_bot_token,
@@ -130,7 +131,7 @@ class DatabaseManager:
     def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """Получить пользователя по email"""
         cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+        cursor.execute("SELECT * FROM users WHERE LOWER(email) = %s", (normalize_email(email),))
         row = cursor.fetchone()
         return dict(row) if row else None
     
@@ -141,7 +142,7 @@ class DatabaseManager:
         cursor.execute("""
             INSERT INTO users (id, email, password_hash, name, phone, created_at)
             VALUES (%s, %s, %s, %s, %s, %s)
-        """, (user_id, email, password_hash, name, phone, datetime.now().isoformat()))
+        """, (user_id, normalize_email(email), password_hash, name, phone, datetime.now().isoformat()))
         self.conn.commit()
         return user_id
     

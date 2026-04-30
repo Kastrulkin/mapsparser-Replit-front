@@ -18,6 +18,10 @@ from pg_db_utils import get_db_connection
 
 PLACEHOLDER = "%s"
 
+def normalize_email(email: str) -> str:
+    """Normalize email for identity lookup."""
+    return str(email or "").strip().lower()
+
 def hash_password(password: str) -> str:
     """Хеширование пароля"""
     salt = secrets.token_hex(16)
@@ -49,10 +53,11 @@ def create_user(email: str, password: str = None, name: str = None, phone: str =
     """Создать нового пользователя"""
     conn = get_db_connection()
     cursor = conn.cursor()
+    normalized_email = normalize_email(email)
     
     try:
         # Проверяем, существует ли пользователь
-        cursor.execute(f"SELECT id FROM Users WHERE email = {PLACEHOLDER}", (email,))
+        cursor.execute(f"SELECT id FROM Users WHERE LOWER(email) = {PLACEHOLDER}", (normalized_email,))
         if cursor.fetchone():
             return {"error": "Пользователь с таким email уже существует"}
         
@@ -80,7 +85,7 @@ def create_user(email: str, password: str = None, name: str = None, phone: str =
                 INSERT INTO Users (id, email, password_hash, name, phone, verification_token, created_at)
                 VALUES ({PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER})
             """,
-                (user_id, email, password_hash, name, phone, verification_token, datetime.now().isoformat()),
+                (user_id, normalized_email, password_hash, name, phone, verification_token, datetime.now().isoformat()),
             )
         else:
             cursor.execute(
@@ -88,14 +93,14 @@ def create_user(email: str, password: str = None, name: str = None, phone: str =
                 INSERT INTO Users (id, email, password_hash, name, phone, created_at)
                 VALUES ({PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER})
             """,
-                (user_id, email, password_hash, name, phone, datetime.now().isoformat()),
+                (user_id, normalized_email, password_hash, name, phone, datetime.now().isoformat()),
             )
         
         conn.commit()
         
         return {
             "id": user_id,
-            "email": email,
+            "email": normalized_email,
             "name": name,
             "phone": phone,
             "verification_token": verification_token,
@@ -111,14 +116,15 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
     """Аутентификация пользователя"""
     conn = get_db_connection()
     cursor = conn.cursor()
+    normalized_email = normalize_email(email)
     
     try:
         cursor.execute(
             f"""
             SELECT id, email, password_hash, name, phone, is_active, is_verified
-            FROM Users WHERE email = {PLACEHOLDER}
+            FROM Users WHERE LOWER(email) = {PLACEHOLDER}
         """,
-            (email,),
+            (normalized_email,),
         )
         
         user = cursor.fetchone()
@@ -411,17 +417,18 @@ def create_invite(invited_by: str, email: str) -> Dict[str, Any]:
     """Создать приглашение"""
     conn = get_db_connection()
     cursor = conn.cursor()
+    normalized_email = normalize_email(email)
     
     try:
         # Проверяем, существует ли пользователь с таким email
-        cursor.execute(f"SELECT id FROM Users WHERE email = {PLACEHOLDER}", (email,))
+        cursor.execute(f"SELECT id FROM Users WHERE LOWER(email) = {PLACEHOLDER}", (normalized_email,))
         if cursor.fetchone():
             return {"error": "Пользователь с таким email уже существует"}
         
         # Проверяем, есть ли уже приглашение
         cursor.execute(
-            f"SELECT id FROM Invites WHERE email = {PLACEHOLDER} AND status = 'pending'",
-            (email,),
+            f"SELECT id FROM Invites WHERE LOWER(email) = {PLACEHOLDER} AND status = 'pending'",
+            (normalized_email,),
         )
         if cursor.fetchone():
             return {"error": "Приглашение уже отправлено"}
@@ -435,14 +442,14 @@ def create_invite(invited_by: str, email: str) -> Dict[str, Any]:
             INSERT INTO Invites (id, email, invited_by, token, expires_at, created_at)
             VALUES ({PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER})
         """,
-            (invite_id, email, invited_by, token, expires_at.isoformat(), datetime.now().isoformat()),
+            (invite_id, normalized_email, invited_by, token, expires_at.isoformat(), datetime.now().isoformat()),
         )
         
         conn.commit()
         
         return {
             "id": invite_id,
-            "email": email,
+            "email": normalized_email,
             "token": token,
             "expires_at": expires_at.isoformat()
         }

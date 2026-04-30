@@ -62,6 +62,121 @@ def _looks_like_url(value: str) -> bool:
         or 'maps.apple.com' in text
     )
 
+
+def _row_to_dict(row):
+    if not row:
+        return {}
+    if isinstance(row, dict):
+        return dict(row)
+    if hasattr(row, 'keys'):
+        return {key: row[key] for key in row.keys()}
+    return {}
+
+
+def _claim_public_audit_business(cursor, audit_slug: str, user_id: str, requested_name: str = ''):
+    slug = str(audit_slug or '').strip()
+    if not slug:
+        return None
+
+    cursor.execute(
+        """
+        SELECT page_json
+        FROM publicreportrequests
+        WHERE slug = %s AND status = 'completed'
+        LIMIT 1
+        """,
+        (slug,),
+    )
+    report_row = _row_to_dict(cursor.fetchone())
+    page_json = report_row.get('page_json') if isinstance(report_row.get('page_json'), dict) else {}
+    if not page_json:
+        return None
+
+    audit = page_json.get('audit') if isinstance(page_json.get('audit'), dict) else {}
+    audit_profile = str(audit.get('audit_profile') or '').strip().lower()
+    is_network_audit = audit_profile.startswith('network_')
+    page_name = str(page_json.get('name') or page_json.get('display_name') or requested_name or '').strip()
+    if not page_name:
+        return None
+
+    if is_network_audit:
+        cursor.execute(
+            """
+            SELECT b.id, b.name, b.owner_id, b.network_id, b.business_type,
+                   u.email AS owner_email, COALESCE(u.is_superadmin, FALSE) AS owner_is_superadmin
+            FROM businesses b
+            LEFT JOIN users u ON u.id = b.owner_id
+            WHERE lower(b.name) = lower(%s)
+              AND COALESCE(b.business_type, '') = 'network'
+            ORDER BY b.created_at DESC
+            LIMIT 1
+            """,
+            (page_name,),
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT b.id, b.name, b.owner_id, b.network_id, b.business_type,
+                   u.email AS owner_email, COALESCE(u.is_superadmin, FALSE) AS owner_is_superadmin
+            FROM businesses b
+            LEFT JOIN users u ON u.id = b.owner_id
+            WHERE lower(b.name) = lower(%s)
+            ORDER BY b.created_at DESC
+            LIMIT 1
+            """,
+            (page_name,),
+        )
+
+    business = _row_to_dict(cursor.fetchone())
+    if not business:
+        return None
+
+    owner_id = str(business.get('owner_id') or '').strip()
+    owner_email = str(business.get('owner_email') or '').strip().lower()
+    owner_is_superadmin = bool(business.get('owner_is_superadmin'))
+    if owner_id and owner_id != user_id and not owner_is_superadmin and owner_email != 'demyanovap@yandex.ru':
+        return None
+
+    business_id = str(business.get('id') or '').strip()
+    network_id = str(business.get('network_id') or '').strip()
+    if not business_id:
+        return None
+
+    if is_network_audit and network_id:
+        cursor.execute(
+            """
+            UPDATE networks
+            SET owner_id = %s, updated_at = NOW()
+            WHERE id = %s
+            """,
+            (user_id, network_id),
+        )
+        cursor.execute(
+            """
+            UPDATE businesses
+            SET owner_id = %s, updated_at = NOW()
+            WHERE id = %s OR network_id = %s
+            """,
+            (user_id, business_id, network_id),
+        )
+    else:
+        cursor.execute(
+            """
+            UPDATE businesses
+            SET owner_id = %s, updated_at = NOW()
+            WHERE id = %s
+            """,
+            (user_id, business_id),
+        )
+
+    return {
+        'id': business_id,
+        'name': str(business.get('name') or page_name),
+        'moderation_status': 'claimed_from_public_audit',
+        'claimed_from_audit_slug': slug,
+    }
+
+
 @messengers_bp.route('/api/auth/register-with-business', methods=['POST'])
 def register_with_business():
     """Регистрация пользователя с автоматическим созданием бизнеса"""
@@ -77,6 +192,7 @@ def register_with_business():
         business_address = data.get('business_address', '').strip()
         business_city = data.get('business_city', '').strip()
         business_country = data.get('business_country', 'US').strip()
+        audit_slug = data.get('audit_slug', '').strip()
         
         if not email or not password:
             return jsonify({"error": "Email и пароль обязательны"}), 400
@@ -105,18 +221,22 @@ def register_with_business():
         # Создаём бизнес
         db = DatabaseManager()
         try:
-            business_id = db.create_business(
-                name=business_name,
-                address=business_address,
-                city=business_city,
-                country=business_country,
-                owner_id=user_id,
-                moderation_status='pending',
-                business_type='beauty_salon'
-            )
+            cursor = db.conn.cursor()
+            claimed_business = _claim_public_audit_business(cursor, audit_slug, user_id, business_name)
+            if claimed_business:
+                business_id = claimed_business['id']
+            else:
+                business_id = db.create_business(
+                    name=business_name,
+                    address=business_address,
+                    city=business_city,
+                    country=business_country,
+                    owner_id=user_id,
+                    moderation_status='pending',
+                    business_type='beauty_salon'
+                )
             
             # Обновляем часовой пояс и координаты, если они определены
-            cursor = db.conn.cursor()
             update_fields = []
             update_values = []
             
@@ -132,7 +252,7 @@ def register_with_business():
                 update_fields.append('longitude = %s')
                 update_values.append(timezone_result['longitude'])
             
-            if update_fields:
+            if update_fields and not claimed_business:
                 update_values.append(business_id)
                 cursor.execute(f"""
                     UPDATE Businesses 
@@ -161,8 +281,9 @@ def register_with_business():
             },
             "business": {
                 "id": business_id,
-                "name": business_name,
-                "moderation_status": "pending"
+                "name": claimed_business.get('name') if claimed_business else business_name,
+                "moderation_status": claimed_business.get('moderation_status') if claimed_business else "pending",
+                "claimed_from_audit_slug": claimed_business.get('claimed_from_audit_slug') if claimed_business else None,
             },
             "timezone": timezone_result.get('timezone', 'UTC'),
             "token": session_token
