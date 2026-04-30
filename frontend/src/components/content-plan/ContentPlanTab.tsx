@@ -151,6 +151,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [selectedPlanTargetKey, setSelectedPlanTargetKey] = useState('all');
   const [selectedItemLocationKey, setSelectedItemLocationKey] = useState('all');
   const [selectedWeekKey, setSelectedWeekKey] = useState('all');
+  const [sortMode, setSortMode] = useState<'priority' | 'date'>('priority');
 
   const allowedHorizons = context?.subscription?.allowed_horizons || [30];
   const scopeOptions = context?.scope?.scope_options || [];
@@ -217,13 +218,15 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       .filter((item) => selectedWeekKey === 'all' || _weekBucketKey(item.scheduled_for) === selectedWeekKey)
       .slice()
       .sort((left, right) => {
-        const priorityDiff = _itemPriorityRank(left) - _itemPriorityRank(right);
-        if (priorityDiff !== 0) return priorityDiff;
+        if (sortMode === 'priority') {
+          const priorityDiff = _itemPriorityRank(left) - _itemPriorityRank(right);
+          if (priorityDiff !== 0) return priorityDiff;
+        }
         const dateDiff = String(left.scheduled_for || '').localeCompare(String(right.scheduled_for || ''));
         if (dateDiff !== 0) return dateDiff;
         return String(left.theme || '').localeCompare(String(right.theme || ''));
       })
-  ), [filteredItems, selectedWeekKey]);
+  ), [filteredItems, selectedWeekKey, sortMode]);
   const itemFilterCounts = useMemo(() => {
     const items = currentPlan?.items || [];
     return ITEM_FILTER_OPTIONS.reduce<Record<ItemFilterKey, number>>((acc, filterKey) => {
@@ -1020,9 +1023,39 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
             ) : null}
             <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3">
               <div className="w-full text-xs font-medium text-slate-500">
-                {isRu
-                  ? 'Порядок внутри списка: сначала без текста, затем готовые к публикации, затем остальные.'
-                  : 'Items are ordered by next best action: no draft first, then ready to publish, then the rest.'}
+                {sortMode === 'priority'
+                  ? (isRu
+                    ? 'Порядок внутри списка: сначала без текста, затем готовые к публикации, затем остальные.'
+                    : 'Items are ordered by next best action: no draft first, then ready to publish, then the rest.')
+                  : (isRu
+                    ? 'Порядок внутри списка: по календарной дате, затем по теме.'
+                    : 'Items are ordered by calendar date, then by theme.')}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSortMode('priority')}
+                  className={[
+                    'rounded-full border px-3 py-1.5 text-sm transition-colors',
+                    sortMode === 'priority'
+                      ? 'border-slate-900 bg-slate-900 text-white'
+                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
+                  ].join(' ')}
+                >
+                  {isRu ? 'По приоритету' : 'By priority'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSortMode('date')}
+                  className={[
+                    'rounded-full border px-3 py-1.5 text-sm transition-colors',
+                    sortMode === 'date'
+                      ? 'border-slate-900 bg-slate-900 text-white'
+                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
+                  ].join(' ')}
+                >
+                  {isRu ? 'По дате' : 'By date'}
+                </button>
               </div>
               <Button
                 variant="outline"
