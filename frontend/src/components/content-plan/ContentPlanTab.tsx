@@ -370,6 +370,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     selectedWeekKey,
     sortMode,
   ]);
+  const activeLocationLabel = useMemo(() => {
+    const activeLocation = availableItemLocations.find((item) => item.key === selectedItemLocationKey);
+    return activeLocation?.label || (isRu ? 'Все точки' : 'All locations');
+  }, [availableItemLocations, selectedItemLocationKey, isRu]);
+  const activeWeekLabel = useMemo(() => {
+    const activeWeek = availableWeeks.find((item) => item.key === selectedWeekKey);
+    return activeWeek?.label || (isRu ? 'Все недели' : 'All weeks');
+  }, [availableWeeks, selectedWeekKey, isRu]);
 
   const loadPlans = async () => {
     if (!businessId) return;
@@ -1010,6 +1018,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   {preset.label}
                 </button>
               ))}
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              <span className="font-medium text-slate-900">
+                {isRu ? 'Сейчас показано:' : 'Current view:'}
+              </span>{' '}
+              {_itemFilterLabel(selectedItemFilter, isRu)} · {_signalFilterLabel(selectedSignalFilter, isRu)} · {activeLocationLabel} · {activeWeekLabel} · {sortMode === 'priority' ? (isRu ? 'По приоритету' : 'By priority') : (isRu ? 'По дате' : 'By date')}
             </div>
             <div className="flex flex-wrap gap-2">
               {ITEM_FILTER_OPTIONS.map((filterKey) => (
