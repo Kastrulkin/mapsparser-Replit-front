@@ -6,6 +6,7 @@ from src.services.content_plan_service import (
     _build_planning_readiness,
     _fetch_seo_keywords,
     _fetch_seo_keywords_isolated,
+    _network_location_targets_from_context,
     _json_ready,
     _resolve_scope_target_meta,
     _scope_target_business_id,
@@ -189,3 +190,22 @@ def test_resolve_scope_target_meta_uses_business_name_and_location():
         "scope_target_city": "Санкт-Петербург",
         "scope_target_address": "Невский проспект, 10",
     }
+
+
+def test_network_location_targets_are_extracted_from_scope_options():
+    context = {
+        "scope": {
+            "scope_options": [
+                {"scope_type": "network_parent", "scope_target_id": "parent-1", "label": "Сеть Север"},
+                {"scope_type": "network_location", "scope_target_id": "loc-1", "label": "Точка 1", "city": "СПб"},
+                {"scope_type": "network_location", "scope_target_id": "loc-2", "label": "Точка 2", "address": "Лиговский, 5"},
+            ]
+        }
+    }
+
+    targets = _network_location_targets_from_context(context)
+
+    assert targets == [
+        {"business_id": "loc-1", "label": "Точка 1", "city": "СПб", "address": ""},
+        {"business_id": "loc-2", "label": "Точка 2", "city": "", "address": "Лиговский, 5"},
+    ]

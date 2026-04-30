@@ -72,6 +72,11 @@ type PlanItem = {
   status: string;
   usernews_id: string;
   content_type: string;
+  business_id?: string;
+  location_scope?: string;
+  location_label?: string;
+  location_city?: string;
+  location_address?: string;
 };
 
 type PlanPayload = {
@@ -143,6 +148,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [selectedItemFilter, setSelectedItemFilter] = useState<ItemFilterKey>('all');
   const [selectedSignalFilter, setSelectedSignalFilter] = useState<SignalFilterKey>('all');
   const [selectedPlanTargetKey, setSelectedPlanTargetKey] = useState('all');
+  const [selectedItemLocationKey, setSelectedItemLocationKey] = useState('all');
 
   const allowedHorizons = context?.subscription?.allowed_horizons || [30];
   const scopeOptions = context?.scope?.scope_options || [];
@@ -158,9 +164,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const filteredItems = useMemo(() => {
     const items = currentPlan?.items || [];
     return items.filter((item) => (
-      _matchesItemFilter(item, selectedItemFilter) && _matchesSignalFilter(item, selectedSignalFilter)
+      _matchesItemFilter(item, selectedItemFilter)
+      && _matchesSignalFilter(item, selectedSignalFilter)
+      && _matchesItemLocationFilter(item, selectedItemLocationKey)
     ));
-  }, [currentPlan?.items, selectedItemFilter, selectedSignalFilter]);
+  }, [currentPlan?.items, selectedItemFilter, selectedSignalFilter, selectedItemLocationKey]);
   const itemFilterCounts = useMemo(() => {
     const items = currentPlan?.items || [];
     return ITEM_FILTER_OPTIONS.reduce<Record<ItemFilterKey, number>>((acc, filterKey) => {
@@ -187,6 +195,22 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       seasonal: 0,
     });
   }, [currentPlan?.items]);
+  const availableItemLocations = useMemo(() => {
+    const seen = new Set<string>();
+    const options: Array<{ key: string; label: string }> = [
+      { key: 'all', label: isRu ? 'Все точки' : 'All locations' },
+    ];
+    for (const item of currentPlan?.items || []) {
+      const key = String(item.location_scope || item.business_id || '').trim();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      options.push({
+        key,
+        label: _itemLocationLabel(item, isRu),
+      });
+    }
+    return options;
+  }, [currentPlan?.items, isRu]);
   const availablePlanTargets = useMemo(() => {
     const seen = new Set<string>();
     const options: Array<{ key: string; label: string }> = [
@@ -717,6 +741,25 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 </button>
               ))}
             </div>
+            {availableItemLocations.length > 1 ? (
+              <div className="flex flex-wrap gap-2">
+                {availableItemLocations.map((location) => (
+                  <button
+                    key={location.key}
+                    type="button"
+                    onClick={() => setSelectedItemLocationKey(location.key)}
+                    className={[
+                      'rounded-full border px-3 py-1.5 text-sm transition-colors',
+                      selectedItemLocationKey === location.key
+                        ? 'border-sky-300 bg-sky-50 text-sky-800'
+                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
+                    ].join(' ')}
+                  >
+                    {location.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             {filteredItems.map((item) => {
               const currentDraft = draftEdits[item.id] !== undefined ? draftEdits[item.id] : item.draft_text;
               const currentTheme = themeEdits[item.id] !== undefined ? themeEdits[item.id] : item.theme;
@@ -748,6 +791,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
                       {_contentTypeLabel(item.content_type, isRu)}
                       {item.location_scope ? ` · ${_locationScopeLabel(currentPlan?.scope_type || '', isRu)}` : ''}
+                      {item.location_label ? ` · ${_itemLocationLabel(item, isRu)}` : ''}
                     </div>
                   </div>
                   <div className="mt-3 grid gap-3 lg:grid-cols-2">
@@ -854,6 +898,16 @@ function _planTargetLabel(plan: Pick<PlanPayload, 'scope_type' | 'scope_target_l
   return _scopeChipLabel(plan.scope_type, isRu);
 }
 
+function _itemLocationLabel(item: Pick<PlanItem, 'location_label' | 'location_city' | 'location_address'>, isRu: boolean): string {
+  const label = String(item.location_label || '').trim();
+  const city = String(item.location_city || '').trim();
+  const address = String(item.location_address || '').trim();
+  if (label && city) return `${label} · ${city}`;
+  if (label && address) return `${label} · ${address}`;
+  if (label) return label;
+  return isRu ? 'Точка сети' : 'Network location';
+}
+
 function _itemFilterLabel(filterKey: ItemFilterKey, isRu: boolean): string {
   if (filterKey === 'needs_draft') return isRu ? 'Без текста' : 'No draft';
   if (filterKey === 'has_draft') return isRu ? 'Есть черновик' : 'Has draft';
@@ -884,4 +938,10 @@ function _matchesSignalFilter(item: PlanItem, filterKey: SignalFilterKey): boole
   const normalizedContentType = String(item.content_type || '').trim().toLowerCase();
   if (filterKey === 'services') return normalizedContentType === 'service';
   return normalizedContentType === filterKey;
+}
+
+function _matchesItemLocationFilter(item: PlanItem, filterKey: string): boolean {
+  if (filterKey === 'all') return true;
+  const itemKey = String(item.location_scope || item.business_id || '').trim();
+  return itemKey === filterKey;
 }

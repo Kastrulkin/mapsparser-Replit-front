@@ -146,6 +146,29 @@ def _resolve_scope_target_meta(cursor: Any, plan_business_id: str, scope_type: s
     }
 
 
+def _network_location_targets_from_context(context: dict[str, Any]) -> list[dict[str, str]]:
+    scope = context.get("scope") if isinstance(context.get("scope"), dict) else {}
+    scope_options = scope.get("scope_options") if isinstance(scope.get("scope_options"), list) else []
+    targets: list[dict[str, str]] = []
+    for item in scope_options:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("scope_type") or "").strip() != "network_location":
+            continue
+        target_id = str(item.get("scope_target_id") or "").strip()
+        if not target_id:
+            continue
+        targets.append(
+            {
+                "business_id": target_id,
+                "label": str(item.get("label") or "").strip(),
+                "city": str(item.get("city") or "").strip(),
+                "address": str(item.get("address") or "").strip(),
+            }
+        )
+    return targets
+
+
 def _fetch_network_scope_options(cursor: Any, business_row: dict[str, Any]) -> list[dict[str, Any]]:
     network_id = str(business_row.get("network_id") or "").strip()
     business_id = str(business_row.get("id") or "").strip()
@@ -670,6 +693,7 @@ def create_generated_content_plan(
         target_id = str(scope_target_id or "").strip() or str(context.get("scope", {}).get("scope_target_id") or business_id)
         root_business = context.get("root_business") if isinstance(context.get("root_business"), dict) else {}
         scope_business = context.get("business") if isinstance(context.get("business"), dict) else {}
+        network_location_targets = _network_location_targets_from_context(context)
         context_json = _json_ready(context)
         skeleton_json = _json_ready(skeleton)
         title = str(skeleton.get("title") or "").strip() or f"Контент-план на {normalized_period} дней"
@@ -702,8 +726,14 @@ def create_generated_content_plan(
         )
 
         items = skeleton.get("items") if isinstance(skeleton.get("items"), list) else []
-        for item in items:
+        for idx, item in enumerate(items):
             item_id = str(uuid.uuid4())
+            item_business_id = str(scope_business.get("id") or business_id)
+            item_location_scope = target_id
+            if normalized_scope == "network_parent" and network_location_targets:
+                assigned_target = network_location_targets[idx % len(network_location_targets)]
+                item_business_id = str(assigned_target.get("business_id") or item_business_id)
+                item_location_scope = item_business_id
             cursor.execute(
                 """
                 INSERT INTO contentplanitems (
@@ -716,7 +746,7 @@ def create_generated_content_plan(
                 (
                     item_id,
                     plan_id,
-                    str(scope_business.get("id") or business_id),
+                    item_business_id,
                     item.get("scheduled_for"),
                     item.get("content_type") or "news",
                     item.get("theme") or "Тема публикации",
@@ -726,7 +756,7 @@ def create_generated_content_plan(
                     item.get("seo_keyword") or None,
                     item.get("service_id") or None,
                     item.get("transaction_id") or None,
-                    target_id,
+                    item_location_scope,
                 ),
             )
         db.conn.commit()
@@ -777,28 +807,40 @@ def get_content_plan(user_id: str, plan_id: str) -> dict[str, Any]:
             (plan_id,),
         )
         item_rows = cursor.fetchall() or []
-        items = [
-            {
-                "id": str(_row_get(row, "id", 0, "") or "").strip(),
-                "business_id": str(_row_get(row, "business_id", 1, "") or "").strip(),
-                "scheduled_for": _row_get(row, "scheduled_for", 2),
-                "content_type": str(_row_get(row, "content_type", 3, "") or "").strip(),
-                "theme": str(_row_get(row, "theme", 4, "") or "").strip(),
-                "goal": str(_row_get(row, "goal", 5, "") or "").strip(),
-                "source_kind": str(_row_get(row, "source_kind", 6, "") or "").strip(),
-                "source_ref": str(_row_get(row, "source_ref", 7, "") or "").strip(),
-                "seo_keyword": str(_row_get(row, "seo_keyword", 8, "") or "").strip(),
-                "service_id": str(_row_get(row, "service_id", 9, "") or "").strip(),
-                "transaction_id": str(_row_get(row, "transaction_id", 10, "") or "").strip(),
-                "location_scope": str(_row_get(row, "location_scope", 11, "") or "").strip(),
-                "draft_text": str(_row_get(row, "draft_text", 12, "") or "").strip(),
-                "status": str(_row_get(row, "status", 13, "") or "").strip(),
-                "usernews_id": str(_row_get(row, "usernews_id", 14, "") or "").strip(),
-                "created_at": _row_get(row, "created_at", 15),
-                "updated_at": _row_get(row, "updated_at", 16),
-            }
-            for row in item_rows
-        ]
+        items = []
+        for row in item_rows:
+            item_business_id = str(_row_get(row, "business_id", 1, "") or "").strip()
+            item_location_scope = str(_row_get(row, "location_scope", 11, "") or "").strip()
+            location_meta = _resolve_scope_target_meta(
+                cursor,
+                item_business_id or str(plan.get("business_id") or ""),
+                "network_location" if item_location_scope else str(plan.get("scope_type") or ""),
+                item_location_scope or item_business_id,
+            )
+            items.append(
+                {
+                    "id": str(_row_get(row, "id", 0, "") or "").strip(),
+                    "business_id": item_business_id,
+                    "scheduled_for": _row_get(row, "scheduled_for", 2),
+                    "content_type": str(_row_get(row, "content_type", 3, "") or "").strip(),
+                    "theme": str(_row_get(row, "theme", 4, "") or "").strip(),
+                    "goal": str(_row_get(row, "goal", 5, "") or "").strip(),
+                    "source_kind": str(_row_get(row, "source_kind", 6, "") or "").strip(),
+                    "source_ref": str(_row_get(row, "source_ref", 7, "") or "").strip(),
+                    "seo_keyword": str(_row_get(row, "seo_keyword", 8, "") or "").strip(),
+                    "service_id": str(_row_get(row, "service_id", 9, "") or "").strip(),
+                    "transaction_id": str(_row_get(row, "transaction_id", 10, "") or "").strip(),
+                    "location_scope": item_location_scope,
+                    "location_label": str(location_meta.get("scope_target_label") or "").strip(),
+                    "location_city": str(location_meta.get("scope_target_city") or "").strip(),
+                    "location_address": str(location_meta.get("scope_target_address") or "").strip(),
+                    "draft_text": str(_row_get(row, "draft_text", 12, "") or "").strip(),
+                    "status": str(_row_get(row, "status", 13, "") or "").strip(),
+                    "usernews_id": str(_row_get(row, "usernews_id", 14, "") or "").strip(),
+                    "created_at": _row_get(row, "created_at", 15),
+                    "updated_at": _row_get(row, "updated_at", 16),
+                }
+            )
         target_meta = _resolve_scope_target_meta(
             cursor,
             str(plan.get("business_id") or ""),
