@@ -380,6 +380,31 @@ def test_build_learning_breakdown_summary_calculates_edit_share():
     ]
 
 
+def test_build_learning_breakdown_summary_keeps_optional_label():
+    breakdown = _build_learning_breakdown_summary(
+        [
+            {
+                "location_scope": "loc-1",
+                "location_label": "Точка 1",
+                "accepted_total": 4,
+                "accepted_edited_total": 2,
+            },
+        ],
+        "location_scope",
+        "location_label",
+    )
+
+    assert breakdown == [
+        {
+            "key": "loc-1",
+            "label": "Точка 1",
+            "accepted_total": 4,
+            "accepted_edited_total": 2,
+            "edited_before_accept_pct": 50.0,
+        }
+    ]
+
+
 def test_learning_feedback_adjusts_generator_ranking_softly():
     feedback = _build_learning_feedback_from_breakdowns(
         [

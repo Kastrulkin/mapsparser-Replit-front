@@ -113,21 +113,25 @@ def _build_learning_metrics_summary(rows: list[Any]) -> dict[str, Any]:
     }
 
 
-def _build_learning_breakdown_summary(rows: list[Any], key_field: str) -> list[dict[str, Any]]:
+def _build_learning_breakdown_summary(rows: list[Any], key_field: str, label_field: str | None = None) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     for row in rows:
         key = str(_row_get(row, key_field, 0, "") or "").strip() or "unknown"
-        accepted_total = int(_row_get(row, "accepted_total", 1, 0) or 0)
-        accepted_edited_total = int(_row_get(row, "accepted_edited_total", 2, 0) or 0)
+        label = str(_row_get(row, label_field or "", 1, "") or "").strip() if label_field else ""
+        accepted_index = 2 if label_field else 1
+        edited_index = 3 if label_field else 2
+        accepted_total = int(_row_get(row, "accepted_total", accepted_index, 0) or 0)
+        accepted_edited_total = int(_row_get(row, "accepted_edited_total", edited_index, 0) or 0)
         edited_before_accept_pct = (accepted_edited_total / accepted_total * 100.0) if accepted_total else 0.0
-        items.append(
-            {
-                "key": key,
-                "accepted_total": accepted_total,
-                "accepted_edited_total": accepted_edited_total,
-                "edited_before_accept_pct": round(edited_before_accept_pct, 2),
-            }
-        )
+        item = {
+            "key": key,
+            "accepted_total": accepted_total,
+            "accepted_edited_total": accepted_edited_total,
+            "edited_before_accept_pct": round(edited_before_accept_pct, 2),
+        }
+        if label:
+            item["label"] = label
+        items.append(item)
     return items
 
 
@@ -1052,12 +1056,34 @@ def get_content_plan_learning_metrics(user_id: str, business_id: str, window_day
             (str(business_id or "").strip(), normalized_window),
         )
         content_type_breakdown = _build_learning_breakdown_summary(cursor.fetchall() or [], "content_type")
+        cursor.execute(
+            """
+            SELECT
+                COALESCE(NULLIF(metadata_json->>'location_scope', ''), 'current') AS location_scope,
+                COALESCE(NULLIF(metadata_json->>'location_label', ''), '') AS location_label,
+                COUNT(*) FILTER (WHERE event_type = 'accepted') AS accepted_total,
+                COUNT(*) FILTER (
+                    WHERE event_type = 'accepted'
+                      AND COALESCE(edited_before_accept, FALSE) = TRUE
+                ) AS accepted_edited_total
+            FROM ailearningevents
+            WHERE business_id = NULLIF(%s, '')::uuid
+              AND capability = 'content_plan.publish'
+              AND created_at >= NOW() - (%s * INTERVAL '1 day')
+            GROUP BY location_scope, location_label
+            HAVING COUNT(*) FILTER (WHERE event_type = 'accepted') > 0
+            ORDER BY accepted_edited_total DESC, accepted_total DESC, location_label ASC
+            """,
+            (str(business_id or "").strip(), normalized_window),
+        )
+        location_breakdown = _build_learning_breakdown_summary(cursor.fetchall() or [], "location_scope", "location_label")
         return {
             "window_days": normalized_window,
             "items": metrics.get("items", []),
             "summary": metrics.get("summary", {}),
             "source_kind_breakdown": source_kind_breakdown,
             "content_type_breakdown": content_type_breakdown,
+            "location_breakdown": location_breakdown,
             "quality_insights": _build_learning_quality_insights(source_kind_breakdown, content_type_breakdown),
             "ranking_feedback": _build_learning_feedback_from_breakdowns(source_kind_breakdown, content_type_breakdown),
         }
@@ -1605,7 +1631,7 @@ def create_news_from_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
         cursor.execute(
             """
             SELECT i.id, i.plan_id, i.business_id, i.theme, i.goal, i.source_ref, i.draft_text, i.service_id, i.status,
-                   i.source_kind, i.content_type,
+                   i.source_kind, i.content_type, i.location_scope,
                    p.business_id AS root_business_id
             FROM contentplanitems i
             JOIN contentplans p ON p.id = i.plan_id
@@ -1665,6 +1691,13 @@ def create_news_from_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
             """,
             (news_id, item_id),
         )
+        location_scope = str(item.get("location_scope") or item.get("business_id") or "").strip()
+        location_meta = _resolve_scope_target_meta(
+            cursor,
+            str(item.get("business_id") or ""),
+            "network_location" if location_scope else "single_business",
+            location_scope or str(item.get("business_id") or ""),
+        )
         _record_content_plan_event(
             conn=db.conn,
             user_id=user_id,
@@ -1685,6 +1718,8 @@ def create_news_from_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
                 "source_kind": str(item.get("source_kind") or "").strip(),
                 "content_type": str(item.get("content_type") or "").strip(),
                 "theme": str(item.get("theme") or "").strip(),
+                "location_scope": location_scope,
+                "location_label": str(location_meta.get("scope_target_label") or "").strip(),
                 "created_via": "content_plan",
             },
         )

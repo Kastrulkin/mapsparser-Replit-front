@@ -128,6 +128,13 @@ type LearningMetricsPayload = {
     accepted_edited_total: number;
     edited_before_accept_pct: number;
   }>;
+  location_breakdown?: Array<{
+    key: string;
+    label?: string;
+    accepted_total: number;
+    accepted_edited_total: number;
+    edited_before_accept_pct: number;
+  }>;
   quality_insights?: Array<{
     kind: string;
     text_ru: string;
@@ -1364,8 +1371,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
           </div>
         ) : null}
         {(learningMetrics?.source_kind_breakdown && learningMetrics.source_kind_breakdown.length > 0)
-          || (learningMetrics?.content_type_breakdown && learningMetrics.content_type_breakdown.length > 0) ? (
-          <div className="mt-4 grid gap-4 xl:grid-cols-2">
+          || (learningMetrics?.content_type_breakdown && learningMetrics.content_type_breakdown.length > 0)
+          || (learningMetrics?.location_breakdown && learningMetrics.location_breakdown.length > 0) ? (
+          <div className="mt-4 grid gap-4 xl:grid-cols-3">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
               <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                 {isRu ? 'Чаще правят по сигналу' : 'Most edited by signal'}
@@ -1392,6 +1400,21 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700"
                   >
                     {_contentTypeLabel(item.key, isRu)} · {Number(item.edited_before_accept_pct || 0).toFixed(0)}%
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                {isRu ? 'Чаще правят по точке' : 'Most edited by location'}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {(learningMetrics?.location_breakdown || []).slice(0, 5).map((item) => (
+                  <div
+                    key={item.key}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700"
+                  >
+                    {String(item.label || item.key || (isRu ? 'Точка' : 'Location'))} · {Number(item.edited_before_accept_pct || 0).toFixed(0)}%
                   </div>
                 ))}
               </div>
