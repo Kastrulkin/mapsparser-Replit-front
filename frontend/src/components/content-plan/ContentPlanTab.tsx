@@ -102,6 +102,8 @@ type LearningMetricsPayload = {
     accepted_edited_total: number;
     skipped_total: number;
     rescheduled_total: number;
+    minor_edit_total: number;
+    major_rewrite_total: number;
     edited_before_accept_pct: number;
   }>;
   summary: {
@@ -110,6 +112,8 @@ type LearningMetricsPayload = {
     accepted_edited_total?: number;
     skipped_total?: number;
     rescheduled_total?: number;
+    minor_edit_total?: number;
+    major_rewrite_total?: number;
     edited_before_accept_pct?: number;
   };
   source_kind_breakdown?: Array<{
@@ -123,6 +127,11 @@ type LearningMetricsPayload = {
     accepted_total: number;
     accepted_edited_total: number;
     edited_before_accept_pct: number;
+  }>;
+  quality_insights?: Array<{
+    kind: string;
+    text_ru: string;
+    text_en: string;
   }>;
 };
 
@@ -1320,6 +1329,28 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
             <div className="mt-2 text-2xl font-semibold text-slate-950">{Number(learningMetrics?.summary?.edited_before_accept_pct || 0).toFixed(0)}%</div>
           </div>
         </div>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{isRu ? 'Небольшие правки' : 'Minor edits'}</div>
+            <div className="mt-2 text-xl font-semibold text-slate-950">{learningMetrics?.summary?.minor_edit_total || 0}</div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{isRu ? 'Смысловые переписывания' : 'Major rewrites'}</div>
+            <div className="mt-2 text-xl font-semibold text-slate-950">{learningMetrics?.summary?.major_rewrite_total || 0}</div>
+          </div>
+        </div>
+        {learningMetrics?.quality_insights && learningMetrics.quality_insights.length > 0 ? (
+          <div className="mt-4 space-y-2">
+            {learningMetrics.quality_insights.map((item) => (
+              <div
+                key={`${item.kind}:${item.text_ru || item.text_en}`}
+                className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700"
+              >
+                {isRu ? item.text_ru : item.text_en}
+              </div>
+            ))}
+          </div>
+        ) : null}
         {learningMetrics?.items && learningMetrics.items.length > 0 ? (
           <div className="mt-4 flex flex-wrap gap-2">
             {learningMetrics.items.map((item) => (

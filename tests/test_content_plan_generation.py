@@ -4,8 +4,10 @@ import src.services.content_plan_service as content_plan_service
 from src.core.content_plan_generator import build_content_plan_skeleton
 from src.services.content_plan_service import (
     _build_learning_breakdown_summary,
+    _build_learning_feedback_from_breakdowns,
     _build_learning_metrics_summary,
     _build_planning_readiness,
+    _classify_text_edit,
     _fetch_audit_signals,
     _fetch_seo_keywords,
     _fetch_seo_keywords_isolated,
@@ -305,6 +307,8 @@ def test_build_learning_metrics_summary_aggregates_content_plan_signals():
                 "accepted_edited_total": 0,
                 "skipped_total": 0,
                 "rescheduled_total": 0,
+                "minor_edit_total": 0,
+                "major_rewrite_total": 0,
             },
             {
                 "capability": "content_plan.publish",
@@ -313,6 +317,8 @@ def test_build_learning_metrics_summary_aggregates_content_plan_signals():
                 "accepted_edited_total": 1,
                 "skipped_total": 0,
                 "rescheduled_total": 0,
+                "minor_edit_total": 0,
+                "major_rewrite_total": 0,
             },
             {
                 "capability": "content_plan.item",
@@ -321,6 +327,8 @@ def test_build_learning_metrics_summary_aggregates_content_plan_signals():
                 "accepted_edited_total": 0,
                 "skipped_total": 3,
                 "rescheduled_total": 2,
+                "minor_edit_total": 1,
+                "major_rewrite_total": 1,
             },
         ]
     )
@@ -331,6 +339,8 @@ def test_build_learning_metrics_summary_aggregates_content_plan_signals():
         "accepted_edited_total": 1,
         "skipped_total": 3,
         "rescheduled_total": 2,
+        "minor_edit_total": 1,
+        "major_rewrite_total": 1,
         "edited_before_accept_pct": 25.0,
     }
     publish_metrics = next(item for item in metrics["items"] if item["capability"] == "content_plan.publish")
@@ -368,3 +378,73 @@ def test_build_learning_breakdown_summary_calculates_edit_share():
             "edited_before_accept_pct": 0.0,
         },
     ]
+
+
+def test_learning_feedback_adjusts_generator_ranking_softly():
+    feedback = _build_learning_feedback_from_breakdowns(
+        [
+            {
+                "key": "seo_keyword",
+                "accepted_total": 4,
+                "accepted_edited_total": 4,
+                "edited_before_accept_pct": 100.0,
+            },
+            {
+                "key": "service",
+                "accepted_total": 4,
+                "accepted_edited_total": 0,
+                "edited_before_accept_pct": 0.0,
+            },
+        ],
+        [
+            {
+                "key": "seo",
+                "accepted_total": 4,
+                "accepted_edited_total": 4,
+                "edited_before_accept_pct": 100.0,
+            },
+            {
+                "key": "service",
+                "accepted_total": 4,
+                "accepted_edited_total": 0,
+                "edited_before_accept_pct": 0.0,
+            },
+        ],
+    )
+    context = {
+        "business": {"name": "LocalOS Cafe", "city": "Кудрово"},
+        "services": [{"id": "svc-1", "name": "Латте", "description": "Кофе с молоком"}],
+        "seo_keywords": [{"keyword": "кофе рядом", "views": 6000}],
+        "sales_signals": [],
+        "audit_signals": [],
+        "learning_feedback": feedback,
+    }
+
+    plan = build_content_plan_skeleton(
+        context,
+        period_days=30,
+        density="light",
+        content_mix={
+            "services": True,
+            "seo": True,
+            "sales": False,
+            "audit": False,
+            "seasonal": False,
+        },
+    )
+
+    seo_item = next(item for item in plan["items"] if item["content_type"] == "seo")
+    service_item = next(item for item in plan["items"] if item["content_type"] == "service")
+    assert seo_item["learning_adjustment"] < 0
+    assert service_item["learning_adjustment"] > 0
+    assert plan["meta"]["learning_feedback_applied"] is True
+
+
+def test_classify_text_edit_distinguishes_minor_and_major_changes():
+    original = "Запишитесь на латте и свежие десерты в карточке."
+    minor = "Запишитесь на латте и свежие десерты в нашей карточке."
+    major = "Сегодня рассказываем о новых завтраках, сезонном меню и вечерних предложениях."
+
+    assert _classify_text_edit(original, minor) == "minor_edit"
+    assert _classify_text_edit(original, major) == "major_rewrite"
+    assert _classify_text_edit(original, original) == "unchanged"

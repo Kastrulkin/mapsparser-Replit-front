@@ -70,6 +70,8 @@ def _build_learning_metrics_summary(rows: list[Any]) -> dict[str, Any]:
         "accepted_edited_total": 0,
         "skipped_total": 0,
         "rescheduled_total": 0,
+        "minor_edit_total": 0,
+        "major_rewrite_total": 0,
     }
     for row in rows:
         capability = str(_row_get(row, "capability", 0, "") or "").strip()
@@ -78,6 +80,8 @@ def _build_learning_metrics_summary(rows: list[Any]) -> dict[str, Any]:
         accepted_edited_total = int(_row_get(row, "accepted_edited_total", 3, 0) or 0)
         skipped_total = int(_row_get(row, "skipped_total", 4, 0) or 0)
         rescheduled_total = int(_row_get(row, "rescheduled_total", 5, 0) or 0)
+        minor_edit_total = int(_row_get(row, "minor_edit_total", 6, 0) or 0)
+        major_rewrite_total = int(_row_get(row, "major_rewrite_total", 7, 0) or 0)
         edited_before_accept_pct = (accepted_edited_total / accepted_total * 100.0) if accepted_total else 0.0
         items.append(
             {
@@ -87,6 +91,8 @@ def _build_learning_metrics_summary(rows: list[Any]) -> dict[str, Any]:
                 "accepted_edited_total": accepted_edited_total,
                 "skipped_total": skipped_total,
                 "rescheduled_total": rescheduled_total,
+                "minor_edit_total": minor_edit_total,
+                "major_rewrite_total": major_rewrite_total,
                 "edited_before_accept_pct": round(edited_before_accept_pct, 2),
             }
         )
@@ -95,6 +101,8 @@ def _build_learning_metrics_summary(rows: list[Any]) -> dict[str, Any]:
         totals["accepted_edited_total"] += accepted_edited_total
         totals["skipped_total"] += skipped_total
         totals["rescheduled_total"] += rescheduled_total
+        totals["minor_edit_total"] += minor_edit_total
+        totals["major_rewrite_total"] += major_rewrite_total
     totals["edited_before_accept_pct"] = round(
         (totals["accepted_edited_total"] / totals["accepted_total"] * 100.0) if totals["accepted_total"] else 0.0,
         2,
@@ -121,6 +129,144 @@ def _build_learning_breakdown_summary(rows: list[Any], key_field: str) -> list[d
             }
         )
     return items
+
+
+def _learning_score_adjustment(accepted_total: int, accepted_edited_total: int) -> int:
+    if accepted_total < 2:
+        return 0
+    edit_pct = (accepted_edited_total / accepted_total * 100.0) if accepted_total else 0.0
+    if edit_pct >= 75:
+        return -22
+    if edit_pct >= 50:
+        return -14
+    if edit_pct >= 25:
+        return -6
+    if accepted_total >= 3 and edit_pct <= 5:
+        return 8
+    if accepted_total >= 3 and edit_pct <= 15:
+        return 4
+    return 0
+
+
+def _build_learning_feedback_from_breakdowns(
+    source_kind_breakdown: list[dict[str, Any]],
+    content_type_breakdown: list[dict[str, Any]],
+) -> dict[str, Any]:
+    def build_index(items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+        indexed: dict[str, dict[str, Any]] = {}
+        for item in items:
+            key = str(item.get("key") or "").strip()
+            if not key:
+                continue
+            accepted_total = int(item.get("accepted_total") or 0)
+            accepted_edited_total = int(item.get("accepted_edited_total") or 0)
+            indexed[key] = {
+                "accepted_total": accepted_total,
+                "accepted_edited_total": accepted_edited_total,
+                "edited_before_accept_pct": float(item.get("edited_before_accept_pct") or 0.0),
+                "score_adjustment": _learning_score_adjustment(accepted_total, accepted_edited_total),
+            }
+        return indexed
+
+    return {
+        "source_kind": build_index(source_kind_breakdown),
+        "content_type": build_index(content_type_breakdown),
+    }
+
+
+def _source_kind_insight_label(value: str) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized == "seo_keyword":
+        return "SEO-темы"
+    if normalized == "service":
+        return "темы по услугам"
+    if normalized == "transaction":
+        return "темы на основе продаж"
+    if normalized == "audit_signal":
+        return "темы из аудита"
+    if normalized == "seasonal":
+        return "сезонные темы"
+    return "часть тем"
+
+
+def _content_type_insight_label(value: str) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized == "seo":
+        return "SEO-публикации"
+    if normalized == "service":
+        return "публикации про услуги"
+    if normalized == "sales":
+        return "публикации по продажам"
+    if normalized == "audit":
+        return "публикации по аудиту"
+    if normalized == "seasonal":
+        return "сезонные публикации"
+    return "публикации"
+
+
+def _build_learning_quality_insights(
+    source_kind_breakdown: list[dict[str, Any]],
+    content_type_breakdown: list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    insights: list[dict[str, str]] = []
+    risky_sources = [
+        item for item in source_kind_breakdown
+        if int(item.get("accepted_total") or 0) >= 2 and float(item.get("edited_before_accept_pct") or 0) >= 50
+    ]
+    strong_sources = [
+        item for item in source_kind_breakdown
+        if int(item.get("accepted_total") or 0) >= 3 and float(item.get("edited_before_accept_pct") or 0) <= 15
+    ]
+    risky_types = [
+        item for item in content_type_breakdown
+        if int(item.get("accepted_total") or 0) >= 2 and float(item.get("edited_before_accept_pct") or 0) >= 50
+    ]
+    if risky_sources:
+        item = risky_sources[0]
+        insights.append(
+            {
+                "kind": "needs_work",
+                "text_ru": f"{_source_kind_insight_label(str(item.get('key') or ''))} чаще требуют ручной правки перед публикацией.",
+                "text_en": f"{str(item.get('key') or 'Some signals')} themes are edited more often before publishing.",
+            }
+        )
+    if strong_sources:
+        item = strong_sources[0]
+        insights.append(
+            {
+                "kind": "works_well",
+                "text_ru": f"{_source_kind_insight_label(str(item.get('key') or ''))} чаще принимают почти без правок.",
+                "text_en": f"{str(item.get('key') or 'Some signals')} themes are accepted with fewer edits.",
+            }
+        )
+    if risky_types:
+        item = risky_types[0]
+        insights.append(
+            {
+                "kind": "content_type_gap",
+                "text_ru": f"{_content_type_insight_label(str(item.get('key') or ''))} стоит формулировать конкретнее: по ним видно больше правок.",
+                "text_en": f"{str(item.get('key') or 'Some content')} posts need more specific framing.",
+            }
+        )
+    return insights[:3]
+
+
+def _classify_text_edit(previous_text: str, next_text: str) -> str:
+    previous = str(previous_text or "").strip()
+    current = str(next_text or "").strip()
+    if not previous and current:
+        return "major_rewrite"
+    if previous == current:
+        return "unchanged"
+    previous_words = set(previous.lower().split())
+    current_words = set(current.lower().split())
+    shared = len(previous_words & current_words)
+    largest = max(len(previous_words), len(current_words), 1)
+    overlap = shared / largest
+    length_delta = abs(len(current) - len(previous)) / max(len(previous), 1)
+    if overlap < 0.45 or length_delta > 0.55:
+        return "major_rewrite"
+    return "minor_edit"
 
 
 def _table_has_column(cursor: Any, table_name: str, column_name: str) -> bool:
@@ -515,6 +661,53 @@ def _build_planning_readiness(
     }
 
 
+def _load_content_plan_learning_feedback(cursor: Any, business_id: str, window_days: int = 90) -> dict[str, Any]:
+    try:
+        normalized_window = max(1, min(int(window_days or 90), 365))
+        ensure_ai_learning_events_table(cursor.connection)
+        cursor.execute(
+            """
+            SELECT
+                COALESCE(NULLIF(metadata_json->>'source_kind', ''), 'unknown') AS source_kind,
+                COUNT(*) FILTER (WHERE event_type = 'accepted') AS accepted_total,
+                COUNT(*) FILTER (
+                    WHERE event_type = 'accepted'
+                      AND COALESCE(edited_before_accept, FALSE) = TRUE
+                ) AS accepted_edited_total
+            FROM ailearningevents
+            WHERE business_id = NULLIF(%s, '')::uuid
+              AND capability = 'content_plan.publish'
+              AND created_at >= NOW() - (%s * INTERVAL '1 day')
+            GROUP BY source_kind
+            HAVING COUNT(*) FILTER (WHERE event_type = 'accepted') > 0
+            """,
+            (str(business_id or "").strip(), normalized_window),
+        )
+        source_kind_breakdown = _build_learning_breakdown_summary(cursor.fetchall() or [], "source_kind")
+        cursor.execute(
+            """
+            SELECT
+                COALESCE(NULLIF(metadata_json->>'content_type', ''), 'unknown') AS content_type,
+                COUNT(*) FILTER (WHERE event_type = 'accepted') AS accepted_total,
+                COUNT(*) FILTER (
+                    WHERE event_type = 'accepted'
+                      AND COALESCE(edited_before_accept, FALSE) = TRUE
+                ) AS accepted_edited_total
+            FROM ailearningevents
+            WHERE business_id = NULLIF(%s, '')::uuid
+              AND capability = 'content_plan.publish'
+              AND created_at >= NOW() - (%s * INTERVAL '1 day')
+            GROUP BY content_type
+            HAVING COUNT(*) FILTER (WHERE event_type = 'accepted') > 0
+            """,
+            (str(business_id or "").strip(), normalized_window),
+        )
+        content_type_breakdown = _build_learning_breakdown_summary(cursor.fetchall() or [], "content_type")
+        return _build_learning_feedback_from_breakdowns(source_kind_breakdown, content_type_breakdown)
+    except Exception:
+        return {"source_kind": {}, "content_type": {}}
+
+
 def _record_content_plan_event(
     *,
     conn: Any,
@@ -673,6 +866,7 @@ def load_plan_context_for_business(user_id: str, business_id: str, scope_type: s
         sales_signals = _fetch_sales_signals(cursor, user_id, scope_business_id)
         recent_news = _fetch_recent_news(cursor, user_id, scope_business_id)
         audit_signals = _fetch_audit_signals(scope_business_id)
+        learning_feedback = _load_content_plan_learning_feedback(cursor, business_id)
         readiness = _build_planning_readiness(
             map_links_count=map_links_count,
             services_count=len(services),
@@ -725,6 +919,7 @@ def load_plan_context_for_business(user_id: str, business_id: str, scope_type: s
             "recent_news": recent_news,
             "audit_signals": audit_signals,
             "readiness": readiness,
+            "learning_feedback": learning_feedback,
         }
     finally:
         db.close()
@@ -804,7 +999,9 @@ def get_content_plan_learning_metrics(user_id: str, business_id: str, window_day
                       AND COALESCE(edited_before_accept, FALSE) = TRUE
                 ) AS accepted_edited_total,
                 COUNT(*) FILTER (WHERE event_type = 'skipped') AS skipped_total,
-                COUNT(*) FILTER (WHERE event_type = 'rescheduled') AS rescheduled_total
+                COUNT(*) FILTER (WHERE event_type = 'rescheduled') AS rescheduled_total,
+                COUNT(*) FILTER (WHERE event_type = 'minor_edit') AS minor_edit_total,
+                COUNT(*) FILTER (WHERE event_type = 'major_rewrite') AS major_rewrite_total
             FROM ailearningevents
             WHERE business_id = NULLIF(%s, '')::uuid
               AND capability LIKE 'content_plan.%%'
@@ -861,6 +1058,8 @@ def get_content_plan_learning_metrics(user_id: str, business_id: str, window_day
             "summary": metrics.get("summary", {}),
             "source_kind_breakdown": source_kind_breakdown,
             "content_type_breakdown": content_type_breakdown,
+            "quality_insights": _build_learning_quality_insights(source_kind_breakdown, content_type_breakdown),
+            "ranking_feedback": _build_learning_feedback_from_breakdowns(source_kind_breakdown, content_type_breakdown),
         }
     finally:
         db.close()
@@ -1103,7 +1302,7 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
         ensure_content_plan_tables(cursor)
         cursor.execute(
             """
-            SELECT i.id, i.plan_id, i.business_id, i.status, i.source_kind, i.content_type, i.theme,
+            SELECT i.id, i.plan_id, i.business_id, i.status, i.source_kind, i.content_type, i.theme, i.draft_text,
                    p.business_id AS root_business_id
             FROM contentplanitems i
             JOIN contentplans p ON p.id = i.plan_id
@@ -1151,10 +1350,15 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
         )
         next_status = str(payload.get("status") or "").strip() if "status" in payload else previous_status
         event_type = "edited"
+        edit_class = ""
         if "status" in payload and next_status == "skipped":
             event_type = "skipped"
         elif "scheduled_for" in payload and "draft_text" not in payload and "theme" not in payload:
             event_type = "rescheduled"
+        elif "draft_text" in payload:
+            edit_class = _classify_text_edit(str(data.get("draft_text") or ""), str(payload.get("draft_text") or ""))
+            if edit_class in {"minor_edit", "major_rewrite"}:
+                event_type = edit_class
         _record_content_plan_event(
             conn=db.conn,
             user_id=user_id,
@@ -1172,6 +1376,7 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
                 "source_kind": str(data.get("source_kind") or "").strip(),
                 "content_type": str(data.get("content_type") or "").strip(),
                 "theme": str(payload.get("theme") or data.get("theme") or "").strip(),
+                "edit_class": edit_class,
             },
         )
         db.conn.commit()

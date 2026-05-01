@@ -206,6 +206,32 @@ def _candidate_sort_key(candidate: dict[str, Any]) -> tuple[int, str]:
     return (int(candidate.get("strength_score") or 0), _safe_text(candidate.get("theme")))
 
 
+def _learning_adjustment(context: dict[str, Any], candidate: dict[str, Any]) -> int:
+    feedback = context.get("learning_feedback") if isinstance(context.get("learning_feedback"), dict) else {}
+    source_feedback = feedback.get("source_kind") if isinstance(feedback.get("source_kind"), dict) else {}
+    content_feedback = feedback.get("content_type") if isinstance(feedback.get("content_type"), dict) else {}
+    source_kind = _safe_text(candidate.get("source_kind"))
+    content_type = _safe_text(candidate.get("content_type"))
+    score = 0
+    if source_kind and isinstance(source_feedback.get(source_kind), dict):
+        score += int(source_feedback[source_kind].get("score_adjustment") or 0)
+    if content_type and isinstance(content_feedback.get(content_type), dict):
+        score += int(content_feedback[content_type].get("score_adjustment") or 0)
+    return max(-35, min(18, score))
+
+
+def _apply_learning_feedback(context: dict[str, Any], candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    adjusted: list[dict[str, Any]] = []
+    for candidate in candidates:
+        adjustment = _learning_adjustment(context, candidate)
+        next_candidate = dict(candidate)
+        next_candidate["learning_adjustment"] = adjustment
+        next_candidate["base_strength_score"] = int(candidate.get("strength_score") or 0)
+        next_candidate["strength_score"] = max(1, int(candidate.get("strength_score") or 0) + adjustment)
+        adjusted.append(next_candidate)
+    return adjusted
+
+
 def _pick_candidates(candidates: list[dict[str, Any]], items_target: int) -> list[dict[str, Any]]:
     if not candidates:
         return []
@@ -374,6 +400,7 @@ def build_content_plan_skeleton(
             }
         )
 
+    candidates = _apply_learning_feedback(context, candidates)
     selected_candidates = _pick_candidates(candidates, items_target)
     selected_items: list[dict[str, Any]] = []
     step_days = max(3, round(period_days / max(items_target, 1)))
@@ -394,6 +421,7 @@ def build_content_plan_skeleton(
                 "transaction_id": candidate.get("transaction_id") or "",
                 "cta_hint": candidate.get("cta_hint") or "",
                 "strength_score": int(candidate.get("strength_score") or 0),
+                "learning_adjustment": int(candidate.get("learning_adjustment") or 0),
             }
         )
         current_date = min(period_end, current_date + timedelta(days=step_days))
@@ -427,5 +455,6 @@ def build_content_plan_skeleton(
                 if _safe_text(item.get("content_type"))
             }),
             "max_strength_score": max(int(item.get("strength_score") or 0) for item in selected_items),
+            "learning_feedback_applied": any(int(item.get("learning_adjustment") or 0) != 0 for item in selected_items),
         },
     }
