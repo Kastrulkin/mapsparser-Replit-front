@@ -152,9 +152,25 @@ def _learning_score_adjustment(accepted_total: int, accepted_edited_total: int) 
     return 0
 
 
+def _location_quality_score_adjustment(item: dict[str, Any]) -> int:
+    risk_score = float(item.get("risk_score") or 0.0)
+    if risk_score >= 85:
+        return -18
+    if risk_score >= 60:
+        return -12
+    if risk_score >= 35:
+        return -6
+    accepted_total = int(item.get("accepted_total") or 0)
+    edit_pct = float(item.get("edited_before_accept_pct") or 0.0)
+    if accepted_total >= 3 and edit_pct <= 10 and int(item.get("skipped_total") or 0) == 0:
+        return 5
+    return 0
+
+
 def _build_learning_feedback_from_breakdowns(
     source_kind_breakdown: list[dict[str, Any]],
     content_type_breakdown: list[dict[str, Any]],
+    network_quality: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     def build_index(items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
         indexed: dict[str, dict[str, Any]] = {}
@@ -172,9 +188,26 @@ def _build_learning_feedback_from_breakdowns(
             }
         return indexed
 
+    location_feedback: dict[str, dict[str, Any]] = {}
+    for item in network_quality or []:
+        key = str(item.get("key") or "").strip()
+        if not key:
+            continue
+        location_feedback[key] = {
+            "label": str(item.get("label") or "").strip(),
+            "risk_score": float(item.get("risk_score") or 0.0),
+            "reasons": item.get("reasons") if isinstance(item.get("reasons"), list) else [],
+            "score_adjustment": _location_quality_score_adjustment(item),
+            "accepted_total": int(item.get("accepted_total") or 0),
+            "skipped_total": int(item.get("skipped_total") or 0),
+            "major_rewrite_total": int(item.get("major_rewrite_total") or 0),
+            "draft_generated_total": int(item.get("draft_generated_total") or 0),
+        }
+
     return {
         "source_kind": build_index(source_kind_breakdown),
         "content_type": build_index(content_type_breakdown),
+        "location": location_feedback,
     }
 
 
@@ -211,8 +244,13 @@ def _content_type_insight_label(value: str) -> str:
 def _build_learning_quality_insights(
     source_kind_breakdown: list[dict[str, Any]],
     content_type_breakdown: list[dict[str, Any]],
+    network_quality: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, str]]:
     insights: list[dict[str, str]] = []
+    weak_locations = [
+        item for item in network_quality or []
+        if float(item.get("risk_score") or 0) >= 35
+    ]
     risky_sources = [
         item for item in source_kind_breakdown
         if int(item.get("accepted_total") or 0) >= 2 and float(item.get("edited_before_accept_pct") or 0) >= 50
@@ -225,6 +263,24 @@ def _build_learning_quality_insights(
         item for item in content_type_breakdown
         if int(item.get("accepted_total") or 0) >= 2 and float(item.get("edited_before_accept_pct") or 0) >= 50
     ]
+    if weak_locations:
+        item = weak_locations[0]
+        label = str(item.get("label") or item.get("key") or "Одна из точек").strip()
+        reasons = item.get("reasons") if isinstance(item.get("reasons"), list) else []
+        reason_text = "часто требуют ручной доработки"
+        if "skipped_items" in reasons:
+            reason_text = "часть тем пропускается, значит план не попадает в операционный ритм"
+        if "major_rewrites" in reasons:
+            reason_text = "часть тем переписывается существенно, значит черновики нужно делать конкретнее"
+        if "drafts_not_published" in reasons:
+            reason_text = "черновики создаются, но не доходят до публикации"
+        insights.append(
+            {
+                "kind": "network_location_gap",
+                "text_ru": f"{label}: {reason_text}. Генератору стоит давать более конкретные темы и CTA для этой точки.",
+                "text_en": f"{label}: content needs a tighter brief and clearer CTA before publishing.",
+            }
+        )
     if risky_sources:
         item = risky_sources[0]
         insights.append(
@@ -252,7 +308,7 @@ def _build_learning_quality_insights(
                 "text_en": f"{str(item.get('key') or 'Some content')} posts need more specific framing.",
             }
         )
-    return insights[:3]
+    return insights[:4]
 
 
 def _build_network_quality_summary(rows: list[Any]) -> list[dict[str, Any]]:
@@ -789,9 +845,37 @@ def _load_content_plan_learning_feedback(cursor: Any, business_id: str, window_d
             (str(business_id or "").strip(), normalized_window),
         )
         content_type_breakdown = _build_learning_breakdown_summary(cursor.fetchall() or [], "content_type")
-        return _build_learning_feedback_from_breakdowns(source_kind_breakdown, content_type_breakdown)
+        cursor.execute(
+            """
+            SELECT
+                COALESCE(NULLIF(metadata_json->>'location_scope', ''), 'current') AS location_scope,
+                COALESCE(NULLIF(metadata_json->>'location_label', ''), '') AS location_label,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.publish' AND event_type = 'accepted') AS accepted_total,
+                COUNT(*) FILTER (
+                    WHERE capability = 'content_plan.publish'
+                      AND event_type = 'accepted'
+                      AND COALESCE(edited_before_accept, FALSE) = TRUE
+                ) AS accepted_edited_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.item' AND event_type = 'skipped') AS skipped_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.item' AND event_type = 'rescheduled') AS rescheduled_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.item' AND event_type = 'major_rewrite') AS major_rewrite_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.draft' AND event_type = 'generated') AS draft_generated_total
+            FROM ailearningevents
+            WHERE business_id = NULLIF(%s, '')::uuid
+              AND capability LIKE 'content_plan.%%'
+              AND created_at >= NOW() - (%s * INTERVAL '1 day')
+            GROUP BY location_scope, location_label
+            HAVING
+                COUNT(*) FILTER (WHERE capability = 'content_plan.publish' AND event_type = 'accepted') > 0
+                OR COUNT(*) FILTER (WHERE capability = 'content_plan.item' AND event_type IN ('skipped', 'rescheduled', 'major_rewrite')) > 0
+                OR COUNT(*) FILTER (WHERE capability = 'content_plan.draft' AND event_type = 'generated') > 0
+            """,
+            (str(business_id or "").strip(), normalized_window),
+        )
+        network_quality = _build_network_quality_summary(cursor.fetchall() or [])
+        return _build_learning_feedback_from_breakdowns(source_kind_breakdown, content_type_breakdown, network_quality)
     except Exception:
-        return {"source_kind": {}, "content_type": {}}
+        return {"source_kind": {}, "content_type": {}, "location": {}}
 
 
 def _record_content_plan_event(
@@ -1196,8 +1280,8 @@ def get_content_plan_learning_metrics(user_id: str, business_id: str, window_day
             "content_type_breakdown": content_type_breakdown,
             "location_breakdown": location_breakdown,
             "network_quality": network_quality,
-            "quality_insights": _build_learning_quality_insights(source_kind_breakdown, content_type_breakdown),
-            "ranking_feedback": _build_learning_feedback_from_breakdowns(source_kind_breakdown, content_type_breakdown),
+            "quality_insights": _build_learning_quality_insights(source_kind_breakdown, content_type_breakdown, network_quality),
+            "ranking_feedback": _build_learning_feedback_from_breakdowns(source_kind_breakdown, content_type_breakdown, network_quality),
         }
     finally:
         db.close()

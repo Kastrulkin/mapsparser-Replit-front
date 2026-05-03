@@ -6,6 +6,7 @@ from src.services.content_plan_service import (
     _build_learning_breakdown_summary,
     _build_learning_feedback_from_breakdowns,
     _build_learning_metrics_summary,
+    _build_learning_quality_insights,
     _build_network_quality_summary,
     _build_planning_readiness,
     _classify_text_edit,
@@ -464,6 +465,87 @@ def test_learning_feedback_adjusts_generator_ranking_softly():
     assert seo_item["learning_adjustment"] < 0
     assert service_item["learning_adjustment"] > 0
     assert plan["meta"]["learning_feedback_applied"] is True
+
+
+def test_learning_feedback_includes_network_location_quality():
+    feedback = _build_learning_feedback_from_breakdowns(
+        [],
+        [],
+        [
+            {
+                "key": "loc-risk",
+                "label": "Риск-точка",
+                "risk_score": 88,
+                "reasons": ["major_rewrites"],
+                "accepted_total": 2,
+                "skipped_total": 1,
+                "major_rewrite_total": 2,
+                "draft_generated_total": 5,
+            }
+        ],
+    )
+
+    assert feedback["location"]["loc-risk"]["score_adjustment"] < 0
+    assert feedback["location"]["loc-risk"]["reasons"] == ["major_rewrites"]
+
+
+def test_content_plan_generator_uses_location_quality_hint():
+    context = {
+        "business": {"id": "loc-risk", "name": "LocalOS Clinic", "city": "Кудрово"},
+        "scope": {"scope_target_id": "loc-risk"},
+        "services": [],
+        "seo_keywords": [{"keyword": "стоматология рядом", "views": 6000}],
+        "sales_signals": [],
+        "audit_signals": [],
+        "learning_feedback": {
+            "source_kind": {},
+            "content_type": {},
+            "location": {
+                "loc-risk": {
+                    "risk_score": 82,
+                    "reasons": ["major_rewrites"],
+                    "score_adjustment": -12,
+                },
+            },
+        },
+    }
+
+    plan = build_content_plan_skeleton(
+        context,
+        period_days=30,
+        density="light",
+        content_mix={
+            "services": False,
+            "seo": True,
+            "sales": False,
+            "audit": False,
+            "seasonal": False,
+        },
+    )
+
+    item = plan["items"][0]
+    assert item["learning_adjustment"] < 0
+    assert "Для этой точки" in item["goal"]
+    assert any(reason["label"] == "location_quality_feedback" for reason in item["ranking_reasons"])
+
+
+def test_learning_quality_insights_explain_weak_network_location():
+    insights = _build_learning_quality_insights(
+        [],
+        [],
+        [
+            {
+                "key": "loc-risk",
+                "label": "Риск-точка",
+                "risk_score": 70,
+                "reasons": ["drafts_not_published"],
+            }
+        ],
+    )
+
+    assert insights[0]["kind"] == "network_location_gap"
+    assert "Риск-точка" in insights[0]["text_ru"]
+    assert "не доходят до публикации" in insights[0]["text_ru"]
 
 
 def test_content_plan_generator_prioritizes_undercovered_seo_topics():

@@ -262,6 +262,7 @@ def _learning_adjustment(context: dict[str, Any], candidate: dict[str, Any]) -> 
     feedback = context.get("learning_feedback") if isinstance(context.get("learning_feedback"), dict) else {}
     source_feedback = feedback.get("source_kind") if isinstance(feedback.get("source_kind"), dict) else {}
     content_feedback = feedback.get("content_type") if isinstance(feedback.get("content_type"), dict) else {}
+    location_feedback = _current_location_feedback(context)
     source_kind = _safe_text(candidate.get("source_kind"))
     content_type = _safe_text(candidate.get("content_type"))
     score = 0
@@ -269,11 +270,49 @@ def _learning_adjustment(context: dict[str, Any], candidate: dict[str, Any]) -> 
         score += int(source_feedback[source_kind].get("score_adjustment") or 0)
     if content_type and isinstance(content_feedback.get(content_type), dict):
         score += int(content_feedback[content_type].get("score_adjustment") or 0)
+    if location_feedback:
+        score += int(location_feedback.get("score_adjustment") or 0)
     return max(-35, min(18, score))
+
+
+def _current_location_feedback(context: dict[str, Any]) -> dict[str, Any]:
+    feedback = context.get("learning_feedback") if isinstance(context.get("learning_feedback"), dict) else {}
+    location_feedback = feedback.get("location") if isinstance(feedback.get("location"), dict) else {}
+    scope = context.get("scope") if isinstance(context.get("scope"), dict) else {}
+    business = context.get("business") if isinstance(context.get("business"), dict) else {}
+    keys = [
+        _safe_text(scope.get("scope_target_id")),
+        _safe_text(business.get("id")),
+        "current",
+    ]
+    for key in keys:
+        if key and isinstance(location_feedback.get(key), dict):
+            return location_feedback[key]
+    return {}
+
+
+def _location_quality_hint(context: dict[str, Any]) -> str:
+    item = _current_location_feedback(context)
+    if not item:
+        return ""
+    risk_score = float(item.get("risk_score") or 0.0)
+    reasons = item.get("reasons") if isinstance(item.get("reasons"), list) else []
+    if risk_score < 35 and int(item.get("score_adjustment") or 0) >= 0:
+        return ""
+    if "drafts_not_published" in reasons:
+        return "Для этой точки делайте тему короче и ближе к публикации: конкретный повод, короткий текст и одно действие."
+    if "major_rewrites" in reasons:
+        return "Для этой точки избегайте общих формулировок: укажите конкретную услугу, выгоду, доказательство и следующий шаг."
+    if "skipped_items" in reasons:
+        return "Для этой точки выбирайте темы, которые можно быстро выпустить без подготовки: готовый повод, понятный CTA и минимум абстракции."
+    if "many_edits" in reasons:
+        return "Для этой точки формулируйте черновик точнее: меньше общих слов, больше связи с услугой, спросом и причиной выбрать бизнес."
+    return "Для этой точки нужен более конкретный черновик: услуга, сценарий выбора, доказательство и CTA."
 
 
 def _apply_learning_feedback(context: dict[str, Any], candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
     adjusted: list[dict[str, Any]] = []
+    location_hint = _location_quality_hint(context)
     for candidate in candidates:
         adjustment = _learning_adjustment(context, candidate)
         next_candidate = dict(candidate)
@@ -281,11 +320,21 @@ def _apply_learning_feedback(context: dict[str, Any], candidates: list[dict[str,
         next_candidate["learning_adjustment"] = adjustment
         next_candidate["base_strength_score"] = int(candidate.get("strength_score") or 0)
         next_candidate["strength_score"] = max(1, int(candidate.get("strength_score") or 0) + adjustment)
+        if location_hint:
+            current_goal = _safe_text(next_candidate.get("goal"))
+            next_candidate["goal"] = f"{current_goal} {location_hint}".strip()
+            next_candidate["quality_hint"] = location_hint
+            ranking_reasons = [
+                *ranking_reasons,
+                _ranking_reason("location_quality_feedback", adjustment),
+            ]
         if adjustment != 0:
             next_candidate["ranking_reasons"] = [
                 *ranking_reasons,
                 _ranking_reason("learning_feedback", adjustment),
             ]
+        elif location_hint:
+            next_candidate["ranking_reasons"] = ranking_reasons
         adjusted.append(next_candidate)
     return adjusted
 
@@ -508,6 +557,7 @@ def build_content_plan_skeleton(
                 "strength_score": int(candidate.get("strength_score") or 0),
                 "learning_adjustment": int(candidate.get("learning_adjustment") or 0),
                 "base_strength_score": int(candidate.get("base_strength_score") or candidate.get("strength_score") or 0),
+                "quality_hint": candidate.get("quality_hint") or "",
                 "ranking_reasons": candidate.get("ranking_reasons") if isinstance(candidate.get("ranking_reasons"), list) else [],
             }
         )
