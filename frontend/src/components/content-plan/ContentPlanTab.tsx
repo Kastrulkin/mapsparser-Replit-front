@@ -180,6 +180,24 @@ type BulkNewsReview = {
   focusWeekKey?: string;
 };
 
+type BulkActionReview = {
+  key: string;
+  kind: 'skip' | 'reschedule';
+  titleRu: string;
+  titleEn: string;
+  descriptionRu: string;
+  descriptionEn: string;
+  confirmLabelRu: string;
+  confirmLabelEn: string;
+  items: PlanItem[];
+  busyAction: string;
+  targetDate?: string;
+  summaryPrefixRu?: string;
+  summaryPrefixEn?: string;
+  focusLocationKey?: string;
+  focusWeekKey?: string;
+};
+
 type NetworkOperatingSlice = {
   key: string;
   label: string;
@@ -274,11 +292,13 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [showAdvancedControls, setShowAdvancedControls] = useState(false);
   const [showPlanSetupDetails, setShowPlanSetupDetails] = useState(false);
   const [showLearningDetails, setShowLearningDetails] = useState(false);
+  const [showContextDetails, setShowContextDetails] = useState(false);
   const [bulkTargetDate, setBulkTargetDate] = useState(() => _shiftIsoDate('', 7));
   const [expandedDuplicateItemId, setExpandedDuplicateItemId] = useState('');
   const [duplicateTargetSelections, setDuplicateTargetSelections] = useState<Record<string, string[]>>({});
   const [duplicateDateOverrides, setDuplicateDateOverrides] = useState<Record<string, string>>({});
   const [bulkNewsReview, setBulkNewsReview] = useState<BulkNewsReview | null>(null);
+  const [bulkActionReview, setBulkActionReview] = useState<BulkActionReview | null>(null);
 
   const allowedHorizons = context?.subscription?.allowed_horizons || [30];
   const scopeOptions = context?.scope?.scope_options || [];
@@ -466,6 +486,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   ), [visibleItems]);
   const bulkNewsCandidates = useMemo(() => (
     visibleItems.filter((item) => String(item.draft_text || '').trim() && !String(item.usernews_id || '').trim())
+  ), [visibleItems]);
+  const missingDateCandidates = useMemo(() => (
+    visibleItems.filter((item) => !_inputDateValue(item.scheduled_for) && !String(item.usernews_id || '').trim())
   ), [visibleItems]);
   const planOperationalSummary = useMemo(() => {
     const items = currentPlan?.items || [];
@@ -1146,6 +1169,48 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     });
   };
 
+  const runBulkAutofillDates = async () => {
+    if (missingDateCandidates.length === 0) return;
+    setBulkBusyAction('autofill-dates');
+    setError('');
+    setActionSummary(null);
+    try {
+      let nextPlan = currentPlan;
+      let updatedCount = 0;
+      let failedCount = 0;
+      const failedThemes: string[] = [];
+      for (let index = 0; index < missingDateCandidates.length; index += 1) {
+        const item = missingDateCandidates[index];
+        try {
+          const nextDate = _autoScheduledDate(index);
+          const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}`, {
+            method: 'PUT',
+            body: JSON.stringify({ scheduled_for: nextDate, status: 'planned' }),
+          });
+          nextPlan = response.plan || null;
+          setCurrentPlan(nextPlan);
+          setDateEdits((prev) => ({ ...prev, [item.id]: nextDate }));
+          updatedCount += 1;
+        } catch {
+          failedCount += 1;
+          failedThemes.push(String(item.theme || item.goal || item.id || '').trim());
+        }
+      }
+      setActionSummary({
+        tone: failedCount > 0 ? 'warning' : 'success',
+        text_ru: `Даты расставлены автоматически: ${updatedCount}${failedCount > 0 ? `, не получилось ${failedCount}` : ''}`,
+        text_en: `Dates assigned automatically: ${updatedCount}${failedCount > 0 ? `, failed ${failedCount}` : ''}`,
+        details_ru: _bulkResultDetails(failedThemes, true),
+        details_en: _bulkResultDetails(failedThemes, false),
+      });
+    } catch (dateError) {
+      const message = dateError instanceof Error ? dateError.message : (isRu ? 'Не удалось расставить даты' : 'Could not assign dates');
+      setError(message);
+    } finally {
+      setBulkBusyAction('');
+    }
+  };
+
   const executeBulkNewsReview = async () => {
     const review = bulkNewsReview;
     if (!review || review.items.length === 0) return;
@@ -1189,6 +1254,69 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setBulkNewsReview(null);
     } catch (publishError) {
       const message = publishError instanceof Error ? publishError.message : (isRu ? 'Не удалось создать новости' : 'Could not create news items');
+      setError(message);
+    } finally {
+      setBulkBusyAction('');
+    }
+  };
+
+  const executeBulkActionReview = async () => {
+    const review = bulkActionReview;
+    if (!review || review.items.length === 0) return;
+    if (review.focusLocationKey && review.focusWeekKey) {
+      applyLocationWeekFocus(review.focusLocationKey, review.focusWeekKey);
+    }
+    setBulkBusyAction(review.busyAction);
+    setError('');
+    setActionSummary(null);
+    try {
+      let nextPlan = currentPlan;
+      let processedCount = 0;
+      let failedCount = 0;
+      const failedThemes: string[] = [];
+      for (const item of review.items) {
+        try {
+          const payload: Record<string, string> = {};
+          if (review.kind === 'skip') {
+            payload.status = 'skipped';
+          } else {
+            payload.scheduled_for = String(review.targetDate || '').slice(0, 10);
+            payload.status = 'planned';
+          }
+          const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+          });
+          nextPlan = response.plan || null;
+          setCurrentPlan(nextPlan);
+          if (review.kind === 'reschedule') {
+            setDateEdits((prev) => ({ ...prev, [item.id]: String(review.targetDate || '').slice(0, 10) }));
+          }
+          processedCount += 1;
+        } catch {
+          failedCount += 1;
+          failedThemes.push(String(item.theme || item.goal || item.id || '').trim());
+        }
+      }
+      await loadLearningMetrics();
+      const actionTextRu = review.kind === 'skip'
+        ? `пропущено тем ${processedCount}${failedCount > 0 ? `, не получилось ${failedCount}` : ''}`
+        : `перенесено на ${String(review.targetDate || '').slice(0, 10)} тем ${processedCount}${failedCount > 0 ? `, не получилось ${failedCount}` : ''}`;
+      const actionTextEn = review.kind === 'skip'
+        ? `skipped ${processedCount}${failedCount > 0 ? `, failed ${failedCount}` : ''}`
+        : `moved to ${String(review.targetDate || '').slice(0, 10)}: ${processedCount}${failedCount > 0 ? `, failed ${failedCount}` : ''}`;
+      setActionSummary({
+        tone: failedCount > 0 ? 'warning' : 'success',
+        text_ru: review.summaryPrefixRu ? `${review.summaryPrefixRu}: ${actionTextRu}` : actionTextRu,
+        text_en: review.summaryPrefixEn ? `${review.summaryPrefixEn}: ${actionTextEn}` : actionTextEn,
+        details_ru: _bulkResultDetails(failedThemes, true),
+        details_en: _bulkResultDetails(failedThemes, false),
+        focusLocationKey: review.focusLocationKey,
+        focusWeekKey: review.kind === 'reschedule' && review.targetDate ? _weekBucketKey(review.targetDate) : review.focusWeekKey,
+      });
+      setBulkActionReview(null);
+    } catch (bulkError) {
+      const message = bulkError instanceof Error ? bulkError.message : (isRu ? 'Не удалось выполнить массовое действие' : 'Could not run bulk action');
       setError(message);
     } finally {
       setBulkBusyAction('');
@@ -1361,44 +1489,26 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       .filter((item) => String(item.status || '').trim() !== 'skipped' && !String(item.usernews_id || '').trim());
     if (focusCandidates.length === 0) return;
     applyLocationWeekFocus(locationKey, weekKey);
-    setBulkBusyAction(`focus-skip:${locationKey}:${weekKey}`);
     setError('');
     setActionSummary(null);
-    try {
-      let skippedCount = 0;
-      let failedCount = 0;
-      const failedThemes: string[] = [];
-      for (const item of focusCandidates) {
-        try {
-          const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}`, {
-            method: 'PUT',
-            body: JSON.stringify({ status: 'skipped' }),
-          });
-          setCurrentPlan(response.plan || null);
-          skippedCount += 1;
-        } catch {
-          failedCount += 1;
-          failedThemes.push(String(item.theme || item.goal || item.id || '').trim());
-        }
-      }
-      await loadLearningMetrics();
-      const locationLabel = _locationLabelByKey(currentPlan?.items || [], locationKey, isRu);
-      const weekLabel = _weekBucketLabel(weekKey, isRu);
-      setActionSummary({
-        tone: failedCount > 0 ? 'warning' : 'success',
-        text_ru: `${locationLabel} · ${weekLabel}: пропущено тем ${skippedCount}${failedCount > 0 ? `, не получилось ${failedCount}` : ''}`,
-        text_en: `${locationLabel} · ${weekLabel}: skipped ${skippedCount}${failedCount > 0 ? `, failed ${failedCount}` : ''}`,
-        details_ru: _bulkResultDetails(failedThemes, true),
-        details_en: _bulkResultDetails(failedThemes, false),
-        focusLocationKey: locationKey,
-        focusWeekKey: weekKey,
-      });
-    } catch (skipError) {
-      const message = skipError instanceof Error ? skipError.message : (isRu ? 'Не удалось пропустить срез' : 'Could not skip slice');
-      setError(message);
-    } finally {
-      setBulkBusyAction('');
-    }
+    const locationLabel = _locationLabelByKey(currentPlan?.items || [], locationKey, isRu);
+    const weekLabel = _weekBucketLabel(weekKey, isRu);
+    setBulkActionReview({
+      key: `skip:${locationKey}:${weekKey}`,
+      kind: 'skip',
+      titleRu: 'Проверить пропуск пачки',
+      titleEn: 'Review batch skip',
+      descriptionRu: `${locationLabel} · ${weekLabel}. Эти темы будут помечены как пропущенные и уйдут из рабочего среза.`,
+      descriptionEn: `${locationLabel} · ${weekLabel}. These items will be marked as skipped and removed from the active slice.`,
+      confirmLabelRu: 'Подтвердить пропуск',
+      confirmLabelEn: 'Confirm skip',
+      items: focusCandidates,
+      busyAction: `focus-skip:${locationKey}:${weekKey}`,
+      summaryPrefixRu: `${locationLabel} · ${weekLabel}`,
+      summaryPrefixEn: `${locationLabel} · ${weekLabel}`,
+      focusLocationKey: locationKey,
+      focusWeekKey: weekKey,
+    });
   };
 
   const runLocationWeekReschedule = async (locationKey: string, weekKey: string, daysDelta: number) => {
@@ -1457,44 +1567,27 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       .filter((item) => String(item.status || '').trim() !== 'skipped' && !String(item.usernews_id || '').trim());
     if (focusCandidates.length === 0) return;
     applyLocationWeekFocus(locationKey, weekKey);
-    setBulkBusyAction(`focus-reschedule-date:${locationKey}:${weekKey}`);
     setError('');
     setActionSummary(null);
-    try {
-      let movedCount = 0;
-      let failedCount = 0;
-      const failedThemes: string[] = [];
-      for (const item of focusCandidates) {
-        try {
-          const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}`, {
-            method: 'PUT',
-            body: JSON.stringify({ scheduled_for: normalizedTargetDate, status: 'planned' }),
-          });
-          setCurrentPlan(response.plan || null);
-          movedCount += 1;
-        } catch {
-          failedCount += 1;
-          failedThemes.push(String(item.theme || item.goal || item.id || '').trim());
-        }
-      }
-      await loadLearningMetrics();
-      const locationLabel = _locationLabelByKey(currentPlan?.items || [], locationKey, isRu);
-      const weekLabel = _weekBucketLabel(weekKey, isRu);
-      setActionSummary({
-        tone: failedCount > 0 ? 'warning' : 'success',
-        text_ru: `${locationLabel} · ${weekLabel}: перенесено на ${normalizedTargetDate} тем ${movedCount}${failedCount > 0 ? `, не получилось ${failedCount}` : ''}`,
-        text_en: `${locationLabel} · ${weekLabel}: moved to ${normalizedTargetDate}: ${movedCount}${failedCount > 0 ? `, failed ${failedCount}` : ''}`,
-        details_ru: _bulkResultDetails(failedThemes, true),
-        details_en: _bulkResultDetails(failedThemes, false),
-        focusLocationKey: locationKey,
-        focusWeekKey: _weekBucketKey(normalizedTargetDate),
-      });
-    } catch (rescheduleError) {
-      const message = rescheduleError instanceof Error ? rescheduleError.message : (isRu ? 'Не удалось перенести срез' : 'Could not reschedule slice');
-      setError(message);
-    } finally {
-      setBulkBusyAction('');
-    }
+    const locationLabel = _locationLabelByKey(currentPlan?.items || [], locationKey, isRu);
+    const weekLabel = _weekBucketLabel(weekKey, isRu);
+    setBulkActionReview({
+      key: `reschedule:${locationKey}:${weekKey}:${normalizedTargetDate}`,
+      kind: 'reschedule',
+      titleRu: 'Проверить перенос пачки',
+      titleEn: 'Review batch move',
+      descriptionRu: `${locationLabel} · ${weekLabel}. Все элементы среза будут перенесены на ${normalizedTargetDate}.`,
+      descriptionEn: `${locationLabel} · ${weekLabel}. All slice items will be moved to ${normalizedTargetDate}.`,
+      confirmLabelRu: 'Подтвердить перенос',
+      confirmLabelEn: 'Confirm move',
+      items: focusCandidates,
+      busyAction: `focus-reschedule-date:${locationKey}:${weekKey}`,
+      targetDate: normalizedTargetDate,
+      summaryPrefixRu: `${locationLabel} · ${weekLabel}`,
+      summaryPrefixEn: `${locationLabel} · ${weekLabel}`,
+      focusLocationKey: locationKey,
+      focusWeekKey: weekKey,
+    });
   };
 
   const runItemSkip = async (itemId: string) => {
@@ -1777,6 +1870,21 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
 
       <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-4">
+            <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+              {isRu ? 'Что сделать сейчас' : 'What to do now'}
+            </div>
+            <div className="mt-1 text-lg font-semibold text-slate-950">
+              {currentPlan?.items?.length
+                ? (isRu ? 'Откройте неделю или точку, а не весь план сразу' : 'Open a week or location instead of the whole plan')
+                : (isRu ? 'Соберите первый план публикаций' : 'Build the first publication plan')}
+            </div>
+            <div className="mt-1 text-sm leading-6 text-slate-600">
+              {isRu
+                ? 'Основное действие сверху. Источники, плотность и тонкие настройки спрятаны, чтобы экран не начинался с перегруза.'
+                : 'The primary action stays on top. Sources, density, and detailed controls are tucked away to reduce first-screen noise.'}
+            </div>
+          </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <div className="text-sm font-semibold text-slate-700">{isRu ? 'Куда строить план' : 'Scope'}</div>
@@ -1910,9 +2018,40 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
-            {isRu ? 'Контекст' : 'Planning context'}
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+                {isRu ? 'Качество данных' : 'Data quality'}
+              </div>
+              <div className="mt-1 text-lg font-semibold text-slate-950">
+                {readiness?.is_grounded_for_search
+                  ? (isRu ? 'Данных достаточно для плана' : 'Enough data for planning')
+                  : (isRu ? 'Плану не хватает источников' : 'The plan needs more inputs')}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowContextDetails((prev) => !prev)}
+              className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              {showContextDetails ? (isRu ? 'Скрыть' : 'Hide') : (isRu ? 'Подробнее' : 'Details')}
+            </button>
           </div>
+          <div className="mt-4 grid grid-cols-3 gap-2 text-sm text-slate-700">
+            <div className="rounded-2xl bg-slate-50 px-3 py-3">
+              <div className="text-lg font-semibold text-slate-950">{readiness?.map_links_count || 0}</div>
+              <div className="text-xs text-slate-500">{isRu ? 'карты' : 'maps'}</div>
+            </div>
+            <div className="rounded-2xl bg-slate-50 px-3 py-3">
+              <div className="text-lg font-semibold text-slate-950">{context?.services?.length || 0}</div>
+              <div className="text-xs text-slate-500">{isRu ? 'услуг' : 'services'}</div>
+            </div>
+            <div className="rounded-2xl bg-slate-50 px-3 py-3">
+              <div className="text-lg font-semibold text-slate-950">{context?.seo_keywords?.length || 0}</div>
+              <div className="text-xs text-slate-500">{isRu ? 'SEO' : 'SEO'}</div>
+            </div>
+          </div>
+          {showContextDetails ? (
           <div className="mt-4 space-y-3 text-sm text-slate-700">
             {isNetworkContext ? (
               <div>
@@ -1949,6 +2088,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
               <div>{context?.recent_news?.length || 0}</div>
             </div>
           </div>
+          ) : null}
         </div>
       </div>
 
@@ -2589,6 +2729,13 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     <div className="text-xs text-slate-300">{isRu ? 'новостей' : 'news items'}</div>
                   </div>
                 </div>
+                {bulkNewsReview.items.filter((item) => !_inputDateValue(item.scheduled_for)).length > 0 ? (
+                  <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+                    {isRu
+                      ? `${bulkNewsReview.items.filter((item) => !_inputDateValue(item.scheduled_for)).length} публикации без даты. Они будут созданы как черновики без календаря.`
+                      : `${bulkNewsReview.items.filter((item) => !_inputDateValue(item.scheduled_for)).length} publications have no date. They will be created as drafts without a calendar date.`}
+                  </div>
+                ) : null}
                 <div className="mt-4 grid gap-2">
                   {bulkNewsReview.items.slice(0, 5).map((item) => (
                     <div key={`${bulkNewsReview.key}:${item.id}`} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
@@ -2640,6 +2787,85 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       disabled={Boolean(bulkBusyAction)}
                     >
                       {isRu ? 'Открыть срез перед созданием' : 'Open slice before creating'}
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+            {bulkActionReview ? (
+              <div className="rounded-[28px] border border-slate-900 bg-white p-5 shadow-lg">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      {isRu ? 'Подтверждение массового действия' : 'Bulk action review'}
+                    </div>
+                    <div className="mt-2 text-lg font-semibold text-slate-950">
+                      {isRu ? bulkActionReview.titleRu : bulkActionReview.titleEn}
+                    </div>
+                    <div className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                      {isRu ? bulkActionReview.descriptionRu : bulkActionReview.descriptionEn}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl bg-slate-950 px-4 py-3 text-center text-white">
+                    <div className="text-2xl font-semibold">{bulkActionReview.items.length}</div>
+                    <div className="text-xs text-slate-300">{isRu ? 'элементов' : 'items'}</div>
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-2">
+                  {bulkActionReview.items.slice(0, 5).map((item) => (
+                    <div key={`${bulkActionReview.key}:${item.id}`} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="text-sm font-semibold text-slate-950">
+                          {String(item.theme || item.goal || (isRu ? 'Без темы' : 'Untitled')).trim()}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {bulkActionReview.kind === 'reschedule' && bulkActionReview.targetDate
+                            ? `${_formatPlanItemDate(item.scheduled_for, isRu)} → ${_formatPlanItemDate(bulkActionReview.targetDate, isRu)}`
+                            : _formatPlanItemDate(item.scheduled_for, isRu)}
+                        </div>
+                      </div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        {_itemLocationLabel(item, isRu)} · {_sourceKindLabel(item.source_kind, isRu)}
+                      </div>
+                    </div>
+                  ))}
+                  {bulkActionReview.items.length > 5 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+                      {isRu
+                        ? `И ещё ${bulkActionReview.items.length - 5} элементов в этом массовом действии.`
+                        : `And ${bulkActionReview.items.length - 5} more items in this bulk action.`}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    onClick={() => { void executeBulkActionReview(); }}
+                    disabled={Boolean(bulkBusyAction)}
+                  >
+                    {bulkBusyAction === bulkActionReview.busyAction
+                      ? (isRu ? 'Выполняем...' : 'Processing...')
+                      : (isRu ? bulkActionReview.confirmLabelRu : bulkActionReview.confirmLabelEn)}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setBulkActionReview(null)}
+                    disabled={Boolean(bulkBusyAction)}
+                  >
+                    {isRu ? 'Отменить' : 'Cancel'}
+                  </Button>
+                  {bulkActionReview.focusLocationKey && bulkActionReview.focusWeekKey ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="bg-slate-50"
+                      onClick={() => {
+                        applyLocationWeekFocus(bulkActionReview.focusLocationKey || 'all', bulkActionReview.focusWeekKey || 'all');
+                      }}
+                      disabled={Boolean(bulkBusyAction)}
+                    >
+                      {isRu ? 'Открыть срез' : 'Open slice'}
                     </Button>
                   ) : null}
                 </div>
@@ -2889,6 +3115,18 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   ? (isRu ? 'Генерируем черновики...' : 'Generating drafts...')
                   : `${isRu ? 'Сгенерировать по выборке' : 'Generate for filtered'} · ${bulkDraftCandidates.length}`}
               </Button>
+              {missingDateCandidates.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => { void runBulkAutofillDates(); }}
+                  disabled={Boolean(bulkBusyAction)}
+                >
+                  {bulkBusyAction === 'autofill-dates'
+                    ? (isRu ? 'Расставляем даты...' : 'Assigning dates...')
+                    : `${isRu ? 'Расставить даты автоматически' : 'Auto-assign dates'} · ${missingDateCandidates.length}`}
+                </Button>
+              ) : null}
               <Button
                 onClick={() => { void runBulkCreateNews(); }}
                 disabled={Boolean(bulkBusyAction) || bulkNewsCandidates.length === 0}
@@ -3403,6 +3641,10 @@ function _shiftIsoDate(input: string, daysDelta: number): string {
   }
   parsed.setUTCDate(parsed.getUTCDate() + daysDelta);
   return parsed.toISOString().slice(0, 10);
+}
+
+function _autoScheduledDate(index: number): string {
+  return _shiftIsoDate('', Math.max(Number(index || 0), 0) * 3);
 }
 
 function _inputDateValue(input: unknown): string {
