@@ -184,6 +184,7 @@ type ContentMixState = Record<ContentMixKey, boolean>;
 type ItemFilterKey = 'all' | 'urgent' | 'needs_draft' | 'has_draft' | 'news_created';
 type SignalFilterKey = 'all' | ContentMixKey;
 type ViewPresetKey = 'overview' | 'urgent' | 'ready' | 'published' | 'focus' | 'custom';
+type QuickActionKey = 'create_month_plan' | 'open_week' | 'weak_locations' | 'fix_gaps' | 'repeat_template';
 
 const CONTENT_MIX_OPTIONS: Array<{ key: ContentMixKey; labelRu: string; labelEn: string }> = [
   { key: 'services', labelRu: 'Услуги', labelEn: 'Services' },
@@ -233,6 +234,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [selectedViewPreset, setSelectedViewPreset] = useState<ViewPresetKey>('overview');
   const [lastFocusLocationKey, setLastFocusLocationKey] = useState('all');
   const [lastFocusWeekKey, setLastFocusWeekKey] = useState('all');
+  const [showAdvancedControls, setShowAdvancedControls] = useState(false);
 
   const allowedHorizons = context?.subscription?.allowed_horizons || [30];
   const scopeOptions = context?.scope?.scope_options || [];
@@ -421,6 +423,38 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const bulkNewsCandidates = useMemo(() => (
     visibleItems.filter((item) => String(item.draft_text || '').trim() && !String(item.usernews_id || '').trim())
   ), [visibleItems]);
+  const planOperationalSummary = useMemo(() => {
+    const items = currentPlan?.items || [];
+    return items.reduce(
+      (acc, item) => {
+        const status = String(item.status || '').trim();
+        const hasDraft = Boolean(String(item.draft_text || '').trim());
+        const hasNews = Boolean(String(item.usernews_id || '').trim());
+        acc.total += 1;
+        if (status === 'skipped') {
+          acc.skipped += 1;
+          return acc;
+        }
+        if (!hasDraft) acc.needsDraft += 1;
+        if (hasDraft && !hasNews) acc.readyToPublish += 1;
+        if (hasNews) acc.published += 1;
+        return acc;
+      },
+      {
+        total: 0,
+        needsDraft: 0,
+        readyToPublish: 0,
+        published: 0,
+        skipped: 0,
+      },
+    );
+  }, [currentPlan?.items]);
+  const repeatTemplateCandidate = useMemo(() => (
+    (currentPlan?.items || []).find((item) => (
+      Boolean(String(item.draft_text || item.usernews_id || '').trim())
+      && availableItemLocations.length > 2
+    )) || null
+  ), [currentPlan?.items, availableItemLocations.length]);
   const viewPresets = useMemo<Array<{ key: ViewPresetKey; label: string }>>(() => ([
     {
       key: 'overview',
@@ -502,6 +536,78 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       })
       .slice(0, 6);
   }, [currentPlan?.items, isRu]);
+  const quickActions = useMemo(() => {
+    const weakLocation = (learningMetrics?.network_quality || [])[0];
+    const focusSlice = locationWeekFocusSummary[0];
+    const actions: Array<{
+      key: QuickActionKey;
+      title: string;
+      description: string;
+      metric: string;
+      disabled: boolean;
+    }> = [
+      {
+        key: 'create_month_plan',
+        title: isRu ? 'Составить план на месяц' : 'Build a monthly plan',
+        description: isRu
+          ? 'Пересобрать план на 30 дней по текущим услугам, SEO и слабым зонам.'
+          : 'Rebuild a 30 day plan from services, SEO, and weak zones.',
+        metric: currentPlan ? `${currentPlan.period_days} ${isRu ? 'дней' : 'days'}` : (isRu ? 'первый план' : 'first plan'),
+        disabled: generating || loading || !selectedScopeOption || !allowedHorizons.includes(30),
+      },
+      {
+        key: 'open_week',
+        title: isRu ? 'Открыть эту неделю' : 'Open this week',
+        description: focusSlice
+          ? `${focusSlice.locationLabel} · ${focusSlice.weekLabel}`
+          : (isRu ? 'Показать ближайший рабочий срез.' : 'Show the nearest operating slice.'),
+        metric: focusSlice ? `${focusSlice.needsDraft + focusSlice.readyToPublish}` : `${visibleItems.length}`,
+        disabled: !currentPlan || (!focusSlice && visibleItems.length === 0),
+      },
+      {
+        key: 'weak_locations',
+        title: isRu ? 'Показать слабые точки' : 'Show weak locations',
+        description: weakLocation
+          ? `${String(weakLocation.label || weakLocation.key)} · ${isRu ? 'риск' : 'risk'} ${Number(weakLocation.risk_score || 0).toFixed(0)}`
+          : (isRu ? 'Когда накопятся правки, здесь появятся проблемные точки.' : 'Risky locations appear here after edits accumulate.'),
+        metric: `${learningMetrics?.network_quality?.length || 0}`,
+        disabled: !weakLocation,
+      },
+      {
+        key: 'fix_gaps',
+        title: isRu ? 'Исправить пропуски' : 'Fix gaps',
+        description: isRu
+          ? 'Открыть темы без текста и готовые черновики, которые ещё не стали новостями.'
+          : 'Open items without drafts and drafts that are not yet news.',
+        metric: `${planOperationalSummary.needsDraft + planOperationalSummary.readyToPublish}`,
+        disabled: !currentPlan || planOperationalSummary.needsDraft + planOperationalSummary.readyToPublish === 0,
+      },
+      {
+        key: 'repeat_template',
+        title: isRu ? 'Повторить удачную тему' : 'Repeat a winning template',
+        description: repeatTemplateCandidate
+          ? String(repeatTemplateCandidate.theme || '').trim()
+          : (isRu ? 'Нужен хотя бы один готовый черновик и несколько точек.' : 'Needs one ready draft and multiple locations.'),
+        metric: `${Math.max(availableItemLocations.length - 2, 0)}`,
+        disabled: !repeatTemplateCandidate,
+      },
+    ];
+    return actions;
+  }, [
+    allowedHorizons,
+    availableItemLocations.length,
+    currentPlan,
+    generating,
+    isRu,
+    learningMetrics?.network_quality,
+    loading,
+    locationWeekFocusSummary,
+    planOperationalSummary.needsDraft,
+    planOperationalSummary.readyToPublish,
+    repeatTemplateCandidate,
+    selectedScopeOption,
+    visibleItems.length,
+  ]);
 
   const loadPlans = async () => {
     if (!businessId) return;
@@ -684,7 +790,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     setContentMix((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const generatePlan = async () => {
+  const generatePlan = async (periodOverride?: string) => {
     if (!businessId || !selectedScopeOption) return;
     setGenerating(true);
     setError('');
@@ -696,7 +802,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
           business_id: businessId,
           scope_type: selectedScopeOption.scope_type,
           scope_target_id: selectedScopeOption.scope_target_id,
-          period_days: Number(selectedPeriod),
+          period_days: Number(periodOverride || selectedPeriod),
           density: selectedDensity,
           content_mix: contentMix,
         }),
@@ -1021,6 +1127,97 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }
   };
 
+  const runLocationWeekSkip = async (locationKey: string, weekKey: string) => {
+    const focusCandidates = getLocationWeekFocusItems(locationKey, weekKey)
+      .filter((item) => String(item.status || '').trim() !== 'skipped' && !String(item.usernews_id || '').trim());
+    if (focusCandidates.length === 0) return;
+    applyLocationWeekFocus(locationKey, weekKey);
+    setBulkBusyAction(`focus-skip:${locationKey}:${weekKey}`);
+    setError('');
+    setActionSummary(null);
+    try {
+      let skippedCount = 0;
+      let failedCount = 0;
+      const failedThemes: string[] = [];
+      for (const item of focusCandidates) {
+        try {
+          const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}`, {
+            method: 'PUT',
+            body: JSON.stringify({ status: 'skipped' }),
+          });
+          setCurrentPlan(response.plan || null);
+          skippedCount += 1;
+        } catch {
+          failedCount += 1;
+          failedThemes.push(String(item.theme || item.goal || item.id || '').trim());
+        }
+      }
+      await loadLearningMetrics();
+      const locationLabel = _locationLabelByKey(currentPlan?.items || [], locationKey, isRu);
+      const weekLabel = _weekBucketLabel(weekKey, isRu);
+      setActionSummary({
+        tone: failedCount > 0 ? 'warning' : 'success',
+        text_ru: `${locationLabel} · ${weekLabel}: пропущено тем ${skippedCount}${failedCount > 0 ? `, не получилось ${failedCount}` : ''}`,
+        text_en: `${locationLabel} · ${weekLabel}: skipped ${skippedCount}${failedCount > 0 ? `, failed ${failedCount}` : ''}`,
+        details_ru: _bulkResultDetails(failedThemes, true),
+        details_en: _bulkResultDetails(failedThemes, false),
+        focusLocationKey: locationKey,
+        focusWeekKey: weekKey,
+      });
+    } catch (skipError) {
+      const message = skipError instanceof Error ? skipError.message : (isRu ? 'Не удалось пропустить срез' : 'Could not skip slice');
+      setError(message);
+    } finally {
+      setBulkBusyAction('');
+    }
+  };
+
+  const runLocationWeekReschedule = async (locationKey: string, weekKey: string, daysDelta: number) => {
+    const focusCandidates = getLocationWeekFocusItems(locationKey, weekKey)
+      .filter((item) => String(item.status || '').trim() !== 'skipped' && !String(item.usernews_id || '').trim());
+    if (focusCandidates.length === 0) return;
+    applyLocationWeekFocus(locationKey, weekKey);
+    setBulkBusyAction(`focus-reschedule:${locationKey}:${weekKey}`);
+    setError('');
+    setActionSummary(null);
+    try {
+      let movedCount = 0;
+      let failedCount = 0;
+      const failedThemes: string[] = [];
+      for (const item of focusCandidates) {
+        try {
+          const nextDate = _shiftIsoDate(item.scheduled_for, daysDelta);
+          const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}`, {
+            method: 'PUT',
+            body: JSON.stringify({ scheduled_for: nextDate, status: 'planned' }),
+          });
+          setCurrentPlan(response.plan || null);
+          movedCount += 1;
+        } catch {
+          failedCount += 1;
+          failedThemes.push(String(item.theme || item.goal || item.id || '').trim());
+        }
+      }
+      await loadLearningMetrics();
+      const locationLabel = _locationLabelByKey(currentPlan?.items || [], locationKey, isRu);
+      const weekLabel = _weekBucketLabel(weekKey, isRu);
+      setActionSummary({
+        tone: failedCount > 0 ? 'warning' : 'success',
+        text_ru: `${locationLabel} · ${weekLabel}: перенесено тем ${movedCount}${failedCount > 0 ? `, не получилось ${failedCount}` : ''}`,
+        text_en: `${locationLabel} · ${weekLabel}: rescheduled ${movedCount}${failedCount > 0 ? `, failed ${failedCount}` : ''}`,
+        details_ru: _bulkResultDetails(failedThemes, true),
+        details_en: _bulkResultDetails(failedThemes, false),
+        focusLocationKey: locationKey,
+        focusWeekKey: _weekBucketKey(_shiftIsoDate(weekKey, daysDelta)),
+      });
+    } catch (rescheduleError) {
+      const message = rescheduleError instanceof Error ? rescheduleError.message : (isRu ? 'Не удалось перенести срез' : 'Could not reschedule slice');
+      setError(message);
+    } finally {
+      setBulkBusyAction('');
+    }
+  };
+
   const runItemSkip = async (itemId: string) => {
     setBusyItemId(itemId);
     setError('');
@@ -1091,6 +1288,76 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setError(message);
     } finally {
       setBusyItemId('');
+    }
+  };
+
+  const runItemDuplicateToOtherLocations = async (item: PlanItem) => {
+    const sourceLocationKey = String(item.location_scope || item.business_id || '').trim();
+    const targetLocationScopes = availableItemLocations
+      .map((location) => location.key)
+      .filter((key) => key !== 'all' && key !== sourceLocationKey);
+    if (targetLocationScopes.length === 0) return;
+    setBusyItemId(item.id);
+    setError('');
+    setActionSummary(null);
+    try {
+      const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}/duplicate-to-locations`, {
+        method: 'POST',
+        body: JSON.stringify({
+          target_location_scopes: targetLocationScopes,
+          scheduled_for: item.scheduled_for,
+        }),
+      });
+      setCurrentPlan(response.plan || null);
+      await loadLearningMetrics();
+      setActionSummary({
+        tone: 'success',
+        text_ru: `Шаблон размножен на другие точки: ${targetLocationScopes.length}.`,
+        text_en: `Template duplicated to other locations: ${targetLocationScopes.length}.`,
+      });
+    } catch (duplicateError) {
+      const message = duplicateError instanceof Error ? duplicateError.message : (isRu ? 'Не удалось размножить шаблон' : 'Could not duplicate template');
+      setError(message);
+    } finally {
+      setBusyItemId('');
+    }
+  };
+
+  const runQuickAction = (actionKey: QuickActionKey) => {
+    if (actionKey === 'create_month_plan') {
+      setSelectedPeriod('30');
+      void generatePlan('30');
+      return;
+    }
+    if (actionKey === 'open_week') {
+      const focusSlice = locationWeekFocusSummary[0];
+      if (focusSlice) {
+        applyLocationWeekFocus(focusSlice.locationKey, focusSlice.weekKey);
+        return;
+      }
+      if (availableWeeks[1]) {
+        setSelectedWeekKey(availableWeeks[1].key);
+      }
+      return;
+    }
+    if (actionKey === 'weak_locations') {
+      const weakLocation = (learningMetrics?.network_quality || [])[0];
+      const weakLocationKey = String(weakLocation?.key || '').trim();
+      if (weakLocationKey) {
+        setSelectedViewPreset('focus');
+        setSelectedItemFilter('urgent');
+        setSelectedItemLocationKey(weakLocationKey);
+        setSelectedWeekKey('all');
+        setSortMode('priority');
+      }
+      return;
+    }
+    if (actionKey === 'fix_gaps') {
+      applyViewPreset('urgent');
+      return;
+    }
+    if (repeatTemplateCandidate) {
+      void runItemDuplicateToOtherLocations(repeatTemplateCandidate);
     }
   };
 
@@ -1608,6 +1875,65 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
 
         {currentPlan?.items && currentPlan.items.length > 0 ? (
           <div className="mt-6 space-y-4">
+            <div className="rounded-[28px] border border-slate-200 bg-slate-950 p-5 text-white shadow-sm">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                    {isRu ? 'Что сделать дальше' : 'Next best action'}
+                  </div>
+                  <div className="mt-2 text-xl font-semibold">
+                    {planOperationalSummary.needsDraft > 0
+                      ? (isRu ? 'Сначала закройте темы без текста' : 'Start with items without drafts')
+                      : planOperationalSummary.readyToPublish > 0
+                        ? (isRu ? 'Теперь можно создать новости' : 'Now create news items')
+                        : (isRu ? 'План под контролем' : 'Plan is under control')}
+                  </div>
+                  <div className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
+                    {isRu
+                      ? 'Это операторский слой: не фильтры ради фильтров, а быстрые сценарии для недели, точки и сети.'
+                      : 'This is the operator layer: not filters for their own sake, but fast workflows for week, location, and network.'}
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center text-xs text-slate-300 sm:min-w-[320px]">
+                  <div className="rounded-2xl bg-white/10 px-3 py-3">
+                    <div className="text-lg font-semibold text-white">{planOperationalSummary.needsDraft}</div>
+                    <div>{isRu ? 'без текста' : 'no draft'}</div>
+                  </div>
+                  <div className="rounded-2xl bg-white/10 px-3 py-3">
+                    <div className="text-lg font-semibold text-white">{planOperationalSummary.readyToPublish}</div>
+                    <div>{isRu ? 'к новости' : 'ready'}</div>
+                  </div>
+                  <div className="rounded-2xl bg-white/10 px-3 py-3">
+                    <div className="text-lg font-semibold text-white">{planOperationalSummary.published}</div>
+                    <div>{isRu ? 'создано' : 'created'}</div>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                {quickActions.map((action) => (
+                  <button
+                    key={action.key}
+                    type="button"
+                    disabled={action.disabled || Boolean(bulkBusyAction) || Boolean(busyItemId)}
+                    onClick={() => runQuickAction(action.key)}
+                    className={[
+                      'rounded-2xl border px-4 py-4 text-left transition-colors',
+                      action.disabled
+                        ? 'cursor-not-allowed border-white/10 bg-white/5 text-slate-500'
+                        : 'border-white/10 bg-white/10 text-white hover:bg-white/15',
+                    ].join(' ')}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="text-sm font-semibold">{action.title}</div>
+                      <div className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-slate-200">{action.metric}</div>
+                    </div>
+                    <div className="mt-2 line-clamp-2 text-xs leading-5 text-slate-300">
+                      {action.description}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
             {itemLocationSummary.length > 1 ? (
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
                 <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
@@ -1707,6 +2033,28 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           ? (isRu ? 'Публикуем...' : 'Publishing...')
                           : `${isRu ? 'Создать новости' : 'Create news'} · ${focus.readyToPublish}`}
                       </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => { void runLocationWeekReschedule(focus.locationKey, focus.weekKey, 7); }}
+                        disabled={Boolean(bulkBusyAction) || focus.total === 0}
+                      >
+                        {bulkBusyAction === `focus-reschedule:${focus.locationKey}:${focus.weekKey}`
+                          ? (isRu ? 'Переносим...' : 'Rescheduling...')
+                          : (isRu ? 'Перенести неделю' : 'Move week')}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => { void runLocationWeekSkip(focus.locationKey, focus.weekKey); }}
+                        disabled={Boolean(bulkBusyAction) || focus.total === 0}
+                      >
+                        {bulkBusyAction === `focus-skip:${focus.locationKey}:${focus.weekKey}`
+                          ? (isRu ? 'Пропускаем...' : 'Skipping...')
+                          : (isRu ? 'Пропустить пачку' : 'Skip batch')}
+                      </Button>
                     </div>
                   </div>
                 ))}
@@ -1746,12 +2094,25 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 ) : null}
               </div>
             ) : null}
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              <span className="font-medium text-slate-900">
-                {isRu ? 'Сейчас показано:' : 'Current view:'}
-              </span>{' '}
-              {_itemFilterLabel(selectedItemFilter, isRu)} · {_signalFilterLabel(selectedSignalFilter, isRu)} · {activeLocationLabel} · {activeWeekLabel} · {sortMode === 'priority' ? (isRu ? 'По приоритету' : 'By priority') : (isRu ? 'По дате' : 'By date')}
+            <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
+              <div>
+                <span className="font-medium text-slate-900">
+                  {isRu ? 'Сейчас показано:' : 'Current view:'}
+                </span>{' '}
+                {_itemFilterLabel(selectedItemFilter, isRu)} · {_signalFilterLabel(selectedSignalFilter, isRu)} · {activeLocationLabel} · {activeWeekLabel} · {sortMode === 'priority' ? (isRu ? 'По приоритету' : 'By priority') : (isRu ? 'По дате' : 'By date')}
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAdvancedControls((prev) => !prev)}
+                className="self-start rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100 md:self-auto"
+              >
+                {showAdvancedControls
+                  ? (isRu ? 'Скрыть тонкие фильтры' : 'Hide advanced filters')
+                  : (isRu ? 'Тонкие фильтры' : 'Advanced filters')}
+              </button>
             </div>
+            {showAdvancedControls ? (
+              <>
             <div className="flex flex-wrap gap-2">
               {ITEM_FILTER_OPTIONS.map((filterKey) => (
                 <button
@@ -1887,6 +2248,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   </button>
                 ))}
               </div>
+            ) : null}
+              </>
             ) : null}
             <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3">
               <div className="w-full text-xs font-medium text-slate-500">
@@ -2046,6 +2409,16 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     >
                       {isRu ? 'Дублировать' : 'Duplicate'}
                     </Button>
+                    {availableItemLocations.length > 2 ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => { void runItemDuplicateToOtherLocations(item); }}
+                        disabled={busyItemId === item.id || !String(currentDraft || item.usernews_id || '').trim()}
+                      >
+                        {isRu ? 'На другие точки' : 'To other locations'}
+                      </Button>
+                    ) : null}
                     <Button
                       type="button"
                       variant="outline"

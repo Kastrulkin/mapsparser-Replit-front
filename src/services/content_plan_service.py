@@ -1637,6 +1637,134 @@ def duplicate_content_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
         db.close()
 
 
+def duplicate_content_plan_item_to_locations(user_id: str, item_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        ensure_content_plan_tables(cursor)
+        cursor.execute(
+            """
+            SELECT i.id, i.plan_id, i.business_id, i.scheduled_for, i.content_type, i.theme, i.goal,
+                   i.source_kind, i.source_ref, i.seo_keyword, i.service_id, i.transaction_id,
+                   i.location_scope, i.draft_text, p.business_id AS root_business_id
+            FROM contentplanitems i
+            JOIN contentplans p ON p.id = i.plan_id
+            WHERE i.id = %s
+            LIMIT 1
+            """,
+            (item_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise ValueError("Элемент плана не найден")
+        item = _row_to_dict(cursor, row)
+        owner_id = get_business_owner_id(cursor, str(item.get("root_business_id") or ""))
+        if str(owner_id or "").strip() != str(user_id or "").strip():
+            cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
+            if not bool(_row_get(cursor.fetchone(), "coalesce", 0, False)):
+                raise PermissionError("Нет доступа к элементу плана")
+
+        request_payload = payload if isinstance(payload, dict) else {}
+        requested_locations = request_payload.get("target_location_scopes")
+        requested_set = {
+            str(value or "").strip()
+            for value in requested_locations
+            if str(value or "").strip()
+        } if isinstance(requested_locations, list) else set()
+        source_location_scope = str(item.get("location_scope") or item.get("business_id") or "").strip()
+        cursor.execute(
+            """
+            SELECT DISTINCT COALESCE(NULLIF(location_scope, ''), business_id) AS location_scope
+            FROM contentplanitems
+            WHERE plan_id = %s
+              AND COALESCE(NULLIF(location_scope, ''), business_id) <> ''
+            ORDER BY location_scope ASC
+            """,
+            (str(item.get("plan_id") or ""),),
+        )
+        location_rows = cursor.fetchall() or []
+        available_locations = [
+            str(_row_get(location_row, "location_scope", 0, "") or "").strip()
+            for location_row in location_rows
+            if str(_row_get(location_row, "location_scope", 0, "") or "").strip()
+        ]
+        target_locations = [
+            location_scope
+            for location_scope in available_locations
+            if location_scope != source_location_scope and (not requested_set or location_scope in requested_set)
+        ]
+        if not target_locations:
+            raise ValueError("Нет других точек для дублирования")
+
+        scheduled_for = str(request_payload.get("scheduled_for") or item.get("scheduled_for") or "").strip() or item.get("scheduled_for")
+        draft_text = str(item.get("draft_text") or "").strip()
+        next_status = "draft_generated" if draft_text else "planned"
+        duplicated_ids: list[str] = []
+        for location_scope in target_locations:
+            duplicated_id = str(uuid.uuid4())
+            cursor.execute(
+                """
+                INSERT INTO contentplanitems (
+                    id, plan_id, business_id, scheduled_for, content_type, theme, goal,
+                    source_kind, source_ref, seo_keyword, service_id, transaction_id,
+                    location_scope, draft_text, status, usernews_id, created_at, updated_at
+                )
+                VALUES (
+                    %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """,
+                (
+                    duplicated_id,
+                    str(item.get("plan_id") or ""),
+                    location_scope,
+                    scheduled_for,
+                    str(item.get("content_type") or "").strip(),
+                    str(item.get("theme") or "").strip(),
+                    str(item.get("goal") or "").strip(),
+                    str(item.get("source_kind") or "").strip(),
+                    str(item.get("source_ref") or "").strip(),
+                    str(item.get("seo_keyword") or "").strip(),
+                    str(item.get("service_id") or "").strip() or None,
+                    str(item.get("transaction_id") or "").strip() or None,
+                    location_scope,
+                    draft_text,
+                    next_status,
+                    None,
+                ),
+            )
+            duplicated_ids.append(duplicated_id)
+        _record_content_plan_event(
+            conn=db.conn,
+            user_id=user_id,
+            business_id=str(item.get("root_business_id") or item.get("business_id") or ""),
+            capability="content_plan.item",
+            event_type="duplicated_to_locations",
+            draft_text=draft_text or None,
+            final_text=str(item.get("theme") or "").strip(),
+            metadata={
+                "source_item_id": item_id,
+                "duplicated_item_ids": duplicated_ids,
+                "plan_id": str(item.get("plan_id") or ""),
+                "scheduled_for": str(scheduled_for or ""),
+                "source_kind": str(item.get("source_kind") or "").strip(),
+                "content_type": str(item.get("content_type") or "").strip(),
+                "theme": str(item.get("theme") or "").strip(),
+                "location_scope": source_location_scope,
+                "target_location_scopes": target_locations,
+                "template_has_draft": bool(draft_text),
+            },
+        )
+        db.conn.commit()
+        return get_content_plan(user_id, str(item.get("plan_id") or ""))
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
 def _fallback_draft_text(business_name: str, item: dict[str, Any]) -> str:
     theme = str(item.get("theme") or "Новость компании").strip()
     source_ref = str(item.get("source_ref") or "").strip()

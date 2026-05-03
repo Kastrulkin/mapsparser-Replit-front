@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+
 from flask import Blueprint, jsonify, request
 
 from auth_system import verify_session
@@ -7,6 +9,7 @@ from services.content_plan_service import (
     create_generated_content_plan,
     create_news_from_plan_item,
     duplicate_content_plan_item,
+    duplicate_content_plan_item_to_locations,
     generate_draft_for_plan_item,
     get_content_plan,
     get_content_plan_learning_metrics,
@@ -47,12 +50,12 @@ def content_plan_context():
             scope_target_id,
         )
         return jsonify({"success": True, "context": payload})
-    except PermissionError as exc:
-        return jsonify({"success": False, "error": str(exc)}), 403
-    except ValueError as exc:
-        return jsonify({"success": False, "error": str(exc)}), 404
-    except Exception as exc:
-        return jsonify({"success": False, "error": str(exc)}), 500
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 404
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
 
 
 @content_plans_bp.route("", methods=["GET"])
@@ -117,12 +120,12 @@ def content_plan_generate():
             content_mix=data.get("content_mix") if isinstance(data.get("content_mix"), dict) else {},
         )
         return jsonify({"success": True, "plan": plan})
-    except PermissionError as exc:
-        return jsonify({"success": False, "error": str(exc)}), 403
-    except ValueError as exc:
-        return jsonify({"success": False, "error": str(exc)}), 404
-    except Exception as exc:
-        return jsonify({"success": False, "error": str(exc)}), 500
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 404
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
 
 
 @content_plans_bp.route("/<plan_id>", methods=["GET"])
@@ -133,12 +136,12 @@ def content_plan_get(plan_id: str):
     try:
         plan = get_content_plan(str(user_data.get("user_id") or ""), plan_id)
         return jsonify({"success": True, "plan": plan})
-    except PermissionError as exc:
-        return jsonify({"success": False, "error": str(exc)}), 403
-    except ValueError as exc:
-        return jsonify({"success": False, "error": str(exc)}), 404
-    except Exception as exc:
-        return jsonify({"success": False, "error": str(exc)}), 500
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 404
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
 
 
 @content_plans_bp.route("/items/<item_id>", methods=["PUT"])
@@ -204,3 +207,24 @@ def content_plan_item_duplicate(item_id: str):
         return jsonify({"success": False, "error": str(exc)}), 404
     except Exception as exc:
         return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@content_plans_bp.route("/items/<item_id>/duplicate-to-locations", methods=["POST"])
+def content_plan_item_duplicate_to_locations(item_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    data = request.get_json(silent=True) or {}
+    try:
+        plan = duplicate_content_plan_item_to_locations(
+            str(user_data.get("user_id") or ""),
+            item_id,
+            data,
+        )
+        return jsonify({"success": True, "plan": plan})
+    except PermissionError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 403
+    except ValueError:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 404
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
