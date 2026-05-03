@@ -143,9 +143,13 @@ type LearningMetricsPayload = {
 };
 
 type ActionSummary = {
-  tone: 'neutral' | 'success';
+  tone: 'neutral' | 'success' | 'warning';
   text_ru: string;
   text_en: string;
+  details_ru?: string[];
+  details_en?: string[];
+  focusLocationKey?: string;
+  focusWeekKey?: string;
 };
 
 const PERIOD_OPTIONS = [30, 60, 90];
@@ -777,19 +781,28 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     try {
       let nextPlan = currentPlan;
       let generatedCount = 0;
+      let failedCount = 0;
+      const failedThemes: string[] = [];
       for (const item of bulkDraftCandidates) {
-        const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}/generate-draft`, {
-          method: 'POST',
-        });
-        nextPlan = response.plan || null;
-        setCurrentPlan(nextPlan);
-        generatedCount += 1;
+        try {
+          const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}/generate-draft`, {
+            method: 'POST',
+          });
+          nextPlan = response.plan || null;
+          setCurrentPlan(nextPlan);
+          generatedCount += 1;
+        } catch {
+          failedCount += 1;
+          failedThemes.push(String(item.theme || item.goal || item.id || '').trim());
+        }
       }
       await loadLearningMetrics();
       setActionSummary({
-        tone: 'success',
-        text_ru: `По текущей выборке сгенерировано черновиков: ${generatedCount}.`,
-        text_en: `Generated drafts for the current filtered set: ${generatedCount}.`,
+        tone: failedCount > 0 ? 'warning' : 'success',
+        text_ru: _bulkResultText('drafts', generatedCount, failedCount, true),
+        text_en: _bulkResultText('drafts', generatedCount, failedCount, false),
+        details_ru: _bulkResultDetails(failedThemes, true),
+        details_en: _bulkResultDetails(failedThemes, false),
       });
     } catch (draftError) {
       const message = draftError instanceof Error ? draftError.message : (isRu ? 'Не удалось сгенерировать черновики' : 'Could not generate drafts');
@@ -807,20 +820,29 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     try {
       let nextPlan = currentPlan;
       let createdCount = 0;
+      let failedCount = 0;
+      const failedThemes: string[] = [];
       for (const item of bulkNewsCandidates) {
-        await persistItemEdits(item.id);
-        const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}/create-news`, {
-          method: 'POST',
-        });
-        nextPlan = response.plan || null;
-        setCurrentPlan(nextPlan);
-        createdCount += 1;
+        try {
+          await persistItemEdits(item.id);
+          const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}/create-news`, {
+            method: 'POST',
+          });
+          nextPlan = response.plan || null;
+          setCurrentPlan(nextPlan);
+          createdCount += 1;
+        } catch {
+          failedCount += 1;
+          failedThemes.push(String(item.theme || item.goal || item.id || '').trim());
+        }
       }
       await loadLearningMetrics();
       setActionSummary({
-        tone: 'success',
-        text_ru: `По текущей выборке создано новостей: ${createdCount}.`,
-        text_en: `Created news items for the current filtered set: ${createdCount}.`,
+        tone: failedCount > 0 ? 'warning' : 'success',
+        text_ru: _bulkResultText('news', createdCount, failedCount, true),
+        text_en: _bulkResultText('news', createdCount, failedCount, false),
+        details_ru: _bulkResultDetails(failedThemes, true),
+        details_en: _bulkResultDetails(failedThemes, false),
       });
     } catch (publishError) {
       const message = publishError instanceof Error ? publishError.message : (isRu ? 'Не удалось создать новости' : 'Could not create news items');
@@ -896,27 +918,39 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     const focusCandidates = getLocationWeekFocusItems(locationKey, weekKey)
       .filter((item) => !String(item.draft_text || '').trim() && !String(item.usernews_id || '').trim());
     if (focusCandidates.length === 0) return;
+    applyLocationWeekFocus(locationKey, weekKey);
     setBulkBusyAction(`focus-drafts:${locationKey}:${weekKey}`);
     setError('');
     setActionSummary(null);
     try {
       let nextPlan = currentPlan;
       let generatedCount = 0;
+      let failedCount = 0;
+      const failedThemes: string[] = [];
       for (const item of focusCandidates) {
-        const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}/generate-draft`, {
-          method: 'POST',
-        });
-        nextPlan = response.plan || null;
-        setCurrentPlan(nextPlan);
-        generatedCount += 1;
+        try {
+          const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}/generate-draft`, {
+            method: 'POST',
+          });
+          nextPlan = response.plan || null;
+          setCurrentPlan(nextPlan);
+          generatedCount += 1;
+        } catch {
+          failedCount += 1;
+          failedThemes.push(String(item.theme || item.goal || item.id || '').trim());
+        }
       }
       await loadLearningMetrics();
       const locationLabel = _locationLabelByKey(currentPlan?.items || [], locationKey, isRu);
       const weekLabel = _weekBucketLabel(weekKey, isRu);
       setActionSummary({
-        tone: 'success',
-        text_ru: `${locationLabel} · ${weekLabel}: сгенерировано черновиков ${generatedCount}.`,
-        text_en: `${locationLabel} · ${weekLabel}: generated drafts ${generatedCount}.`,
+        tone: failedCount > 0 ? 'warning' : 'success',
+        text_ru: `${locationLabel} · ${weekLabel}: ${_bulkResultText('drafts', generatedCount, failedCount, true)}`,
+        text_en: `${locationLabel} · ${weekLabel}: ${_bulkResultText('drafts', generatedCount, failedCount, false)}`,
+        details_ru: _bulkResultDetails(failedThemes, true),
+        details_en: _bulkResultDetails(failedThemes, false),
+        focusLocationKey: locationKey,
+        focusWeekKey: weekKey,
       });
     } catch (draftError) {
       const message = draftError instanceof Error ? draftError.message : (isRu ? 'Не удалось сгенерировать черновики' : 'Could not generate drafts');
@@ -930,28 +964,40 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     const focusCandidates = getLocationWeekFocusItems(locationKey, weekKey)
       .filter((item) => String(item.draft_text || '').trim() && !String(item.usernews_id || '').trim());
     if (focusCandidates.length === 0) return;
+    applyLocationWeekFocus(locationKey, weekKey);
     setBulkBusyAction(`focus-news:${locationKey}:${weekKey}`);
     setError('');
     setActionSummary(null);
     try {
       let nextPlan = currentPlan;
       let createdCount = 0;
+      let failedCount = 0;
+      const failedThemes: string[] = [];
       for (const item of focusCandidates) {
-        await persistItemEdits(item.id);
-        const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}/create-news`, {
-          method: 'POST',
-        });
-        nextPlan = response.plan || null;
-        setCurrentPlan(nextPlan);
-        createdCount += 1;
+        try {
+          await persistItemEdits(item.id);
+          const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}/create-news`, {
+            method: 'POST',
+          });
+          nextPlan = response.plan || null;
+          setCurrentPlan(nextPlan);
+          createdCount += 1;
+        } catch {
+          failedCount += 1;
+          failedThemes.push(String(item.theme || item.goal || item.id || '').trim());
+        }
       }
       await loadLearningMetrics();
       const locationLabel = _locationLabelByKey(currentPlan?.items || [], locationKey, isRu);
       const weekLabel = _weekBucketLabel(weekKey, isRu);
       setActionSummary({
-        tone: 'success',
-        text_ru: `${locationLabel} · ${weekLabel}: создано новостей ${createdCount}.`,
-        text_en: `${locationLabel} · ${weekLabel}: created news items ${createdCount}.`,
+        tone: failedCount > 0 ? 'warning' : 'success',
+        text_ru: `${locationLabel} · ${weekLabel}: ${_bulkResultText('news', createdCount, failedCount, true)}`,
+        text_en: `${locationLabel} · ${weekLabel}: ${_bulkResultText('news', createdCount, failedCount, false)}`,
+        details_ru: _bulkResultDetails(failedThemes, true),
+        details_en: _bulkResultDetails(failedThemes, false),
+        focusLocationKey: locationKey,
+        focusWeekKey: weekKey,
       });
     } catch (publishError) {
       const message = publishError instanceof Error ? publishError.message : (isRu ? 'Не удалось создать новости' : 'Could not create news items');
@@ -1592,10 +1638,32 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   'rounded-2xl border px-4 py-3 text-sm',
                   actionSummary.tone === 'success'
                     ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                    : 'border-slate-200 bg-slate-50 text-slate-700',
+                    : actionSummary.tone === 'warning'
+                      ? 'border-amber-200 bg-amber-50 text-amber-900'
+                      : 'border-slate-200 bg-slate-50 text-slate-700',
                 ].join(' ')}
               >
-                {isRu ? actionSummary.text_ru : actionSummary.text_en}
+                <div>{isRu ? actionSummary.text_ru : actionSummary.text_en}</div>
+                {(isRu ? actionSummary.details_ru : actionSummary.details_en)?.length ? (
+                  <div className="mt-2 space-y-1 text-xs opacity-90">
+                    {(isRu ? actionSummary.details_ru : actionSummary.details_en)?.map((detail) => (
+                      <div key={detail}>{detail}</div>
+                    ))}
+                  </div>
+                ) : null}
+                {actionSummary.focusLocationKey && actionSummary.focusWeekKey ? (
+                  <div className="mt-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="bg-white/70"
+                      onClick={() => applyLocationWeekFocus(String(actionSummary.focusLocationKey || ''), String(actionSummary.focusWeekKey || ''))}
+                    >
+                      {isRu ? 'Открыть этот срез' : 'Open this slice'}
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             ) : null}
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
@@ -1982,6 +2050,37 @@ function _locationLabelByKey(items: PlanItem[], locationKey: string, isRu: boole
     }
   }
   return isRu ? 'Точка сети' : 'Network location';
+}
+
+function _bulkResultText(kind: 'drafts' | 'news', successCount: number, failedCount: number, isRu: boolean): string {
+  if (kind === 'drafts') {
+    if (failedCount > 0) {
+      return isRu
+        ? `сгенерировано черновиков ${successCount}, не получилось ${failedCount}`
+        : `generated drafts ${successCount}, failed ${failedCount}`;
+    }
+    return isRu
+      ? `сгенерировано черновиков ${successCount}`
+      : `generated drafts ${successCount}`;
+  }
+  if (failedCount > 0) {
+    return isRu
+      ? `создано новостей ${successCount}, не получилось ${failedCount}`
+      : `created news items ${successCount}, failed ${failedCount}`;
+  }
+  return isRu
+    ? `создано новостей ${successCount}`
+    : `created news items ${successCount}`;
+}
+
+function _bulkResultDetails(failedThemes: string[], isRu: boolean): string[] {
+  const cleanThemes = failedThemes
+    .map((theme) => String(theme || '').trim())
+    .filter(Boolean)
+    .slice(0, 3);
+  if (cleanThemes.length === 0) return [];
+  const prefix = isRu ? 'Не обработано' : 'Not processed';
+  return cleanThemes.map((theme) => `${prefix}: ${theme}`);
 }
 
 function _learningCapabilityLabel(capability: string, isRu: boolean): string {
