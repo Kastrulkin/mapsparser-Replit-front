@@ -6,6 +6,7 @@ from src.services.content_plan_service import (
     _build_learning_breakdown_summary,
     _build_learning_feedback_from_breakdowns,
     _build_learning_metrics_summary,
+    _build_network_quality_summary,
     _build_planning_readiness,
     _classify_text_edit,
     _fetch_audit_signals,
@@ -465,6 +466,80 @@ def test_learning_feedback_adjusts_generator_ranking_softly():
     assert plan["meta"]["learning_feedback_applied"] is True
 
 
+def test_content_plan_generator_prioritizes_undercovered_seo_topics():
+    context = {
+        "business": {"name": "LocalOS Clinic", "city": "Кудрово"},
+        "services": [],
+        "seo_keywords": [
+            {"keyword": "педиатр рядом", "views": 1200},
+            {"keyword": "стоматология рядом", "views": 1200},
+        ],
+        "recent_news": [
+            {"text": "Сегодня рассказываем, как выбрать стоматология рядом с домом."},
+        ],
+        "sales_signals": [],
+        "audit_signals": [],
+    }
+
+    plan = build_content_plan_skeleton(
+        context,
+        period_days=30,
+        density="light",
+        content_mix={
+            "services": False,
+            "seo": True,
+            "sales": False,
+            "audit": False,
+            "seasonal": False,
+        },
+    )
+
+    assert plan["items"][0]["source_ref"] == "педиатр рядом"
+    assert plan["items"][0]["ranking_reasons"]
+    assert plan["meta"]["quality_ranking_applied"] is True
+
+
+def test_content_plan_generator_prioritizes_weak_audit_search_zone():
+    context = {
+        "business": {"name": "LocalOS Beauty", "city": "Кудрово"},
+        "services": [],
+        "seo_keywords": [],
+        "sales_signals": [],
+        "audit_signals": [
+            {
+                "id": "description",
+                "title": "Общее описание услуг",
+                "problem": "Не хватает конкретики",
+                "priority": "medium",
+                "section": "content",
+            },
+            {
+                "id": "search_intent:маникюр рядом",
+                "title": "Недопокрытый поисковый сценарий: маникюр рядом",
+                "problem": "Нет отдельного ответа под спрос",
+                "priority": "medium",
+                "section": "search",
+            },
+        ],
+    }
+
+    plan = build_content_plan_skeleton(
+        context,
+        period_days=30,
+        density="light",
+        content_mix={
+            "services": False,
+            "seo": False,
+            "sales": False,
+            "audit": True,
+            "seasonal": False,
+        },
+    )
+
+    assert "маникюр рядом" in plan["items"][0]["source_ref"]
+    assert any(reason["label"] == "weak_zone_priority" for reason in plan["items"][0]["ranking_reasons"])
+
+
 def test_classify_text_edit_distinguishes_minor_and_major_changes():
     original = "Запишитесь на латте и свежие десерты в карточке."
     minor = "Запишитесь на латте и свежие десерты в нашей карточке."
@@ -473,3 +548,34 @@ def test_classify_text_edit_distinguishes_minor_and_major_changes():
     assert _classify_text_edit(original, minor) == "minor_edit"
     assert _classify_text_edit(original, major) == "major_rewrite"
     assert _classify_text_edit(original, original) == "unchanged"
+
+
+def test_build_network_quality_summary_surfaces_risky_locations():
+    summary = _build_network_quality_summary(
+        [
+            {
+                "location_scope": "loc-risk",
+                "location_label": "Риск-точка",
+                "accepted_total": 2,
+                "accepted_edited_total": 2,
+                "skipped_total": 1,
+                "rescheduled_total": 0,
+                "major_rewrite_total": 1,
+                "draft_generated_total": 5,
+            },
+            {
+                "location_scope": "loc-stable",
+                "location_label": "Стабильная точка",
+                "accepted_total": 5,
+                "accepted_edited_total": 0,
+                "skipped_total": 0,
+                "rescheduled_total": 0,
+                "major_rewrite_total": 0,
+                "draft_generated_total": 5,
+            },
+        ]
+    )
+
+    assert summary[0]["key"] == "loc-risk"
+    assert summary[0]["risk_score"] > summary[1]["risk_score"]
+    assert "major_rewrites" in summary[0]["reasons"]

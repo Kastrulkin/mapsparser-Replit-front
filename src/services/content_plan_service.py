@@ -255,6 +255,62 @@ def _build_learning_quality_insights(
     return insights[:3]
 
 
+def _build_network_quality_summary(rows: list[Any]) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        key = str(_row_get(row, "location_scope", 0, "") or "").strip() or "current"
+        label = str(_row_get(row, "location_label", 1, "") or "").strip()
+        accepted_total = int(_row_get(row, "accepted_total", 2, 0) or 0)
+        accepted_edited_total = int(_row_get(row, "accepted_edited_total", 3, 0) or 0)
+        skipped_total = int(_row_get(row, "skipped_total", 4, 0) or 0)
+        rescheduled_total = int(_row_get(row, "rescheduled_total", 5, 0) or 0)
+        major_rewrite_total = int(_row_get(row, "major_rewrite_total", 6, 0) or 0)
+        draft_generated_total = int(_row_get(row, "draft_generated_total", 7, 0) or 0)
+        edit_pct = round((accepted_edited_total / accepted_total * 100.0) if accepted_total else 0.0, 2)
+        planned_activity = accepted_total + skipped_total + rescheduled_total + major_rewrite_total + draft_generated_total
+        risk_score = min(
+            100,
+            round(
+                edit_pct
+                + skipped_total * 12
+                + major_rewrite_total * 18
+                + max(0, draft_generated_total - accepted_total) * 5
+                - accepted_total * 3,
+                2,
+            ),
+        )
+        if risk_score < 0:
+            risk_score = 0
+        reasons: list[str] = []
+        if edit_pct >= 50:
+            reasons.append("many_edits")
+        if skipped_total > 0:
+            reasons.append("skipped_items")
+        if major_rewrite_total > 0:
+            reasons.append("major_rewrites")
+        if draft_generated_total > accepted_total:
+            reasons.append("drafts_not_published")
+        if not reasons and accepted_total > 0:
+            reasons.append("stable")
+        items.append(
+            {
+                "key": key,
+                "label": label,
+                "accepted_total": accepted_total,
+                "accepted_edited_total": accepted_edited_total,
+                "skipped_total": skipped_total,
+                "rescheduled_total": rescheduled_total,
+                "major_rewrite_total": major_rewrite_total,
+                "draft_generated_total": draft_generated_total,
+                "edited_before_accept_pct": edit_pct,
+                "planned_activity_total": planned_activity,
+                "risk_score": risk_score,
+                "reasons": reasons,
+            }
+        )
+    return sorted(items, key=lambda item: (float(item.get("risk_score") or 0), int(item.get("planned_activity_total") or 0)), reverse=True)
+
+
 def _classify_text_edit(previous_text: str, next_text: str) -> str:
     previous = str(previous_text or "").strip()
     current = str(next_text or "").strip()
@@ -271,6 +327,32 @@ def _classify_text_edit(previous_text: str, next_text: str) -> str:
     if overlap < 0.45 or length_delta > 0.55:
         return "major_rewrite"
     return "minor_edit"
+
+
+def _edit_reason_from_class(edit_class: str) -> str:
+    normalized = str(edit_class or "").strip()
+    if normalized == "major_rewrite":
+        return "semantic_rewrite_before_publish"
+    if normalized == "minor_edit":
+        return "copy_polish_before_publish"
+    if normalized == "unchanged":
+        return "no_text_change"
+    return ""
+
+
+def _acceptance_reason(item: dict[str, Any], edited_before_accept: bool) -> str:
+    if edited_before_accept:
+        return "accepted_after_manual_edit"
+    source_kind = str(item.get("source_kind") or "").strip()
+    if source_kind == "seo_keyword":
+        return "accepted_grounded_in_search_demand"
+    if source_kind == "audit_signal":
+        return "accepted_from_card_weak_zone"
+    if source_kind == "transaction":
+        return "accepted_from_sales_signal"
+    if source_kind == "service":
+        return "accepted_from_service_catalog"
+    return "accepted_without_manual_edit"
 
 
 def _table_has_column(cursor: Any, table_name: str, column_name: str) -> bool:
@@ -1077,6 +1159,35 @@ def get_content_plan_learning_metrics(user_id: str, business_id: str, window_day
             (str(business_id or "").strip(), normalized_window),
         )
         location_breakdown = _build_learning_breakdown_summary(cursor.fetchall() or [], "location_scope", "location_label")
+        cursor.execute(
+            """
+            SELECT
+                COALESCE(NULLIF(metadata_json->>'location_scope', ''), 'current') AS location_scope,
+                COALESCE(NULLIF(metadata_json->>'location_label', ''), '') AS location_label,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.publish' AND event_type = 'accepted') AS accepted_total,
+                COUNT(*) FILTER (
+                    WHERE capability = 'content_plan.publish'
+                      AND event_type = 'accepted'
+                      AND COALESCE(edited_before_accept, FALSE) = TRUE
+                ) AS accepted_edited_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.item' AND event_type = 'skipped') AS skipped_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.item' AND event_type = 'rescheduled') AS rescheduled_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.item' AND event_type = 'major_rewrite') AS major_rewrite_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.draft' AND event_type = 'generated') AS draft_generated_total
+            FROM ailearningevents
+            WHERE business_id = NULLIF(%s, '')::uuid
+              AND capability LIKE 'content_plan.%%'
+              AND created_at >= NOW() - (%s * INTERVAL '1 day')
+            GROUP BY location_scope, location_label
+            HAVING
+                COUNT(*) FILTER (WHERE capability = 'content_plan.publish' AND event_type = 'accepted') > 0
+                OR COUNT(*) FILTER (WHERE capability = 'content_plan.item' AND event_type IN ('skipped', 'rescheduled', 'major_rewrite')) > 0
+                OR COUNT(*) FILTER (WHERE capability = 'content_plan.draft' AND event_type = 'generated') > 0
+            ORDER BY skipped_total DESC, major_rewrite_total DESC, accepted_edited_total DESC, accepted_total DESC
+            """,
+            (str(business_id or "").strip(), normalized_window),
+        )
+        network_quality = _build_network_quality_summary(cursor.fetchall() or [])
         return {
             "window_days": normalized_window,
             "items": metrics.get("items", []),
@@ -1084,6 +1195,7 @@ def get_content_plan_learning_metrics(user_id: str, business_id: str, window_day
             "source_kind_breakdown": source_kind_breakdown,
             "content_type_breakdown": content_type_breakdown,
             "location_breakdown": location_breakdown,
+            "network_quality": network_quality,
             "quality_insights": _build_learning_quality_insights(source_kind_breakdown, content_type_breakdown),
             "ranking_feedback": _build_learning_feedback_from_breakdowns(source_kind_breakdown, content_type_breakdown),
         }
@@ -1329,7 +1441,7 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
         cursor.execute(
             """
             SELECT i.id, i.plan_id, i.business_id, i.status, i.source_kind, i.content_type, i.theme, i.draft_text,
-                   p.business_id AS root_business_id
+                   i.location_scope, p.business_id AS root_business_id
             FROM contentplanitems i
             JOIN contentplans p ON p.id = i.plan_id
             WHERE i.id = %s
@@ -1385,6 +1497,13 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
             edit_class = _classify_text_edit(str(data.get("draft_text") or ""), str(payload.get("draft_text") or ""))
             if edit_class in {"minor_edit", "major_rewrite"}:
                 event_type = edit_class
+        location_scope = str(data.get("location_scope") or data.get("business_id") or "").strip()
+        location_meta = _resolve_scope_target_meta(
+            cursor,
+            str(data.get("business_id") or ""),
+            "network_location" if location_scope else "single_business",
+            location_scope or str(data.get("business_id") or ""),
+        )
         _record_content_plan_event(
             conn=db.conn,
             user_id=user_id,
@@ -1403,6 +1522,9 @@ def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]
                 "content_type": str(data.get("content_type") or "").strip(),
                 "theme": str(payload.get("theme") or data.get("theme") or "").strip(),
                 "edit_class": edit_class,
+                "edit_reason": _edit_reason_from_class(edit_class),
+                "location_scope": location_scope,
+                "location_label": str(location_meta.get("scope_target_label") or "").strip(),
             },
         )
         db.conn.commit()
@@ -1503,6 +1625,7 @@ def duplicate_content_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
                 "source_kind": str(item.get("source_kind") or "").strip(),
                 "content_type": str(item.get("content_type") or "").strip(),
                 "theme": str(item.get("theme") or "").strip(),
+                "location_scope": str(item.get("location_scope") or item.get("business_id") or "").strip(),
             },
         )
         db.conn.commit()
@@ -1586,6 +1709,13 @@ def generate_draft_for_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
                 generated_text = _fallback_draft_text(business_name, item)
         except Exception:
             generated_text = _fallback_draft_text(business_name, item)
+        location_scope = str(item.get("location_scope") or item.get("business_id") or "").strip()
+        location_meta = _resolve_scope_target_meta(
+            cursor,
+            str(item.get("business_id") or ""),
+            "network_location" if location_scope else "single_business",
+            location_scope or str(item.get("business_id") or ""),
+        )
         cursor.execute(
             """
             UPDATE contentplanitems
@@ -1611,6 +1741,8 @@ def generate_draft_for_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
                 "content_type": str(item.get("content_type") or "").strip(),
                 "theme": str(item.get("theme") or "").strip(),
                 "seo_keyword": str(item.get("seo_keyword") or "").strip(),
+                "location_scope": location_scope,
+                "location_label": str(location_meta.get("scope_target_label") or "").strip(),
             },
         )
         db.conn.commit()
@@ -1720,6 +1852,7 @@ def create_news_from_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
                 "theme": str(item.get("theme") or "").strip(),
                 "location_scope": location_scope,
                 "location_label": str(location_meta.get("scope_target_label") or "").strip(),
+                "acceptance_reason": _acceptance_reason(item, edited_before_accept),
                 "created_via": "content_plan",
             },
         )

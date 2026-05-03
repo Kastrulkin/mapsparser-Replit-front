@@ -135,6 +135,20 @@ type LearningMetricsPayload = {
     accepted_edited_total: number;
     edited_before_accept_pct: number;
   }>;
+  network_quality?: Array<{
+    key: string;
+    label?: string;
+    accepted_total: number;
+    accepted_edited_total: number;
+    skipped_total: number;
+    rescheduled_total: number;
+    major_rewrite_total: number;
+    draft_generated_total: number;
+    edited_before_accept_pct: number;
+    planned_activity_total: number;
+    risk_score: number;
+    reasons?: string[];
+  }>;
   quality_insights?: Array<{
     kind: string;
     text_ru: string;
@@ -1467,6 +1481,72 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
             </div>
           </div>
         ) : null}
+        {learningMetrics?.network_quality && learningMetrics.network_quality.length > 0 ? (
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-4">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  {isRu ? 'Качество по точкам' : 'Quality by location'}
+                </div>
+                <div className="mt-1 text-sm text-slate-600">
+                  {isRu
+                    ? 'Показывает, где контент-план чаще требует вмешательства: правки, пропуски, черновики без публикации.'
+                    : 'Shows where the content plan needs more operator attention: edits, skips, drafts without publishing.'}
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-3 lg:grid-cols-3">
+              {learningMetrics.network_quality.slice(0, 3).map((item) => (
+                <div key={item.key} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-950">
+                        {String(item.label || item.key || (isRu ? 'Точка' : 'Location'))}
+                      </div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        {isRu ? 'Индекс риска' : 'Risk score'} · {Number(item.risk_score || 0).toFixed(0)}
+                      </div>
+                    </div>
+                    <span className={[
+                      'rounded-full px-2.5 py-1 text-xs font-medium',
+                      Number(item.risk_score || 0) >= 60
+                        ? 'bg-red-100 text-red-700'
+                        : Number(item.risk_score || 0) >= 30
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-emerald-100 text-emerald-800',
+                    ].join(' ')}
+                    >
+                      {Number(item.risk_score || 0) >= 60
+                        ? (isRu ? 'Высокий' : 'High')
+                        : Number(item.risk_score || 0) >= 30
+                          ? (isRu ? 'Средний' : 'Medium')
+                          : (isRu ? 'Норма' : 'Stable')}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                    <span className="rounded-full bg-white px-2.5 py-1 text-slate-700">
+                      {isRu ? 'Опубликовано' : 'Published'} · {item.accepted_total}
+                    </span>
+                    <span className="rounded-full bg-white px-2.5 py-1 text-slate-700">
+                      {isRu ? 'Правки' : 'Edits'} · {Number(item.edited_before_accept_pct || 0).toFixed(0)}%
+                    </span>
+                    <span className="rounded-full bg-white px-2.5 py-1 text-slate-700">
+                      {isRu ? 'Пропуски' : 'Skipped'} · {item.skipped_total}
+                    </span>
+                    <span className="rounded-full bg-white px-2.5 py-1 text-slate-700">
+                      {isRu ? 'Переписывания' : 'Rewrites'} · {item.major_rewrite_total}
+                    </span>
+                  </div>
+                  {item.reasons && item.reasons.length > 0 ? (
+                    <div className="mt-3 text-xs leading-5 text-slate-500">
+                      {item.reasons.slice(0, 2).map((reason) => _networkQualityReasonLabel(reason, isRu)).join(' · ')}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -2090,6 +2170,16 @@ function _learningCapabilityLabel(capability: string, isRu: boolean): string {
   if (normalized === 'content_plan.item') return isRu ? 'Действия с элементами' : 'Item actions';
   if (normalized === 'content_plan.publish') return isRu ? 'Создание новостей' : 'News creation';
   return isRu ? 'Контент-план' : 'Content plan';
+}
+
+function _networkQualityReasonLabel(reason: string, isRu: boolean): string {
+  const normalized = String(reason || '').trim();
+  if (normalized === 'many_edits') return isRu ? 'часто правят перед публикацией' : 'often edited before publishing';
+  if (normalized === 'skipped_items') return isRu ? 'есть пропущенные темы' : 'has skipped topics';
+  if (normalized === 'major_rewrites') return isRu ? 'есть смысловые переписывания' : 'has major rewrites';
+  if (normalized === 'drafts_not_published') return isRu ? 'черновики не доходят до новостей' : 'drafts do not reach publishing';
+  if (normalized === 'stable') return isRu ? 'работает стабильно' : 'stable';
+  return isRu ? 'нужна проверка' : 'needs review';
 }
 
 function _itemFilterLabel(filterKey: ItemFilterKey, isRu: boolean): string {

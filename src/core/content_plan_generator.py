@@ -202,6 +202,58 @@ def _seasonal_strength(topic: str) -> int:
     return 34
 
 
+def _recent_content_blob(context: dict[str, Any]) -> str:
+    recent_news = context.get("recent_news") if isinstance(context.get("recent_news"), list) else []
+    return " ".join(
+        _safe_text(item.get("text")).lower()
+        for item in recent_news
+        if isinstance(item, dict) and _safe_text(item.get("text"))
+    )
+
+
+def _is_topic_covered(topic: str, recent_blob: str) -> bool:
+    clean = _safe_text(topic).lower()
+    if not clean or not recent_blob:
+        return False
+    words = [
+        word
+        for word in clean.replace(",", " ").replace(".", " ").split()
+        if len(word) >= 4
+    ]
+    if not words:
+        return clean in recent_blob
+    matched = sum(1 for word in words if word in recent_blob)
+    required_matches = 1 if len(words) == 1 else max(2, round(len(words) * 0.6))
+    return matched >= required_matches
+
+
+def _undercovered_bonus(topic: str, recent_blob: str) -> int:
+    if not _safe_text(topic):
+        return 0
+    return 16 if not _is_topic_covered(topic, recent_blob) else -8
+
+
+def _weak_zone_bonus(signal: dict[str, Any]) -> int:
+    priority = _safe_text(signal.get("priority")).lower()
+    section = _safe_text(signal.get("section")).lower()
+    signal_id = _safe_text(signal.get("id")).lower()
+    score = 0
+    if priority in {"critical", "high"}:
+        score += 14
+    if section in {"search", "reviews", "photos", "services"}:
+        score += 8
+    if "search_intent:" in signal_id:
+        score += 12
+    return score
+
+
+def _ranking_reason(label: str, score: int) -> dict[str, Any]:
+    return {
+        "label": label,
+        "score": int(score or 0),
+    }
+
+
 def _candidate_sort_key(candidate: dict[str, Any]) -> tuple[int, str]:
     return (int(candidate.get("strength_score") or 0), _safe_text(candidate.get("theme")))
 
@@ -225,9 +277,15 @@ def _apply_learning_feedback(context: dict[str, Any], candidates: list[dict[str,
     for candidate in candidates:
         adjustment = _learning_adjustment(context, candidate)
         next_candidate = dict(candidate)
+        ranking_reasons = candidate.get("ranking_reasons") if isinstance(candidate.get("ranking_reasons"), list) else []
         next_candidate["learning_adjustment"] = adjustment
         next_candidate["base_strength_score"] = int(candidate.get("strength_score") or 0)
         next_candidate["strength_score"] = max(1, int(candidate.get("strength_score") or 0) + adjustment)
+        if adjustment != 0:
+            next_candidate["ranking_reasons"] = [
+                *ranking_reasons,
+                _ranking_reason("learning_feedback", adjustment),
+            ]
         adjusted.append(next_candidate)
     return adjusted
 
@@ -293,12 +351,15 @@ def build_content_plan_skeleton(
     business = context.get("business") if isinstance(context.get("business"), dict) else {}
     business_name = _safe_text(business.get("name")) or "Бизнес"
     city = _safe_text(business.get("city"))
+    recent_blob = _recent_content_blob(context)
 
     if _content_mix_value(content_mix, "services"):
         for service in services[:10]:
             service_name = _safe_text(service.get("name"))
             if not service_name:
                 continue
+            base_score = _service_strength(service)
+            coverage_score = _undercovered_bonus(service_name, recent_blob)
             candidates.append(
                 {
                     "content_type": "service",
@@ -308,7 +369,11 @@ def build_content_plan_skeleton(
                     "source_ref": service_name,
                     "service_id": _safe_text(service.get("id")),
                     "cta_hint": _service_cta(service_name),
-                    "strength_score": _service_strength(service),
+                    "strength_score": base_score + coverage_score,
+                    "ranking_reasons": [
+                        _ranking_reason("service_signal_strength", base_score),
+                        _ranking_reason("undercovered_topic", coverage_score),
+                    ],
                 }
             )
 
@@ -318,6 +383,8 @@ def build_content_plan_skeleton(
             if not keyword_text:
                 continue
             theme_suffix = f" в {city}" if city else ""
+            base_score = _seo_strength(keyword)
+            coverage_score = _undercovered_bonus(keyword_text, recent_blob)
             candidates.append(
                 {
                     "content_type": "seo",
@@ -327,7 +394,11 @@ def build_content_plan_skeleton(
                     "source_ref": keyword_text,
                     "seo_keyword": keyword_text,
                     "cta_hint": _seo_cta(keyword_text),
-                    "strength_score": _seo_strength(keyword),
+                    "strength_score": base_score + coverage_score,
+                    "ranking_reasons": [
+                        _ranking_reason("seo_demand_strength", base_score),
+                        _ranking_reason("undercovered_seo_scenario", coverage_score),
+                    ],
                 }
             )
 
@@ -336,6 +407,8 @@ def build_content_plan_skeleton(
             sale_name = _safe_text(sale.get("title") or sale.get("label") or sale.get("service_name"))
             if not sale_name:
                 continue
+            base_score = _sales_strength(sale)
+            coverage_score = _undercovered_bonus(sale_name, recent_blob)
             candidates.append(
                 {
                     "content_type": "sales",
@@ -345,7 +418,11 @@ def build_content_plan_skeleton(
                     "source_ref": sale_name,
                     "transaction_id": _safe_text(sale.get("transaction_id")),
                     "cta_hint": _sales_cta(sale_name),
-                    "strength_score": _sales_strength(sale),
+                    "strength_score": base_score + coverage_score,
+                    "ranking_reasons": [
+                        _ranking_reason("sales_signal_strength", base_score),
+                        _ranking_reason("undercovered_sales_topic", coverage_score),
+                    ],
                 }
             )
 
@@ -356,6 +433,9 @@ def build_content_plan_skeleton(
             if not signal_title and not signal_problem:
                 continue
             theme = signal_title or signal_problem
+            base_score = _audit_strength(signal)
+            weak_zone_score = _weak_zone_bonus(signal)
+            coverage_score = _undercovered_bonus(theme, recent_blob)
             candidates.append(
                 {
                     "content_type": "audit",
@@ -364,7 +444,12 @@ def build_content_plan_skeleton(
                     "source_kind": "audit_signal",
                     "source_ref": theme,
                     "cta_hint": _audit_cta(theme),
-                    "strength_score": _audit_strength(signal),
+                    "strength_score": base_score + weak_zone_score + coverage_score,
+                    "ranking_reasons": [
+                        _ranking_reason("audit_signal_strength", base_score),
+                        _ranking_reason("weak_zone_priority", weak_zone_score),
+                        _ranking_reason("undercovered_weak_zone", coverage_score),
+                    ],
                 }
             )
 
@@ -422,6 +507,8 @@ def build_content_plan_skeleton(
                 "cta_hint": candidate.get("cta_hint") or "",
                 "strength_score": int(candidate.get("strength_score") or 0),
                 "learning_adjustment": int(candidate.get("learning_adjustment") or 0),
+                "base_strength_score": int(candidate.get("base_strength_score") or candidate.get("strength_score") or 0),
+                "ranking_reasons": candidate.get("ranking_reasons") if isinstance(candidate.get("ranking_reasons"), list) else [],
             }
         )
         current_date = min(period_end, current_date + timedelta(days=step_days))
@@ -456,5 +543,9 @@ def build_content_plan_skeleton(
             }),
             "max_strength_score": max(int(item.get("strength_score") or 0) for item in selected_items),
             "learning_feedback_applied": any(int(item.get("learning_adjustment") or 0) != 0 for item in selected_items),
+            "quality_ranking_applied": any(
+                bool(item.get("ranking_reasons"))
+                for item in selected_items
+            ),
         },
     }
