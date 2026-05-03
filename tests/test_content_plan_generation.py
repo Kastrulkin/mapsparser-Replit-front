@@ -371,12 +371,20 @@ def test_build_learning_breakdown_summary_calculates_edit_share():
             "key": "seo",
             "accepted_total": 6,
             "accepted_edited_total": 3,
+            "skipped_total": 0,
+            "rescheduled_total": 0,
+            "major_rewrite_total": 0,
+            "draft_generated_total": 0,
             "edited_before_accept_pct": 50.0,
         },
         {
             "key": "audit",
             "accepted_total": 2,
             "accepted_edited_total": 0,
+            "skipped_total": 0,
+            "rescheduled_total": 0,
+            "major_rewrite_total": 0,
+            "draft_generated_total": 0,
             "edited_before_accept_pct": 0.0,
         },
     ]
@@ -402,6 +410,10 @@ def test_build_learning_breakdown_summary_keeps_optional_label():
             "label": "Точка 1",
             "accepted_total": 4,
             "accepted_edited_total": 2,
+            "skipped_total": 0,
+            "rescheduled_total": 0,
+            "major_rewrite_total": 0,
+            "draft_generated_total": 0,
             "edited_before_accept_pct": 50.0,
         }
     ]
@@ -465,6 +477,26 @@ def test_learning_feedback_adjusts_generator_ranking_softly():
     assert seo_item["learning_adjustment"] < 0
     assert service_item["learning_adjustment"] > 0
     assert plan["meta"]["learning_feedback_applied"] is True
+
+
+def test_learning_feedback_penalizes_skipped_source_even_without_accepts():
+    feedback = _build_learning_feedback_from_breakdowns(
+        [
+            {
+                "key": "audit_signal",
+                "accepted_total": 0,
+                "accepted_edited_total": 0,
+                "skipped_total": 2,
+                "major_rewrite_total": 1,
+                "draft_generated_total": 3,
+                "edited_before_accept_pct": 0.0,
+            }
+        ],
+        [],
+    )
+
+    assert feedback["source_kind"]["audit_signal"]["score_adjustment"] < 0
+    assert feedback["source_kind"]["audit_signal"]["skipped_total"] == 2
 
 
 def test_learning_feedback_includes_network_location_quality():

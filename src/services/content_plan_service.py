@@ -122,11 +122,19 @@ def _build_learning_breakdown_summary(rows: list[Any], key_field: str, label_fie
         edited_index = 3 if label_field else 2
         accepted_total = int(_row_get(row, "accepted_total", accepted_index, 0) or 0)
         accepted_edited_total = int(_row_get(row, "accepted_edited_total", edited_index, 0) or 0)
+        skipped_total = int(_row_get(row, "skipped_total", edited_index + 1, 0) or 0)
+        rescheduled_total = int(_row_get(row, "rescheduled_total", edited_index + 2, 0) or 0)
+        major_rewrite_total = int(_row_get(row, "major_rewrite_total", edited_index + 3, 0) or 0)
+        draft_generated_total = int(_row_get(row, "draft_generated_total", edited_index + 4, 0) or 0)
         edited_before_accept_pct = (accepted_edited_total / accepted_total * 100.0) if accepted_total else 0.0
         item = {
             "key": key,
             "accepted_total": accepted_total,
             "accepted_edited_total": accepted_edited_total,
+            "skipped_total": skipped_total,
+            "rescheduled_total": rescheduled_total,
+            "major_rewrite_total": major_rewrite_total,
+            "draft_generated_total": draft_generated_total,
             "edited_before_accept_pct": round(edited_before_accept_pct, 2),
         }
         if label:
@@ -135,21 +143,31 @@ def _build_learning_breakdown_summary(rows: list[Any], key_field: str, label_fie
     return items
 
 
-def _learning_score_adjustment(accepted_total: int, accepted_edited_total: int) -> int:
+def _learning_score_adjustment(
+    accepted_total: int,
+    accepted_edited_total: int,
+    skipped_total: int = 0,
+    major_rewrite_total: int = 0,
+    draft_generated_total: int = 0,
+) -> int:
+    operational_penalty = min(28, int(skipped_total or 0) * 7 + int(major_rewrite_total or 0) * 10)
+    if int(draft_generated_total or 0) > int(accepted_total or 0):
+        operational_penalty += min(12, (int(draft_generated_total or 0) - int(accepted_total or 0)) * 3)
     if accepted_total < 2:
-        return 0
+        return max(-35, min(18, -operational_penalty))
     edit_pct = (accepted_edited_total / accepted_total * 100.0) if accepted_total else 0.0
+    base_adjustment = 0
     if edit_pct >= 75:
-        return -22
-    if edit_pct >= 50:
-        return -14
-    if edit_pct >= 25:
-        return -6
-    if accepted_total >= 3 and edit_pct <= 5:
-        return 8
-    if accepted_total >= 3 and edit_pct <= 15:
-        return 4
-    return 0
+        base_adjustment = -22
+    elif edit_pct >= 50:
+        base_adjustment = -14
+    elif edit_pct >= 25:
+        base_adjustment = -6
+    elif accepted_total >= 3 and edit_pct <= 5:
+        base_adjustment = 8
+    elif accepted_total >= 3 and edit_pct <= 15:
+        base_adjustment = 4
+    return max(-35, min(18, base_adjustment - operational_penalty))
 
 
 def _location_quality_score_adjustment(item: dict[str, Any]) -> int:
@@ -180,11 +198,24 @@ def _build_learning_feedback_from_breakdowns(
                 continue
             accepted_total = int(item.get("accepted_total") or 0)
             accepted_edited_total = int(item.get("accepted_edited_total") or 0)
+            skipped_total = int(item.get("skipped_total") or 0)
+            major_rewrite_total = int(item.get("major_rewrite_total") or 0)
+            draft_generated_total = int(item.get("draft_generated_total") or 0)
             indexed[key] = {
                 "accepted_total": accepted_total,
                 "accepted_edited_total": accepted_edited_total,
                 "edited_before_accept_pct": float(item.get("edited_before_accept_pct") or 0.0),
-                "score_adjustment": _learning_score_adjustment(accepted_total, accepted_edited_total),
+                "score_adjustment": _learning_score_adjustment(
+                    accepted_total,
+                    accepted_edited_total,
+                    skipped_total,
+                    major_rewrite_total,
+                    draft_generated_total,
+                ),
+                "skipped_total": skipped_total,
+                "rescheduled_total": int(item.get("rescheduled_total") or 0),
+                "major_rewrite_total": major_rewrite_total,
+                "draft_generated_total": draft_generated_total,
             }
         return indexed
 
@@ -253,7 +284,12 @@ def _build_learning_quality_insights(
     ]
     risky_sources = [
         item for item in source_kind_breakdown
-        if int(item.get("accepted_total") or 0) >= 2 and float(item.get("edited_before_accept_pct") or 0) >= 50
+        if (
+            int(item.get("accepted_total") or 0) >= 2
+            and float(item.get("edited_before_accept_pct") or 0) >= 50
+        )
+        or int(item.get("skipped_total") or 0) > 0
+        or int(item.get("major_rewrite_total") or 0) > 0
     ]
     strong_sources = [
         item for item in source_kind_breakdown
@@ -261,7 +297,12 @@ def _build_learning_quality_insights(
     ]
     risky_types = [
         item for item in content_type_breakdown
-        if int(item.get("accepted_total") or 0) >= 2 and float(item.get("edited_before_accept_pct") or 0) >= 50
+        if (
+            int(item.get("accepted_total") or 0) >= 2
+            and float(item.get("edited_before_accept_pct") or 0) >= 50
+        )
+        or int(item.get("skipped_total") or 0) > 0
+        or int(item.get("major_rewrite_total") or 0) > 0
     ]
     if weak_locations:
         item = weak_locations[0]
@@ -283,10 +324,15 @@ def _build_learning_quality_insights(
         )
     if risky_sources:
         item = risky_sources[0]
+        source_reason = "чаще требуют ручной правки перед публикацией"
+        if int(item.get("skipped_total") or 0) > 0:
+            source_reason = "часто пропускаются, значит темы нужно делать проще и ближе к готовому поводу"
+        if int(item.get("major_rewrite_total") or 0) > 0:
+            source_reason = "часто переписываются по смыслу, значит нужен более конкретный brief"
         insights.append(
             {
                 "kind": "needs_work",
-                "text_ru": f"{_source_kind_insight_label(str(item.get('key') or ''))} чаще требуют ручной правки перед публикацией.",
+                "text_ru": f"{_source_kind_insight_label(str(item.get('key') or ''))} {source_reason}.",
                 "text_en": f"{str(item.get('key') or 'Some signals')} themes are edited more often before publishing.",
             }
         )
@@ -301,10 +347,15 @@ def _build_learning_quality_insights(
         )
     if risky_types:
         item = risky_types[0]
+        type_reason = "по ним видно больше правок"
+        if int(item.get("skipped_total") or 0) > 0:
+            type_reason = "по ним есть пропуски, значит формат нужно упростить"
+        if int(item.get("major_rewrite_total") or 0) > 0:
+            type_reason = "по ним есть смысловые переписывания"
         insights.append(
             {
                 "kind": "content_type_gap",
-                "text_ru": f"{_content_type_insight_label(str(item.get('key') or ''))} стоит формулировать конкретнее: по ним видно больше правок.",
+                "text_ru": f"{_content_type_insight_label(str(item.get('key') or ''))} стоит формулировать конкретнее: {type_reason}.",
                 "text_en": f"{str(item.get('key') or 'Some content')} posts need more specific framing.",
             }
         )
@@ -811,17 +862,25 @@ def _load_content_plan_learning_feedback(cursor: Any, business_id: str, window_d
             """
             SELECT
                 COALESCE(NULLIF(metadata_json->>'source_kind', ''), 'unknown') AS source_kind,
-                COUNT(*) FILTER (WHERE event_type = 'accepted') AS accepted_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.publish' AND event_type = 'accepted') AS accepted_total,
                 COUNT(*) FILTER (
-                    WHERE event_type = 'accepted'
+                    WHERE capability = 'content_plan.publish'
+                      AND event_type = 'accepted'
                       AND COALESCE(edited_before_accept, FALSE) = TRUE
-                ) AS accepted_edited_total
+                ) AS accepted_edited_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.item' AND event_type = 'skipped') AS skipped_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.item' AND event_type = 'rescheduled') AS rescheduled_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.item' AND event_type = 'major_rewrite') AS major_rewrite_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.draft' AND event_type = 'generated') AS draft_generated_total
             FROM ailearningevents
             WHERE business_id = NULLIF(%s, '')::uuid
-              AND capability = 'content_plan.publish'
+              AND capability LIKE 'content_plan.%%'
               AND created_at >= NOW() - (%s * INTERVAL '1 day')
             GROUP BY source_kind
-            HAVING COUNT(*) FILTER (WHERE event_type = 'accepted') > 0
+            HAVING
+                COUNT(*) FILTER (WHERE capability = 'content_plan.publish' AND event_type = 'accepted') > 0
+                OR COUNT(*) FILTER (WHERE capability = 'content_plan.item' AND event_type IN ('skipped', 'rescheduled', 'major_rewrite')) > 0
+                OR COUNT(*) FILTER (WHERE capability = 'content_plan.draft' AND event_type = 'generated') > 0
             """,
             (str(business_id or "").strip(), normalized_window),
         )
@@ -830,17 +889,25 @@ def _load_content_plan_learning_feedback(cursor: Any, business_id: str, window_d
             """
             SELECT
                 COALESCE(NULLIF(metadata_json->>'content_type', ''), 'unknown') AS content_type,
-                COUNT(*) FILTER (WHERE event_type = 'accepted') AS accepted_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.publish' AND event_type = 'accepted') AS accepted_total,
                 COUNT(*) FILTER (
-                    WHERE event_type = 'accepted'
+                    WHERE capability = 'content_plan.publish'
+                      AND event_type = 'accepted'
                       AND COALESCE(edited_before_accept, FALSE) = TRUE
-                ) AS accepted_edited_total
+                ) AS accepted_edited_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.item' AND event_type = 'skipped') AS skipped_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.item' AND event_type = 'rescheduled') AS rescheduled_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.item' AND event_type = 'major_rewrite') AS major_rewrite_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.draft' AND event_type = 'generated') AS draft_generated_total
             FROM ailearningevents
             WHERE business_id = NULLIF(%s, '')::uuid
-              AND capability = 'content_plan.publish'
+              AND capability LIKE 'content_plan.%%'
               AND created_at >= NOW() - (%s * INTERVAL '1 day')
             GROUP BY content_type
-            HAVING COUNT(*) FILTER (WHERE event_type = 'accepted') > 0
+            HAVING
+                COUNT(*) FILTER (WHERE capability = 'content_plan.publish' AND event_type = 'accepted') > 0
+                OR COUNT(*) FILTER (WHERE capability = 'content_plan.item' AND event_type IN ('skipped', 'rescheduled', 'major_rewrite')) > 0
+                OR COUNT(*) FILTER (WHERE capability = 'content_plan.draft' AND event_type = 'generated') > 0
             """,
             (str(business_id or "").strip(), normalized_window),
         )
@@ -1186,18 +1253,26 @@ def get_content_plan_learning_metrics(user_id: str, business_id: str, window_day
             """
             SELECT
                 COALESCE(NULLIF(metadata_json->>'source_kind', ''), 'unknown') AS source_kind,
-                COUNT(*) FILTER (WHERE event_type = 'accepted') AS accepted_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.publish' AND event_type = 'accepted') AS accepted_total,
                 COUNT(*) FILTER (
-                    WHERE event_type = 'accepted'
+                    WHERE capability = 'content_plan.publish'
+                      AND event_type = 'accepted'
                       AND COALESCE(edited_before_accept, FALSE) = TRUE
-                ) AS accepted_edited_total
+                ) AS accepted_edited_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.item' AND event_type = 'skipped') AS skipped_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.item' AND event_type = 'rescheduled') AS rescheduled_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.item' AND event_type = 'major_rewrite') AS major_rewrite_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.draft' AND event_type = 'generated') AS draft_generated_total
             FROM ailearningevents
             WHERE business_id = NULLIF(%s, '')::uuid
-              AND capability = 'content_plan.publish'
+              AND capability LIKE 'content_plan.%%'
               AND created_at >= NOW() - (%s * INTERVAL '1 day')
             GROUP BY source_kind
-            HAVING COUNT(*) FILTER (WHERE event_type = 'accepted') > 0
-            ORDER BY accepted_edited_total DESC, accepted_total DESC, source_kind ASC
+            HAVING
+                COUNT(*) FILTER (WHERE capability = 'content_plan.publish' AND event_type = 'accepted') > 0
+                OR COUNT(*) FILTER (WHERE capability = 'content_plan.item' AND event_type IN ('skipped', 'rescheduled', 'major_rewrite')) > 0
+                OR COUNT(*) FILTER (WHERE capability = 'content_plan.draft' AND event_type = 'generated') > 0
+            ORDER BY skipped_total DESC, major_rewrite_total DESC, accepted_edited_total DESC, accepted_total DESC, source_kind ASC
             """,
             (str(business_id or "").strip(), normalized_window),
         )
@@ -1206,18 +1281,26 @@ def get_content_plan_learning_metrics(user_id: str, business_id: str, window_day
             """
             SELECT
                 COALESCE(NULLIF(metadata_json->>'content_type', ''), 'unknown') AS content_type,
-                COUNT(*) FILTER (WHERE event_type = 'accepted') AS accepted_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.publish' AND event_type = 'accepted') AS accepted_total,
                 COUNT(*) FILTER (
-                    WHERE event_type = 'accepted'
+                    WHERE capability = 'content_plan.publish'
+                      AND event_type = 'accepted'
                       AND COALESCE(edited_before_accept, FALSE) = TRUE
-                ) AS accepted_edited_total
+                ) AS accepted_edited_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.item' AND event_type = 'skipped') AS skipped_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.item' AND event_type = 'rescheduled') AS rescheduled_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.item' AND event_type = 'major_rewrite') AS major_rewrite_total,
+                COUNT(*) FILTER (WHERE capability = 'content_plan.draft' AND event_type = 'generated') AS draft_generated_total
             FROM ailearningevents
             WHERE business_id = NULLIF(%s, '')::uuid
-              AND capability = 'content_plan.publish'
+              AND capability LIKE 'content_plan.%%'
               AND created_at >= NOW() - (%s * INTERVAL '1 day')
             GROUP BY content_type
-            HAVING COUNT(*) FILTER (WHERE event_type = 'accepted') > 0
-            ORDER BY accepted_edited_total DESC, accepted_total DESC, content_type ASC
+            HAVING
+                COUNT(*) FILTER (WHERE capability = 'content_plan.publish' AND event_type = 'accepted') > 0
+                OR COUNT(*) FILTER (WHERE capability = 'content_plan.item' AND event_type IN ('skipped', 'rescheduled', 'major_rewrite')) > 0
+                OR COUNT(*) FILTER (WHERE capability = 'content_plan.draft' AND event_type = 'generated') > 0
+            ORDER BY skipped_total DESC, major_rewrite_total DESC, accepted_edited_total DESC, accepted_total DESC, content_type ASC
             """,
             (str(business_id or "").strip(), normalized_window),
         )
