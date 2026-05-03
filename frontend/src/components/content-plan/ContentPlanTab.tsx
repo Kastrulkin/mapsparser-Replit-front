@@ -2274,15 +2274,22 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     className={[
                       'rounded-2xl border px-4 py-4 text-left transition-colors',
                       action.disabled
-                        ? 'cursor-not-allowed border-white/10 bg-white/5 text-slate-500'
+                        ? 'cursor-not-allowed border-white/5 bg-white/[0.03] text-slate-500 opacity-70'
                         : 'border-white/10 bg-white/10 text-white hover:bg-white/15',
                     ].join(' ')}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="text-sm font-semibold">{action.title}</div>
-                      <div className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-slate-200">{action.metric}</div>
+                      <div
+                        className={[
+                          'rounded-full px-2 py-0.5 text-xs',
+                          action.disabled ? 'bg-white/5 text-slate-500' : 'bg-white/10 text-slate-200',
+                        ].join(' ')}
+                      >
+                        {action.disabled ? (isRu ? 'Недоступно' : 'Locked') : action.metric}
+                      </div>
                     </div>
-                    <div className="mt-2 line-clamp-2 text-xs leading-5 text-slate-300">
+                    <div className={['mt-2 line-clamp-2 text-xs leading-5', action.disabled ? 'text-slate-500' : 'text-slate-300'].join(' ')}>
                       {action.description}
                     </div>
                   </button>
@@ -2589,7 +2596,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                         <div className="text-sm font-semibold text-slate-950">
                           {String(item.theme || item.goal || (isRu ? 'Без темы' : 'Untitled')).trim()}
                         </div>
-                        <div className="text-xs text-slate-500">{String(item.scheduled_for || '').slice(0, 10)}</div>
+                        <div className="text-xs text-slate-500">{_formatPlanItemDate(item.scheduled_for, isRu)}</div>
                       </div>
                       <div className="mt-1 text-xs text-slate-500">
                         {_itemLocationLabel(item, isRu)} · {_sourceKindLabel(item.source_kind, isRu)}
@@ -2622,19 +2629,19 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   >
                     {isRu ? 'Отменить' : 'Cancel'}
                   </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="bg-slate-50"
-                    onClick={() => {
-                      if (bulkNewsReview.focusLocationKey && bulkNewsReview.focusWeekKey) {
-                        applyLocationWeekFocus(bulkNewsReview.focusLocationKey, bulkNewsReview.focusWeekKey);
-                      }
-                    }}
-                    disabled={!bulkNewsReview.focusLocationKey || !bulkNewsReview.focusWeekKey || Boolean(bulkBusyAction)}
-                  >
-                    {isRu ? 'Открыть срез перед созданием' : 'Open slice before creating'}
-                  </Button>
+                  {bulkNewsReview.focusLocationKey && bulkNewsReview.focusWeekKey ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="bg-slate-50"
+                      onClick={() => {
+                        applyLocationWeekFocus(bulkNewsReview.focusLocationKey || 'all', bulkNewsReview.focusWeekKey || 'all');
+                      }}
+                      disabled={Boolean(bulkBusyAction)}
+                    >
+                      {isRu ? 'Открыть срез перед созданием' : 'Open slice before creating'}
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             ) : null}
@@ -2895,9 +2902,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
               const currentDraft = draftEdits[item.id] !== undefined ? draftEdits[item.id] : item.draft_text;
               const currentTheme = themeEdits[item.id] !== undefined ? themeEdits[item.id] : item.theme;
               const currentDate = dateEdits[item.id] !== undefined ? dateEdits[item.id] : item.scheduled_for;
+              const currentInputDate = _inputDateValue(currentDate);
               const duplicateTargetOptions = getDuplicateTargetLocationOptions(item);
               const selectedDuplicateTargets = duplicateTargetSelections[item.id] || [];
-              const duplicateTargetDate = duplicateDateOverrides[item.id] || String(currentDate || '').slice(0, 10);
+              const duplicateTargetDate = duplicateDateOverrides[item.id] || currentInputDate;
               return (
                 <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -2908,9 +2916,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                         </div>
                         <Input
                           type="date"
-                          value={currentDate}
+                          value={currentInputDate}
                           onChange={(event) => setDateEdits((prev) => ({ ...prev, [item.id]: event.target.value }))}
                         />
+                        {!currentInputDate ? (
+                          <div className="text-xs leading-5 text-amber-700">
+                            {isRu ? 'Назначьте дату публикации' : 'Set a publication date'}
+                          </div>
+                        ) : null}
                       </div>
                       <div className="space-y-2">
                         <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
@@ -3390,6 +3403,24 @@ function _shiftIsoDate(input: string, daysDelta: number): string {
   }
   parsed.setUTCDate(parsed.getUTCDate() + daysDelta);
   return parsed.toISOString().slice(0, 10);
+}
+
+function _inputDateValue(input: unknown): string {
+  const normalized = String(input || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return '';
+  return normalized;
+}
+
+function _formatPlanItemDate(input: unknown, isRu: boolean): string {
+  const normalized = _inputDateValue(input);
+  if (!normalized) return isRu ? 'Дата не назначена' : 'No date set';
+  const parsed = new Date(`${normalized}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return normalized;
+  return new Intl.DateTimeFormat(isRu ? 'ru-RU' : 'en-US', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(parsed);
 }
 
 function _itemPriorityRank(item: Pick<PlanItem, 'draft_text' | 'usernews_id'>): number {
