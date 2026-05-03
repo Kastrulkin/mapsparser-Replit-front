@@ -166,6 +166,23 @@ type ActionSummary = {
   focusWeekKey?: string;
 };
 
+type NetworkOperatingSlice = {
+  key: string;
+  label: string;
+  riskScore: number;
+  reasons: string[];
+  total: number;
+  needsDraft: number;
+  readyToPublish: number;
+  published: number;
+  skipped: number;
+  focusWeekKey: string;
+  focusWeekLabel: string;
+  focusWeekNeedsDraft: number;
+  focusWeekReadyToPublish: number;
+  recommendation: string;
+};
+
 const PERIOD_OPTIONS = [30, 60, 90];
 
 const DENSITY_OPTIONS = [
@@ -536,6 +553,83 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       })
       .slice(0, 6);
   }, [currentPlan?.items, isRu]);
+  const networkOperatingSlices = useMemo<NetworkOperatingSlice[]>(() => {
+    if (!isNetworkContext || !currentPlan?.items?.length) return [];
+    const qualityByLocation = new Map<string, NonNullable<LearningMetricsPayload['network_quality']>[number]>();
+    for (const item of learningMetrics?.network_quality || []) {
+      const key = String(item.key || '').trim();
+      if (key) qualityByLocation.set(key, item);
+    }
+    const locationKeys = new Set<string>();
+    for (const item of currentPlan.items) {
+      const key = String(item.location_scope || item.business_id || '').trim();
+      if (key) locationKeys.add(key);
+    }
+    const slices: NetworkOperatingSlice[] = [];
+    for (const locationKey of Array.from(locationKeys)) {
+      const locationItems = currentPlan.items.filter((item) => String(item.location_scope || item.business_id || '').trim() === locationKey);
+      if (locationItems.length === 0) continue;
+      const quality = qualityByLocation.get(locationKey);
+      const firstItem = locationItems[0];
+      let needsDraft = 0;
+      let readyToPublish = 0;
+      let published = 0;
+      let skipped = 0;
+      const weekBuckets = new Map<string, { key: string; needsDraft: number; readyToPublish: number; total: number }>();
+      for (const item of locationItems) {
+        const status = String(item.status || '').trim();
+        const hasDraft = Boolean(String(item.draft_text || '').trim());
+        const hasNews = Boolean(String(item.usernews_id || '').trim());
+        if (status === 'skipped') {
+          skipped += 1;
+          continue;
+        }
+        if (!hasDraft) needsDraft += 1;
+        if (hasDraft && !hasNews) readyToPublish += 1;
+        if (hasNews) published += 1;
+        const weekKey = _weekBucketKey(item.scheduled_for);
+        if (!weekKey) continue;
+        const existing = weekBuckets.get(weekKey) || { key: weekKey, needsDraft: 0, readyToPublish: 0, total: 0 };
+        existing.total += 1;
+        if (!hasDraft) existing.needsDraft += 1;
+        if (hasDraft && !hasNews) existing.readyToPublish += 1;
+        weekBuckets.set(weekKey, existing);
+      }
+      const focusWeek = Array.from(weekBuckets.values())
+        .filter((item) => item.needsDraft > 0 || item.readyToPublish > 0)
+        .sort((left, right) => {
+          const urgentDiff = (right.needsDraft + right.readyToPublish) - (left.needsDraft + left.readyToPublish);
+          if (urgentDiff !== 0) return urgentDiff;
+          return left.key.localeCompare(right.key);
+        })[0] || Array.from(weekBuckets.values()).sort((left, right) => left.key.localeCompare(right.key))[0];
+      const reasons = quality?.reasons && Array.isArray(quality.reasons) ? quality.reasons : [];
+      slices.push({
+        key: locationKey,
+        label: String(quality?.label || _itemLocationLabel(firstItem, isRu) || locationKey),
+        riskScore: Number(quality?.risk_score || 0),
+        reasons,
+        total: locationItems.length,
+        needsDraft,
+        readyToPublish,
+        published,
+        skipped,
+        focusWeekKey: focusWeek?.key || 'all',
+        focusWeekLabel: focusWeek?.key ? _weekBucketLabel(focusWeek.key, isRu) : (isRu ? 'Все недели' : 'All weeks'),
+        focusWeekNeedsDraft: focusWeek?.needsDraft || 0,
+        focusWeekReadyToPublish: focusWeek?.readyToPublish || 0,
+        recommendation: _networkOperatingRecommendation(reasons, isRu),
+      });
+    }
+    return slices
+      .sort((left, right) => {
+        const riskDiff = right.riskScore - left.riskScore;
+        if (riskDiff !== 0) return riskDiff;
+        const urgentDiff = (right.needsDraft + right.readyToPublish + right.skipped) - (left.needsDraft + left.readyToPublish + left.skipped);
+        if (urgentDiff !== 0) return urgentDiff;
+        return right.total - left.total;
+      })
+      .slice(0, 5);
+  }, [currentPlan?.items, isNetworkContext, isRu, learningMetrics?.network_quality]);
   const quickActions = useMemo(() => {
     const weakLocation = (learningMetrics?.network_quality || [])[0];
     const focusSlice = locationWeekFocusSummary[0];
@@ -1951,6 +2045,118 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 </div>
               </div>
             ) : null}
+            {networkOperatingSlices.length > 0 ? (
+              <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      {isRu ? 'Режим управления сетью' : 'Network operating mode'}
+                    </div>
+                    <div className="mt-1 text-lg font-semibold text-slate-950">
+                      {isRu ? 'Точки, где есть работа прямо сейчас' : 'Locations that need work now'}
+                    </div>
+                    <div className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+                      {isRu
+                        ? 'Откройте конкретную точку и неделю, чтобы не тонуть во всём плане сети сразу.'
+                        : 'Open a specific location and week instead of working through the whole network plan at once.'}
+                    </div>
+                  </div>
+                  <div className="rounded-full bg-slate-950 px-4 py-2 text-sm font-medium text-white">
+                    {networkOperatingSlices.length} {isRu ? 'точек в фокусе' : 'locations in focus'}
+                  </div>
+                </div>
+                <div className="mt-5 grid gap-3 xl:grid-cols-2">
+                  {networkOperatingSlices.map((slice) => (
+                    <div key={slice.key} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="text-base font-semibold text-slate-950">{slice.label}</div>
+                          <div className="mt-1 text-sm text-slate-600">
+                            {slice.focusWeekLabel} · {isRu ? 'рабочий срез' : 'operating slice'}
+                          </div>
+                        </div>
+                        <span className={[
+                          'w-fit rounded-full px-2.5 py-1 text-xs font-medium',
+                          slice.riskScore >= 60
+                            ? 'bg-red-100 text-red-700'
+                            : slice.riskScore >= 30
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-emerald-100 text-emerald-800',
+                        ].join(' ')}
+                        >
+                          {_networkRiskLabel(slice.riskScore, isRu)}
+                        </span>
+                      </div>
+                      <div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-5">
+                        <div className="rounded-xl bg-white px-3 py-2">
+                          <div className="font-semibold text-slate-950">{slice.needsDraft}</div>
+                          <div className="text-slate-500">{isRu ? 'без текста' : 'no draft'}</div>
+                        </div>
+                        <div className="rounded-xl bg-white px-3 py-2">
+                          <div className="font-semibold text-slate-950">{slice.readyToPublish}</div>
+                          <div className="text-slate-500">{isRu ? 'к новости' : 'ready'}</div>
+                        </div>
+                        <div className="rounded-xl bg-white px-3 py-2">
+                          <div className="font-semibold text-slate-950">{slice.published}</div>
+                          <div className="text-slate-500">{isRu ? 'создано' : 'created'}</div>
+                        </div>
+                        <div className="rounded-xl bg-white px-3 py-2">
+                          <div className="font-semibold text-slate-950">{slice.skipped}</div>
+                          <div className="text-slate-500">{isRu ? 'пропуски' : 'skipped'}</div>
+                        </div>
+                        <div className="rounded-xl bg-white px-3 py-2">
+                          <div className="font-semibold text-slate-950">{Number(slice.riskScore || 0).toFixed(0)}</div>
+                          <div className="text-slate-500">{isRu ? 'риск' : 'risk'}</div>
+                        </div>
+                      </div>
+                      <div className="mt-3 rounded-xl bg-white px-3 py-2 text-sm leading-6 text-slate-700">
+                        {slice.recommendation}
+                      </div>
+                      {slice.reasons.length > 0 ? (
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                          {slice.reasons.slice(0, 3).map((reason) => (
+                            <span key={reason} className="rounded-full bg-white px-2.5 py-1 text-slate-600">
+                              {_networkQualityReasonLabel(reason, isRu)}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => applyLocationWeekFocus(slice.key, slice.focusWeekKey)}
+                        >
+                          {isRu ? 'Открыть точку' : 'Open location'}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => { void runLocationWeekFocusDrafts(slice.key, slice.focusWeekKey); }}
+                          disabled={Boolean(bulkBusyAction) || slice.focusWeekKey === 'all' || slice.focusWeekNeedsDraft === 0}
+                        >
+                          {bulkBusyAction === `focus-drafts:${slice.key}:${slice.focusWeekKey}`
+                            ? (isRu ? 'Генерируем...' : 'Generating...')
+                            : `${isRu ? 'Сгенерировать неделю' : 'Generate week'} · ${slice.focusWeekNeedsDraft}`}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => { void runLocationWeekFocusNews(slice.key, slice.focusWeekKey); }}
+                          disabled={Boolean(bulkBusyAction) || slice.focusWeekKey === 'all' || slice.focusWeekReadyToPublish === 0}
+                        >
+                          {bulkBusyAction === `focus-news:${slice.key}:${slice.focusWeekKey}`
+                            ? (isRu ? 'Создаём...' : 'Creating...')
+                            : `${isRu ? 'Создать новости' : 'Create news'} · ${slice.focusWeekReadyToPublish}`}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               {viewPresets.map((preset) => (
                 <button
@@ -2553,6 +2759,39 @@ function _networkQualityReasonLabel(reason: string, isRu: boolean): string {
   if (normalized === 'drafts_not_published') return isRu ? 'черновики не доходят до новостей' : 'drafts do not reach publishing';
   if (normalized === 'stable') return isRu ? 'работает стабильно' : 'stable';
   return isRu ? 'нужна проверка' : 'needs review';
+}
+
+function _networkRiskLabel(riskScore: number, isRu: boolean): string {
+  if (Number(riskScore || 0) >= 60) return isRu ? 'Высокий риск' : 'High risk';
+  if (Number(riskScore || 0) >= 30) return isRu ? 'Средний риск' : 'Medium risk';
+  return isRu ? 'Норма' : 'Stable';
+}
+
+function _networkOperatingRecommendation(reasons: string[], isRu: boolean): string {
+  const normalized = Array.isArray(reasons) ? reasons.map((item) => String(item || '').trim()) : [];
+  if (normalized.includes('drafts_not_published')) {
+    return isRu
+      ? 'Сначала доведите готовые черновики до новостей: здесь уже есть заготовки, но они не превращаются в публикации.'
+      : 'Start by turning ready drafts into news: this location has drafts that do not reach publishing.';
+  }
+  if (normalized.includes('skipped_items')) {
+    return isRu
+      ? 'Проверьте темы этой точки: часть идей пропускается, значит нужно упростить поводы и оставить только то, что реально выпустить.'
+      : 'Review this location themes: skipped items mean the topics should be simpler and easier to publish.';
+  }
+  if (normalized.includes('major_rewrites')) {
+    return isRu
+      ? 'Генерируйте черновики точнее: конкретная услуга, понятная выгода, доказательство и одно действие для клиента.'
+      : 'Generate tighter drafts: concrete service, clear benefit, proof point, and one customer action.';
+  }
+  if (normalized.includes('many_edits')) {
+    return isRu
+      ? 'Перед публикацией проверьте формулировки: по этой точке часто нужны ручные правки.'
+      : 'Review wording before publishing: this location often needs manual edits.';
+  }
+  return isRu
+    ? 'Работайте ближайшей неделей: закройте темы без текста, затем создайте новости из готовых черновиков.'
+    : 'Work through the nearest week: fill missing drafts, then create news from ready drafts.';
 }
 
 function _itemFilterLabel(filterKey: ItemFilterKey, isRu: boolean): string {
