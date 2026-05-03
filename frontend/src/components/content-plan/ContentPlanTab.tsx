@@ -166,6 +166,20 @@ type ActionSummary = {
   focusWeekKey?: string;
 };
 
+type BulkNewsReview = {
+  key: string;
+  titleRu: string;
+  titleEn: string;
+  descriptionRu: string;
+  descriptionEn: string;
+  items: PlanItem[];
+  busyAction: string;
+  summaryPrefixRu?: string;
+  summaryPrefixEn?: string;
+  focusLocationKey?: string;
+  focusWeekKey?: string;
+};
+
 type NetworkOperatingSlice = {
   key: string;
   label: string;
@@ -264,6 +278,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [expandedDuplicateItemId, setExpandedDuplicateItemId] = useState('');
   const [duplicateTargetSelections, setDuplicateTargetSelections] = useState<Record<string, string[]>>({});
   const [duplicateDateOverrides, setDuplicateDateOverrides] = useState<Record<string, string>>({});
+  const [bulkNewsReview, setBulkNewsReview] = useState<BulkNewsReview | null>(null);
 
   const allowedHorizons = context?.subscription?.allowed_horizons || [30];
   const scopeOptions = context?.scope?.scope_options || [];
@@ -1120,8 +1135,24 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
 
   const runBulkCreateNews = async () => {
     if (bulkNewsCandidates.length === 0) return;
-    if (!_confirmBulkNewsCreation(bulkNewsCandidates.length, isRu)) return;
-    setBulkBusyAction('news');
+    setBulkNewsReview({
+      key: 'filtered',
+      titleRu: 'Проверить новости перед созданием',
+      titleEn: 'Review news before creating',
+      descriptionRu: 'Будут созданы новости только из текущей выборки: с учётом точки, недели и фильтров сверху.',
+      descriptionEn: 'News will be created only from the current view: respecting location, week, and filters above.',
+      items: bulkNewsCandidates,
+      busyAction: 'news',
+    });
+  };
+
+  const executeBulkNewsReview = async () => {
+    const review = bulkNewsReview;
+    if (!review || review.items.length === 0) return;
+    if (review.focusLocationKey && review.focusWeekKey) {
+      applyLocationWeekFocus(review.focusLocationKey, review.focusWeekKey);
+    }
+    setBulkBusyAction(review.busyAction);
     setError('');
     setActionSummary(null);
     try {
@@ -1129,7 +1160,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       let createdCount = 0;
       let failedCount = 0;
       const failedThemes: string[] = [];
-      for (const item of bulkNewsCandidates) {
+      for (const item of review.items) {
         try {
           await persistItemEdits(item.id);
           const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}/create-news`, {
@@ -1144,13 +1175,18 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         }
       }
       await loadLearningMetrics();
+      const textRu = _bulkResultText('news', createdCount, failedCount, true);
+      const textEn = _bulkResultText('news', createdCount, failedCount, false);
       setActionSummary({
         tone: failedCount > 0 ? 'warning' : 'success',
-        text_ru: _bulkResultText('news', createdCount, failedCount, true),
-        text_en: _bulkResultText('news', createdCount, failedCount, false),
+        text_ru: review.summaryPrefixRu ? `${review.summaryPrefixRu}: ${textRu}` : textRu,
+        text_en: review.summaryPrefixEn ? `${review.summaryPrefixEn}: ${textEn}` : textEn,
         details_ru: _bulkResultDetails(failedThemes, true),
         details_en: _bulkResultDetails(failedThemes, false),
+        focusLocationKey: review.focusLocationKey,
+        focusWeekKey: review.focusWeekKey,
       });
+      setBulkNewsReview(null);
     } catch (publishError) {
       const message = publishError instanceof Error ? publishError.message : (isRu ? 'Не удалось создать новости' : 'Could not create news items');
       setError(message);
@@ -1302,48 +1338,22 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     const focusCandidates = getLocationWeekFocusItems(locationKey, weekKey)
       .filter((item) => String(item.draft_text || '').trim() && !String(item.usernews_id || '').trim());
     if (focusCandidates.length === 0) return;
-    if (!_confirmBulkNewsCreation(focusCandidates.length, isRu)) return;
     applyLocationWeekFocus(locationKey, weekKey);
-    setBulkBusyAction(`focus-news:${locationKey}:${weekKey}`);
-    setError('');
-    setActionSummary(null);
-    try {
-      let nextPlan = currentPlan;
-      let createdCount = 0;
-      let failedCount = 0;
-      const failedThemes: string[] = [];
-      for (const item of focusCandidates) {
-        try {
-          await persistItemEdits(item.id);
-          const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}/create-news`, {
-            method: 'POST',
-          });
-          nextPlan = response.plan || null;
-          setCurrentPlan(nextPlan);
-          createdCount += 1;
-        } catch {
-          failedCount += 1;
-          failedThemes.push(String(item.theme || item.goal || item.id || '').trim());
-        }
-      }
-      await loadLearningMetrics();
-      const locationLabel = _locationLabelByKey(currentPlan?.items || [], locationKey, isRu);
-      const weekLabel = _weekBucketLabel(weekKey, isRu);
-      setActionSummary({
-        tone: failedCount > 0 ? 'warning' : 'success',
-        text_ru: `${locationLabel} · ${weekLabel}: ${_bulkResultText('news', createdCount, failedCount, true)}`,
-        text_en: `${locationLabel} · ${weekLabel}: ${_bulkResultText('news', createdCount, failedCount, false)}`,
-        details_ru: _bulkResultDetails(failedThemes, true),
-        details_en: _bulkResultDetails(failedThemes, false),
-        focusLocationKey: locationKey,
-        focusWeekKey: weekKey,
-      });
-    } catch (publishError) {
-      const message = publishError instanceof Error ? publishError.message : (isRu ? 'Не удалось создать новости' : 'Could not create news items');
-      setError(message);
-    } finally {
-      setBulkBusyAction('');
-    }
+    const locationLabel = _locationLabelByKey(currentPlan?.items || [], locationKey, isRu);
+    const weekLabel = _weekBucketLabel(weekKey, isRu);
+    setBulkNewsReview({
+      key: `focus:${locationKey}:${weekKey}`,
+      titleRu: 'Проверить новости по срезу',
+      titleEn: 'Review slice news',
+      descriptionRu: `${locationLabel} · ${weekLabel}. Будут созданы новости только из готовых черновиков этого среза.`,
+      descriptionEn: `${locationLabel} · ${weekLabel}. News will be created only from ready drafts in this slice.`,
+      items: focusCandidates,
+      busyAction: `focus-news:${locationKey}:${weekKey}`,
+      summaryPrefixRu: `${locationLabel} · ${weekLabel}`,
+      summaryPrefixEn: `${locationLabel} · ${weekLabel}`,
+      focusLocationKey: locationKey,
+      focusWeekKey: weekKey,
+    });
   };
 
   const runLocationWeekSkip = async (locationKey: string, weekKey: string) => {
@@ -2553,6 +2563,81 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 ))}
               </div>
             ) : null}
+            {bulkNewsReview ? (
+              <div className="rounded-[28px] border border-slate-900 bg-white p-5 shadow-lg">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      {isRu ? 'Подтверждение публикаций' : 'Publication review'}
+                    </div>
+                    <div className="mt-2 text-lg font-semibold text-slate-950">
+                      {isRu ? bulkNewsReview.titleRu : bulkNewsReview.titleEn}
+                    </div>
+                    <div className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                      {isRu ? bulkNewsReview.descriptionRu : bulkNewsReview.descriptionEn}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl bg-slate-950 px-4 py-3 text-center text-white">
+                    <div className="text-2xl font-semibold">{bulkNewsReview.items.length}</div>
+                    <div className="text-xs text-slate-300">{isRu ? 'новостей' : 'news items'}</div>
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-2">
+                  {bulkNewsReview.items.slice(0, 5).map((item) => (
+                    <div key={`${bulkNewsReview.key}:${item.id}`} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="text-sm font-semibold text-slate-950">
+                          {String(item.theme || item.goal || (isRu ? 'Без темы' : 'Untitled')).trim()}
+                        </div>
+                        <div className="text-xs text-slate-500">{String(item.scheduled_for || '').slice(0, 10)}</div>
+                      </div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        {_itemLocationLabel(item, isRu)} · {_sourceKindLabel(item.source_kind, isRu)}
+                      </div>
+                    </div>
+                  ))}
+                  {bulkNewsReview.items.length > 5 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+                      {isRu
+                        ? `И ещё ${bulkNewsReview.items.length - 5} элементов в этом массовом действии.`
+                        : `And ${bulkNewsReview.items.length - 5} more items in this bulk action.`}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    onClick={() => { void executeBulkNewsReview(); }}
+                    disabled={Boolean(bulkBusyAction)}
+                  >
+                    {bulkBusyAction === bulkNewsReview.busyAction
+                      ? (isRu ? 'Создаём новости...' : 'Creating news...')
+                      : (isRu ? 'Подтвердить и создать' : 'Confirm and create')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setBulkNewsReview(null)}
+                    disabled={Boolean(bulkBusyAction)}
+                  >
+                    {isRu ? 'Отменить' : 'Cancel'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="bg-slate-50"
+                    onClick={() => {
+                      if (bulkNewsReview.focusLocationKey && bulkNewsReview.focusWeekKey) {
+                        applyLocationWeekFocus(bulkNewsReview.focusLocationKey, bulkNewsReview.focusWeekKey);
+                      }
+                    }}
+                    disabled={!bulkNewsReview.focusLocationKey || !bulkNewsReview.focusWeekKey || Boolean(bulkBusyAction)}
+                  >
+                    {isRu ? 'Открыть срез перед созданием' : 'Open slice before creating'}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
             {actionSummary ? (
               <div
                 className={[
@@ -3097,15 +3182,6 @@ function _bulkResultDetails(failedThemes: string[], isRu: boolean): string[] {
   if (cleanThemes.length === 0) return [];
   const prefix = isRu ? 'Не обработано' : 'Not processed';
   return cleanThemes.map((theme) => `${prefix}: ${theme}`);
-}
-
-function _confirmBulkNewsCreation(count: number, isRu: boolean): boolean {
-  if (count <= 1 || typeof window === 'undefined') return true;
-  return window.confirm(
-    isRu
-      ? `Создать новости из выбранного среза? Будет создано до ${count} черновиков новостей.`
-      : `Create news from this slice? This will create up to ${count} news drafts.`,
-  );
 }
 
 function _learningCapabilityLabel(capability: string, isRu: boolean): string {
