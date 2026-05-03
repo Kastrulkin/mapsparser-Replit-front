@@ -183,6 +183,12 @@ type NetworkOperatingSlice = {
   recommendation: string;
 };
 
+type OperatorInsight = {
+  key: string;
+  textRu: string;
+  textEn: string;
+};
+
 const PERIOD_OPTIONS = [30, 60, 90];
 
 const DENSITY_OPTIONS = [
@@ -252,6 +258,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [lastFocusLocationKey, setLastFocusLocationKey] = useState('all');
   const [lastFocusWeekKey, setLastFocusWeekKey] = useState('all');
   const [showAdvancedControls, setShowAdvancedControls] = useState(false);
+  const [showPlanSetupDetails, setShowPlanSetupDetails] = useState(false);
+  const [showLearningDetails, setShowLearningDetails] = useState(false);
 
   const allowedHorizons = context?.subscription?.allowed_horizons || [30];
   const scopeOptions = context?.scope?.scope_options || [];
@@ -701,6 +709,55 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     repeatTemplateCandidate,
     selectedScopeOption,
     visibleItems.length,
+  ]);
+  const operatorQualityInsights = useMemo(() => {
+    const insights: OperatorInsight[] = [];
+    for (const item of learningMetrics?.quality_insights || []) {
+      const textRu = String(item.text_ru || '').trim();
+      const textEn = String(item.text_en || '').trim();
+      if (!textRu && !textEn) continue;
+      insights.push({
+        key: `metric:${item.kind}:${textRu}:${textEn}`,
+        textRu,
+        textEn,
+      });
+    }
+    const weakSlice = networkOperatingSlices.find((item) => Number(item.riskScore || 0) >= 35);
+    if (weakSlice) {
+      insights.push({
+        key: `network:${weakSlice.key}`,
+        textRu: `${weakSlice.label}: точка требует внимания. ${weakSlice.recommendation}`,
+        textEn: `${weakSlice.label}: this location needs attention. ${weakSlice.recommendation}`,
+      });
+    }
+    if (planOperationalSummary.needsDraft > 0) {
+      insights.push({
+        key: 'plan:no-draft',
+        textRu: `В плане ${planOperationalSummary.needsDraft} тем без текста. Начните с них, иначе план останется календарём идей, а не публикациями.`,
+        textEn: `${planOperationalSummary.needsDraft} plan items have no draft. Start there or the plan stays a calendar of ideas, not publications.`,
+      });
+    }
+    if (planOperationalSummary.readyToPublish > 0) {
+      insights.push({
+        key: 'plan:ready',
+        textRu: `${planOperationalSummary.readyToPublish} черновиков уже готовы к новости. Это самый быстрый путь к видимой активности в карточках.`,
+        textEn: `${planOperationalSummary.readyToPublish} drafts are ready to become news. This is the fastest path to visible listing activity.`,
+      });
+    }
+    if (Number(learningMetrics?.summary?.edited_before_accept_pct || 0) >= 35) {
+      insights.push({
+        key: 'quality:edited-before-accept',
+        textRu: 'Черновики часто правят перед публикацией. Значит генератору нужны более конкретные услуги, SEO-сценарии или примеры удачных тем.',
+        textEn: 'Drafts are often edited before publishing. The generator needs more concrete services, SEO scenarios, or examples of good topics.',
+      });
+    }
+    return insights.slice(0, 4);
+  }, [
+    learningMetrics?.quality_insights,
+    learningMetrics?.summary?.edited_before_accept_pct,
+    networkOperatingSlices,
+    planOperationalSummary.needsDraft,
+    planOperationalSummary.readyToPublish,
   ]);
 
   const loadPlans = async () => {
@@ -1618,42 +1675,46 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
               ) : null}
             </div>
 
-            <div className="space-y-2">
-              <div className="text-sm font-semibold text-slate-700">{isRu ? 'Плотность' : 'Density'}</div>
-              <Select value={selectedDensity} onValueChange={setSelectedDensity}>
-                <SelectTrigger className="rounded-xl border-slate-200">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DENSITY_OPTIONS.map((item) => (
-                    <SelectItem key={item.value} value={item.value}>
-                      {isRu ? item.labelRu : item.labelEn}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {showPlanSetupDetails ? (
+              <>
+                <div className="space-y-2">
+                  <div className="text-sm font-semibold text-slate-700">{isRu ? 'Плотность' : 'Density'}</div>
+                  <Select value={selectedDensity} onValueChange={setSelectedDensity}>
+                    <SelectTrigger className="rounded-xl border-slate-200">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DENSITY_OPTIONS.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {isRu ? item.labelRu : item.labelEn}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            <div className="space-y-2">
-              <div className="text-sm font-semibold text-slate-700">{isRu ? 'Что использовать' : 'Use signals from'}</div>
-              <div className="flex flex-wrap gap-2">
-                {CONTENT_MIX_OPTIONS.map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => toggleMix(item.key)}
-                    className={[
-                      'rounded-full border px-3 py-1.5 text-sm transition-colors',
-                      contentMix[item.key]
-                        ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
-                        : 'border-slate-200 bg-white text-slate-600',
-                    ].join(' ')}
-                  >
-                    {isRu ? item.labelRu : item.labelEn}
-                  </button>
-                ))}
-              </div>
-            </div>
+                <div className="space-y-2">
+                  <div className="text-sm font-semibold text-slate-700">{isRu ? 'Что использовать' : 'Use signals from'}</div>
+                  <div className="flex flex-wrap gap-2">
+                    {CONTENT_MIX_OPTIONS.map((item) => (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => toggleMix(item.key)}
+                        className={[
+                          'rounded-full border px-3 py-1.5 text-sm transition-colors',
+                          contentMix[item.key]
+                            ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                            : 'border-slate-200 bg-white text-slate-600',
+                        ].join(' ')}
+                      >
+                        {isRu ? item.labelRu : item.labelEn}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : null}
           </div>
 
           <div className="mt-5 flex flex-wrap items-center gap-3">
@@ -1667,6 +1728,15 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
               <Wand2 className="mr-2 h-4 w-4" />
               {isRu ? 'Обновить контекст' : 'Refresh context'}
             </Button>
+            <button
+              type="button"
+              onClick={() => setShowPlanSetupDetails((prev) => !prev)}
+              className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              {showPlanSetupDetails
+                ? (isRu ? 'Скрыть настройки' : 'Hide settings')
+                : (isRu ? 'Настроить источники' : 'Tune sources')}
+            </button>
           </div>
 
           {error ? (
@@ -1723,18 +1793,44 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         <div className="flex items-center justify-between gap-4">
           <div>
             <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
-              {isRu ? 'Learning loop' : 'Learning loop'}
+              {isRu ? 'Качество плана' : 'Plan quality'}
             </div>
             <div className="mt-1 text-lg font-semibold text-slate-950">
-              {isRu ? 'Как контент-план принимают в работу' : 'How the content plan gets accepted'}
+              {isRu ? 'Что система уже поняла по работе с темами' : 'What the system learned from topic work'}
             </div>
           </div>
-          <div className="text-xs text-slate-500">
+          <button
+            type="button"
+            onClick={() => setShowLearningDetails((prev) => !prev)}
+            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+          >
             {metricsLoading
               ? (isRu ? 'Обновляем...' : 'Refreshing...')
-              : `${learningMetrics?.window_days || 30} ${isRu ? 'дней' : 'days'}`}
-          </div>
+              : showLearningDetails
+                ? (isRu ? 'Скрыть метрики' : 'Hide metrics')
+                : `${isRu ? 'Показать метрики' : 'Show metrics'} · ${learningMetrics?.window_days || 30} ${isRu ? 'дней' : 'days'}`}
+          </button>
         </div>
+        {operatorQualityInsights.length > 0 ? (
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {operatorQualityInsights.map((item) => (
+              <div
+                key={item.key}
+                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700"
+              >
+                {isRu ? item.textRu : item.textEn}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
+            {isRu
+              ? 'Пока мало истории, чтобы делать выводы. После публикаций и правок здесь появятся подсказки по качеству тем.'
+              : 'There is not enough history yet. After edits and publications, quality guidance will appear here.'}
+          </div>
+        )}
+        {showLearningDetails ? (
+          <>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
             <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{isRu ? 'Сгенерировано' : 'Generated'}</div>
@@ -1907,6 +2003,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
               ))}
             </div>
           </div>
+        ) : null}
+          </>
         ) : null}
       </div>
 
@@ -2150,6 +2248,28 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           {bulkBusyAction === `focus-news:${slice.key}:${slice.focusWeekKey}`
                             ? (isRu ? 'Создаём...' : 'Creating...')
                             : `${isRu ? 'Создать новости' : 'Create news'} · ${slice.focusWeekReadyToPublish}`}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => { void runLocationWeekReschedule(slice.key, slice.focusWeekKey, 7); }}
+                          disabled={Boolean(bulkBusyAction) || slice.focusWeekKey === 'all' || slice.total === 0}
+                        >
+                          {bulkBusyAction === `focus-reschedule:${slice.key}:${slice.focusWeekKey}`
+                            ? (isRu ? 'Переносим...' : 'Rescheduling...')
+                            : (isRu ? 'Перенести неделю' : 'Move week')}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => { void runLocationWeekSkip(slice.key, slice.focusWeekKey); }}
+                          disabled={Boolean(bulkBusyAction) || slice.focusWeekKey === 'all' || slice.total === 0}
+                        >
+                          {bulkBusyAction === `focus-skip:${slice.key}:${slice.focusWeekKey}`
+                            ? (isRu ? 'Пропускаем...' : 'Skipping...')
+                            : (isRu ? 'Пропустить срез' : 'Skip slice')}
                         </Button>
                       </div>
                     </div>
