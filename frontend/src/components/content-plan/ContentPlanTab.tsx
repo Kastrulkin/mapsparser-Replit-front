@@ -299,6 +299,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [duplicateDateOverrides, setDuplicateDateOverrides] = useState<Record<string, string>>({});
   const [bulkNewsReview, setBulkNewsReview] = useState<BulkNewsReview | null>(null);
   const [bulkActionReview, setBulkActionReview] = useState<BulkActionReview | null>(null);
+  const [recentGeneratedItemId, setRecentGeneratedItemId] = useState('');
 
   const allowedHorizons = context?.subscription?.allowed_horizons || [30];
   const scopeOptions = context?.scope?.scope_options || [];
@@ -373,6 +374,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       .filter((item) => selectedWeekKey === 'all' || _weekBucketKey(item.scheduled_for) === selectedWeekKey)
       .slice()
       .sort((left, right) => {
+        if (recentGeneratedItemId) {
+          if (left.id === recentGeneratedItemId && right.id !== recentGeneratedItemId) return -1;
+          if (right.id === recentGeneratedItemId && left.id !== recentGeneratedItemId) return 1;
+        }
         if (sortMode === 'priority') {
           const priorityDiff = _itemPriorityRank(left) - _itemPriorityRank(right);
           if (priorityDiff !== 0) return priorityDiff;
@@ -381,7 +386,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         if (dateDiff !== 0) return dateDiff;
         return String(left.theme || '').localeCompare(String(right.theme || ''));
       })
-  ), [filteredItems, selectedWeekKey, sortMode]);
+  ), [filteredItems, recentGeneratedItemId, selectedWeekKey, sortMode]);
   const itemFilterCounts = useMemo(() => {
     const items = currentPlan?.items || [];
     return ITEM_FILTER_OPTIONS.reduce<Record<ItemFilterKey, number>>((acc, filterKey) => {
@@ -1074,6 +1079,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       });
       setCurrentPlan(response.plan || null);
       setDraftEdits((prev) => _removeRecordKeys(prev, [itemId]));
+      setRecentGeneratedItemId(itemId);
       await loadLearningMetrics();
       setActionSummary({
         tone: 'success',
@@ -3243,6 +3249,13 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       {item.location_label ? ` · ${_itemLocationLabel(item, isRu)}` : ''}
                     </div>
                   </div>
+                  {recentGeneratedItemId === item.id ? (
+                    <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
+                      {isRu
+                        ? 'Черновик только что сгенерирован и закреплён сверху, чтобы он не уехал вниз после сортировки.'
+                        : 'The draft was just generated and pinned here so it does not move after sorting.'}
+                    </div>
+                  ) : null}
                   <div className="mt-3 grid gap-3 lg:grid-cols-2">
                     <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700">
                       <div className="font-semibold text-slate-900">{isRu ? 'Почему эта тема' : 'Why this theme'}</div>

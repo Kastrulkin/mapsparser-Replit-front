@@ -17,6 +17,7 @@ from src.services.content_plan_service import (
     _network_location_targets_from_context,
     _json_ready,
     _resolve_scope_target_meta,
+    _sanitize_generated_news_text,
     _scope_context_business_ids,
     _select_context_seo_keywords,
     _scope_target_business_id,
@@ -194,6 +195,24 @@ def test_select_context_seo_keywords_prefers_sufficient_custom_set():
         "заправка рядом",
         "бензин 95",
     ]
+
+
+def test_sanitize_generated_news_text_extracts_json_and_removes_markup():
+    raw = '{"news":"🎉 **Что выбрать сейчас:**\\n\\nОсень – время перемен! #салон"}'
+
+    result = _sanitize_generated_news_text(raw)
+
+    assert result == "Что выбрать сейчас: Осень – время перемен!"
+    assert "{" not in result
+    assert "}" not in result
+    assert "**" not in result
+    assert "#" not in result
+
+
+def test_sanitize_generated_news_text_extracts_fenced_payload():
+    raw = '```json\n{"news":"Новая тема без технических символов"}\n```'
+
+    assert _sanitize_generated_news_text(raw) == "Новая тема без технических символов"
 
 
 def test_fetch_seo_keywords_isolated_returns_empty_list_when_optional_loader_fails(monkeypatch):

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import re
 import uuid
+import unicodedata
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -2194,6 +2196,51 @@ def _fallback_draft_text(business_name: str, item: dict[str, Any]) -> str:
     return " ".join(lines)
 
 
+def _sanitize_generated_news_text(raw_text: str) -> str:
+    text = str(raw_text or "").strip()
+    if not text:
+        return ""
+
+    fenced_match = re.search(r"```(?:json)?\s*(.*?)```", text, flags=re.IGNORECASE | re.DOTALL)
+    if fenced_match:
+        text = str(fenced_match.group(1) or "").strip()
+
+    payload_candidates = [text]
+    first_brace = text.find("{")
+    last_brace = text.rfind("}")
+    if first_brace >= 0 and last_brace > first_brace:
+        payload_candidates.append(text[first_brace:last_brace + 1])
+
+    for candidate in payload_candidates:
+        try:
+            parsed = json.loads(candidate)
+        except Exception:
+            continue
+        if isinstance(parsed, dict):
+            for key in ("news", "text", "content", "draft"):
+                value = str(parsed.get(key) or "").strip()
+                if value:
+                    text = value
+                    break
+        elif isinstance(parsed, str):
+            text = parsed.strip()
+        if text:
+            break
+
+    text = text.replace("\\n", "\n")
+    text = re.sub(r"[*_`]+", "", text)
+    text = re.sub(r"^\s*#+\s*", "", text, flags=re.MULTILINE)
+    text = re.sub(r"#[\wа-яА-ЯёЁ-]+", "", text)
+    text = text.replace("{", "").replace("}", "")
+    text = "".join(
+        char
+        for char in text
+        if unicodedata.category(char) not in {"So", "Sk"}
+    )
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
 def generate_draft_for_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()
@@ -2220,17 +2267,31 @@ def generate_draft_for_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
             cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
             if not bool(_row_get(cursor.fetchone(), "coalesce", 0, False)):
                 raise PermissionError("Нет доступа к элементу плана")
-        cursor.execute("SELECT name FROM businesses WHERE id = %s", (item.get("business_id"),))
-        business_name = str(_row_get(cursor.fetchone(), "name", 0, "Бизнес") or "Бизнес").strip() or "Бизнес"
+        cursor.execute("SELECT name, city, business_type FROM businesses WHERE id = %s", (item.get("business_id"),))
+        business_row = cursor.fetchone()
+        business_name = str(_row_get(business_row, "name", 0, "Бизнес") or "Бизнес").strip() or "Бизнес"
+        business_city = str(_row_get(business_row, "city", 1, "") or "").strip()
+        business_type = str(_row_get(business_row, "business_type", 2, "") or "").strip()
+        source_kind = str(item.get("source_kind") or "").strip()
         prompt = (
             "Ты — маркетолог локального бизнеса. Напиши короткую новость для публикации на картах. "
-            "До 900 символов, без хештегов, без выдуманных фактов, с понятным CTA.\n\n"
+            "До 700 символов, обычным русским текстом.\n\n"
+            "Жёсткие правила:\n"
+            "- не возвращай JSON, markdown, эмодзи, хештеги, фигурные скобки или технические символы;\n"
+            "- не выдумывай цены, скидки, акции, режим работы, бесплатные консультации, адрес, район, центр города;\n"
+            "- не выдумывай пол, возраст или тип аудитории, если этого нет в фактах;\n"
+            "- не используй сезонность, если источник идеи не seasonal;\n"
+            "- если данных мало, пиши нейтрально: что можно уточнить в карточке и как связаться.\n\n"
+            "Факты:\n"
             f"Бизнес: {business_name}\n"
+            f"Город: {business_city}\n"
+            f"Тип бизнеса: {business_type}\n"
             f"Тема: {str(item.get('theme') or '').strip()}\n"
             f"Цель: {str(item.get('goal') or '').strip()}\n"
-            f"Источник идеи: {str(item.get('source_kind') or '').strip()} / {str(item.get('source_ref') or '').strip()}\n"
-            f"SEO-запрос: {str(item.get('seo_keyword') or '').strip()}\n\n"
-            'Верни только JSON вида {"news":"..."}'
+            f"Источник идеи: {source_kind} / {str(item.get('source_ref') or '').strip()}\n"
+            f"SEO-запрос: {str(item.get('seo_keyword') or '').strip()}\n"
+            f"Дата генерации: {datetime.utcnow().date().isoformat()}\n\n"
+            "Верни только готовый текст новости."
         )
         try:
             result = analyze_text_with_gigachat(
@@ -2239,13 +2300,7 @@ def generate_draft_for_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
                 business_id=str(item.get("business_id") or ""),
                 user_id=user_id,
             )
-            generated_text = str(result or "").strip()
-            if generated_text.startswith("{"):
-                try:
-                    generated_payload = json.loads(generated_text)
-                    generated_text = str(generated_payload.get("news") or generated_payload.get("text") or "").strip()
-                except Exception:
-                    pass
+            generated_text = _sanitize_generated_news_text(str(result or ""))
             if not generated_text:
                 generated_text = _fallback_draft_text(business_name, item)
         except Exception:
