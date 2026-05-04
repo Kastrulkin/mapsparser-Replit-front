@@ -1073,6 +1073,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         method: 'POST',
       });
       setCurrentPlan(response.plan || null);
+      setDraftEdits((prev) => _removeRecordKeys(prev, [itemId]));
       await loadLearningMetrics();
       setActionSummary({
         tone: 'success',
@@ -1139,6 +1140,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       let generatedCount = 0;
       let failedCount = 0;
       const failedThemes: string[] = [];
+      const generatedIds: string[] = [];
       for (const item of bulkDraftCandidates) {
         try {
           const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}/generate-draft`, {
@@ -1147,10 +1149,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
           nextPlan = response.plan || null;
           setCurrentPlan(nextPlan);
           generatedCount += 1;
+          generatedIds.push(item.id);
         } catch {
           failedCount += 1;
           failedThemes.push(String(item.theme || item.goal || item.id || '').trim());
         }
+      }
+      if (generatedIds.length > 0) {
+        setDraftEdits((prev) => _removeRecordKeys(prev, generatedIds));
       }
       await loadLearningMetrics();
       setActionSummary({
@@ -1441,6 +1447,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       let generatedCount = 0;
       let failedCount = 0;
       const failedThemes: string[] = [];
+      const generatedIds: string[] = [];
       for (const item of focusCandidates) {
         try {
           const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}/generate-draft`, {
@@ -1449,10 +1456,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
           nextPlan = response.plan || null;
           setCurrentPlan(nextPlan);
           generatedCount += 1;
+          generatedIds.push(item.id);
         } catch {
           failedCount += 1;
           failedThemes.push(String(item.theme || item.goal || item.id || '').trim());
         }
+      }
+      if (generatedIds.length > 0) {
+        setDraftEdits((prev) => _removeRecordKeys(prev, generatedIds));
       }
       await loadLearningMetrics();
       const locationLabel = _locationLabelByKey(currentPlan?.items || [], locationKey, isRu);
@@ -3704,6 +3715,17 @@ function _inputDateValue(input: unknown): string {
   const normalized = String(input || '').slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return '';
   return normalized;
+}
+
+function _removeRecordKeys(source: Record<string, string>, keys: string[]): Record<string, string> {
+  const blocked = new Set(keys.map((item) => String(item || '').trim()).filter(Boolean));
+  const next: Record<string, string> = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (!blocked.has(key)) {
+      next[key] = value;
+    }
+  }
+  return next;
 }
 
 function _formatPlanItemDate(input: unknown, isRu: boolean): string {
