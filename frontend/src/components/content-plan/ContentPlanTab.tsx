@@ -307,6 +307,13 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const selectedScopeLabel = context?.scope?.selected_scope_label || '';
   const readiness = context?.readiness || null;
   const missingInputs = Array.isArray(readiness?.missing_inputs) ? readiness?.missing_inputs : [];
+  const mapLinksCount = Number(readiness?.map_links_count || 0);
+  const servicesCount = context?.services?.length || 0;
+  const seoKeywordsCount = context?.seo_keywords?.length || 0;
+  const networkLocationsCount = context?.scope?.network?.locations_count || 0;
+  const hasSearchFoundation = mapLinksCount > 0 && seoKeywordsCount > 0;
+  const hasOnlyServicesGap = missingInputs.length === 1 && missingInputs.includes('services');
+  const networkHasSearchPlanFoundation = isNetworkContext && hasSearchFoundation && hasOnlyServicesGap;
 
   const selectedScopeOption = useMemo(() => (
     scopeOptions.find((item) => `${item.scope_type}:${item.scope_target_id}` === selectedScopeKey) || null
@@ -803,8 +810,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (missingInputs.includes('services')) {
       insights.push({
         key: 'input:services',
-        textRu: 'Плану не хватает списка услуг. Добавьте услуги, чтобы новости были не общими, а привязанными к конкретному выбору клиента.',
-        textEn: 'The plan lacks a service list. Add services so news posts are tied to concrete customer choices.',
+        textRu: networkHasSearchPlanFoundation
+          ? 'Для сети уже есть карты и SEO-спрос. Следующее усиление — добавить меню, товары или ключевые услуги, чтобы публикации были не только поисковыми, но и коммерческими.'
+          : 'Плану не хватает списка услуг. Добавьте услуги, чтобы новости были не общими, а привязанными к конкретному выбору клиента.',
+        textEn: networkHasSearchPlanFoundation
+          ? 'The network already has map listings and SEO demand. The next upgrade is adding menu items, products, or key services so posts become commercial, not only search-driven.'
+          : 'The plan lacks a service list. Add services so news posts are tied to concrete customer choices.',
       });
     }
     if (!context?.sales_signals?.length) {
@@ -828,6 +839,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     learningMetrics?.summary?.skipped_total,
     learningMetrics?.summary?.edited_before_accept_pct,
     missingInputs,
+    networkHasSearchPlanFoundation,
     networkOperatingSlices,
     planOperationalSummary.needsDraft,
     planOperationalSummary.readyToPublish,
@@ -1817,14 +1829,32 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       ) : null}
 
       {readiness && !readiness.is_grounded_for_search ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-950">
+        <div
+          className={[
+            'rounded-2xl border px-5 py-4 text-sm',
+            networkHasSearchPlanFoundation
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
+              : 'border-amber-200 bg-amber-50 text-amber-950',
+          ].join(' ')}
+        >
           <div className="font-semibold">
-            {isRu ? 'План пока строится не на полном наборе данных' : 'The plan is not yet using the full data set'}
+            {networkHasSearchPlanFoundation
+              ? (isRu ? 'Сеть готова для поискового контент-плана' : 'The network is ready for a search-driven content plan')
+              : (isRu ? 'План пока строится не на полном наборе данных' : 'The plan is not yet using the full data set')}
           </div>
-          <div className="mt-1 leading-6 text-amber-900/90">
-            {isRu
-              ? 'Сейчас контент-план опирается в основном на аудит и сезонные поводы. Чтобы получить темы по реальному спросу, добавьте карту и услуги.'
-              : 'Right now the plan relies mostly on audit signals and seasonal prompts. Add a map listing and services to ground it in real demand.'}
+          <div
+            className={[
+              'mt-1 leading-6',
+              networkHasSearchPlanFoundation ? 'text-emerald-900/90' : 'text-amber-900/90',
+            ].join(' ')}
+          >
+            {networkHasSearchPlanFoundation
+              ? (isRu
+                ? `Есть ${mapLinksCount} ссылок на карты и ${seoKeywordsCount} SEO-ключей. Можно строить план по спросу; меню, товары или услуги добавят темам коммерческую конкретику.`
+                : `There are ${mapLinksCount} map listings and ${seoKeywordsCount} SEO keywords. You can build demand-driven posts now; menu items, products, or services will make topics more commercial.`)
+              : (isRu
+                ? 'Сейчас контент-план опирается в основном на аудит и сезонные поводы. Чтобы получить темы по реальному спросу, добавьте карту и услуги.'
+                : 'Right now the plan relies mostly on audit signals and seasonal prompts. Add a map listing and services to ground it in real demand.')}
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             {missingInputs.includes('map_links') ? (
@@ -1833,8 +1863,17 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
               </span>
             ) : null}
             {missingInputs.includes('services') ? (
-              <span className="rounded-full border border-amber-300 bg-white/80 px-3 py-1 text-xs font-medium text-amber-800">
-                {isRu ? 'Нет услуг в карточке' : 'No services yet'}
+              <span
+                className={[
+                  'rounded-full border bg-white/80 px-3 py-1 text-xs font-medium',
+                  networkHasSearchPlanFoundation
+                    ? 'border-emerald-300 text-emerald-800'
+                    : 'border-amber-300 text-amber-800',
+                ].join(' ')}
+              >
+                {isNetworkContext
+                  ? (isRu ? 'Нет меню, товаров или услуг' : 'No menu, products, or services yet')
+                  : (isRu ? 'Нет услуг в карточке' : 'No services yet')}
               </span>
             ) : null}
             {missingInputs.includes('seo_keywords') ? (
@@ -1858,10 +1897,17 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
               <Button
                 type="button"
                 variant="outline"
-                className="border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
+                className={[
+                  'bg-white',
+                  networkHasSearchPlanFoundation
+                    ? 'border-emerald-300 text-emerald-900 hover:bg-emerald-100'
+                    : 'border-amber-300 text-amber-900 hover:bg-amber-100',
+                ].join(' ')}
                 onClick={() => navigate('/dashboard/card?tab=services')}
               >
-                {isRu ? 'Добавить услуги' : 'Add services'}
+                {isNetworkContext
+                  ? (isRu ? 'Добавить меню/услуги' : 'Add menu/services')
+                  : (isRu ? 'Добавить услуги' : 'Add services')}
               </Button>
             ) : null}
           </div>
@@ -2024,10 +2070,17 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 {isRu ? 'Качество данных' : 'Data quality'}
               </div>
               <div className="mt-1 text-lg font-semibold text-slate-950">
-                {readiness?.is_grounded_for_search
+                {readiness?.is_grounded_for_search || networkHasSearchPlanFoundation
                   ? (isRu ? 'Данных достаточно для плана' : 'Enough data for planning')
                   : (isRu ? 'Плану не хватает источников' : 'The plan needs more inputs')}
               </div>
+              {networkHasSearchPlanFoundation ? (
+                <div className="mt-1 text-sm leading-6 text-slate-600">
+                  {isRu
+                    ? 'Для сети уже есть поисковый фундамент. Услуги и товары нужны как следующий слой конкретики.'
+                    : 'The network already has a search foundation. Services and products are the next layer of specificity.'}
+                </div>
+              ) : null}
             </div>
             <button
               type="button"
@@ -2039,15 +2092,15 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
           </div>
           <div className="mt-4 grid grid-cols-3 gap-2 text-sm text-slate-700">
             <div className="rounded-2xl bg-slate-50 px-3 py-3">
-              <div className="text-lg font-semibold text-slate-950">{readiness?.map_links_count || 0}</div>
-              <div className="text-xs text-slate-500">{isRu ? 'карты' : 'maps'}</div>
+              <div className="text-lg font-semibold text-slate-950">{mapLinksCount}</div>
+              <div className="text-xs text-slate-500">{isNetworkContext ? (isRu ? 'ссылок на карты' : 'map links') : (isRu ? 'карты' : 'maps')}</div>
             </div>
             <div className="rounded-2xl bg-slate-50 px-3 py-3">
-              <div className="text-lg font-semibold text-slate-950">{context?.services?.length || 0}</div>
-              <div className="text-xs text-slate-500">{isRu ? 'услуг' : 'services'}</div>
+              <div className="text-lg font-semibold text-slate-950">{servicesCount}</div>
+              <div className="text-xs text-slate-500">{isNetworkContext ? (isRu ? 'меню/услуг' : 'menu/services') : (isRu ? 'услуг' : 'services')}</div>
             </div>
             <div className="rounded-2xl bg-slate-50 px-3 py-3">
-              <div className="text-lg font-semibold text-slate-950">{context?.seo_keywords?.length || 0}</div>
+              <div className="text-lg font-semibold text-slate-950">{seoKeywordsCount}</div>
               <div className="text-xs text-slate-500">{isRu ? 'SEO' : 'SEO'}</div>
             </div>
           </div>
@@ -2058,22 +2111,22 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 <div className="font-semibold text-slate-900">{isRu ? 'Режим сети' : 'Network mode'}</div>
                 <div>
                   {context?.scope?.network?.has_parent_scope
-                    ? `${isRu ? 'Точек в сети' : 'Locations in network'}: ${context?.scope?.network?.locations_count || 0}`
+                    ? `${isRu ? 'Точек в сети' : 'Locations in network'}: ${networkLocationsCount}`
                     : (isRu ? 'План строится по текущему бизнесу.' : 'Planning uses the current business.')}
                 </div>
               </div>
             ) : null}
             <div>
               <div className="font-semibold text-slate-900">{isRu ? 'Ссылки на карты' : 'Map listings'}</div>
-              <div>{readiness?.map_links_count || 0}</div>
+              <div>{mapLinksCount}</div>
             </div>
             <div>
-              <div className="font-semibold text-slate-900">{isRu ? 'Услуги' : 'Services'}</div>
-              <div>{context?.services?.length || 0}</div>
+              <div className="font-semibold text-slate-900">{isNetworkContext ? (isRu ? 'Меню, товары или услуги' : 'Menu, products, or services') : (isRu ? 'Услуги' : 'Services')}</div>
+              <div>{servicesCount}</div>
             </div>
             <div>
               <div className="font-semibold text-slate-900">{isRu ? 'SEO-ключи' : 'SEO keywords'}</div>
-              <div>{context?.seo_keywords?.length || 0}</div>
+              <div>{seoKeywordsCount}</div>
             </div>
             <div>
               <div className="font-semibold text-slate-900">{isRu ? 'Продажи' : 'Sales signals'}</div>
