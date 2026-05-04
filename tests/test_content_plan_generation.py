@@ -13,9 +13,12 @@ from src.services.content_plan_service import (
     _fetch_audit_signals,
     _fetch_seo_keywords,
     _fetch_seo_keywords_isolated,
+    _merge_seo_keyword_lists,
     _network_location_targets_from_context,
     _json_ready,
     _resolve_scope_target_meta,
+    _scope_context_business_ids,
+    _select_context_seo_keywords,
     _scope_target_business_id,
 )
 
@@ -127,6 +130,70 @@ def test_scope_target_business_id_uses_parent_for_network_parent():
     assert _scope_target_business_id(None, "child-1", "network_parent", "parent-1") == "parent-1"
     assert _scope_target_business_id(None, "child-1", "network_location", "location-1") == "location-1"
     assert _scope_target_business_id(None, "child-1", "single_business", "parent-1") == "child-1"
+
+
+def test_scope_context_business_ids_expands_network_parent():
+    class FakeCursor:
+        def __init__(self):
+            self.params = None
+
+        def execute(self, query, params=None):
+            self.params = params
+
+        def fetchall(self):
+            return [
+                ("parent-1",),
+                ("loc-1",),
+                ("loc-2",),
+            ]
+
+    cursor = FakeCursor()
+
+    result = _scope_context_business_ids(
+        cursor,
+        {"id": "child-1", "network_id": "parent-1"},
+        "network_parent",
+        "parent-1",
+    )
+
+    assert cursor.params == ("parent-1", "parent-1")
+    assert result == ["parent-1", "loc-1", "loc-2"]
+
+
+def test_merge_seo_keyword_lists_deduplicates_primary_and_fallback():
+    result = _merge_seo_keyword_lists(
+        [{"keyword": "АЗС рядом", "views": 100, "category": "fuel"}],
+        [
+            {"keyword": "азс рядом", "views": 80, "category": "fuel"},
+            {"keyword": "заправка дизель", "views": 70, "category": "fuel"},
+        ],
+    )
+
+    assert result == [
+        {"keyword": "АЗС рядом", "views": 100, "category": "fuel"},
+        {"keyword": "заправка дизель", "views": 70, "category": "fuel"},
+    ]
+
+
+def test_select_context_seo_keywords_prefers_sufficient_custom_set():
+    result = _select_context_seo_keywords(
+        [{"keyword": "салон красоты рядом", "views": 10000, "category": "other"}],
+        [
+            {"keyword": "лукойл", "views": 12000, "category": "fuel"},
+            {"keyword": "лукойл азс", "views": 11000, "category": "fuel"},
+            {"keyword": "азс рядом", "views": 9800, "category": "fuel"},
+            {"keyword": "заправка рядом", "views": 9400, "category": "fuel"},
+            {"keyword": "бензин 95", "views": 7200, "category": "fuel"},
+        ],
+    )
+
+    assert [item["keyword"] for item in result] == [
+        "лукойл",
+        "лукойл азс",
+        "азс рядом",
+        "заправка рядом",
+        "бензин 95",
+    ]
 
 
 def test_fetch_seo_keywords_isolated_returns_empty_list_when_optional_loader_fails(monkeypatch):

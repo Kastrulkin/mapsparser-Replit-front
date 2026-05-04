@@ -1059,6 +1059,245 @@ def _build_scope_business_context(cursor: Any, business_row: dict[str, Any], sco
     return scope_business_row
 
 
+def _scope_context_business_ids(cursor: Any, business_row: dict[str, Any], scope_type: str, scope_target_id: str | None) -> list[str]:
+    normalized_scope = _normalize_scope_type(scope_type)
+    if normalized_scope != "network_parent":
+        scope_business_id = _scope_target_business_id(
+            cursor,
+            str(business_row.get("id") or ""),
+            normalized_scope,
+            scope_target_id,
+        )
+        return [scope_business_id] if scope_business_id else []
+
+    network_id = (
+        str(scope_target_id or "").strip()
+        or str(business_row.get("network_id") or "").strip()
+        or str(business_row.get("id") or "").strip()
+    )
+    if not network_id:
+        return []
+    try:
+        cursor.execute(
+            """
+            SELECT id
+            FROM businesses
+            WHERE network_id = %s OR id = %s
+            ORDER BY created_at ASC, name ASC
+            """,
+            (network_id, network_id),
+        )
+        rows = cursor.fetchall() or []
+    except Exception:
+        rows = []
+    ids: list[str] = []
+    for row in rows:
+        current_id = str(_row_get(row, "id", 0, "") or "").strip()
+        if current_id and current_id not in ids:
+            ids.append(current_id)
+    if network_id not in ids:
+        ids.insert(0, network_id)
+    return ids
+
+
+def _fetch_map_link_count_for_businesses(cursor: Any, business_ids: list[str]) -> int:
+    clean_ids = [str(item or "").strip() for item in business_ids if str(item or "").strip()]
+    if not clean_ids:
+        return 0
+    if len(clean_ids) == 1:
+        return _fetch_map_link_count(cursor, clean_ids[0])
+    try:
+        cursor.execute("SELECT to_regclass('public.businessmaplinks')")
+        row = cursor.fetchone()
+        if not _row_get(row, "to_regclass", 0, None):
+            return 0
+        cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM businessmaplinks
+            WHERE business_id = ANY(%s)
+            """,
+            (clean_ids,),
+        )
+        count_row = cursor.fetchone()
+        return int(_row_get(count_row, "count", 0, 0) or 0)
+    except Exception:
+        return 0
+
+
+def _fetch_services_for_businesses(cursor: Any, business_ids: list[str]) -> list[dict[str, Any]]:
+    clean_ids = [str(item or "").strip() for item in business_ids if str(item or "").strip()]
+    if not clean_ids:
+        return []
+    if len(clean_ids) == 1:
+        return _fetch_services(cursor, clean_ids[0])
+    try:
+        cursor.execute(
+            """
+            SELECT id, name, description, category, price
+            FROM userservices
+            WHERE business_id = ANY(%s)
+              AND (is_active IS TRUE OR is_active IS NULL)
+            ORDER BY updated_at DESC NULLS LAST, created_at DESC
+            LIMIT 300
+            """,
+            (clean_ids,),
+        )
+        rows = cursor.fetchall() or []
+    except Exception:
+        return []
+    return [
+        {
+            "id": str(_row_get(row, "id", 0, "") or "").strip(),
+            "name": str(_row_get(row, "name", 1, "") or "").strip(),
+            "description": str(_row_get(row, "description", 2, "") or "").strip(),
+            "category": str(_row_get(row, "category", 3, "") or "").strip(),
+            "price": str(_row_get(row, "price", 4, "") or "").strip(),
+        }
+        for row in rows
+        if str(_row_get(row, "name", 1, "") or "").strip()
+    ]
+
+
+def _fetch_recent_news_for_businesses(cursor: Any, user_id: str, business_ids: list[str]) -> list[dict[str, Any]]:
+    clean_ids = [str(item or "").strip() for item in business_ids if str(item or "").strip()]
+    if not clean_ids:
+        return []
+    if len(clean_ids) == 1:
+        return _fetch_recent_news(cursor, user_id, clean_ids[0])
+    has_business_id = _table_has_column(cursor, "usernews", "business_id")
+    if not has_business_id:
+        return _fetch_recent_news(cursor, user_id, clean_ids[0])
+    try:
+        cursor.execute(
+            """
+            SELECT id, generated_text, approved, created_at
+            FROM usernews
+            WHERE user_id = %s AND business_id = ANY(%s)
+            ORDER BY created_at DESC
+            LIMIT 20
+            """,
+            (user_id, clean_ids),
+        )
+        rows = cursor.fetchall() or []
+    except Exception:
+        return []
+    return [
+        {
+            "id": str(_row_get(row, "id", 0, "") or "").strip(),
+            "text": str(_row_get(row, "generated_text", 1, "") or "").strip(),
+            "approved": bool(_row_get(row, "approved", 2, False)),
+            "created_at": _row_get(row, "created_at", 3),
+        }
+        for row in rows
+        if str(_row_get(row, "generated_text", 1, "") or "").strip()
+    ]
+
+
+def _fetch_sales_signals_for_businesses(cursor: Any, user_id: str, business_ids: list[str]) -> list[dict[str, Any]]:
+    clean_ids = [str(item or "").strip() for item in business_ids if str(item or "").strip()]
+    if not clean_ids:
+        return []
+    if len(clean_ids) == 1:
+        return _fetch_sales_signals(cursor, user_id, clean_ids[0])
+    try:
+        cursor.execute(
+            """
+            SELECT id, transaction_date, amount, services, notes
+            FROM financialtransactions
+            WHERE user_id = %s AND business_id = ANY(%s)
+            ORDER BY transaction_date DESC NULLS LAST, created_at DESC
+            LIMIT 20
+            """,
+            (user_id, clean_ids),
+        )
+        rows = cursor.fetchall() or []
+    except Exception:
+        return []
+    signals = []
+    for row in rows:
+        services_raw = _row_get(row, "services", 3, None)
+        services_list = []
+        if services_raw:
+            try:
+                parsed = json.loads(services_raw) if isinstance(services_raw, str) else services_raw
+                if isinstance(parsed, list):
+                    services_list = [str(item).strip() for item in parsed if str(item).strip()]
+            except Exception:
+                services_list = []
+        title = ", ".join(services_list[:3]) if services_list else str(_row_get(row, "notes", 4, "") or "").strip()
+        if not title:
+            title = f"Продажа на {_row_get(row, 'transaction_date', 1, '')}"
+        signals.append(
+            {
+                "transaction_id": str(_row_get(row, "id", 0, "") or "").strip(),
+                "title": title,
+                "amount": float(_row_get(row, "amount", 2, 0) or 0),
+                "transaction_date": _row_get(row, "transaction_date", 1),
+            }
+        )
+    return signals
+
+
+def _fetch_custom_seo_keywords_for_businesses(cursor: Any, business_ids: list[str], limit: int = 20) -> list[dict[str, Any]]:
+    clean_ids = [str(item or "").strip() for item in business_ids if str(item or "").strip()]
+    if not clean_ids:
+        return []
+    try:
+        cursor.execute("SELECT to_regclass('public.wordstatkeywordscustom')")
+        row = cursor.fetchone()
+        if not _row_get(row, "to_regclass", 0, None):
+            return []
+        cursor.execute(
+            """
+            SELECT keyword, views, category
+            FROM wordstatkeywordscustom
+            WHERE business_id = ANY(%s)
+            ORDER BY views DESC, updated_at DESC
+            LIMIT %s
+            """,
+            (clean_ids, max(1, int(limit or 20))),
+        )
+        rows = cursor.fetchall() or []
+    except Exception:
+        return []
+    return [
+        {
+            "keyword": str(_row_get(row, "keyword", 0, "") or "").strip(),
+            "views": int(_row_get(row, "views", 1, 0) or 0),
+            "category": str(_row_get(row, "category", 2, "") or "").strip(),
+        }
+        for row in rows
+        if str(_row_get(row, "keyword", 0, "") or "").strip()
+    ]
+
+
+def _merge_seo_keyword_lists(primary: list[dict[str, Any]], fallback: list[dict[str, Any]], limit: int = 20) -> list[dict[str, Any]]:
+    merged: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for source in (primary, fallback):
+        for item in source:
+            keyword = str(item.get("keyword") or "").strip()
+            key = keyword.lower()
+            if not keyword or key in seen:
+                continue
+            seen.add(key)
+            merged.append(item)
+            if len(merged) >= limit:
+                return merged
+    return merged
+
+
+def _select_context_seo_keywords(
+    ranked_keywords: list[dict[str, Any]],
+    custom_keywords: list[dict[str, Any]],
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    if len(custom_keywords) >= 5:
+        return _merge_seo_keyword_lists(custom_keywords, [], limit=limit)
+    return _merge_seo_keyword_lists(ranked_keywords, custom_keywords, limit=limit)
+
+
 def load_plan_context_for_business(user_id: str, business_id: str, scope_type: str, scope_target_id: str | None = None) -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()
@@ -1097,11 +1336,18 @@ def load_plan_context_for_business(user_id: str, business_id: str, scope_type: s
         )
         scope_business_row = _build_scope_business_context(cursor, business_row, normalized_scope, target_id)
         scope_business_id = str(scope_business_row.get("id") or business_id)
-        map_links_count = _fetch_map_link_count(cursor, scope_business_id)
-        services = _fetch_services(cursor, scope_business_id)
-        seo_keywords = _fetch_seo_keywords_isolated(user_id, scope_business_id)
-        sales_signals = _fetch_sales_signals(cursor, user_id, scope_business_id)
-        recent_news = _fetch_recent_news(cursor, user_id, scope_business_id)
+        context_business_ids = _scope_context_business_ids(cursor, business_row, normalized_scope, target_id)
+        if not context_business_ids:
+            context_business_ids = [scope_business_id]
+        map_links_count = _fetch_map_link_count_for_businesses(cursor, context_business_ids)
+        services = _fetch_services_for_businesses(cursor, context_business_ids)
+        custom_seo_keywords = _fetch_custom_seo_keywords_for_businesses(cursor, context_business_ids)
+        seo_keywords = _select_context_seo_keywords(
+            _fetch_seo_keywords_isolated(user_id, scope_business_id),
+            custom_seo_keywords,
+        )
+        sales_signals = _fetch_sales_signals_for_businesses(cursor, user_id, context_business_ids)
+        recent_news = _fetch_recent_news_for_businesses(cursor, user_id, context_business_ids)
         audit_signals = _fetch_audit_signals(scope_business_id)
         learning_feedback = _load_content_plan_learning_feedback(cursor, business_id)
         readiness = _build_planning_readiness(
