@@ -300,6 +300,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [bulkNewsReview, setBulkNewsReview] = useState<BulkNewsReview | null>(null);
   const [bulkActionReview, setBulkActionReview] = useState<BulkActionReview | null>(null);
   const [recentGeneratedItemId, setRecentGeneratedItemId] = useState('');
+  const [activeStage, setActiveStage] = useState<'build' | 'work'>('build');
+  const [selectedQueueItemId, setSelectedQueueItemId] = useState('');
+  const [showSelectedItemDetails, setShowSelectedItemDetails] = useState(false);
 
   const allowedHorizons = context?.subscription?.allowed_horizons || [30];
   const scopeOptions = context?.scope?.scope_options || [];
@@ -387,6 +390,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         return String(left.theme || '').localeCompare(String(right.theme || ''));
       })
   ), [filteredItems, recentGeneratedItemId, selectedWeekKey, sortMode]);
+  const selectedQueueItem = useMemo(() => (
+    visibleItems.find((item) => item.id === selectedQueueItemId) || visibleItems[0] || null
+  ), [selectedQueueItemId, visibleItems]);
   const itemFilterCounts = useMemo(() => {
     const items = currentPlan?.items || [];
     return ITEM_FILTER_OPTIONS.reduce<Record<ItemFilterKey, number>>((acc, filterKey) => {
@@ -941,6 +947,15 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   }, [availableWeeks, selectedWeekKey]);
 
   useEffect(() => {
+    if (visibleItems.length === 0) {
+      if (selectedQueueItemId) setSelectedQueueItemId('');
+      return;
+    }
+    if (selectedQueueItemId && visibleItems.some((item) => item.id === selectedQueueItemId)) return;
+    setSelectedQueueItemId(visibleItems[0].id);
+  }, [selectedQueueItemId, visibleItems]);
+
+  useEffect(() => {
     if (!businessId) return;
     const stored = _readStoredPreferences(businessId);
     if (!stored) return;
@@ -1049,6 +1064,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         }),
       });
       setCurrentPlan(response.plan || null);
+      setActiveStage('work');
       await loadPlans();
       await loadLearningMetrics();
     } catch (generationError) {
@@ -1834,6 +1850,55 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         </div>
       </div>
 
+      <div className="rounded-[28px] border border-slate-200 bg-white p-2 shadow-sm">
+        <div className="grid gap-2 md:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => setActiveStage('build')}
+            className={[
+              'rounded-3xl px-5 py-4 text-left transition-colors',
+              activeStage === 'build'
+                ? 'bg-slate-950 text-white shadow-sm'
+                : 'bg-transparent text-slate-600 hover:bg-slate-50',
+            ].join(' ')}
+          >
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] opacity-70">
+              {isRu ? 'Этап 1' : 'Step 1'}
+            </div>
+            <div className="mt-1 text-lg font-semibold">{isRu ? 'Собрать план' : 'Build plan'}</div>
+            <div className={['mt-1 text-sm leading-6', activeStage === 'build' ? 'text-slate-300' : 'text-slate-500'].join(' ')}>
+              {isRu ? 'Точка или сеть, горизонт, плотность и источники.' : 'Scope, horizon, density, and data sources.'}
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveStage('work')}
+            className={[
+              'rounded-3xl px-5 py-4 text-left transition-colors',
+              activeStage === 'work'
+                ? 'bg-slate-950 text-white shadow-sm'
+                : 'bg-transparent text-slate-600 hover:bg-slate-50',
+            ].join(' ')}
+          >
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] opacity-70">
+              {isRu ? 'Этап 2' : 'Step 2'}
+            </div>
+            <div className="mt-1 flex items-center gap-2 text-lg font-semibold">
+              {isRu ? 'Рабочая очередь' : 'Work queue'}
+              {currentPlan?.items?.length ? (
+                <span className={['rounded-full px-2.5 py-1 text-xs', activeStage === 'work' ? 'bg-white/10 text-white' : 'bg-slate-100 text-slate-600'].join(' ')}>
+                  {currentPlan.items.length}
+                </span>
+              ) : null}
+            </div>
+            <div className={['mt-1 text-sm leading-6', activeStage === 'work' ? 'text-slate-300' : 'text-slate-500'].join(' ')}>
+              {isRu ? 'Одна выбранная тема, быстрые действия и массовые операции.' : 'One selected topic, quick actions, and bulk operations.'}
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <div className={activeStage === 'build' ? 'space-y-6' : 'hidden'}>
       {selectedScopeDescription ? (
         <div className="rounded-2xl border border-indigo-100 bg-indigo-50/70 px-5 py-4 text-sm text-indigo-950">
           <div className="font-semibold">
@@ -2381,7 +2446,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         ) : null}
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      </div>
+
+      <div className={activeStage === 'work' ? 'rounded-2xl border border-slate-200 bg-white p-5 shadow-sm' : 'hidden'}>
         <div className="flex items-center justify-between gap-4">
           <div>
             <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -3206,207 +3273,319 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   : `${isRu ? 'Создать новости по выборке' : 'Create news for filtered'} · ${bulkNewsCandidates.length}`}
               </Button>
             </div>
-            {visibleItems.map((item) => {
-              const currentDraft = draftEdits[item.id] !== undefined ? draftEdits[item.id] : item.draft_text;
-              const currentTheme = themeEdits[item.id] !== undefined ? themeEdits[item.id] : item.theme;
-              const currentDate = dateEdits[item.id] !== undefined ? dateEdits[item.id] : item.scheduled_for;
-              const currentInputDate = _inputDateValue(currentDate);
-              const duplicateTargetOptions = getDuplicateTargetLocationOptions(item);
-              const selectedDuplicateTargets = duplicateTargetSelections[item.id] || [];
-              const duplicateTargetDate = duplicateDateOverrides[item.id] || currentInputDate;
-              return (
-                <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="grid flex-1 gap-3 md:grid-cols-[180px_1fr]">
-                      <div className="space-y-2">
-                        <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                          {isRu ? 'Дата' : 'Date'}
-                        </div>
-                        <Input
-                          type="date"
-                          value={currentInputDate}
-                          onChange={(event) => setDateEdits((prev) => ({ ...prev, [item.id]: event.target.value }))}
-                        />
-                        {!currentInputDate ? (
-                          <div className="text-xs leading-5 text-amber-700">
-                            {isRu ? 'Назначьте дату публикации' : 'Set a publication date'}
+            {visibleItems.length > 0 ? (
+              <div className="grid gap-4 xl:grid-cols-[minmax(280px,0.75fr)_minmax(0,1.35fr)]">
+                <div className="rounded-[28px] border border-slate-200 bg-slate-50 p-3">
+                  <div className="px-2 pb-3">
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      {isRu ? 'Очередь тем' : 'Topic queue'}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-600">
+                      {isRu ? 'Выберите одну тему для работы справа.' : 'Select one item to work on at the right.'}
+                    </div>
+                  </div>
+                  <div className="max-h-[680px] space-y-2 overflow-y-auto pr-1">
+                    {visibleItems.map((item) => {
+                      const status = _planItemStatus(item, isRu);
+                      const isSelected = selectedQueueItem?.id === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedQueueItemId(item.id);
+                            setShowSelectedItemDetails(false);
+                          }}
+                          className={[
+                            'w-full rounded-2xl border px-4 py-3 text-left transition-colors',
+                            isSelected
+                              ? 'border-slate-950 bg-white shadow-sm'
+                              : 'border-transparent bg-white/70 hover:border-slate-200 hover:bg-white',
+                          ].join(' ')}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <span className={status.className}>{status.label}</span>
+                            <span className="shrink-0 text-xs font-medium text-slate-400">
+                              {_formatPlanItemDate(item.scheduled_for, isRu)}
+                            </span>
                           </div>
-                        ) : null}
-                      </div>
-                      <div className="space-y-2">
-                        <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                          {isRu ? 'Тема' : 'Theme'}
-                        </div>
-                        <Input
-                          value={currentTheme}
-                          onChange={(event) => setThemeEdits((prev) => ({ ...prev, [item.id]: event.target.value }))}
-                        />
-                      </div>
-                    </div>
-                    <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
-                      {_contentTypeLabel(item.content_type, isRu)}
-                      {item.location_scope ? ` · ${_locationScopeLabel(currentPlan?.scope_type || '', isRu)}` : ''}
-                      {item.location_label ? ` · ${_itemLocationLabel(item, isRu)}` : ''}
-                    </div>
+                          <div className="mt-2 line-clamp-2 text-sm font-semibold leading-5 text-slate-950">
+                            {_humanizePlanTitle(item, isRu)}
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-slate-500">
+                            <span>{_contentTypeLabel(item.content_type, isRu)}</span>
+                            <span>·</span>
+                            <span>{_sourceKindLabel(item.source_kind, isRu)}</span>
+                            {item.location_label ? (
+                              <>
+                                <span>·</span>
+                                <span className="line-clamp-1">{_itemLocationLabel(item, isRu)}</span>
+                              </>
+                            ) : null}
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
-                  {recentGeneratedItemId === item.id ? (
-                    <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
-                      {isRu
-                        ? 'Черновик только что сгенерирован и закреплён сверху, чтобы он не уехал вниз после сортировки.'
-                        : 'The draft was just generated and pinned here so it does not move after sorting.'}
-                    </div>
-                  ) : null}
-                  <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700">
-                      <div className="font-semibold text-slate-900">{isRu ? 'Почему эта тема' : 'Why this theme'}</div>
-                      <div className="mt-2">{item.goal || '—'}</div>
-                      <div className="mt-2 text-xs text-slate-500">
-                        <MapPinned className="mr-1 inline h-3.5 w-3.5" />
-                        {_sourceKindLabel(item.source_kind, isRu)} {item.source_ref ? `· ${item.source_ref}` : ''}
-                        {item.seo_keyword ? ` · SEO: ${item.seo_keyword}` : ''}
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                        {isRu ? 'Черновик' : 'Draft'}
-                      </div>
-                      <Textarea
-                        rows={4}
-                        value={currentDraft}
-                        onChange={(event) => setDraftEdits((prev) => ({ ...prev, [item.id]: event.target.value }))}
-                        placeholder={isRu ? 'Здесь появится текст публикации' : 'Draft text will appear here'}
-                      />
-                    </div>
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => generateDraft(item.id)}
-                      disabled={busyItemId === item.id}
-                    >
-                      <Sparkles className="mr-2 h-4 w-4" />
-                      {isRu ? 'Сгенерировать текст' : 'Generate draft'}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => saveItem(item.id)}
-                      disabled={busyItemId === item.id}
-                    >
-                      {isRu ? 'Сохранить' : 'Save'}
-                    </Button>
-                    <Button
-                      onClick={() => createNews(item.id)}
-                      disabled={busyItemId === item.id || !currentDraft.trim()}
-                    >
-                      {item.usernews_id
-                        ? (isRu ? 'Новость уже создана' : 'News already created')
-                        : (isRu ? 'Создать новость' : 'Create news')}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => runItemReschedule(item.id, currentDate, 7)}
-                      disabled={busyItemId === item.id}
-                    >
-                      {isRu ? '+7 дней' : '+7 days'}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => runItemDuplicate(item.id)}
-                      disabled={busyItemId === item.id}
-                    >
-                      {isRu ? 'Дублировать' : 'Duplicate'}
-                    </Button>
-                    {availableItemLocations.length > 2 ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => openDuplicateTargetPicker(item)}
-                        disabled={busyItemId === item.id || !String(currentDraft || item.usernews_id || '').trim()}
-                      >
-                        {isRu ? 'Выбрать точки' : 'Choose locations'}
-                      </Button>
-                    ) : null}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => runItemSkip(item.id)}
-                      disabled={busyItemId === item.id}
-                    >
-                      {isRu ? 'Пропустить' : 'Skip'}
-                    </Button>
-                  </div>
-                  {expandedDuplicateItemId === item.id ? (
-                    <div className="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-4">
-                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                </div>
+
+                {selectedQueueItem ? (() => {
+                  const item = selectedQueueItem;
+                  const currentDraft = draftEdits[item.id] !== undefined ? draftEdits[item.id] : item.draft_text;
+                  const currentTheme = themeEdits[item.id] !== undefined ? themeEdits[item.id] : item.theme;
+                  const currentDate = dateEdits[item.id] !== undefined ? dateEdits[item.id] : item.scheduled_for;
+                  const currentInputDate = _inputDateValue(currentDate);
+                  const duplicateTargetOptions = getDuplicateTargetLocationOptions(item);
+                  const selectedDuplicateTargets = duplicateTargetSelections[item.id] || [];
+                  const duplicateTargetDate = duplicateDateOverrides[item.id] || currentInputDate;
+                  const status = _planItemStatus(item, isRu);
+                  const hasDraft = Boolean(String(currentDraft || '').trim());
+                  const hasNews = Boolean(String(item.usernews_id || '').trim());
+                  return (
+                    <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <div>
-                          <div className="text-sm font-semibold text-slate-950">
-                            {isRu ? 'Дублировать удачную тему на выбранные точки' : 'Duplicate this winning topic to selected locations'}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={status.className}>{status.label}</span>
+                            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                              {_contentTypeLabel(item.content_type, isRu)}
+                            </span>
+                            {item.location_label ? (
+                              <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-800">
+                                {_itemLocationLabel(item, isRu)}
+                              </span>
+                            ) : null}
                           </div>
-                          <div className="mt-1 text-sm leading-6 text-slate-600">
-                            {isRu
-                              ? 'Выберите только те точки, где эта тема действительно уместна. Черновик и дата будут скопированы.'
-                              : 'Pick only locations where this topic fits. The draft and date will be copied.'}
+                          <h5 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">
+                            {_humanizePlanTitle(item, isRu)}
+                          </h5>
+                          {recentGeneratedItemId === item.id ? (
+                            <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+                              {isRu
+                                ? 'Черновик сгенерирован именно для этой темы.'
+                                : 'The draft was generated for this selected item.'}
+                            </div>
+                          ) : null}
+                        </div>
+                        <div className="grid min-w-[180px] grid-cols-2 gap-2 text-center text-xs text-slate-500">
+                          <div className="rounded-2xl bg-slate-50 px-3 py-3">
+                            <div className="text-sm font-semibold text-slate-950">{_formatPlanItemDate(currentDate, isRu)}</div>
+                            <div>{isRu ? 'дата' : 'date'}</div>
+                          </div>
+                          <div className="rounded-2xl bg-slate-50 px-3 py-3">
+                            <div className="text-sm font-semibold text-slate-950">{_sourceKindLabel(item.source_kind, isRu)}</div>
+                            <div>{isRu ? 'сигнал' : 'signal'}</div>
                           </div>
                         </div>
-                        <Input
-                          type="date"
-                          value={duplicateTargetDate}
-                          onChange={(event) => setDuplicateDateOverrides((prev) => ({ ...prev, [item.id]: event.target.value }))}
-                          className="h-9 max-w-[180px]"
-                          aria-label={isRu ? 'Дата дублирования темы' : 'Duplicate target date'}
+                      </div>
+
+                      <div className="mt-6 grid gap-4 lg:grid-cols-[180px_1fr]">
+                        <div className="space-y-2">
+                          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                            {isRu ? 'Дата' : 'Date'}
+                          </div>
+                          <Input
+                            type="date"
+                            value={currentInputDate}
+                            onChange={(event) => setDateEdits((prev) => ({ ...prev, [item.id]: event.target.value }))}
+                          />
+                          {!currentInputDate ? (
+                            <div className="text-xs leading-5 text-amber-700">
+                              {isRu ? 'Назначьте дату публикации' : 'Set a publication date'}
+                            </div>
+                          ) : null}
+                        </div>
+                        <div className="space-y-2">
+                          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                            {isRu ? 'Тема' : 'Theme'}
+                          </div>
+                          <Input
+                            value={currentTheme}
+                            onChange={(event) => setThemeEdits((prev) => ({ ...prev, [item.id]: event.target.value }))}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="mt-5 space-y-2">
+                        <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                          {isRu ? 'Черновик' : 'Draft'}
+                        </div>
+                        <Textarea
+                          rows={8}
+                          value={currentDraft}
+                          onChange={(event) => setDraftEdits((prev) => ({ ...prev, [item.id]: event.target.value }))}
+                          placeholder={isRu ? 'Здесь появится текст публикации' : 'Draft text will appear here'}
                         />
                       </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {duplicateTargetOptions.map((location) => (
-                          <button
-                            key={location.key}
-                            type="button"
-                            onClick={() => toggleDuplicateTargetLocation(item.id, location.key)}
-                            className={[
-                              'rounded-full border px-3 py-1.5 text-sm transition-colors',
-                              selectedDuplicateTargets.includes(location.key)
-                                ? 'border-sky-300 bg-sky-50 text-sky-800'
-                                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
-                            ].join(' ')}
-                          >
-                            {location.label}
-                          </button>
-                        ))}
-                      </div>
+
                       <div className="mt-4 flex flex-wrap gap-2">
+                        {!hasDraft ? (
+                          <Button
+                            onClick={() => generateDraft(item.id)}
+                            disabled={busyItemId === item.id}
+                          >
+                            <Sparkles className="mr-2 h-4 w-4" />
+                            {isRu ? 'Сгенерировать текст' : 'Generate draft'}
+                          </Button>
+                        ) : (
+                          <Button
+                            onClick={() => createNews(item.id)}
+                            disabled={busyItemId === item.id || !String(currentDraft || '').trim() || hasNews}
+                          >
+                            {hasNews
+                              ? (isRu ? 'Новость создана' : 'News created')
+                              : (isRu ? 'Создать новость' : 'Create news')}
+                          </Button>
+                        )}
+                        <Button
+                          variant="outline"
+                          onClick={() => saveItem(item.id)}
+                          disabled={busyItemId === item.id}
+                        >
+                          {isRu ? 'Сохранить' : 'Save'}
+                        </Button>
+                        {hasDraft ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => generateDraft(item.id)}
+                            disabled={busyItemId === item.id}
+                          >
+                            <Sparkles className="mr-2 h-4 w-4" />
+                            {isRu ? 'Перегенерировать' : 'Regenerate'}
+                          </Button>
+                        ) : null}
                         <Button
                           type="button"
-                          size="sm"
-                          onClick={() => { void runItemDuplicateToSelectedLocations(item); }}
-                          disabled={busyItemId === item.id || selectedDuplicateTargets.length === 0}
+                          variant="outline"
+                          onClick={() => runItemReschedule(item.id, currentDate, 7)}
+                          disabled={busyItemId === item.id}
                         >
-                          {isRu ? `Дублировать · ${selectedDuplicateTargets.length}` : `Duplicate · ${selectedDuplicateTargets.length}`}
+                          {isRu ? '+7 дней' : '+7 days'}
                         </Button>
                         <Button
                           type="button"
                           variant="outline"
-                          size="sm"
-                          onClick={() => setExpandedDuplicateItemId('')}
+                          onClick={() => runItemDuplicate(item.id)}
+                          disabled={busyItemId === item.id}
                         >
-                          {isRu ? 'Отмена' : 'Cancel'}
+                          {isRu ? 'Дублировать' : 'Duplicate'}
                         </Button>
+                        {availableItemLocations.length > 2 ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => openDuplicateTargetPicker(item)}
+                            disabled={busyItemId === item.id || !String(currentDraft || item.usernews_id || '').trim()}
+                          >
+                            {isRu ? 'Выбрать точки' : 'Choose locations'}
+                          </Button>
+                        ) : null}
                         <Button
                           type="button"
                           variant="ghost"
-                          size="sm"
-                          onClick={() => { void runItemDuplicateToOtherLocations(item); }}
-                          disabled={busyItemId === item.id || duplicateTargetOptions.length === 0}
+                          onClick={() => runItemSkip(item.id)}
+                          disabled={busyItemId === item.id}
                         >
-                          {isRu ? 'На все остальные' : 'All other locations'}
+                          {isRu ? 'Пропустить' : 'Skip'}
                         </Button>
                       </div>
+
+                      <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <button
+                          type="button"
+                          onClick={() => setShowSelectedItemDetails((prev) => !prev)}
+                          className="flex w-full items-center justify-between gap-3 text-left text-sm font-semibold text-slate-900"
+                        >
+                          <span>{isRu ? 'Почему эта тема и откуда сигнал' : 'Why this topic and signal source'}</span>
+                          <span className="text-xs font-medium text-slate-500">
+                            {showSelectedItemDetails ? (isRu ? 'Скрыть' : 'Hide') : (isRu ? 'Показать' : 'Show')}
+                          </span>
+                        </button>
+                        {showSelectedItemDetails ? (
+                          <div className="mt-3 text-sm leading-6 text-slate-700">
+                            <div>{_humanizePlanGoal(item, isRu)}</div>
+                            <div className="mt-2 text-xs text-slate-500">
+                              <MapPinned className="mr-1 inline h-3.5 w-3.5" />
+                              {_sourceKindLabel(item.source_kind, isRu)} {item.source_ref ? `· ${item.source_ref}` : ''}
+                              {item.seo_keyword ? ` · SEO: ${item.seo_keyword}` : ''}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      {expandedDuplicateItemId === item.id ? (
+                        <div className="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                            <div>
+                              <div className="text-sm font-semibold text-slate-950">
+                                {isRu ? 'Дублировать удачную тему на выбранные точки' : 'Duplicate this winning topic to selected locations'}
+                              </div>
+                              <div className="mt-1 text-sm leading-6 text-slate-600">
+                                {isRu
+                                  ? 'Выберите только те точки, где эта тема действительно уместна. Черновик и дата будут скопированы.'
+                                  : 'Pick only locations where this topic fits. The draft and date will be copied.'}
+                              </div>
+                            </div>
+                            <Input
+                              type="date"
+                              value={duplicateTargetDate}
+                              onChange={(event) => setDuplicateDateOverrides((prev) => ({ ...prev, [item.id]: event.target.value }))}
+                              className="h-9 max-w-[180px]"
+                              aria-label={isRu ? 'Дата дублирования темы' : 'Duplicate target date'}
+                            />
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {duplicateTargetOptions.map((location) => (
+                              <button
+                                key={location.key}
+                                type="button"
+                                onClick={() => toggleDuplicateTargetLocation(item.id, location.key)}
+                                className={[
+                                  'rounded-full border px-3 py-1.5 text-sm transition-colors',
+                                  selectedDuplicateTargets.includes(location.key)
+                                    ? 'border-sky-300 bg-sky-50 text-sky-800'
+                                    : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
+                                ].join(' ')}
+                              >
+                                {location.label}
+                              </button>
+                            ))}
+                          </div>
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => { void runItemDuplicateToSelectedLocations(item); }}
+                              disabled={busyItemId === item.id || selectedDuplicateTargets.length === 0}
+                            >
+                              {isRu ? `Дублировать · ${selectedDuplicateTargets.length}` : `Duplicate · ${selectedDuplicateTargets.length}`}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setExpandedDuplicateItemId('')}
+                            >
+                              {isRu ? 'Отмена' : 'Cancel'}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => { void runItemDuplicateToOtherLocations(item); }}
+                              disabled={busyItemId === item.id || duplicateTargetOptions.length === 0}
+                            >
+                              {isRu ? 'На все остальные' : 'All other locations'}
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
-                  ) : null}
-                </div>
-              );
-            })}
+                  );
+                })() : null}
+              </div>
+            ) : null}
             {visibleItems.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 py-8 text-sm text-slate-600">
                 {isRu
@@ -3570,6 +3749,121 @@ function _itemFilterLabel(filterKey: ItemFilterKey, isRu: boolean): string {
   if (filterKey === 'has_draft') return isRu ? 'Есть черновик' : 'Has draft';
   if (filterKey === 'news_created') return isRu ? 'Есть новость' : 'News created';
   return isRu ? 'Все' : 'All';
+}
+
+function _planItemStatus(item: Pick<PlanItem, 'draft_text' | 'usernews_id' | 'status'>, isRu: boolean): { label: string; className: string } {
+  const normalizedStatus = String(item.status || '').trim();
+  const hasDraft = Boolean(String(item.draft_text || '').trim());
+  const hasNews = Boolean(String(item.usernews_id || '').trim());
+  const baseClassName = 'rounded-full px-2.5 py-1 text-xs font-semibold';
+  if (normalizedStatus === 'skipped') {
+    return {
+      label: isRu ? 'Пропущено' : 'Skipped',
+      className: `${baseClassName} bg-slate-100 text-slate-500`,
+    };
+  }
+  if (hasNews) {
+    return {
+      label: isRu ? 'Опубликовано' : 'Published',
+      className: `${baseClassName} bg-emerald-100 text-emerald-800`,
+    };
+  }
+  if (hasDraft) {
+    return {
+      label: isRu ? 'К публикации' : 'Ready',
+      className: `${baseClassName} bg-sky-100 text-sky-800`,
+    };
+  }
+  return {
+    label: isRu ? 'Без текста' : 'No draft',
+    className: `${baseClassName} bg-amber-100 text-amber-800`,
+  };
+}
+
+function _humanizePlanTitle(item: Pick<PlanItem, 'theme' | 'goal' | 'seo_keyword' | 'content_type'>, isRu: boolean): string {
+  const rawTitle = String(item.theme || item.goal || item.seo_keyword || '').trim();
+  const fallback = isRu ? 'Тема для публикации' : 'Publication topic';
+  if (!rawTitle) return fallback;
+  const noisyPrefixes = [
+    'Закрыть слабую зону карточки:',
+    'Недопокрытый поисковый сценарий:',
+    'Ответить на спрос:',
+    'Закрыть слабое место карточки:',
+    'Аудит ·',
+    'SEO ·',
+    'Услуга ·',
+    'Продажи ·',
+  ];
+  let title = rawTitle;
+  for (const prefix of noisyPrefixes) {
+    if (title.toLowerCase().startsWith(prefix.toLowerCase())) {
+      title = title.slice(prefix.length).trim();
+    }
+  }
+  title = title
+    .replace(/\s+/g, ' ')
+    .replace(/^["'«]+|["'»]+$/g, '')
+    .trim();
+  if (!title) return fallback;
+  if (title.length <= 96) return title;
+  return `${title.slice(0, 93).trim()}...`;
+}
+
+function _humanizePlanGoal(item: Pick<PlanItem, 'goal' | 'theme' | 'source_kind' | 'source_ref' | 'seo_keyword'>, isRu: boolean): string {
+  const rawGoal = String(item.goal || '').trim();
+  const rawTheme = String(item.theme || '').trim();
+  const sourceRef = String(item.source_ref || item.seo_keyword || '').trim();
+  const combined = `${rawGoal} ${rawTheme} ${sourceRef}`.toLowerCase();
+  if (!rawGoal && !rawTheme && !sourceRef) {
+    return isRu ? 'Причина не указана.' : 'No reason provided.';
+  }
+  if (
+    combined.includes('недопокрытый поисковый сценарий')
+    || combined.includes('закрыть слабую зону карточки')
+    || combined.includes('закрыть слабое место карточки')
+  ) {
+    const readableSource = _cleanTechnicalPlanText(sourceRef || rawTheme);
+    if (readableSource && /цен|стоимост|прайс|пример|работ|фото/i.test(readableSource)) {
+      return isRu
+        ? 'Клиенту проще записаться, если в карточке видно цену, результат и понятный следующий шаг.'
+        : 'Customers are more likely to book when the listing shows price, result, and the next step.';
+    }
+    if (readableSource) {
+      return isRu
+        ? `Карточке нужен понятный ответ на запрос клиента: ${readableSource}.`
+        : `The listing needs a clear answer for this customer search: ${readableSource}.`;
+    }
+    return isRu
+      ? 'Карточке нужен более понятный ответ на поисковый сценарий клиента.'
+      : 'The listing needs a clearer answer for this customer search scenario.';
+  }
+  return rawGoal || rawTheme || (isRu ? 'Причина не указана.' : 'No reason provided.');
+}
+
+function _cleanTechnicalPlanText(value: string): string {
+  const prefixes = [
+    'Закрыть слабую зону карточки:',
+    'Закрыть слабое место карточки вокруг темы',
+    'Закрыть слабое место карточки:',
+    'Недопокрытый поисковый сценарий:',
+    'Ответить на спрос:',
+  ];
+  let text = String(value || '').trim();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const prefix of prefixes) {
+      if (text.toLowerCase().startsWith(prefix.toLowerCase())) {
+        text = text.slice(prefix.length).trim();
+        changed = true;
+      }
+    }
+  }
+  return text
+    .replace(/^["'«]+|["'»]+$/g, '')
+    .replace(/\s+и снизить сомнения перед звонком, визитом или записью\.?$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function _matchesItemFilter(item: PlanItem, filterKey: ItemFilterKey): boolean {

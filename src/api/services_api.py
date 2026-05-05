@@ -4,6 +4,7 @@ API для управления услугами бизнеса
 from flask import Blueprint, request, jsonify
 from database_manager import DatabaseManager
 from auth_system import verify_session
+from core.ai_learning import record_ai_learning_event
 from core.helpers import get_business_owner_id
 import json
 
@@ -44,6 +45,97 @@ def _resolve_network_scope(cursor, business_id, requested_scope):
 
 def _network_business_where(column_name):
     return f"({column_name} IN (SELECT id FROM businesses WHERE network_id = %s) OR {column_name} = %s)"
+
+
+def _normalize_learning_text(value):
+    return " ".join(str(value or "").strip().lower().replace("ё", "е").split())
+
+
+def _record_service_optimization_learning(
+    *,
+    user_id,
+    business_id,
+    service_id,
+    previous_data,
+    next_data,
+    conn,
+):
+    prev_name = str(previous_data.get("name") or "")
+    prev_description = str(previous_data.get("description") or "")
+    prev_optimized_name = str(previous_data.get("optimized_name") or "")
+    prev_optimized_description = str(previous_data.get("optimized_description") or "")
+    next_name = str(next_data.get("name") or "")
+    next_description = str(next_data.get("description") or "")
+    next_optimized_name = str(next_data.get("optimized_name") or "")
+    next_optimized_description = str(next_data.get("optimized_description") or "")
+
+    if prev_optimized_name and not next_optimized_name:
+        accepted_name = _normalize_learning_text(next_name) != _normalize_learning_text(prev_name)
+        if accepted_name:
+            record_ai_learning_event(
+                capability="services.optimize",
+                event_type="accepted",
+                intent="operations",
+                user_id=user_id,
+                business_id=business_id,
+                accepted=True,
+                edited_before_accept=_normalize_learning_text(next_name) != _normalize_learning_text(prev_optimized_name),
+                prompt_key="service_optimization",
+                prompt_version="v1",
+                draft_text=prev_optimized_name,
+                final_text=next_name,
+                metadata={"field": "name", "service_id": service_id, "source": "services_api"},
+                conn=conn,
+            )
+        else:
+            record_ai_learning_event(
+                capability="services.optimize",
+                event_type="rejected",
+                intent="operations",
+                user_id=user_id,
+                business_id=business_id,
+                rejected=True,
+                prompt_key="service_optimization",
+                prompt_version="v1",
+                draft_text=prev_optimized_name,
+                final_text=prev_name,
+                metadata={"field": "name", "service_id": service_id, "source": "services_api"},
+                conn=conn,
+            )
+
+    if prev_optimized_description and not next_optimized_description:
+        accepted_description = _normalize_learning_text(next_description) != _normalize_learning_text(prev_description)
+        if accepted_description:
+            record_ai_learning_event(
+                capability="services.optimize",
+                event_type="accepted",
+                intent="operations",
+                user_id=user_id,
+                business_id=business_id,
+                accepted=True,
+                edited_before_accept=_normalize_learning_text(next_description) != _normalize_learning_text(prev_optimized_description),
+                prompt_key="service_optimization",
+                prompt_version="v1",
+                draft_text=prev_optimized_description,
+                final_text=next_description,
+                metadata={"field": "description", "service_id": service_id, "source": "services_api"},
+                conn=conn,
+            )
+        else:
+            record_ai_learning_event(
+                capability="services.optimize",
+                event_type="rejected",
+                intent="operations",
+                user_id=user_id,
+                business_id=business_id,
+                rejected=True,
+                prompt_key="service_optimization",
+                prompt_version="v1",
+                draft_text=prev_optimized_description,
+                final_text=prev_description,
+                metadata={"field": "description", "service_id": service_id, "source": "services_api"},
+                conn=conn,
+            )
 
 @services_bp.route('/api/services/add', methods=['POST', 'OPTIONS'])
 def add_service():
@@ -435,7 +527,14 @@ def update_service(service_id):
         cursor = db.conn.cursor()
         
         # Проверяем, что услуга принадлежит пользователю
-        cursor.execute("SELECT user_id, business_id FROM userservices WHERE id = %s", (service_id,))
+        cursor.execute(
+            """
+            SELECT user_id, business_id, name, description, optimized_name, optimized_description
+            FROM userservices
+            WHERE id = %s
+            """,
+            (service_id,),
+        )
         row = cursor.fetchone()
         if not row:
             db.close()
@@ -443,6 +542,12 @@ def update_service(service_id):
         
         service_user_id = _cell(row, 'user_id', _cell(row, 0))
         service_business_id = _cell(row, 'business_id', _cell(row, 1))
+        previous_data = {
+            "name": _cell(row, 'name', _cell(row, 2, '')),
+            "description": _cell(row, 'description', _cell(row, 3, '')),
+            "optimized_name": _cell(row, 'optimized_name', _cell(row, 4, '')),
+            "optimized_description": _cell(row, 'optimized_description', _cell(row, 5, '')),
+        }
         
         if service_user_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
             db.close()
@@ -549,6 +654,19 @@ def update_service(service_id):
                 service_id
             ))
         
+        _record_service_optimization_learning(
+            user_id=user_data["user_id"],
+            business_id=service_business_id,
+            service_id=service_id,
+            previous_data=previous_data,
+            next_data={
+                "name": data.get('name', ''),
+                "description": data.get('description', ''),
+                "optimized_name": optimized_name,
+                "optimized_description": optimized_description,
+            },
+            conn=db.conn,
+        )
         db.conn.commit()
         db.close()
         return jsonify({

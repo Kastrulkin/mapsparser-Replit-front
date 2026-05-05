@@ -87,18 +87,87 @@ def _sales_cta(sale_name: str) -> str:
     )
 
 
-def _audit_goal(theme: str) -> str:
-    return (
-        f"Закрыть слабое место карточки вокруг темы {_quoted(theme)} "
-        "и снизить сомнения перед звонком, визитом или записью."
-    )
+def _clean_audit_signal_text(value: str) -> str:
+    text = _safe_text(value)
+    prefixes = [
+        "Недопокрытый поисковый сценарий:",
+        "Закрыть слабую зону карточки:",
+        "Закрыть слабое место карточки:",
+    ]
+    changed = True
+    while changed:
+        changed = False
+        for prefix in prefixes:
+            if text.lower().startswith(prefix.lower()):
+                text = text[len(prefix):].strip(" .:;\"'«»")
+                changed = True
+    return text
 
 
-def _audit_cta(theme: str) -> str:
-    return (
-        f"Сделайте публикацию, которая прямо отвечает на пробел по теме {_quoted(theme)} "
-        "и усиливает доверие к карточке."
-    )
+def _search_intent_theme(intent: str) -> str:
+    clean = _clean_audit_signal_text(intent)
+    normalized = clean.lower()
+    if any(marker in normalized for marker in ("цен", "стоимост", "прайс", "пример", "работ", "фото")):
+        return "Показать цену и примеры работ"
+    if any(marker in normalized for marker in ("рядом", "поблизости", "около", "возле")):
+        return f"Почему выбрать вас по запросу {_quoted(clean)}" if clean else "Объяснить, почему выбрать вас рядом"
+    if clean:
+        return f"Ответить на запрос клиента: {clean}"
+    return "Ответить на важный поисковый запрос"
+
+
+def _audit_theme(signal: dict[str, Any]) -> str:
+    section = _safe_text(signal.get("section")).lower()
+    signal_id = _safe_text(signal.get("id")).lower()
+    evidence = _safe_text(signal.get("evidence"))
+    title = _safe_text(signal.get("title"))
+    problem = _safe_text(signal.get("problem"))
+    if section == "search" or "search_intent:" in signal_id:
+        return _search_intent_theme(evidence or title or problem)
+    clean_title = _clean_audit_signal_text(title)
+    if clean_title:
+        return clean_title
+    clean_problem = _clean_audit_signal_text(problem)
+    if clean_problem:
+        return clean_problem
+    return "Усилить карточку перед выбором клиента"
+
+
+def _audit_goal(signal: dict[str, Any]) -> str:
+    section = _safe_text(signal.get("section")).lower()
+    signal_id = _safe_text(signal.get("id")).lower()
+    evidence = _clean_audit_signal_text(_safe_text(signal.get("evidence")))
+    problem = _clean_audit_signal_text(_safe_text(signal.get("problem")))
+    if section == "search" or "search_intent:" in signal_id:
+        if any(marker in evidence.lower() for marker in ("цен", "стоимост", "прайс", "пример", "работ", "фото")):
+            return (
+                "Клиенту проще записаться, если в карточке видно цену, результат и понятный следующий шаг. "
+                "Публикация должна убрать сомнения перед звонком или записью."
+            )
+        if evidence:
+            return (
+                f"Дать понятный ответ на запрос {_quoted(evidence)}: что вы предлагаете, почему это удобно "
+                "и как быстро связаться с бизнесом."
+            )
+        return "Дать клиенту понятный ответ на поисковый запрос и привести его к звонку, маршруту или записи."
+    if problem:
+        theme = _audit_theme(signal)
+        if theme:
+            return f"Усилить блок {_quoted(theme)} и объяснить клиенту простым языком: {problem}"
+        return f"Объяснить клиенту важный пробел карточки простым языком: {problem}"
+    return "Сделать карточку понятнее и убедительнее перед звонком, визитом или записью."
+
+
+def _audit_cta(signal: dict[str, Any]) -> str:
+    section = _safe_text(signal.get("section")).lower()
+    signal_id = _safe_text(signal.get("id")).lower()
+    evidence = _clean_audit_signal_text(_safe_text(signal.get("evidence")))
+    if section == "search" or "search_intent:" in signal_id:
+        if any(marker in evidence.lower() for marker in ("цен", "стоимост", "прайс", "пример", "работ", "фото")):
+            return "Покажите цену, пример результата и один простой способ записаться."
+        if evidence:
+            return f"Свяжите запрос {_quoted(evidence)} с конкретной услугой, выгодой и действием."
+    return "Сделайте короткую публикацию, которая закрывает пробел карточки и усиливает доверие."
 
 
 def _seasonal_goal(topic: str) -> str:
@@ -481,18 +550,19 @@ def build_content_plan_skeleton(
             signal_problem = _safe_text(signal.get("problem"))
             if not signal_title and not signal_problem:
                 continue
-            theme = signal_title or signal_problem
+            theme = _audit_theme(signal)
+            source_ref = _clean_audit_signal_text(_safe_text(signal.get("evidence") or signal_title or signal_problem))
             base_score = _audit_strength(signal)
             weak_zone_score = _weak_zone_bonus(signal)
             coverage_score = _undercovered_bonus(theme, recent_blob)
             candidates.append(
                 {
                     "content_type": "audit",
-                    "theme": f"Закрыть слабую зону карточки: {theme}",
-                    "goal": _audit_goal(theme),
+                    "theme": theme,
+                    "goal": _audit_goal(signal),
                     "source_kind": "audit_signal",
-                    "source_ref": theme,
-                    "cta_hint": _audit_cta(theme),
+                    "source_ref": source_ref or theme,
+                    "cta_hint": _audit_cta(signal),
                     "strength_score": base_score + weak_zone_score + coverage_score,
                     "ranking_reasons": [
                         _ranking_reason("audit_signal_strength", base_score),

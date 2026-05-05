@@ -85,6 +85,7 @@ from core.card_automation import (
     run_card_automation_action,
     save_card_automation_settings,
 )
+from core.learning_patterns import get_service_optimization_learning_candidates
 from core.telegram_userbot import (
     load_userbot_account,
     send_code as userbot_send_code,
@@ -10796,6 +10797,55 @@ def get_prompts():
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/admin/prompts/learning-candidates', methods=['GET', 'OPTIONS'])
+def get_prompt_learning_candidates():
+    """Показать суперадмину human-review кандидаты для улучшения общих промптов."""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            db.close()
+            return jsonify({"error": "Недостаточно прав"}), 403
+
+        try:
+            days = int(request.args.get("days") or 30)
+        except Exception:
+            days = 30
+        try:
+            limit = int(request.args.get("limit") or 12)
+        except Exception:
+            limit = 12
+
+        items = get_service_optimization_learning_candidates(db.conn, days=days, limit=limit)
+        db.close()
+        return jsonify({
+            "success": True,
+            "window_days": max(1, min(days, 180)),
+            "items": items,
+            "policy": {
+                "auto_apply": False,
+                "reviewer": "superadmin",
+                "note": "Кандидаты не меняют общие промпты автоматически. Суперадмин должен вручную утвердить и внести правило в промпт.",
+            },
+        })
+    except Exception as e:
+        print(f"❌ Ошибка получения learning candidates: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route('/api/admin/prompts/<prompt_type>', methods=['PUT', 'OPTIONS'])
 def update_prompt(prompt_type):

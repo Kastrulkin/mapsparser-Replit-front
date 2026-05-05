@@ -111,6 +111,17 @@ interface PromptRecommendation {
   } | null;
 }
 
+interface LearningCandidate {
+  id: string;
+  field: string;
+  business_name?: string;
+  user_email?: string;
+  draft_text: string;
+  final_text: string;
+  candidate_rule: string;
+  created_at?: string;
+}
+
 interface PromptAbConfig {
   prompt_key: string;
   enabled: boolean;
@@ -165,6 +176,7 @@ export const PromptsManagement: React.FC = () => {
   const [permissions, setPermissions] = useState<PromptPermissions>({ can_view: true, can_publish: false });
   const [auditItems, setAuditItems] = useState<PromptAuditItem[]>([]);
   const [recommendations, setRecommendations] = useState<PromptRecommendation[]>([]);
+  const [learningCandidates, setLearningCandidates] = useState<LearningCandidate[]>([]);
   const [abConfig, setAbConfig] = useState<PromptAbConfig>({
     prompt_key: 'news_social_generation',
     enabled: false,
@@ -258,15 +270,40 @@ export const PromptsManagement: React.FC = () => {
 
   const loadPromptInsights = async () => {
     try {
-      const [auditData, recData] = await Promise.all([
+      const [auditData, recData, candidateData] = await Promise.all([
         newAuth.makeRequest('/admin/prompts/audit?limit=50', { method: 'GET' }),
         newAuth.makeRequest('/admin/prompts/recommendations?days=30', { method: 'GET' }),
+        newAuth.makeRequest('/admin/prompts/learning-candidates?days=30&limit=12', { method: 'GET' }),
       ]);
       setAuditItems(Array.isArray(auditData.items) ? auditData.items : []);
       setRecommendations(Array.isArray(recData.items) ? recData.items : []);
+      setLearningCandidates(Array.isArray(candidateData.items) ? candidateData.items : []);
     } catch (error) {
       console.error('Ошибка загрузки prompt insights:', error);
     }
+  };
+
+  const appendLearningCandidateToServicePrompt = (candidate: LearningCandidate) => {
+    const promptType = 'service_optimization';
+    const current = editedPrompts[promptType]?.text || prompts.find((p) => p.type === promptType)?.text || '';
+    const block = [
+      '',
+      'Правило-кандидат из Ralph-loop, утверждено суперадмином перед публикацией:',
+      `- ${candidate.candidate_rule}`,
+      `- Пример AI: ${candidate.draft_text}`,
+      `- Пример редакции: ${candidate.final_text}`,
+    ].join('\n');
+    setEditedPrompts((prev) => ({
+      ...prev,
+      [promptType]: {
+        text: `${current.trimEnd()}${block}`,
+        description: prev[promptType]?.description || prompts.find((p) => p.type === promptType)?.description || '',
+      },
+    }));
+    toast({
+      title: 'Кандидат добавлен в редактор',
+      description: 'Проверьте текст промпта и нажмите “Сохранить”, если правило подходит для всех.',
+    });
   };
 
   const handleSave = async (promptType: string) => {
@@ -925,6 +962,63 @@ export const PromptsManagement: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <div className="bg-white rounded-lg border border-amber-200 p-6">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Кандидаты Ralph-loop для общих промптов</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Индивидуальные правки пользователей не применяются автоматически. Суперадмин проверяет паттерн и вручную добавляет его в промпт.
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={loadPromptInsights}>
+            <RefreshCcw className="w-4 h-4 mr-2" />
+            Обновить
+          </Button>
+        </div>
+        {learningCandidates.length === 0 ? (
+          <p className="text-sm text-gray-500">Пока нет новых кандидатов из ручных редактур.</p>
+        ) : (
+          <div className="space-y-3">
+            {learningCandidates.map((item) => (
+              <div key={item.id} className="rounded-md border border-amber-100 bg-amber-50/50 p-3">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-gray-900">
+                      {item.field === 'name' ? 'Название услуги' : 'Описание услуги'}
+                      {item.business_name ? <span className="ml-2 text-xs text-gray-500">· {item.business_name}</span> : null}
+                    </div>
+                    <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
+                      <div className="rounded-md bg-white p-2">
+                        <div className="text-[11px] uppercase tracking-wide text-gray-500">AI предложил</div>
+                        <p className="mt-1 text-xs leading-5 text-gray-700">{item.draft_text}</p>
+                      </div>
+                      <div className="rounded-md bg-white p-2">
+                        <div className="text-[11px] uppercase tracking-wide text-emerald-700">Пользователь исправил</div>
+                        <p className="mt-1 text-xs leading-5 text-gray-900">{item.final_text}</p>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-xs leading-5 text-amber-900">{item.candidate_rule}</p>
+                    <p className="mt-1 text-[11px] text-gray-500">
+                      {item.created_at ? new Date(item.created_at).toLocaleString('ru-RU') : 'Дата неизвестна'}
+                      {item.user_email ? ` · ${item.user_email}` : ''}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => appendLearningCandidateToServicePrompt(item)}
+                  >
+                    <Copy className="w-3 h-3 mr-1" />
+                    Вставить в промпт услуг
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-3">

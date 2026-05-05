@@ -1,4 +1,5 @@
 from core import card_automation
+from datetime import date
 
 
 class _FakeConn:
@@ -130,3 +131,23 @@ def test_business_context_prefers_ai_agent_language_column(monkeypatch):
 
     assert result["language"] == "ru"
     assert "ai_agent_language AS language" in conn.cursor_obj.executed[0]
+
+
+def test_digest_plan_lines_follow_weekly_rhythm_for_starter():
+    monday = card_automation._digest_plan_lines_for_weekday(date(2026, 5, 4), "starter", False)
+    assert "• Ответить на новые отзывы и не оставлять негатив без реакции" in monday
+    assert "• Сгенерировать новость недели по контент-плану" in monday
+    assert "• Добавить свежие фото в карточку: без фото новости и услуги работают слабее" in monday
+
+    wednesday = card_automation._digest_plan_lines_for_weekday(date(2026, 5, 6), "starter", False)
+    assert "• Обновить фото в карточке: показать свежие работы, витрину, зал или процесс" in wednesday
+    assert "• Сгенерировать новость недели по контент-плану" not in wednesday
+
+    friday = card_automation._digest_plan_lines_for_weekday(date(2026, 5, 8), "starter", False)
+    assert "• Проверить статистику карт: звонки, маршруты, просмотры и динамику отзывов" in friday
+
+
+def test_digest_plan_lines_ask_concierge_for_new_photos_on_monday():
+    lines = card_automation._digest_plan_lines_for_weekday(date(2026, 5, 4), "concierge", False)
+    assert "• Прислать новые фото для карточек: интерьер, работы, товары или команда" in lines
+    assert "• Добавить свежие фото в карточку: без фото новости и услуги работают слабее" not in lines

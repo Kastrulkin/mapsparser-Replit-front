@@ -1397,6 +1397,12 @@ def _run_card_automation_if_due() -> None:
                 f"errors={int(result.get('errors') or 0)}",
                 flush=True,
             )
+        # Keep Telegram digests isolated from automation failures. A failed
+        # automation transaction must not make the daily digest repeat forever.
+        try:
+            db.conn.rollback()
+        except Exception:
+            pass
         digest_messages = collect_due_telegram_digest_messages(db.conn)
         for digest in digest_messages:
             telegram_id = str(digest.get("telegram_id") or "").strip()
@@ -1405,8 +1411,17 @@ def _run_card_automation_if_due() -> None:
             business_ids = [str(item or "").strip() for item in (digest.get("business_ids") or []) if str(item or "").strip()]
             if not telegram_id or not message or not sent_date or not business_ids:
                 continue
-            if _send_telegram_plain_message(telegram_id, message):
+            try:
                 mark_telegram_digest_sent(db.conn, business_ids, sent_date)
+            except Exception as digest_mark_exc:
+                try:
+                    db.conn.rollback()
+                except Exception:
+                    pass
+                print(f"[CARD_AUTOMATION_DIGEST] failed to mark digest sent for {telegram_id}: {digest_mark_exc}", flush=True)
+                continue
+            if _send_telegram_plain_message(telegram_id, message):
+                pass
             else:
                 print(f"[CARD_AUTOMATION_DIGEST] failed to send telegram digest to {telegram_id}", flush=True)
     except Exception as e:

@@ -818,14 +818,36 @@ def _fetch_audit_signals(scope_business_id: str) -> list[dict[str, Any]]:
             signals.append(
                 {
                     "id": f"search_intent:{clean_intent}",
-                    "title": f"Недопокрытый поисковый сценарий: {clean_intent}",
-                    "problem": "Карточке нужен отдельный контент под этот сценарий выбора.",
+                    "title": _search_intent_content_title(clean_intent),
+                    "problem": _search_intent_content_problem(clean_intent),
                     "priority": "medium",
                     "section": "search",
                     "evidence": clean_intent,
                 }
             )
     return signals
+
+
+def _search_intent_content_title(intent: str) -> str:
+    clean = str(intent or "").strip()
+    normalized = clean.lower()
+    if any(marker in normalized for marker in ("цен", "стоимост", "прайс", "пример", "работ", "фото")):
+        return "Показать цену и примеры работ"
+    if any(marker in normalized for marker in ("рядом", "поблизости", "около", "возле")):
+        return f"Почему выбрать вас по запросу «{clean}»" if clean else "Объяснить, почему выбрать вас рядом"
+    if clean:
+        return f"Ответить на запрос клиента: {clean}"
+    return "Ответить на важный поисковый запрос"
+
+
+def _search_intent_content_problem(intent: str) -> str:
+    clean = str(intent or "").strip()
+    normalized = clean.lower()
+    if any(marker in normalized for marker in ("цен", "стоимост", "прайс", "пример", "работ", "фото")):
+        return "Клиенту не хватает цены, примеров результата и понятного следующего шага."
+    if clean:
+        return f"Карточке нужен понятный ответ на запрос клиента: {clean}."
+    return "Карточке нужен отдельный понятный ответ под этот сценарий выбора."
 
 
 def _build_planning_readiness(

@@ -8,6 +8,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from core.ai_learning import record_ai_learning_event
+from core.learning_patterns import format_learning_candidates_for_digest, get_service_optimization_learning_candidates
 from services.gigachat_client import analyze_text_with_gigachat
 
 
@@ -1449,6 +1450,39 @@ def _action_label(action_type: str) -> str:
     return "Сгенерировать draft-новость"
 
 
+def _normalize_digest_tier(business_tier: Any, subscription_tariff: Any) -> str:
+    raw_tariff = str(subscription_tariff or "").strip().lower()
+    raw_tier = str(business_tier or "").strip().lower()
+    combined = f"{raw_tariff} {raw_tier}"
+    if "elite" in combined:
+        return "elite"
+    if "concierge" in combined or "25000" in combined:
+        return "concierge"
+    if "professional" in combined or "pro" in combined or "5000" in combined:
+        return "professional"
+    if "starter" in combined or "promo" in combined or "1200" in combined:
+        return "starter"
+    return raw_tier or "none"
+
+
+def _digest_plan_lines_for_weekday(local_today: date, tier: str, is_superadmin: bool) -> list[str]:
+    weekday = local_today.isoweekday()
+    lines = ["• Ответить на новые отзывы и не оставлять негатив без реакции"]
+    if weekday == 1:
+        lines.append("• Сгенерировать новость недели по контент-плану")
+        if tier in {"concierge", "elite"}:
+            lines.append("• Прислать новые фото для карточек: интерьер, работы, товары или команда")
+        else:
+            lines.append("• Добавить свежие фото в карточку: без фото новости и услуги работают слабее")
+    if weekday == 3:
+        lines.append("• Обновить фото в карточке: показать свежие работы, витрину, зал или процесс")
+    if weekday == 5:
+        lines.append("• Проверить статистику карт: звонки, маршруты, просмотры и динамику отзывов")
+    if is_superadmin:
+        lines.append("• Проверить кандидаты Ralph-loop для улучшения промптов")
+    return lines
+
+
 def _format_event_line(event: dict[str, Any]) -> str:
     action_label = _action_label(str(event.get("action_type") or ""))
     status = str(event.get("status") or "").strip().lower()
@@ -1475,12 +1509,15 @@ def collect_due_telegram_digest_messages(conn) -> list[dict[str, Any]]:
             s.digest_last_sent_on,
             b.name AS business_name,
             {business_timezone_select}
+            b.subscription_tier,
             b.owner_id,
             u.telegram_id,
-            u.name AS owner_name
+            u.name AS owner_name,
+            sub.tariff_id AS subscription_tariff_id
         FROM businesscardautomationsettings s
         JOIN businesses b ON b.id = s.business_id
         JOIN users u ON u.id = b.owner_id
+        LEFT JOIN subscriptions sub ON sub.business_id = b.id AND sub.status = 'active'
         WHERE s.digest_enabled = TRUE
           AND COALESCE(b.is_active, TRUE) = TRUE
           AND u.telegram_id IS NOT NULL
@@ -1516,18 +1553,9 @@ def collect_due_telegram_digest_messages(conn) -> list[dict[str, Any]]:
         if digest_last_sent_on == now_local.date():
             continue
 
-        settings = _load_settings_row(conn, business_id)
-        planned_lines: list[str] = []
-        for action_type in [ACTION_REVIEW_SYNC, ACTION_REVIEW_REPLY, ACTION_NEWS]:
-            planned, when_text = _action_planned_for_local_day(settings, action_type, now_local.date())
-            if not planned:
-                continue
-            if when_text == "после завершения синхронизации":
-                planned_lines.append(f"• {_action_label(action_type)} — {when_text}")
-            elif when_text:
-                planned_lines.append(f"• {when_text} — {_action_label(action_type)}")
-            else:
-                planned_lines.append(f"• {_action_label(action_type)}")
+        owner_is_superadmin = _owner_is_superadmin(conn, owner_id)
+        tier = _normalize_digest_tier(rd.get("subscription_tier"), rd.get("subscription_tariff_id"))
+        planned_lines = _digest_plan_lines_for_weekday(now_local.date(), tier, owner_is_superadmin)
 
         recent_events = _recent_events(conn, business_id, limit=20)
         completed_today = []
@@ -1546,6 +1574,7 @@ def collect_due_telegram_digest_messages(conn) -> list[dict[str, Any]]:
                 "owner_id": owner_id,
                 "telegram_id": str(rd.get("telegram_id") or "").strip(),
                 "owner_name": str(rd.get("owner_name") or "").strip() or "владелец",
+                "is_superadmin": owner_is_superadmin,
                 "businesses": [],
             },
         )
@@ -1580,6 +1609,10 @@ def collect_due_telegram_digest_messages(conn) -> list[dict[str, Any]]:
             f"Доброе утро. План LocalOS на {sent_date.strftime('%d.%m.%Y')}.\n\n"
             + "\n\n".join(business_sections)
         )
+        if bool(bucket.get("is_superadmin")):
+            learning_block = _superadmin_learning_digest_block(conn)
+            if learning_block:
+                text += f"\n\n{learning_block}"
         messages.append(
             {
                 "owner_id": bucket["owner_id"],
@@ -1590,6 +1623,25 @@ def collect_due_telegram_digest_messages(conn) -> list[dict[str, Any]]:
             }
         )
     return messages
+
+
+def _owner_is_superadmin(conn, owner_id: str) -> bool:
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT is_superadmin FROM users WHERE id = %s LIMIT 1", (owner_id,))
+        row = cursor.fetchone()
+        row_dict = _row_to_dict(cursor, row) or {}
+        return bool(row_dict.get("is_superadmin"))
+    except Exception:
+        return False
+
+
+def _superadmin_learning_digest_block(conn) -> str:
+    try:
+        items = get_service_optimization_learning_candidates(conn, days=7, limit=3)
+        return format_learning_candidates_for_digest(items, max_items=3)
+    except Exception:
+        return ""
 
 
 def mark_telegram_digest_sent(conn, business_ids: list[str], sent_date: date) -> None:

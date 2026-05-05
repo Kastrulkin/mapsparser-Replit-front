@@ -737,6 +737,10 @@ def test_content_plan_generator_prioritizes_weak_audit_search_zone():
     )
 
     assert "маникюр рядом" in plan["items"][0]["source_ref"]
+    assert "Недопокрытый поисковый сценарий" not in plan["items"][0]["theme"]
+    assert "Закрыть слабую зону" not in plan["items"][0]["theme"]
+    assert "Закрыть слабое место" not in plan["items"][0]["goal"]
+    assert plan["items"][0]["theme"] == "Почему выбрать вас по запросу «маникюр рядом»"
     assert any(reason["label"] == "weak_zone_priority" for reason in plan["items"][0]["ranking_reasons"])
 
 

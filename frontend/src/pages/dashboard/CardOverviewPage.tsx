@@ -242,6 +242,7 @@ export const CardOverviewPage = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [isNetworkMaster, setIsNetworkMaster] = useState(false);
   const [operationsLearning, setOperationsLearning] = useState<Record<string, any>>({});
+  const previousParseStatusRef = useRef(parseStatus);
 
   useEffect(() => {
     const nextTabParam = String(searchParams.get('tab') || '').trim().toLowerCase();
@@ -494,7 +495,7 @@ export const CardOverviewPage = () => {
   };
 
   useEffect(() => {
-    if (currentBusinessId && context) {
+    if (currentBusinessId) {
       loadSummary();
       loadUserServices();
       loadExternalPosts();
@@ -504,7 +505,7 @@ export const CardOverviewPage = () => {
       loadOperationsLearning();
       loadParseStatus();
     }
-  }, [currentBusinessId, context, selectedSource, isNetworkRepresentative]);
+  }, [currentBusinessId, selectedSource, isNetworkRepresentative]);
 
   useEffect(() => {
     if (parseStatus !== 'processing' && parseStatus !== 'queued') {
@@ -513,13 +514,23 @@ export const CardOverviewPage = () => {
 
     const timer = window.setInterval(() => {
       loadParseStatus();
-      loadSummary();
-      loadUserServices();
-      loadExternalPosts();
     }, 10000);
 
     return () => window.clearInterval(timer);
-  }, [parseStatus, currentBusinessId, selectedSource, isNetworkRepresentative]);
+  }, [parseStatus, currentBusinessId]);
+
+  useEffect(() => {
+    const previousStatus = previousParseStatusRef.current;
+    previousParseStatusRef.current = parseStatus;
+    const wasActive = previousStatus === 'processing' || previousStatus === 'queued';
+    const isFinished = parseStatus === 'completed' || parseStatus === 'done' || parseStatus === 'error';
+    if (!wasActive || !isFinished || !currentBusinessId) {
+      return;
+    }
+    loadSummary();
+    loadUserServices();
+    loadExternalPosts();
+  }, [parseStatus, currentBusinessId]);
 
   useEffect(() => {
     setServicesCurrentPage(1);
