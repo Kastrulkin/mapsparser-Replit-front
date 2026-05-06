@@ -315,7 +315,7 @@ export function CardServicesTable({
                 {groupedServices.length}
               </div>
             </div>
-            <div className={isDetailVisible ? 'max-h-[720px] overflow-y-auto p-2' : 'p-2'}>
+            <div className="p-2">
               {groupedServices.map((item) => {
                 const service = item.service;
                 const status = getServiceStatus(service);
