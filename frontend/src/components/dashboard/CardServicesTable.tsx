@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { RefObject } from 'react';
-import { CheckCircle2, Edit3, Search, Sparkles, Trash2, Wand2 } from 'lucide-react';
+import { CheckCircle2, Edit3, Search, Sparkles, Trash2, Wand2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { KeywordMatchLevel, KeywordScore } from '@/components/dashboard/cardServicesLogic';
 import { getServiceQuality } from '@/components/dashboard/cardServicesLogic';
@@ -248,6 +248,7 @@ export function CardServicesTable({
 }: CardServicesTableProps) {
   const locale = language === 'ru' ? 'ru-RU' : 'en-US';
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(true);
 
   const groupedServices = useMemo(() => {
     const seen = new Map<string, GroupedService>();
@@ -284,6 +285,7 @@ export function CardServicesTable({
     `${selectedService.name || ''} ${selectedService.description || ''}`,
   ) : null;
   const selectedUpdatedAt = selectedService ? getDisplayedServiceUpdatedAt(selectedService) : null;
+  const isDetailVisible = isDetailOpen && selectedService && selectedQuality && selectedStatus;
 
   return (
     <div ref={tableScrollRef} className="rounded-3xl border border-slate-200/80 bg-white/90 shadow-sm">
@@ -300,28 +302,33 @@ export function CardServicesTable({
           <p>{servicesSearch || servicesCategoryFilter !== 'all' ? copy.emptyFiltered : copy.emptyDefault}</p>
         </div>
       ) : (
-        <div className="grid lg:grid-cols-[minmax(320px,0.9fr)_minmax(420px,1.35fr)]">
-          <div className="border-b border-slate-100 lg:border-b-0 lg:border-r">
+        <div className={isDetailVisible ? 'grid items-start lg:grid-cols-[minmax(320px,0.9fr)_minmax(420px,1.35fr)]' : 'block'}>
+          <div className={isDetailVisible ? 'border-b border-slate-100 lg:border-b-0 lg:border-r' : ''}>
             <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
               <div>
                 <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Очередь услуг</div>
-                <div className="mt-1 text-sm text-slate-500">Выберите услугу для проверки</div>
+                <div className="mt-1 text-sm text-slate-500">
+                  {isDetailOpen ? 'Выберите услугу для проверки' : 'Кликните по услуге, чтобы открыть редактор'}
+                </div>
               </div>
               <div className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
                 {groupedServices.length}
               </div>
             </div>
-            <div className="max-h-[720px] overflow-y-auto p-2">
+            <div className={isDetailVisible ? 'max-h-[720px] overflow-y-auto p-2' : 'p-2'}>
               {groupedServices.map((item) => {
                 const service = item.service;
                 const status = getServiceStatus(service);
-                const isSelected = selectedId === item.serviceId;
+                const isSelected = isDetailVisible && selectedId === item.serviceId;
                 const updatedAt = getDisplayedServiceUpdatedAt(service);
                 return (
                   <button
                     key={item.serviceId}
                     type="button"
-                    onClick={() => setSelectedServiceId(item.serviceId)}
+                    onClick={() => {
+                      setSelectedServiceId(item.serviceId);
+                      setIsDetailOpen(true);
+                    }}
                     className={`mb-2 w-full rounded-2xl border px-4 py-3 text-left transition-all ${
                       isSelected
                         ? 'border-slate-300 bg-slate-950 text-white shadow-sm'
@@ -362,11 +369,13 @@ export function CardServicesTable({
             </div>
           </div>
 
+          {isDetailVisible ? (
           <div className="min-w-0 p-5">
             {selectedService && selectedQuality && selectedStatus ? (
               <div className="space-y-5">
                 <div className="space-y-4 border-b border-slate-100 pb-5">
-                  <div className="min-w-0">
+                  <div className="flex items-start gap-3">
+                    <div className="min-w-0 flex-1">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${selectedStatus.className}`}>
                         {selectedStatus.label}
@@ -388,6 +397,16 @@ export function CardServicesTable({
                       {selectedService.price ? <span>{formatPrice(selectedService.price)}</span> : null}
                       {selectedUpdatedAt ? <span>Обновлено {formatDate(selectedUpdatedAt, locale)}</span> : null}
                     </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setIsDetailOpen(false)}
+                      className="shrink-0 text-slate-400 hover:bg-slate-100 hover:text-slate-900"
+                      title="Закрыть редактор и оставить только список услуг"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button
@@ -534,6 +553,7 @@ export function CardServicesTable({
               </div>
             ) : null}
           </div>
+          ) : null}
         </div>
       )}
     </div>
