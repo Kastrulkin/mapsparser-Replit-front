@@ -37,8 +37,10 @@ import {
 import {
   formatMapSourceTab,
   formatServiceSource,
+  buildServicesQualityAudit,
   getDisplayedServiceUpdatedAt,
-  getMatchedKeywords,
+  getKeywordScore,
+  getServiceQuality,
   isDraftSimilarToCurrent,
 } from '@/components/dashboard/cardServicesLogic';
 import { useCardServiceController } from '@/components/dashboard/useCardServiceController';
@@ -210,6 +212,7 @@ export const CardOverviewPage = () => {
   const servicesItemsPerPage = 1000;
   const [servicesSearch, setServicesSearch] = useState('');
   const [servicesCategoryFilter, setServicesCategoryFilter] = useState('all');
+  const [servicesQualityFilter, setServicesQualityFilter] = useState('all');
   const [servicesSort, setServicesSort] = useState<ServicesSort>('default');
 
   // Состояния для парсера
@@ -534,7 +537,12 @@ export const CardOverviewPage = () => {
 
   useEffect(() => {
     setServicesCurrentPage(1);
-  }, [servicesSearch, servicesCategoryFilter, servicesSort, currentBusinessId]);
+  }, [servicesSearch, servicesCategoryFilter, servicesQualityFilter, servicesSort, currentBusinessId]);
+
+  const servicesQualityAudit = useMemo(
+    () => buildServicesQualityAudit(userServices),
+    [userServices],
+  );
 
   const serviceCategories = useMemo(() => {
     const set = new Set<string>();
@@ -561,6 +569,22 @@ export const CardOverviewPage = () => {
       if (!sourceMatches(service)) return false;
       if (servicesCategoryFilter !== 'all' && (service?.category || '') !== servicesCategoryFilter) {
         return false;
+      }
+      if (servicesQualityFilter !== 'all') {
+        const quality = getServiceQuality(service);
+        if (servicesQualityFilter === 'needs_review' && !quality.needsReview) return false;
+        if (servicesQualityFilter === 'manual_review' && !quality.manualReview) return false;
+        if (servicesQualityFilter === 'good' && quality.status !== 'good') return false;
+        if (servicesQualityFilter === 'fallback' && !quality.issueCodes.includes('fallback_used') && !quality.issueCodes.includes('fallback_description')) return false;
+        if (
+          servicesQualityFilter !== 'needs_review'
+          && servicesQualityFilter !== 'manual_review'
+          && servicesQualityFilter !== 'good'
+          && servicesQualityFilter !== 'fallback'
+          && !quality.issueCodes.includes(servicesQualityFilter)
+        ) {
+          return false;
+        }
       }
       if (!query) return true;
       const haystack = [
@@ -606,7 +630,7 @@ export const CardOverviewPage = () => {
       }
     });
     return sorted;
-  }, [userServices, servicesSearch, servicesCategoryFilter, servicesSort, language, selectedSource]);
+  }, [userServices, servicesSearch, servicesCategoryFilter, servicesQualityFilter, servicesSort, language, selectedSource]);
 
   const pagedServices = useMemo(
     () => filteredServices.slice((servicesCurrentPage - 1) * servicesItemsPerPage, servicesCurrentPage * servicesItemsPerPage),
@@ -823,6 +847,7 @@ export const CardOverviewPage = () => {
     setEditServiceForm,
     optimizingServiceId,
     optimizingAll,
+    problemRegenerationStatus,
     addService,
     optimizeService,
     optimizeAllServices,
@@ -1244,6 +1269,7 @@ export const CardOverviewPage = () => {
                   automationLockedMessage={automationLockedMessage}
                   optimizingAll={optimizingAll}
                   optimizingServiceId={optimizingServiceId}
+                  problemRegenerationStatus={problemRegenerationStatus}
                   onOptimizeAll={optimizeAllServices}
                   onServicesImported={loadUserServices}
                 />
@@ -1255,12 +1281,49 @@ export const CardOverviewPage = () => {
                 locale={language === 'ru' ? 'ru-RU' : 'en-US'}
               />
 
+              <div className="mb-4 grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-white p-3 text-sm md:grid-cols-4 lg:grid-cols-8">
+                <div className="rounded-lg bg-slate-50 px-3 py-2">
+                  <div className="text-xs text-slate-500">Всего</div>
+                  <div className="font-semibold text-slate-950">{servicesQualityAudit.summary.total}</div>
+                </div>
+                <div className="rounded-lg bg-emerald-50 px-3 py-2">
+                  <div className="text-xs text-emerald-700">ОК</div>
+                  <div className="font-semibold text-emerald-900">{servicesQualityAudit.summary.good}</div>
+                </div>
+                <button type="button" onClick={() => setServicesQualityFilter('needs_review')} className="rounded-lg bg-amber-50 px-3 py-2 text-left">
+                  <div className="text-xs text-amber-700">Требуют доработки</div>
+                  <div className="font-semibold text-amber-900">{servicesQualityAudit.summary.needsReview}</div>
+                </button>
+                <button type="button" onClick={() => setServicesQualityFilter('manual_review')} className="rounded-lg bg-red-50 px-3 py-2 text-left">
+                  <div className="text-xs text-red-700">Ручная проверка</div>
+                  <div className="font-semibold text-red-900">{servicesQualityAudit.summary.manualReview}</div>
+                </button>
+                <button type="button" onClick={() => setServicesQualityFilter('missing_keywords')} className="rounded-lg bg-orange-50 px-3 py-2 text-left">
+                  <div className="text-xs text-orange-700">Потеряны ключи</div>
+                  <div className="font-semibold text-orange-900">{servicesQualityAudit.summary.missingKeywords}</div>
+                </button>
+                <button type="button" onClick={() => setServicesQualityFilter('weak_matches_only')} className="rounded-lg bg-yellow-50 px-3 py-2 text-left">
+                  <div className="text-xs text-yellow-700">Слабые</div>
+                  <div className="font-semibold text-yellow-900">{servicesQualityAudit.summary.weakMatchesOnly}</div>
+                </button>
+                <button type="button" onClick={() => setServicesQualityFilter('fallback')} className="rounded-lg bg-indigo-50 px-3 py-2 text-left">
+                  <div className="text-xs text-indigo-700">Fallback</div>
+                  <div className="font-semibold text-indigo-900">{servicesQualityAudit.summary.fallback}</div>
+                </button>
+                <button type="button" onClick={() => setServicesQualityFilter('no_keywords')} className="rounded-lg bg-slate-50 px-3 py-2 text-left">
+                  <div className="text-xs text-slate-600">Нет ключей</div>
+                  <div className="font-semibold text-slate-900">{servicesQualityAudit.summary.noKeywords}</div>
+                </button>
+              </div>
+
               <CardServicesFilterBar
                 copy={serviceControlsCopy}
                 search={servicesSearch}
                 onSearchChange={setServicesSearch}
                 categoryFilter={servicesCategoryFilter}
                 onCategoryFilterChange={setServicesCategoryFilter}
+                qualityFilter={servicesQualityFilter}
+                onQualityFilterChange={setServicesQualityFilter}
                 categories={serviceCategories}
                 sort={servicesSort}
                 onSortChange={(value) => setServicesSort(toServicesSort(value))}
@@ -1297,7 +1360,7 @@ export const CardOverviewPage = () => {
                 formatServiceSource={formatServiceSource}
                 getOptimizedNameValue={getOptimizedNameValue}
                 getOptimizedDescriptionValue={getOptimizedDescriptionValue}
-                getMatchedKeywords={getMatchedKeywords}
+                getKeywordScore={getKeywordScore}
                 isDraftSimilarToCurrent={isDraftSimilarToCurrent}
                 getDisplayedServiceUpdatedAt={(service) =>
                   getDisplayedServiceUpdatedAt(service, servicesLastParseDate, lastParseDate, servicesNoNewFromParse)

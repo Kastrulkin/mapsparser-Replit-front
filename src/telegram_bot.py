@@ -14,6 +14,7 @@ import uuid
 import base64
 import logging
 import requests
+import sys
 from datetime import datetime
 from typing import Any
 from urllib.parse import urlparse
@@ -23,6 +24,12 @@ from telegram.request import HTTPXRequest
 from database_manager import get_db_connection
 from core.action_orchestrator import ActionOrchestrator
 from core.helpers import get_user_language
+from core.service_optimization_verticals import (
+    detect_service_optimization_vertical,
+    format_service_optimization_vertical_prompt,
+    get_service_optimization_vertical_context,
+)
+from core.service_keyword_scoring import build_services_quality_audit
 from core.telegram_network import build_requests_proxy_kwargs, resolve_telegram_http_proxy
 from crypto_pay_client import (
     CryptoPayClient,
@@ -59,6 +66,7 @@ from services.telegram_static_answers import (
 )
 from services.gigachat_client import analyze_screenshot_with_gigachat, analyze_text_with_gigachat
 from subscription_manager import get_subscription_info
+from auth_system import create_session
 
 # Автоматически подгружаем переменные окружения из .env,
 # как это сделано в main.py, чтобы GigaChat-ключи и другие
@@ -366,6 +374,15 @@ def _telegram_capability_services_optimize(envelope: dict, user_data: dict) -> d
         "zh": "Chinese",
     }
     service_examples = _load_user_examples(str(user_data.get("user_id") or ""), "service", limit=5)
+    business_vertical_key = detect_service_optimization_vertical(
+        business_name=business_name,
+        business_type=payload.get("business_type") or "",
+        industry=payload.get("industry") or "",
+        categories=payload.get("categories") or "",
+    )
+    business_vertical_prompt = format_service_optimization_vertical_prompt(
+        get_service_optimization_vertical_context(business_vertical_key)
+    )
     prompt = _format_prompt_with_replacements(
         prompt_template,
         {
@@ -373,6 +390,18 @@ def _telegram_capability_services_optimize(envelope: dict, user_data: dict) -> d
             "business_name": business_name,
             "industry": str(payload.get("industry") or "-"),
             "business_type": str(payload.get("business_type") or "-"),
+            "business_profile": " | ".join(
+                item
+                for item in [
+                    business_name,
+                    str(payload.get("business_type") or "").strip(),
+                    str(payload.get("industry") or "").strip(),
+                    str(payload.get("categories") or "").strip(),
+                    region,
+                ]
+                if item
+            ),
+            "business_vertical": business_vertical_prompt,
             "tone": tone,
             "language_name": language_names.get(language, "Russian"),
             "length": length,
@@ -386,6 +415,7 @@ def _telegram_capability_services_optimize(envelope: dict, user_data: dict) -> d
     )
     prompt += (
         "\n\n"
+        f"ВЕРТИКАЛЬНЫЕ ПРАВИЛА:\n{business_vertical_prompt}\n\n"
         "КРИТИЧЕСКИЕ ОГРАНИЧЕНИЯ:\n"
         "1) Используй ТОЛЬКО исходную услугу из блока {content}. Не меняй тематику.\n"
         "2) Не копируй чужие примеры как готовый результат.\n"
@@ -850,6 +880,8 @@ def _build_card_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [InlineKeyboardButton("📊 Открыть аудит и прогресс", url=urls["progress"])],
+            [InlineKeyboardButton("🧩 Аудит услуг", callback_data="client_services_audit")],
+            [InlineKeyboardButton("🔁 Перегенерировать проблемные", callback_data="client_services_regenerate_problematic")],
             [InlineKeyboardButton("👤 Профиль и бизнес", url=urls["profile"])],
             [InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")],
         ]
@@ -1782,6 +1814,141 @@ def _perform_service_optimize(business_ctx: dict, service_text: str) -> tuple[bo
     return True, "\n".join(lines)
 
 
+def _build_services_audit_text(business_ctx: dict) -> tuple[bool, str]:
+    business_id = str(business_ctx.get("business_id") or "").strip()
+    if not business_id:
+        return False, "❌ Бизнес не выбран."
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT id, name, description, optimized_name, optimized_description, keywords
+        FROM userservices
+        WHERE business_id = %s AND (is_active IS TRUE OR is_active IS NULL)
+        ORDER BY category NULLS LAST, name NULLS LAST
+        """,
+        (business_id,),
+    )
+    rows = cursor.fetchall()
+    conn.close()
+
+    services = []
+    for row in rows:
+        if hasattr(row, "keys"):
+            raw = dict(row)
+        else:
+            raw = {
+                "id": row[0] if len(row) > 0 else "",
+                "name": row[1] if len(row) > 1 else "",
+                "description": row[2] if len(row) > 2 else "",
+                "optimized_name": row[3] if len(row) > 3 else "",
+                "optimized_description": row[4] if len(row) > 4 else "",
+                "keywords": row[5] if len(row) > 5 else [],
+            }
+        raw_keywords = raw.get("keywords")
+        if isinstance(raw_keywords, str):
+            try:
+                parsed_keywords = json.loads(raw_keywords)
+            except Exception:
+                parsed_keywords = [item.strip() for item in raw_keywords.split(",") if item.strip()]
+            raw["keywords"] = parsed_keywords if isinstance(parsed_keywords, list) else []
+        services.append(raw)
+
+    audit = build_services_quality_audit(services)
+    summary = audit.get("summary") or {}
+    items = audit.get("items") or []
+    problem_items = [item for item in items if item.get("needs_review")][:5]
+    lines = [
+        "🧩 Аудит услуг",
+        f"Бизнес: {business_ctx.get('business_name') or 'бизнес'}",
+        "",
+        f"Проверено {int(summary.get('total') or 0)} услуг",
+        f"ОК: {int(summary.get('good') or 0)}",
+        f"Требуют доработки: {int(summary.get('needs_review') or 0)}",
+        f"Потеряны SEO-ключи: {int(summary.get('missing_keywords') or 0)}",
+        f"Только слабые совпадения: {int(summary.get('weak_matches_only') or 0)}",
+        f"Fallback: {int(summary.get('fallback') or 0)}",
+        f"Guardrails: {int(summary.get('guardrail_failed') or 0)}",
+    ]
+    if problem_items:
+        lines.extend(["", "Первые проблемы:"])
+        for item in problem_items:
+            labels = item.get("issue_labels") if isinstance(item.get("issue_labels"), list) else []
+            reason = "; ".join([str(label) for label in labels[:2]]) or "требует проверки"
+            lines.append(f"• {item.get('name') or 'Услуга'} — {reason}")
+    lines.extend(["", "Команда: /optimize_service — перегенерировать одну услугу."])
+    return True, "\n".join(lines)
+
+
+def _start_services_problem_regeneration_from_telegram(
+    telegram_id: str,
+    business_ctx: dict,
+    *,
+    confirm: bool = False,
+    job_id: str = "",
+) -> tuple[bool, str, InlineKeyboardMarkup | None]:
+    business_id = str((business_ctx or {}).get("business_id") or "").strip()
+    if not business_id:
+        return False, "❌ Бизнес не выбран.", None
+    db_user_id = get_user_id_from_telegram(telegram_id)
+    if not db_user_id:
+        return False, "❌ Аккаунт не привязан. Откройте /start и привяжите LocalOS.", None
+
+    token = create_session(str(db_user_id), ip_address="telegram", user_agent="localos-telegram-bot")
+    if not token:
+        return False, "❌ Не удалось создать безопасную сессию для запуска job.", None
+
+    try:
+        payload = {"business_id": business_id, "limit": 10, "requested_by": "telegram"}
+        if confirm:
+            payload["confirm"] = True
+            payload["job_id"] = job_id
+        response = requests.post(
+            f"{API_BASE_URL}/api/services/regenerate-problematic",
+            headers={"Authorization": "Bearer " + token},
+            json=payload,
+            timeout=(5, 20),
+        )
+        data = response.json() if response.content else {}
+    except Exception:
+        error = sys.exc_info()[1]
+        return False, f"❌ Не удалось запустить перегенерацию: {error}", None
+
+    if response.status_code >= 400 or not data.get("success"):
+        return False, "❌ Не удалось запустить перегенерацию: " + str(data.get("error") or f"HTTP {response.status_code}"), None
+
+    job = data.get("job") if isinstance(data.get("job"), dict) else {}
+    selected = int(job.get("selected") or 0)
+    manual_review = int(job.get("manual_review") or 0)
+    status = str(job.get("status") or "")
+    if status == "awaiting_confirmation":
+        total_problem_count = int(job.get("total_problem_count") or selected)
+        next_job_id = str(job.get("id") or "")
+        return True, (
+            "🔁 Перегенерация проблемных услуг\n\n"
+            f"Найдено проблемных услуг: {total_problem_count}.\n"
+            f"Готов взять до {int(job.get('limit') or 10)} за запуск.\n\n"
+            "Подтвердить запуск?"
+        ), InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("✅ Запустить до 10", callback_data=f"svc_regen_go:{next_job_id}")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="client_services_audit")],
+            ]
+        )
+    if selected <= 0:
+        return True, (
+            "🔁 Перегенерация проблемных услуг\n\n"
+            "Проблемных услуг для запуска не найдено."
+            + (f"\nНужна ручная проверка: {manual_review}" if manual_review else "")
+        ), _build_card_menu()
+    return True, (
+        "🔁 Перегенерация проблемных услуг\n\n"
+        f"Взял {selected} проблемных услуг из аудита, лимит — до 10 за запуск.\n"
+        "Запустил job в фоне. Результат можно смотреть в кабинете, аудит обновится после завершения."
+    ), _build_card_menu()
+
+
 def _perform_news_generate(business_ctx: dict, raw_info: str) -> tuple[bool, str]:
     raw_info = str(raw_info or "").strip()
     if not raw_info:
@@ -2324,6 +2491,14 @@ async def partnerships_command(update: Update, context: ContextTypes.DEFAULT_TYP
     await update.message.reply_text(text)
 
 
+async def services_audit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    business_ctx = await _require_bound_business(update, context)
+    if not business_ctx:
+        return
+    _ok, text = _build_services_audit_text(business_ctx)
+    await update.message.reply_text(text, reply_markup=_build_card_menu())
+
+
 async def feature_request_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not _is_bound_user(str(update.effective_user.id)):
         await update.message.reply_text("✨ Эта функция доступна после привязки аккаунта.")
@@ -2730,6 +2905,33 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
     elif data == "client_card":
         await _show_client_section(update, build_card_text(business_ctx), _build_card_menu())
+    elif data == "client_services_audit":
+        audit_ctx = resolve_business_context(user_id)
+        if not audit_ctx or not audit_ctx.get("business_id"):
+            await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
+            return
+        _ok, text = _build_services_audit_text(audit_ctx)
+        await query.edit_message_text(text, reply_markup=_build_card_menu())
+    elif data == "client_services_regenerate_problematic":
+        regen_ctx = resolve_business_context(user_id)
+        if not regen_ctx or not regen_ctx.get("business_id"):
+            await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
+            return
+        _ok, text, markup = _start_services_problem_regeneration_from_telegram(user_id, regen_ctx)
+        await query.edit_message_text(text, reply_markup=markup or _build_card_menu())
+    elif data.startswith("svc_regen_go:"):
+        regen_ctx = resolve_business_context(user_id)
+        if not regen_ctx or not regen_ctx.get("business_id"):
+            await query.edit_message_text("❌ Для аккаунта не найден бизнес. Сначала создайте бизнес в LocalOS.")
+            return
+        job_id = data.replace("svc_regen_go:", "", 1).strip()
+        _ok, text, markup = _start_services_problem_regeneration_from_telegram(
+            user_id,
+            regen_ctx,
+            confirm=True,
+            job_id=job_id,
+        )
+        await query.edit_message_text(text, reply_markup=markup or _build_card_menu())
     elif data == "client_reviews":
         await _show_client_section(update, build_reviews_text(business_ctx), _build_reviews_menu())
     elif data == "client_growth":
@@ -4201,6 +4403,7 @@ def main():
         application.add_handler(CommandHandler("status", openclaw_status_command))
         application.add_handler(CommandHandler("reply_review", reply_review_command))
         application.add_handler(CommandHandler("optimize_service", optimize_service_command))
+        application.add_handler(CommandHandler("services_audit", services_audit_command))
         application.add_handler(CommandHandler("generate_news", generate_news_command))
         application.add_handler(CommandHandler("partnerships", partnerships_command))
         application.add_handler(CommandHandler("feature_request", feature_request_command))

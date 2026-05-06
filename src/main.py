@@ -50,6 +50,18 @@ from parsequeue_status import STATUS_COMPLETED, STATUS_ERROR, normalize_status
 from auth_system import authenticate_user, create_session, normalize_email, verify_session
 from init_database_schema import init_database_schema
 from core.default_ai_prompts import get_default_ai_prompts
+from core.beauty_service_optimization import (
+    apply_beauty_service_guardrails,
+    beauty_canonical_service_key,
+    format_beauty_generation_context,
+    is_beauty_optimization_context,
+)
+from core.service_keyword_scoring import evaluate_service_keyword_score
+from core.service_optimization_verticals import (
+    detect_service_optimization_vertical,
+    format_service_optimization_vertical_prompt,
+    get_service_optimization_vertical_context,
+)
 from chatgpt_api import chatgpt_bp
 from chatgpt_search_api import chatgpt_search_bp
 from stripe_integration import stripe_bp
@@ -3636,6 +3648,62 @@ def _is_beauty_service_context(
     return False
 
 
+def _is_beauty_business_context(business_profile: str) -> bool:
+    normalized = str(business_profile or "").strip().lower().replace("ё", "е")
+    if not normalized:
+        return False
+    normalized_spaced = f" {normalized} "
+    if " spa " in normalized_spaced:
+        return True
+    beauty_markers = (
+        "beauty", "салон красоты", "парикмах", "барбер", "маник", "педик",
+        "космет", "бров", "ресниц", "спа", "массаж", "эпиля",
+    )
+    return any(marker in normalized for marker in beauty_markers)
+
+
+def _strip_unwanted_service_vertical_hallucinations(
+    text: str,
+    *,
+    original_name: str,
+    source_description: str,
+    business_profile: str,
+) -> str:
+    result = str(text or "").strip()
+    if not result:
+        return result
+
+    source_text = " ".join(
+        part
+        for part in [
+            str(original_name or ""),
+            str(source_description or ""),
+        ]
+        if str(part or "").strip()
+    ).lower().replace("ё", "е")
+    if _is_beauty_business_context(business_profile) or "бьюти" in source_text or "индустр" in source_text and "красот" in source_text:
+        return result
+
+    replacements = (
+        (" для бьюти-индустрии", ""),
+        (" для бьюти индустрии", ""),
+        (" в бьюти-индустрии", ""),
+        (" в бьюти индустрии", ""),
+        (" для индустрии красоты", ""),
+        (" в индустрии красоты", ""),
+        (" специалистов бьюти-индустрии", "специалистов"),
+        (" специалистов индустрии красоты", "специалистов"),
+        (" в салоне красоты", ""),
+        (" для салона красоты", ""),
+    )
+    for source, replacement in replacements:
+        result = result.replace(source, replacement)
+        result = result.replace(source.capitalize(), replacement.capitalize() if replacement else "")
+
+    result = " ".join(result.split())
+    return result.strip(" ,-–—")
+
+
 def _compose_beauty_service_name(base_name: str, keywords: object) -> str:
     source_name = str(base_name or "").strip()
     if not source_name:
@@ -3727,24 +3795,7 @@ def _compose_service_seo_draft(
 
     if is_beauty_context:
         natural_name = _compose_beauty_service_name(base_name, keyword_items) or str(base_name or "").strip() or "Услуга"
-        beauty_keywords = []
-        for keyword in keyword_items:
-            if keyword not in beauty_keywords:
-                beauty_keywords.append(keyword)
-            if len(beauty_keywords) >= 2:
-                break
-        beauty_tail = ""
-        if beauty_keywords:
-            beauty_tail = f" Подходит под запросы: {', '.join(beauty_keywords)}."
-        if region_text:
-            return (
-                f"{natural_name} для региона {region_text}. Процедура помогает аккуратно проработать выбранную зону "
-                f"и поддерживать гладкость кожи.{beauty_tail}"
-            )
-        return (
-            f"{natural_name}. Процедура помогает аккуратно проработать выбранную зону "
-            f"и поддерживать гладкость кожи.{beauty_tail}"
-        )
+        return f"{natural_name}: услуга по исходному формату записи."
 
     if keyword_items:
         lead_keywords = ", ".join(keyword_items[:3])
@@ -3759,6 +3810,8 @@ def _normalize_low_quality_service_suggestions(
     parsed_result: dict,
     region: str | None = None,
     preferred_category: str | None = None,
+    business_profile: str = "",
+    business_vertical_key: str = "",
 ) -> dict:
     if not isinstance(parsed_result, dict):
         return parsed_result
@@ -3768,6 +3821,7 @@ def _normalize_low_quality_service_suggestions(
 
     region_text = str(region or "").strip()
     normalized: list[dict] = []
+    beauty_canonical_cache: dict[str, dict] = {}
     for item in services:
         if not isinstance(item, dict):
             continue
@@ -3783,6 +3837,20 @@ def _normalize_low_quality_service_suggestions(
         keywords = item.get("keywords")
         price = item.get("price")
         category = item.get("category")
+        is_beauty_context = is_beauty_optimization_context(
+            vertical_key=business_vertical_key,
+            business_profile=business_profile,
+            service_name=original_name or optimized_name,
+            category=category or preferred_category,
+        )
+        beauty_cache_key = ""
+        if is_beauty_context:
+            beauty_cache_key = beauty_canonical_service_key(original_name or optimized_name, source_description)
+            cached_beauty = beauty_canonical_cache.get(beauty_cache_key)
+            if isinstance(cached_beauty, dict):
+                normalized.append(dict(cached_beauty))
+                continue
+
         relevant_keywords = _select_relevant_service_keywords(
             keywords,
             original_name or optimized_name,
@@ -3803,7 +3871,7 @@ def _normalize_low_quality_service_suggestions(
         low_keywords = not isinstance(keywords, list) or len([k for k in keywords if str(k).strip()]) == 0
 
         if low_name:
-            if _is_beauty_service_context(
+            if is_beauty_context or _is_beauty_service_context(
                 original_name or optimized_name,
                 source_description=source_description,
                 preferred_category=category or preferred_category,
@@ -3826,19 +3894,58 @@ def _normalize_low_quality_service_suggestions(
                 preferred_category=category or preferred_category,
             )
 
+        optimized_name = _strip_unwanted_service_vertical_hallucinations(
+            optimized_name,
+            original_name=original_name,
+            source_description=source_description,
+            business_profile=business_profile,
+        )
+        seo_description = _strip_unwanted_service_vertical_hallucinations(
+            seo_description,
+            original_name=original_name,
+            source_description=source_description,
+            business_profile=business_profile,
+        )
+
         if low_keywords:
             keywords = relevant_keywords or _extract_keywords_from_service_name(original_name or optimized_name)
         else:
             keywords = relevant_keywords
 
-        normalized.append({
+        if is_beauty_context:
+            guarded = apply_beauty_service_guardrails(
+                original_name=original_name or optimized_name,
+                optimized_name=optimized_name,
+                seo_description=seo_description,
+                source_description=source_description,
+            )
+            optimized_name = str(guarded.get("optimized_name") or "").strip()
+            seo_description = str(guarded.get("seo_description") or "").strip()
+            item["beauty_attributes"] = guarded.get("beauty_attributes") or {}
+            item["guardrail_reasons"] = guarded.get("guardrail_reasons") or []
+            item["fallback_used"] = bool(guarded.get("fallback_used"))
+
+        normalized_item = {
             "original_name": original_name or optimized_name,
             "optimized_name": optimized_name,
             "seo_description": seo_description,
             "keywords": keywords,
+            "seo_keyword_score": evaluate_service_keyword_score(
+                f"{optimized_name} {seo_description}",
+                keywords,
+                f"{original_name} {source_description}",
+            ),
             "price": price if price is not None else "",
             "category": _normalize_service_category_value(category, fallback=preferred_category),
-        })
+        }
+        if is_beauty_context:
+            normalized_item["beauty_attributes"] = item.get("beauty_attributes") or {}
+            normalized_item["guardrail_reasons"] = item.get("guardrail_reasons") or []
+            normalized_item["fallback_used"] = bool(item.get("fallback_used"))
+            if beauty_cache_key:
+                beauty_canonical_cache[beauty_cache_key] = dict(normalized_item)
+
+        normalized.append(normalized_item)
 
     parsed_result["services"] = normalized if normalized else services
     return parsed_result
@@ -3885,6 +3992,52 @@ def services_optimize():
         )
         length = request.form.get('description_length') or json_payload.get('description_length') or 150
         request_business_id = _resolve_request_business_id(user_data, json_data=json_payload)
+        business_profile = ""
+        business_vertical_key = "local_business"
+        business_vertical_prompt = format_service_optimization_vertical_prompt(
+            get_service_optimization_vertical_context(business_vertical_key)
+        )
+        if request_business_id:
+            try:
+                profile_db = DatabaseManager()
+                profile_cursor = profile_db.conn.cursor()
+                profile_cursor.execute(
+                    """
+                    SELECT name, business_type, industry, categories, city, address
+                    FROM businesses
+                    WHERE id = %s
+                    LIMIT 1
+                    """,
+                    (request_business_id,),
+                )
+                profile_row = profile_cursor.fetchone()
+                profile_data = _row_to_dict(profile_cursor, profile_row) if profile_row else {}
+                profile_db.close()
+                business_profile = " | ".join(
+                    item
+                    for item in [
+                        str(profile_data.get("name") or business_name or "").strip(),
+                        str(profile_data.get("business_type") or "").strip(),
+                        str(profile_data.get("industry") or "").strip(),
+                        str(profile_data.get("categories") or "").strip(),
+                        str(profile_data.get("city") or "").strip(),
+                        str(profile_data.get("address") or "").strip(),
+                    ]
+                    if item
+                )
+                if not business_name:
+                    business_name = str(profile_data.get("name") or "").strip()
+                business_vertical_key = detect_service_optimization_vertical(
+                    business_name=profile_data.get("name") or business_name,
+                    business_type=profile_data.get("business_type"),
+                    industry=profile_data.get("industry"),
+                    categories=profile_data.get("categories"),
+                )
+                business_vertical_prompt = format_service_optimization_vertical_prompt(
+                    get_service_optimization_vertical_context(business_vertical_key)
+                )
+            except Exception:
+                business_profile = ""
 
         seo_keywords_list: list[str] = []
         seo_keywords_top10 = ""
@@ -4049,15 +4202,17 @@ def services_optimize():
                     # Формируем финальный промпт
                     formatted_user_prompt = user_prompt_template.format(
                         region=region or 'Санкт-Петербург',
-                        business_name=business_name or 'Салон красоты',
+                        business_name=business_name or 'Локальный бизнес',
+                        business_profile=business_profile or 'не указан',
                         tone=tone or 'Профессиональный',
                         length=length or 150,
                         instructions=instructions or 'Оптимизируй услуги для Яндекс.Карт'
                     )
-                    screenshot_prompt = f"{system_prompt}\n\n{formatted_user_prompt}"
+                    screenshot_prompt = f"{system_prompt}\n\nПрофиль бизнеса: {business_profile or 'не указан'}\n{business_vertical_prompt}\n\n{formatted_user_prompt}"
 
                 except FileNotFoundError:
-                    screenshot_prompt = """Проанализируй скриншот прайс-листа салона красоты и найди все услуги.
+                    screenshot_prompt = """Проанализируй скриншот прайс-листа или списка услуг и найди все услуги.
+Не подменяй отрасль бизнеса. Не добавляй бьюти-термины, если их нет в исходном тексте или профиле бизнеса.
 
 ВЕРНИ РЕЗУЛЬТАТ СТРОГО В JSON ФОРМАТЕ:
 {
@@ -4166,6 +4321,15 @@ def services_optimize():
             except Exception as keywords_error:
                 print(f"⚠️ services_optimize: не удалось загрузить SEO-ключи: {keywords_error}", flush=True)
 
+            beauty_attribute_map = ""
+            if is_beauty_optimization_context(
+                vertical_key=business_vertical_key,
+                business_profile=business_profile,
+                service_name=content,
+                category=requested_service_category,
+            ):
+                beauty_attribute_map = format_beauty_generation_context(content)
+
             # Загружаем новый промпт из файла
             try:
                 with open('prompts/services-optimization-prompt.txt', 'r', encoding='utf-8') as f:
@@ -4204,14 +4368,18 @@ def services_optimize():
 
                 # Формируем финальный промпт
                 user_prompt = user_template.replace('{region}', str(region or 'не указан'))
-                user_prompt = user_prompt.replace('{business_name}', str(business_name or 'салон красоты'))
+                user_prompt = user_prompt.replace('{business_name}', str(business_name or 'локальный бизнес'))
+                user_prompt = user_prompt.replace('{business_profile}', str(business_profile or 'не указан'))
+                user_prompt = user_prompt.replace('{business_vertical}', str(business_vertical_prompt))
                 user_prompt = user_prompt.replace('{tone}', str(tone or 'профессиональный'))
+                user_prompt = user_prompt.replace('{language_name}', language_name)
                 user_prompt = user_prompt.replace('{length}', str(length or 150))
                 user_prompt = user_prompt.replace('{instructions}', str(instructions or '-'))
                 user_prompt = user_prompt.replace('{frequent_queries}', str(frequent_queries))
                 user_prompt = user_prompt.replace('{seo_keywords}', str(seo_keywords_top10))
                 user_prompt = user_prompt.replace('{seo_keywords_top10}', str(seo_keywords_top10))
                 user_prompt = user_prompt.replace('{good_examples}', str(good_examples))
+                user_prompt = user_prompt.replace('{beauty_attribute_map}', str(beauty_attribute_map or '-'))
                 user_prompt = user_prompt.replace('{content}', str(content[:4000]))
 
                 # Объединяем system и user промпты
@@ -4219,11 +4387,15 @@ def services_optimize():
 
             except FileNotFoundError:
                 # Fallback на старый промпт
-                default_prompt_template = """Ты - SEO-специалист для бьюти-индустрии. Перефразируй ТОЛЬКО названия услуг и короткие описания для карточек Яндекс.Карт.
+                default_prompt_template = """Ты - SEO-специалист для локального бизнеса. Перефразируй ТОЛЬКО названия услуг и короткие описания для карточек Яндекс.Карт.
 Запрещено любые мнения, диалог, оценочные суждения, обсуждение конкурентов, оскорбления. Никакого текста кроме результата.
+Не подменяй отрасль бизнеса. Не добавляй "салон", "бьюти", "индустрия красоты", если это не указано в исходной услуге, профиле бизнеса или инструкциях.
 
 Регион: {region}
 Название бизнеса: {business_name}
+Профиль бизнеса: {business_profile}
+Вертикальные правила:
+{business_vertical}
 Тон: {tone}
 Язык результата: {language_name} (все текстовые поля optimized_name, seo_description и general_recommendations должны быть на этом языке)
 Длина описания: {length} символов
@@ -4256,7 +4428,9 @@ def services_optimize():
                 prompt = (
                     prompt_template
                     .replace('{region}', str(region or 'не указан'))
-                    .replace('{business_name}', str(business_name or 'салон красоты'))
+                    .replace('{business_name}', str(business_name or 'локальный бизнес'))
+                    .replace('{business_profile}', str(business_profile or 'не указан'))
+                    .replace('{business_vertical}', str(business_vertical_prompt))
                     .replace('{tone}', str(tone or 'профессиональный'))
                     .replace('{language_name}', language_name)
                     .replace('{length}', str(length or 150))
@@ -4264,6 +4438,8 @@ def services_optimize():
                     .replace('{frequent_queries}', str(frequent_queries))
                     .replace('{seo_keywords}', str(seo_keywords_top10))
                     .replace('{seo_keywords_top10}', str(seo_keywords_top10))
+                    .replace('{good_examples}', str(good_examples))
+                    .replace('{beauty_attribute_map}', str(beauty_attribute_map or '-'))
                     .replace('{content}', str(content[:4000]))
                 )
 
@@ -4374,6 +4550,8 @@ def services_optimize():
                 parsed_result,
                 region=region,
                 preferred_category=requested_service_category,
+                business_profile=business_profile,
+                business_vertical_key=business_vertical_key,
             )
 
         # Apply quality normalization for fallback branch as well
@@ -4381,6 +4559,8 @@ def services_optimize():
             parsed_result,
             region=region,
             preferred_category=requested_service_category,
+            business_profile=business_profile,
+            business_vertical_key=business_vertical_key,
         )
 
         # Сохраним в БД (как оптимизацию прайса, даже для текстового режима)

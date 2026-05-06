@@ -116,6 +116,7 @@ type CardServiceOptimizerPanelProps = {
   automationLockedMessage: string;
   optimizingAll: boolean;
   optimizingServiceId: string | null;
+  problemRegenerationStatus: string | null;
   onOptimizeAll: () => void;
   onServicesImported: () => void;
 };
@@ -130,6 +131,7 @@ export const CardServiceOptimizerPanel = ({
   automationLockedMessage,
   optimizingAll,
   optimizingServiceId,
+  problemRegenerationStatus,
   onOptimizeAll,
   onServicesImported,
 }: CardServiceOptimizerPanelProps) => (
@@ -148,12 +150,19 @@ export const CardServiceOptimizerPanel = ({
           onClick={onOptimizeAll}
           disabled={!automationAllowed || optimizingAll || optimizingServiceId !== null}
           className="shrink-0 border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50"
-          title={!automationAllowed ? automationLockedMessage : copy.optimizeAll}
+          title={!automationAllowed ? automationLockedMessage : 'Перегенерировать проблемные: до 10 за запуск'}
         >
           <Wand2 className="mr-2 h-4 w-4" />
-          {optimizingAll ? 'Оптимизируем...' : copy.optimizeAll}
+          {optimizingAll ? 'Перегенерируем...' : 'Перегенерировать проблемные'}
         </Button>
       ) : null}
+    </div>
+    <div className="mb-4 rounded-xl border border-indigo-100 bg-white px-4 py-3 text-sm text-indigo-800">
+      <div className="font-medium">Перегенерировать проблемные</div>
+      <div className="mt-1 text-indigo-700/80">
+        До 10 услуг за запуск. Берём только те, где аудит нашёл потерянные ключи, fallback или guardrails.
+      </div>
+      {problemRegenerationStatus ? <div className="mt-2 font-medium">{problemRegenerationStatus}</div> : null}
     </div>
     {!automationAllowed ? (
       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -202,6 +211,8 @@ type CardServicesFilterBarProps = {
   onSearchChange: (value: string) => void;
   categoryFilter: string;
   onCategoryFilterChange: (value: string) => void;
+  qualityFilter: string;
+  onQualityFilterChange: (value: string) => void;
   categories: string[];
   sort: string;
   onSortChange: (value: string) => void;
@@ -213,13 +224,15 @@ export const CardServicesFilterBar = ({
   onSearchChange,
   categoryFilter,
   onCategoryFilterChange,
+  qualityFilter,
+  onQualityFilterChange,
   categories,
   sort,
   onSortChange,
 }: CardServicesFilterBarProps) => (
   <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
     <div className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Поиск и фильтры</div>
-    <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
         <input
@@ -239,6 +252,23 @@ export const CardServicesFilterBar = ({
         >
           <option value="all">Все категории</option>
           {categories.map((category) => <option key={category} value={category}>{category}</option>)}
+        </select>
+      </div>
+      <div className="relative">
+        <Filter className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <select
+          value={qualityFilter}
+          onChange={(event) => onQualityFilterChange(event.target.value)}
+          className="w-full appearance-none rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm"
+        >
+          <option value="all">Все по качеству</option>
+          <option value="needs_review">Требуют доработки</option>
+          <option value="manual_review">Нужна ручная проверка</option>
+          <option value="good">ОК</option>
+          <option value="missing_keywords">Потеряны ключи</option>
+          <option value="weak_matches_only">Только близкое совпадение</option>
+          <option value="fallback">Fallback</option>
+          <option value="no_keywords">Нет ключей</option>
         </select>
       </div>
       <div className="flex gap-2">

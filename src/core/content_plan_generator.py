@@ -73,6 +73,29 @@ def _seo_cta(keyword_text: str) -> str:
     )
 
 
+_COMPETITOR_BRAND_KEYWORDS = {
+    "точка красоты",
+    "город красоты",
+    "истинная красота",
+    "персона",
+    "мастерская красоты",
+}
+
+
+def _normalize_keyword_text(value: Any) -> str:
+    return " ".join(_safe_text(value).lower().replace("ё", "е").split())
+
+
+def _is_foreign_brand_keyword(keyword_text: str, business_name: str) -> bool:
+    normalized_keyword = _normalize_keyword_text(keyword_text)
+    normalized_business = _normalize_keyword_text(business_name)
+    if not normalized_keyword:
+        return False
+    if normalized_business and (normalized_keyword in normalized_business or normalized_business in normalized_keyword):
+        return False
+    return normalized_keyword in {_normalize_keyword_text(item) for item in _COMPETITOR_BRAND_KEYWORDS}
+
+
 def _sales_goal(sale_name: str) -> str:
     return (
         f"Опирайтесь на уже подтверждённый интерес к {_quoted(sale_name)}: "
@@ -500,7 +523,10 @@ def build_content_plan_skeleton(
             keyword_text = _safe_text(keyword.get("keyword"))
             if not keyword_text:
                 continue
+            if _is_foreign_brand_keyword(keyword_text, business_name):
+                continue
             theme_suffix = f" в {city}" if city else ""
+            keyword_views = int(keyword.get("views") or 0)
             base_score = _seo_strength(keyword)
             coverage_score = _undercovered_bonus(keyword_text, recent_blob)
             candidates.append(
@@ -511,6 +537,7 @@ def build_content_plan_skeleton(
                     "source_kind": "seo_keyword",
                     "source_ref": keyword_text,
                     "seo_keyword": keyword_text,
+                    "seo_views": keyword_views,
                     "cta_hint": _seo_cta(keyword_text),
                     "strength_score": base_score + coverage_score,
                     "ranking_reasons": [
@@ -621,6 +648,7 @@ def build_content_plan_skeleton(
                 "source_kind": candidate.get("source_kind") or "",
                 "source_ref": candidate.get("source_ref") or "",
                 "seo_keyword": candidate.get("seo_keyword") or "",
+                "seo_views": int(candidate.get("seo_views") or 0),
                 "service_id": candidate.get("service_id") or "",
                 "transaction_id": candidate.get("transaction_id") or "",
                 "cta_hint": candidate.get("cta_hint") or "",

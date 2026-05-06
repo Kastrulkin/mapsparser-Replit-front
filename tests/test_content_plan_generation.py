@@ -13,6 +13,7 @@ from src.services.content_plan_service import (
     _fetch_audit_signals,
     _fetch_seo_keywords,
     _fetch_seo_keywords_isolated,
+    _filter_foreign_brand_seo_keywords,
     _merge_seo_keyword_lists,
     _network_location_targets_from_context,
     _json_ready,
@@ -195,6 +196,27 @@ def test_select_context_seo_keywords_prefers_sufficient_custom_set():
         "заправка рядом",
         "бензин 95",
     ]
+
+
+def test_filter_foreign_brand_seo_keywords_removes_competitor_brands():
+    result = _filter_foreign_brand_seo_keywords(
+        [
+            {"keyword": "точка красоты", "views": 100726, "category": "other"},
+            {"keyword": "детская стрижка", "views": 1200, "category": "beauty"},
+        ],
+        "Весёлая расчёска",
+    )
+
+    assert [item["keyword"] for item in result] == ["детская стрижка"]
+
+
+def test_filter_foreign_brand_seo_keywords_keeps_own_brand():
+    result = _filter_foreign_brand_seo_keywords(
+        [{"keyword": "точка красоты", "views": 100726, "category": "other"}],
+        "Точка красоты",
+    )
+
+    assert [item["keyword"] for item in result] == ["точка красоты"]
 
 
 def test_sanitize_generated_news_text_extracts_json_and_removes_markup():
@@ -697,6 +719,35 @@ def test_content_plan_generator_prioritizes_undercovered_seo_topics():
     assert plan["items"][0]["source_ref"] == "педиатр рядом"
     assert plan["items"][0]["ranking_reasons"]
     assert plan["meta"]["quality_ranking_applied"] is True
+
+
+def test_content_plan_generator_skips_foreign_brand_keywords_and_keeps_views():
+    context = {
+        "business": {"name": "Весёлая расчёска", "city": "Санкт-Петербург"},
+        "services": [],
+        "seo_keywords": [
+            {"keyword": "точка красоты", "views": 100726},
+            {"keyword": "детская стрижка", "views": 1200},
+        ],
+        "sales_signals": [],
+        "audit_signals": [],
+    }
+
+    plan = build_content_plan_skeleton(
+        context,
+        period_days=30,
+        density="light",
+        content_mix={
+            "services": False,
+            "seo": True,
+            "sales": False,
+            "audit": False,
+            "seasonal": False,
+        },
+    )
+
+    assert plan["items"][0]["seo_keyword"] == "детская стрижка"
+    assert plan["items"][0]["seo_views"] == 1200
 
 
 def test_content_plan_generator_prioritizes_weak_audit_search_zone():

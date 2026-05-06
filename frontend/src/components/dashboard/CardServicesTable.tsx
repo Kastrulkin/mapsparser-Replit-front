@@ -2,6 +2,8 @@ import type { RefObject } from 'react';
 import { CheckCircle2, Edit3, Search, Sparkles, Trash2, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StickyBottomHorizontalScrollbar } from '@/components/ui/sticky-bottom-horizontal-scrollbar';
+import type { KeywordMatchLevel, KeywordScore } from '@/components/dashboard/cardServicesLogic';
+import { getServiceQuality } from '@/components/dashboard/cardServicesLogic';
 
 export type ServiceTableItem = {
   id?: string;
@@ -14,6 +16,20 @@ export type ServiceTableItem = {
   keywords?: string[] | string;
   price?: string | number;
   updated_at?: string | null;
+  fallback_used?: boolean;
+  guardrail_reasons?: string[];
+  regeneration_status?: string;
+  regeneration_attempts?: number;
+  regeneration_history?: Array<{
+    status?: string;
+    attempt_no?: number;
+    issue_labels_json?: string[];
+    after_issue_labels_json?: string[];
+    before_optimized_name?: string;
+    after_optimized_name?: string;
+    error?: string;
+    updated_at?: string;
+  }>;
 };
 
 type ServiceTableCopy = {
@@ -49,7 +65,7 @@ type CardServicesTableProps = {
   formatServiceSource: (service: ServiceTableItem) => string;
   getOptimizedNameValue: (service: ServiceTableItem) => string;
   getOptimizedDescriptionValue: (service: ServiceTableItem) => string;
-  getMatchedKeywords: (draft: string, service: ServiceTableItem) => string[];
+  getKeywordScore: (draft: string, service: ServiceTableItem, sourceText?: string) => KeywordScore;
   isDraftSimilarToCurrent: (draft: string, current: string) => boolean;
   getDisplayedServiceUpdatedAt: (service: ServiceTableItem) => string | null | undefined;
   onOptimizedNameDraftChange: (serviceId: string, value: string) => void;
@@ -67,6 +83,61 @@ function getServiceId(service: ServiceTableItem, fallback: number) {
   return service.id || `service-${fallback}`;
 }
 
+const keywordLevelCopy: Record<KeywordMatchLevel, string> = {
+  exact: 'точное',
+  normalized: 'словоформа',
+  close: 'близкое',
+};
+
+const keywordLevelClasses: Record<KeywordMatchLevel, string> = {
+  exact: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  normalized: 'border-sky-200 bg-sky-50 text-sky-700',
+  close: 'border-amber-200 bg-amber-50 text-amber-700',
+};
+
+function KeywordScoreBadges({ score }: { score: KeywordScore }) {
+  if (score.total === 0) {
+    return (
+      <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+        SEO-ключи не заданы
+      </span>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${score.missingCount > 0 ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
+        Найдено {score.found}/{score.total}
+      </span>
+      {score.matches.slice(0, 4).map((match) => (
+        <span
+          key={`${match.keyword}-${match.level}`}
+          className={`inline-flex max-w-[220px] items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${keywordLevelClasses[match.level]}`}
+          title={`${match.keyword}: ${keywordLevelCopy[match.level]}`}
+        >
+          <span className="truncate">{match.keyword}</span>
+          <span className="ml-1 opacity-80">· {keywordLevelCopy[match.level]}</span>
+        </span>
+      ))}
+      {score.weak.length > 0 ? (
+        <span className="inline-flex items-center rounded-full border border-amber-200 bg-white px-2 py-0.5 text-[10px] font-medium text-amber-700">
+          слабое: {score.weak.slice(0, 2).join(', ')}
+        </span>
+      ) : null}
+      {score.added.length > 0 ? (
+        <span className="inline-flex items-center rounded-full border border-indigo-200 bg-white px-2 py-0.5 text-[10px] font-medium text-indigo-700">
+          добавлено: {score.added.slice(0, 2).join(', ')}
+        </span>
+      ) : null}
+      {score.missing.length > 0 ? (
+        <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+          потеряно: {score.missing.slice(0, 2).join(', ')}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 export function CardServicesTable({
   tableScrollRef,
   copy,
@@ -82,7 +153,7 @@ export function CardServicesTable({
   formatServiceSource,
   getOptimizedNameValue,
   getOptimizedDescriptionValue,
-  getMatchedKeywords,
+  getKeywordScore,
   isDraftSimilarToCurrent,
   getDisplayedServiceUpdatedAt,
   onOptimizedNameDraftChange,
@@ -156,6 +227,13 @@ export function CardServicesTable({
                 const optimizedName = getOptimizedNameValue(service);
                 const optimizedDescription = getOptimizedDescriptionValue(service);
                 const displayedUpdatedAt = getDisplayedServiceUpdatedAt(service);
+                const nameKeywordScore = getKeywordScore(optimizedName, service, service.name || '');
+                const descriptionKeywordScore = getKeywordScore(
+                  optimizedDescription,
+                  service,
+                  `${service.name || ''} ${service.description || ''}`,
+                );
+                const quality = getServiceQuality(service);
 
                 return (
                   <tr key={serviceId} className="group transition-colors hover:bg-slate-50/60">
@@ -172,6 +250,35 @@ export function CardServicesTable({
                     <td className="max-w-[250px] px-6 py-4 align-top text-sm text-slate-900">
                       <div className="space-y-3">
                         {service.name ? <div className="font-semibold">{service.name}</div> : null}
+                        {quality.manualReview ? (
+                          <div className="flex flex-wrap gap-1">
+                            <span className="inline-flex max-w-[220px] items-center rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-700">
+                              нужна ручная проверка
+                            </span>
+                          </div>
+                        ) : quality.needsReview ? (
+                          <div className="flex flex-wrap gap-1">
+                            {quality.issueLabels.slice(0, 3).map((label) => (
+                              <span key={label} className="inline-flex max-w-[220px] items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700" title={label}>
+                                <span className="truncate">{label}</span>
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                            SEO-предложение ОК
+                          </span>
+                        )}
+                        {service.regeneration_history?.[0] ? (
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] leading-5 text-slate-600">
+                            <div className="font-semibold text-slate-800">История качества</div>
+                            <div>Статус: {service.regeneration_history[0].status || '—'} · попытка {service.regeneration_history[0].attempt_no || service.regeneration_attempts || 0}</div>
+                            {Array.isArray(service.regeneration_history[0].after_issue_labels_json) && service.regeneration_history[0].after_issue_labels_json.length > 0 ? (
+                              <div>После: {service.regeneration_history[0].after_issue_labels_json.slice(0, 2).join('; ')}</div>
+                            ) : null}
+                            {service.regeneration_history[0].error ? <div>Причина: {service.regeneration_history[0].error}</div> : null}
+                          </div>
+                        ) : null}
                         {service.optimized_name ? (
                           <div className="mt-2 animate-in fade-in space-y-2 rounded-lg border border-indigo-100 bg-indigo-50/80 p-3">
                             <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-indigo-600">
@@ -184,15 +291,7 @@ export function CardServicesTable({
                                   Похоже на текущее название
                                 </span>
                               ) : null}
-                              {getMatchedKeywords(optimizedName, service).length > 0 ? (
-                                <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-                                  SEO-ключи: {getMatchedKeywords(optimizedName, service).slice(0, 3).join(', ')}
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-600">
-                                  SEO-ключи не найдены
-                                </span>
-                              )}
+                              <KeywordScoreBadges score={nameKeywordScore} />
                             </div>
                             <textarea
                               value={optimizedName}
@@ -238,15 +337,7 @@ export function CardServicesTable({
                                   Похоже на текущее описание
                                 </span>
                               ) : null}
-                              {getMatchedKeywords(optimizedDescription, service).length > 0 ? (
-                                <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-                                  SEO-ключи: {getMatchedKeywords(optimizedDescription, service).slice(0, 3).join(', ')}
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-600">
-                                  SEO-ключи не найдены
-                                </span>
-                              )}
+                              <KeywordScoreBadges score={descriptionKeywordScore} />
                             </div>
                             <textarea
                               value={optimizedDescription}
@@ -294,9 +385,9 @@ export function CardServicesTable({
                           variant="ghost"
                           size="icon"
                           onClick={() => onOptimizeService(serviceId)}
-                          disabled={!automationAllowed || optimizingServiceId === serviceId}
+                          disabled={!automationAllowed || optimizingServiceId === serviceId || quality.manualReview}
                           className="h-8 w-8 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700"
-                          title={!automationAllowed ? automationLockedMessage : copy.optimize}
+                          title={quality.manualReview ? 'Нужна ручная проверка' : !automationAllowed ? automationLockedMessage : copy.optimize}
                         >
                           {optimizingServiceId === serviceId ? (
                             <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>

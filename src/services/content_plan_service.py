@@ -1042,6 +1042,7 @@ def ensure_content_plan_tables(cursor: Any) -> None:
             seo_keyword TEXT,
             service_id TEXT,
             transaction_id TEXT,
+            seo_views INTEGER NOT NULL DEFAULT 0,
             location_scope TEXT,
             draft_text TEXT,
             status TEXT NOT NULL DEFAULT 'planned',
@@ -1312,14 +1313,46 @@ def _merge_seo_keyword_lists(primary: list[dict[str, Any]], fallback: list[dict[
     return merged
 
 
+_FOREIGN_BRAND_SEO_KEYWORDS = {
+    "точка красоты",
+    "город красоты",
+    "истинная красота",
+    "персона",
+    "мастерская красоты",
+}
+
+
+def _normalize_keyword_for_filter(value: Any) -> str:
+    return " ".join(str(value or "").strip().lower().replace("ё", "е").split())
+
+
+def _filter_foreign_brand_seo_keywords(keywords: list[dict[str, Any]], business_name: str) -> list[dict[str, Any]]:
+    normalized_business = _normalize_keyword_for_filter(business_name)
+    filtered: list[dict[str, Any]] = []
+    excluded = {_normalize_keyword_for_filter(item) for item in _FOREIGN_BRAND_SEO_KEYWORDS}
+    for item in keywords:
+        keyword = str(item.get("keyword") or "").strip()
+        normalized_keyword = _normalize_keyword_for_filter(keyword)
+        if not normalized_keyword:
+            continue
+        if normalized_keyword in excluded and not (
+            normalized_business
+            and (normalized_keyword in normalized_business or normalized_business in normalized_keyword)
+        ):
+            continue
+        filtered.append(item)
+    return filtered
+
+
 def _select_context_seo_keywords(
     ranked_keywords: list[dict[str, Any]],
     custom_keywords: list[dict[str, Any]],
+    business_name: str = "",
     limit: int = 20,
 ) -> list[dict[str, Any]]:
     if len(custom_keywords) >= 5:
-        return _merge_seo_keyword_lists(custom_keywords, [], limit=limit)
-    return _merge_seo_keyword_lists(ranked_keywords, custom_keywords, limit=limit)
+        return _filter_foreign_brand_seo_keywords(_merge_seo_keyword_lists(custom_keywords, [], limit=limit), business_name)
+    return _filter_foreign_brand_seo_keywords(_merge_seo_keyword_lists(ranked_keywords, custom_keywords, limit=limit), business_name)
 
 
 def load_plan_context_for_business(user_id: str, business_id: str, scope_type: str, scope_target_id: str | None = None) -> dict[str, Any]:
@@ -1369,6 +1402,7 @@ def load_plan_context_for_business(user_id: str, business_id: str, scope_type: s
         seo_keywords = _select_context_seo_keywords(
             _fetch_seo_keywords_isolated(user_id, scope_business_id),
             custom_seo_keywords,
+            str(scope_business_row.get("name") or business_row.get("name") or ""),
         )
         sales_signals = _fetch_sales_signals_for_businesses(cursor, user_id, context_business_ids)
         recent_news = _fetch_recent_news_for_businesses(cursor, user_id, context_business_ids)
@@ -1381,6 +1415,9 @@ def load_plan_context_for_business(user_id: str, business_id: str, scope_type: s
             sales_signals_count=len(sales_signals),
             audit_signals_count=len(audit_signals),
         )
+        selected_scope_label = str(selected_scope_option.get("label") or "").strip() if selected_scope_option else str(scope_business_row.get("name") or "").strip()
+        selected_scope_city = str(selected_scope_option.get("city") or "").strip() if selected_scope_option else str(scope_business_row.get("city") or "").strip()
+        selected_scope_address = str(selected_scope_option.get("address") or "").strip() if selected_scope_option else str(scope_business_row.get("address") or "").strip()
 
         return {
             "business": {
@@ -1400,12 +1437,12 @@ def load_plan_context_for_business(user_id: str, business_id: str, scope_type: s
                 "scope_type": normalized_scope,
                 "scope_target_id": target_id,
                 "scope_options": scope_options,
-                "selected_scope_label": str(selected_scope_option.get("label") or "").strip() if selected_scope_option else str(scope_business_row.get("name") or "").strip(),
+                "selected_scope_label": selected_scope_label,
                 "selected_scope_description": _scope_description(
                     normalized_scope,
-                    str(selected_scope_option.get("label") or scope_business_row.get("name") or "").strip(),
-                    str(selected_scope_option.get("city") or scope_business_row.get("city") or "").strip(),
-                    str(selected_scope_option.get("address") or scope_business_row.get("address") or "").strip(),
+                    selected_scope_label,
+                    selected_scope_city,
+                    selected_scope_address,
                 ),
                 "network": {
                     "is_network": len(scope_options) > 1,
@@ -1718,9 +1755,9 @@ def create_generated_content_plan(
                 INSERT INTO contentplanitems (
                     id, plan_id, business_id, scheduled_for, content_type, theme, goal,
                     source_kind, source_ref, seo_keyword, service_id, transaction_id,
-                    location_scope, status
+                    seo_views, location_scope, status
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'planned')
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'planned')
                 """,
                 (
                     item_id,
@@ -1735,6 +1772,7 @@ def create_generated_content_plan(
                     item.get("seo_keyword") or None,
                     item.get("service_id") or None,
                     item.get("transaction_id") or None,
+                    int(item.get("seo_views") or 0),
                     item_location_scope,
                 ),
             )
@@ -1794,7 +1832,7 @@ def get_content_plan(user_id: str, plan_id: str) -> dict[str, Any]:
         cursor.execute(
             """
             SELECT id, business_id, scheduled_for, content_type, theme, goal, source_kind, source_ref,
-                   seo_keyword, service_id, transaction_id, location_scope, draft_text, status, usernews_id,
+                   seo_keyword, service_id, transaction_id, seo_views, location_scope, draft_text, status, usernews_id,
                    created_at, updated_at
             FROM contentplanitems
             WHERE plan_id = %s
@@ -1806,7 +1844,7 @@ def get_content_plan(user_id: str, plan_id: str) -> dict[str, Any]:
         items = []
         for row in item_rows:
             item_business_id = str(_row_get(row, "business_id", 1, "") or "").strip()
-            item_location_scope = str(_row_get(row, "location_scope", 11, "") or "").strip()
+            item_location_scope = str(_row_get(row, "location_scope", 12, "") or "").strip()
             location_meta = _resolve_scope_target_meta(
                 cursor,
                 item_business_id or str(plan.get("business_id") or ""),
@@ -1826,15 +1864,16 @@ def get_content_plan(user_id: str, plan_id: str) -> dict[str, Any]:
                     "seo_keyword": str(_row_get(row, "seo_keyword", 8, "") or "").strip(),
                     "service_id": str(_row_get(row, "service_id", 9, "") or "").strip(),
                     "transaction_id": str(_row_get(row, "transaction_id", 10, "") or "").strip(),
+                    "seo_views": int(_row_get(row, "seo_views", 11, 0) or 0),
                     "location_scope": item_location_scope,
                     "location_label": str(location_meta.get("scope_target_label") or "").strip(),
                     "location_city": str(location_meta.get("scope_target_city") or "").strip(),
                     "location_address": str(location_meta.get("scope_target_address") or "").strip(),
-                    "draft_text": str(_row_get(row, "draft_text", 12, "") or "").strip(),
-                    "status": str(_row_get(row, "status", 13, "") or "").strip(),
-                    "usernews_id": str(_row_get(row, "usernews_id", 14, "") or "").strip(),
-                    "created_at": _row_get(row, "created_at", 15),
-                    "updated_at": _row_get(row, "updated_at", 16),
+                    "draft_text": str(_row_get(row, "draft_text", 13, "") or "").strip(),
+                    "status": str(_row_get(row, "status", 14, "") or "").strip(),
+                    "usernews_id": str(_row_get(row, "usernews_id", 15, "") or "").strip(),
+                    "created_at": _row_get(row, "created_at", 16),
+                    "updated_at": _row_get(row, "updated_at", 17),
                 }
             )
         target_meta = _resolve_scope_target_meta(
@@ -1981,7 +2020,7 @@ def duplicate_content_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
         cursor.execute(
             """
             SELECT i.id, i.plan_id, i.business_id, i.scheduled_for, i.content_type, i.theme, i.goal,
-                   i.source_kind, i.source_ref, i.seo_keyword, i.service_id, i.transaction_id,
+                   i.source_kind, i.source_ref, i.seo_keyword, i.seo_views, i.service_id, i.transaction_id,
                    i.location_scope, p.business_id AS root_business_id
             FROM contentplanitems i
             JOIN contentplans p ON p.id = i.plan_id
@@ -2019,12 +2058,12 @@ def duplicate_content_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
             """
             INSERT INTO contentplanitems (
                 id, plan_id, business_id, scheduled_for, content_type, theme, goal,
-                source_kind, source_ref, seo_keyword, service_id, transaction_id,
+                source_kind, source_ref, seo_keyword, seo_views, service_id, transaction_id,
                 location_scope, draft_text, status, usernews_id, created_at, updated_at
             )
             VALUES (
                 %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             )
             """,
@@ -2039,6 +2078,7 @@ def duplicate_content_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
                 str(item.get("source_kind") or "").strip(),
                 str(item.get("source_ref") or "").strip(),
                 str(item.get("seo_keyword") or "").strip(),
+                int(item.get("seo_views") or 0),
                 str(item.get("service_id") or "").strip() or None,
                 str(item.get("transaction_id") or "").strip() or None,
                 str(item.get("location_scope") or "").strip() or None,
@@ -2082,7 +2122,7 @@ def duplicate_content_plan_item_to_locations(user_id: str, item_id: str, payload
         cursor.execute(
             """
             SELECT i.id, i.plan_id, i.business_id, i.scheduled_for, i.content_type, i.theme, i.goal,
-                   i.source_kind, i.source_ref, i.seo_keyword, i.service_id, i.transaction_id,
+                   i.source_kind, i.source_ref, i.seo_keyword, i.seo_views, i.service_id, i.transaction_id,
                    i.location_scope, i.draft_text, p.business_id AS root_business_id
             FROM contentplanitems i
             JOIN contentplans p ON p.id = i.plan_id
@@ -2143,12 +2183,12 @@ def duplicate_content_plan_item_to_locations(user_id: str, item_id: str, payload
                 """
                 INSERT INTO contentplanitems (
                     id, plan_id, business_id, scheduled_for, content_type, theme, goal,
-                    source_kind, source_ref, seo_keyword, service_id, transaction_id,
+                    source_kind, source_ref, seo_keyword, seo_views, service_id, transaction_id,
                     location_scope, draft_text, status, usernews_id, created_at, updated_at
                 )
                 VALUES (
                     %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 )
                 """,
@@ -2163,6 +2203,7 @@ def duplicate_content_plan_item_to_locations(user_id: str, item_id: str, payload
                     str(item.get("source_kind") or "").strip(),
                     str(item.get("source_ref") or "").strip(),
                     str(item.get("seo_keyword") or "").strip(),
+                    int(item.get("seo_views") or 0),
                     str(item.get("service_id") or "").strip() or None,
                     str(item.get("transaction_id") or "").strip() or None,
                     location_scope,
@@ -2271,7 +2312,7 @@ def generate_draft_for_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
         cursor.execute(
             """
             SELECT i.id, i.plan_id, i.business_id, i.theme, i.goal, i.content_type, i.source_kind, i.source_ref,
-                   i.seo_keyword, i.service_id, i.transaction_id, i.location_scope,
+                   i.seo_keyword, i.seo_views, i.service_id, i.transaction_id, i.location_scope,
                    p.business_id AS root_business_id
             FROM contentplanitems i
             JOIN contentplans p ON p.id = i.plan_id
@@ -2312,6 +2353,7 @@ def generate_draft_for_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
             f"Цель: {str(item.get('goal') or '').strip()}\n"
             f"Источник идеи: {source_kind} / {str(item.get('source_ref') or '').strip()}\n"
             f"SEO-запрос: {str(item.get('seo_keyword') or '').strip()}\n"
+            f"Частотность SEO-запроса: {int(item.get('seo_views') or 0)}\n"
             f"Дата генерации: {datetime.utcnow().date().isoformat()}\n\n"
             "Верни только готовый текст новости."
         )

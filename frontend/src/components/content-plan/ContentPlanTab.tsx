@@ -68,6 +68,7 @@ type PlanItem = {
   source_kind: string;
   source_ref: string;
   seo_keyword: string;
+  seo_views?: number;
   draft_text: string;
   status: string;
   usernews_id: string;
@@ -3316,6 +3317,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                             <span>{_contentTypeLabel(item.content_type, isRu)}</span>
                             <span>·</span>
                             <span>{_sourceKindLabel(item.source_kind, isRu)}</span>
+                            {_seoViewsLabel(item, isRu) ? (
+                              <>
+                                <span>·</span>
+                                <span>{_seoViewsLabel(item, isRu)}</span>
+                              </>
+                            ) : null}
                             {item.location_label ? (
                               <>
                                 <span>·</span>
@@ -3376,6 +3383,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                             <div className="text-sm font-semibold text-slate-950">{_sourceKindLabel(item.source_kind, isRu)}</div>
                             <div>{isRu ? 'сигнал' : 'signal'}</div>
                           </div>
+                          {_seoViewsLabel(item, isRu) ? (
+                            <div className="col-span-2 rounded-2xl bg-blue-50 px-3 py-3">
+                              <div className="text-sm font-semibold text-blue-950">{_seoViewsLabel(item, isRu)}</div>
+                              <div>{isRu ? 'частотность запроса' : 'query demand'}</div>
+                            </div>
+                          ) : null}
                         </div>
                       </div>
 
@@ -3509,6 +3522,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               <MapPinned className="mr-1 inline h-3.5 w-3.5" />
                               {_sourceKindLabel(item.source_kind, isRu)} {item.source_ref ? `· ${item.source_ref}` : ''}
                               {item.seo_keyword ? ` · SEO: ${item.seo_keyword}` : ''}
+                              {_seoViewsLabel(item, isRu) ? ` · ${_seoViewsLabel(item, isRu)}` : ''}
                             </div>
                           </div>
                         ) : null}
@@ -3896,6 +3910,14 @@ function _sourceKindLabel(sourceKind: string, isRu: boolean): string {
   if (normalized === 'seasonal') return isRu ? 'Сезонный сигнал' : 'Seasonal signal';
   if (normalized === 'fallback') return isRu ? 'Базовый сигнал' : 'Baseline signal';
   return isRu ? 'Сигнал' : 'Signal';
+}
+
+function _seoViewsLabel(item: Pick<PlanItem, 'source_kind' | 'seo_views'>, isRu: boolean): string {
+  if (String(item.source_kind || '').trim().toLowerCase() !== 'seo_keyword') return '';
+  const views = Number(item.seo_views || 0);
+  if (!Number.isFinite(views) || views <= 0) return '';
+  const formatted = new Intl.NumberFormat(isRu ? 'ru-RU' : 'en-US').format(Math.round(views));
+  return isRu ? `${formatted} показов` : `${formatted} searches`;
 }
 
 function _matchesSignalFilter(item: PlanItem, filterKey: SignalFilterKey): boolean {

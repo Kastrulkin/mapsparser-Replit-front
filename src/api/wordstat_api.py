@@ -14,6 +14,9 @@ from database_manager import get_db_connection
 from auth_system import verify_session
 from core.helpers import get_business_owner_id
 from core.seo_keywords import collect_ranked_keywords
+from service_categorizer import categorizer
+from wordstat_client import WordstatClient
+from wordstat_config import config
 
 wordstat_bp = Blueprint('wordstat_api', __name__, url_prefix='/api/wordstat')
 
@@ -92,6 +95,134 @@ def _row_get(row, key: str, idx: int = 0, default=None):
 
 def _normalize_keyword_search_text(value: str) -> str:
     return str(value or "").strip().lower().replace("ё", "е")
+
+
+def _extract_live_wordstat_queries(api_payload):
+    if not api_payload:
+        return []
+
+    blocks = api_payload if isinstance(api_payload, list) else [api_payload]
+    rows = []
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        for section in ("topRequests", "top_requests", "associations", "alsoSearch"):
+            section_items = block.get(section) or []
+            if not isinstance(section_items, list):
+                continue
+            for raw_item in section_items:
+                if not isinstance(raw_item, dict):
+                    continue
+                text = str(
+                    raw_item.get("text")
+                    or raw_item.get("phrase")
+                    or raw_item.get("query")
+                    or raw_item.get("key")
+                    or ""
+                ).strip()
+                if not text:
+                    continue
+                count = raw_item.get("count") or raw_item.get("shows") or raw_item.get("clicks") or 0
+                try:
+                    count = int(count)
+                except Exception:
+                    count = 0
+                rows.append({"keyword": text, "views": count})
+
+    by_keyword = {}
+    for item in rows:
+        key = _normalize_keyword_search_text(item.get("keyword") or "")
+        if not key:
+            continue
+        previous = by_keyword.get(key)
+        if not previous or int(item.get("views") or 0) > int(previous.get("views") or 0):
+            by_keyword[key] = item
+    return list(by_keyword.values())
+
+
+def _categorize_wordstat_keyword(keyword: str) -> str:
+    try:
+        category, confidence, _matched = categorizer.categorize_service(keyword)
+        if float(confidence or 0) >= 0.3:
+            return str(category or "other").strip() or "other"
+    except Exception:
+        pass
+    return "other"
+
+
+def _load_live_wordstat_search(query: str, limit: int) -> list[dict]:
+    if not config.is_configured():
+        return []
+
+    client = WordstatClient(config.client_id, config.client_secret)
+    client.set_access_token(config.oauth_token)
+    live_payload = client.get_popular_queries([query], config.default_region)
+    rows = _extract_live_wordstat_queries(live_payload)
+    normalized_query = _normalize_keyword_search_text(query)
+    if not rows and normalized_query:
+        rows = [{"keyword": query, "views": 0}]
+
+    items = []
+    for row in rows:
+        keyword = str(row.get("keyword") or "").strip()
+        if not keyword:
+            continue
+        normalized_keyword = _normalize_keyword_search_text(keyword)
+        if normalized_query and normalized_query not in normalized_keyword:
+            ratio = difflib.SequenceMatcher(None, normalized_query, normalized_keyword).ratio()
+            if ratio < 0.55:
+                continue
+        items.append(
+            {
+                "keyword": keyword,
+                "views": int(row.get("views") or 0),
+                "category": _categorize_wordstat_keyword(keyword),
+                "updated_at": datetime.now().isoformat(),
+                "source": "live_wordstat",
+            }
+        )
+        if len(items) >= max(limit, 50):
+            break
+    return items
+
+
+def _save_live_wordstat_items(cursor, items: list[dict]) -> None:
+    if not items:
+        return
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS wordstatkeywords (
+            id TEXT PRIMARY KEY,
+            keyword TEXT UNIQUE NOT NULL,
+            views INTEGER DEFAULT 0,
+            category TEXT DEFAULT 'other',
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_wordstat_views ON wordstatkeywords(views DESC)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_wordstat_category ON wordstatkeywords(category)")
+    for item in items:
+        keyword = str(item.get("keyword") or "").strip()
+        if not keyword:
+            continue
+        cursor.execute(
+            """
+            INSERT INTO wordstatkeywords (id, keyword, views, category, updated_at)
+            VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+            ON CONFLICT (keyword)
+            DO UPDATE SET
+                views = GREATEST(wordstatkeywords.views, EXCLUDED.views),
+                category = COALESCE(NULLIF(EXCLUDED.category, ''), wordstatkeywords.category),
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (
+                str(uuid.uuid4()),
+                keyword,
+                int(item.get("views") or 0),
+                str(item.get("category") or "other").strip() or "other",
+            ),
+        )
 
 
 def _score_keyword(keyword_text: str, terms):
@@ -445,8 +576,34 @@ def search_keywords():
                 if len(items) >= limit:
                     break
 
+        if len(items) == 0 and normalized_query:
+            live_items = _load_live_wordstat_search(query, limit=50)
+            if live_items:
+                _save_live_wordstat_items(cursor, live_items)
+                conn.commit()
+            for item in live_items:
+                keyword_value = str(item.get('keyword') or '').strip()
+                keyword_lower = keyword_value.lower()
+                if not keyword_lower:
+                    continue
+                if keyword_lower in excluded or keyword_lower in custom_existing:
+                    continue
+                reason = _negative_reason_for(keyword_value, item.get('category') or '', negative_rows)
+                if reason:
+                    if include_blocked:
+                        item['negative_blocked'] = True
+                        item['negative_reason'] = reason
+                        items.append(item)
+                    continue
+                item['negative_blocked'] = False
+                item['negative_reason'] = ''
+                items.append(item)
+                if len(items) >= limit:
+                    break
+
         return jsonify({'success': True, 'count': len(items), 'items': items})
     except Exception as e:
+        conn.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         conn.close()

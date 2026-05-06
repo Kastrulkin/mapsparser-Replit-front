@@ -62,6 +62,19 @@ export const loadCardServices = (params: {
   return jsonRequest(`/api/services/list?${query.toString()}`);
 };
 
+export const loadCardServicesSeoAudit = (businessId: string) =>
+  jsonRequest(`/api/services/seo-audit?business_id=${businessId}`);
+
+export const startProblematicServicesRegeneration = (payload: { business_id?: string; limit?: number; confirm?: boolean; job_id?: string; requested_by?: string }) =>
+  jsonRequest('/api/services/regenerate-problematic', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+export const loadProblematicServicesRegenerationJob = (jobId: string) =>
+  jsonRequest(`/api/services/regenerate-problematic/${jobId}`);
+
 export const loadCardExternalPosts = (businessId: string, scopeNetwork: boolean) => {
   const scopeQuery = scopeNetwork ? '?scope=network' : '';
   return jsonRequest(`/api/business/${businessId}/external/posts${scopeQuery}`);

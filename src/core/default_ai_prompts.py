@@ -16,6 +16,7 @@ def get_default_ai_prompts():
 - Индустрия: {industry}
 - Тип бизнеса: {business_type}
 - Регион: {region}
+- Вертикальные правила: {business_vertical}
 - Тон: {tone}
 - Желаемая длина описания: {length}
 - Доп. требования пользователя: {instructions}

@@ -3,10 +3,13 @@ import type { Dispatch, SetStateAction } from 'react';
 import type { ServiceTableItem } from '@/components/dashboard/CardServicesTable';
 import {
   createCardService,
+  loadProblematicServicesRegenerationJob,
   optimizeCardService,
   removeCardService,
+  startProblematicServicesRegeneration,
   updateCardService,
 } from '@/components/dashboard/cardOverviewApi';
+import { getServiceQuality } from '@/components/dashboard/cardServicesLogic';
 
 type ServiceFormValue = {
   category: string;
@@ -65,6 +68,33 @@ const normalizeKeywords = (keywords: ServiceTableItem['keywords']) => {
   return [];
 };
 
+const serviceNeedsRegeneration = (service: ServiceTableItem) => {
+  return getServiceQuality(service).needsReview;
+};
+
+const buildRegenerationInstructions = (service: ServiceTableItem) => {
+  const quality = getServiceQuality(service);
+  const instructions = [
+    'Сохрани смысл исходной услуги и исправь только проблему качества SEO-предложения.',
+  ];
+  if (quality.keywordScore.missing.length > 0) {
+    instructions.push(`Сохрани SEO-ключи: ${quality.keywordScore.missing.slice(0, 5).join(', ')}.`);
+  }
+  if (quality.issueCodes.includes('weak_matches_only')) {
+    instructions.push('Замени слабое близкое совпадение на более точное вхождение ключа без потери смысла.');
+  }
+  if (quality.issueCodes.includes('fallback_used') || quality.issueCodes.includes('fallback_description')) {
+    instructions.push('Не возвращай fallback-описание; сделай короткое точное описание в одно предложение.');
+  }
+  if (quality.issueCodes.includes('guardrail_reasons')) {
+    instructions.push('Не добавляй неподтвержденные обещания, зоны, препараты, объемы или аудиторию.');
+  }
+  if (quality.issueCodes.includes('name_unchanged')) {
+    instructions.push('Улучшить название можно только за счет релевантного ключа и сохраненных атрибутов.');
+  }
+  return instructions.join(' ');
+};
+
 export function useCardServiceController({
   userServices,
   setUserServices,
@@ -82,6 +112,7 @@ export function useCardServiceController({
   const [editServiceForm, setEditServiceForm] = useState<ServiceFormValue>(emptyServiceForm);
   const [optimizingServiceId, setOptimizingServiceId] = useState<string | null>(null);
   const [optimizingAll, setOptimizingAll] = useState(false);
+  const [problemRegenerationStatus, setProblemRegenerationStatus] = useState<string | null>(null);
   const [optimizedNameDrafts, setOptimizedNameDrafts] = useState<Record<string, string>>({});
   const [optimizedDescriptionDrafts, setOptimizedDescriptionDrafts] = useState<Record<string, string>>({});
 
@@ -172,6 +203,7 @@ export function useCardServiceController({
         text: String(service.name || '') + (service.description ? `\n${service.description}` : ''),
         business_id: currentBusinessId,
         service_category: service.category || '',
+        instructions: buildRegenerationInstructions(service),
       });
       const errorText = String(data?.error || '');
       const isRateLimited =
@@ -190,10 +222,15 @@ export function useCardServiceController({
           keywords: normalizeKeywords(service.keywords),
           price: service.price || '',
         };
+        const statePatch = {
+          ...updateData,
+          fallback_used: Boolean(optimized.fallback_used),
+          guardrail_reasons: Array.isArray(optimized.guardrail_reasons) ? optimized.guardrail_reasons : [],
+        };
 
         try {
           await updateService(serviceId, updateData, { reload: false, showSuccess: false });
-          patchServiceInState(serviceId, updateData);
+          patchServiceInState(serviceId, statePatch);
           if (!options?.silent) setSuccess(copy.success);
           return 'ok';
         } catch {
@@ -220,41 +257,91 @@ export function useCardServiceController({
       setError(automationLockedMessage);
       return;
     }
+    if (!currentBusinessId) {
+      setError('Не выбран бизнес для повторной генерации');
+      return;
+    }
 
     setOptimizingAll(true);
     setError(null);
     setSuccess(null);
+    setProblemRegenerationStatus('Запускаем job: до 10 проблемных услуг за запуск');
 
-    let okCount = 0;
-    let errorCount = 0;
-    let rateLimitedCount = 0;
+    const targetServices = userServices.filter(serviceNeedsRegeneration);
+    if (targetServices.length === 0) {
+      setSuccess('Нет плохих предложений для повторной генерации');
+      setProblemRegenerationStatus(null);
+      setOptimizingAll(false);
+      return;
+    }
 
-    for (const service of userServices) {
-      const serviceId = service.id;
-      if (!serviceId) continue;
-      const result = await optimizeService(serviceId, { silent: true });
-      if (result === 'ok') {
-        okCount += 1;
-        await sleep(1200);
-        continue;
+    try {
+      const { response, data } = await startProblematicServicesRegeneration({
+        business_id: currentBusinessId,
+        limit: 10,
+        requested_by: 'ui',
+      });
+
+      if (!response.ok || !data.success || !data.job?.id) {
+        throw new Error(data.error || copy.error);
       }
-      if (result === 'rate_limited') {
-        rateLimitedCount += 1;
-        await sleep(20000);
+
+      let latestJob = data.job;
+      if (String(latestJob.status || '') === 'awaiting_confirmation') {
+        const ok = window.confirm(
+          `Найдено проблемных услуг: ${latestJob.total_problem_count || targetServices.length}. Запустить перегенерацию до ${latestJob.limit || 10} услуг?`
+        );
+        if (!ok) {
+          setProblemRegenerationStatus(null);
+          setOptimizingAll(false);
+          return;
+        }
+        const confirmed = await startProblematicServicesRegeneration({
+          business_id: currentBusinessId,
+          job_id: String(latestJob.id),
+          limit: 10,
+          confirm: true,
+          requested_by: 'ui',
+        });
+        if (!confirmed.response.ok || !confirmed.data.success || !confirmed.data.job?.id) {
+          throw new Error(confirmed.data.error || copy.error);
+        }
+        latestJob = confirmed.data.job;
+      }
+      setProblemRegenerationStatus(latestJob.message || 'Job запущен');
+
+      for (let attempt = 0; attempt < 60; attempt += 1) {
+        if (['completed', 'rate_limited', 'failed', 'cancelled'].includes(String(latestJob.status || ''))) {
+          break;
+        }
+        await sleep(3000);
+        const statusResult = await loadProblematicServicesRegenerationJob(String(latestJob.id));
+        if (statusResult.response.ok && statusResult.data.success) {
+          latestJob = statusResult.data.job;
+          const processedCount = Array.isArray(latestJob.processed) ? latestJob.processed.length : 0;
+          setProblemRegenerationStatus(`Job ${latestJob.status}: обработано ${processedCount}/${latestJob.selected || 0}`);
+        }
+      }
+
+      await loadUserServices();
+
+      const fixed = Number(latestJob.fixed || 0);
+      const failed = Number(latestJob.failed || 0);
+      const manual = Number(latestJob.manual_review || 0);
+      const remaining = latestJob.remaining ?? 'неизвестно';
+      if (latestJob.status === 'rate_limited') {
+        const cooldown = latestJob.cooldown_until ? ` Пауза до ${new Date(latestJob.cooldown_until).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}.` : '';
+        setError(`Остановлено из-за лимита GigaChat. Исправлено: ${fixed}. Осталось: ${remaining}.${cooldown}`);
+      } else if (failed > 0 || manual > 0) {
+        setError(`Исправлено: ${fixed}. Ошибок: ${failed}. Ручная проверка: ${manual}. Осталось: ${remaining}.`);
       } else {
-        errorCount += 1;
-        await sleep(1200);
+        setSuccess(`Повторно оптимизировано: ${fixed}. Осталось проблемных: ${remaining}.`);
       }
+      setProblemRegenerationStatus(null);
+    } catch (error: any) {
+      setError(`${copy.error}: ${error.message}`);
+      setProblemRegenerationStatus(null);
     }
-
-    if (okCount > 0 && rateLimitedCount === 0 && errorCount === 0) {
-      setSuccess(`Оптимизировано услуг: ${okCount}`);
-    } else if (okCount > 0) {
-      setError(`Оптимизировано: ${okCount}. Ошибок: ${errorCount}. Лимит GigaChat (429): ${rateLimitedCount}.`);
-    } else {
-      setError(`Оптимизация не выполнена. Ошибок: ${errorCount}. Лимит GigaChat (429): ${rateLimitedCount}.`);
-    }
-
     setOptimizingAll(false);
   };
 
@@ -412,6 +499,7 @@ export function useCardServiceController({
     setEditServiceForm,
     optimizingServiceId,
     optimizingAll,
+    problemRegenerationStatus,
     addService,
     optimizeService,
     optimizeAllServices,
