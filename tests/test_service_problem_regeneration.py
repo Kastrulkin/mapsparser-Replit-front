@@ -12,7 +12,7 @@ def test_problem_regeneration_instructions_include_quality_reasons() -> None:
 
     assert "Сохрани SEO-ключи: ботокс, 1 ml." in instructions
     assert "близкое совпадение" in instructions
-    assert "fallback-описание" in instructions
+    assert "шаблонное описание" in instructions
     assert "Не добавляй неподтвержденные" in instructions
 
 

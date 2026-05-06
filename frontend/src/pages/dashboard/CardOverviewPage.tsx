@@ -18,7 +18,10 @@ import {
   Trophy,
   RefreshCw,
   FileSearch,
-  Info
+  Info,
+  Sparkles,
+  Search,
+  Wand2
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -214,6 +217,7 @@ export const CardOverviewPage = () => {
   const [servicesCategoryFilter, setServicesCategoryFilter] = useState('all');
   const [servicesQualityFilter, setServicesQualityFilter] = useState('all');
   const [servicesSort, setServicesSort] = useState<ServicesSort>('default');
+  const [showServiceSettings, setShowServiceSettings] = useState(false);
 
   // Состояния для парсера
   // parsequeue canonical status: 'completed'; API and backend also accept legacy 'done'
@@ -846,11 +850,17 @@ export const CardOverviewPage = () => {
     editServiceForm,
     setEditServiceForm,
     optimizingServiceId,
+    enrichingServiceId,
     optimizingAll,
+    enrichingProblematic,
+    regeneratingProblematic,
     problemRegenerationStatus,
     addService,
     optimizeService,
     optimizeAllServices,
+    regenerateProblematicServices,
+    enrichKeywordsForService,
+    enrichProblematicKeywords,
     getOptimizedNameValue,
     getOptimizedDescriptionValue,
     setOptimizedNameDrafts,
@@ -1240,16 +1250,65 @@ export const CardOverviewPage = () => {
             </DashboardSection>
 
             {/* Services Section */}
-            <DashboardSection
-              title={t.dashboard.card.services}
-              description={t.dashboard.card.servicesSubtitle}
-              actions={!showAddService ? (
-                <Button onClick={() => setShowAddService(true)} className="bg-primary text-white shadow-sm">
-                  <Plus className="w-4 h-4 mr-2" />
-                  {t.dashboard.card.addService}
-                </Button>
-              ) : null}
-            >
+            <DashboardSection contentClassName="space-y-5">
+              <DashboardActionPanel
+                title="Услуги"
+                description="Проверьте, как услуги будут выглядеть в карточках и поиске. Главный сценарий: закрыть слабые описания и принять готовые SEO-варианты."
+                tone="default"
+                actions={!showAddService ? (
+                  <>
+                    <Button
+                      onClick={regenerateProblematicServices}
+                      disabled={!automationAccess.automationAllowed || optimizingAll || regeneratingProblematic || optimizingServiceId !== null}
+                      className="bg-slate-950 text-white hover:bg-slate-800"
+                    >
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      {regeneratingProblematic ? 'Обрабатываем...' : 'Обработать проблемные'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={enrichProblematicKeywords}
+                      disabled={enrichingProblematic}
+                      className="border-slate-200 bg-white text-slate-700"
+                    >
+                      <Search className="mr-2 h-4 w-4" />
+                      {enrichingProblematic ? 'Ищем...' : 'Найти запросы'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={optimizeAllServices}
+                      disabled={!automationAccess.automationAllowed || optimizingAll || regeneratingProblematic || optimizingServiceId !== null}
+                      className="border-slate-200 bg-white text-slate-700"
+                    >
+                      <Wand2 className="mr-2 h-4 w-4" />
+                      {optimizingAll ? 'Оптимизируем...' : serviceControlsCopy.optimizeAll}
+                    </Button>
+                    <Button onClick={() => setShowAddService(true)} variant="outline" className="border-slate-200 bg-white text-slate-700">
+                      <Plus className="mr-2 h-4 w-4" />
+                      {t.dashboard.card.addService}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setShowServiceSettings((value) => !value)}
+                      className="text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                    >
+                      Настройки
+                    </Button>
+                  </>
+                ) : null}
+                status={problemRegenerationStatus ? (
+                  <span>{problemRegenerationStatus}</span>
+                ) : serviceLastParseDate ? (
+                  <span>Последнее обновление карточки: {new Date(serviceLastParseDate).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}</span>
+                ) : null}
+              />
+
               {showAddService ? (
                 <CardServiceAddForm
                   copy={serviceControlsCopy}
@@ -1258,63 +1317,16 @@ export const CardOverviewPage = () => {
                   onCancel={() => setShowAddService(false)}
                   onSubmit={addService}
                 />
-              ) : (
-                <CardServiceOptimizerPanel
-                  copy={serviceControlsCopy}
-                  businessName={currentBusiness?.name}
-                  businessId={currentBusinessId}
-                  language={language}
-                  servicesCount={userServices.length}
-                  automationAllowed={automationAccess.automationAllowed}
-                  automationLockedMessage={automationLockedMessage}
-                  optimizingAll={optimizingAll}
-                  optimizingServiceId={optimizingServiceId}
-                  problemRegenerationStatus={problemRegenerationStatus}
-                  onOptimizeAll={optimizeAllServices}
-                  onServicesImported={loadUserServices}
-                />
-              )}
+              ) : null}
 
-              <CardServicesMetaStrip
-                lastParseDate={serviceLastParseDate}
-                noNewServicesFound={servicesNoNewFromParse}
-                locale={language === 'ru' ? 'ru-RU' : 'en-US'}
+              <DashboardCompactMetricsRow
+                items={[
+                  { label: 'Всего', value: servicesQualityAudit.summary.total },
+                  { label: 'Готово', value: servicesQualityAudit.summary.good, tone: 'positive' },
+                  { label: 'Нужна проверка', value: servicesQualityAudit.summary.needsReview + servicesQualityAudit.summary.manualReview, tone: 'warning' },
+                  { label: 'Без запросов', value: servicesQualityAudit.summary.noKeywords },
+                ]}
               />
-
-              <div className="mb-4 grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-white p-3 text-sm md:grid-cols-4 lg:grid-cols-8">
-                <div className="rounded-lg bg-slate-50 px-3 py-2">
-                  <div className="text-xs text-slate-500">Всего</div>
-                  <div className="font-semibold text-slate-950">{servicesQualityAudit.summary.total}</div>
-                </div>
-                <div className="rounded-lg bg-emerald-50 px-3 py-2">
-                  <div className="text-xs text-emerald-700">ОК</div>
-                  <div className="font-semibold text-emerald-900">{servicesQualityAudit.summary.good}</div>
-                </div>
-                <button type="button" onClick={() => setServicesQualityFilter('needs_review')} className="rounded-lg bg-amber-50 px-3 py-2 text-left">
-                  <div className="text-xs text-amber-700">Требуют доработки</div>
-                  <div className="font-semibold text-amber-900">{servicesQualityAudit.summary.needsReview}</div>
-                </button>
-                <button type="button" onClick={() => setServicesQualityFilter('manual_review')} className="rounded-lg bg-red-50 px-3 py-2 text-left">
-                  <div className="text-xs text-red-700">Ручная проверка</div>
-                  <div className="font-semibold text-red-900">{servicesQualityAudit.summary.manualReview}</div>
-                </button>
-                <button type="button" onClick={() => setServicesQualityFilter('missing_keywords')} className="rounded-lg bg-orange-50 px-3 py-2 text-left">
-                  <div className="text-xs text-orange-700">Потеряны ключи</div>
-                  <div className="font-semibold text-orange-900">{servicesQualityAudit.summary.missingKeywords}</div>
-                </button>
-                <button type="button" onClick={() => setServicesQualityFilter('weak_matches_only')} className="rounded-lg bg-yellow-50 px-3 py-2 text-left">
-                  <div className="text-xs text-yellow-700">Слабые</div>
-                  <div className="font-semibold text-yellow-900">{servicesQualityAudit.summary.weakMatchesOnly}</div>
-                </button>
-                <button type="button" onClick={() => setServicesQualityFilter('fallback')} className="rounded-lg bg-indigo-50 px-3 py-2 text-left">
-                  <div className="text-xs text-indigo-700">Fallback</div>
-                  <div className="font-semibold text-indigo-900">{servicesQualityAudit.summary.fallback}</div>
-                </button>
-                <button type="button" onClick={() => setServicesQualityFilter('no_keywords')} className="rounded-lg bg-slate-50 px-3 py-2 text-left">
-                  <div className="text-xs text-slate-600">Нет ключей</div>
-                  <div className="font-semibold text-slate-900">{servicesQualityAudit.summary.noKeywords}</div>
-                </button>
-              </div>
 
               <CardServicesFilterBar
                 copy={serviceControlsCopy}
@@ -1357,6 +1369,7 @@ export const CardOverviewPage = () => {
                 automationAllowed={automationAccess.automationAllowed}
                 automationLockedMessage={automationLockedMessage}
                 optimizingServiceId={optimizingServiceId}
+                enrichingServiceId={enrichingServiceId}
                 formatServiceSource={formatServiceSource}
                 getOptimizedNameValue={getOptimizedNameValue}
                 getOptimizedDescriptionValue={getOptimizedDescriptionValue}
@@ -1372,10 +1385,45 @@ export const CardOverviewPage = () => {
                 onAcceptOptimizedDescription={acceptOptimizedServiceDescription}
                 onRejectOptimizedDescription={rejectOptimizedServiceDescription}
                 onOptimizeService={(serviceId) => optimizeService(serviceId)}
+                onEnrichKeywords={enrichKeywordsForService}
                 onEditService={openEditService}
                 onDeleteService={deleteService}
               />
 
+              {showServiceSettings ? (
+                <div className="rounded-3xl border border-slate-200/80 bg-slate-50/70 p-5">
+                  <div className="mb-4 flex items-start justify-between gap-4">
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Настройки генерации</div>
+                      <div className="mt-1 text-sm text-slate-600">Импорт, распознавание и дополнительные параметры спрятаны здесь, чтобы не перегружать рабочую очередь.</div>
+                    </div>
+                    <Button type="button" variant="ghost" onClick={() => setShowServiceSettings(false)} className="text-slate-500">
+                      Скрыть
+                    </Button>
+                  </div>
+                  <CardServicesMetaStrip
+                    lastParseDate={serviceLastParseDate}
+                    noNewServicesFound={servicesNoNewFromParse}
+                    locale={language === 'ru' ? 'ru-RU' : 'en-US'}
+                  />
+                  <CardServiceOptimizerPanel
+                    copy={serviceControlsCopy}
+                    businessName={currentBusiness?.name}
+                    businessId={currentBusinessId}
+                    language={language}
+                    servicesCount={userServices.length}
+                    automationAllowed={automationAccess.automationAllowed}
+                    automationLockedMessage={automationLockedMessage}
+                    optimizingAll={optimizingAll}
+                    regeneratingProblematic={regeneratingProblematic}
+                    optimizingServiceId={optimizingServiceId}
+                    problemRegenerationStatus={problemRegenerationStatus}
+                    onOptimizeAll={optimizeAllServices}
+                    onRegenerateProblematic={regenerateProblematicServices}
+                    onServicesImported={loadUserServices}
+                  />
+                </div>
+              ) : null}
             </DashboardSection>
           </TabsContent>
 

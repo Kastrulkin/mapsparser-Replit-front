@@ -115,9 +115,11 @@ type CardServiceOptimizerPanelProps = {
   automationAllowed: boolean;
   automationLockedMessage: string;
   optimizingAll: boolean;
+  regeneratingProblematic: boolean;
   optimizingServiceId: string | null;
   problemRegenerationStatus: string | null;
   onOptimizeAll: () => void;
+  onRegenerateProblematic: () => void;
   onServicesImported: () => void;
 };
 
@@ -130,9 +132,11 @@ export const CardServiceOptimizerPanel = ({
   automationAllowed,
   automationLockedMessage,
   optimizingAll,
+  regeneratingProblematic,
   optimizingServiceId,
   problemRegenerationStatus,
   onOptimizeAll,
+  onRegenerateProblematic,
   onServicesImported,
 }: CardServiceOptimizerPanelProps) => (
   <div className="mb-8 rounded-2xl border border-indigo-100 bg-indigo-50/70 p-6">
@@ -145,22 +149,33 @@ export const CardServiceOptimizerPanel = ({
         <p className="max-w-2xl text-sm leading-relaxed text-indigo-800/80">{copy.seoDescription}</p>
       </div>
       {servicesCount > 0 ? (
-        <Button
-          variant="outline"
-          onClick={onOptimizeAll}
-          disabled={!automationAllowed || optimizingAll || optimizingServiceId !== null}
-          className="shrink-0 border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50"
-          title={!automationAllowed ? automationLockedMessage : 'Перегенерировать проблемные: до 10 за запуск'}
-        >
-          <Wand2 className="mr-2 h-4 w-4" />
-          {optimizingAll ? 'Перегенерируем...' : 'Перегенерировать проблемные'}
-        </Button>
+        <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+          <Button
+            onClick={onOptimizeAll}
+            disabled={!automationAllowed || optimizingAll || regeneratingProblematic || optimizingServiceId !== null}
+            className="bg-indigo-700 text-white hover:bg-indigo-800"
+            title={!automationAllowed ? automationLockedMessage : copy.optimizeAll}
+          >
+            <Wand2 className="mr-2 h-4 w-4" />
+            {optimizingAll ? 'Оптимизируем...' : copy.optimizeAll}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={onRegenerateProblematic}
+            disabled={!automationAllowed || optimizingAll || regeneratingProblematic || optimizingServiceId !== null}
+            className="border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50"
+            title={!automationAllowed ? automationLockedMessage : 'Улучшить до 10 самых слабых описаний'}
+          >
+            <Sparkles className="mr-2 h-4 w-4" />
+            {regeneratingProblematic ? 'Улучшаем...' : 'Слабые описания'}
+          </Button>
+        </div>
       ) : null}
     </div>
     <div className="mb-4 rounded-xl border border-indigo-100 bg-white px-4 py-3 text-sm text-indigo-800">
-      <div className="font-medium">Перегенерировать проблемные</div>
+      <div className="font-medium">Улучшить слабые описания</div>
       <div className="mt-1 text-indigo-700/80">
-        До 10 услуг за запуск. Берём только те, где аудит нашёл потерянные ключи, fallback или guardrails.
+        LocalOS найдёт до 10 услуг, где не хватает важных запросов или описание выглядит слишком шаблонно, и предложит более сильные варианты.
       </div>
       {problemRegenerationStatus ? <div className="mt-2 font-medium">{problemRegenerationStatus}</div> : null}
     </div>
@@ -265,9 +280,9 @@ export const CardServicesFilterBar = ({
           <option value="needs_review">Требуют доработки</option>
           <option value="manual_review">Нужна ручная проверка</option>
           <option value="good">ОК</option>
-          <option value="missing_keywords">Потеряны ключи</option>
-          <option value="weak_matches_only">Только близкое совпадение</option>
-          <option value="fallback">Fallback</option>
+          <option value="missing_keywords">Не хватает запросов</option>
+          <option value="weak_matches_only">Слабое совпадение</option>
+          <option value="fallback">Шаблонные описания</option>
           <option value="no_keywords">Нет ключей</option>
         </select>
       </div>

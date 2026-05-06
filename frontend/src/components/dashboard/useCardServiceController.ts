@@ -3,6 +3,8 @@ import type { Dispatch, SetStateAction } from 'react';
 import type { ServiceTableItem } from '@/components/dashboard/CardServicesTable';
 import {
   createCardService,
+  enrichProblematicServiceKeywords,
+  enrichServiceKeywords,
   loadProblematicServicesRegenerationJob,
   optimizeCardService,
   removeCardService,
@@ -84,7 +86,7 @@ const buildRegenerationInstructions = (service: ServiceTableItem) => {
     instructions.push('Замени слабое близкое совпадение на более точное вхождение ключа без потери смысла.');
   }
   if (quality.issueCodes.includes('fallback_used') || quality.issueCodes.includes('fallback_description')) {
-    instructions.push('Не возвращай fallback-описание; сделай короткое точное описание в одно предложение.');
+    instructions.push('Не возвращай шаблонное описание; сделай короткое точное описание в одно предложение.');
   }
   if (quality.issueCodes.includes('guardrail_reasons')) {
     instructions.push('Не добавляй неподтвержденные обещания, зоны, препараты, объемы или аудиторию.');
@@ -111,7 +113,10 @@ export function useCardServiceController({
   const [newService, setNewService] = useState<ServiceFormValue>(emptyServiceForm);
   const [editServiceForm, setEditServiceForm] = useState<ServiceFormValue>(emptyServiceForm);
   const [optimizingServiceId, setOptimizingServiceId] = useState<string | null>(null);
+  const [enrichingServiceId, setEnrichingServiceId] = useState<string | null>(null);
   const [optimizingAll, setOptimizingAll] = useState(false);
+  const [enrichingProblematic, setEnrichingProblematic] = useState(false);
+  const [regeneratingProblematic, setRegeneratingProblematic] = useState(false);
   const [problemRegenerationStatus, setProblemRegenerationStatus] = useState<string | null>(null);
   const [optimizedNameDrafts, setOptimizedNameDrafts] = useState<Record<string, string>>({});
   const [optimizedDescriptionDrafts, setOptimizedDescriptionDrafts] = useState<Record<string, string>>({});
@@ -257,21 +262,65 @@ export function useCardServiceController({
       setError(automationLockedMessage);
       return;
     }
+
+    setOptimizingAll(true);
+    setError(null);
+    setSuccess(null);
+
+    let okCount = 0;
+    let errorCount = 0;
+    let rateLimitedCount = 0;
+
+    for (const service of userServices) {
+      const serviceId = service.id;
+      if (!serviceId) continue;
+      const result = await optimizeService(serviceId, { silent: true });
+      if (result === 'ok') {
+        okCount += 1;
+        await sleep(1200);
+        continue;
+      }
+      if (result === 'rate_limited') {
+        rateLimitedCount += 1;
+        await sleep(20000);
+      } else {
+        errorCount += 1;
+        await sleep(1200);
+      }
+    }
+
+    if (okCount > 0 && rateLimitedCount === 0 && errorCount === 0) {
+      setSuccess(`Оптимизировано услуг: ${okCount}`);
+    } else if (okCount > 0) {
+      setError(`Оптимизировано: ${okCount}. Ошибок: ${errorCount}. Лимит GigaChat (429): ${rateLimitedCount}.`);
+    } else {
+      setError(`Оптимизация не выполнена. Ошибок: ${errorCount}. Лимит GigaChat (429): ${rateLimitedCount}.`);
+    }
+
+    setOptimizingAll(false);
+  };
+
+  const regenerateProblematicServices = async () => {
+    if (!userServices.length) return;
+    if (!automationAllowed) {
+      setError(automationLockedMessage);
+      return;
+    }
     if (!currentBusinessId) {
       setError('Не выбран бизнес для повторной генерации');
       return;
     }
 
-    setOptimizingAll(true);
+    setRegeneratingProblematic(true);
     setError(null);
     setSuccess(null);
-    setProblemRegenerationStatus('Запускаем job: до 10 проблемных услуг за запуск');
+    setProblemRegenerationStatus('Ищем до 10 услуг, которые стоит переписать сильнее');
 
     const targetServices = userServices.filter(serviceNeedsRegeneration);
     if (targetServices.length === 0) {
       setSuccess('Нет плохих предложений для повторной генерации');
       setProblemRegenerationStatus(null);
-      setOptimizingAll(false);
+      setRegeneratingProblematic(false);
       return;
     }
 
@@ -293,7 +342,7 @@ export function useCardServiceController({
         );
         if (!ok) {
           setProblemRegenerationStatus(null);
-          setOptimizingAll(false);
+          setRegeneratingProblematic(false);
           return;
         }
         const confirmed = await startProblematicServicesRegeneration({
@@ -342,7 +391,59 @@ export function useCardServiceController({
       setError(`${copy.error}: ${error.message}`);
       setProblemRegenerationStatus(null);
     }
-    setOptimizingAll(false);
+    setRegeneratingProblematic(false);
+  };
+
+  const enrichKeywordsForService = async (serviceId: string) => {
+    if (!serviceId) return;
+    setEnrichingServiceId(serviceId);
+    setError(null);
+    setSuccess(null);
+    try {
+      const { response, data } = await enrichServiceKeywords({ service_id: serviceId, limit: 8 });
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || copy.error);
+      }
+      await loadUserServices();
+      const enrichment = data.enrichment || {};
+      if (data.saved) {
+        setSuccess(`Запросы найдены и сохранены: ${(enrichment.keywords || []).slice(0, 3).join(', ')}`);
+      } else if (enrichment.status === 'blocked') {
+        setError('Безопасные запросы не сохранены: найденные варианты не подошли по смыслу.');
+      } else {
+        setError('Безопасные запросы не найдены. Нужна ручная проверка.');
+      }
+    } catch (error: any) {
+      setError(`${copy.error}: ${error.message}`);
+    } finally {
+      setEnrichingServiceId(null);
+    }
+  };
+
+  const enrichProblematicKeywords = async () => {
+    if (!currentBusinessId) {
+      setError('Не выбран бизнес для поиска запросов');
+      return;
+    }
+    setEnrichingProblematic(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const { response, data } = await enrichProblematicServiceKeywords({ business_id: currentBusinessId, limit: 10 });
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || copy.error);
+      }
+      await loadUserServices();
+      if (Number(data.saved || 0) > 0) {
+        setSuccess(`Запросы найдены для услуг: ${data.saved}`);
+      } else {
+        setError('Безопасные запросы автоматически не найдены. Проверьте спорные услуги вручную.');
+      }
+    } catch (error: any) {
+      setError(`${copy.error}: ${error.message}`);
+    } finally {
+      setEnrichingProblematic(false);
+    }
   };
 
   const deleteService = async (serviceId: string) => {
@@ -498,11 +599,17 @@ export function useCardServiceController({
     editServiceForm,
     setEditServiceForm,
     optimizingServiceId,
+    enrichingServiceId,
     optimizingAll,
+    enrichingProblematic,
+    regeneratingProblematic,
     problemRegenerationStatus,
     addService,
     optimizeService,
     optimizeAllServices,
+    regenerateProblematicServices,
+    enrichKeywordsForService,
+    enrichProblematicKeywords,
     getOptimizedNameValue,
     getOptimizedDescriptionValue,
     setOptimizedNameDrafts,

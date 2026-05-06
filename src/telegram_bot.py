@@ -881,7 +881,7 @@ def _build_card_menu() -> InlineKeyboardMarkup:
         [
             [InlineKeyboardButton("📊 Открыть аудит и прогресс", url=urls["progress"])],
             [InlineKeyboardButton("🧩 Аудит услуг", callback_data="client_services_audit")],
-            [InlineKeyboardButton("🔁 Перегенерировать проблемные", callback_data="client_services_regenerate_problematic")],
+            [InlineKeyboardButton("🔁 Улучшить слабые описания", callback_data="client_services_regenerate_problematic")],
             [InlineKeyboardButton("👤 Профиль и бизнес", url=urls["profile"])],
             [InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")],
         ]
@@ -1866,10 +1866,10 @@ def _build_services_audit_text(business_ctx: dict) -> tuple[bool, str]:
         f"Проверено {int(summary.get('total') or 0)} услуг",
         f"ОК: {int(summary.get('good') or 0)}",
         f"Требуют доработки: {int(summary.get('needs_review') or 0)}",
-        f"Потеряны SEO-ключи: {int(summary.get('missing_keywords') or 0)}",
-        f"Только слабые совпадения: {int(summary.get('weak_matches_only') or 0)}",
-        f"Fallback: {int(summary.get('fallback') or 0)}",
-        f"Guardrails: {int(summary.get('guardrail_failed') or 0)}",
+        f"Не хватает важных запросов: {int(summary.get('missing_keywords') or 0)}",
+        f"Слишком неточные совпадения: {int(summary.get('weak_matches_only') or 0)}",
+        f"Шаблонные описания: {int(summary.get('fallback') or 0)}",
+        f"Нужна проверка смысла: {int(summary.get('guardrail_failed') or 0)}",
     ]
     if problem_items:
         lines.extend(["", "Первые проблемы:"])

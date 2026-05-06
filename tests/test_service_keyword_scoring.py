@@ -178,7 +178,7 @@ def test_service_quality_explains_review_reasons() -> None:
     assert "missing_keywords" in quality["issue_codes"]
     assert "fallback_used" in quality["issue_codes"]
     assert "guardrail_reasons" in quality["issue_codes"]
-    assert any("потерян ключ" in label for label in quality["issue_labels"])
+    assert any("не хватает запроса" in label for label in quality["issue_labels"])
 
 
 def test_services_quality_audit_summary_counts() -> None:

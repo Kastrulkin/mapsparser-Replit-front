@@ -33,7 +33,7 @@ def build_problem_regeneration_instructions(quality: dict[str, Any]) -> str:
         )
     if "fallback_used" in issue_codes or "fallback_description" in issue_codes:
         instructions.append(
-            "Не возвращай fallback-описание; сделай короткое точное описание в одно предложение."
+            "Не возвращай шаблонное описание; сделай короткое точное описание в одно предложение."
         )
     if "guardrail_reasons" in issue_codes:
         instructions.append(

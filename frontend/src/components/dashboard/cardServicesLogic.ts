@@ -291,12 +291,12 @@ export const getServiceQuality = (service: ServiceLike & {
     if (!issueLabels.includes(label)) issueLabels.push(label);
   };
 
-  if (score.total === 0) addIssue('no_keywords', 'нет SEO-ключей');
-  if (score.missing.length > 0) addIssue('missing_keywords', `потерян ключ: ${score.missing.slice(0, 3).join(', ')}`);
-  if (score.found > 0 && score.found === score.closeCount) addIssue('weak_matches_only', 'только близкое совпадение');
-  if (optimizedDescription && normalizeServiceText(optimizedDescription).includes('услуга по исходному формату записи')) addIssue('fallback_description', 'fallback-описание');
-  if (service.fallback_used) addIssue('fallback_used', 'fallback после guardrails');
-  if (guardrailReasons.length > 0) addIssue('guardrail_reasons', `сработали guardrails: ${guardrailReasons.slice(0, 2).join(', ')}`);
+  if (score.total === 0) addIssue('no_keywords', 'нет SEO-запросов для проверки');
+  if (score.missing.length > 0) addIssue('missing_keywords', `не хватает запроса: ${score.missing.slice(0, 3).join(', ')}`);
+  if (score.found > 0 && score.found === score.closeCount) addIssue('weak_matches_only', 'запрос использован слишком неточно');
+  if (optimizedDescription && normalizeServiceText(optimizedDescription).includes('услуга по исходному формату записи')) addIssue('fallback_description', 'описание выглядит шаблонно');
+  if (service.fallback_used) addIssue('fallback_used', 'описание нужно переписать точнее');
+  if (guardrailReasons.length > 0) addIssue('guardrail_reasons', 'нужна проверка смысла и обещаний');
   if (optimizedName && name && isDraftSimilarToCurrent(optimizedName, name)) addIssue('name_unchanged', 'название почти не изменилось');
   if (optimizedDescription && description && isDraftSimilarToCurrent(optimizedDescription, description)) addIssue('description_unchanged', 'описание почти не изменилось');
   if (!optimizedName && !optimizedDescription) addIssue('no_suggestion', 'нет SEO-предложения');
@@ -349,8 +349,8 @@ export const buildServicesQualityAudit = (
       `ОК: ${summary.good}`,
       `Требуют доработки: ${summary.needsReview}`,
       `Нужна ручная проверка: ${summary.manualReview}`,
-      `Потеряны SEO-ключи: ${summary.missingKeywords}`,
-      `Fallback: ${summary.fallback}`,
+      `Не хватает важных запросов: ${summary.missingKeywords}`,
+      `Шаблонные описания: ${summary.fallback}`,
     ].join('\n'),
   };
 };

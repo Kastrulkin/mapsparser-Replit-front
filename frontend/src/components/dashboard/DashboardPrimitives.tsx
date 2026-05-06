@@ -113,7 +113,7 @@ export const DashboardActionPanel: React.FC<{
   return (
     <div className={cn("rounded-3xl border p-5 shadow-sm sm:p-6", toneClassName, className)}>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 space-y-2">
+        <div className="min-w-0 flex-[1_1_24rem] space-y-2">
           <h2 className="text-lg font-semibold text-slate-950">
             {title}
           </h2>
@@ -129,7 +129,7 @@ export const DashboardActionPanel: React.FC<{
           ) : null}
         </div>
         {actions ? (
-          <div className="flex shrink-0 flex-wrap gap-2">
+          <div className="flex max-w-full flex-[1_1_26rem] flex-wrap gap-2 lg:justify-end">
             {actions}
           </div>
         ) : null}

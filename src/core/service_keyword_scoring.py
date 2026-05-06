@@ -247,22 +247,22 @@ def evaluate_service_quality(service: dict[str, Any]) -> dict[str, Any]:
 
     if score["total"] == 0:
         issue_codes.append("no_keywords")
-        issue_labels.append("нет SEO-ключей")
+        issue_labels.append("нет SEO-запросов для проверки")
     if score["missing"]:
         issue_codes.append("missing_keywords")
-        issue_labels.append("потерян ключ: " + ", ".join(score["missing"][:3]))
+        issue_labels.append("не хватает запроса: " + ", ".join(score["missing"][:3]))
     if score["found"] > 0 and score["found"] == score["close_count"]:
         issue_codes.append("weak_matches_only")
-        issue_labels.append("только близкое совпадение")
+        issue_labels.append("запрос использован слишком неточно")
     if optimized_description and "услуга по исходному формату записи" in normalize_service_text(optimized_description):
         issue_codes.append("fallback_description")
-        issue_labels.append("fallback-описание")
+        issue_labels.append("описание выглядит шаблонно")
     if bool(service.get("fallback_used")):
         issue_codes.append("fallback_used")
-        issue_labels.append("fallback после guardrails")
+        issue_labels.append("описание нужно переписать точнее")
     if guardrail_reasons:
         issue_codes.append("guardrail_reasons")
-        issue_labels.append("сработали guardrails: " + ", ".join(guardrail_reasons[:2]))
+        issue_labels.append("нужна проверка смысла и обещаний")
     if optimized_name and name and normalize_service_text(optimized_name) == normalize_service_text(name):
         issue_codes.append("name_unchanged")
         issue_labels.append("название почти не изменилось")
@@ -322,7 +322,7 @@ def build_services_quality_audit(services: list[dict[str, Any]]) -> dict[str, An
             f"Проверено {summary['total']} услуг\n"
             f"ОК: {summary['good']}\n"
             f"Требуют доработки: {summary['needs_review']}\n"
-            f"Потеряны SEO-ключи: {summary['missing_keywords']}\n"
-            f"Fallback: {summary['fallback']}"
+            f"Не хватает важных запросов: {summary['missing_keywords']}\n"
+            f"Шаблонные описания: {summary['fallback']}"
         ),
     }

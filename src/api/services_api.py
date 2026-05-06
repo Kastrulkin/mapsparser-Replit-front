@@ -7,6 +7,10 @@ from auth_system import verify_session
 from core.ai_learning import record_ai_learning_event
 from core.helpers import get_business_owner_id
 from core.service_keyword_scoring import build_services_quality_audit
+from core.service_keyword_enrichment import (
+    attach_service_quality_metadata,
+    enrich_service_keywords_from_wordstat,
+)
 from core.service_problem_regeneration import (
     SERVICE_REGENERATION_BATCH_LIMIT,
     SERVICE_REGENERATION_ITEM_DELAY_SECONDS,
@@ -1265,6 +1269,9 @@ def get_services():
         except Exception:
             pass
 
+        attach_service_quality_metadata(services)
+        attach_service_quality_metadata(external_services)
+
         return jsonify({
             "success": True,
             "services": services,
@@ -1370,6 +1377,161 @@ def get_services_seo_audit():
         import sys
         error = sys.exc_info()[1]
         print(f"❌ Ошибка SEO-аудита услуг: {error}", flush=True)
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(error)}), 500
+
+
+@services_bp.route('/api/services/enrich-keywords', methods=['POST', 'OPTIONS'])
+def enrich_service_keywords():
+    """Подобрать безопасные Wordstat-запросы для одной услуги и сохранить их."""
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        data = request.get_json(silent=True) if request.is_json else {}
+        if not isinstance(data, dict):
+            data = {}
+        service_id = str(data.get("service_id") or "").strip()
+        if not service_id:
+            return jsonify({"error": "service_id обязателен"}), 400
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            SELECT id, user_id, business_id, category, name, description, keywords, price
+            FROM userservices
+            WHERE id = %s AND (is_active IS TRUE OR is_active IS NULL)
+            LIMIT 1
+            """,
+            (service_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            db.close()
+            return jsonify({"error": "Услуга не найдена"}), 404
+        service = _service_row_to_dict(row, [d[0] for d in cursor.description])
+        service_user_id = str(service.get("user_id") or "")
+        if service_user_id != str(user_data["user_id"]) and not user_data.get("is_superadmin"):
+            db.close()
+            return jsonify({"error": "Нет доступа к этой услуге"}), 403
+
+        result = enrich_service_keywords_from_wordstat(cursor, service, limit=int(data.get("limit") or 8))
+        saved = False
+        if result.get("status") == "auto_found" and result.get("keywords"):
+            cursor.execute(
+                """
+                UPDATE userservices
+                SET keywords = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                """,
+                (json.dumps(result.get("keywords") or [], ensure_ascii=False), service_id),
+            )
+            db.conn.commit()
+            saved = True
+        db.close()
+        return jsonify({
+            "success": True,
+            "service_id": service_id,
+            "saved": saved,
+            "enrichment": result,
+        })
+    except Exception:
+        import sys
+        error = sys.exc_info()[1]
+        print(f"❌ Ошибка enrich_service_keywords: {error}", flush=True)
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(error)}), 500
+
+
+@services_bp.route('/api/services/enrich-problematic-keywords', methods=['POST', 'OPTIONS'])
+def enrich_problematic_service_keywords():
+    """Подобрать безопасные Wordstat-запросы для услуг без ключей, без автогенерации текстов."""
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        data = request.get_json(silent=True) if request.is_json else {}
+        if not isinstance(data, dict):
+            data = {}
+        business_id = str(data.get("business_id") or "").strip()
+        if not business_id:
+            return jsonify({"error": "business_id обязателен"}), 400
+        _business_id, error_response, error_status = _get_user_business_id(user_data, business_id)
+        if error_response is not None:
+            return error_response, error_status
+
+        limit = max(1, min(int(data.get("limit") or 10), 10))
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        services = _load_active_services_for_business(cursor, business_id)
+        selected = []
+        for service in services:
+            if len(selected) >= limit:
+                break
+            if _parse_service_keywords(service.get("keywords")):
+                continue
+            selected.append(service)
+
+        items = []
+        saved_count = 0
+        for service in selected:
+            result = enrich_service_keywords_from_wordstat(cursor, service, limit=8)
+            saved = False
+            if result.get("status") == "auto_found" and result.get("keywords"):
+                cursor.execute(
+                    """
+                    UPDATE userservices
+                    SET keywords = %s, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                    """,
+                    (
+                        json.dumps(result.get("keywords") or [], ensure_ascii=False),
+                        str(service.get("id") or ""),
+                    ),
+                )
+                saved = True
+                saved_count += 1
+            items.append({
+                "service_id": str(service.get("id") or ""),
+                "name": str(service.get("name") or ""),
+                "saved": saved,
+                "enrichment": result,
+            })
+        if saved_count > 0:
+            db.conn.commit()
+        db.close()
+        return jsonify({
+            "success": True,
+            "business_id": business_id,
+            "selected": len(selected),
+            "saved": saved_count,
+            "items": items,
+        })
+    except Exception:
+        import sys
+        error = sys.exc_info()[1]
+        print(f"❌ Ошибка enrich_problematic_service_keywords: {error}", flush=True)
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(error)}), 500

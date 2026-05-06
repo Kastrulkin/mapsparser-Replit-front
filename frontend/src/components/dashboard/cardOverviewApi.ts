@@ -75,6 +75,20 @@ export const startProblematicServicesRegeneration = (payload: { business_id?: st
 export const loadProblematicServicesRegenerationJob = (jobId: string) =>
   jsonRequest(`/api/services/regenerate-problematic/${jobId}`);
 
+export const enrichServiceKeywords = (payload: { service_id: string; limit?: number }) =>
+  jsonRequest('/api/services/enrich-keywords', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+export const enrichProblematicServiceKeywords = (payload: { business_id?: string; limit?: number }) =>
+  jsonRequest('/api/services/enrich-problematic-keywords', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
 export const loadCardExternalPosts = (businessId: string, scopeNetwork: boolean) => {
   const scopeQuery = scopeNetwork ? '?scope=network' : '';
   return jsonRequest(`/api/business/${businessId}/external/posts${scopeQuery}`);
