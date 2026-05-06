@@ -24,7 +24,7 @@ import {
   Wand2
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
 import { getAutomationAccessForBusiness } from '@/lib/subscriptionAccess';
 import { pickNetworkRepresentative } from '@/lib/networkRepresentative';
@@ -1256,46 +1256,91 @@ export const CardOverviewPage = () => {
                 description="Проверьте, как услуги будут выглядеть в карточках и поиске. Главный сценарий: закрыть слабые описания и принять готовые SEO-варианты."
                 tone="default"
                 actions={!showAddService ? (
-                  <>
-                    <Button
-                      onClick={regenerateProblematicServices}
-                      disabled={!automationAccess.automationAllowed || optimizingAll || regeneratingProblematic || optimizingServiceId !== null}
-                      className="bg-slate-950 text-white hover:bg-slate-800"
-                    >
-                      <Sparkles className="mr-2 h-4 w-4" />
-                      {regeneratingProblematic ? 'Обрабатываем...' : 'Обработать проблемные'}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={enrichProblematicKeywords}
-                      disabled={enrichingProblematic}
-                      className="border-slate-200 bg-white text-slate-700"
-                    >
-                      <Search className="mr-2 h-4 w-4" />
-                      {enrichingProblematic ? 'Ищем...' : 'Найти запросы'}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={optimizeAllServices}
-                      disabled={!automationAccess.automationAllowed || optimizingAll || regeneratingProblematic || optimizingServiceId !== null}
-                      className="border-slate-200 bg-white text-slate-700"
-                    >
-                      <Wand2 className="mr-2 h-4 w-4" />
-                      {optimizingAll ? 'Оптимизируем...' : serviceControlsCopy.optimizeAll}
-                    </Button>
-                    <Button onClick={() => setShowAddService(true)} variant="outline" className="border-slate-200 bg-white text-slate-700">
-                      <Plus className="mr-2 h-4 w-4" />
-                      {t.dashboard.card.addService}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => setShowServiceSettings((value) => !value)}
-                      className="text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                    >
-                      Настройки
-                    </Button>
-                  </>
+                  <TooltipProvider delayDuration={180}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex">
+                          <Button
+                            onClick={regenerateProblematicServices}
+                            disabled={!automationAccess.automationAllowed || optimizingAll || regeneratingProblematic || optimizingServiceId !== null}
+                            className="bg-slate-950 text-white hover:bg-slate-800"
+                          >
+                            <Sparkles className="mr-2 h-4 w-4" />
+                            {regeneratingProblematic ? 'Обрабатываем...' : 'Обработать проблемные'}
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-xs text-xs leading-5">
+                        Найдёт услуги со слабыми или пустыми описаниями и улучшит до 10 самых проблемных за один запуск.
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex">
+                          <Button
+                            variant="outline"
+                            onClick={enrichProblematicKeywords}
+                            disabled={enrichingProblematic}
+                            className="border-slate-200 bg-white text-slate-700"
+                          >
+                            <Search className="mr-2 h-4 w-4" />
+                            {enrichingProblematic ? 'Ищем...' : 'Найти запросы'}
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-xs text-xs leading-5">
+                        Подберёт SEO-запросы для услуг, где их нет, через безопасный Wordstat-поиск.
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex">
+                          <Button
+                            variant="outline"
+                            onClick={optimizeAllServices}
+                            disabled={!automationAccess.automationAllowed || optimizingAll || regeneratingProblematic || optimizingServiceId !== null}
+                            className="border-slate-200 bg-white text-slate-700"
+                          >
+                            <Wand2 className="mr-2 h-4 w-4" />
+                            {optimizingAll ? 'Оптимизируем...' : serviceControlsCopy.optimizeAll}
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-xs text-xs leading-5">
+                        Сгенерирует SEO-названия и описания для всех услуг. Используйте осторожно, если список большой.
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex">
+                          <Button onClick={() => setShowAddService(true)} variant="outline" className="border-slate-200 bg-white text-slate-700">
+                            <Plus className="mr-2 h-4 w-4" />
+                            {t.dashboard.card.addService}
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-xs text-xs leading-5">
+                        Добавить услугу вручную, если её нет в данных карточки или нужно проверить отдельную формулировку.
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => setShowServiceSettings((value) => !value)}
+                            className="text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                          >
+                            Настройки
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-xs text-xs leading-5">
+                        Открывает тон, язык, регион, импорт файла и дополнительные параметры генерации.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 ) : null}
                 status={problemRegenerationStatus ? (
                   <span>{problemRegenerationStatus}</span>
