@@ -33,7 +33,8 @@ interface AIAgent {
   type: string;
   description: string;
   personality?: string;
-  workflow?: WorkflowState[];
+  workflow?: WorkflowState[] | string;
+  states?: Record<string, any>;
   task?: string;
   identity?: string;
   speech_style?: string;
@@ -366,7 +367,7 @@ export const AIAgentsManagement = ({ mode = 'admin', businessId = null }: AIAgen
   const addWorkflowState = () => {
     if (!editingAgent) return;
 
-    const currentWorkflow = editingAgent.workflow || [];
+    const currentWorkflow = Array.isArray(editingAgent.workflow) ? editingAgent.workflow : [];
     const isFirstState = currentWorkflow.length === 0;
 
     const newState: WorkflowState = {
@@ -387,7 +388,7 @@ export const AIAgentsManagement = ({ mode = 'admin', businessId = null }: AIAgen
 
   const removeWorkflowState = (index: number) => {
     if (!editingAgent) return;
-    const currentWorkflow = editingAgent.workflow || [];
+    const currentWorkflow = Array.isArray(editingAgent.workflow) ? editingAgent.workflow : [];
     if (index < 0 || index >= currentWorkflow.length) return;
 
     const confirmDelete = window.confirm('Удалить этот стейт workflow?');
@@ -405,12 +406,12 @@ export const AIAgentsManagement = ({ mode = 'admin', businessId = null }: AIAgen
 
   const updateWorkflowState = (index: number, field: keyof WorkflowState, value: any) => {
     if (!editingAgent) return;
-    const currentWorkflow = editingAgent.workflow || [];
+    const currentWorkflow = Array.isArray(editingAgent.workflow) ? editingAgent.workflow : [];
     if (index < 0 || index >= currentWorkflow.length) return;
 
     const newWorkflow = [...currentWorkflow];
     // Копируем объект стейта, чтобы не мутировать напрямую
-    const updatedState: WorkflowState = { ...newWorkflow[index], [field]: value } as WorkflowState;
+    const updatedState = { ...newWorkflow[index], [field]: value };
     newWorkflow[index] = updatedState;
 
     setEditingAgent({ ...editingAgent, workflow: newWorkflow });
@@ -418,7 +419,7 @@ export const AIAgentsManagement = ({ mode = 'admin', businessId = null }: AIAgen
 
   const addScenario = (stateIndex: number) => {
     if (!editingAgent) return;
-    const currentWorkflow = editingAgent.workflow || [];
+    const currentWorkflow = Array.isArray(editingAgent.workflow) ? editingAgent.workflow : [];
     if (stateIndex < 0 || stateIndex >= currentWorkflow.length) return;
 
     const newWorkflow = [...currentWorkflow];
@@ -440,7 +441,7 @@ export const AIAgentsManagement = ({ mode = 'admin', businessId = null }: AIAgen
 
   const removeScenario = (stateIndex: number, scenarioIndex: number) => {
     if (!editingAgent) return;
-    const currentWorkflow = editingAgent.workflow || [];
+    const currentWorkflow = Array.isArray(editingAgent.workflow) ? editingAgent.workflow : [];
     if (stateIndex < 0 || stateIndex >= currentWorkflow.length) return;
 
     const newWorkflow = [...currentWorkflow];

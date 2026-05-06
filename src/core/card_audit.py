@@ -5,7 +5,9 @@ from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional
 
 from database_manager import DatabaseManager
+from core.audit_editorial import apply_audit_editorial_pass, build_editorial_summary
 from core.card_audit_policy import policy_value
+from core.industry_patterns import get_industry_pattern_profile
 from core.map_url_normalizer import normalize_map_url
 
 
@@ -334,6 +336,16 @@ MEDICAL_IDENTITY_HINTS = (
     "педиатр",
     "ортопед",
     "травмат",
+)
+
+DEFAULT_LOCAL_BUSINESS_HINTS = (
+    "гипермаркет",
+    "хозтовар",
+    "бытовой химии",
+    "строительн",
+    "товары для дома",
+    "магазин хоз",
+    "супермаркет",
 )
 
 
@@ -1066,8 +1078,18 @@ def _normalize_generated_location_phrases(text: str, city: str) -> str:
 
 
 def _detect_audit_profile(business_type: Any, business_name: Any, overview: Any) -> str:
+    return str(_detect_audit_profile_details(business_type, business_name, overview).get("profile") or "default_local_business")
+
+
+def _detect_audit_profile_details(business_type: Any, business_name: Any, overview: Any) -> Dict[str, Any]:
     if _is_hospitality_business(business_type, business_name, overview):
-        return "hospitality"
+        return {
+            "profile": "hospitality",
+            "confidence": 0.95,
+            "reasons": ["hospitality markers"],
+            "conflicts": [],
+            "scores": {"hospitality": 10},
+        }
     business_type_text = str(business_type or "").strip().lower()
     business_name_text = str(business_name or "").strip().lower()
     category_text = ""
@@ -1095,14 +1117,29 @@ def _detect_audit_profile(business_type: Any, business_name: Any, overview: Any)
                     parts.append(normalized_item)
     combined = " ".join([item for item in parts if item]).strip()
     if not combined:
-        return "default_local_business"
+        return {
+            "profile": "default_local_business",
+            "confidence": 0.45,
+            "reasons": ["empty profile"],
+            "conflicts": [],
+            "scores": {},
+        }
+    if any(token in combined for token in DEFAULT_LOCAL_BUSINESS_HINTS):
+        return {
+            "profile": "default_local_business",
+            "confidence": 0.9,
+            "reasons": ["default local business markers"],
+            "conflicts": [],
+            "scores": {"default_local_business": 10},
+        }
     strong_medical_service_hits = 0
+    strong_beauty_service_hits = 0
     for service_name in service_names_list[:15]:
         if any(token in service_name for token in STRONG_MEDICAL_SERVICE_HINTS):
             strong_medical_service_hits += 1
+        if any(token in service_name for token in AUDIT_PROFILE_HINTS.get("beauty") or ()):
+            strong_beauty_service_hits += 1
     medical_identity_present = any(token in combined for token in MEDICAL_IDENTITY_HINTS)
-    if strong_medical_service_hits >= 2:
-        return "medical"
     profile_scores: Dict[str, int] = {}
     for profile_name in ("medical", "beauty", "fashion", "wellness", "food", "fitness"):
         hints = AUDIT_PROFILE_HINTS.get(profile_name) or ()
@@ -1122,12 +1159,89 @@ def _detect_audit_profile(business_type: Any, business_name: Any, overview: Any)
                 if token and token in service_name:
                     score += 3
         profile_scores[profile_name] = score
+    if strong_medical_service_hits >= 2:
+        profile_scores["medical"] = profile_scores.get("medical", 0) + 8
+    if strong_beauty_service_hits >= 2:
+        profile_scores["beauty"] = profile_scores.get("beauty", 0) + 5
+
+    category_has_medical = any(token in category_text for token in MEDICAL_IDENTITY_HINTS)
+    category_has_beauty = any(token in category_text for token in AUDIT_PROFILE_HINTS.get("beauty") or ())
+    name_has_medical = any(token in business_name_text for token in MEDICAL_IDENTITY_HINTS)
+    service_beauty_dominates = strong_beauty_service_hits >= 2 and strong_medical_service_hits <= 0
+    service_medical_dominates = strong_medical_service_hits >= 2
+    conflicts: List[str] = []
+    if category_has_medical and service_beauty_dominates:
+        conflicts.append("medical category with beauty services")
+    if category_has_beauty and medical_identity_present and not service_medical_dominates:
+        conflicts.append("beauty category with medical name marker")
+
+    if service_medical_dominates:
+        selected_profile = "medical"
+    elif service_beauty_dominates and (not category_has_medical or name_has_medical):
+        selected_profile = "beauty"
+    else:
+        selected_profile = max(profile_scores.items(), key=lambda item: item[1])[0]
+
     best_profile = max(profile_scores.items(), key=lambda item: item[1])
-    if best_profile[0] == "medical" and not medical_identity_present and strong_medical_service_hits <= 0:
-        return "default_local_business"
-    if best_profile[1] > 0:
-        return best_profile[0]
-    return "default_local_business"
+    if selected_profile == "medical" and not medical_identity_present and strong_medical_service_hits <= 0:
+        selected_profile = "default_local_business"
+    if profile_scores.get(selected_profile, 0) <= 0:
+        selected_profile = "default_local_business"
+
+    selected_score = profile_scores.get(selected_profile, 0)
+    runner_up = 0
+    for profile_name, score in profile_scores.items():
+        if profile_name != selected_profile:
+            runner_up = max(runner_up, score)
+
+    confidence = 0.55
+    if selected_profile == "default_local_business":
+        confidence = 0.5 if best_profile[1] > 0 else 0.65
+    elif selected_score >= runner_up + 8:
+        confidence = 0.92
+    elif selected_score >= runner_up + 4:
+        confidence = 0.82
+    elif selected_score > runner_up:
+        confidence = 0.7
+    if conflicts:
+        confidence = min(confidence, 0.68)
+
+    reasons: List[str] = []
+    if selected_profile in profile_scores:
+        reasons.append(f"{selected_profile} score {profile_scores[selected_profile]}")
+    if service_medical_dominates:
+        reasons.append(f"medical service hits {strong_medical_service_hits}")
+    if service_beauty_dominates:
+        reasons.append(f"beauty service hits {strong_beauty_service_hits}")
+    if category_has_medical:
+        reasons.append("medical category marker")
+    if category_has_beauty:
+        reasons.append("beauty category marker")
+
+    return {
+        "profile": selected_profile,
+        "confidence": round(confidence, 2),
+        "reasons": reasons[:5],
+        "conflicts": conflicts[:5],
+        "scores": profile_scores,
+    }
+
+
+def _audit_industry_patterns(audit_profile: str) -> Dict[str, Any]:
+    industry_key = "local_business" if audit_profile == "default_local_business" else str(audit_profile or "local_business")
+    profile = get_industry_pattern_profile(industry_key)
+    return {
+        "industry_key": profile.get("industry_key"),
+        "label": profile.get("label"),
+        "service_patterns": profile.get("service_patterns") or [],
+        "news_patterns": profile.get("news_patterns") or [],
+        "review_reply_patterns": profile.get("review_reply_patterns") or [],
+        "forbidden_claims": profile.get("forbidden_claims") or [],
+        "forbidden_industry_drifts": profile.get("forbidden_industry_drifts") or [],
+        "positive_signals": profile.get("positive_signals") or [],
+        "examples": profile.get("examples") or [],
+        "version": profile.get("version"),
+    }
 
 
 def _extract_hospitality_intent_modifiers(text: str) -> List[str]:
@@ -1250,7 +1364,7 @@ def _build_reasoning_fields(
         beauty_focus_terms = _derive_beauty_focus_terms(service_names or [], overview_text)
         focus_text = ", ".join(beauty_focus_terms[:3]) if beauty_focus_terms else "ключевые направления"
         best_fit = [
-            f"Клиенты, которые ищут конкретную beauty-услугу рядом в {location_in}",
+            f"Клиенты, которые ищут конкретную услугу рядом в {location_in}",
             "Аудитория, которой важны понятные цены, фото результата и удобная запись",
             "Повторные клиенты, если карточка регулярно показывает новинки и работы",
         ]
@@ -2454,7 +2568,7 @@ def _build_card_baseline_action_plan(
         )
     if include_review_count and reviews_count < 30:
         next_24h.append(
-            "Запустить системный сбор отзывов: карточке нужен устойчивый social proof, а не разовые комментарии без регулярного пополнения."
+            "Запустить системный сбор отзывов: карточке нужен устойчивый слой доверия, а не разовые комментарии без регулярного пополнения."
         )
     if include_photos and photos_count < 8:
         next_7d.append(
@@ -2669,7 +2783,7 @@ def _build_food_action_plan(
             "Доснять конверсионную фотосерию: хиты меню крупным планом, интерьер, посадка, фасад, витрина/бар и реальный опыт гостя, а не случайный набор фотографий."
         )
     next_7d.append(
-        "Проверить категории и атрибуты под реальный спрос: restaurant / cafe / breakfast / brunch / delivery / specialty coffee / bakery / kebab / dessert — в зависимости от формата точки."
+        "Проверить категории и атрибуты под поисковые сценарии гостей: restaurant / cafe / breakfast / brunch / delivery / specialty coffee / bakery / kebab / dessert — в зависимости от формата точки."
     )
     next_7d.append(
         "Запустить 3–5 updates, которые дают повод прийти сейчас: сезонные блюда, новинки меню, lunch offers, завтраки, комбо, десерты, события и спецпозиции."
@@ -2762,7 +2876,7 @@ def _build_default_local_business_action_plan(
         )
     if reviews_count < 30:
         next_24h.append(
-            "Запустить системный сбор отзывов: карточке нужен устойчивый social proof, а не единичные комментарии без регулярного пополнения."
+            "Запустить системный сбор отзывов: карточке нужен устойчивый слой доверия, а не единичные комментарии без регулярного пополнения."
         )
     if photos_count < 8:
         next_7d.append(
@@ -2788,10 +2902,10 @@ def _build_default_local_business_action_plan(
             "Подготовить 3–5 updates, которые отвечают на реальный входящий спрос: кейсы, новые услуги, частые вопросы, сезонные предложения и рабочие процессы."
         )
     if not next_24h:
-        next_24h.append("Проверить, понимает ли новый клиент из карточки, за чем именно сюда обращаться и что он получает на выходе.")
+        next_24h.append("Проверить, понимает ли новый клиент из карточки, с каким запросом сюда обращаться и что он получает на выходе.")
     ongoing = [
         "Поддерживать актуальность услуг, цен, фото и контактов, чтобы карточка не расходилась с реальностью.",
-        "Регулярно отвечать на отзывы и превращать их в понятный social proof, а не просто закрывать долг.",
+        "Регулярно отвечать на отзывы и превращать их в понятный слой доверия, а не просто закрывать долг.",
         "Держать карточку живой через новости, свежие фото, обновления предложения и визуальные подтверждения реальной работы.",
     ]
     return {"next_24h": next_24h[:4], "next_7d": next_7d[:4], "ongoing": ongoing}
@@ -3110,7 +3224,7 @@ def _build_beauty_issue_blocks(
                 "id": "positioning_description_gap",
                 "section": "positioning",
                 "priority": "high",
-                "title": "Описание карточки не объясняет, за чем сюда идти",
+                "title": "Описание карточки не объясняет, с каким запросом сюда обращаться",
                 "problem": f"По карточке неясно, какие направления здесь основные ({focus_text}) и в чём причина выбрать именно этот салон.",
                 "evidence": f"В карточке {business_name} видны направления: {focus_text}; описание не превращает их в понятные причины записаться в {city_in}.",
                 "impact": "Падает конверсия из просмотра в запись и карточка хуже отрабатывает локальные запросы.",
@@ -3124,7 +3238,7 @@ def _build_beauty_issue_blocks(
                 "section": "services",
                 "priority": "high",
                 "title": "Услуги не оформлены как понятные точки входа в запись",
-                "problem": "Карточка не показывает ключевые beauty-услуги по отдельности.",
+                "problem": "Карточка не показывает ключевые услуги по отдельности.",
                 "evidence": f"Услуг в срезе: {services_count}.",
                 "impact": "Пользователь не находит нужную процедуру и уходит к конкурентам с более понятной карточкой.",
                 "fix": "Выделить ключевые услуги по направлениям: эпиляция, косметология, маникюр, brow/lashes, массаж и другие основные входы в спрос.",
@@ -3176,7 +3290,7 @@ def _build_beauty_issue_blocks(
             "priority": "medium",
                 "title": "Категории и направления можно сделать точнее",
                 "problem": "Слишком общая структура карточки размывает коммерческие запросы.",
-            "evidence": f"Для beauty вертикали особенно важны точные категории, направления услуг ({focus_text}), цены и регулярные фото-обновления.",
+            "evidence": f"Для этой ниши особенно важны точные категории, направления услуг ({focus_text}), цены и регулярные фото-обновления.",
             "impact": "Карточка слабее отрабатывает поисковые запросы по конкретным процедурам.",
             "fix": f"Проверить категории и разделить направления так, чтобы клиент быстро находил {focus_text} без лишнего поиска.",
         }
@@ -3188,7 +3302,7 @@ def _build_beauty_issue_blocks(
             "priority": "medium",
             "title": "Карточка не показывает свежие работы и поводы записаться",
             "problem": "Если в карточке давно не появлялись новые работы, кейсы и обновления, салон выглядит менее живым и слабее подталкивает к записи.",
-            "evidence": "Для beauty особенно важны свежие работы, новинки услуг, сезонные предложения и регулярный ритм публикаций.",
+            "evidence": "Для карточки важны свежие работы, новинки услуг, сезонные предложения и регулярный ритм публикаций.",
             "impact": "Снижается доверие, карточка выглядит менее актуальной и хуже конвертирует интерес в запись.",
             "fix": "Публиковать новые работы, короткие кейсы, новинки услуг и сезонные поводы записаться 1–2 раза в неделю.",
         }
@@ -3255,9 +3369,9 @@ def _build_wellness_issue_blocks(
                 "section": "reviews",
                 "priority": "medium",
                 "title": "Отзывы сильные, но не используются как маркетинговый актив",
-                "problem": "Отзывы дают доверие, но карточка почти не превращает их в SEO и conversion layer.",
+                "problem": "Отзывы дают доверие, но карточка почти не превращает их в поисковые формулировки и понятные причины записаться.",
                 "evidence": f"Отзывов: {reviews_count}, без ответа: {unanswered_reviews_count}.",
-                "impact": "Потенциал social proof недорабатывает и не усиливает запись.",
+                "impact": "Потенциал доверия через отзывы недорабатывает и не усиливает запись.",
                 "fix": "Отвечать на отзывы с ключевыми словами, просить детали о процедурах и собирать новые отзывы после визита.",
             }
         )
@@ -3783,7 +3897,7 @@ def _build_default_local_business_issue_blocks(
                 "section": "reviews",
                 "priority": "medium",
                 "title": "Отзывы есть, но не управляются как слой доверия",
-                "problem": "Карточка не превращает отзывы в понятный social proof.",
+                "problem": "Карточка не превращает отзывы в понятный слой доверия.",
                 "evidence": f"Отзывов: {reviews_count}, без ответа: {unanswered_reviews_count}.",
                 "impact": "Доверие есть, но работает слабее, чем могло бы.",
                 "fix": "Отвечать на отзывы так, чтобы подчеркивать качество сервиса, скорость, результат и надёжность бизнеса.",
@@ -3835,11 +3949,12 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
     beauty_focus_terms = _derive_beauty_focus_terms(profile_service_names, str(lead.get("description") or ""))
     if profile_service_names:
         profile_overview["service_names"] = profile_service_names
-    audit_profile = _detect_audit_profile(
+    audit_profile_details = _detect_audit_profile_details(
         business.get("business_type") or business_type,
         business.get("name") or lead_name,
         profile_overview,
     )
+    audit_profile = str(audit_profile_details.get("profile") or "default_local_business")
 
     rating_raw = snapshot.get("rating") if snapshot.get("rating") is not None else lead.get("rating")
     rating = _extract_numeric(rating_raw)
@@ -4143,7 +4258,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
                 "section": "reviews",
                 "priority": "medium",
                 "title": "Недостаточно отзывов",
-                "problem": "Объём social proof пока слабый.",
+                "problem": "Объём доверия через отзывы пока слабый.",
                 "evidence": f"Сейчас отзывов: {reviews_count}, ориентир: {reviews_target_min}+.",
                 "impact": "Новым клиентам сложнее доверять карточке.",
                 "fix": "Запустить сбор отзывов после визита и закрепить еженедельный ритм.",
@@ -4242,7 +4357,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
     elif audit_profile == "beauty":
         summary_text = (
             f"{health_label}. Карточка уже может приводить запись из локального поиска, но пока слабо продаёт направления услуг, цены и результат. "
-            f"Главные зоны роста сейчас — понятные beauty-услуги, фото работ и живой ритм обновлений."
+            f"Главные зоны роста сейчас — понятные услуги, фото работ и живой ритм обновлений."
         )
     elif audit_profile == "fashion":
         summary_text = (
@@ -4416,7 +4531,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         top_negative=hospitality_signals.get("top_negative") if hospitality_mode else None,
     )
 
-    return {
+    result = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "business": {
             "id": lead.get("id"),
@@ -4438,6 +4553,10 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
         "health_label": health_label,
         "audit_profile": audit_profile,
         "audit_profile_label": reasoning.get("audit_profile_label"),
+        "audit_profile_confidence": audit_profile_details.get("confidence"),
+        "audit_profile_reasons": audit_profile_details.get("reasons"),
+        "audit_profile_conflicts": audit_profile_details.get("conflicts"),
+        "industry_patterns": _audit_industry_patterns(audit_profile),
         "summary_text": summary_text,
         "subscores": {
             "profile": profile_score,
@@ -4495,6 +4614,8 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             "photo_urls": effective_photos[:8],
         },
     }
+    result["summary_text"] = build_editorial_summary(result)
+    return apply_audit_editorial_pass(result)
 
 
 def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
@@ -4692,7 +4813,8 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
         beauty_focus_terms = _derive_beauty_focus_terms(profile_service_names, description_text)
         if profile_service_names:
             profile_overview["service_names"] = profile_service_names
-        audit_profile = _detect_audit_profile(business.get("business_type"), business.get("name"), profile_overview)
+        audit_profile_details = _detect_audit_profile_details(business.get("business_type"), business.get("name"), profile_overview)
+        audit_profile = str(audit_profile_details.get("profile") or "default_local_business")
         hospitality_mode = audit_profile == "hospitality"
 
         has_website = bool(str(business.get("website") or "").strip())
@@ -5205,7 +5327,7 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
         elif audit_profile == "beauty":
             summary_text = (
                 f"{health_label}. Карточка уже может приводить запись из локального поиска, но пока слабо продаёт направления услуг, цены и результат. "
-                f"Главные зоны роста сейчас — понятные beauty-услуги, фото работ и живой ритм обновлений."
+                f"Главные зоны роста сейчас — понятные услуги, фото работ и живой ритм обновлений."
             )
         elif audit_profile == "fashion":
             summary_text = (
@@ -5257,7 +5379,7 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
         )
         has_successful_parse = bool(latest_successful_parse.get("updated_at"))
 
-        return {
+        result = {
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "business": {
                 "id": business.get("id"),
@@ -5275,6 +5397,10 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
             "audit_mode": "hospitality" if hospitality_mode else "default",
             "audit_profile": audit_profile,
             "audit_profile_label": reasoning.get("audit_profile_label"),
+            "audit_profile_confidence": audit_profile_details.get("confidence"),
+            "audit_profile_reasons": audit_profile_details.get("reasons"),
+            "audit_profile_conflicts": audit_profile_details.get("conflicts"),
+            "industry_patterns": _audit_industry_patterns(audit_profile),
             "summary_score": summary_score,
             "health_level": health_level,
             "health_label": health_label,
@@ -5324,6 +5450,8 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
             },
             "services_preview": services_preview[:12] if hospitality_mode else raw_services_preview[:12],
         }
+        result["summary_text"] = build_editorial_summary(result)
+        return apply_audit_editorial_pass(result)
     finally:
         db.close()
     rating_risk_max = policy_value("rating", "risk_max", 4.4)

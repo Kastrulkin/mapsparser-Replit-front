@@ -1,0 +1,155 @@
+{
+  "total": 224,
+  "duplicate_summaries_5plus": [
+    {
+      "count": 59,
+      "summary": "Описание карточки не объясняет, с каким запросом сюда обращаться. Сейчас фото 1, нет свежих обновлений, поэтому клиенту сложнее быстро выбрать и обратиться. Первое действие: Описание карточки не объясняет, с каким запросом сюда обращаться."
+    },
+    {
+      "count": 27,
+      "summary": "Описание карточки не объясняет, с каким запросом сюда обращаться. Сейчас фото 1, сайт не указан, поэтому клиенту сложнее быстро выбрать и обратиться. Первое действие: Описание карточки не объясняет, с каким запросом сюда обращаться."
+    },
+    {
+      "count": 21,
+      "summary": "Фото не усиливают доверие к клинике. Сейчас фото 1, нет свежих обновлений, поэтому пациенту сложнее быстро выбрать и обратиться. Первое действие: Фото не усиливают доверие к клинике."
+    },
+    {
+      "count": 10,
+      "summary": "Описание карточки не объясняет, с каким запросом сюда обращаться. Сейчас фото 1, рейтинг 4.4, поэтому клиенту сложнее быстро выбрать и обратиться. Первое действие: Описание карточки не объясняет, с каким запросом сюда обращаться."
+    },
+    {
+      "count": 10,
+      "summary": "Описание карточки не объясняет, с каким запросом сюда обращаться. Сейчас нет свежих обновлений, поэтому клиенту сложнее быстро выбрать и обратиться. Первое действие: Описание карточки не объясняет, с каким запросом сюда обращаться."
+    },
+    {
+      "count": 9,
+      "summary": "Описание карточки не объясняет, с каким запросом сюда обращаться. Сейчас услуг 30, но цены не показаны, фото 1, поэтому клиенту сложнее быстро выбрать и обратиться. Первое действие: Описание карточки не объясняет, с каким запросом сюда обра"
+    },
+    {
+      "count": 9,
+      "summary": "Описание карточки не объясняет, с каким запросом сюда обращаться. Сейчас фото 1, рейтинг 4.3, поэтому клиенту сложнее быстро выбрать и обратиться. Первое действие: Описание карточки не объясняет, с каким запросом сюда обращаться."
+    },
+    {
+      "count": 7,
+      "summary": "Описание карточки не объясняет центр под поисковое намерение. Сейчас фото 1, нет свежих обновлений, поэтому клиенту сложнее быстро выбрать и обратиться. Первое действие: Описание карточки не объясняет центр под поисковое намерение."
+    },
+    {
+      "count": 5,
+      "summary": "Рейтинг ниже нужного уровня. Сейчас фото 1, рейтинг 4.3, поэтому пациенту сложнее быстро выбрать и обратиться. Первое действие: Рейтинг ниже нужного уровня."
+    },
+    {
+      "count": 5,
+      "summary": "Описание карточки не объясняет центр под поисковое намерение. Сейчас фото 1, сайт не указан, поэтому клиенту сложнее быстро выбрать и обратиться. Первое действие: Описание карточки не объясняет центр под поисковое намерение."
+    }
+  ],
+  "bad_marker_hits": [],
+  "bad_marker_hits_count": 0,
+  "long_summaries_count": 0,
+  "long_summaries": [],
+  "missing_summary_variants_count": 0,
+  "missing_summary_variants": [],
+  "technical_key_hits_count": 0,
+  "technical_key_hits": [],
+  "profile_conflicts_count": 0,
+  "profile_conflicts": [],
+  "editorial_gate_issues_count": 55,
+  "editorial_gate_issues": [
+    {
+      "lead_id": "fe284228-66b7-423e-a1fb-e947660cd960",
+      "name": "Кабинет косметолога Сергеевой М. В.",
+      "issues": [
+        "issue_blocks_forbidden_marker",
+        "recommended_actions_forbidden_marker"
+      ]
+    },
+    {
+      "lead_id": "fcbf29f1-fbc1-4833-a702-77089bd08d49",
+      "name": "АмикоЭстетик",
+      "issues": [
+        "issue_blocks_forbidden_marker",
+        "recommended_actions_forbidden_marker"
+      ]
+    },
+    {
+      "lead_id": "fadeccc9-be28-4c0b-aeda-2bb775f8b6bd",
+      "name": "Одонт",
+      "issues": [
+        "issue_blocks_forbidden_marker",
+        "recommended_actions_forbidden_marker"
+      ]
+    },
+    {
+      "lead_id": "f8d8f198-4c9e-4d79-bc00-737109878fc0",
+      "name": "Сальвэ",
+      "issues": [
+        "issue_blocks_forbidden_marker",
+        "recommended_actions_forbidden_marker"
+      ]
+    },
+    {
+      "lead_id": "f78f250e-8001-4d01-887d-63121f627521",
+      "name": "Алс-Мед",
+      "issues": [
+        "issue_blocks_forbidden_marker",
+        "recommended_actions_forbidden_marker"
+      ]
+    },
+    {
+      "lead_id": "f6926526-97b5-4f60-ae24-8a77253da61b",
+      "name": "Точка Тела студия массажа",
+      "issues": [
+        "issue_blocks_forbidden_marker",
+        "recommended_actions_forbidden_marker"
+      ]
+    },
+    {
+      "lead_id": "efc4e4a9-5cc4-49c5-b523-6247ced224e1",
+      "name": "Ива Nova",
+      "issues": [
+        "issue_blocks_forbidden_marker",
+        "recommended_actions_forbidden_marker"
+      ]
+    },
+    {
+      "lead_id": "e39d2a62-f350-428d-8c46-340f062229fd",
+      "name": "Мир Здоровья",
+      "issues": [
+        "issue_blocks_forbidden_marker",
+        "recommended_actions_forbidden_marker"
+      ]
+    },
+    {
+      "lead_id": "ddff3e2d-3b2d-4d74-a340-4c09fc595b55",
+      "name": "Beauty Laser Clinic",
+      "issues": [
+        "issue_blocks_forbidden_marker",
+        "recommended_actions_forbidden_marker"
+      ]
+    },
+    {
+      "lead_id": "d5d56a21-14a6-4599-a334-bde5097c55f2",
+      "name": "Интрамед",
+      "issues": [
+        "issue_blocks_forbidden_marker",
+        "recommended_actions_forbidden_marker"
+      ]
+    },
+    {
+      "lead_id": "d5917ba6-2240-4ce0-8f44-674a9c5cd76e",
+      "name": "АрсВита",
+      "issues": [
+        "issue_blocks_forbidden_marker",
+        "recommended_actions_forbidden_marker"
+      ]
+    },
+    {
+      "lead_id": "d1e26d28-dca8-4eb3-9373-bf66b4a49f1d",
+      "name": "Arkadia",
+      "issues": [
+        "issue_blocks_forbidden_marker",
+        "recommended_actions_forbidden_marker"
+      ]
+    }
+  ],
+  "pass": false
+}

@@ -62,6 +62,17 @@ from core.service_optimization_verticals import (
     format_service_optimization_vertical_prompt,
     get_service_optimization_vertical_context,
 )
+from core.industry_patterns import detect_industry_key, evaluate_pattern_fit, format_industry_pattern_prompt
+from core.industry_pattern_recalibration import (
+    build_pattern_impact_metrics,
+    decide_industry_pattern_proposal,
+    ensure_industry_pattern_tables,
+    format_active_industry_patterns,
+    format_loaded_active_industry_patterns,
+    load_active_industry_patterns,
+    record_industry_pattern_impact_event,
+    run_monthly_industry_pattern_recalibration,
+)
 from chatgpt_api import chatgpt_bp
 from chatgpt_search_api import chatgpt_search_bp
 from stripe_integration import stripe_bp
@@ -88,6 +99,7 @@ from api.admin_prospecting import (
     _ensure_partnership_public_offers_table,
     _slugify_company_name,
 )
+from api.admin_industry_patterns_api import admin_industry_patterns_bp
 from services.prospecting_service import ProspectingService
 from core.card_audit import build_card_audit_snapshot, build_lead_card_preview_snapshot
 from core.ai_learning import record_ai_learning_event
@@ -228,6 +240,7 @@ app.register_blueprint(networks_bp)
 app.register_blueprint(network_health_bp)
 app.register_blueprint(content_plans_bp)
 app.register_blueprint(admin_prospecting_bp)
+app.register_blueprint(admin_industry_patterns_bp)
 
 # Dev-safeguard: не допускаем дублирования /api/services/list
 try:
@@ -3930,6 +3943,12 @@ def _normalize_low_quality_service_suggestions(
             "optimized_name": optimized_name,
             "seo_description": seo_description,
             "keywords": keywords,
+            "industry_key": business_vertical_key or "local_business",
+            "pattern_fit": evaluate_pattern_fit(
+                f"{optimized_name} {seo_description}",
+                business_vertical_key or "local_business",
+                mode="service",
+            ),
             "seo_keyword_score": evaluate_service_keyword_score(
                 f"{optimized_name} {seo_description}",
                 keywords,
@@ -3994,6 +4013,7 @@ def services_optimize():
         request_business_id = _resolve_request_business_id(user_data, json_data=json_payload)
         business_profile = ""
         business_vertical_key = "local_business"
+        active_service_patterns: list[dict] = []
         business_vertical_prompt = format_service_optimization_vertical_prompt(
             get_service_optimization_vertical_context(business_vertical_key)
         )
@@ -4012,7 +4032,6 @@ def services_optimize():
                 )
                 profile_row = profile_cursor.fetchone()
                 profile_data = _row_to_dict(profile_cursor, profile_row) if profile_row else {}
-                profile_db.close()
                 business_profile = " | ".join(
                     item
                     for item in [
@@ -4036,6 +4055,11 @@ def services_optimize():
                 business_vertical_prompt = format_service_optimization_vertical_prompt(
                     get_service_optimization_vertical_context(business_vertical_key)
                 )
+                active_service_patterns = load_active_industry_patterns(profile_db.conn, business_vertical_key, "service")
+                active_patterns = format_loaded_active_industry_patterns(active_service_patterns)
+                if active_patterns:
+                    business_vertical_prompt += f"\n{active_patterns}"
+                profile_db.close()
             except Exception:
                 business_profile = ""
 
@@ -4590,6 +4614,32 @@ def services_optimize():
 
         result = parsed_result
         services_count = len(result.get('services', [])) if isinstance(result.get('services'), list) else 0
+        if active_service_patterns:
+            record_industry_pattern_impact_event(
+                db.conn,
+                active_service_patterns,
+                industry_key=business_vertical_key,
+                pattern_type="service",
+                business_id=request_business_id or "",
+                user_id=user_data['user_id'],
+                source="services_optimize",
+                event_type="applied",
+                result_status="used_in_prompt",
+                metrics={"services_count": services_count},
+            )
+            impact_metrics = build_pattern_impact_metrics(result, "service")
+            record_industry_pattern_impact_event(
+                db.conn,
+                active_service_patterns,
+                industry_key=business_vertical_key,
+                pattern_type="service",
+                business_id=request_business_id or "",
+                user_id=user_data['user_id'],
+                source="services_optimize",
+                event_type="result",
+                result_status="needs_review" if int(impact_metrics.get("needs_review") or 0) > 0 else "good",
+                metrics=impact_metrics,
+            )
         cursor.execute("""
             INSERT INTO PricelistOptimizations (id, user_id, original_file_path, optimized_data, services_count, expires_at)
             VALUES (%s, %s, %s, %s, %s, %s)
@@ -4873,6 +4923,9 @@ def news_generate():
         business_name = "Бизнес"
         business_categories = ""
         business_type_context = ""
+        industry_key = "local_business"
+        active_news_patterns: list[dict] = []
+        industry_pattern_context = format_industry_pattern_prompt("local_business", mode="news")
         if business_id:
             cur.execute(
                 """
@@ -4898,6 +4951,17 @@ def news_generate():
                     ]
                     if item
                 )
+                industry_key = detect_industry_key(
+                    business_name=business_name,
+                    business_type=business_data.get('business_type'),
+                    industry=business_data.get('industry'),
+                    categories=business_data.get('categories'),
+                )
+                industry_pattern_context = format_industry_pattern_prompt(industry_key, mode="news")
+                active_news_patterns = load_active_industry_patterns(db.conn, industry_key, "news")
+                active_news_pattern_text = format_loaded_active_industry_patterns(active_news_patterns)
+                if active_news_pattern_text:
+                    industry_pattern_context += f"\n{active_news_pattern_text}"
         business_context = f"Название бизнеса: {business_name}. Тип/категории/адрес: {business_type_context or 'не указано'}."
         forbidden_industry_examples = (
             "Не выдумывай услуги, товары, режим работы, акции или отрасль. "
@@ -5086,6 +5150,7 @@ Write all generated text in {language_name}.
         prompt = (
             f"{business_context}\n"
             f"{forbidden_industry_examples}\n"
+            f"Рабочие паттерны индустрии для новости:\n{industry_pattern_context}\n"
             "Пиши только о фактах, которые совместимы с контекстом бизнеса выше.\n\n"
             f"{prompt}"
         )
@@ -5197,6 +5262,37 @@ Write all generated text in {language_name}.
         prompt_key = "news_social_generation" if content_mode == "social" else "news_generation"
         prompt_version = "v1"
         business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id') or data.get('business_id'))
+        if active_news_patterns:
+            record_industry_pattern_impact_event(
+                db.conn,
+                active_news_patterns,
+                industry_key=industry_key,
+                pattern_type="news",
+                business_id=business_id or "",
+                user_id=user_data['user_id'],
+                source="news_generate",
+                event_type="applied",
+                result_status="used_in_prompt",
+                metrics={"content_mode": content_mode, "source_has_context": bool(service_context or transaction_context or raw_info)},
+            )
+            news_impact_metrics = build_pattern_impact_metrics(
+                {"generated_text": generated_text},
+                "news",
+                industry_key=industry_key,
+                source_text=f"{service_context} {transaction_context} {raw_info}",
+            )
+            record_industry_pattern_impact_event(
+                db.conn,
+                active_news_patterns,
+                industry_key=industry_key,
+                pattern_type="news",
+                business_id=business_id or "",
+                user_id=user_data['user_id'],
+                source="news_generate",
+                event_type="result",
+                result_status="needs_review" if int(news_impact_metrics.get("needs_review") or 0) > 0 else "good",
+                metrics=news_impact_metrics,
+            )
         has_usernews_business_id = _table_has_column(cur, "usernews", "business_id")
         if has_usernews_business_id:
             cur.execute(
@@ -5782,6 +5878,39 @@ def reviews_reply():
         if not review_text:
             return jsonify({"error": "Не передан текст отзыва"}), 400
         business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id'))
+        review_industry_key = "local_business"
+        active_reply_patterns: list[dict] = []
+        review_industry_context = format_industry_pattern_prompt("local_business", mode="review_reply")
+        if business_id:
+            try:
+                db_profile = DatabaseManager()
+                cur_profile = db_profile.conn.cursor()
+                cur_profile.execute(
+                    """
+                    SELECT name, business_type, industry, categories
+                    FROM businesses
+                    WHERE id = %s
+                    LIMIT 1
+                    """,
+                    (business_id,),
+                )
+                profile_row = cur_profile.fetchone()
+                profile_data = _row_to_dict(cur_profile, profile_row) if profile_row else {}
+                review_industry_key = detect_industry_key(
+                    business_name=profile_data.get("name"),
+                    business_type=profile_data.get("business_type"),
+                    industry=profile_data.get("industry"),
+                    categories=profile_data.get("categories"),
+                    service_text=review_text,
+                )
+                review_industry_context = format_industry_pattern_prompt(review_industry_key, mode="review_reply")
+                active_reply_patterns = load_active_industry_patterns(db_profile.conn, review_industry_key, "review_reply")
+                active_reply_pattern_text = format_loaded_active_industry_patterns(active_reply_patterns)
+                if active_reply_pattern_text:
+                    review_industry_context += f"\n{active_reply_pattern_text}"
+                db_profile.close()
+            except Exception:
+                review_industry_context = format_industry_pattern_prompt("local_business", mode="review_reply")
 
         # Подтянем примеры ответов пользователя (до 5)
         # Сначала проверяем, переданы ли примеры в запросе
@@ -5923,6 +6052,11 @@ Top-10 SEO ключей: {seo_keywords_top10}
                 seo_keywords=seo_keywords_top10,
                 seo_keywords_top10=seo_keywords_top10
             )
+        prompt = (
+            "Рабочие паттерны индустрии для ответа на отзыв:\n"
+            f"{review_industry_context}\n\n"
+            f"{prompt}"
+        )
         # Логируем промпт для отладки
         print(f"🔍 DEBUG reviews_reply: prompt (первые 500 символов) = {prompt[:500]}")
         print(f"🔍 DEBUG reviews_reply: review_text = {review_text[:200] if review_text else 'ПУСТО'}")
@@ -5983,6 +6117,40 @@ Top-10 SEO ключей: {seo_keywords_top10}
             reply_text = str(result_text) if result_text else "Ошибка генерации ответа"
 
         business_id = get_business_id_from_user(user_data['user_id'], request.args.get('business_id') if request else None)
+        if active_reply_patterns:
+            impact_db = DatabaseManager()
+            record_industry_pattern_impact_event(
+                impact_db.conn,
+                active_reply_patterns,
+                industry_key=review_industry_key,
+                pattern_type="review_reply",
+                business_id=business_id or "",
+                user_id=user_data['user_id'],
+                source="reviews_reply",
+                event_type="applied",
+                result_status="used_in_prompt",
+                metrics={"review_length": len(str(review_text or "")), "tone": tone},
+            )
+            reply_impact_metrics = build_pattern_impact_metrics(
+                {"reply": reply_text},
+                "review_reply",
+                industry_key=review_industry_key,
+                source_text=review_text,
+            )
+            record_industry_pattern_impact_event(
+                impact_db.conn,
+                active_reply_patterns,
+                industry_key=review_industry_key,
+                pattern_type="review_reply",
+                business_id=business_id or "",
+                user_id=user_data['user_id'],
+                source="reviews_reply",
+                event_type="result",
+                result_status="needs_review" if int(reply_impact_metrics.get("needs_review") or 0) > 0 else "good",
+                metrics=reply_impact_metrics,
+            )
+            impact_db.conn.commit()
+            impact_db.close()
         record_ai_learning_event(
             capability="reviews.reply",
             event_type="generated",
@@ -11022,6 +11190,126 @@ def get_prompt_learning_candidates():
         })
     except Exception as e:
         print(f"❌ Ошибка получения learning candidates: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/admin/industry-patterns/recalibrate', methods=['POST', 'OPTIONS'])
+def run_industry_patterns_recalibration():
+    """Создать pending предложения по monthly recalibration. Без автоприменения."""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            db.close()
+            return jsonify({"error": "Недостаточно прав"}), 403
+
+        result = run_monthly_industry_pattern_recalibration(db.conn, create_proposals=True)
+        db.close()
+        return jsonify({
+            "success": True,
+            "auto_apply": False,
+            "result": result,
+        })
+    except Exception as e:
+        print(f"❌ Ошибка monthly industry recalibration: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/admin/industry-patterns/proposals', methods=['GET', 'OPTIONS'])
+def list_industry_pattern_proposals():
+    """Список предложений паттернов для human-in-the-loop review."""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            db.close()
+            return jsonify({"error": "Недостаточно прав"}), 403
+
+        ensure_industry_pattern_tables(db.conn)
+        status = str(request.args.get("status") or "pending_review").strip()
+        cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            SELECT id, industry_key, pattern_type, proposed_pattern, examples_json,
+                   source_period_start, source_period_end, source_counts_json,
+                   confidence, risk_level, status, reviewed_by, reviewed_at,
+                   decision_comment, activated_version_id, created_at, updated_at
+            FROM industry_pattern_proposals
+            WHERE status = %s
+            ORDER BY created_at DESC
+            LIMIT 100
+            """,
+            (status,),
+        )
+        items = []
+        for row in cursor.fetchall() or []:
+            row_data = _row_to_dict(cursor, row) if row else {}
+            items.append(row_data)
+        db.close()
+        return jsonify({"success": True, "status": status, "items": items})
+    except Exception as e:
+        print(f"❌ Ошибка списка industry pattern proposals: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/admin/industry-patterns/proposals/<proposal_id>/decision', methods=['POST', 'OPTIONS'])
+def decide_industry_pattern(proposal_id):
+    """Принять, отклонить или отправить на доработку proposed pattern."""
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            db.close()
+            return jsonify({"error": "Недостаточно прав"}), 403
+
+        data = request.get_json(silent=True) or {}
+        result = decide_industry_pattern_proposal(
+            db.conn,
+            proposal_id=proposal_id,
+            decision=str(data.get("decision") or ""),
+            decided_by=str(user_data['user_id']),
+            decision_comment=str(data.get("comment") or ""),
+        )
+        db.close()
+        return jsonify({"success": True, "result": result})
+    except Exception as e:
+        print(f"❌ Ошибка решения industry pattern proposal: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500

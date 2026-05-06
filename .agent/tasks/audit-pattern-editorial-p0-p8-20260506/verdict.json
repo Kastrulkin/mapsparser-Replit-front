@@ -1,0 +1,28 @@
+{
+  "task_id": "audit-pattern-editorial-p0-p8-20260506",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Editorial module, public normalization, payload cleanup, vertical detection tests, and targeted unit tests are in place."
+    },
+    {
+      "id": "PROD",
+      "status": "PASS",
+      "reason": "Production backup, partial rollout, 224/224 deterministic regeneration, and QA pass completed."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/core/audit_editorial.py src/core/public_audit_editor.py src/core/card_audit.py src/api/admin_prospecting.py",
+    "python3 -m pytest -q tests/test_public_audit_editor.py tests/test_admin_prospecting_audit_payload.py tests/test_industry_patterns.py",
+    "git diff --check",
+    "cd /opt/seo-app && bash scripts/postgres-backup.sh",
+    "cd /opt/seo-app && docker compose restart app worker",
+    "PYTHONPATH=/app:/app/src python3 /tmp/regenerate_all_active_public_audits.py --group-id cb88c1fa-637f-41df-bef3-05aeda192f58 --skip-ai-enrichment",
+    "PYTHONPATH=/app:/app/src python3 /tmp/qa_public_audit_quality.py --group-id cb88c1fa-637f-41df-bef3-05aeda192f58 --sample 12"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/audit-pattern-editorial-p0-p8-20260506/evidence.md"
+  ]
+}

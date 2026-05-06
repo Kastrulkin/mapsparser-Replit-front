@@ -1,0 +1,45 @@
+{
+  "task_id": "industry-patterns-version-rollback-stage10-20260506",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Active detail card can create pending version proposals through Telegram."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Detail card includes same-industry/type version candidates."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Rollback activates selected target and disables only the current context version."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Both new-version and rollback actions write decision records."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "No migration/deploy is needed for future accepted versions or rollbacks."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "Local tests and production smoke checks passed."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/core/industry_pattern_recalibration.py src/telegram_bot.py",
+    "python3 -m pytest -q tests/test_industry_patterns.py tests/test_service_keyword_scoring.py tests/test_beauty_service_optimization.py tests/test_service_problem_regeneration.py tests/test_worker_services_quality.py tests/test_content_plan_generation.py",
+    "server production AST/smoke/restart/log checks"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/industry-patterns-version-rollback-stage10-20260506/evidence.md",
+    ".agent/tasks/industry-patterns-version-rollback-stage10-20260506/evidence.json"
+  ]
+}

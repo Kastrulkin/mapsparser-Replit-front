@@ -1,0 +1,9 @@
+Production integration checks:
+- DB backup created: /opt/seo-app/backups/service-regeneration-stage7-20260505_220810/postgres_before_stage7.sql
+- docker compose up -d --force-recreate app worker: succeeded.
+- flask db current: 20260505_002 (head).
+- to_regclass: serviceregenerationjobs|serviceregenerationjobitems.
+- curl -I http://localhost:8000: 200 OK.
+- POST /api/services/regenerate-problematic without auth: 401.
+- GET /api/services/regeneration-history/test-service without auth: 401.
+- openclaw-localos-telegram-bot.service: active.

@@ -1,0 +1,42 @@
+{
+  "task_id": "content-plan-p0",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Пользователь в разделе `Работа с картами → Новости и сторис` может открыть вкладку `Контент-план`, собрать контент-план для текущего бизнеса или сетевого scope, увидеть tariff-aware горизонты `30/60/90`, сгенерировать skeleton плана, отредактировать item, сгенерировать draft и создать запись в `usernews`.",
+      "status": "PASS",
+      "proof": [
+        "Добавлены миграция contentplans/contentplanitems, backend service, API blueprint, frontend tab и tests.",
+        "Build passed: npm run build.",
+        "Python syntax checks passed: python3 -m py_compile ...",
+        "Targeted tests passed: python3 -m pytest -q tests/test_content_plan_policy.py tests/test_content_plan_generation.py"
+      ],
+      "gaps": [
+        "No manual browser smoke-check in this iteration.",
+        "No production rollout in this iteration."
+      ]
+    }
+  ],
+  "changed_files": [
+    "alembic_migrations/versions/20260430_add_content_plans.py",
+    "src/core/content_plan_generator.py",
+    "src/services/content_plan_service.py",
+    "src/api/content_plans_api.py",
+    "src/subscription_manager.py",
+    "src/main.py",
+    "frontend/src/components/content-plan/ContentPlanTab.tsx",
+    "frontend/src/components/NewsGenerator.tsx",
+    "tests/test_content_plan_policy.py",
+    "tests/test_content_plan_generation.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "npm run build",
+    "python3 -m py_compile src/core/content_plan_generator.py src/services/content_plan_service.py src/api/content_plans_api.py src/subscription_manager.py src/main.py",
+    "python3 -m pytest -q tests/test_content_plan_policy.py tests/test_content_plan_generation.py"
+  ],
+  "known_gaps": [
+    "No manual browser smoke-check in this iteration.",
+    "No production rollout in this iteration."
+  ]
+}

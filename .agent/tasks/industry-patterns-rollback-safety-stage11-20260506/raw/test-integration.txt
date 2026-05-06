@@ -1,0 +1,11 @@
+Production deploy/smoke on 2026-05-06:
+- partial tar sync with ~/.ssh/localos_prod to /opt/seo-app
+- docker compose exec app AST syntax check: syntax ok
+- find src/alembic_migrations -name '._*': no output
+- docker compose restart app worker: started
+- systemctl restart openclaw-localos-telegram-bot.service: ok
+- docker compose ps: app/worker/postgres up
+- curl -I http://localhost:8000: HTTP/1.1 200 OK
+- app/worker logs since restart: migrations at 20260506_002, no tracebacks
+- Telegram bot service: active, getMe/setMyCommands/deleteWebhook OK
+- production pytest unavailable in app image: No module named pytest

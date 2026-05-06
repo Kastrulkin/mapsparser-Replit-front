@@ -1,0 +1,40 @@
+{
+  "task_id": "content-plan-network-ux",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Live read-only smoke completed without mutating requests."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "First screen now emphasizes immediate operation and collapses detailed context."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Auto-date recovery action is implemented for visible undated items."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Bulk news review includes explicit warning for undated publications."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Bulk skip and move-to-date now require in-page review confirmation."
+    }
+  ],
+  "commands_run": [
+    "git diff --check",
+    "cd frontend && npm run build",
+    "source venv/bin/activate && python3 -m pytest -q tests/test_content_plan_generation.py tests/test_content_plan_policy.py",
+    "python3 /tmp/localos_network_readonly_smoke.py"
+  ],
+  "artifacts_used": [
+    "frontend/dist/assets/NewsGenerator-C0mIG5Ff.js"
+  ]
+}

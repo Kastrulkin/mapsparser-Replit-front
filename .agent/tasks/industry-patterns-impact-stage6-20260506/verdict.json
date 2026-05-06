@@ -1,0 +1,41 @@
+{
+  "task_id": "industry-patterns-impact-stage6-20260506",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Structured active patterns are loaded and impact events are recorded."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Service result impact metrics are computed and stored."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Telegram health screen and disable buttons are wired."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Production backup and Alembic migration completed."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Relevant local tests and production smoke checks passed; unrelated full-suite failures are documented."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/core/industry_pattern_recalibration.py src/main.py src/telegram_bot.py",
+    "python3 -m pytest -q tests/test_industry_patterns.py",
+    "python3 -m pytest -q tests/test_industry_patterns.py tests/test_service_keyword_scoring.py tests/test_beauty_service_optimization.py tests/test_service_problem_regeneration.py tests/test_worker_services_quality.py tests/test_content_plan_generation.py",
+    "python3 -m pytest -q",
+    "production: backup, sync, flask db upgrade/current, restart app worker, restart telegram bot, smoke checks"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/industry-patterns-impact-stage6-20260506/evidence.md"
+  ]
+}

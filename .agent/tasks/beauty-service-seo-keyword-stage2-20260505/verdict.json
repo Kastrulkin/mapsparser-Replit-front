@@ -1,0 +1,47 @@
+{
+  "task_id": "beauty-service-seo-keyword-stage2-20260505",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Keyword matching now returns exact, normalized, or close levels."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Targeted regression covers Russian wordforms and close beauty synonyms."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Beauty guardrails reject newly added zones and unconfirmed medical claims."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "No schema changes were made; production cleanup was limited to backed-up bad generated suggestions."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Relevant backend and frontend targeted checks passed."
+    }
+  ],
+  "commands_run": [
+    "./venv/bin/python -m pytest -q tests/test_beauty_service_optimization.py",
+    "python3 -m py_compile src/core/beauty_service_optimization.py src/core/service_optimization_verticals.py src/main.py",
+    "cd frontend && ./node_modules/.bin/sucrase-node scripts/test-card-services-logic.ts",
+    "cd frontend && ./node_modules/.bin/tsc -p tsconfig.app.json --noEmit",
+    "cd frontend && npm run build:all",
+    "scripts/deploy_frontend_dist.sh",
+    "server partial backend deploy and docker compose restart app worker",
+    "server targeted bad generated suggestions cleanup with CSV backup"
+  ],
+  "artifacts_used": [
+    "frontend/src/components/dashboard/cardServicesLogic.ts",
+    "frontend/scripts/test-card-services-logic.ts",
+    "src/core/beauty_service_optimization.py",
+    "tests/test_beauty_service_optimization.py"
+  ]
+}

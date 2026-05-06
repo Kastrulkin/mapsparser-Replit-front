@@ -2,7 +2,7 @@ import React, { Suspense, lazy, useState, useEffect, useCallback, useMemo } from
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
-import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Gift, Settings, BarChart3, TrendingUp, FileText, X, Search } from 'lucide-react';
+import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Gift, Settings, BarChart3, TrendingUp, FileText, X, Search, ShieldCheck } from 'lucide-react';
 import { newAuth } from '../../lib/auth_new';
 import { useToast } from '../../hooks/use-toast';
 import { CreateBusinessModal } from '../../components/CreateBusinessModal';
@@ -33,8 +33,11 @@ const ProxyManagement = lazy(() =>
 const ParsingManagement = lazy(() =>
   import('../../components/ParsingManagement').then((module) => ({ default: module.ParsingManagement })),
 );
+const IndustryPatternsManagement = lazy(() =>
+  import('../../components/IndustryPatternsManagement').then((module) => ({ default: module.IndustryPatternsManagement })),
+);
 
-type AdminTabId = 'businesses' | 'agents' | 'tokens' | 'growth' | 'prompts' | 'proxies' | 'parsing' | 'prospecting';
+type AdminTabId = 'businesses' | 'agents' | 'tokens' | 'growth' | 'prompts' | 'patterns' | 'proxies' | 'parsing' | 'prospecting';
 interface Business {
   id: string;
   name: string;
@@ -90,6 +93,7 @@ const adminTabs: AdminTabConfig[] = [
   { id: 'tokens', label: 'Статистика кредитов', icon: BarChart3 },
   { id: 'growth', label: 'Схема роста', icon: TrendingUp },
   { id: 'prompts', label: 'Промпты анализа', icon: FileText },
+  { id: 'patterns', label: 'Паттерны', icon: ShieldCheck },
   { id: 'proxies', label: 'Прокси', icon: Network },
   { id: 'parsing', label: 'Парсинг', icon: MapPin },
 ];
@@ -104,6 +108,7 @@ const toolsAdminTabs: AdminTabConfig[] = [
   { id: 'parsing', label: 'Парсинг', icon: MapPin },
   { id: 'proxies', label: 'Прокси', icon: Network },
   { id: 'prompts', label: 'Промпты анализа', icon: FileText },
+  { id: 'patterns', label: 'Паттерны', icon: ShieldCheck },
   { id: 'tokens', label: 'Статистика кредитов', icon: BarChart3 },
   { id: 'growth', label: 'Схема роста', icon: TrendingUp },
 ];
@@ -618,7 +623,7 @@ export const AdminPage: React.FC = () => {
               })}
             </div>
 
-            <div className="grid grid-cols-1 gap-2 border-t border-slate-100 pt-2 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="grid grid-cols-1 gap-2 border-t border-slate-100 pt-2 sm:grid-cols-2 lg:grid-cols-6">
               {toolsAdminTabs.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
@@ -673,6 +678,14 @@ export const AdminPage: React.FC = () => {
             contentClassName="p-0"
           >
             <PromptsManagement />
+          </DashboardSection>
+        ) : activeTab === 'patterns' ? (
+          <DashboardSection
+            title={activeTabConfig.label}
+            description="Web-контур HITL для active-паттернов: pending, impact, версии и rollback без деплоя."
+            contentClassName="p-0"
+          >
+            <IndustryPatternsManagement />
           </DashboardSection>
         ) : activeTab === 'proxies' ? (
           <DashboardSection

@@ -1,0 +1,78 @@
+{
+  "task_id": "beauty-service-keyword-scoring-stage3-20260505",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "UI shows keyword match levels.",
+      "status": "PASS",
+      "proof": ["CardServicesTable renders exact, normalized, close, missing, and no-keywords states."],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Beauty synonym dictionary expanded.",
+      "status": "PASS",
+      "proof": ["Frontend and backend dictionaries include requested beauty close groups."],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Scoring reports found/missing/added/weak details.",
+      "status": "PASS",
+      "proof": ["KeywordScore and backend evaluate_service_keyword_score expose counts and keyword lists."],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Backend service optimization returns seo_keyword_score.",
+      "status": "PASS",
+      "proof": ["src/main.py adds seo_keyword_score during service result normalization."],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Organika regression cases cover at least 20 beauty services.",
+      "status": "PASS",
+      "proof": ["tests/test_service_keyword_scoring.py includes 20 Organika-style cases."],
+      "gaps": []
+    },
+    {
+      "id": "AC6",
+      "text": "Bulk regeneration only targets bad service suggestions.",
+      "status": "PASS",
+      "proof": ["useCardServiceController filters optimizeAllServices through serviceNeedsRegeneration."],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/core/service_keyword_scoring.py",
+    "src/main.py",
+    "frontend/src/components/dashboard/cardServicesLogic.ts",
+    "frontend/src/components/dashboard/CardServicesTable.tsx",
+    "frontend/src/components/dashboard/useCardServiceController.ts",
+    "frontend/src/pages/dashboard/CardOverviewPage.tsx",
+    "frontend/scripts/test-card-services-logic.ts",
+    "tests/test_service_keyword_scoring.py",
+    ".agent/tasks/beauty-service-keyword-scoring-stage3-20260505/spec.md",
+    ".agent/tasks/beauty-service-keyword-scoring-stage3-20260505/evidence.md",
+    ".agent/tasks/beauty-service-keyword-scoring-stage3-20260505/evidence.json",
+    ".agent/tasks/beauty-service-keyword-scoring-stage3-20260505/verdict.json",
+    ".agent/tasks/beauty-service-keyword-scoring-stage3-20260505/problems.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "./venv/bin/python -m pytest -q tests/test_service_keyword_scoring.py tests/test_beauty_service_optimization.py",
+    "python3 -m py_compile src/core/service_keyword_scoring.py src/core/beauty_service_optimization.py src/main.py",
+    "cd frontend && ./node_modules/.bin/sucrase-node scripts/test-card-services-logic.ts",
+    "cd frontend && npm run build:all",
+    "cd frontend && ./node_modules/.bin/tsc -p tsconfig.app.json --noEmit",
+    "scripts/deploy_frontend_dist.sh",
+    "server partial backend deploy and docker compose restart app worker",
+    "server backend scoring smoke",
+    "server frontend bundle grep",
+    "server docker compose ps and curl -I http://localhost:8000"
+  ],
+  "known_gaps": [
+    "Full frontend TypeScript check fails on pre-existing unrelated errors outside this task; production build passes."
+  ]
+}

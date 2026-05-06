@@ -1,0 +1,10 @@
+No build output captured yet.
+PASS
+
+Commands:
+- cd frontend && ./node_modules/.bin/tsc -p tsconfig.app.json --noEmit
+- cd frontend && npm run build:all
+
+Result:
+- TypeScript check exited 0.
+- Vite production build and public build exited 0.

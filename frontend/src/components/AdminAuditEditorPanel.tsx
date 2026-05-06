@@ -69,13 +69,15 @@ type EditorResponse = {
   };
 };
 
+type DemandBlockKey = 'strong_demand' | 'weak_demand' | 'why';
+
 type AdminAuditEditorPanelProps = {
   leadId?: string;
   enabled: boolean;
   onPublished?: () => void;
 };
 
-const DEMAND_BLOCKS: Array<{ key: keyof EditorBlocks; label: string }> = [
+const DEMAND_BLOCKS: Array<{ key: DemandBlockKey; label: string }> = [
   { key: 'strong_demand', label: 'Сильный спрос' },
   { key: 'weak_demand', label: 'Слабый спрос' },
   { key: 'why', label: 'Почему' },

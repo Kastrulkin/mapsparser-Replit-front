@@ -1,0 +1,42 @@
+{
+  "task_id": "fix-whatsapp-lead-audits",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Production table backup was created before write operations."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "All 224 audits in the target group were rebuilt and updated successfully."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Final quality gate returned problem_count=0 over all 224 audits."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Manual sample shows corrected vertical copy for previously mismatched leads."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Representative public audit URLs returned HTTP 200."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/core/card_audit.py src/core/public_audit_editor.py src/api/admin_prospecting.py",
+    "cd /opt/seo-app && docker compose up -d --build app worker",
+    "cd /opt/seo-app && curl -I http://localhost:8000",
+    "cd /opt/seo-app && production DB quality gate over target group",
+    "cd /opt/seo-app && representative public audit curl checks"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/fix-whatsapp-lead-audits/evidence.md",
+    ".agent/tasks/fix-whatsapp-lead-audits/evidence.json"
+  ]
+}

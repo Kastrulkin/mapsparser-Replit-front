@@ -1,0 +1,10 @@
+Production deploy verification 2026-05-06:
+- Backup created: /opt/seo-app/backups/industry-patterns-20260506_155213/postgres_before_industry_patterns.sql
+- Synced backend, migration, docs to /opt/seo-app.
+- Removed accidental macOS AppleDouble ._* files before Alembic.
+- flask db upgrade applied: current revision 20260506_001 (head).
+- Restarted app and worker only.
+- curl -I http://localhost:8000 -> HTTP/1.1 200 OK.
+- Tables exist: industry_pattern_proposals, industry_pattern_versions, industry_pattern_decisions.
+- Auth gate smoke: GET /api/admin/industry-patterns/proposals without token -> 401.
+- Fresh app/worker logs after restart show no new traceback in 1m window.

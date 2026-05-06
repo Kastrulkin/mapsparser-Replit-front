@@ -1,0 +1,2 @@
+npm run build  # PASS on 2026-04-30
+python3 -m py_compile src/core/content_plan_generator.py src/services/content_plan_service.py src/api/content_plans_api.py src/subscription_manager.py src/main.py  # PASS on 2026-04-30

@@ -1420,7 +1420,7 @@ def _run_card_automation_if_due() -> None:
                     pass
                 print(f"[CARD_AUTOMATION_DIGEST] failed to mark digest sent for {telegram_id}: {digest_mark_exc}", flush=True)
                 continue
-            if _send_telegram_plain_message(telegram_id, message):
+            if _send_telegram_plain_message(telegram_id, message, reply_markup=digest.get("reply_markup")):
                 pass
             else:
                 print(f"[CARD_AUTOMATION_DIGEST] failed to send telegram digest to {telegram_id}", flush=True)
@@ -1457,19 +1457,20 @@ def _dispatch_openclaw_callback_outbox_if_due() -> None:
         print(f"[CALLBACK_DISPATCH] error: {e}", flush=True)
 
 
-def _send_telegram_plain_message(chat_id: str, text: str) -> bool:
+def _send_telegram_plain_message(chat_id: str, text: str, reply_markup: dict | None = None) -> bool:
     token = (os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
     chat_id = str(chat_id or "").strip()
     if not token or not chat_id:
         return False
     try:
-        payload = json.dumps(
-            {
-                "chat_id": chat_id,
-                "text": text,
-                "disable_web_page_preview": True,
-            }
-        ).encode("utf-8")
+        payload_dict = {
+            "chat_id": chat_id,
+            "text": text,
+            "disable_web_page_preview": True,
+        }
+        if isinstance(reply_markup, dict) and reply_markup:
+            payload_dict["reply_markup"] = reply_markup
+        payload = json.dumps(payload_dict).encode("utf-8")
         req = urllib_request.Request(
             f"https://api.telegram.org/bot{token}/sendMessage",
             data=payload,

@@ -27,12 +27,42 @@ from src.core.card_audit import (
     _build_medical_issue_blocks,
     _build_reasoning_fields,
     _build_wellness_issue_blocks,
+    _detect_audit_profile_details,
     _extract_lead_import_payload,
     _format_ru_location_prepositional,
     _merge_action_plan,
     _merge_issue_blocks,
     _normalize_generated_location_phrases,
 )
+
+
+def test_audit_profile_detection_keeps_beauty_laser_out_of_medical_without_medical_services() -> None:
+    details = _detect_audit_profile_details(
+        "Салон красоты",
+        "Beauty Laser Clinic",
+        {
+            "category": "Салон красоты",
+            "service_names": ["Лазерная эпиляция", "Окрашивание бровей", "Маникюр"],
+        },
+    )
+
+    assert details["profile"] == "beauty"
+    assert details["confidence"] >= 0.58
+    assert details["conflicts"]
+
+
+def test_audit_profile_detection_prefers_medical_when_services_are_medical() -> None:
+    details = _detect_audit_profile_details(
+        "Медцентр",
+        "Биомед",
+        {
+            "category": "Медицинский центр",
+            "service_names": ["Консультация врача невролога", "УЗИ молочных желез", "Приём терапевта"],
+        },
+    )
+
+    assert details["profile"] == "medical"
+    assert "medical service hits" in " ".join(details["reasons"])
 
 
 def test_build_admin_lead_offer_payload_exposes_current_state_top_level_facts() -> None:
@@ -580,8 +610,10 @@ def test_build_deterministic_dense_audit_enrichment_makes_summary_specific() -> 
     )
 
     assert payload["meta"]["prompt_version"] == "deterministic_dense_v2"
-    assert payload["summary_text"].startswith("Описание карточки не продаёт салон под реальный спрос")
-    assert "В первую очередь стоит" in payload["summary_text"]
+    assert "под реальный спрос" not in payload["summary_text"]
+    assert "за чем сюда идти" not in payload["summary_text"]
+    assert len(payload["summary_text"]) <= 320
+    assert payload["summary_text"].startswith("Описание карточки не объясняет")
     assert payload["why_now"]
     assert len(payload["recommended_actions"]) == 3
 
@@ -622,7 +654,8 @@ def test_generate_lead_audit_enrichment_uses_ai_payload(monkeypatch) -> None:
         "ru",
     )
 
-    assert enrichment["summary_text"] == "AI summary"
+    assert "AI summary" not in enrichment["summary_text"]
+    assert "услуг 3" in enrichment["summary_text"]
     assert enrichment["recommended_actions"][0]["title"] == "Action 1"
     assert enrichment["meta"]["source"] == "gigachat"
 

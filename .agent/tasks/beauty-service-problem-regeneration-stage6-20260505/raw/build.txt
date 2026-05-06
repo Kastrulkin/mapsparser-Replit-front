@@ -1,0 +1,5 @@
+python3 -m py_compile src/core/service_problem_regeneration.py src/api/services_api.py src/telegram_bot.py
+cd frontend && npm run build:all
+
+Local Python compile passed.
+Frontend build and public build passed.

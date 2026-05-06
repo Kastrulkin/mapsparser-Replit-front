@@ -1,0 +1,2 @@
+python3 -m pytest -q tests/test_content_plan_policy.py tests/test_content_plan_generation.py
+5 passed in 0.17s

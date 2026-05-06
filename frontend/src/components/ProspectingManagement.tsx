@@ -230,6 +230,7 @@ type OutreachDraft = {
     approved_text?: string;
     learning_note_json?: { note?: string } | null;
     created_at?: string;
+    updated_at?: string;
 };
 
 type OutreachQueueItem = {
@@ -2508,7 +2509,7 @@ export const ProspectingManagement: React.FC = () => {
         }
     };
 
-    const chooseChannel = async (leadId: string, channel: 'telegram' | 'whatsapp' | 'email' | 'manual') => {
+    const chooseChannel = async (leadId: string, channel: OutreachChannel) => {
         await withSelectionBusy(leadId, channel, async () => {
             await api.post(`/admin/prospecting/lead/${leadId}/channel`, { channel });
             await fetchSavedLeads();

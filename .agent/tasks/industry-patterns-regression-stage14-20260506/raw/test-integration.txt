@@ -1,0 +1,7 @@
+No integration test output captured yet.
+PASS
+
+Covered:
+- Flask blueprint API auth and safety gates with fake auth/DB.
+- Telegram pending proposal markup for buttons 4 and 5.
+- Python compile checks for touched backend/test modules.

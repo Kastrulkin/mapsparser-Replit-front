@@ -1,0 +1,8 @@
+No lint output captured yet.
+NOT RUN
+
+Project-specific gate used for this task:
+- frontend TypeScript noEmit
+- frontend production build
+- focused Python regression tests
+- Python syntax checks

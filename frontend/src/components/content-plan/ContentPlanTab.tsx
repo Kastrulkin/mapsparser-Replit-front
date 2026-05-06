@@ -2118,7 +2118,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
           </div>
 
           <div className="mt-5 flex flex-wrap items-center gap-3">
-            <Button onClick={generatePlan} disabled={generating || loading || !selectedScopeOption}>
+            <Button onClick={() => { void generatePlan(); }} disabled={generating || loading || !selectedScopeOption}>
               <Sparkles className="mr-2 h-4 w-4" />
               {generating
                 ? (isRu ? 'Собираем план...' : 'Building plan...')

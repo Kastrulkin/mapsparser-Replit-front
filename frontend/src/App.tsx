@@ -90,6 +90,9 @@ const Header = lazy(() => import("./components/Header"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const PublicPartnershipOfferPage = lazy(() => import("./pages/PublicPartnershipOfferPage"));
 const CheckoutReturn = lazy(() => import("./pages/CheckoutReturn"));
+const IndustryPatternsE2EPage = import.meta.env.DEV
+  ? lazy(() => import("./pages/dev/IndustryPatternsE2EPage"))
+  : null;
 
 const queryClient = new QueryClient();
 
@@ -163,6 +166,9 @@ const AppShell = () => {
           <Route path="/set-password" element={<SetPassword />} />
           <Route path="/reset-password" element={<SetPassword />} />
           <Route path="/checkout/return" element={<CheckoutReturn />} />
+          {IndustryPatternsE2EPage ? (
+            <Route path="/__e2e__/industry-patterns" element={<IndustryPatternsE2EPage />} />
+          ) : null}
           <Route path="/:offerSlug" element={<PublicPartnershipOfferPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

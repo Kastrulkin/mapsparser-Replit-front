@@ -1,0 +1,5 @@
+python3 -m py_compile src/core/service_problem_regeneration.py src/core/service_keyword_scoring.py src/api/services_api.py src/telegram_bot.py alembic_migrations/versions/20260505_add_service_regeneration_jobs.py
+cd frontend && npm run build:all
+
+Python compile passed.
+Frontend app build and public build passed.

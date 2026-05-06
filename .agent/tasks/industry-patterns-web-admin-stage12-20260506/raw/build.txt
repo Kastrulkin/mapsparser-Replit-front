@@ -1,0 +1,162 @@
+
+> vite_react_shadcn_ts@0.0.0 build:all
+> npm run build && npm run build:public
+
+
+> vite_react_shadcn_ts@0.0.0 build
+> vite build
+
+vite v7.3.1 building client environment for production...
+transforming...
+Browserslist: browsers data (caniuse-lite) is 9 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+node_modules/@pbe/react-yandex-maps/dist/react-yandex-maps.esm.js (1:4471): A comment
+
+"/*#__PURE__*/"
+
+in "node_modules/@pbe/react-yandex-maps/dist/react-yandex-maps.esm.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+node_modules/@pbe/react-yandex-maps/dist/react-yandex-maps.esm.js (1:6197): A comment
+
+"/*#__PURE__*/"
+
+in "node_modules/@pbe/react-yandex-maps/dist/react-yandex-maps.esm.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+node_modules/@pbe/react-yandex-maps/dist/react-yandex-maps.esm.js (1:7493): A comment
+
+"/*#__PURE__*/"
+
+in "node_modules/@pbe/react-yandex-maps/dist/react-yandex-maps.esm.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+node_modules/@pbe/react-yandex-maps/dist/react-yandex-maps.esm.js (1:10459): A comment
+
+"/*#__PURE__*/"
+
+in "node_modules/@pbe/react-yandex-maps/dist/react-yandex-maps.esm.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+✓ 3345 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                        4.17 kB │ gzip:   1.70 kB
+dist/assets/hero-image-BXgvVNKj.jpg                   62.88 kB
+dist/assets/logo-BY03Vnee.png                        431.60 kB
+dist/assets/index-DPz0tWmL.css                       150.46 kB │ gzip:  22.82 kB
+dist/assets/api-Bhbs2s3U.js                            0.17 kB │ gzip:   0.15 kB
+dist/assets/design-tokens-BHpcWfux.js                  0.19 kB │ gzip:   0.18 kB
+dist/assets/label-ByUUgrwZ.js                          0.36 kB │ gzip:   0.26 kB
+dist/assets/subscriptionAccess-B3ig_O45.js             0.47 kB │ gzip:   0.33 kB
+dist/assets/textarea-YMsqiODE.js                       0.52 kB │ gzip:   0.34 kB
+dist/assets/input-CVshP_uu.js                          0.62 kB │ gzip:   0.37 kB
+dist/assets/NotFound-DjfC4rz3.js                       0.66 kB │ gzip:   0.39 kB
+dist/assets/badge-z2_pLhw4.js                          0.75 kB │ gzip:   0.39 kB
+dist/assets/scroll-area-ZTPnLRYe.js                    0.84 kB │ gzip:   0.44 kB
+dist/assets/switch-DIAEYURA.js                         0.84 kB │ gzip:   0.45 kB
+dist/assets/alert--6VvXNxj.js                          0.95 kB │ gzip:   0.49 kB
+dist/assets/card-CTPcJXFv.js                           1.03 kB │ gzip:   0.40 kB
+dist/assets/ServicePhrases-CLGN2JT7.js                 1.09 kB │ gzip:   0.59 kB
+dist/assets/tabs-CMc3QeW1.js                           1.14 kB │ gzip:   0.49 kB
+dist/assets/networkRepresentative-CRdnvs4A.js          1.16 kB │ gzip:   0.55 kB
+dist/assets/CardRecommendations-CcFwetCp.js            1.16 kB │ gzip:   0.64 kB
+dist/assets/ArticleDetailPage-_0ORTqNb.js              1.56 kB │ gzip:   0.85 kB
+dist/assets/LeadDetailSections-CPLCoT90.js             1.72 kB │ gzip:   0.77 kB
+dist/assets/Requisites-DqM402IW.js                     1.83 kB │ gzip:   0.67 kB
+dist/assets/DocumentDetailPage-B9rR6anM.js             1.92 kB │ gzip:   1.01 kB
+dist/assets/CasesPage-DA4OUYJm.js                      2.17 kB │ gzip:   1.16 kB
+dist/assets/ArticlesPage-QGbr8cRU.js                   2.18 kB │ gzip:   1.13 kB
+dist/assets/query-4qgXgvfz.js                          2.19 kB │ gzip:   1.08 kB
+dist/assets/dialog-D0TBqs5x.js                         2.23 kB │ gzip:   0.88 kB
+dist/assets/DocumentsPage-DUdkXcWo.js                  2.28 kB │ gzip:   1.15 kB
+dist/assets/CaseDetailPage-Cfurm5Mq.js                 2.73 kB │ gzip:   1.18 kB
+dist/assets/Footer-CSN_Kwbg.js                         2.97 kB │ gzip:   1.20 kB
+dist/assets/select-DpeIcd2Q.js                         3.02 kB │ gzip:   1.11 kB
+dist/assets/BusinessSwitcher-C6YnIFln.js               3.12 kB │ gzip:   1.40 kB
+dist/assets/table-Cl-d44g4.js                          3.26 kB │ gzip:   1.34 kB
+dist/assets/Contact-BC7ieLdK.js                        3.45 kB │ gzip:   1.33 kB
+dist/assets/DashboardPrimitives-DE9PbVuw.js            3.79 kB │ gzip:   1.13 kB
+dist/assets/CheckoutReturn-ngmvayOt.js                 4.00 kB │ gzip:   1.74 kB
+dist/assets/Sprint-EO_ecL6I.js                         4.18 kB │ gzip:   1.74 kB
+dist/assets/SetPassword-CscMLkVF.js                    4.23 kB │ gzip:   1.66 kB
+dist/assets/LanguageSwitcher-DlyOeLbW.js               4.68 kB │ gzip:   1.48 kB
+dist/assets/Policy-Be9oTpKr.js                         4.78 kB │ gzip:   1.55 kB
+dist/assets/documents-snr1RFrQ.js                      5.69 kB │ gzip:   1.99 kB
+dist/assets/AIChatPromotionPage-n81ftAcz.js            5.71 kB │ gzip:   1.73 kB
+dist/assets/BookingsPage-0a9bM7zf.js                   5.86 kB │ gzip:   1.87 kB
+dist/assets/Header-BSe8marX.js                         6.00 kB │ gzip:   1.97 kB
+dist/assets/auth_new-DOoKjhdf.js                       6.37 kB │ gzip:   1.87 kB
+dist/assets/NetworkHealthDashboard-Dh43KtV2.js         6.81 kB │ gzip:   2.44 kB
+dist/assets/PartnershipLeadDetailDrawer-dwtESBca.js    7.01 kB │ gzip:   2.69 kB
+dist/assets/FinancePage-BAdqotSi.js                    7.41 kB │ gzip:   2.66 kB
+dist/assets/cases-CgO-mO5h.js                          7.62 kB │ gzip:   2.56 kB
+dist/assets/WizardYandex-BIJZnHsK.js                   7.77 kB │ gzip:   2.00 kB
+dist/assets/ContentShared-DS-U6-_8.js                  8.84 kB │ gzip:   3.06 kB
+dist/assets/TokenUsageStats-iCt9mGol.js                9.18 kB │ gzip:   1.72 kB
+dist/assets/AuditDisplayPrimitives-BpYuspn8.js         9.56 kB │ gzip:   2.97 kB
+dist/assets/PartnershipAnalyticsPanels-DjidzbLX.js    10.62 kB │ gzip:   2.93 kB
+dist/assets/GrowthPlanEditor-SzJBY_Ss.js              10.86 kB │ gzip:   3.07 kB
+dist/assets/ProxyManagement-DZWvC1HU.js               11.10 kB │ gzip:   3.33 kB
+dist/assets/router-0HhFJHfj.js                        12.18 kB │ gzip:   4.50 kB
+dist/assets/ChatsPage-Cv3Shxl-.js                     12.54 kB │ gzip:   3.31 kB
+dist/assets/prospectingAsync-CRNBasAj.js              13.26 kB │ gzip:   3.86 kB
+dist/assets/maps-D3XnRG9c.js                          13.51 kB │ gzip:   3.81 kB
+dist/assets/Login-z1obvEA6.js                         14.72 kB │ gzip:   4.06 kB
+dist/assets/About-gnA--OI3.js                         15.76 kB │ gzip:   3.31 kB
+dist/assets/IndustryPatternsManagement-pt8kUvcy.js    17.62 kB │ gzip:   4.91 kB
+dist/assets/DashboardLayout-CoGpgHZE.js               19.52 kB │ gzip:   6.72 kB
+dist/assets/articles-BHx4tuLW.js                      21.65 kB │ gzip:   6.21 kB
+dist/assets/index-D0HidV0b.js                         21.88 kB │ gzip:   7.44 kB
+dist/assets/TransactionForm-Dy7hnC8M.js               23.23 kB │ gzip:   5.69 kB
+dist/assets/AIAgentsManagement-De97VIiU.js            23.65 kB │ gzip:   6.67 kB
+dist/assets/LeadCardPreviewPanel-lPpEsb0M.js          25.44 kB │ gzip:   6.94 kB
+dist/assets/PromptsManagement-Dqzc9ttK.js             25.87 kB │ gzip:   6.76 kB
+dist/assets/icons-C_Qpo-Ji.js                         27.65 kB │ gzip:   9.05 kB
+dist/assets/Index-agbdR_vq.js                         28.67 kB │ gzip:   4.50 kB
+dist/assets/SettingsPage-DEPUVA6c.js                  37.69 kB │ gzip:   9.82 kB
+dist/assets/NetworkDashboardPage-CnZCzD6O.js          40.61 kB │ gzip:  11.65 kB
+dist/assets/ha-CRwond7f.js                            41.29 kB │ gzip:  15.52 kB
+dist/assets/es-BAkT2wXd.js                            43.83 kB │ gzip:  16.36 kB
+dist/assets/de-C9KtXHTa.js                            44.05 kB │ gzip:  16.60 kB
+dist/assets/Dashboard-CjUIUXCG.js                     46.01 kB │ gzip:  11.65 kB
+dist/assets/fr-DAu6oJ3m.js                            46.15 kB │ gzip:  16.86 kB
+dist/assets/ar-DIRxlEZf.js                            48.05 kB │ gzip:  16.65 kB
+dist/assets/en-CTrHCRWS.js                            49.01 kB │ gzip:  17.48 kB
+dist/assets/tr-C_01Nfj2.js                            51.06 kB │ gzip:  17.94 kB
+dist/assets/ParsingManagement-C-Hp_K4T.js             53.22 kB │ gzip:  10.60 kB
+dist/assets/el-CEZ57LjK.js                            58.81 kB │ gzip:  18.87 kB
+dist/assets/ProfilePage-Bvfz4DqJ.js                   59.74 kB │ gzip:  16.43 kB
+dist/assets/ru-vNwBxKOM.js                            61.09 kB │ gzip:  17.61 kB
+dist/assets/th-BrUfQbVQ.js                            62.43 kB │ gzip:  17.49 kB
+dist/assets/ProgressPage-DWirksPk.js                  65.43 kB │ gzip:  17.32 kB
+dist/assets/ExternalIntegrations-CtKQbi9p.js          99.42 kB │ gzip:  20.21 kB
+dist/assets/CardOverviewPage-DZ_kd8_S.js             106.45 kB │ gzip:  29.04 kB
+dist/assets/PartnershipSearchPage-CgnWoW3i.js        112.81 kB │ gzip:  27.84 kB
+dist/assets/radix-D7mXbKDg.js                        113.26 kB │ gzip:  32.82 kB
+dist/assets/NewsGenerator-D9fyq_D-.js                162.10 kB │ gzip:  37.90 kB
+dist/assets/PublicPartnershipOfferPage-BXF9eXhq.js   165.57 kB │ gzip:  46.15 kB
+dist/assets/AdminPage-Dm-GZ7eN.js                    189.52 kB │ gzip:  47.86 kB
+dist/assets/charts-BLi57adS.js                       298.32 kB │ gzip:  67.18 kB
+dist/assets/vendor-Bd6D5Py9.js                       482.82 kB │ gzip: 155.13 kB
+✓ built in 7.57s
+
+> vite_react_shadcn_ts@0.0.0 build:public
+> vite build --config vite.public.config.ts
+
+vite v7.3.1 building client environment for production...
+transforming...
+Browserslist: browsers data (caniuse-lite) is 9 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+✓ 1604 modules transformed.
+rendering chunks...
+computing gzip size...
+public-dist/public-audit/index.html      0.51 kB │ gzip:  0.31 kB
+public-dist/assets/index-DPz0tWmL.css  150.46 kB │ gzip: 22.82 kB
+public-dist/assets/ha-CRwond7f.js       41.29 kB │ gzip: 15.52 kB
+public-dist/assets/es-BAkT2wXd.js       43.83 kB │ gzip: 16.36 kB
+public-dist/assets/de-C9KtXHTa.js       44.05 kB │ gzip: 16.60 kB
+public-dist/assets/fr-DAu6oJ3m.js       46.15 kB │ gzip: 16.86 kB
+public-dist/assets/ar-DIRxlEZf.js       48.05 kB │ gzip: 16.65 kB
+public-dist/assets/en-CTrHCRWS.js       49.01 kB │ gzip: 17.48 kB
+public-dist/assets/tr-C_01Nfj2.js       51.06 kB │ gzip: 17.94 kB
+public-dist/assets/el-CEZ57LjK.js       58.81 kB │ gzip: 18.87 kB
+public-dist/assets/ru-vNwBxKOM.js       61.09 kB │ gzip: 17.61 kB
+public-dist/assets/th-BrUfQbVQ.js       62.43 kB │ gzip: 17.49 kB
+public-dist/assets/index-CMbWiPv7.js   184.42 kB │ gzip: 52.36 kB
+public-dist/assets/vendor-UKI34vz2.js  186.84 kB │ gzip: 61.66 kB
+✓ built in 3.99s

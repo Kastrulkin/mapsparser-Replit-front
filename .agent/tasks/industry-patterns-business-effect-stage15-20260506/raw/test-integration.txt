@@ -1,0 +1,9 @@
+No integration test output captured yet.
+PASS
+
+Checks:
+- Backend source deploy completed.
+- Frontend dist deploy completed.
+- Server runtime compile() check passed for changed backend files.
+- Production no-auth /api/admin/industry-patterns/summary returned 403.
+- docker compose ps and curl -I http://localhost:8000 passed in deploy scripts.

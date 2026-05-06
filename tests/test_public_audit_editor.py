@@ -9,6 +9,7 @@ from src.core.public_audit_editor import (
     build_generated_editor_blocks,
     classify_edit_kind,
     compute_editor_diff,
+    normalize_public_audit_page_json,
     normalize_editor_blocks,
 )
 
@@ -126,3 +127,24 @@ def test_classify_edit_kind_detects_minor_copy_edit() -> None:
     )
 
     assert kind == "minor_copy_edit"
+
+
+def test_normalize_public_audit_removes_template_markers_and_adds_summary_variants() -> None:
+    page_json = _sample_page_json()
+    page_json["audit"]["summary_text"] = (
+        "Описание карточки не объясняет, за чем сюда идти. "
+        "Слабый визуальный слой режет доверие, но можно забрать спрос без допрекламы."
+    )
+    page_json["audit"]["ai_enrichment"] = {"prompt_key": "internal"}
+    page_json["audit_full"] = {"debug": True}
+
+    normalized = normalize_public_audit_page_json(page_json)
+    audit = normalized["audit"]
+
+    assert "за чем сюда идти" not in audit["summary_text"].lower()
+    assert "режет доверие" not in audit["summary_text"].lower()
+    assert "без допрекламы" not in audit["summary_text"].lower()
+    assert len(audit["summary_whatsapp"]) <= 240
+    assert "audit_full" not in normalized
+    assert "ai_enrichment" not in audit
+    assert audit["editorial_quality_gate"]["status"] == "pass"

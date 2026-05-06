@@ -1,0 +1,36 @@
+{
+  "task_id": "industry-patterns-review-mining-stage23-20260506",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Stage 2+3 improves Telegram proposal review and evidence-based pattern mining.",
+      "status": "PASS",
+      "proof": [
+        "Telegram review supports pagination, industry filters, examples, source counts, and readable risk/confidence.",
+        "Monthly mining loads real service/news/review-reply samples from successful businesses.",
+        "Proposals are gated by minimum entities and sample evidence when sample data is available.",
+        "Existing JSON fields store examples and source counts; no schema migration required.",
+        "83 targeted tests passed.",
+        "Production app/worker and Telegram bot restarted successfully.",
+        "Production HTTP smoke returned 200.",
+        "Telegram bot service is active and setMyCommands returned 200."
+      ],
+      "gaps": [
+        "Live Telegram button click was not performed by the agent after deployment."
+      ]
+    }
+  ],
+  "changed_files": [
+    "src/core/industry_pattern_recalibration.py",
+    "src/telegram_bot.py",
+    "tests/test_industry_patterns.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/core/industry_patterns.py src/core/industry_pattern_recalibration.py src/core/service_optimization_verticals.py src/core/service_keyword_scoring.py src/core/card_automation.py src/services/content_plan_service.py src/main.py src/worker.py src/telegram_bot.py",
+    "python3 -m pytest -q tests/test_industry_patterns.py tests/test_beauty_service_optimization.py tests/test_service_keyword_scoring.py tests/test_content_plan_generation.py tests/test_card_automation.py tests/test_telegram_response_router.py tests/test_telegram_dashboard_copy.py"
+  ],
+  "known_gaps": [
+    "Live Telegram button click was not performed by the agent after deployment."
+  ]
+}

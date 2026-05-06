@@ -2,9 +2,16 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from typing import Any
+
+from core.audit_editorial import (
+    apply_audit_editorial_pass,
+    clean_public_payload,
+    normalize_audit_text,
+)
 
 
 SUMMARY_BLOCK_KEY = "summary"
@@ -141,12 +148,87 @@ def _normalize_beauty_summary_text(text: Any) -> str:
     normalized = _normalize_text(text)
     if not normalized:
         return normalized
-    return (
-        normalized
-        .replace("beauty-услуги", "направления услуг")
-        .replace("beauty-услугу", "услугу")
-        .replace("beauty-описание", "описание услуг")
+    return _normalize_public_audit_copy(normalized)
+
+
+def _infer_public_audit_profile(page_json: dict[str, Any], audit: dict[str, Any]) -> str:
+    profile = _normalize_text(audit.get("audit_profile")).lower()
+    text = " ".join(
+        _normalize_text(value).lower()
+        for value in (
+            page_json.get("category"),
+            page_json.get("name"),
+            page_json.get("city"),
+        )
     )
+    if any(token in text for token in ("гипермаркет", "хозтовар", "бытовой химии", "строительн", "товары для дома")):
+        return "default_local_business"
+    return profile
+
+
+def _normalize_city_copy(text: str) -> str:
+    result = str(text or "")
+    replacements = {
+        r"\bв Санкт-Петербург(?!е)": "в Санкт-Петербурге",
+        r"\bпоиск в Санкт-Петербург(?!е)": "поиск в Санкт-Петербурге",
+        r"\bв Ленинградская область(?!и)": "в Ленинградской области",
+        r"\bпоиск в Ленинградская область(?!и)": "поиск в Ленинградской области",
+    }
+    for source, target in replacements.items():
+        result = re.sub(source, target, result)
+    return result
+
+
+def _normalize_public_audit_copy(text: Any, *, audit_profile: str = "") -> str:
+    result = _normalize_text(text)
+    if not result:
+        return result
+    result = normalize_audit_text(result, audit_profile=audit_profile)
+    replacements = (
+        ("beauty-услуги", "услуги"),
+        ("beauty-услугу", "услугу"),
+        ("beauty-описания", "описания услуг"),
+        ("beauty-описание", "описание услуг"),
+        ("сильного описания услуг", "понятного описания услуг"),
+        ("сильное описание услуг", "понятное описание услуг"),
+        ("салон под реальный спрос", "предложение под запросы клиентов"),
+        ("под реальный спрос", "под запросы клиентов"),
+        ("тёплый спрос уходит в более понятные предложения рядом", "часть клиентов выбирает конкурентов с более понятной карточкой"),
+        ("часть тёплого спроса", "часть пользователей"),
+        ("уровня стабильного доверия", "уровня доверия перед обращением"),
+        ("стабильного доверия", "доверия перед обращением"),
+        ("выглядит менее живой и менее желанной", "выглядит менее актуальной"),
+        ("выглядит менее живой", "выглядит менее актуальной"),
+        ("можно сделать точнее", "стоит уточнить"),
+        ("Для medical вертикали", "Для медицинской карточки"),
+        ("Для beauty вертикали", "Для карточки услуг"),
+        ("social proof", "слой доверия"),
+        ("часть спроса уходит", "часть клиентов выбирает конкурентов"),
+    )
+    for source, target in replacements:
+        result = result.replace(source, target)
+    result = _normalize_city_copy(result)
+    if audit_profile not in {"medical", "hospitality"}:
+        result = result.replace("Пациент", "Клиент").replace("пациент", "клиент")
+        result = result.replace("специализацию, показания и формат приёма", "предложение, ключевые услуги и формат обращения")
+        result = result.replace("медицинские сценарии поиска", "сценарии поиска клиентов")
+    if audit_profile not in {"beauty", "wellness", "medical"}:
+        result = re.sub(r"\bсалона\b", "бизнеса", result, flags=re.IGNORECASE)
+        result = re.sub(r"\bсалон\b", "бизнес", result, flags=re.IGNORECASE)
+    return result
+
+
+def _normalize_public_audit_copy_tree(value: Any, *, audit_profile: str) -> Any:
+    if isinstance(value, str):
+        return _normalize_public_audit_copy(value, audit_profile=audit_profile)
+    if isinstance(value, list):
+        return [_normalize_public_audit_copy_tree(item, audit_profile=audit_profile) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: _normalize_public_audit_copy_tree(item, audit_profile=audit_profile)
+            for key, item in value.items()
+        }
+    return value
 
 
 def _normalize_issue_blocks(issue_blocks: Any) -> list[dict[str, Any]]:
@@ -161,12 +243,7 @@ def _normalize_issue_blocks(issue_blocks: Any) -> list[dict[str, Any]]:
             text = _normalize_text(next_item.get(key))
             if not text:
                 continue
-            next_item[key] = (
-                text
-                .replace("beauty-услуги", "ключевые услуги")
-                .replace("beauty-услугу", "услугу")
-                .replace("beauty-описание", "описание услуг")
-            )
+            next_item[key] = _normalize_public_audit_copy(text)
         normalized.append(next_item)
     return normalized
 
@@ -184,7 +261,14 @@ def normalize_public_audit_page_json(page_json: dict[str, Any], *, slug: str | N
     output = copy.deepcopy(page_json if isinstance(page_json, dict) else {})
     audit = output.get("audit") if isinstance(output.get("audit"), dict) else {}
     output_slug = _extract_slug(output, slug)
-    audit_profile = _normalize_text(audit.get("audit_profile")).lower()
+    audit_profile = _infer_public_audit_profile(output, audit)
+    audit = _normalize_public_audit_copy_tree(audit, audit_profile=audit_profile)
+    if isinstance(audit, dict):
+        audit["audit_profile"] = audit_profile or audit.get("audit_profile")
+        business_name = str(output.get("display_name") or output.get("name") or "").strip()
+        if business_name and not str(audit.get("business_name") or "").strip():
+            audit["business_name"] = business_name
+        audit = apply_audit_editorial_pass(audit)
 
     if audit_profile == "beauty":
         focus_terms = _extract_beauty_focus_terms(output)
@@ -244,8 +328,12 @@ def normalize_public_audit_page_json(page_json: dict[str, Any], *, slug: str | N
         next_state["services_count"] = 0
         audit["current_state"] = next_state
 
+    if isinstance(audit, dict):
+        audit = apply_audit_editorial_pass(audit)
+
     output["audit"] = audit
-    return output
+    output = _normalize_public_audit_copy_tree(output, audit_profile=audit_profile)
+    return clean_public_payload(output)
 
 
 def _normalize_top_issue_items(items: Any) -> list[dict[str, Any]]:

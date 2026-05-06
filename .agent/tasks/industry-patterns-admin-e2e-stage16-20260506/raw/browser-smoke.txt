@@ -1,0 +1,18 @@
+URL: http://127.0.0.1:5175/__e2e__/industry-patterns
+Tooling: Browser Use in-app browser over Vite dev server.
+
+Checks:
+- Page rendered the real IndustryPatternsManagement React component through a dev-only E2E harness.
+- Summary metrics visible: Pending 2, На доработке 1, Active 2, Needs review 7.
+- Safety panel visible: Superadmin only OK, Rollback через preview OK, destructive actions with confirm OK.
+- Business effect panel visible: score 25, SEO delta 13, Keyword delta 8, Accepted / Manual edits 47/4.
+- Pending proposals visible with accept / revise / reject actions.
+- Calibration confirmation modal opened and showed that recalibration creates only pending proposals.
+- Active tab opened active versions and detail card.
+- Pattern detail card opened with recent reasons, bad/good examples, and rollback candidates.
+- Rollback preview opened with current/target diff, impact comparison, warning text, and disabled confirm button because can_confirm=false.
+- Browser console errors: [].
+
+Screenshots:
+- raw/screenshot-1.png
+- raw/screenshot-rollback-visible.png

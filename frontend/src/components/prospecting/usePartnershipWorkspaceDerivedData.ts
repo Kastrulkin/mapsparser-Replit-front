@@ -43,6 +43,7 @@ export type PartnershipDerivedBatch = {
 };
 
 export type PartnershipDerivedReaction = {
+  id: string;
   lead_id: string;
   classified_outcome?: string | null;
   human_confirmed_outcome?: string | null;

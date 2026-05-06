@@ -1,0 +1,2 @@
+No separate lint command exists for this project stage.
+Used Python compile, targeted pytest, frontend production build, deployed route checks, and app logs instead.

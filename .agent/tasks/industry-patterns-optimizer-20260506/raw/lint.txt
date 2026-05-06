@@ -1,0 +1,1 @@
+No separate linter configured; py_compile used as syntax gate.

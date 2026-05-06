@@ -1,0 +1,70 @@
+{
+  "task_id": "industry-patterns-admin-e2e-stage16-20260506",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Web/admin industry patterns UI has a browser smoke path that can run without production auth or DB state.",
+      "status": "PASS",
+      "proof": [
+        "IndustryPatternsManagement accepts an injectable apiClient.",
+        "Dev-only /__e2e__/industry-patterns route renders the real admin component with mock responses."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Smoke covers summary, safety, business effect, pending proposals, calibration confirmation, active versions, detail card, and rollback preview.",
+      "status": "PASS",
+      "proof": [
+        "Browser Use smoke completed the target UI flow.",
+        "Rollback confirm button was disabled when can_confirm=false.",
+        "Browser console errors were empty."
+      ],
+      "gaps": [
+        "Not wired into CI yet."
+      ]
+    },
+    {
+      "id": "AC3",
+      "text": "Production frontend build and TypeScript check remain green.",
+      "status": "PASS",
+      "proof": [
+        "npm run build passed.",
+        "npx tsc --noEmit --pretty false passed."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Existing industry pattern API/UI Telegram regressions remain green.",
+      "status": "PASS",
+      "proof": [
+        "9 focused pytest regressions passed."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "frontend/src/App.tsx",
+    "frontend/src/components/IndustryPatternsManagement.tsx",
+    "frontend/src/pages/dev/IndustryPatternsE2EPage.tsx",
+    ".agent/tasks/industry-patterns-admin-e2e-stage16-20260506/spec.md",
+    ".agent/tasks/industry-patterns-admin-e2e-stage16-20260506/evidence.md",
+    ".agent/tasks/industry-patterns-admin-e2e-stage16-20260506/evidence.json",
+    ".agent/tasks/industry-patterns-admin-e2e-stage16-20260506/verdict.json",
+    ".agent/tasks/industry-patterns-admin-e2e-stage16-20260506/problems.md",
+    ".agent/tasks/industry-patterns-admin-e2e-stage16-20260506/raw/browser-smoke.txt",
+    ".agent/tasks/industry-patterns-admin-e2e-stage16-20260506/raw/screenshot-rollback-visible.png"
+  ],
+  "commands_for_fresh_verifier": [
+    "cd frontend && npm run build",
+    "cd frontend && npx tsc --noEmit --pretty false",
+    "source venv/bin/activate && python3 -m pytest -q tests/test_industry_patterns_api_regression.py tests/test_industry_patterns_ui_telegram_regression.py",
+    "cd frontend && npm run dev -- --host 127.0.0.1 --port 5175",
+    "curl -I --max-time 5 http://127.0.0.1:5175/__e2e__/industry-patterns"
+  ],
+  "known_gaps": [
+    "The browser smoke is repeatable through the dev route and evidence notes, but a dedicated CI E2E runner was not added in this stage."
+  ]
+}

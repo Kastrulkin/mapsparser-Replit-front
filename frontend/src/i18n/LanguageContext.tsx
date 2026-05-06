@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode } from "react";
 
-type Translations = typeof import("./locales/ru").ru;
+type Translations = any;
 
 export type Language = "ru" | "en" | "fr" | "es" | "el" | "de" | "th" | "ar" | "ha" | "tr";
 

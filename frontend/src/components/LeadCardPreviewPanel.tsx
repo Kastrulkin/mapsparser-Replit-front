@@ -21,7 +21,6 @@ export type LeadPreviewLead = {
   selected_channel?: string;
   telegram_url?: string;
   whatsapp_url?: string;
-  email?: string;
   public_audit_url?: string;
   preferred_language?: string | null;
   enabled_languages?: string[] | null;

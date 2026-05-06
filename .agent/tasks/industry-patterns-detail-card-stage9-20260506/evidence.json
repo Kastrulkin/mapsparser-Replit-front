@@ -1,0 +1,59 @@
+{
+  "task_id": "industry-patterns-detail-card-stage9-20260506",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Detail card opens from active list, health, and impact report.",
+      "status": "PASS",
+      "proof": [],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Detail card shows metadata, impact summary, reasons, and event history.",
+      "status": "PASS",
+      "proof": [],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Detail card shows good/bad examples when samples are available.",
+      "status": "PASS",
+      "proof": [],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Detail card shows recent superadmin decisions.",
+      "status": "PASS",
+      "proof": [],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Detail card keeps HITL revision/disable actions.",
+      "status": "PASS",
+      "proof": [],
+      "gaps": []
+    },
+    {
+      "id": "AC6",
+      "text": "Relevant tests and production smoke checks pass.",
+      "status": "PASS",
+      "proof": [],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/core/industry_pattern_recalibration.py",
+    "src/telegram_bot.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/core/industry_pattern_recalibration.py src/telegram_bot.py",
+    "python3 -m pytest -q tests/test_industry_patterns.py tests/test_service_keyword_scoring.py tests/test_beauty_service_optimization.py tests/test_service_problem_regeneration.py tests/test_worker_services_quality.py tests/test_content_plan_generation.py"
+  ],
+  "known_gaps": [
+    "Older impact events do not have sample_text; examples appear for new events after this deploy."
+  ]
+}

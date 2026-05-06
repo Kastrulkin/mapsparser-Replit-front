@@ -1,0 +1,94 @@
+{
+  "task_id": "services-ux-simplification-20260506",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "P0: services tab IA uses action panel, compact metrics, filters, list-detail, and settings below",
+      "status": "PASS",
+      "proof": [
+        "py_compile passed",
+        "pytest passed",
+        "frontend build passed"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "P0: inline service editors moved from list rows into selected service detail panel",
+      "status": "PASS",
+      "proof": [
+        "py_compile passed",
+        "pytest passed",
+        "frontend build passed"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "P0: duplicate grouping metadata exists in backend list response and visual duplicate grouping exists in UI",
+      "status": "PASS",
+      "proof": [
+        "py_compile passed",
+        "pytest passed",
+        "frontend build passed"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "P1: safe Wordstat seed/filtering backend exists with manual selected-service and batch endpoints",
+      "status": "PASS",
+      "proof": [
+        "py_compile passed",
+        "pytest passed",
+        "frontend build passed"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "P1: unsafe/adult/irrelevant queries are blocked by tests",
+      "status": "PASS",
+      "proof": [
+        "py_compile passed",
+        "pytest passed",
+        "frontend build passed"
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "frontend/src/components/dashboard/CardServicesTable.tsx",
+    "frontend/src/pages/dashboard/CardOverviewPage.tsx",
+    "frontend/src/components/dashboard/CardServicesControls.tsx",
+    "frontend/src/components/dashboard/cardOverviewApi.ts",
+    "frontend/src/components/dashboard/useCardServiceController.ts",
+    "frontend/src/components/dashboard/cardServicesLogic.ts",
+    "src/api/services_api.py",
+    "src/core/service_duplicate_grouping.py",
+    "src/core/service_safe_wordstat.py",
+    "src/core/service_keyword_enrichment.py",
+    "src/core/service_keyword_scoring.py",
+    "src/core/service_problem_regeneration.py",
+    "src/telegram_bot.py",
+    "tests/test_service_safe_wordstat.py",
+    "tests/test_service_keyword_scoring.py",
+    "tests/test_service_problem_regeneration.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/core/service_safe_wordstat.py src/core/service_keyword_enrichment.py src/core/service_duplicate_grouping.py src/api/services_api.py",
+    "python3 -m pytest -q tests/test_service_safe_wordstat.py tests/test_service_keyword_scoring.py tests/test_service_problem_regeneration.py",
+    "cd frontend && npm run build"
+  ],
+  "known_gaps": [
+    "No production rollout performed in this step.",
+    "No browser visual smoke was performed in this step.",
+    "Wordstat enrichment uses saved wordstatkeywords table; background auto-enrichment is intentionally not enabled."
+  ],
+  "checks": {
+    "py_compile": "passed",
+    "pytest": "13 passed",
+    "frontend_build": "passed"
+  }
+}

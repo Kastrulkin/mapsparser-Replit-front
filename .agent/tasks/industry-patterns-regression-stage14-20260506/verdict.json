@@ -1,0 +1,40 @@
+{
+  "task_id": "industry-patterns-regression-stage14-20260506",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Backend API auth, confirmation, and rollback token regressions are covered."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Frontend admin pattern UI safety and confirmation wiring is covered."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Telegram pending proposal markup supports proposal actions 4 and 5."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Existing industry-pattern regression suite passes with new tests."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "TypeScript, production build, pytest, and Python compile checks pass."
+    }
+  ],
+  "commands_run": [
+    "PYTHONPATH=src python3 -m pytest -q tests/test_industry_patterns.py tests/test_industry_patterns_api_regression.py tests/test_industry_patterns_ui_telegram_regression.py",
+    "cd frontend && ./node_modules/.bin/tsc -p tsconfig.app.json --noEmit",
+    "python3 -m py_compile src/api/admin_industry_patterns_api.py src/core/industry_pattern_recalibration.py src/telegram_bot.py tests/test_industry_patterns_api_regression.py tests/test_industry_patterns_ui_telegram_regression.py",
+    "cd frontend && npm run build:all"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/industry-patterns-regression-stage14-20260506/evidence.md"
+  ]
+}

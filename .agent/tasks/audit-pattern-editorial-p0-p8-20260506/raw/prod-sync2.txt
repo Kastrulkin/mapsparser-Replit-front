@@ -1,0 +1,22 @@
+Transfer starting: 2 files
+audit_editorial.py
+public_audit_editor.py
+
+sent 4412 bytes  received 448 bytes  747 bytes/sec
+total size is 44557  speedup is 9.17
+ Container seo-app-app-1 Restarting 
+ Container seo-app-worker-1 Restarting 
+ Container seo-app-worker-1 Started 
+ Container seo-app-app-1 Started 
+ seo-app-app-1 Copying scripts/regenerate_all_active_public_audits.py to seo-app-app-1:/tmp/regenerate_all_active_public_audits.py
+ seo-app-app-1 Copied scripts/regenerate_all_active_public_audits.py to seo-app-app-1:/tmp/regenerate_all_active_public_audits.py
+ seo-app-app-1 Copying scripts/qa_public_audit_quality.py to seo-app-app-1:/tmp/qa_public_audit_quality.py
+ seo-app-app-1 Copied scripts/qa_public_audit_quality.py to seo-app-app-1:/tmp/qa_public_audit_quality.py
+NAME                 IMAGE            COMMAND                  SERVICE    CREATED          STATUS                  PORTS
+seo-app-app-1        seo-app-app      "/app/entrypoint.sh …"   app        57 minutes ago   Up Less than a second   0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp
+seo-app-postgres-1   postgres:16      "docker-entrypoint.s…"   postgres   3 weeks ago      Up 2 days (healthy)     5432/tcp
+seo-app-worker-1     seo-app-worker   "/app/entrypoint.sh …"   worker     57 minutes ago   Up Less than a second   
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+curl: (56) Recv failure: Connection reset by peer

@@ -1,0 +1,28 @@
+{
+  "task_id": "industry-patterns-web-admin-stage12-20260506",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {"id": "AC1", "status": "PASS", "reason": "Superadmin API was added and registered."},
+    {"id": "AC2", "status": "PASS", "reason": "Pending decisions are available in web UI."},
+    {"id": "AC3", "status": "PASS", "reason": "Revision regeneration is available in web UI."},
+    {"id": "AC4", "status": "PASS", "reason": "Active detail card is available in web UI."},
+    {"id": "AC5", "status": "PASS", "reason": "Active version actions are available in web UI."},
+    {"id": "AC6", "status": "PASS", "reason": "Web rollback has preview and confirm safety."},
+    {"id": "AC7", "status": "PASS", "reason": "Bazich admin includes the Patterns tab."},
+    {"id": "AC8", "status": "PASS", "reason": "No migration was added."},
+    {"id": "AC9", "status": "PASS", "reason": "Local and production checks passed."}
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/api/admin_industry_patterns_api.py src/main.py src/core/industry_pattern_recalibration.py",
+    "python3 -m pytest -q tests/test_industry_patterns.py",
+    "cd frontend && npm run build:all",
+    "production deploy and smoke checks"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/industry-patterns-web-admin-stage12-20260506/evidence.md",
+    ".agent/tasks/industry-patterns-web-admin-stage12-20260506/evidence.json",
+    ".agent/tasks/industry-patterns-web-admin-stage12-20260506/raw/build.txt",
+    ".agent/tasks/industry-patterns-web-admin-stage12-20260506/raw/test-unit.txt",
+    ".agent/tasks/industry-patterns-web-admin-stage12-20260506/raw/test-integration.txt"
+  ]
+}

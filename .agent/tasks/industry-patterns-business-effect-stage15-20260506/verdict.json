@@ -1,0 +1,42 @@
+{
+  "task_id": "industry-patterns-business-effect-stage15-20260506",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Business-effect signals are included in pattern result metrics."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Monthly impact report aggregates business effect and ranks effective/questionable patterns."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Admin UI shows business-effect summary and pattern lists."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Regression tests cover business-effect metrics and report text."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Build, tests, deploy, and production smoke checks passed."
+    }
+  ],
+  "commands_run": [
+    "PYTHONPATH=src python3 -m pytest -q tests/test_industry_patterns.py tests/test_industry_patterns_api_regression.py tests/test_industry_patterns_ui_telegram_regression.py",
+    "cd frontend && ./node_modules/.bin/tsc -p tsconfig.app.json --noEmit",
+    "python3 -m py_compile src/core/industry_pattern_recalibration.py src/api/admin_industry_patterns_api.py tests/test_industry_patterns.py",
+    "cd frontend && npm run build:all",
+    "bash scripts/deploy_backend_src.sh",
+    "bash scripts/deploy_frontend_dist.sh"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/industry-patterns-business-effect-stage15-20260506/evidence.md"
+  ]
+}

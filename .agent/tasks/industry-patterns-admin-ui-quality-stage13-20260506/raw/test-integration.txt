@@ -1,0 +1,8 @@
+No integration test output captured yet.
+PASS
+
+Checks:
+- python3 -m py_compile src/core/industry_pattern_recalibration.py src/api/admin_industry_patterns_api.py
+- Server runtime compile() check for /app/src/api/admin_industry_patterns_api.py and /app/src/core/industry_pattern_recalibration.py
+- Production no-auth GET /api/admin/industry-patterns/summary returned 403.
+- Deployment scripts verified docker compose ps, app logs, curl -I http://localhost:8000, and live frontend bundle.

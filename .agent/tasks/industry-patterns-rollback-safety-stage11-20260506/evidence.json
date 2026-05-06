@@ -1,0 +1,83 @@
+{
+  "task_id": "industry-patterns-rollback-safety-stage11-20260506",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Rollback from an active pattern card no longer executes on the first click.",
+      "status": "PASS",
+      "proof": ["Rollback buttons open ip_rpc preview; legacy ip_rb is a preview alias."],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Telegram shows a rollback preview comparing current active version and target version before applying.",
+      "status": "PASS",
+      "proof": ["Added core preview builder and Telegram preview renderer."],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Preview includes text, impact, bad rate, diff, warnings, and reason.",
+      "status": "PASS",
+      "proof": ["Preview text includes current/target, impact counters, text diff, warnings, and selected reason."],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Superadmin must choose/confirm a rollback reason and press a separate confirm button before DB state changes.",
+      "status": "PASS",
+      "proof": ["Reasons use ip_rbr; rollback runs only on ip_rbc confirm."],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Confirmation re-validates same industry/type and current active context before rollback.",
+      "status": "PASS",
+      "proof": ["Confirm path re-runs rollback preview and blocks if can_confirm is false."],
+      "gaps": []
+    },
+    {
+      "id": "AC6",
+      "text": "Rollback writes a decision record and an impact timeline event.",
+      "status": "PASS",
+      "proof": ["Rollback logs rollback_activate decision and admin_rollback impact event."],
+      "gaps": []
+    },
+    {
+      "id": "AC7",
+      "text": "Existing version management remains backward-compatible with old ip_rb callbacks.",
+      "status": "PASS",
+      "proof": ["ip_rb routes to preview, not direct rollback."],
+      "gaps": []
+    },
+    {
+      "id": "AC8",
+      "text": "Relevant local tests and production smoke checks pass.",
+      "status": "PASS",
+      "proof": ["84 local tests passed; production AST/smoke/restart/log checks passed."],
+      "gaps": ["Production image does not include pytest."]
+    }
+  ],
+  "changed_files": [
+    "src/core/industry_pattern_recalibration.py",
+    "src/telegram_bot.py",
+    "tests/test_industry_patterns.py",
+    ".agent/tasks/industry-patterns-rollback-safety-stage11-20260506/spec.md",
+    ".agent/tasks/industry-patterns-rollback-safety-stage11-20260506/evidence.md",
+    ".agent/tasks/industry-patterns-rollback-safety-stage11-20260506/evidence.json",
+    ".agent/tasks/industry-patterns-rollback-safety-stage11-20260506/verdict.json",
+    ".agent/tasks/industry-patterns-rollback-safety-stage11-20260506/problems.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/core/industry_pattern_recalibration.py src/telegram_bot.py",
+    "python3 -m pytest -q tests/test_industry_patterns.py tests/test_service_keyword_scoring.py tests/test_beauty_service_optimization.py tests/test_service_problem_regeneration.py tests/test_worker_services_quality.py tests/test_content_plan_generation.py",
+    "server: cd /opt/seo-app && docker compose exec -T app python -B -c '<AST syntax check>'",
+    "server: cd /opt/seo-app && docker compose ps && curl -I http://localhost:8000",
+    "server: cd /opt/seo-app && docker compose logs --since 2m app worker --tail=160",
+    "server: cd /opt/seo-app && systemctl is-active openclaw-localos-telegram-bot.service"
+  ],
+  "known_gaps": [
+    "Production image does not include pytest; server unit test command reports No module named pytest."
+  ]
+}

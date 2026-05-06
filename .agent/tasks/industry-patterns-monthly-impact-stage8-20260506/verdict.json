@@ -1,0 +1,49 @@
+{
+  "task_id": "industry-patterns-monthly-impact-stage8-20260506",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Monthly impact report aggregates active pattern events."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Report includes totals and key causes."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Patterns are classified into action candidates without auto-action."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Telegram command and menu button added."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Superadmin monthly digest includes impact block."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "HITL disable and revision buttons are wired."
+    },
+    {
+      "id": "AC7",
+      "status": "PASS",
+      "reason": "Relevant tests and production smoke checks passed."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/core/industry_pattern_recalibration.py src/core/card_automation.py src/telegram_bot.py",
+    "python3 -m pytest -q tests/test_industry_patterns.py tests/test_service_keyword_scoring.py tests/test_beauty_service_optimization.py tests/test_service_problem_regeneration.py tests/test_worker_services_quality.py tests/test_content_plan_generation.py",
+    "production: syntax ok, restart app worker, restart telegram bot, HTTP/log smoke checks"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/industry-patterns-monthly-impact-stage8-20260506/evidence.md"
+  ]
+}

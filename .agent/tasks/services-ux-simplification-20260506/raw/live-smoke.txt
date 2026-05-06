@@ -1,0 +1,9 @@
+2026-05-06 live smoke after prod rollout
+- docker compose ps on /opt/seo-app: app/postgres/worker running
+- runtime imports in app container: IMPORTS_OK for service_safe_wordstat, service_keyword_enrichment, service_duplicate_grouping
+- safe seeds for "Афро на длинные волосы": афрокудри, биозавивка афрокудри, завивка афрокудри, афрокудри на длинные волосы
+- filter check: "афро порно" blocked as unsafe_blacklist; "афрокудри на длинные волосы" allowed
+- duplicate grouping check: identical services grouped with count=2
+- https://localos.pro/dashboard/card?tab=services returns HTTP 200 and live index-BzvrpVjy.js / index-BF8XQzY1.css
+- POST /api/services/enrich-keywords without auth returns 401 JSON, so endpoint is registered and protected
+Limitation: in-app Browser Use visual smoke could not run because node_repl js tool was not exposed in this session; no authenticated browser session available for dashboard visual click-through.

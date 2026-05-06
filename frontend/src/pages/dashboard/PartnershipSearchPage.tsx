@@ -1809,7 +1809,7 @@ export const PartnershipSearchPage: React.FC = () => {
 
   const recordReaction = async (
     queueId: string,
-    outcome?: (typeof OUTCOME_OPTIONS)[number]
+    outcome?: string
   ) => {
     if (!currentBusinessId) return;
     setSendQueueBusy((prev) => ({ ...prev, [queueId]: `reaction:${outcome || 'auto'}` }));
@@ -1831,7 +1831,7 @@ export const PartnershipSearchPage: React.FC = () => {
     }
   };
 
-  const confirmReaction = async (reactionId: string, outcome: (typeof OUTCOME_OPTIONS)[number]) => {
+  const confirmReaction = async (reactionId: string, outcome: string) => {
     if (!currentBusinessId) return;
     setReactionBusy((prev) => ({ ...prev, [reactionId]: outcome }));
     try {

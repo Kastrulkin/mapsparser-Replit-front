@@ -26,6 +26,12 @@ from core.channel_delivery import normalize_phone, send_maton_bridge_message
 from core.card_audit import build_lead_card_preview_snapshot
 from core.telegram_userbot import load_userbot_account, send_message as userbot_send_message
 from core.ai_learning import ensure_ai_learning_events_table, record_ai_learning_event
+from core.audit_editorial import (
+    apply_audit_editorial_pass,
+    build_editorial_summary,
+    normalize_audit_text,
+    truncate_sentence,
+)
 from core.public_audit_editor import (
     ACTION_PLAN_BLOCK_KEY,
     EDITOR_BLOCK_KEYS,
@@ -37,6 +43,7 @@ from core.public_audit_editor import (
     build_learning_metadata,
     classify_edit_kind,
     compute_editor_diff,
+    normalize_public_audit_page_json,
     normalize_editor_blocks,
     normalize_editor_state,
     render_block_text,
@@ -3512,15 +3519,15 @@ def _deterministic_priority_steps(
     description_present = bool(current_state.get("description_present"))
 
     if "опис" in joined or not description_present:
-        _add("переписать описание под реальный спрос")
+        _add("переписать описание под основные услуги и сценарии обращения")
     if "услуг" in joined or services_count <= 0:
         _add("собрать понятную структуру услуг")
     if "цен" in joined or (services_count > 0 and services_with_price_count <= 0):
         _add("добавить ценовые ориентиры")
     if "фото" in joined or photos_state == "weak" or photos_count <= 1:
-        _add("добавить фото, которые продают качество и результат")
+        _add("добавить фото, которые помогают оценить качество и результат")
     if "отзыв" in joined or "рейтинг" in joined or reviews_count <= 0 or rating is None:
-        _add("усилить слой доверия через отзывы и ответы")
+        _add("усилить доверие через отзывы и ответы")
     if "контакт" in joined or not has_website:
         _add("закрыть пробелы в контактах и переходе в запись")
 
@@ -3595,7 +3602,7 @@ def _build_deterministic_dense_audit_enrichment(
         if str(item.get("title") or "").strip()
     ]
     if len(top_titles) >= 2:
-        sentence1 = f"{top_titles[0]}, а {_lowercase_first(top_titles[1])}."
+        sentence1 = f"{top_titles[0]}. Также: {_lowercase_first(top_titles[1])}."
     elif top_titles:
         sentence1 = f"{top_titles[0]}."
     elif services_count <= 0:
@@ -3624,9 +3631,9 @@ def _build_deterministic_dense_audit_enrichment(
             sentence2 = f"{actor_dative[:1].upper() + actor_dative[1:]} сложнее понять, какие услуги здесь ключевые и чем бизнес отличается от соседних предложений."
     elif photos_state == "weak" or photos_count <= 1:
         if metrics_text:
-            sentence2 = f"Сейчас {metrics_text}, и слабый визуальный слой режет доверие ещё до первого контакта."
+            sentence2 = f"Сейчас {metrics_text}, и не хватает визуальных доказательств выбора до первого контакта."
         else:
-            sentence2 = "Слабый визуальный слой режет доверие ещё до первого контакта и делает выбор менее очевидным."
+            sentence2 = "Не хватает визуальных доказательств выбора до первого контакта."
     elif reviews_count <= 0 or rating is None:
         if metrics_text:
             sentence2 = f"Сейчас {metrics_text}, поэтому карточка хуже закрывает доверие и проигрывает более понятным конкурентам рядом."
@@ -3634,9 +3641,9 @@ def _build_deterministic_dense_audit_enrichment(
             sentence2 = "Без рейтинга и свежих отзывов карточка хуже закрывает доверие и проигрывает более понятным конкурентам рядом."
     elif not has_website:
         if metrics_text:
-            sentence2 = f"Сейчас {metrics_text}, и часть тёплого спроса теряется ещё на этапе перехода в запись."
+            sentence2 = f"Сейчас {metrics_text}, и часть пользователей теряется ещё на этапе перехода в запись."
         else:
-            sentence2 = "Часть тёплого спроса теряется на этапе перехода в запись, потому что карточка не даёт полного маршрута к контакту."
+            sentence2 = "Часть пользователей теряется на этапе перехода в запись, потому что карточка не даёт полного маршрута к контакту."
     elif services_count > 0 and services_with_price_count <= 0:
         if metrics_text:
             sentence2 = f"Сейчас {metrics_text}, поэтому {actor_dative} сложнее быстро принять решение о записи."
@@ -3644,9 +3651,9 @@ def _build_deterministic_dense_audit_enrichment(
             sentence2 = f"Услуги есть, но без ценовых ориентиров {actor_dative} сложнее быстро принять решение о записи."
     else:
         if metrics_text:
-            sentence2 = f"Сейчас {metrics_text}, и часть спроса уходит к тем, кто понятнее упаковал предложение."
+            sentence2 = f"Сейчас {metrics_text}, и часть клиентов выбирает конкурентов, где предложение упаковано понятнее."
         else:
-            sentence2 = "Сейчас карточка выглядит слабее, чем могла бы, и часть спроса уходит к тем, кто понятнее упаковал предложение."
+            sentence2 = "Сейчас карточка выглядит слабее, чем могла бы, и часть клиентов выбирает конкурентов, где предложение упаковано понятнее."
 
     priorities = _deterministic_priority_steps(normalized_findings, current_state)
     if priorities:
@@ -3659,17 +3666,24 @@ def _build_deterministic_dense_audit_enrichment(
     else:
         sentence3 = "В первую очередь стоит сделать карточку понятнее по услугам, доверию и конверсии."
 
-    summary_text = " ".join(
-        part.strip()
-        for part in [sentence1, sentence2, sentence3]
-        if str(part or "").strip()
-    ).strip()
-    summary_text = _truncate_text(summary_text, 420)
+    draft_audit = {
+        "audit_profile": preview.get("audit_profile"),
+        "summary_text": " ".join(
+            part.strip()
+            for part in [sentence1, sentence2, sentence3]
+            if str(part or "").strip()
+        ).strip(),
+        "findings": normalized_findings,
+        "recommended_actions": actions,
+        "current_state": current_state,
+        "industry_patterns": preview.get("industry_patterns") if isinstance(preview.get("industry_patterns"), dict) else {},
+    }
+    summary_text = build_editorial_summary(draft_audit)
 
     if services_count <= 0:
-        why_now = f"Пока в карточке нет понятных услуг{', ' + metrics_text if metrics_text else ''}, тёплый спрос уходит в более понятные предложения рядом."
+        why_now = f"Пока в карточке нет понятных услуг{', ' + metrics_text if metrics_text else ''}, часть клиентов выбирает конкурентов с более понятной карточкой."
     elif not description_present and (photos_state == "weak" or photos_count <= 1):
-        why_now = f"Сейчас карточка теряет конверсию и на поиске, и на доверии{', ' + metrics_text if metrics_text else ''}, хотя спрос уже можно забирать без рекламы."
+        why_now = f"Сейчас карточка теряет обращения и на поиске, и на доверии{', ' + metrics_text if metrics_text else ''}."
     elif reviews_count <= 0 or rating is None:
         why_now = f"Пока карточка не закрывает доверие через рейтинг и отзывы{', ' + metrics_text if metrics_text else ''}, часть обращений не доходит до записи."
     elif not has_website:
@@ -3677,12 +3691,12 @@ def _build_deterministic_dense_audit_enrichment(
     elif services_count > 0 and services_with_price_count <= 0:
         why_now = f"Пока у ключевых услуг нет ценовых ориентиров{', ' + metrics_text if metrics_text else ''}, карточка недобирает быстрые обращения из горячего спроса."
     else:
-        why_now = f"Спрос уже есть, и более понятная упаковка карточки{', ' + metrics_text if metrics_text else ''} может быстро поднять долю обращений без допрекламы."
+        why_now = f"Понятная упаковка карточки{', ' + metrics_text if metrics_text else ''} может быстрее переводить просмотры в обращения."
 
     return {
-        "summary_text": summary_text,
+        "summary_text": normalize_audit_text(summary_text, audit_profile=str(preview.get("audit_profile") or "")),
         "recommended_actions": actions,
-        "why_now": _truncate_text(why_now, 180),
+        "why_now": truncate_sentence(normalize_audit_text(why_now, audit_profile=str(preview.get("audit_profile") or "")), 180),
         "meta": {
             "source": "deterministic",
             "prompt_key": "lead_audit_enrichment",
@@ -3890,10 +3904,20 @@ def _generate_lead_audit_enrichment(
             raise ValueError("AI audit enrichment returned empty summary_text")
         if not recommended_actions:
             recommended_actions = fallback_actions
+        editorial_payload = apply_audit_editorial_pass(
+            {
+                "audit_profile": preview.get("audit_profile"),
+                "summary_text": summary_text,
+                "recommended_actions": recommended_actions,
+                "why_now": why_now,
+                "current_state": preview.get("current_state") if isinstance(preview.get("current_state"), dict) else {},
+                "industry_patterns": preview.get("industry_patterns") if isinstance(preview.get("industry_patterns"), dict) else {},
+            }
+        )
         return {
-            "summary_text": summary_text,
-            "recommended_actions": recommended_actions,
-            "why_now": why_now,
+            "summary_text": str(editorial_payload.get("summary_text") or "").strip(),
+            "recommended_actions": editorial_payload.get("recommended_actions") if isinstance(editorial_payload.get("recommended_actions"), list) else recommended_actions,
+            "why_now": str(editorial_payload.get("why_now") or "").strip(),
             "meta": {
                 "source": "gigachat",
                 "prompt_key": "lead_audit_enrichment",
@@ -13214,6 +13238,7 @@ def generate_admin_prospecting_offer_page(lead_id):
             audit_payload["ai_enrichment"] = ai_enrichment.get("meta") if isinstance(ai_enrichment.get("meta"), dict) else {}
             page_json["audit"] = audit_payload
         page_json["ai_enrichment"] = ai_enrichment.get("meta") if isinstance(ai_enrichment.get("meta"), dict) else {}
+        page_json = normalize_public_audit_page_json(page_json)
 
         conn = get_db_connection()
         try:
@@ -13323,12 +13348,12 @@ def generate_admin_prospecting_offer_page(lead_id):
                 event_type="generated",
                 intent="client_outreach",
                 user_id=user_data.get("user_id"),
-                prompt_key=str(page_json.get("ai_enrichment", {}).get("prompt_key") or ""),
-                prompt_version=str(page_json.get("ai_enrichment", {}).get("prompt_version") or ""),
+                prompt_key=str((ai_enrichment.get("meta") or {}).get("prompt_key") or ""),
+                prompt_version=str((ai_enrichment.get("meta") or {}).get("prompt_version") or ""),
                 final_text=str(audit_payload.get("summary_text") or "")[:3000] if isinstance(audit_payload, dict) else None,
                 metadata={
                     "lead_id": lead_id,
-                    "source": str(page_json.get("ai_enrichment", {}).get("source") or ""),
+                    "source": str((ai_enrichment.get("meta") or {}).get("source") or ""),
                 },
                 conn=conn,
             )

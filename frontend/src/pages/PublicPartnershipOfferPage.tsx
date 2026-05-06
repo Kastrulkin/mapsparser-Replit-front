@@ -115,6 +115,7 @@ type OfferPagePayload = {
       has_website?: boolean;
       has_recent_activity?: boolean;
       photos_state?: string;
+      locations_count?: number;
       unverified_locations_count?: number;
       verified_locations_count?: number;
       verification_unknown_locations_count?: number;
@@ -123,6 +124,7 @@ type OfferPagePayload = {
       last_parse_at?: string;
       last_parse_status?: string;
       no_new_services_found?: boolean;
+      scope?: string;
     };
     cadence?: {
       news_posts_per_month_min?: number;

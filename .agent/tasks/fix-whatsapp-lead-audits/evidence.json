@@ -1,0 +1,67 @@
+{
+  "task_id": "fix-whatsapp-lead-audits",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Production backup exists before modifying lead audit data.",
+      "status": "PASS",
+      "proof": [
+        "/opt/seo-app/backups/audit_repair/whatsapp_lead_audits_20260506_171702.sql.gz"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "All 224 active public audits in group `Канал - Востапп` are regenerated or normalized.",
+      "status": "PASS",
+      "proof": [
+        "Data repair script result: {\"success\": true, \"updated\": 224}"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Quality gate reports 0 stale/internal bad phrases, 0 missing audits, 0 empty issue blocks, 0 missing action plans.",
+      "status": "PASS",
+      "proof": [
+        "Final quality gate: total=224, with_audit=224, problem_count=0, problems=[]"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Known mismatch examples no longer use wrong vertical copy.",
+      "status": "PASS",
+      "proof": [
+        "12 Месяцев profile=default_local_business with retail/default copy",
+        "Комфорт profile=medical with medical/stomatology copy"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Representative public audit URLs return HTTP 200 after rollout.",
+      "status": "PASS",
+      "proof": [
+        "12-mesyatsev-zanevskiy-prospekt 200",
+        "4you-saint-petersburg-pavlinskaya-ulitsa 200",
+        "komfort 200",
+        "kultura-krasoty-krasnodar-nikolaya-kondratenko 200"
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/core/card_audit.py",
+    "src/core/public_audit_editor.py",
+    "src/api/admin_prospecting.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/core/card_audit.py src/core/public_audit_editor.py src/api/admin_prospecting.py",
+    "cd /opt/seo-app && docker compose ps",
+    "cd /opt/seo-app && curl -I http://localhost:8000",
+    "Run DB quality gate over group id cb88c1fa-637f-41df-bef3-05aeda192f58"
+  ],
+  "known_gaps": []
+}

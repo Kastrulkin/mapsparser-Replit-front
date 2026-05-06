@@ -1,0 +1,7 @@
+Production checks:
+- docker compose ps: app, worker, postgres running.
+- curl -I http://localhost:8000: 200 OK.
+- POST /api/services/regenerate-problematic without auth: 401.
+- GET /api/services/regenerate-problematic/test-job without auth: 401.
+- Telegram service openclaw-localos-telegram-bot.service: active.
+- Frontend bundle contains "Перегенерировать проблемные".

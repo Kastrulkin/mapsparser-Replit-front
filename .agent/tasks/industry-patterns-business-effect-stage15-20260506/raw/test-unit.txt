@@ -1,0 +1,8 @@
+No unit test output captured yet.
+PASS
+
+Command:
+PYTHONPATH=src python3 -m pytest -q tests/test_industry_patterns.py tests/test_industry_patterns_api_regression.py tests/test_industry_patterns_ui_telegram_regression.py
+
+Result:
+28 passed in 0.45s

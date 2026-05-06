@@ -152,7 +152,7 @@ const toWorkflowActions = (actions?: DetailAction[]) =>
 
 const renderDetailStatusBadge = (
   label?: string,
-  tone?: 'default' | 'success' | 'warning' | 'danger',
+  tone?: DetailTone,
 ) => (label ? <LeadStatusBadge label={label} tone={tone} /> : null);
 
 const renderDetailWarning = ({

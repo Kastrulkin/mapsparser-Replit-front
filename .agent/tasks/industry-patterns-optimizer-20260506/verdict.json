@@ -1,0 +1,21 @@
+{
+  "task_id": "industry-patterns-optimizer-20260506",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Implementation added shared industry pattern context, monthly HITL proposal flow, Telegram controls, targeted checks pass, and production smoke is healthy."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile ...",
+    "python3 -m pytest -q tests/test_industry_patterns.py tests/test_beauty_service_optimization.py tests/test_service_keyword_scoring.py tests/test_content_plan_generation.py tests/test_card_automation.py",
+    "cd /opt/seo-app && docker compose exec -T app flask db upgrade",
+    "cd /opt/seo-app && curl -I http://localhost:8000"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/industry-patterns-optimizer-20260506/raw/build.txt",
+    ".agent/tasks/industry-patterns-optimizer-20260506/raw/test-unit.txt"
+  ]
+}

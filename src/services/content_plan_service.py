@@ -11,6 +11,13 @@ from database_manager import DatabaseManager
 from core.ai_learning import ensure_ai_learning_events_table, record_ai_learning_event
 from core.card_audit import build_card_audit_snapshot
 from core.helpers import get_business_owner_id
+from core.industry_patterns import detect_industry_key, format_industry_pattern_prompt
+from core.industry_pattern_recalibration import (
+    build_pattern_impact_metrics,
+    format_loaded_active_industry_patterns,
+    load_active_industry_patterns,
+    record_industry_pattern_impact_event,
+)
 from core.seo_keywords import collect_ranked_keywords
 from core.content_plan_generator import build_content_plan_skeleton
 from services.gigachat_client import analyze_text_with_gigachat
@@ -2330,11 +2337,23 @@ def generate_draft_for_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
             cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
             if not bool(_row_get(cursor.fetchone(), "coalesce", 0, False)):
                 raise PermissionError("Нет доступа к элементу плана")
-        cursor.execute("SELECT name, city, business_type FROM businesses WHERE id = %s", (item.get("business_id"),))
+        cursor.execute("SELECT name, city, business_type, industry, categories, address FROM businesses WHERE id = %s", (item.get("business_id"),))
         business_row = cursor.fetchone()
         business_name = str(_row_get(business_row, "name", 0, "Бизнес") or "Бизнес").strip() or "Бизнес"
         business_city = str(_row_get(business_row, "city", 1, "") or "").strip()
         business_type = str(_row_get(business_row, "business_type", 2, "") or "").strip()
+        industry_key = detect_industry_key(
+            business_name=business_name,
+            business_type=business_type,
+            industry=_row_get(business_row, "industry", 3, ""),
+            categories=_row_get(business_row, "categories", 4, ""),
+            service_text=str(item.get("theme") or ""),
+        )
+        industry_pattern_context = format_industry_pattern_prompt(industry_key, mode="news")
+        active_patterns = load_active_industry_patterns(db.conn, industry_key, "news")
+        active_pattern_text = format_loaded_active_industry_patterns(active_patterns)
+        if active_pattern_text:
+            industry_pattern_context += f"\n{active_pattern_text}"
         source_kind = str(item.get("source_kind") or "").strip()
         prompt = (
             "Ты — маркетолог локального бизнеса. Напиши короткую новость для публикации на картах. "
@@ -2355,6 +2374,8 @@ def generate_draft_for_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
             f"SEO-запрос: {str(item.get('seo_keyword') or '').strip()}\n"
             f"Частотность SEO-запроса: {int(item.get('seo_views') or 0)}\n"
             f"Дата генерации: {datetime.utcnow().date().isoformat()}\n\n"
+            "Рабочие паттерны индустрии:\n"
+            f"{industry_pattern_context}\n\n"
             "Верни только готовый текст новости."
         )
         try:
@@ -2369,6 +2390,40 @@ def generate_draft_for_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
                 generated_text = _fallback_draft_text(business_name, item)
         except Exception:
             generated_text = _fallback_draft_text(business_name, item)
+        if active_patterns:
+            record_industry_pattern_impact_event(
+                db.conn,
+                active_patterns,
+                industry_key=industry_key,
+                pattern_type="news",
+                business_id=str(item.get("business_id") or ""),
+                user_id=user_id,
+                source="content_plan_draft",
+                event_type="applied",
+                result_status="used_in_prompt",
+                metrics={"item_id": item_id, "source_kind": source_kind},
+            )
+            news_impact_metrics = build_pattern_impact_metrics(
+                {"generated_text": generated_text},
+                "news",
+                industry_key=industry_key,
+                source_text=(
+                    f"{business_name} {business_type} {str(item.get('theme') or '')} "
+                    f"{str(item.get('goal') or '')} {str(item.get('seo_keyword') or '')}"
+                ),
+            )
+            record_industry_pattern_impact_event(
+                db.conn,
+                active_patterns,
+                industry_key=industry_key,
+                pattern_type="news",
+                business_id=str(item.get("business_id") or ""),
+                user_id=user_id,
+                source="content_plan_draft",
+                event_type="result",
+                result_status="needs_review" if int(news_impact_metrics.get("needs_review") or 0) > 0 else "good",
+                metrics=news_impact_metrics,
+            )
         location_scope = str(item.get("location_scope") or item.get("business_id") or "").strip()
         location_meta = _resolve_scope_target_meta(
             cursor,

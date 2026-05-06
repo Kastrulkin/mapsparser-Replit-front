@@ -4,6 +4,7 @@ import json
 import re
 from typing import Any
 
+from core.industry_patterns import evaluate_pattern_fit
 from core.service_problem_regeneration import is_manual_review_regeneration_status
 
 
@@ -239,6 +240,13 @@ def evaluate_service_quality(service: dict[str, Any]) -> dict[str, Any]:
     draft_text = f"{optimized_name} {optimized_description}".strip()
     source_text = f"{name} {description}".strip()
     score = evaluate_service_keyword_score(draft_text, keywords, source_text)
+    pattern_fit = service.get("pattern_fit")
+    if not isinstance(pattern_fit, dict):
+        pattern_fit = evaluate_pattern_fit(
+            draft_text,
+            service.get("industry_key") or service.get("vertical_key") or "local_business",
+            mode="service",
+        )
     guardrail_reasons = _normalize_guardrail_reasons(service.get("guardrail_reasons"))
     manual_review = is_manual_review_regeneration_status(service.get("regeneration_status"))
 
@@ -263,6 +271,9 @@ def evaluate_service_quality(service: dict[str, Any]) -> dict[str, Any]:
     if guardrail_reasons:
         issue_codes.append("guardrail_reasons")
         issue_labels.append("нужна проверка смысла и обещаний")
+    if pattern_fit.get("status") == "needs_review":
+        issue_codes.append("pattern_fit")
+        issue_labels.append("формулировка слабо совпадает с рабочими паттернами индустрии")
     if optimized_name and name and normalize_service_text(optimized_name) == normalize_service_text(name):
         issue_codes.append("name_unchanged")
         issue_labels.append("название почти не изменилось")
@@ -295,6 +306,7 @@ def evaluate_service_quality(service: dict[str, Any]) -> dict[str, Any]:
         "issue_codes": seen_codes,
         "issue_labels": seen_labels,
         "keyword_score": score,
+        "pattern_fit": pattern_fit,
         "guardrail_reasons": guardrail_reasons,
     }
 
@@ -314,6 +326,7 @@ def build_services_quality_audit(services: list[dict[str, Any]]) -> dict[str, An
         "weak_matches_only": len([item for item in items if "weak_matches_only" in item.get("issue_codes", [])]),
         "guardrail_failed": len([item for item in items if "guardrail_reasons" in item.get("issue_codes", [])]),
         "no_keywords": len([item for item in items if "no_keywords" in item.get("issue_codes", [])]),
+        "pattern_fit": len([item for item in items if "pattern_fit" in item.get("issue_codes", [])]),
     }
     return {
         "summary": summary,

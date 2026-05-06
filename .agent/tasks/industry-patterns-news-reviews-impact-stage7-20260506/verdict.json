@@ -1,0 +1,44 @@
+{
+  "task_id": "industry-patterns-news-reviews-impact-stage7-20260506",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Manual news generation records applied/result impact events."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Manual review replies record applied/result impact events."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Card automation news and review reply drafts record impact events."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Content plan news drafts record impact events."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Health summary aggregates and displays news/review counters."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "Relevant tests and production smoke checks passed."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/core/industry_pattern_recalibration.py src/main.py src/core/card_automation.py src/services/content_plan_service.py src/telegram_bot.py",
+    "python3 -m pytest -q tests/test_industry_patterns.py tests/test_service_keyword_scoring.py tests/test_beauty_service_optimization.py tests/test_service_problem_regeneration.py tests/test_worker_services_quality.py tests/test_content_plan_generation.py",
+    "production: syntax ok, restart app worker, restart telegram bot, HTTP/log smoke checks"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/industry-patterns-news-reviews-impact-stage7-20260506/evidence.md"
+  ]
+}

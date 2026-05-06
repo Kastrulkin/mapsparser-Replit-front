@@ -4,6 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.industry_patterns import (
+    detect_industry_key,
+    format_industry_pattern_prompt,
+    get_industry_pattern_profile,
+)
+
 
 _VERTICALS: dict[str, dict[str, Any]] = {
     "school": {
@@ -101,6 +107,64 @@ _VERTICALS: dict[str, dict[str, Any]] = {
         ),
         "categories": "fitness|training|yoga|kids|other",
     },
+    "food": {
+        "label": "Еда / пекарни / кафе",
+        "markers": ("food", "bakery", "пекар", "кофейн", "кондитер", "кафе", "ресторан", "бар", "быстрое питание"),
+        "rules": (
+            "Писать про продукт, блюдо, состав, вкус, свежесть, кофе, завтрак или сценарий заказа.",
+            "Не добавлять доставку, акции, скидки или завтраки, если их нет в исходной услуге.",
+            "Не использовать beauty, medical или auto темы без факта.",
+        ),
+        "examples": (
+            "Круассан с ветчиной",
+            "Эклер фисташковый",
+            "Латте",
+        ),
+        "categories": "food|drink|bakery|breakfast|dessert|delivery|other",
+    },
+    "medical": {
+        "label": "Медицина / клиники",
+        "markers": ("medical", "медцентр", "клиник", "врач", "доктор", "лаборатор", "диагност", "стоматолог"),
+        "rules": (
+            "Писать точно: процедура + область, метод или специализация.",
+            "Не обещать лечение, результат, отсутствие боли или безопасность без исходных данных.",
+            "Не добавлять beauty или food темы без факта.",
+        ),
+        "examples": (
+            "Консультация дерматолога",
+            "УЗИ молочных желез",
+            "Лазерное удаление новообразований",
+        ),
+        "categories": "consultation|diagnostics|procedure|lab|dentistry|other",
+    },
+    "hospitality": {
+        "label": "Отели / гостиницы",
+        "markers": ("hotel", "отель", "гостиниц", "апартамент", "номер", "завтрак"),
+        "rules": (
+            "Писать про тип номера, вместимость, питание, расположение или удобство, если это есть.",
+            "Не добавлять гарантированный вид, скидки или услуги без исходного факта.",
+        ),
+        "examples": (
+            "Стандарт двухместный с завтраком",
+            "Семейный номер",
+            "Номер с двумя кроватями",
+        ),
+        "categories": "room|breakfast|family|parking|nearby|other",
+    },
+    "retail": {
+        "label": "Retail / магазины",
+        "markers": ("retail", "магазин", "товары", "плать", "двер", "букет", "цвет", "парфюмер"),
+        "rules": (
+            "Писать про товар, модель, размер, материал, наличие или цену, если они указаны.",
+            "Не добавлять услуги другой индустрии без факта.",
+        ),
+        "examples": (
+            "Свадебное платье Габриэлла",
+            "Межкомнатная дверь Шелтон",
+            "Букет Комплимент",
+        ),
+        "categories": "product|model|size|collection|flowers|doors|other",
+    },
     "local_business": {
         "label": "Локальный бизнес",
         "markers": (),
@@ -130,6 +194,15 @@ def detect_service_optimization_vertical(
     industry: Any = "",
     categories: Any = "",
 ) -> str:
+    industry_key = detect_industry_key(
+        business_name=business_name,
+        business_type=business_type,
+        industry=industry,
+        categories=categories,
+    )
+    if industry_key in _VERTICALS and industry_key != "local_business":
+        return industry_key
+
     normalized_business_type = _normalize(business_type)
     if normalized_business_type in {"spa", "spa/wellness"}:
         return "beauty"
@@ -162,12 +235,30 @@ def detect_service_optimization_vertical(
 def get_service_optimization_vertical_context(vertical_key: str) -> dict[str, Any]:
     key = str(vertical_key or "").strip()
     config = _VERTICALS.get(key) or _VERTICALS["local_business"]
+    industry_profile = get_industry_pattern_profile(key)
+    profile_rules = list(industry_profile.get("service_patterns") or [])
+    profile_restrictions = list(industry_profile.get("forbidden_industry_drifts") or [])
+    profile_claims = [
+        f"Не использовать без исходного факта: {item}"
+        for item in list(industry_profile.get("forbidden_claims") or [])
+    ]
+    merged_rules: list[str] = []
+    for item in list(config["rules"]) + profile_rules + profile_restrictions + profile_claims:
+        text = str(item or "").strip()
+        if text and text not in merged_rules:
+            merged_rules.append(text)
+    merged_examples: list[str] = []
+    for item in list(config["examples"]) + list(industry_profile.get("examples") or []):
+        text = str(item or "").strip()
+        if text and text not in merged_examples:
+            merged_examples.append(text)
     return {
         "key": key if key in _VERTICALS else "local_business",
         "label": config["label"],
-        "rules": list(config["rules"]),
-        "examples": list(config["examples"]),
+        "rules": merged_rules,
+        "examples": merged_examples,
         "categories": config["categories"],
+        "industry_patterns": format_industry_pattern_prompt(key, mode="service"),
     }
 
 
@@ -180,5 +271,6 @@ def format_service_optimization_vertical_prompt(context: dict[str, Any]) -> str:
         f"Вертикаль бизнеса: {context.get('label') or 'Локальный бизнес'}\n"
         f"Допустимые категории ответа: {context.get('categories') or 'other'}\n"
         f"Правила вертикали:\n{rule_lines or '- Писать строго по исходной услуге.'}\n"
-        f"Примеры направления формулировок:\n{example_lines or '- Короткая понятная услуга.'}"
+        f"Примеры направления формулировок:\n{example_lines or '- Короткая понятная услуга.'}\n"
+        f"Industry pattern context:\n{context.get('industry_patterns') or '-'}"
     )

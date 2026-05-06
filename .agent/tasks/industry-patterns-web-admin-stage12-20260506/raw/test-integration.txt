@@ -1,0 +1,11 @@
+Production deploy/smoke on 2026-05-06:
+- partial backend sync to /opt/seo-app: src/api/admin_industry_patterns_api.py, src/main.py, src/core/industry_pattern_recalibration.py
+- frontend dist deployed by scripts/deploy_frontend_dist.sh
+- docker compose exec app AST syntax check: syntax ok
+- docker compose restart app worker: started
+- GET /api/admin/industry-patterns/summary without auth: 403 JSON
+- GET /api/admin/industry-patterns/summary with superadmin session: success True, period_days 30
+- GET /api/admin/industry-patterns/versions with superadmin session: success True, active versions returned
+- curl -I http://localhost:8000: HTTP/1.1 200 OK
+- frontend asset check: AdminPage bundle references IndustryPatternsManagement
+- app/worker logs after restart: no traceback

@@ -1,0 +1,22 @@
+{
+  "task_id": "industry-patterns-active-management-stage5-20260506",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Active pattern list and disable flow are implemented, disabled versions are excluded from optimizer context, checks pass, and production smoke is healthy."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile ...",
+    "python3 -m pytest -q tests/test_industry_patterns.py tests/test_beauty_service_optimization.py tests/test_service_keyword_scoring.py tests/test_content_plan_generation.py tests/test_card_automation.py tests/test_telegram_response_router.py tests/test_telegram_dashboard_copy.py",
+    "cd /opt/seo-app && docker compose restart app worker",
+    "cd /opt/seo-app && systemctl restart openclaw-localos-telegram-bot.service",
+    "cd /opt/seo-app && curl -I http://localhost:8000"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/industry-patterns-active-management-stage5-20260506/evidence.md",
+    ".agent/tasks/industry-patterns-active-management-stage5-20260506/evidence.json"
+  ]
+}

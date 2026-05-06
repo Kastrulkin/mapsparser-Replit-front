@@ -45,7 +45,7 @@ export const getStringIds = (value: unknown) => {
   return value.filter((item) => typeof item === 'string' && item.length > 0);
 };
 
-const request = <T = any>(path: string, init?: PartnershipRequestInit) => newAuth.makeRequest<T>(path, init);
+const request = (path: string, init?: PartnershipRequestInit) => newAuth.makeRequest(path, init);
 
 export const loadPartnershipLeads = ({ businessId, stage, pilotCohort, query }: PartnershipLeadQuery) => {
   const params = new URLSearchParams();
@@ -157,7 +157,7 @@ export const bulkUpdatePartnershipLeads = (
   leadIds: string[],
   payload: Record<string, unknown>,
 ) =>
-  request<{ updated_count?: number }>('/partnership/leads/bulk-update', {
+  request('/partnership/leads/bulk-update', {
     method: 'POST',
     body: JSON.stringify({
       business_id: businessId,

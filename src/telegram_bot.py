@@ -18,7 +18,7 @@ import sys
 from datetime import datetime
 from typing import Any
 from urllib.parse import urlparse
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.request import HTTPXRequest
 from database_manager import get_db_connection
@@ -30,6 +30,21 @@ from core.service_optimization_verticals import (
     get_service_optimization_vertical_context,
 )
 from core.service_keyword_scoring import build_services_quality_audit
+from core.industry_pattern_recalibration import (
+    build_monthly_industry_pattern_impact_report,
+    create_industry_pattern_version_proposal,
+    decide_industry_pattern_proposal,
+    disable_industry_pattern_version,
+    ensure_industry_pattern_tables,
+    format_monthly_industry_pattern_impact_report,
+    get_industry_pattern_detail_card,
+    get_industry_pattern_rollback_preview,
+    mark_industry_pattern_version_for_revision,
+    regenerate_industry_pattern_revision,
+    rollback_industry_pattern_version,
+    run_monthly_industry_pattern_recalibration,
+    summarize_industry_pattern_health,
+)
 from core.telegram_network import build_requests_proxy_kwargs, resolve_telegram_http_proxy
 from crypto_pay_client import (
     CryptoPayClient,
@@ -95,6 +110,35 @@ REVIEW_REPLY_TONES = [
     ("professional", "Профессиональный"),
     ("premium", "Премиум"),
     ("business", "Деловой"),
+]
+INDUSTRY_PATTERN_PAGE_SIZE = 5
+INDUSTRY_PATTERN_FILTERS = [
+    ("all", "Все"),
+    ("beauty", "Beauty"),
+    ("food", "Food"),
+    ("medical", "Medical"),
+    ("auto_service", "Auto"),
+]
+INDUSTRY_PATTERN_REVISION_REASONS = [
+    ("too_general", "Слишком общее"),
+    ("weak_evidence", "Слабые примеры"),
+    ("guardrail_risk", "Риск guardrails"),
+    ("wrong_industry", "Не та индустрия"),
+    ("needs_shorter", "Сделать короче"),
+]
+INDUSTRY_PATTERN_DISABLE_REASONS = [
+    ("hurts_quality", "Ухудшает качество"),
+    ("too_noisy", "Даёт воду"),
+    ("wrong_industry", "Не та индустрия"),
+    ("guardrail_risk", "Риск guardrails"),
+    ("temporary", "Временно отключить"),
+]
+INDUSTRY_PATTERN_ROLLBACK_REASONS = [
+    ("hurts_quality", "Ухудшает качество"),
+    ("many_fallbacks", "Много fallback"),
+    ("wrong_industry", "Не та индустрия"),
+    ("weak_results", "Слабые результаты"),
+    ("temporary", "Временный откат"),
 ]
 FEATURE_REQUEST_CATEGORIES = [
     ("reviews", "Отзывы"),
@@ -611,6 +655,783 @@ def get_user_id_from_telegram(telegram_id: str):
     user_row = cursor.fetchone()
     conn.close()
     return _row_get(user_row, "id", 0)
+
+
+def _is_superadmin_telegram_user(telegram_id: str) -> bool:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE telegram_id = %s", (telegram_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return bool(_row_get(row, "coalesce", 0, False))
+
+
+def _telegram_json_value(value, fallback):
+    if value is None:
+        return fallback
+    if isinstance(value, (dict, list)):
+        return value
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except Exception:
+            return fallback
+    return fallback
+
+
+def _industry_pattern_filter_label(industry_key: str) -> str:
+    for key, label in INDUSTRY_PATTERN_FILTERS:
+        if key == industry_key:
+            return label
+    return industry_key or "all"
+
+
+def _industry_pattern_type_label(pattern_type: str) -> str:
+    labels = {
+        "service": "услуги",
+        "news": "новости",
+        "review_reply": "ответы",
+    }
+    return labels.get(pattern_type, pattern_type)
+
+
+def _industry_pattern_confidence_label(value) -> str:
+    try:
+        score = float(value or 0)
+    except Exception:
+        score = 0
+    if score >= 0.8:
+        return f"высокая {score:.2f}"
+    if score >= 0.65:
+        return f"средняя {score:.2f}"
+    return f"низкая {score:.2f}"
+
+
+def _industry_pattern_risk_label(value) -> str:
+    risk = str(value or "medium").strip().lower()
+    if risk == "low":
+        return "низкий"
+    if risk == "high":
+        return "высокий"
+    return "средний"
+
+
+def _industry_pattern_example_line(examples) -> str:
+    items = _telegram_json_value(examples, [])
+    if not isinstance(items, list) or not items:
+        return ""
+    first = items[0] or {}
+    if not isinstance(first, dict):
+        return ""
+    business = str(first.get("business_name") or first.get("name") or "").strip()
+    text = str(first.get("text") or first.get("review") or "").strip()
+    if len(text) > 130:
+        text = text[:127].rstrip() + "..."
+    if business and text:
+        return f"Пример: {business}: {text}"
+    if text:
+        return f"Пример: {text}"
+    if business:
+        return f"Пример точки: {business}"
+    return ""
+
+
+def _industry_pattern_source_line(source_counts) -> str:
+    counts = _telegram_json_value(source_counts, {})
+    if not isinstance(counts, dict):
+        return ""
+    parts = []
+    successful = counts.get("successful_entities")
+    if successful:
+        parts.append(f"успешных точек: {successful}")
+    for key in ("service_samples", "news_samples", "review_reply_samples"):
+        if counts.get(key):
+            parts.append(f"примеров: {counts.get(key)}")
+            break
+    return ", ".join(parts)
+
+
+def _industry_pattern_revision_reason_label(reason_key: str) -> str:
+    for key, label in INDUSTRY_PATTERN_REVISION_REASONS:
+        if key == reason_key:
+            return label
+    return "Доработать"
+
+
+def _industry_pattern_disable_reason_label(reason_key: str) -> str:
+    for key, label in INDUSTRY_PATTERN_DISABLE_REASONS:
+        if key == reason_key:
+            return label
+    return "Отключить"
+
+
+def _industry_pattern_rollback_reason_label(reason_key: str) -> str:
+    for key, label in INDUSTRY_PATTERN_ROLLBACK_REASONS:
+        if key == reason_key:
+            return label
+    return "Временный откат"
+
+
+def _industry_patterns_callback(action: str, industry_key: str = "all", page: int = 0) -> str:
+    safe_industry = str(industry_key or "all").strip() or "all"
+    safe_page = max(0, int(page or 0))
+    return f"industry_patterns_{action}:{safe_industry}:{safe_page}"
+
+
+def _build_industry_pattern_proposals_text(
+    telegram_id: str,
+    industry_key: str = "all",
+    page: int = 0,
+) -> tuple[str, InlineKeyboardMarkup]:
+    if not _is_superadmin_telegram_user(telegram_id):
+        return "Эта команда доступна только суперадмину.", InlineKeyboardMarkup(
+            [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")]]
+        )
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    safe_industry = str(industry_key or "all").strip() or "all"
+    safe_page = max(0, int(page or 0))
+    offset = safe_page * INDUSTRY_PATTERN_PAGE_SIZE
+    try:
+        ensure_industry_pattern_tables(conn)
+        where_clause = "WHERE status = 'pending_review'"
+        params = []
+        if safe_industry != "all":
+            where_clause += " AND industry_key = %s"
+            params.append(safe_industry)
+        cursor.execute(f"SELECT COUNT(*) FROM industry_pattern_proposals {where_clause}", params)
+        total = int(_row_get(cursor.fetchone(), "count", 0, 0) or 0)
+        cursor.execute(
+            f"""
+            SELECT id, industry_key, pattern_type, proposed_pattern, confidence, risk_level,
+                   examples_json, source_counts_json, created_at
+            FROM industry_pattern_proposals
+            {where_clause}
+            ORDER BY created_at DESC
+            LIMIT %s OFFSET %s
+            """,
+            [*params, INDUSTRY_PATTERN_PAGE_SIZE, offset],
+        )
+        rows = cursor.fetchall() or []
+    finally:
+        conn.close()
+    if not rows:
+        return (
+            f"Pending-предложений нет.\nФильтр: {_industry_pattern_filter_label(safe_industry)}",
+            InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton(label, callback_data=_industry_patterns_callback("filter", key, 0))
+                        for key, label in INDUSTRY_PATTERN_FILTERS[:3]
+                    ],
+                    [
+                        InlineKeyboardButton(label, callback_data=_industry_patterns_callback("filter", key, 0))
+                        for key, label in INDUSTRY_PATTERN_FILTERS[3:]
+                    ],
+                    [InlineKeyboardButton("Запустить калибровку", callback_data="industry_patterns_recalibrate")],
+                    [InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")],
+                ]
+            ),
+        )
+    start_number = offset + 1
+    end_number = min(offset + len(rows), total)
+    lines = [
+        "Pending industry patterns",
+        f"Фильтр: {_industry_pattern_filter_label(safe_industry)}",
+        f"Показаны: {start_number}-{end_number} из {total}",
+    ]
+    for index, row in enumerate(rows, start=start_number):
+        pattern = str(_row_get(row, "proposed_pattern", 3, "") or "").strip()
+        if len(pattern) > 240:
+            pattern = pattern[:237].rstrip() + "..."
+        example_line = _industry_pattern_example_line(_row_get(row, "examples_json", 6, []))
+        source_line = _industry_pattern_source_line(_row_get(row, "source_counts_json", 7, {}))
+        lines.append(
+            f"{index}. {_row_get(row, 'industry_key', 1)} / {_industry_pattern_type_label(str(_row_get(row, 'pattern_type', 2) or ''))}\n"
+            f"{pattern}\n"
+            f"Уверенность: {_industry_pattern_confidence_label(_row_get(row, 'confidence', 4))}; "
+            f"риск: {_industry_pattern_risk_label(_row_get(row, 'risk_level', 5))}"
+        )
+        if source_line:
+            lines.append(f"Источник: {source_line}")
+        if example_line:
+            lines.append(example_line)
+    keyboard = []
+    for index, row in enumerate(rows[:5], start=start_number):
+        proposal_id = str(_row_get(row, "id", 0, "") or "").strip()
+        if proposal_id:
+            keyboard.append(
+                [
+                    InlineKeyboardButton(f"✅ Принять {index}", callback_data=f"ip_a:{proposal_id}"),
+                    InlineKeyboardButton(f"↩️ Доработать {index}", callback_data=f"ip_rv:{proposal_id}"),
+                    InlineKeyboardButton(f"❌ Отклонить {index}", callback_data=f"ip_rej:{proposal_id}"),
+                ]
+            )
+    nav = []
+    if safe_page > 0:
+        nav.append(InlineKeyboardButton("← Назад", callback_data=_industry_patterns_callback("page", safe_industry, safe_page - 1)))
+    if offset + INDUSTRY_PATTERN_PAGE_SIZE < total:
+        nav.append(InlineKeyboardButton("Вперёд →", callback_data=_industry_patterns_callback("page", safe_industry, safe_page + 1)))
+    if nav:
+        keyboard.append(nav)
+    keyboard.append(
+        [
+            InlineKeyboardButton(label, callback_data=_industry_patterns_callback("filter", key, 0))
+            for key, label in INDUSTRY_PATTERN_FILTERS[:3]
+        ]
+    )
+    keyboard.append(
+        [
+            InlineKeyboardButton(label, callback_data=_industry_patterns_callback("filter", key, 0))
+            for key, label in INDUSTRY_PATTERN_FILTERS[3:]
+        ]
+    )
+    keyboard.append([InlineKeyboardButton("Политика HITL", callback_data="industry_patterns_policy")])
+    keyboard.append([InlineKeyboardButton("🔄 Обновить", callback_data=_industry_patterns_callback("page", safe_industry, safe_page))])
+    markup = InlineKeyboardMarkup(keyboard)
+    return _safe_telegram_text("\n\n".join(lines)), markup
+
+
+def _build_industry_pattern_revision_reason_markup(proposal_id: str) -> InlineKeyboardMarkup:
+    keyboard = []
+    for key, label in INDUSTRY_PATTERN_REVISION_REASONS:
+        keyboard.append(
+            [InlineKeyboardButton(label, callback_data=f"ip_rr:{proposal_id}:{key}")]
+        )
+    keyboard.append([InlineKeyboardButton("Назад к предложениям", callback_data="industry_patterns_show")])
+    return InlineKeyboardMarkup(keyboard)
+
+
+def _build_industry_pattern_disable_reason_markup(version_id: str) -> InlineKeyboardMarkup:
+    keyboard = []
+    for key, label in INDUSTRY_PATTERN_DISABLE_REASONS:
+        keyboard.append([InlineKeyboardButton(label, callback_data=f"ip_dr:{version_id}:{key}")])
+    keyboard.append([InlineKeyboardButton("Назад к active", callback_data="industry_patterns_active")])
+    return InlineKeyboardMarkup(keyboard)
+
+
+def _build_industry_pattern_active_revision_reason_markup(version_id: str) -> InlineKeyboardMarkup:
+    keyboard = []
+    for key, label in INDUSTRY_PATTERN_REVISION_REASONS:
+        keyboard.append([InlineKeyboardButton(label, callback_data=f"ip_mrr:{version_id}:{key}")])
+    keyboard.append([InlineKeyboardButton("Назад к impact report", callback_data="industry_patterns_impact")])
+    return InlineKeyboardMarkup(keyboard)
+
+
+def _build_industry_pattern_active_versions_text(
+    telegram_id: str,
+    industry_key: str = "all",
+    page: int = 0,
+) -> tuple[str, InlineKeyboardMarkup]:
+    if not _is_superadmin_telegram_user(telegram_id):
+        return "Эта команда доступна только суперадмину.", InlineKeyboardMarkup(
+            [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")]]
+        )
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    safe_industry = str(industry_key or "all").strip() or "all"
+    safe_page = max(0, int(page or 0))
+    offset = safe_page * INDUSTRY_PATTERN_PAGE_SIZE
+    try:
+        ensure_industry_pattern_tables(conn)
+        where_clause = "WHERE status = 'active' AND disabled_at IS NULL"
+        params = []
+        if safe_industry != "all":
+            where_clause += " AND industry_key = %s"
+            params.append(safe_industry)
+        cursor.execute(f"SELECT COUNT(*) FROM industry_pattern_versions {where_clause}", params)
+        total = int(_row_get(cursor.fetchone(), "count", 0, 0) or 0)
+        cursor.execute(
+            f"""
+            SELECT id, industry_key, pattern_type, pattern_text, source_proposal_id,
+                   activated_by, activated_at, created_at
+            FROM industry_pattern_versions
+            {where_clause}
+            ORDER BY activated_at DESC, created_at DESC
+            LIMIT %s OFFSET %s
+            """,
+            [*params, INDUSTRY_PATTERN_PAGE_SIZE, offset],
+        )
+        rows = cursor.fetchall() or []
+    finally:
+        conn.close()
+    if not rows:
+        return (
+            f"Active-паттернов нет.\nФильтр: {_industry_pattern_filter_label(safe_industry)}",
+            InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton(label, callback_data=f"ip_af:{key}:0")
+                        for key, label in INDUSTRY_PATTERN_FILTERS[:3]
+                    ],
+                    [
+                        InlineKeyboardButton(label, callback_data=f"ip_af:{key}:0")
+                        for key, label in INDUSTRY_PATTERN_FILTERS[3:]
+                    ],
+                    [InlineKeyboardButton("Показать pending", callback_data="industry_patterns_show")],
+                    [InlineKeyboardButton("🔙 Назад", callback_data="industry_patterns_home")],
+                ]
+            ),
+        )
+    start_number = offset + 1
+    end_number = min(offset + len(rows), total)
+    lines = [
+        "Active industry patterns",
+        f"Фильтр: {_industry_pattern_filter_label(safe_industry)}",
+        f"Показаны: {start_number}-{end_number} из {total}",
+    ]
+    keyboard = []
+    for index, row in enumerate(rows, start=start_number):
+        version_id = str(_row_get(row, "id", 0, "") or "").strip()
+        pattern = str(_row_get(row, "pattern_text", 3, "") or "").strip()
+        if len(pattern) > 240:
+            pattern = pattern[:237].rstrip() + "..."
+        activated_by = str(_row_get(row, "activated_by", 5, "") or "").strip()
+        activated_at = str(_row_get(row, "activated_at", 6, "") or "").split(".")[0]
+        lines.append(
+            f"{index}. {_row_get(row, 'industry_key', 1)} / {_industry_pattern_type_label(str(_row_get(row, 'pattern_type', 2) or ''))}\n"
+            f"{pattern}\n"
+            f"Принял: {activated_by or '-'}; дата: {activated_at or '-'}"
+        )
+        if version_id:
+            keyboard.append([InlineKeyboardButton(f"Отключить {index}", callback_data=f"ip_d:{version_id}")])
+            keyboard.append([InlineKeyboardButton(f"Детали {index}", callback_data=f"ip_dc:{version_id}")])
+    nav = []
+    if safe_page > 0:
+        nav.append(InlineKeyboardButton("← Назад", callback_data=f"ip_ap:{safe_industry}:{safe_page - 1}"))
+    if offset + INDUSTRY_PATTERN_PAGE_SIZE < total:
+        nav.append(InlineKeyboardButton("Вперёд →", callback_data=f"ip_ap:{safe_industry}:{safe_page + 1}"))
+    if nav:
+        keyboard.append(nav)
+    keyboard.append(
+        [
+            InlineKeyboardButton(label, callback_data=f"ip_af:{key}:0")
+            for key, label in INDUSTRY_PATTERN_FILTERS[:3]
+        ]
+    )
+    keyboard.append(
+        [
+            InlineKeyboardButton(label, callback_data=f"ip_af:{key}:0")
+            for key, label in INDUSTRY_PATTERN_FILTERS[3:]
+        ]
+    )
+    keyboard.append([InlineKeyboardButton("Показать pending", callback_data="industry_patterns_show")])
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="industry_patterns_home")])
+    return _safe_telegram_text("\n\n".join(lines)), InlineKeyboardMarkup(keyboard)
+
+
+def _build_industry_pattern_health_text(telegram_id: str) -> tuple[str, InlineKeyboardMarkup]:
+    if not _is_superadmin_telegram_user(telegram_id):
+        return "Эта команда доступна только суперадмину.", InlineKeyboardMarkup(
+            [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")]]
+        )
+    conn = get_db_connection()
+    try:
+        items = summarize_industry_pattern_health(conn, days=30, limit=8)
+    finally:
+        conn.close()
+    if not items:
+        return (
+            "Health active-паттернов\n\n"
+            "Пока нет active-паттернов или событий применения за последние 30 дней.",
+            InlineKeyboardMarkup(
+                [
+                    [InlineKeyboardButton("Active-паттерны", callback_data="industry_patterns_active")],
+                    [InlineKeyboardButton("🔙 Назад", callback_data="industry_patterns_home")],
+                ]
+            ),
+        )
+
+    lines = [
+        "Health active-паттернов",
+        "Период: последние 30 дней",
+        "Смотрим, где паттерн попадал в optimizer prompt и какой результат вернулся.",
+    ]
+    keyboard = []
+    for index, item in enumerate(items, start=1):
+        pattern = str(item.get("pattern_text") or "").strip()
+        if len(pattern) > 170:
+            pattern = pattern[:167].rstrip() + "..."
+        status = "подозрительно" if item.get("suspicious") else "норма"
+        lines.append(
+            f"{index}. {item.get('industry_key')} / {_industry_pattern_type_label(str(item.get('pattern_type') or ''))} - {status}\n"
+            f"{pattern}\n"
+            f"Применений: {item.get('applied_count', 0)}; результатов: {item.get('result_count', 0)}; "
+            f"услуг: {item.get('total_items', 0)}; требуют доработки: {item.get('needs_review', 0)}; "
+            f"fallback: {item.get('fallback', 0)}; guardrails: {item.get('guardrail_failed', 0)}; "
+            f"pattern fit: {item.get('pattern_fit', 0)}; missing keys: {item.get('missing_keywords', 0)}; "
+            f"drift: {item.get('industry_drift', 0)}; facts risk: {item.get('factual_risk', 0)}; "
+            f"too long: {item.get('too_long', 0)}; no detail: {item.get('no_review_detail', 0)}"
+        )
+        version_id = str(item.get("version_id") or "").strip()
+        if version_id:
+            keyboard.append([InlineKeyboardButton(f"Отключить {index}", callback_data=f"ip_d:{version_id}")])
+            keyboard.append([InlineKeyboardButton(f"Детали {index}", callback_data=f"ip_dc:{version_id}")])
+    keyboard.append([InlineKeyboardButton("Обновить health", callback_data="industry_patterns_health")])
+    keyboard.append([InlineKeyboardButton("Active-паттерны", callback_data="industry_patterns_active")])
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="industry_patterns_home")])
+    return _safe_telegram_text("\n\n".join(lines)), InlineKeyboardMarkup(keyboard)
+
+
+def _build_industry_pattern_impact_report_text(telegram_id: str) -> tuple[str, InlineKeyboardMarkup]:
+    if not _is_superadmin_telegram_user(telegram_id):
+        return "Эта команда доступна только суперадмину.", InlineKeyboardMarkup(
+            [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")]]
+        )
+    conn = get_db_connection()
+    try:
+        report = build_monthly_industry_pattern_impact_report(conn, days=30, limit=50)
+    finally:
+        conn.close()
+    text = format_monthly_industry_pattern_impact_report(report, max_items=5)
+    keyboard = []
+    for index, item in enumerate((report.get("problematic") or [])[:5], start=1):
+        version_id = str(item.get("version_id") or "").strip()
+        if not version_id:
+            continue
+        recommendation = str(item.get("recommendation") or "")
+        if recommendation == "disable_candidate":
+            keyboard.append([InlineKeyboardButton(f"Отключить {index}", callback_data=f"ip_d:{version_id}")])
+        keyboard.append([InlineKeyboardButton(f"На доработку {index}", callback_data=f"ip_mr:{version_id}")])
+        keyboard.append([InlineKeyboardButton(f"Детали {index}", callback_data=f"ip_dc:{version_id}")])
+    keyboard.append([InlineKeyboardButton("Обновить impact report", callback_data="industry_patterns_impact")])
+    keyboard.append([InlineKeyboardButton("Health active-паттернов", callback_data="industry_patterns_health")])
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="industry_patterns_home")])
+    return _safe_telegram_text(text), InlineKeyboardMarkup(keyboard)
+
+
+def _format_pattern_detail_event(event: dict, index: int) -> str:
+    created_at = str(event.get("created_at") or "").split(".")[0]
+    status = str(event.get("result_status") or event.get("event_type") or "-")
+    reasons = ", ".join(event.get("reasons") or []) or "-"
+    source = str(event.get("source") or "-")
+    sample = str(event.get("sample_text") or "").strip()
+    if len(sample) > 160:
+        sample = sample[:157].rstrip() + "..."
+    base = f"{index}. {created_at or '-'} / {source} / {status}; причины: {reasons}"
+    if sample:
+        base += f"\n   {sample}"
+    return base
+
+
+def _format_pattern_rollback_health(label: str, health: dict) -> str:
+    return (
+        f"{label}: применений {health.get('applied_count', 0)}; "
+        f"результатов {health.get('result_count', 0)}; единиц {health.get('total_items', 0)}; "
+        f"OK {health.get('good', 0)}; needs_review {health.get('needs_review', 0)}; "
+        f"bad rate {health.get('bad_rate', 0)}"
+    )
+
+
+def _truncate_pattern_preview_text(value: str, limit: int = 360) -> str:
+    text = str(value or "").strip()
+    if len(text) > limit:
+        return text[: limit - 3].rstrip() + "..."
+    return text or "-"
+
+
+def _build_industry_pattern_rollback_preview_text(
+    telegram_id: str,
+    target_version_id: str,
+    reason_key: str = "",
+) -> tuple[str, InlineKeyboardMarkup]:
+    if not _is_superadmin_telegram_user(telegram_id):
+        return "Эта команда доступна только суперадмину.", InlineKeyboardMarkup(
+            [[InlineKeyboardButton("Назад", callback_data="industry_patterns_impact")]]
+        )
+    state = user_states.setdefault(str(telegram_id), {})
+    current_version_id = str(state.get("pattern_detail_current_version_id") or "").strip()
+    if not current_version_id:
+        return (
+            "Для rollback нужно открыть карточку active-паттерна заново, чтобы зафиксировать текущую версию.",
+            InlineKeyboardMarkup([[InlineKeyboardButton("Active-паттерны", callback_data="industry_patterns_active")]]),
+        )
+    conn = get_db_connection()
+    try:
+        preview = get_industry_pattern_rollback_preview(
+            conn,
+            current_version_id=current_version_id,
+            target_version_id=target_version_id,
+            days=30,
+        )
+    finally:
+        conn.close()
+
+    current = preview.get("current") or {}
+    target = preview.get("target") or {}
+    text_diff = preview.get("text_diff") or {}
+    selected_reason_key = str(reason_key or state.get("pattern_rollback_reason_key") or "temporary").strip()
+    state["pattern_rollback_target_version_id"] = target_version_id
+    state["pattern_rollback_reason_key"] = selected_reason_key
+
+    warning_labels = {
+        "rollback_scope_mismatch": "версии из разных индустрий или типов",
+        "current_not_active": "текущая версия уже не active",
+        "target_is_disabled": "целевая версия сейчас disabled, потребуется явное подтверждение",
+        "same_version": "выбрана та же самая версия",
+    }
+    warnings = [
+        warning_labels.get(str(item), str(item))
+        for item in preview.get("warnings") or []
+    ]
+    added_terms = ", ".join(text_diff.get("added_terms") or []) or "-"
+    removed_terms = ", ".join(text_diff.get("removed_terms") or []) or "-"
+    lines = [
+        "Подтверждение rollback",
+        f"{current.get('industry_key') or '-'} / {_industry_pattern_type_label(str(current.get('pattern_type') or ''))}",
+        "",
+        "Сейчас active:",
+        f"Версия: {current.get('version') or '-'}; статус: {current.get('status') or '-'}",
+        _truncate_pattern_preview_text(str(current.get("pattern_text") or "")),
+        "",
+        "Будет активирована:",
+        f"Версия: {target.get('version') or '-'}; статус: {target.get('status') or '-'}",
+        _truncate_pattern_preview_text(str(target.get("pattern_text") or "")),
+        "",
+        "Impact за 30 дней:",
+        _format_pattern_rollback_health("Текущая", preview.get("current_health") or {}),
+        _format_pattern_rollback_health("Rollback", preview.get("target_health") or {}),
+        "",
+        "Разница текста:",
+        f"длина: {text_diff.get('current_length', 0)} -> {text_diff.get('target_length', 0)} ({text_diff.get('length_delta', 0)})",
+        f"сходство: {text_diff.get('similarity', 0)}",
+        f"добавится: {added_terms}",
+        f"уйдёт: {removed_terms}",
+        "",
+        f"Причина: {_industry_pattern_rollback_reason_label(selected_reason_key)}",
+    ]
+    if warnings:
+        lines.append("")
+        lines.append("Предупреждения:")
+        for warning in warnings[:5]:
+            lines.append(f"- {warning}")
+
+    keyboard_rows = []
+    for key, label in INDUSTRY_PATTERN_ROLLBACK_REASONS:
+        prefix = "✓ " if key == selected_reason_key else ""
+        keyboard_rows.append([InlineKeyboardButton(prefix + label, callback_data=f"ip_rbr:{target_version_id}:{key}")])
+    if preview.get("can_confirm"):
+        keyboard_rows.append([InlineKeyboardButton("Подтвердить rollback", callback_data=f"ip_rbc:{target_version_id}")])
+    keyboard_rows.append([InlineKeyboardButton("Отмена", callback_data=f"ip_dc:{current_version_id}")])
+    return _safe_telegram_text("\n".join(lines)), InlineKeyboardMarkup(keyboard_rows)
+
+
+def _build_industry_pattern_detail_card_text(telegram_id: str, version_id: str) -> tuple[str, InlineKeyboardMarkup]:
+    if not _is_superadmin_telegram_user(telegram_id):
+        return "Эта команда доступна только суперадмину.", InlineKeyboardMarkup(
+            [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")]]
+        )
+    conn = get_db_connection()
+    try:
+        detail = get_industry_pattern_detail_card(conn, version_id=version_id, days=30, event_limit=20)
+    finally:
+        conn.close()
+
+    version = detail.get("version") or {}
+    health = detail.get("health") or {}
+    pattern_text = str(version.get("pattern_text") or "").strip()
+    if len(pattern_text) > 700:
+        pattern_text = pattern_text[:697].rstrip() + "..."
+    recent_reasons = ", ".join(detail.get("recent_reasons") or []) or "-"
+    recommendation = str(health.get("recommendation") or "no_data")
+    lines = [
+        "Карточка active-паттерна",
+        f"{version.get('industry_key')} / {_industry_pattern_type_label(str(version.get('pattern_type') or ''))}",
+        f"Статус: {version.get('status')}; рекомендация: {recommendation}",
+        f"Версия: {version.get('version') or '-'}; активировал: {version.get('activated_by') or '-'}",
+        "",
+        pattern_text or "-",
+        "",
+        "Impact за 30 дней:",
+        (
+            f"применений {health.get('applied_count', 0)}; результатов {health.get('result_count', 0)}; "
+            f"единиц {health.get('total_items', 0)}; OK {health.get('good', 0)}; "
+            f"needs_review {health.get('needs_review', 0)}; bad rate {health.get('bad_rate', 0)}"
+        ),
+        f"Последние причины: {recent_reasons}",
+    ]
+
+    bad_examples = detail.get("bad_examples") or []
+    if bad_examples:
+        lines.append("")
+        lines.append("Плохие примеры:")
+        for index, event in enumerate(bad_examples[:3], start=1):
+            lines.append(_format_pattern_detail_event(event, index))
+    else:
+        lines.append("")
+        lines.append("Плохих примеров с текстом пока нет.")
+
+    good_examples = detail.get("good_examples") or []
+    if good_examples:
+        lines.append("")
+        lines.append("Хорошие примеры:")
+        for index, event in enumerate(good_examples[:3], start=1):
+            lines.append(_format_pattern_detail_event(event, index))
+    else:
+        lines.append("")
+        lines.append("Хороших примеров с текстом пока нет.")
+
+    events = detail.get("events") or []
+    if events:
+        lines.append("")
+        lines.append("Последние события:")
+        for index, event in enumerate(events[:5], start=1):
+            lines.append(_format_pattern_detail_event(event, index))
+
+    decisions = detail.get("decisions") or []
+    lines.append("")
+    lines.append("Решения суперадмина:")
+    if decisions:
+        for index, decision in enumerate(decisions[:5], start=1):
+            created_at = str(decision.get("created_at") or "").split(".")[0]
+            lines.append(
+                f"{index}. {created_at or '-'} / {decision.get('decision') or '-'} / "
+                f"{decision.get('decided_by') or '-'}: {decision.get('decision_comment') or '-'}"
+            )
+    else:
+        lines.append("Пока нет решений по этой версии/исходному proposal.")
+
+    version_candidates = detail.get("version_candidates") or []
+    if version_candidates:
+        lines.append("")
+        lines.append("Другие версии / rollback-кандидаты:")
+        for index, candidate in enumerate(version_candidates[:5], start=1):
+            candidate_health = candidate.get("health") or {}
+            candidate_text = str(candidate.get("pattern_text") or "").strip()
+            if len(candidate_text) > 120:
+                candidate_text = candidate_text[:117].rstrip() + "..."
+            lines.append(
+                f"{index}. {candidate.get('status') or '-'} / {candidate.get('version') or '-'} / "
+                f"bad rate {candidate_health.get('bad_rate', 0)} / {candidate_text}"
+            )
+
+    user_states.setdefault(str(telegram_id), {})["pattern_detail_current_version_id"] = version_id
+    keyboard_rows = [
+        [InlineKeyboardButton("Создать новую версию", callback_data=f"ip_nv:{version_id}")],
+        [InlineKeyboardButton("На доработку", callback_data=f"ip_mr:{version_id}")],
+        [InlineKeyboardButton("Отключить", callback_data=f"ip_d:{version_id}")],
+    ]
+    for index, candidate in enumerate(version_candidates[:5], start=1):
+        candidate_id = str(candidate.get("version_id") or "").strip()
+        if candidate_id:
+            keyboard_rows.append([InlineKeyboardButton(f"Rollback {index}", callback_data=f"ip_rpc:{candidate_id}")])
+    keyboard_rows.append([InlineKeyboardButton("Impact report", callback_data="industry_patterns_impact")])
+    keyboard_rows.append([InlineKeyboardButton("Health active-паттернов", callback_data="industry_patterns_health")])
+    keyboard = InlineKeyboardMarkup(keyboard_rows)
+    return _safe_telegram_text("\n".join(lines)), keyboard
+
+
+def _build_industry_pattern_revision_queue_text(telegram_id: str) -> tuple[str, InlineKeyboardMarkup]:
+    if not _is_superadmin_telegram_user(telegram_id):
+        return "Эта команда доступна только суперадмину.", InlineKeyboardMarkup(
+            [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")]]
+        )
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        ensure_industry_pattern_tables(conn)
+        cursor.execute(
+            """
+            SELECT id, industry_key, pattern_type, proposed_pattern, decision_comment,
+                   examples_json, source_counts_json, updated_at
+            FROM industry_pattern_proposals
+            WHERE status = 'needs_revision'
+            ORDER BY updated_at DESC
+            LIMIT 5
+            """
+        )
+        rows = cursor.fetchall() or []
+    finally:
+        conn.close()
+    if not rows:
+        return "Предложений на доработке нет.", InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("Показать pending", callback_data="industry_patterns_show")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="industry_patterns_home")],
+            ]
+        )
+    lines = ["Industry patterns на доработке"]
+    keyboard = []
+    for index, row in enumerate(rows, start=1):
+        proposal_id = str(_row_get(row, "id", 0, "") or "")
+        pattern = str(_row_get(row, "proposed_pattern", 3, "") or "").strip()
+        if len(pattern) > 180:
+            pattern = pattern[:177].rstrip() + "..."
+        reason = str(_row_get(row, "decision_comment", 4, "") or "").strip()
+        example_line = _industry_pattern_example_line(_row_get(row, "examples_json", 5, []))
+        source_line = _industry_pattern_source_line(_row_get(row, "source_counts_json", 6, {}))
+        lines.append(
+            f"{index}. {_row_get(row, 'industry_key', 1)} / {_industry_pattern_type_label(str(_row_get(row, 'pattern_type', 2) or ''))}\n"
+            f"{pattern}\n"
+            f"Причина: {reason or '-'}"
+        )
+        if source_line:
+            lines.append(f"Источник: {source_line}")
+        if example_line:
+            lines.append(example_line)
+        if proposal_id:
+            keyboard.append(
+                [InlineKeyboardButton(f"Сделать новую версию {index}", callback_data=f"ip_rg:{proposal_id}")]
+            )
+    keyboard.append([InlineKeyboardButton("Показать pending", callback_data="industry_patterns_show")])
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="industry_patterns_home")])
+    return _safe_telegram_text("\n\n".join(lines)), InlineKeyboardMarkup(keyboard)
+
+
+def _build_industry_patterns_home_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("Запустить калибровку", callback_data="industry_patterns_recalibrate")],
+            [InlineKeyboardButton("Показать предложения", callback_data="industry_patterns_show")],
+            [InlineKeyboardButton("На доработке", callback_data="industry_patterns_revision_queue")],
+            [InlineKeyboardButton("Active-паттерны", callback_data="industry_patterns_active")],
+            [InlineKeyboardButton("Health active-паттернов", callback_data="industry_patterns_health")],
+            [InlineKeyboardButton("Impact report", callback_data="industry_patterns_impact")],
+            [InlineKeyboardButton("Политика HITL", callback_data="industry_patterns_policy")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")],
+        ]
+    )
+
+
+def _build_industry_patterns_after_run_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("Показать предложения", callback_data="industry_patterns_show")],
+            [InlineKeyboardButton("На доработке", callback_data="industry_patterns_revision_queue")],
+            [InlineKeyboardButton("Active-паттерны", callback_data="industry_patterns_active")],
+            [InlineKeyboardButton("Health active-паттернов", callback_data="industry_patterns_health")],
+            [InlineKeyboardButton("Impact report", callback_data="industry_patterns_impact")],
+            [InlineKeyboardButton("Запустить ещё раз", callback_data="industry_patterns_recalibrate")],
+            [InlineKeyboardButton("Политика HITL", callback_data="industry_patterns_policy")],
+        ]
+    )
+
+
+def _safe_telegram_text(text: str, limit: int = 3800) -> str:
+    value = str(text or "").strip()
+    if len(value) <= limit:
+        return value
+    return value[: limit - 80].rstrip() + "\n\n... текст сокращён, откройте список предложений кнопкой ниже."
+
+
+def _run_industry_patterns_recalibration_for_telegram(telegram_id: str) -> tuple[str, InlineKeyboardMarkup]:
+    if not _is_superadmin_telegram_user(telegram_id):
+        return "Эта команда доступна только суперадмину.", InlineKeyboardMarkup(
+            [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")]]
+        )
+    conn = get_db_connection()
+    try:
+        result = run_monthly_industry_pattern_recalibration(conn, create_proposals=True)
+    finally:
+        conn.close()
+    summary = str(result.get("telegram_summary") or "").strip()
+    created_count = len(result.get("created_proposal_ids") or [])
+    text = (
+        f"{summary}\n\n"
+        f"Создано новых pending-записей: {created_count}\n\n"
+        "Только принятые суперадмином паттерны станут active и попадут в оптимизатор."
+    )
+    return _safe_telegram_text(text), _build_industry_patterns_after_run_markup()
 
 
 def list_user_businesses(telegram_id: str) -> list[dict]:
@@ -2235,6 +3056,8 @@ def build_openclaw_menu(telegram_id: str) -> tuple[str, InlineKeyboardMarkup]:
         [InlineKeyboardButton("🛠 Сервис и диагностика", callback_data="menu_diagnostics")],
         [InlineKeyboardButton("🔙 Назад", callback_data="client_more")],
     ]
+    if _is_superadmin_telegram_user(str(telegram_id)):
+        keyboard.insert(4, [InlineKeyboardButton("Калибровка паттернов", callback_data="industry_patterns_home")])
     return text, InlineKeyboardMarkup(keyboard)
 
 
@@ -2271,6 +3094,54 @@ async def control_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🧭 Панель быстрых действий\nБизнес: {business_ctx['business_name']}",
     )
     await update.message.reply_text(panel_text, reply_markup=reply_markup)
+
+
+async def industry_patterns_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Панель суперадмина для HITL-калибровки паттернов."""
+    telegram_id = str(update.effective_user.id)
+    if not _is_superadmin_telegram_user(telegram_id):
+        await update.message.reply_text("Эта команда доступна только суперадмину.")
+        return
+    await update.message.reply_text(
+        "Калибровка industry patterns\n\n"
+        "Можно запустить анализ данных вручную, посмотреть pending-предложения и принять или отклонить их. "
+        "Автоматически паттерны не применяются.",
+        reply_markup=_build_industry_patterns_home_markup(),
+    )
+
+
+async def industry_patterns_recalibrate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ручной запуск monthly recalibration из Telegram."""
+    telegram_id = str(update.effective_user.id)
+    if not _is_superadmin_telegram_user(telegram_id):
+        await update.message.reply_text("Эта команда доступна только суперадмину.")
+        return
+    await update.message.reply_text("Запускаю калибровку паттернов. Это может занять немного времени.")
+    try:
+        text, reply_markup = _run_industry_patterns_recalibration_for_telegram(telegram_id)
+        await update.message.reply_text(text, reply_markup=reply_markup)
+    except Exception:
+        logger.exception("Failed to run industry patterns recalibration from Telegram")
+        await update.message.reply_text(
+            "Не удалось запустить калибровку паттернов. Посмотрите логи worker/app и попробуйте ещё раз."
+        )
+
+
+async def industry_patterns_impact_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ручной monthly impact report по active-паттернам."""
+    telegram_id = str(update.effective_user.id)
+    if not _is_superadmin_telegram_user(telegram_id):
+        await update.message.reply_text("Эта команда доступна только суперадмину.")
+        return
+    try:
+        text, reply_markup = _build_industry_pattern_impact_report_text(telegram_id)
+        await update.message.reply_text(text, reply_markup=reply_markup)
+    except Exception:
+        logger.exception("Failed to build industry pattern impact report")
+        await update.message.reply_text(
+            "Не удалось собрать impact report. Посмотрите логи app/worker и попробуйте ещё раз.",
+            reply_markup=_build_industry_patterns_home_markup(),
+        )
 
 
 async def businesses_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3088,6 +3959,373 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             }
         )
         await query.edit_message_text(text, reply_markup=reply_markup)
+    elif data == "industry_patterns_show":
+        text, reply_markup = _build_industry_pattern_proposals_text(user_id)
+        await query.edit_message_text(text, reply_markup=reply_markup)
+    elif data.startswith("industry_patterns_page:") or data.startswith("industry_patterns_filter:"):
+        parts = data.split(":")
+        selected_industry = parts[1] if len(parts) > 1 else "all"
+        selected_page = 0
+        if len(parts) > 2:
+            try:
+                selected_page = int(parts[2])
+            except Exception:
+                selected_page = 0
+        text, reply_markup = _build_industry_pattern_proposals_text(user_id, selected_industry, selected_page)
+        await query.edit_message_text(text, reply_markup=reply_markup)
+    elif data == "industry_patterns_revision_queue":
+        text, reply_markup = _build_industry_pattern_revision_queue_text(user_id)
+        await query.edit_message_text(text, reply_markup=reply_markup)
+    elif data == "industry_patterns_active":
+        text, reply_markup = _build_industry_pattern_active_versions_text(user_id)
+        await query.edit_message_text(text, reply_markup=reply_markup)
+    elif data == "industry_patterns_health":
+        text, reply_markup = _build_industry_pattern_health_text(user_id)
+        await query.edit_message_text(text, reply_markup=reply_markup)
+    elif data == "industry_patterns_impact":
+        text, reply_markup = _build_industry_pattern_impact_report_text(user_id)
+        await query.edit_message_text(text, reply_markup=reply_markup)
+    elif data.startswith("ip_dc:"):
+        version_id = data.replace("ip_dc:", "", 1).strip()
+        text, reply_markup = _build_industry_pattern_detail_card_text(user_id, version_id)
+        await query.edit_message_text(text, reply_markup=reply_markup)
+    elif data.startswith("ip_nv:"):
+        version_id = data.replace("ip_nv:", "", 1).strip()
+        if not _is_superadmin_telegram_user(user_id):
+            await query.edit_message_text("Эта команда доступна только суперадмину.")
+            return
+        conn = get_db_connection()
+        try:
+            result = create_industry_pattern_version_proposal(
+                conn,
+                version_id=version_id,
+                decided_by=str(get_user_id_from_telegram(user_id) or user_id),
+                reason="Новая версия из карточки active-паттерна",
+            )
+            text, reply_markup = _build_industry_pattern_proposals_text(user_id)
+            await query.edit_message_text(
+                f"Создан pending proposal новой версии: {result.get('proposal_id')}.\n\n{text}",
+                reply_markup=reply_markup,
+            )
+        except Exception:
+            logger.exception("Failed to create industry pattern version proposal")
+            await query.edit_message_text(
+                "Не удалось создать новую версию active-паттерна.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Impact report", callback_data="industry_patterns_impact")]]),
+            )
+        finally:
+            conn.close()
+    elif data.startswith("ip_rpc:") or data.startswith("ip_rb:"):
+        if data.startswith("ip_rpc:"):
+            target_version_id = data.replace("ip_rpc:", "", 1).strip()
+        else:
+            target_version_id = data.replace("ip_rb:", "", 1).strip()
+        text, reply_markup = _build_industry_pattern_rollback_preview_text(user_id, target_version_id)
+        await query.edit_message_text(text, reply_markup=reply_markup)
+    elif data.startswith("ip_rbr:"):
+        parts = data.split(":")
+        target_version_id = parts[1] if len(parts) > 1 else ""
+        reason_key = parts[2] if len(parts) > 2 else "temporary"
+        text, reply_markup = _build_industry_pattern_rollback_preview_text(user_id, target_version_id, reason_key)
+        await query.edit_message_text(text, reply_markup=reply_markup)
+    elif data.startswith("ip_rbc:"):
+        target_version_id = data.replace("ip_rbc:", "", 1).strip()
+        if not _is_superadmin_telegram_user(user_id):
+            await query.edit_message_text("Эта команда доступна только суперадмину.")
+            return
+        state = user_states.get(str(user_id), {})
+        current_version_id = str(state.get("pattern_detail_current_version_id") or "").strip()
+        expected_target_version_id = str(state.get("pattern_rollback_target_version_id") or "").strip()
+        reason_key = str(state.get("pattern_rollback_reason_key") or "temporary").strip()
+        if expected_target_version_id and expected_target_version_id != target_version_id:
+            await query.edit_message_text(
+                "Rollback не выполнен: выбранная версия не совпадает с последним экраном подтверждения.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Active-паттерны", callback_data="industry_patterns_active")]]),
+            )
+            return
+        conn = get_db_connection()
+        try:
+            preview = get_industry_pattern_rollback_preview(
+                conn,
+                current_version_id=current_version_id,
+                target_version_id=target_version_id,
+                days=30,
+            )
+            if not preview.get("can_confirm"):
+                text, reply_markup = _build_industry_pattern_rollback_preview_text(user_id, target_version_id, reason_key)
+                await query.edit_message_text(
+                    "Rollback не выполнен: есть блокирующее предупреждение.\n\n" + text,
+                    reply_markup=reply_markup,
+                )
+                return
+            result = rollback_industry_pattern_version(
+                conn,
+                target_version_id=target_version_id,
+                current_version_id=current_version_id,
+                decided_by=str(get_user_id_from_telegram(user_id) or user_id),
+                reason=_industry_pattern_rollback_reason_label(reason_key),
+            )
+            text, reply_markup = _build_industry_pattern_detail_card_text(user_id, target_version_id)
+            await query.edit_message_text(
+                f"Rollback выполнен. Активна версия: {result.get('target_version_id')}.\n\n{text}",
+                reply_markup=reply_markup,
+            )
+        except Exception:
+            logger.exception("Failed to rollback industry pattern version")
+            await query.edit_message_text(
+                "Не удалось выполнить rollback active-паттерна.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Impact report", callback_data="industry_patterns_impact")]]),
+            )
+        finally:
+            conn.close()
+    elif data.startswith("ip_ap:") or data.startswith("ip_af:"):
+        parts = data.split(":")
+        selected_industry = parts[1] if len(parts) > 1 else "all"
+        selected_page = 0
+        if len(parts) > 2:
+            try:
+                selected_page = int(parts[2])
+            except Exception:
+                selected_page = 0
+        text, reply_markup = _build_industry_pattern_active_versions_text(user_id, selected_industry, selected_page)
+        await query.edit_message_text(text, reply_markup=reply_markup)
+    elif data == "industry_patterns_home":
+        if not _is_superadmin_telegram_user(user_id):
+            await query.edit_message_text("Эта команда доступна только суперадмину.")
+            return
+        await query.edit_message_text(
+            "Калибровка industry patterns\n\n"
+            "Можно запустить анализ данных вручную, посмотреть pending-предложения и принять или отклонить их. "
+            "Автоматически паттерны не применяются.",
+            reply_markup=_build_industry_patterns_home_markup(),
+        )
+    elif data == "industry_patterns_recalibrate":
+        if not _is_superadmin_telegram_user(user_id):
+            await query.edit_message_text("Эта команда доступна только суперадмину.")
+            return
+        await query.edit_message_text("Запускаю калибровку паттернов. Это может занять немного времени.")
+        try:
+            text, reply_markup = _run_industry_patterns_recalibration_for_telegram(user_id)
+            await query.edit_message_text(text, reply_markup=reply_markup)
+        except Exception:
+            logger.exception("Failed to run industry patterns recalibration from Telegram callback")
+            await query.edit_message_text(
+                "Не удалось запустить калибровку паттернов. Посмотрите логи worker/app и попробуйте ещё раз.",
+                reply_markup=_build_industry_patterns_home_markup(),
+            )
+    elif data.startswith("ip_rr:") or data.startswith("industry_patterns_revise_reason:"):
+        parts = data.split(":")
+        proposal_id = parts[1] if len(parts) > 1 else ""
+        reason_key = parts[2] if len(parts) > 2 else "too_general"
+        if not _is_superadmin_telegram_user(user_id):
+            await query.edit_message_text("Эта команда доступна только суперадмину.")
+            return
+        conn = get_db_connection()
+        try:
+            result = decide_industry_pattern_proposal(
+                conn,
+                proposal_id=proposal_id,
+                decision="revise",
+                decided_by=str(get_user_id_from_telegram(user_id) or user_id),
+                decision_comment=_industry_pattern_revision_reason_label(reason_key),
+            )
+            text, reply_markup = _build_industry_pattern_revision_queue_text(user_id)
+            await query.edit_message_text(
+                f"Отправлено на доработку: {result.get('status')}.\n\n{text}",
+                reply_markup=reply_markup,
+            )
+        except Exception:
+            logger.exception("Failed to mark industry pattern proposal for revision")
+            await query.edit_message_text(
+                "Не удалось отправить proposal на доработку.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Обновить", callback_data="industry_patterns_show")]]),
+            )
+        finally:
+            conn.close()
+    elif data.startswith("ip_rg:") or data.startswith("industry_patterns_regenerate_revision:"):
+        if data.startswith("ip_rg:"):
+            proposal_id = data.replace("ip_rg:", "", 1).strip()
+        else:
+            proposal_id = data.replace("industry_patterns_regenerate_revision:", "", 1).strip()
+        if not _is_superadmin_telegram_user(user_id):
+            await query.edit_message_text("Эта команда доступна только суперадмину.")
+            return
+        conn = get_db_connection()
+        try:
+            result = regenerate_industry_pattern_revision(
+                conn,
+                proposal_id=proposal_id,
+                decided_by=str(get_user_id_from_telegram(user_id) or user_id),
+            )
+            if result.get("status") == "manual_review":
+                await query.edit_message_text(
+                    "Достигнут лимит доработок. Proposal переведен в ручную проверку.",
+                    reply_markup=InlineKeyboardMarkup(
+                        [[InlineKeyboardButton("На доработке", callback_data="industry_patterns_revision_queue")]]
+                    ),
+                )
+                return
+            text, reply_markup = _build_industry_pattern_proposals_text(user_id)
+            await query.edit_message_text(
+                f"Новая версия создана и возвращена в pending: {result.get('created_proposal_id')}.\n\n{text}",
+                reply_markup=reply_markup,
+            )
+        except Exception:
+            logger.exception("Failed to regenerate industry pattern revision")
+            await query.edit_message_text(
+                "Не удалось создать новую версию proposal.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("На доработке", callback_data="industry_patterns_revision_queue")]]),
+            )
+        finally:
+            conn.close()
+    elif data.startswith("ip_d:"):
+        version_id = data.replace("ip_d:", "", 1).strip()
+        if not _is_superadmin_telegram_user(user_id):
+            await query.edit_message_text("Эта команда доступна только суперадмину.")
+            return
+        await query.edit_message_text(
+            "Почему отключаем active-паттерн?",
+            reply_markup=_build_industry_pattern_disable_reason_markup(version_id),
+        )
+    elif data.startswith("ip_mr:"):
+        version_id = data.replace("ip_mr:", "", 1).strip()
+        if not _is_superadmin_telegram_user(user_id):
+            await query.edit_message_text("Эта команда доступна только суперадмину.")
+            return
+        await query.edit_message_text(
+            "Почему отправляем active-паттерн на доработку?",
+            reply_markup=_build_industry_pattern_active_revision_reason_markup(version_id),
+        )
+    elif data.startswith("ip_mrr:"):
+        parts = data.split(":")
+        version_id = parts[1] if len(parts) > 1 else ""
+        reason_key = parts[2] if len(parts) > 2 else "too_general"
+        if not _is_superadmin_telegram_user(user_id):
+            await query.edit_message_text("Эта команда доступна только суперадмину.")
+            return
+        conn = get_db_connection()
+        try:
+            result = mark_industry_pattern_version_for_revision(
+                conn,
+                version_id=version_id,
+                decided_by=str(get_user_id_from_telegram(user_id) or user_id),
+                reason=_industry_pattern_revision_reason_label(reason_key),
+            )
+            text, reply_markup = _build_industry_pattern_revision_queue_text(user_id)
+            await query.edit_message_text(
+                f"Active-паттерн отправлен на доработку: {result.get('proposal_id')}.\n\n{text}",
+                reply_markup=reply_markup,
+            )
+        except Exception:
+            logger.exception("Failed to mark active industry pattern for revision")
+            await query.edit_message_text(
+                "Не удалось отправить active-паттерн на доработку.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Impact report", callback_data="industry_patterns_impact")]]),
+            )
+        finally:
+            conn.close()
+    elif data.startswith("ip_dr:"):
+        parts = data.split(":")
+        version_id = parts[1] if len(parts) > 1 else ""
+        reason_key = parts[2] if len(parts) > 2 else "temporary"
+        if not _is_superadmin_telegram_user(user_id):
+            await query.edit_message_text("Эта команда доступна только суперадмину.")
+            return
+        conn = get_db_connection()
+        try:
+            result = disable_industry_pattern_version(
+                conn,
+                version_id=version_id,
+                decided_by=str(get_user_id_from_telegram(user_id) or user_id),
+                reason=_industry_pattern_disable_reason_label(reason_key),
+            )
+            text, reply_markup = _build_industry_pattern_active_versions_text(user_id)
+            await query.edit_message_text(
+                f"Active-паттерн отключён: {result.get('status')}.\nПричина: {result.get('reason')}.\n\n{text}",
+                reply_markup=reply_markup,
+            )
+        except Exception:
+            logger.exception("Failed to disable active industry pattern")
+            await query.edit_message_text(
+                "Не удалось отключить active-паттерн.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Active-паттерны", callback_data="industry_patterns_active")]]),
+            )
+        finally:
+            conn.close()
+    elif (
+        data.startswith("ip_a:")
+        or data.startswith("ip_rej:")
+        or data.startswith("ip_rv:")
+        or data.startswith("industry_patterns_accept:")
+        or data.startswith("industry_patterns_reject:")
+        or data.startswith("industry_patterns_revise:")
+    ):
+        if data.startswith("ip_a:"):
+            decision = "accept"
+            proposal_id = data.replace("ip_a:", "", 1).strip()
+        elif data.startswith("ip_rej:"):
+            decision = "reject"
+            proposal_id = data.replace("ip_rej:", "", 1).strip()
+        elif data.startswith("ip_rv:"):
+            proposal_id = data.replace("ip_rv:", "", 1).strip()
+            await query.edit_message_text(
+                "Почему отправляем proposal на доработку?",
+                reply_markup=_build_industry_pattern_revision_reason_markup(proposal_id),
+            )
+            return
+        elif data.startswith("industry_patterns_accept:"):
+            decision = "accept"
+            proposal_id = data.replace("industry_patterns_accept:", "", 1).strip()
+        elif data.startswith("industry_patterns_reject:"):
+            decision = "reject"
+            proposal_id = data.replace("industry_patterns_reject:", "", 1).strip()
+        else:
+            proposal_id = data.replace("industry_patterns_revise:", "", 1).strip()
+            await query.edit_message_text(
+                "Почему отправляем proposal на доработку?",
+                reply_markup=_build_industry_pattern_revision_reason_markup(proposal_id),
+            )
+            return
+        if not _is_superadmin_telegram_user(user_id):
+            await query.edit_message_text("Эта команда доступна только суперадмину.")
+            return
+        conn = get_db_connection()
+        try:
+            result = decide_industry_pattern_proposal(
+                conn,
+                proposal_id=proposal_id,
+                decision=decision,
+                decided_by=str(get_user_id_from_telegram(user_id) or user_id),
+                decision_comment="telegram",
+            )
+            text, reply_markup = _build_industry_pattern_proposals_text(user_id)
+            await query.edit_message_text(
+                f"Решение сохранено: {result.get('status')}.\n\n{text}",
+                reply_markup=reply_markup,
+            )
+        except Exception:
+            await query.edit_message_text(
+                "Не удалось сохранить решение по pattern proposal.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Обновить", callback_data="industry_patterns_show")]]),
+            )
+        finally:
+            conn.close()
+    elif data == "industry_patterns_policy":
+        await query.edit_message_text(
+            "Industry patterns не применяются автоматически.\n\n"
+            "Суперадмин проверяет pending-предложения, затем принимает, отклоняет или отправляет на доработку. "
+            "Для доработки сначала выбирается причина, затем proposal попадает в отдельный список. "
+            "Новая версия возвращается в pending и снова требует ручного решения. "
+            "После принятия паттерн становится активной версией и попадает в оптимизатор.",
+            reply_markup=InlineKeyboardMarkup(
+                [
+                    [InlineKeyboardButton("Показать предложения", callback_data="industry_patterns_show")],
+                    [InlineKeyboardButton("На доработке", callback_data="industry_patterns_revision_queue")],
+                    [InlineKeyboardButton("Active-паттерны", callback_data="industry_patterns_active")],
+                    [InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")],
+                ]
+            ),
+        )
     elif data == "openclaw_actions":
         business_ctx = resolve_business_context(user_id)
         if not business_ctx or not business_ctx.get("business_id"):
@@ -4314,6 +5552,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *Команды:*
 /start - Главное меню
 /control - Панель быстрых действий
+/industry_patterns - Калибровка паттернов
+/industry_patterns_recalibrate - Запустить калибровку паттернов
+/industry_patterns_impact - Impact report по active-паттернам
 /help - Справка
 /cancel - Отменить текущую операцию
 /businesses - Показать ваши бизнесы
@@ -4359,6 +5600,28 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_states[str(update.effective_user.id)] = {'state': 'idle'}
     await update.message.reply_text("❌ Операция отменена")
 
+
+async def _configure_bot_commands(application: Application):
+    """Настроить нижнее меню команд Telegram."""
+    await application.bot.set_my_commands(
+        [
+            BotCommand("start", "Главное меню"),
+            BotCommand("control", "Панель быстрых действий"),
+            BotCommand("industry_patterns", "Калибровка паттернов"),
+            BotCommand("industry_patterns_recalibrate", "Запустить калибровку"),
+            BotCommand("industry_patterns_impact", "Impact report паттернов"),
+            BotCommand("services_audit", "Аудит услуг"),
+            BotCommand("status", "Статус автоматизации"),
+            BotCommand("reply_review", "Ответ на отзыв"),
+            BotCommand("optimize_service", "Оптимизировать услугу"),
+            BotCommand("generate_news", "Сгенерировать новость"),
+            BotCommand("pending_approvals", "Ожидают подтверждения"),
+            BotCommand("help", "Справка"),
+            BotCommand("cancel", "Отменить операцию"),
+        ]
+    )
+
+
 def main():
     """Запуск бота"""
     if not TELEGRAM_BOT_TOKEN:
@@ -4369,7 +5632,7 @@ def main():
     
     try:
         proxy_url = resolve_telegram_http_proxy()
-        builder = Application.builder().token(TELEGRAM_BOT_TOKEN)
+        builder = Application.builder().token(TELEGRAM_BOT_TOKEN).post_init(_configure_bot_commands)
         if proxy_url:
             # PTB/httpx can hang on long polling through the HTTP proxy when
             # getUpdates shares the same request transport. Separate request
@@ -4396,6 +5659,9 @@ def main():
         # Регистрируем обработчики
         application.add_handler(CommandHandler("start", start))
         application.add_handler(CommandHandler("control", control_command))
+        application.add_handler(CommandHandler("industry_patterns", industry_patterns_command))
+        application.add_handler(CommandHandler("industry_patterns_recalibrate", industry_patterns_recalibrate_command))
+        application.add_handler(CommandHandler("industry_patterns_impact", industry_patterns_impact_command))
         application.add_handler(CommandHandler("help", help_command))
         application.add_handler(CommandHandler("cancel", cancel_command))
         application.add_handler(CommandHandler("businesses", businesses_command))

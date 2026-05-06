@@ -1,0 +1,8 @@
+No lint output captured yet.
+NOT RUN
+
+Project gate used:
+- focused pytest suite
+- python3 -m py_compile
+- frontend TypeScript noEmit
+- frontend production build

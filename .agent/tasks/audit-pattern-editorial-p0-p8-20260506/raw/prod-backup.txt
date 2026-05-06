@@ -1,0 +1,3 @@
+Creating backup: data/backups/postgres/local_20260506_181809.sql.gz
+ Container seo-app-postgres-1 Running 
+Backup complete: data/backups/postgres/local_20260506_181809.sql.gz

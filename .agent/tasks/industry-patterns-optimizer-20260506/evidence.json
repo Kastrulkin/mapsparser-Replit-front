@@ -1,0 +1,48 @@
+{
+  "task_id": "industry-patterns-optimizer-20260506",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Industry patterns are integrated into services/news/review replies with monthly HITL recalibration.",
+      "status": "PASS",
+      "proof": [
+        "Shared industry patterns module added.",
+        "Service vertical adapter extended.",
+        "News/review/service prompts receive industry context.",
+        "Pattern fit scoring added.",
+        "Monthly pending proposals, versions, decisions, Telegram summary, and superadmin buttons added.",
+        "py_compile passed.",
+        "60 targeted tests passed.",
+        "Production backup created at /opt/seo-app/backups/industry-patterns-20260506_155213.",
+        "Production Alembic current is 20260506_001.",
+        "Production HTTP smoke returned 200.",
+        "Industry pattern tables exist."
+      ],
+      "gaps": [
+        "Live Telegram callback click was not manually exercised."
+      ]
+    }
+  ],
+  "changed_files": [
+    "docs/INDUSTRY_PATTERNS_OPTIMIZER.md",
+    "src/core/industry_patterns.py",
+    "src/core/industry_pattern_recalibration.py",
+    "src/core/service_optimization_verticals.py",
+    "src/core/service_keyword_scoring.py",
+    "src/core/card_automation.py",
+    "src/services/content_plan_service.py",
+    "src/main.py",
+    "src/worker.py",
+    "src/telegram_bot.py",
+    "alembic_migrations/versions/20260506_add_industry_pattern_tables.py",
+    "tests/test_industry_patterns.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/core/industry_patterns.py src/core/industry_pattern_recalibration.py src/core/service_optimization_verticals.py src/core/service_keyword_scoring.py src/core/card_automation.py src/services/content_plan_service.py src/main.py src/worker.py src/telegram_bot.py",
+    "python3 -m pytest -q tests/test_industry_patterns.py tests/test_beauty_service_optimization.py tests/test_service_keyword_scoring.py tests/test_content_plan_generation.py tests/test_card_automation.py"
+  ],
+  "known_gaps": [
+    "Live Telegram callback click was not manually exercised."
+  ]
+}

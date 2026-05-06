@@ -1,0 +1,87 @@
+{
+  "task_id": "industry-patterns-version-rollback-stage10-20260506",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Active pattern card can create a new pending version proposal without deploy.",
+      "status": "PASS",
+      "proof": [
+        "create_industry_pattern_version_proposal creates pending_review proposals from active versions.",
+        "Telegram detail-card button ip_nv:<version_id> exposes this to superadmin."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Active pattern card shows rollback candidates/other versions.",
+      "status": "PASS",
+      "proof": [
+        "get_industry_pattern_detail_card returns version_candidates.",
+        "Telegram detail card renders rollback candidates and Rollback N buttons."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Rollback can activate a selected previous version and deactivate the current context version through Telegram HITL.",
+      "status": "PASS",
+      "proof": [
+        "rollback_industry_pattern_version activates target version and disables current context version only.",
+        "Telegram callback ip_rb:<target_version_id> is guarded by superadmin check."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Rollback and new-version actions are logged in industry_pattern_decisions.",
+      "status": "PASS",
+      "proof": [
+        "New-version action logs create_version_proposal.",
+        "Rollback action logs rollback_activate with target/source metadata."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Optimizer continues to read active patterns from DB; no code deploy is needed for future version changes.",
+      "status": "PASS",
+      "proof": [
+        "No migration was added.",
+        "Version/rollback operations change DB status and disabled_at only; optimizer remains DB-backed."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC6",
+      "text": "Relevant tests and production smoke checks pass.",
+      "status": "PASS",
+      "proof": [
+        "Local py_compile passed.",
+        "82 targeted tests passed.",
+        "Production AST check, app/worker restart, Telegram bot restart, HTTP smoke, and logs passed."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/core/industry_pattern_recalibration.py",
+    "src/telegram_bot.py",
+    ".agent/tasks/industry-patterns-version-rollback-stage10-20260506/spec.md",
+    ".agent/tasks/industry-patterns-version-rollback-stage10-20260506/evidence.md",
+    ".agent/tasks/industry-patterns-version-rollback-stage10-20260506/evidence.json",
+    ".agent/tasks/industry-patterns-version-rollback-stage10-20260506/verdict.json",
+    ".agent/tasks/industry-patterns-version-rollback-stage10-20260506/problems.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/core/industry_pattern_recalibration.py src/telegram_bot.py",
+    "python3 -m pytest -q tests/test_industry_patterns.py tests/test_service_keyword_scoring.py tests/test_beauty_service_optimization.py tests/test_service_problem_regeneration.py tests/test_worker_services_quality.py tests/test_content_plan_generation.py",
+    "server: cd /opt/seo-app && docker compose exec -T app python -B -c '<AST syntax check>'",
+    "server: cd /opt/seo-app && curl -I http://localhost:8000",
+    "server: cd /opt/seo-app && docker compose logs --since 2m app worker --tail=120",
+    "server: systemctl is-active openclaw-localos-telegram-bot.service"
+  ],
+  "known_gaps": [
+    "No browser screenshot; this stage is Telegram/backend HITL only."
+  ]
+}

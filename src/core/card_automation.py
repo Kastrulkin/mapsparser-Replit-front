@@ -8,6 +8,16 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from core.ai_learning import record_ai_learning_event
+from core.industry_patterns import detect_industry_key, format_industry_pattern_prompt
+from core.industry_pattern_recalibration import (
+    build_pattern_impact_metrics,
+    build_monthly_industry_pattern_impact_report,
+    format_monthly_industry_pattern_impact_report,
+    format_loaded_active_industry_patterns,
+    load_active_industry_patterns,
+    record_industry_pattern_impact_event,
+    run_monthly_industry_pattern_recalibration,
+)
 from core.learning_patterns import format_learning_candidates_for_digest, get_service_optimization_learning_candidates
 from services.gigachat_client import analyze_text_with_gigachat
 
@@ -751,7 +761,7 @@ def _business_context(conn, business_id: str) -> dict[str, Any]:
     )
     cursor.execute(
         f"""
-        SELECT id, owner_id, name, {language_select} address
+        SELECT id, owner_id, name, {language_select} address, business_type, industry, categories
         FROM businesses
         WHERE id = %s
         LIMIT 1
@@ -987,6 +997,18 @@ def _generate_news_for_business(conn, business_id: str) -> dict[str, Any]:
     settings = _load_settings_row(conn, business_id)
     news_content_source = str(settings.get("news_content_source") or "services").strip().lower() or "services"
     service_text = _service_context(conn, business_id, limit=5)
+    industry_key = detect_industry_key(
+        business_name=business_name,
+        business_type=ctx.get("business_type"),
+        industry=ctx.get("industry"),
+        categories=ctx.get("categories"),
+        service_text=service_text,
+    )
+    industry_pattern_context = format_industry_pattern_prompt(industry_key, mode="news")
+    active_news_patterns = load_active_industry_patterns(conn, industry_key, "news")
+    active_news_pattern_text = format_loaded_active_industry_patterns(active_news_patterns)
+    if active_news_pattern_text:
+        industry_pattern_context += f"\n{active_news_pattern_text}"
     transaction_text = _latest_transaction_context(conn, owner_id)
     news_examples = _load_user_examples(conn, owner_id, "news", limit=5)
     raw_info = (
@@ -1022,6 +1044,11 @@ Write all generated text in {language_name}.
         raw_info=raw_info,
         news_examples=news_examples or "Примеров нет",
     )
+    prompt = (
+        "Рабочие паттерны индустрии для auto-news:\n"
+        f"{industry_pattern_context}\n\n"
+        f"{prompt}"
+    )
     generated = analyze_text_with_gigachat(
         prompt,
         task_type="news_generation",
@@ -1031,6 +1058,37 @@ Write all generated text in {language_name}.
     generated_text = _extract_json_field(generated, "news").strip()
     if not generated_text:
         raise ValueError("AI не вернул текст новости")
+    if active_news_patterns:
+        record_industry_pattern_impact_event(
+            conn,
+            active_news_patterns,
+            industry_key=industry_key,
+            pattern_type="news",
+            business_id=business_id,
+            user_id=owner_id,
+            source="card_automation_news",
+            event_type="applied",
+            result_status="used_in_prompt",
+            metrics={"news_content_source": news_content_source},
+        )
+        news_impact_metrics = build_pattern_impact_metrics(
+            {"generated_text": generated_text},
+            "news",
+            industry_key=industry_key,
+            source_text=f"{service_text} {transaction_text} {raw_info}",
+        )
+        record_industry_pattern_impact_event(
+            conn,
+            active_news_patterns,
+            industry_key=industry_key,
+            pattern_type="news",
+            business_id=business_id,
+            user_id=owner_id,
+            source="card_automation_news",
+            event_type="result",
+            result_status="needs_review" if int(news_impact_metrics.get("needs_review") or 0) > 0 else "good",
+            metrics=news_impact_metrics,
+        )
     cursor = conn.cursor()
     has_business_id = _table_has_column(cursor, "usernews", "business_id")
     news_id = str(uuid.uuid4())
@@ -1106,6 +1164,17 @@ def _generate_review_reply_drafts(conn, business_id: str, batch_size: int = 5) -
         "ar": "Arabic",
     }
     examples_text = _load_user_examples(conn, owner_id, "review", limit=5)
+    review_industry_key = detect_industry_key(
+        business_name=ctx.get("name"),
+        business_type=ctx.get("business_type"),
+        industry=ctx.get("industry"),
+        categories=ctx.get("categories"),
+    )
+    review_industry_context = format_industry_pattern_prompt(review_industry_key, mode="review_reply")
+    active_reply_patterns = load_active_industry_patterns(conn, review_industry_key, "review_reply")
+    active_reply_pattern_text = format_loaded_active_industry_patterns(active_reply_patterns)
+    if active_reply_pattern_text:
+        review_industry_context += f"\n{active_reply_pattern_text}"
     default_prompt = """Ты - вежливый менеджер локального бизнеса. Сгенерируй короткий ответ на отзыв.
 Тон: {tone}. До 250 символов. Без лишних обещаний и без выдуманных деталей.
 Write the reply in {language_name}.
@@ -1148,6 +1217,11 @@ Write the reply in {language_name}.
             seo_keywords="",
             seo_keywords_top10="",
         )
+        prompt = (
+            "Рабочие паттерны индустрии для auto-review-reply:\n"
+            f"{review_industry_context}\n\n"
+            f"{prompt}"
+        )
         generated = analyze_text_with_gigachat(
             prompt,
             task_type="review_reply",
@@ -1157,6 +1231,37 @@ Write the reply in {language_name}.
         generated_text = _extract_json_field(generated, "reply").strip()
         if not generated_text:
             continue
+        if active_reply_patterns:
+            record_industry_pattern_impact_event(
+                conn,
+                active_reply_patterns,
+                industry_key=review_industry_key,
+                pattern_type="review_reply",
+                business_id=business_id,
+                user_id=owner_id,
+                source="card_automation_review_reply",
+                event_type="applied",
+                result_status="used_in_prompt",
+                metrics={"review_id": str(rd.get("id") or ""), "review_length": len(review_text)},
+            )
+            reply_impact_metrics = build_pattern_impact_metrics(
+                {"reply": generated_text},
+                "review_reply",
+                industry_key=review_industry_key,
+                source_text=review_text,
+            )
+            record_industry_pattern_impact_event(
+                conn,
+                active_reply_patterns,
+                industry_key=review_industry_key,
+                pattern_type="review_reply",
+                business_id=business_id,
+                user_id=owner_id,
+                source="card_automation_review_reply",
+                event_type="result",
+                result_status="needs_review" if int(reply_impact_metrics.get("needs_review") or 0) > 0 else "good",
+                metrics=reply_impact_metrics,
+            )
         draft_id = str(uuid.uuid4())
         cursor.execute(
             """
@@ -1610,14 +1715,36 @@ def collect_due_telegram_digest_messages(conn) -> list[dict[str, Any]]:
             + "\n\n".join(business_sections)
         )
         if bool(bucket.get("is_superadmin")):
+            reply_markup = {}
             learning_block = _superadmin_learning_digest_block(conn)
             if learning_block:
                 text += f"\n\n{learning_block}"
+            monthly_block = _superadmin_monthly_recalibration_block(conn, sent_date)
+            if monthly_block:
+                text += f"\n\n{monthly_block}"
+                reply_markup = {
+                    "inline_keyboard": [
+                        [{"text": "Показать предложения", "callback_data": "industry_patterns_show"}],
+                        [{"text": "Применить только после review", "callback_data": "industry_patterns_policy"}],
+                    ]
+                }
+            impact_block = _superadmin_monthly_impact_block(conn, sent_date)
+            if impact_block:
+                text += f"\n\n{impact_block}"
+                reply_markup = {
+                    "inline_keyboard": [
+                        [{"text": "Impact report", "callback_data": "industry_patterns_impact"}],
+                        [{"text": "Health active-паттернов", "callback_data": "industry_patterns_health"}],
+                    ]
+                }
+        else:
+            reply_markup = {}
         messages.append(
             {
                 "owner_id": bucket["owner_id"],
                 "telegram_id": bucket["telegram_id"],
                 "message": text,
+                "reply_markup": reply_markup,
                 "business_ids": sent_business_ids,
                 "sent_date": sent_date,
             }
@@ -1641,6 +1768,41 @@ def _superadmin_learning_digest_block(conn) -> str:
         items = get_service_optimization_learning_candidates(conn, days=7, limit=3)
         return format_learning_candidates_for_digest(items, max_items=3)
     except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return ""
+
+
+def _superadmin_monthly_recalibration_block(conn, local_today: date) -> str:
+    if local_today.day != 1:
+        return ""
+    try:
+        result = run_monthly_industry_pattern_recalibration(conn, today=local_today, create_proposals=True)
+        summary = str(result.get("telegram_summary") or "").strip()
+        if not summary:
+            return ""
+        return "📌 Monthly industry patterns\n" + summary
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return ""
+
+
+def _superadmin_monthly_impact_block(conn, local_today: date) -> str:
+    if local_today.day != 1:
+        return ""
+    try:
+        report = build_monthly_industry_pattern_impact_report(conn, days=30, limit=50)
+        return format_monthly_industry_pattern_impact_report(report, max_items=3)
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         return ""
 
 
