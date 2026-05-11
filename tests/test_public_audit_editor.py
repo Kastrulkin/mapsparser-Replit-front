@@ -153,12 +153,14 @@ def test_normalize_public_audit_removes_template_markers_and_adds_summary_varian
 def test_normalize_public_audit_marks_uncertain_photos_without_hard_claim() -> None:
     page_json = _sample_page_json()
     page_json["audit"]["summary_text"] = "В карточке всего 1 фото, поэтому слабый визуальный слой режет доверие."
+    page_json["audit"]["audit_profile"] = "medical"
     page_json["audit"]["current_state"]["photos_count"] = 1
     page_json["audit"]["current_state"]["photos_state"] = "weak"
     page_json["audit"]["issue_blocks"] = [
         {
             "id": "photo_story_gap",
-            "title": "Фото не усиливают доверие",
+            "title": "Фото не усиливают доверие к клинике",
+            "problem": "Пользователь не видит пространство, оборудование и реальный уровень сервиса.",
             "evidence": "Фото в карточке: 1.",
             "fix": "Добавить фото входа и кабинетов.",
         }
@@ -173,7 +175,10 @@ def test_normalize_public_audit_marks_uncertain_photos_without_hard_claim() -> N
     assert "только одно фото" not in audit["summary_text"].lower()
     assert "фото в карточке: 1" not in issue_evidence
     assert "ручной проверки" in issue_evidence
-    assert "по собранным данным" in audit["summary_text"].lower()
+    assert "вывески" in audit["issue_blocks"][0]["impact"]
+    assert "видимость карточки в поиске" in audit["issue_blocks"][0]["impact"]
+    assert "регулярно обновлять фото входа" in audit["issue_blocks"][0]["fix"]
+    assert "по собранным данным" in issue_evidence
     assert audit["editorial_quality_gate"]["status"] == "pass"
 
 
@@ -212,6 +217,43 @@ def test_normalize_public_audit_removes_public_action_plan_anglicisms() -> None:
     assert "ресепшен" not in joined
     assert "медицинский центр" in joined
     assert "3–5 публикаций" in " | ".join(next_7d)
+
+
+def test_normalize_public_audit_builds_medical_summary_from_trust_and_patient_queries() -> None:
+    page_json = _sample_page_json()
+    page_json["name"] = "Евромедсервис"
+    page_json["category"] = "Медцентр"
+    page_json["city"] = "Пушкин"
+    page_json["audit"]["audit_profile"] = "medical"
+    page_json["audit"]["summary_text"] = (
+        "У «Евромедсервис»: фото не усиливают доверие к клинике. Сейчас карточка давно не обновлялась. "
+        "Сначала лучше: добавить короткий блок про медицинский центр пушкин, консультации врачей пушкин, "
+        "гинеколог пушкин: отличие, ориентир по выбору и следующий шаг."
+    )
+    page_json["audit"]["search_intents_to_target"] = [
+        "медицинский центр пушкин",
+        "консультации врачей пушкин",
+        "гинеколог пушкин",
+    ]
+    page_json["audit"]["current_state"] = {
+        "rating": 4.5,
+        "reviews_count": 95,
+        "services_count": 37,
+        "has_recent_activity": False,
+    }
+
+    normalized = normalize_public_audit_page_json(page_json)
+    summary = normalized["audit"]["summary_text"]
+
+    assert summary.startswith("У «Евромедсервис» есть база доверия")
+    assert "рейтинг 4,5" in summary
+    assert "95 отзывов" in summary
+    assert "запросы пациентов" in summary
+    assert "медицинский центр в Пушкине" in summary
+    assert "Сначала стоит объяснить" in summary
+    assert "Сначала лучше:" not in summary
+    assert "отличие, ориентир" not in summary
+    assert len(summary) <= 300
 
 
 def test_normalize_public_audit_rewrites_abstract_marketing_language() -> None:

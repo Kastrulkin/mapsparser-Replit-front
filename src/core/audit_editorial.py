@@ -550,6 +550,78 @@ def _summary_action_prefix(audit: dict[str, Any]) -> str:
     return variants[_summary_variant_index(audit) % len(variants)]
 
 
+def _format_rating_ru(value: Any) -> str:
+    try:
+        rating = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if rating <= 0:
+        return ""
+    return f"{rating:.1f}".replace(".", ",")
+
+
+def _medical_patient_queries(focus: str, *, limit: int = 3) -> str:
+    items: list[str] = []
+    seen: set[str] = set()
+    for raw in str(focus or "").split(","):
+        text = re.sub(r"\s+", " ", raw).strip(" .;")
+        if not text:
+            continue
+        lowered = text.lower().replace("ё", "е")
+        lowered = re.sub(r"\bпушкин\b", "в Пушкине", lowered).strip()
+        lowered = re.sub(r"\s+в пушкине\s+в пушкине\b", " в пушкине", lowered, flags=re.IGNORECASE)
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        items.append(lowered)
+        if len(items) >= limit:
+            break
+    return ", ".join(items)
+
+
+def _medical_summary(audit: dict[str, Any], *, business_name: str, focus: str, max_length: int) -> str:
+    state = audit.get("current_state") if isinstance(audit.get("current_state"), dict) else {}
+    trust_parts: list[str] = []
+    rating_text = _format_rating_ru(state.get("rating"))
+    reviews_count = _safe_int(state.get("reviews_count"))
+    services_count = _safe_int(state.get("services_count"))
+    has_activity = state.get("has_recent_activity")
+    if rating_text:
+        trust_parts.append(f"рейтинг {rating_text}")
+    if reviews_count > 0:
+        trust_parts.append(f"{reviews_count} отзывов")
+    if services_count > 0:
+        trust_parts.append("список услуг")
+    if trust_parts:
+        first = f"У «{business_name}» есть база доверия: {', '.join(trust_parts)}."
+    elif business_name:
+        first = f"У «{business_name}» уже есть основа для доверия пациентов."
+    else:
+        first = "У карточки уже есть основа для доверия пациентов."
+
+    freshness = "свежих обновлений и " if has_activity is False else ""
+    queries = _medical_patient_queries(focus)
+    if queries:
+        second = f"Сейчас карточке не хватает {freshness}понятного описания под запросы пациентов: {queries}."
+    else:
+        second = f"Сейчас карточке не хватает {freshness}понятного описания под запросы пациентов."
+    third = "Сначала стоит объяснить, какие направления доступны и как записаться."
+    summary = normalize_audit_text(" ".join([first, second, third]), audit_profile="medical")
+    if len(summary) <= max_length:
+        return summary
+    for limit in (2, 1):
+        short_queries = _medical_patient_queries(focus, limit=limit)
+        if not short_queries:
+            continue
+        short_second = f"Не хватает понятного описания под запросы пациентов: {short_queries}."
+        short_third = "Сначала стоит объяснить, какие направления доступны и как записаться."
+        short_summary = normalize_audit_text(" ".join([first, short_second, short_third]), audit_profile="medical")
+        if len(short_summary) <= max_length:
+            return short_summary
+    compact_summary = normalize_audit_text(" ".join([first, third]), audit_profile="medical")
+    return truncate_sentence(compact_summary, max_length)
+
+
 def _rewrite_issue_title(audit: dict[str, Any], issue_title: str) -> str:
     text = normalize_audit_text(issue_title, audit_profile=str(audit.get("audit_profile") or ""))
     lowered = text.lower().replace("ё", "е")
@@ -612,6 +684,8 @@ def build_editorial_summary(audit: dict[str, Any], *, max_length: int = SUMMARY_
     state_fact = ", ".join(state_facts[:2])
     pattern_hint = _pattern_hint(audit)
     next_action = _editorial_next_action(audit, issue_fix)
+    if audit_profile == "medical":
+        return _medical_summary(audit, business_name=business_name, focus=_services_focus(audit), max_length=max_length)
 
     if issue_title:
         if business_name:
@@ -712,10 +786,23 @@ def _sanitize_uncertain_photo_issue(item: dict[str, Any], *, photo_confidence: s
     )
     if item_id not in {"photo_story_gap", "visual_no_photos", "photos_gap"} and not has_hard_photo_count:
         return next_item
+    title_text = str(next_item.get("title") or "").lower().replace("ё", "е")
+    problem_text = str(next_item.get("problem") or "").lower().replace("ё", "е")
+    is_medical_photo_issue = "клиник" in title_text or "клиник" in problem_text or "пациент" in problem_text
     next_item["evidence"] = (
         "По собранным данным визуальный блок требует ручной проверки: важно убедиться, "
-        "что в карточке видны вход, ресепшен, кабинеты, оборудование и специалисты."
+        "что в карточке видны вход, стойка администратора, кабинеты, оборудование и специалисты."
     )
+    if is_medical_photo_issue:
+        next_item["problem"] = "Пациент не видит вход, интерьер, оборудование и реальный уровень сервиса."
+        next_item["impact"] = (
+            "Актуальные фото входа, вывески, интерьера и кабинетов важны для карт: "
+            "они помогают пациенту быстрее выбрать место и поддерживают видимость карточки в поиске."
+        )
+        next_item["fix"] = (
+            "Добавить и регулярно обновлять фото входа, вывески, стойки администратора, "
+            "кабинетов, оборудования, врачей и навигации внутри клиники."
+        )
     return next_item
 
 

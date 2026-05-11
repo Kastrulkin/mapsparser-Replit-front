@@ -270,29 +270,29 @@ const buildSelfHelpMaterials = (
       : ['Entrance and sign', 'Room or workspace', 'Specialists at work', 'Equipment or workplace', 'Examples of results'];
   const postIdeas = lang === 'ru'
     ? [
-        `Как проходит ${serviceFocus[0] || 'популярная услуга'}: этапы, длительность и как записаться.`,
-        `Что выбрать впервые: ${focusText}.`,
-        news.length > 0 ? 'Обновить старую публикацию: что изменилось, какие услуги актуальны сейчас.' : 'Показать свежий повод: услуга недели, новый специалист или сезонный спрос.',
+        `Как проходит посещение ${businessType}: этапы, длительность и как записаться.`,
+        `Что выбрать при первом посещении: подготовить новости под популярные услуги и запросы (${focusText}).`,
+        news.length > 0 ? 'Рассказать актуальные новости: что изменилось, какие услуги доступны сейчас.' : 'Рассказать актуальные новости: услуга недели, новый специалист или сезонный спрос.',
       ]
     : [
-        `How ${serviceFocus[0] || 'a popular service'} works: steps, timing, and booking.`,
-        `What to choose first: ${focusText}.`,
-        news.length > 0 ? 'Refresh an old post with what is relevant now.' : 'Post a fresh reason to visit: service of the week, specialist, or seasonal demand.',
+        `What a visit to ${businessType} looks like: steps, timing, and booking.`,
+        `What to choose on the first visit: prepare posts around popular services and queries (${focusText}).`,
+        news.length > 0 ? 'Share current updates: what changed and which services are available now.' : 'Share current updates: service of the week, new specialist, or seasonal demand.',
       ];
   const reviewTemplates = lang === 'ru'
     ? [
-        'Спасибо за отзыв. Рады, что вам понравились сервис и результат. Будем ждать вас снова.',
-        serviceFocus.length > 0
-          ? `Спасибо, что отметили детали. Если вам будет актуально, будем рады помочь и с направлением «${serviceFocus[0]}».`
+        `Спасибо за отзыв. Рады, что вам понравилась услуга «${serviceFocus[0] || 'основная услуга'}». Будем ждать вас снова.`,
+        serviceFocus.length > 1
+          ? `Спасибо за отзыв. Рады, что вы остались довольны услугой «${serviceFocus[0]}». В следующий раз можем также предложить «${serviceFocus[1]}», если это будет вам актуально.`
           : reviewSignals.length > 0
-            ? 'Спасибо, что отметили детали. Нам важно, чтобы клиенту было понятно и комфортно на каждом этапе.'
+            ? 'Спасибо за ваш отзыв. Рады, что вам понравились сервис и результат. Будем ждать вас снова.'
             : 'Спасибо за обратную связь. Учтём ваш комментарий и постараемся сделать следующий визит удобнее.',
       ]
     : [
-        'Thank you for the review. We are glad you liked the service and result. We will be happy to see you again.',
-        serviceFocus.length > 0
-          ? `Thank you for the detail. If it becomes relevant, we will be happy to help with “${serviceFocus[0]}” as well.`
-          : 'Thank you for the detail. We want every visit to feel clear and comfortable.',
+        `Thank you for the review. We are glad you liked “${serviceFocus[0] || 'the main service'}”. We will be happy to see you again.`,
+        serviceFocus.length > 1
+          ? `Thank you for your review. We are glad you were happy with “${serviceFocus[0]}”. Next time, we can also suggest “${serviceFocus[1]}” if it is relevant for you.`
+          : 'Thank you for your review. We are glad you liked the service and result.',
       ];
   return {
     title: lang === 'ru' ? 'Что можно исправить самостоятельно' : 'What you can fix yourself',
@@ -300,14 +300,14 @@ const buildSelfHelpMaterials = (
       ? 'Это можно сделать без LocalOS. Ниже — короткие заготовки, чтобы карточка стала понятнее уже после первых правок.'
       : 'You can do this without LocalOS. These templates help make the listing clearer after the first edits.',
     descriptionTemplate: lang === 'ru'
-      ? `${displayName} — ${businessType}. Основные направления: ${focusText}. Коротко объясните, кому подходят услуги, как проходит визит и как записаться.`
-      : `${displayName} is a ${businessType}. Main directions: ${focusText}. Explain who the services suit, what the visit looks like, and how to book.`,
+      ? `Для «${displayName}» стоит добавить понятные описания к ключевым услугам, с учётом популярных поисковых запросов: ${focusText}. В публикациях можно объяснить, когда обращаться, как проходит приём и как записаться.`
+      : `For “${displayName}”, add clear texts for key services based on popular search queries: ${focusText}. In posts, explain when to visit, what the appointment looks like, and how to book.`,
     photoList,
     postIdeas,
     reviewTemplates,
     plan: lang === 'ru'
       ? {
-          today: 'Сегодня: обновить описание и закрыть самые заметные пробелы.',
+          today: 'Сегодня: обновить тексты услуг и закрыть самые заметные пробелы.',
           week: 'За 7 дней: добавить фото, цены/формат услуг и 2–3 публикации.',
           regular: 'Регулярно: отвечать на отзывы, добавлять новости и проверять, что изменилось после правок.',
         }
@@ -2870,7 +2870,7 @@ const PublicPartnershipOfferPage: React.FC = () => {
           </div>
           <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-sm font-semibold text-slate-900">{lang === 'ru' ? 'Шаблон описания' : 'Description template'}</div>
+              <div className="text-sm font-semibold text-slate-900">{lang === 'ru' ? 'Тексты для карт' : 'Map listing texts'}</div>
               <p className="mt-2 text-sm leading-6 text-slate-700">{selfHelp.descriptionTemplate}</p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -3270,7 +3270,7 @@ const PublicPartnershipOfferPage: React.FC = () => {
           </div>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-700">
             {lang === 'ru'
-              ? 'Можно сделать вручную. LocalOS нужен, чтобы вести карточки быстрее, регулярнее и без хаоса после каждого нового среза данных.'
+              ? 'Можно сделать вручную. LocalOS нужен, чтобы вести карточки быстрее, регулярнее и без хаоса после каждого обновления данных.'
               : 'You can do it manually. LocalOS helps keep listings updated faster, more regularly, and with less chaos after each new data snapshot.'}
           </p>
           <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-5">
