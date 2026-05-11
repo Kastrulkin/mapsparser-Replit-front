@@ -109,11 +109,19 @@ export class NewAuth {
     }
   }
 
-  async signUp(email: string, password: string, name?: string, phone?: string, yandexUrl?: string): Promise<{ user: User | null; error: any }> {
+  async signUp(email: string, password: string, name?: string, phone?: string, yandexUrl?: string, personalDataConsent?: boolean): Promise<{ user: User | null; error: any }> {
     try {
       const response = await this.makeRequest('/auth/register', {
         method: 'POST',
-        body: JSON.stringify({ email, password, name, phone, yandexUrl }),
+        body: JSON.stringify({
+          email,
+          password,
+          name,
+          phone,
+          yandexUrl,
+          personal_data_consent: Boolean(personalDataConsent),
+          consent_version: 'localos-personal-data-v1-2026-05-11',
+        }),
       });
 
       if (response.error) {
@@ -147,7 +155,8 @@ export class NewAuth {
     business_name?: string,
     business_address?: string,
     business_city?: string,
-    business_country?: string
+    business_country?: string,
+    personalDataConsent?: boolean
   ): Promise<{ user: User | null; business: any | null; error: any }> {
     try {
       const response = await this.makeRequest('/auth/register-with-business', {
@@ -160,7 +169,9 @@ export class NewAuth {
           business_name,
           business_address,
           business_city,
-          business_country
+          business_country,
+          personal_data_consent: Boolean(personalDataConsent),
+          consent_version: 'localos-personal-data-v1-2026-05-11',
         }),
       });
 
@@ -397,11 +408,23 @@ export class NewAuth {
     }
   }
 
-  async setPassword(email: string, password: string): Promise<{ user: User | null; error: any }> {
+  async setPassword(
+    email: string,
+    password: string,
+    token?: string,
+    personalDataConsent?: boolean,
+    consentVersion?: string
+  ): Promise<{ user: User | null; error: any }> {
     try {
       const response = await this.makeRequest('/auth/set-password', {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          email,
+          password,
+          token,
+          personal_data_consent: Boolean(personalDataConsent),
+          consent_version: consentVersion,
+        }),
       });
 
       if (response.error) {

@@ -11,6 +11,7 @@ const Index = lazy(() => import("./pages/Index"));
 const About = lazy(() => import("./pages/About"));
 const Login = lazy(() => import("./pages/Login"));
 const SetPassword = lazy(() => import("./pages/SetPassword"));
+const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
 const Contact = lazy(() => import("./pages/Contact"));
 const Policy = lazy(() => import("./pages/Policy"));
 const Requisites = lazy(() => import("./pages/Requisites"));
@@ -165,6 +166,7 @@ const AppShell = () => {
           <Route path="/card-recs" element={<CardRecommendations />} />
           <Route path="/set-password" element={<SetPassword />} />
           <Route path="/reset-password" element={<SetPassword />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/checkout/return" element={<CheckoutReturn />} />
           {IndustryPatternsE2EPage ? (
             <Route path="/__e2e__/industry-patterns" element={<IndustryPatternsE2EPage />} />

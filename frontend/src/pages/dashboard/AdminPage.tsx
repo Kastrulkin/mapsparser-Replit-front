@@ -2,7 +2,7 @@ import React, { Suspense, lazy, useState, useEffect, useCallback, useMemo } from
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
-import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Gift, Settings, BarChart3, TrendingUp, FileText, X, Search, ShieldCheck } from 'lucide-react';
+import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Gift, Settings, BarChart3, TrendingUp, FileText, X, Search, ShieldCheck, KeyRound } from 'lucide-react';
 import { newAuth } from '../../lib/auth_new';
 import { useToast } from '../../hooks/use-toast';
 import { CreateBusinessModal } from '../../components/CreateBusinessModal';
@@ -67,6 +67,8 @@ interface UserWithBusinesses {
   phone?: string;
   is_superadmin?: boolean;
   is_active?: number;
+  password_setup_required?: boolean;
+  has_password_setup_token?: boolean;
   direct_businesses: Business[];
   networks: Network[];
 }
@@ -468,6 +470,31 @@ export const AdminPage: React.FC = () => {
         );
       },
     });
+  };
+
+  const handleSendPasswordSetup = async (userId: string, userEmail: string) => {
+    try {
+      const response = await newAuth.makeRequest(`/superadmin/users/${userId}/send-password-setup`, {
+        method: 'POST',
+      });
+      const setupUrl = typeof response?.setup_url === 'string' ? response.setup_url : '';
+      if (setupUrl && navigator.clipboard) {
+        await navigator.clipboard.writeText(setupUrl);
+      }
+      toast({
+        title: response?.email_sent ? 'Письмо отправлено' : 'Ссылка создана',
+        description: response?.email_sent
+          ? `Ссылка установки пароля отправлена на ${userEmail}`
+          : 'Письмо не отправилось, но ссылка скопирована в буфер обмена',
+      });
+      await loadUsers();
+    } catch (error: unknown) {
+      toast({
+        title: 'Ошибка',
+        description: getErrorMessage(error, 'Не удалось отправить ссылку установки пароля'),
+        variant: 'destructive',
+      });
+    }
   };
 
   const handlePromo = async (businessId: string, businessName: string, isPromo: boolean) => {
@@ -942,6 +969,11 @@ export const AdminPage: React.FC = () => {
                                     Приостановлен
                                   </span>
                                 )}
+                                {user.password_setup_required && user.is_active !== 0 && (
+                                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                                    Нужен пароль
+                                  </span>
+                                )}
                               </div>
                               <p className="mt-0.5 truncate text-sm text-slate-500">{user.email}</p>
                             </div>
@@ -966,6 +998,19 @@ export const AdminPage: React.FC = () => {
                                 ) : (
                                   <Ban className="h-4 w-4" />
                                 )}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 rounded-full p-0 text-amber-600 hover:bg-amber-50 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-40"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSendPasswordSetup(user.id, user.email);
+                                }}
+                                disabled={!user.password_setup_required || user.is_active === 0}
+                                title={user.password_setup_required ? "Отправить ссылку установки пароля" : "Пароль уже установлен"}
+                              >
+                                <KeyRound className="h-4 w-4" />
                               </Button>
                               <Button
                                 variant="ghost"

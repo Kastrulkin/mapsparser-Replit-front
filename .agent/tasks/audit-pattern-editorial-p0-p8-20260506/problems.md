@@ -5,3 +5,8 @@ No code-level verifier findings from the targeted local checks.
 Known remaining product/runtime gaps:
 - Full AI enrichment over all 224 was not used because the first AI run stalled after 4 items. Deterministic regeneration completed successfully and QA passed.
 - Visual browser screenshot smoke was not run; HTTP public page smoke returned 200.
+
+Resolved in final P0-P8 pass:
+- Added `photo_signal_confidence` and removed hard photo claims when parser confidence is uncertain.
+- Tightened production QA for summary length, duplicate summaries and photo hard claims.
+- Regenerated the `Канал - Востапп` group again after final copy polish: 224 processed, 0 errors, final QA pass.

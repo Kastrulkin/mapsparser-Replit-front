@@ -19,12 +19,43 @@ UNSAFE_PATTERNS = [
     "букмекер",
 ]
 
+INFORMATIONAL_QUERY_PATTERNS = [
+    "это",
+    "что",
+    "отзывы",
+    "что это",
+    "можно",
+    "после",
+    "до и после",
+    "фото",
+    "видео",
+    "форум",
+    "википедия",
+    "сколько",
+    "можно ли",
+    "в неврологии",
+    "аппаратная",
+    "плюсы",
+    "минусы",
+    "какая",
+    "какой",
+    "какие",
+    "цена",
+    "стоимость",
+    "противопоказания",
+]
+
 
 CATEGORY_RULES: dict[str, dict[str, list[str]]] = {
+    "injection_cosmetology": {
+        "triggers": ["биоревитал", "ботул", "инъекц", "belarti", "relatox", "ксеомин", "миотокс", "контур", "филлер", "collost", "коллаген", "ml", "мл"],
+        "anchors": ["биоревитал", "ботул", "инъекц", "косметолог", "препарат", "контур", "филлер", "collost", "коллаген", "ml", "мл"],
+        "safe_seeds": [],
+    },
     "biozavivka": {
         "triggers": ["афро", "афрокуд", "биозавив", "завив", "кудр"],
         "anchors": ["волос", "кудр", "завив", "биозавив", "афрокудр"],
-        "safe_seeds": ["афрокудри", "биозавивка афрокудри", "завивка афрокудри"],
+        "safe_seeds": ["биозавивка"],
     },
     "brows_lashes": {
         "triggers": ["бров", "ресниц", "ламинирование ресниц"],
@@ -40,11 +71,6 @@ CATEGORY_RULES: dict[str, dict[str, list[str]]] = {
         "triggers": ["детск", "ребен", "дети", "12 15", "подрост"],
         "anchors": ["детск", "ребен", "дети", "подрост", "стриж"],
         "safe_seeds": ["детская стрижка", "детская укладка"],
-    },
-    "injection_cosmetology": {
-        "triggers": ["биоревитал", "ботул", "инъекц", "belarti", "ml", "мл"],
-        "anchors": ["биоревитал", "ботул", "инъекц", "косметолог", "препарат", "ml", "мл"],
-        "safe_seeds": ["биоревитализация", "инъекционная косметология"],
     },
 }
 
@@ -113,6 +139,29 @@ def build_safe_seed_queries(service: dict[str, Any], limit: int = 8) -> list[str
         seeds.append(seed)
     name = normalize_query_text(service.get("name"))
     category = normalize_query_text(service.get("category"))
+    if category_key == "injection_cosmetology":
+        if "ботул" in name:
+            seeds = ["ботулинотерапия"]
+        elif "биоревитал" in name:
+            seeds = ["биоревитализация"]
+        elif "контур" in name and "губ" in name:
+            seeds = ["контурная пластика губ"]
+        elif "филлер" in name:
+            seeds = ["филлер"]
+        elif "collost" in name or "коллаген" in name:
+            seeds = ["коллагенотерапия"]
+        elif "инъекц" in name:
+            seeds = ["инъекционная косметология"]
+        if "гипергидроз" in name:
+            seeds.append("ботулинотерапия гипергидроз")
+    if category_key == "brows_lashes":
+        seeds = []
+        if "бров" in name:
+            seeds.append("коррекция бровей")
+        if "ресниц" in name:
+            seeds.append("ламинирование ресниц")
+        if "окраш" in name and "бров" in name:
+            seeds.append("окрашивание бровей")
     if category_key == "biozavivka" and "афро" in name:
         seeds.extend(["афрокудри", "биозавивка афрокудри", "завивка афрокудри"])
         if attributes.get("hair_length"):
@@ -121,7 +170,7 @@ def build_safe_seed_queries(service: dict[str, Any], limit: int = 8) -> list[str
         safe_name = name
         if len(safe_name) >= 5:
             seeds.append(safe_name)
-    if category and len(category) >= 5:
+    if category and len(category) >= 5 and category_key != "injection_cosmetology":
         seeds.append(category)
 
     unique: list[str] = []
@@ -140,6 +189,9 @@ def is_unsafe_query(query: str) -> tuple[bool, str | None]:
     for pattern in UNSAFE_PATTERNS:
         if pattern in normalized:
             return True, "unsafe_blacklist"
+    for pattern in INFORMATIONAL_QUERY_PATTERNS:
+        if pattern in normalized:
+            return True, "informational_query"
     return False, None
 
 

@@ -1,0 +1,19 @@
+{
+  "total": 224,
+  "duplicate_summaries_5plus": [],
+  "bad_marker_hits": [],
+  "bad_marker_hits_count": 0,
+  "long_summaries_count": 0,
+  "long_summaries": [],
+  "missing_summary_variants_count": 0,
+  "missing_summary_variants": [],
+  "technical_key_hits_count": 0,
+  "technical_key_hits": [],
+  "photo_hard_claims_count": 0,
+  "photo_hard_claims": [],
+  "profile_conflicts_count": 0,
+  "profile_conflicts": [],
+  "editorial_gate_issues_count": 0,
+  "editorial_gate_issues": [],
+  "pass": true
+}

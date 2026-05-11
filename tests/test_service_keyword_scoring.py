@@ -181,6 +181,20 @@ def test_service_quality_explains_review_reasons() -> None:
     assert any("не хватает запроса" in label for label in quality["issue_labels"])
 
 
+def test_unchanged_service_name_is_ok_when_description_and_keywords_are_good() -> None:
+    quality = evaluate_service_quality({
+        "id": "svc-ready",
+        "name": "Лазерная эпиляция - Все тело",
+        "description": "",
+        "optimized_name": "Лазерная эпиляция - Все тело",
+        "optimized_description": "Лазерная эпиляция всего тела.",
+        "keywords": ["лазерная эпиляция"],
+    })
+
+    assert quality["status"] == "good"
+    assert "name_unchanged" not in quality["issue_codes"]
+
+
 def test_services_quality_audit_summary_counts() -> None:
     audit = build_services_quality_audit([
         {
@@ -221,3 +235,20 @@ def test_manual_review_status_is_separate_from_needs_review() -> None:
     assert quality["manual_review"] is True
     assert quality["needs_review"] is False
     assert "manual_review" in quality["issue_codes"]
+
+
+def test_accepted_manual_service_text_is_scored_without_pending_draft() -> None:
+    quality = evaluate_service_quality({
+        "id": "accepted",
+        "name": "Биозавивка длинные волосы",
+        "description": "Биозавивка длинные волосы.",
+        "optimized_name": "",
+        "optimized_description": "",
+        "keywords": ["биозавивка"],
+        "fallback_used": False,
+        "guardrail_reasons": [],
+    })
+
+    assert quality["status"] == "good"
+    assert "no_suggestion" not in quality["issue_codes"]
+    assert quality["keyword_score"]["found"] == 1

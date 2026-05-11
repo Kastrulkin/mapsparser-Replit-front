@@ -51,11 +51,13 @@ const Login = () => {
     business_address: '',
     business_city: '',
     business_country: 'Россия',
+    personal_data_consent: false,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [registrationComplete, setRegistrationComplete] = useState(false);
+  const [resendingVerification, setResendingVerification] = useState(false);
   const navigate = useNavigate();
   const { language } = useLanguage();
   const isRu = language === 'ru';
@@ -69,8 +71,10 @@ const Login = () => {
     registerError: isRu ? 'Ошибка регистрации: ' : 'Registration error: ',
     registerRequired: isRu ? 'Email и пароль обязательны' : 'Email and password are required',
     businessRequired: isRu ? 'Название бизнеса, адрес и город обязательны' : 'Business name, address, and city are required',
-    registerSuccess: isRu ? 'Регистрация прошла успешно. Перенаправляем в личный кабинет...' : 'Registration successful. Redirecting to your dashboard...',
-    registerPending: isRu ? 'Регистрация успешна! Ваш бизнес ожидает модерации. Перенаправляем в личный кабинет...' : 'Registration successful. Your business is pending moderation. Redirecting to your dashboard...',
+    consentRequired: isRu ? 'Нужно согласие на обработку персональных данных' : 'Personal data consent is required',
+    consentText: isRu ? 'Я согласен на обработку персональных данных и принимаю политику сервиса' : 'I agree to personal data processing and accept the service policy',
+    registerSuccess: isRu ? 'Регистрация почти завершена. Проверьте почту и подтвердите email.' : 'Registration is almost complete. Check your email and confirm it.',
+    registerPending: isRu ? 'Бизнес создан и ожидает модерации. Осталось подтвердить email по письму.' : 'Your business is pending moderation. Confirm your email to continue.',
     resetSent: isRu ? 'Инструкции по восстановлению пароля отправлены на email. Проверьте почту!' : 'Password reset instructions were sent to your email.',
     resetError: isRu ? 'Ошибка восстановления пароля: ' : 'Password reset error: ',
     email: 'Email',
@@ -91,6 +95,9 @@ const Login = () => {
     signUp: isRu ? 'Зарегистрироваться' : 'Sign up',
     signingUp: isRu ? 'Регистрация...' : 'Registering...',
     postRegisterHint: isRu ? 'После регистрации вам будет предложено выбрать тариф и оплатить подписку' : 'After registration you will be able to choose a plan and pay for your subscription.',
+    checkEmailHint: isRu ? 'Мы отправили письмо со ссылкой подтверждения. После подтверждения email вы автоматически войдёте в кабинет.' : 'We sent a confirmation link. After confirming the email you will be signed in.',
+    resendVerification: isRu ? 'Отправить письмо ещё раз' : 'Send email again',
+    resendVerificationDone: isRu ? 'Письмо подтверждения отправлено повторно.' : 'Confirmation email was sent again.',
     sendReset: isRu ? 'Восстановить пароль' : 'Reset password',
     sendingReset: isRu ? 'Отправка...' : 'Sending...',
   };
@@ -153,6 +160,8 @@ const Login = () => {
         if (error.includes('NEED_PASSWORD')) {
           // Пользователь существует, но не установил пароль
           navigate('/set-password', { state: { email: loginForm.email } });
+        } else if (error.includes('EMAIL_NOT_VERIFIED')) {
+          setError(isRu ? 'Email не подтверждён. Проверьте почту или запросите письмо ещё раз.' : 'Email is not verified. Check your inbox or request another email.');
         } else {
           setError(error);
         }
@@ -193,6 +202,11 @@ const Login = () => {
       setLoading(false);
       return;
     }
+    if (!registerForm.personal_data_consent) {
+      setError(copy.consentRequired);
+      setLoading(false);
+      return;
+    }
     if (looksLikeUrl(registerForm.business_address)) {
       setError(isRu ? 'Поле «Адрес» не должно содержать ссылку на карту' : 'The address field must not contain a map link');
       setLoading(false);
@@ -220,6 +234,8 @@ const Login = () => {
           business_address: registerForm.business_address,
           business_city: registerForm.business_city,
           business_country: registerForm.business_country,
+          personal_data_consent: registerForm.personal_data_consent,
+          consent_version: 'localos-personal-data-v1-2026-05-11',
           source: searchParams.get('source') || undefined,
           audit_slug: searchParams.get('audit_slug') || undefined,
           audit_public_url: searchParams.get('audit_slug')
@@ -231,36 +247,11 @@ const Login = () => {
       const data = await response.json();
 
       if (response.ok && data.success) {
-        const tierFromUrl = searchParams.get('tier');
         setRegistrationComplete(true);
-
-        // Сохраняем токен
-        if (data.token) {
-          localStorage.setItem('auth_token', data.token);
-        }
-
-        if (tierFromUrl) {
-          localStorage.setItem('selectedTier', tierFromUrl);
-        }
-
-        // Первый вход должен вести в стартовый first-run сценарий, а не в разрозненные разделы
-        const fromPublicAudit = searchParams.get('source') === 'public_audit';
-        const targetUrl = fromPublicAudit
-          ? '/dashboard/profile'
-          : tierFromUrl
-          ? `/dashboard/profile?payment=required&tier=${tierFromUrl}`
-          : '/dashboard/profile?payment=required';
-
         if (data.business?.moderation_status === 'pending') {
           setInfo(copy.registerPending);
-          setTimeout(() => {
-            navigate(targetUrl);
-          }, 1500);
         } else {
           setInfo(copy.registerSuccess);
-          setTimeout(() => {
-            navigate(targetUrl);
-          }, 1200);
         }
       } else {
         setError(data.error || (isRu ? 'Ошибка регистрации' : 'Registration failed'));
@@ -300,6 +291,32 @@ const Login = () => {
       setError(copy.resetError + (error as Error).message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!registerForm.email) {
+      return;
+    }
+
+    setResendingVerification(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: registerForm.email }),
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setInfo(copy.resendVerificationDone);
+      } else {
+        setError(data.error || (isRu ? 'Не удалось отправить письмо повторно' : 'Could not resend the email'));
+      }
+    } catch (error) {
+      setError(isRu ? 'Не удалось отправить письмо повторно' : 'Could not resend the email');
+    } finally {
+      setResendingVerification(false);
     }
   };
 
@@ -528,16 +545,40 @@ const Login = () => {
                 </div>
               </div>
 
+              <label className="flex items-start gap-3 rounded-md border border-gray-200 bg-white px-3 py-3 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={registerForm.personal_data_consent}
+                  onChange={(e) => setRegisterForm({ ...registerForm, personal_data_consent: e.target.checked })}
+                  className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span>
+                  {copy.consentText}{' '}
+                  <a className="font-medium text-indigo-600 hover:text-indigo-700" href="/policy" target="_blank" rel="noreferrer">
+                    {isRu ? 'Политика обработки персональных данных' : 'Personal data policy'}
+                  </a>
+                </span>
+              </label>
+
               <Button
                 type="submit"
                 className="w-full"
-                disabled={loading}
+                disabled={loading || !registerForm.personal_data_consent}
               >
                 {loading ? copy.signingUp : copy.signUp}
               </Button>
               {registrationComplete && (
                 <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                  {info || copy.registerSuccess}
+                  <p>{info || copy.registerSuccess}</p>
+                  <p className="mt-1">{copy.checkEmailHint}</p>
+                  <button
+                    type="button"
+                    className="mt-3 text-sm font-medium text-emerald-800 underline disabled:opacity-50"
+                    disabled={resendingVerification}
+                    onClick={handleResendVerification}
+                  >
+                    {resendingVerification ? copy.sendingReset : copy.resendVerification}
+                  </button>
                 </div>
               )}
               <p className="text-xs text-gray-500 text-center">

@@ -19,6 +19,13 @@ CREATE TABLE Users (
     is_verified BOOLEAN DEFAULT FALSE,
     is_superadmin BOOLEAN DEFAULT FALSE,
     verification_token TEXT,
+    email_verified_at TIMESTAMP,
+    personal_data_consent_at TIMESTAMP,
+    personal_data_consent_version TEXT,
+    privacy_accepted_at TIMESTAMP,
+    terms_accepted_at TIMESTAMP,
+    consent_ip TEXT,
+    consent_user_agent TEXT,
     reset_token TEXT,
     reset_token_expires TIMESTAMP
 );
@@ -283,6 +290,10 @@ CREATE TABLE UserServices (
     price TEXT,
     optimized_name TEXT,
     optimized_description TEXT, -- Missing from initial schema
+    fallback_used BOOLEAN DEFAULT FALSE,
+    fallback_reason TEXT,
+    guardrail_reasons JSONB DEFAULT '[]'::jsonb,
+    pattern_version_ids JSONB DEFAULT '[]'::jsonb,
     chatgpt_context TEXT,
     is_active BOOLEAN DEFAULT TRUE, -- Missing from initial schema
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

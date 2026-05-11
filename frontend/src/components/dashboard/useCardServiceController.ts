@@ -136,6 +136,15 @@ export function useCardServiceController({
     );
   };
 
+  const resolvedQualityPatch = {
+    fallback_used: false,
+    fallback_reason: '',
+    guardrail_reasons: [],
+    pattern_version_ids: [],
+    regeneration_status: '',
+    regeneration_history: [],
+  };
+
   const updateService = async (
     serviceId: string,
     updatedData: Record<string, any>,
@@ -226,11 +235,13 @@ export function useCardServiceController({
           optimized_description: String(optimized.seo_description || optimized.seoDescription || '').trim(),
           keywords: normalizeKeywords(service.keywords),
           price: service.price || '',
+          fallback_used: Boolean(optimized.fallback_used),
+          fallback_reason: String(optimized.fallback_reason || '').trim(),
+          guardrail_reasons: Array.isArray(optimized.guardrail_reasons) ? optimized.guardrail_reasons : [],
+          pattern_version_ids: Array.isArray(optimized.pattern_version_ids) ? optimized.pattern_version_ids : [],
         };
         const statePatch = {
           ...updateData,
-          fallback_used: Boolean(optimized.fallback_used),
-          guardrail_reasons: Array.isArray(optimized.guardrail_reasons) ? optimized.guardrail_reasons : [],
         };
 
         try {
@@ -477,14 +488,18 @@ export function useCardServiceController({
     if (!editingService) return;
     const original = userServices.find((service) => service.id === editingService);
     if (!original) return;
+    const nameChanged = editServiceForm.name.trim() !== String(original.name || '').trim();
+    const descriptionChanged = editServiceForm.description.trim() !== String(original.description || '').trim();
+    const manualTextChanged = nameChanged || descriptionChanged;
     await updateService(editingService, {
       category: editServiceForm.category || '',
       name: editServiceForm.name || '',
       description: editServiceForm.description || '',
       keywords: editServiceForm.keywords.split(',').map((keyword) => keyword.trim()).filter(Boolean),
       price: editServiceForm.price || '',
-      optimized_name: original.optimized_name || '',
-      optimized_description: original.optimized_description || '',
+      optimized_name: manualTextChanged ? '' : original.optimized_name || '',
+      optimized_description: manualTextChanged ? '' : original.optimized_description || '',
+      ...resolvedQualityPatch,
     });
     setEditingService(null);
   };
@@ -513,6 +528,7 @@ export function useCardServiceController({
       optimized_description: service.optimized_description,
       keywords: service.keywords,
       price: service.price,
+      ...resolvedQualityPatch,
     };
     await updateService(serviceId, payload, { reload: false, showSuccess: false });
     patchServiceInState(serviceId, payload);
@@ -535,6 +551,7 @@ export function useCardServiceController({
       optimized_description: service.optimized_description,
       keywords: service.keywords,
       price: service.price,
+      ...resolvedQualityPatch,
     };
     await updateService(serviceId, payload, { reload: false, showSuccess: false });
     patchServiceInState(serviceId, payload);
@@ -557,6 +574,7 @@ export function useCardServiceController({
       optimized_description: '',
       keywords: service.keywords,
       price: service.price,
+      ...resolvedQualityPatch,
     };
     await updateService(serviceId, payload, { reload: false, showSuccess: false });
     patchServiceInState(serviceId, payload);
@@ -578,6 +596,7 @@ export function useCardServiceController({
       optimized_description: '',
       keywords: service.keywords,
       price: service.price,
+      ...resolvedQualityPatch,
     };
     await updateService(serviceId, payload, { reload: false, showSuccess: false });
     patchServiceInState(serviceId, payload);

@@ -3513,6 +3513,9 @@ def _deterministic_priority_steps(
     services_with_price_count = int(current_state.get("services_with_price_count") or 0)
     photos_count = int(current_state.get("photos_count") or 0)
     photos_state = str(current_state.get("photos_state") or "").strip().lower()
+    photo_confidence = str(
+        current_state.get("photo_signal_confidence") or current_state.get("photos_confidence") or ""
+    ).strip().lower()
     reviews_count = int(current_state.get("reviews_count") or 0)
     rating = current_state.get("rating")
     has_website = bool(current_state.get("has_website"))
@@ -3524,7 +3527,7 @@ def _deterministic_priority_steps(
         _add("собрать понятную структуру услуг")
     if "цен" in joined or (services_count > 0 and services_with_price_count <= 0):
         _add("добавить ценовые ориентиры")
-    if "фото" in joined or photos_state == "weak" or photos_count <= 1:
+    if "фото" in joined or photos_state == "weak" or (photos_count <= 1 and photo_confidence == "confirmed"):
         _add("добавить фото, которые помогают оценить качество и результат")
     if "отзыв" in joined or "рейтинг" in joined or reviews_count <= 0 or rating is None:
         _add("усилить доверие через отзывы и ответы")
@@ -3568,13 +3571,16 @@ def _build_deterministic_dense_audit_enrichment(
     services_with_price_count = int(current_state.get("services_with_price_count") or 0)
     photos_count = int(current_state.get("photos_count") or 0)
     photos_state = str(current_state.get("photos_state") or "").strip().lower()
+    photo_confidence = str(
+        current_state.get("photo_signal_confidence") or current_state.get("photos_confidence") or ""
+    ).strip().lower()
     reviews_count = int(current_state.get("reviews_count") or 0)
     rating = current_state.get("rating")
     has_website = bool(current_state.get("has_website"))
     description_present = bool(current_state.get("description_present"))
 
     metric_fragments: list[str] = []
-    if photos_count <= 1:
+    if photos_count <= 1 and photo_confidence == "confirmed":
         metric_fragments.append("в карточке всего 1 фото")
     elif photos_count > 1 and photos_state == "weak":
         metric_fragments.append(f"фото пока только {photos_count}")

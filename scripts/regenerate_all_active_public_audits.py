@@ -58,10 +58,44 @@ def _load_target_leads(
     cur,
     limit: int | None,
     lead_id: str | None,
+    lead_ids: list[str] | None,
     group_id: str | None,
     group_name: str | None,
+    old_only: bool,
+    include_missing_offers: bool,
+    missing_only: bool,
+    parsed_only: bool,
 ) -> list[dict[str, Any]]:
-    sql = """
+    if include_missing_offers:
+        sql = """
+        SELECT
+            l.*,
+            o.slug AS offer_slug,
+            o.page_json AS offer_page_json,
+            o.generated_json AS offer_generated_json,
+            o.edited_json AS offer_edited_json,
+            o.published_json AS offer_published_json,
+            o.edit_status AS offer_edit_status,
+            o.business_id AS offer_business_id,
+            o.business_profile AS offer_business_profile,
+            o.source_type AS offer_source_type,
+            o.published_by AS offer_published_by,
+            o.published_at AS offer_published_at
+        FROM prospectingleads l
+        LEFT JOIN adminprospectingleadpublicoffers o
+          ON o.lead_id = l.id
+         AND o.is_active = TRUE
+        LEFT JOIN lead_group_items gi
+          ON gi.lead_id = l.id
+        LEFT JOIN lead_groups g
+          ON g.id = gi.group_id
+        WHERE (%s IS NULL OR l.id = %s)
+          AND (%s IS NULL OR l.id = ANY(%s))
+          AND (%s IS NULL OR g.id = %s)
+          AND (%s IS NULL OR LOWER(g.name) LIKE %s)
+    """
+    else:
+        sql = """
         SELECT
             l.*,
             o.slug AS offer_slug,
@@ -84,22 +118,49 @@ def _load_target_leads(
           ON g.id = gi.group_id
         WHERE o.is_active = TRUE
           AND (%s IS NULL OR l.id = %s)
+          AND (%s IS NULL OR l.id = ANY(%s))
           AND (%s IS NULL OR g.id = %s)
           AND (%s IS NULL OR LOWER(g.name) LIKE %s)
-        ORDER BY o.updated_at DESC NULLS LAST, l.updated_at DESC NULLS LAST, l.created_at DESC
     """
     normalized_lead_id = str(lead_id or "").strip() or None
+    normalized_lead_ids = [str(item).strip() for item in lead_ids or [] if str(item or "").strip()]
     normalized_group_id = str(group_id or "").strip() or None
     normalized_group_name = str(group_name or "").strip().lower() or None
     group_name_pattern = f"%{normalized_group_name}%" if normalized_group_name else None
     params: list[Any] = [
         normalized_lead_id,
         normalized_lead_id,
+        normalized_lead_ids or None,
+        normalized_lead_ids or None,
         normalized_group_id,
         normalized_group_id,
         normalized_group_name,
         group_name_pattern,
     ]
+    if missing_only:
+        sql += " AND o.lead_id IS NULL"
+    if parsed_only:
+        sql += """
+          AND (
+            l.raw_payload_json IS NOT NULL
+            OR l.search_payload_json IS NOT NULL
+            OR l.enrich_payload_json IS NOT NULL
+            OR (l.services_json IS NOT NULL AND jsonb_typeof(l.services_json) = 'array' AND jsonb_array_length(l.services_json) > 0)
+            OR (l.reviews_json IS NOT NULL AND jsonb_typeof(l.reviews_json) = 'array' AND jsonb_array_length(l.reviews_json) > 0)
+            OR (l.photos_json IS NOT NULL AND jsonb_typeof(l.photos_json) = 'array' AND jsonb_array_length(l.photos_json) > 0)
+          )
+        """
+    if old_only:
+        sql += """
+          AND (
+            COALESCE(o.published_json, o.page_json, o.generated_json) -> 'audit' IS NULL
+            OR NOT ((COALESCE(o.published_json, o.page_json, o.generated_json) -> 'audit') ? 'photo_signal_confidence')
+            OR NOT ((COALESCE(o.published_json, o.page_json, o.generated_json) -> 'audit') ? 'summary_public')
+            OR NOT ((COALESCE(o.published_json, o.page_json, o.generated_json) -> 'audit') ? 'summary_whatsapp')
+            OR NOT ((COALESCE(o.published_json, o.page_json, o.generated_json) -> 'audit') ? 'editorial_quality_gate')
+          )
+        """
+    sql += " ORDER BY o.updated_at ASC NULLS FIRST, l.updated_at ASC NULLS FIRST, l.created_at ASC NULLS FIRST"
     if limit and limit > 0:
         sql += " LIMIT %s"
         params.append(limit)
@@ -243,10 +304,21 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--lead-id", type=str, default="")
+    parser.add_argument("--lead-ids-file", type=str, default="")
     parser.add_argument("--group-id", type=str, default="")
     parser.add_argument("--group-name", type=str, default="")
+    parser.add_argument("--old-only", action="store_true")
+    parser.add_argument("--include-missing-offers", action="store_true")
+    parser.add_argument("--missing-only", action="store_true")
+    parser.add_argument("--parsed-only", action="store_true")
+    parser.add_argument("--write-lead-ids-file", type=str, default="")
+    parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--skip-ai-enrichment", action="store_true")
     args = parser.parse_args()
+    lead_ids: list[str] = []
+    if args.lead_ids_file:
+        with open(args.lead_ids_file, encoding="utf-8") as handle:
+            lead_ids = [line.strip() for line in handle.readlines() if line.strip()]
 
     conn = _connect()
     try:
@@ -257,10 +329,34 @@ def main() -> None:
             cur,
             args.limit if args.limit > 0 else None,
             args.lead_id,
+            lead_ids,
             args.group_id,
             args.group_name,
+            args.old_only,
+            args.include_missing_offers or args.missing_only,
+            args.missing_only,
+            args.parsed_only,
         )
+        if args.write_lead_ids_file:
+            with open(args.write_lead_ids_file, "w", encoding="utf-8") as handle:
+                for lead in leads:
+                    handle.write(str(lead.get("id") or "").strip() + "\n")
         print(json.dumps({"total": len(leads)}, ensure_ascii=False), flush=True)
+        if args.dry_run:
+            for lead in leads[:10]:
+                print(
+                    json.dumps(
+                        {
+                            "lead_id": str(lead.get("id") or ""),
+                            "name": str(lead.get("name") or ""),
+                            "status": str(lead.get("status") or ""),
+                            "has_public_offer": bool(str(lead.get("offer_slug") or "").strip()),
+                        },
+                        ensure_ascii=False,
+                    ),
+                    flush=True,
+                )
+            return
 
         processed = 0
         errors = 0

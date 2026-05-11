@@ -115,7 +115,17 @@ class DatabaseManager:
         """Получить всех пользователей"""
         cursor = self.conn.cursor()
         cursor.execute("""
-            SELECT id, email, name, phone, created_at, is_active, is_verified, is_superadmin
+            SELECT
+                id,
+                email,
+                name,
+                phone,
+                created_at,
+                is_active,
+                is_verified,
+                is_superadmin,
+                CASE WHEN COALESCE(TRIM(password_hash), '') = '' THEN TRUE ELSE FALSE END AS password_setup_required,
+                CASE WHEN COALESCE(TRIM(verification_token), '') = '' THEN FALSE ELSE TRUE END AS has_password_setup_token
             FROM users 
             ORDER BY created_at DESC
         """)

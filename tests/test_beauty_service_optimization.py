@@ -1,6 +1,7 @@
 from core.beauty_service_optimization import (
     apply_beauty_service_guardrails,
     beauty_canonical_service_key,
+    compose_beauty_fallback_description,
     extract_beauty_service_attributes,
     format_beauty_generation_context,
     is_beauty_optimization_context,
@@ -14,6 +15,16 @@ def test_extracts_beauty_specific_attributes() -> None:
     assert "1 ml" in attrs["dosage_or_volume"]
 
 
+def test_fallback_description_keeps_service_name_without_technical_phrase() -> None:
+    description = compose_beauty_fallback_description(
+        "Афро на среднюю длину волос",
+        "Афро на среднюю длину волос",
+    )
+
+    assert description == "Афро на среднюю длину волос."
+    assert "исходному формату" not in description.lower()
+
+
 def test_guardrails_preserve_extra_long_hair() -> None:
     result = apply_beauty_service_guardrails(
         original_name="Афро на экстра длинные волосы",
@@ -22,7 +33,9 @@ def test_guardrails_preserve_extra_long_hair() -> None:
     )
 
     assert result["fallback_used"] is True
+    assert result["fallback_reason"] == "guardrails_failed"
     assert "экстра длинные волосы" in result["optimized_name"].lower()
+    assert "исходному формату" not in result["seo_description"].lower()
 
 
 def test_guardrails_do_not_turn_one_zone_waxing_into_brows() -> None:
@@ -77,6 +90,24 @@ def test_guardrails_reject_added_promo_words() -> None:
     assert result["fallback_used"] is True
     assert "профессиональная" not in result["optimized_name"].lower()
     assert "стойкий результат" not in result["seo_description"].lower()
+
+
+def test_guardrails_reject_added_promo_word_inflections() -> None:
+    result = apply_beauty_service_guardrails(
+        original_name="Афро на экстра длинные волосы",
+        optimized_name="Биозавивка афрокудри на экстра длинные волосы",
+        seo_description="Создаем пышные натуральные завитки на длинных волосах.",
+    )
+    professional_result = apply_beauty_service_guardrails(
+        original_name="Комплекс брови и ресницы",
+        optimized_name="Ламинирование и окрашивание бровей и ресниц",
+        seo_description="Профессиональное оформление бровей и ресниц.",
+    )
+
+    assert result["fallback_used"] is True
+    assert professional_result["fallback_used"] is True
+    assert "натуральные" not in result["seo_description"].lower()
+    assert "профессиональное" not in professional_result["seo_description"].lower()
 
 
 def test_guardrails_reject_unconfirmed_medical_claims_and_zones() -> None:

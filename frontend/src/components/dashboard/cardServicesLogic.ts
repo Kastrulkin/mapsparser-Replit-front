@@ -273,14 +273,19 @@ export const getServiceQuality = (service: ServiceLike & {
   optimized_name?: string;
   optimized_description?: string;
   fallback_used?: boolean;
+  fallback_reason?: string;
   guardrail_reasons?: string[] | string;
+  pattern_version_ids?: string[] | string;
   regeneration_status?: string;
 }): ServiceQuality => {
   const name = String(service.name || '').trim();
   const description = String(service.description || '').trim();
   const optimizedName = String(service.optimized_name || '').trim();
   const optimizedDescription = String(service.optimized_description || '').trim();
-  const score = getKeywordScore(`${optimizedName} ${optimizedDescription}`, service, `${name} ${description}`);
+  const sourceText = `${name} ${description}`.trim();
+  const hasOptimizationDraft = Boolean(optimizedName || optimizedDescription);
+  const draftText = hasOptimizationDraft ? `${optimizedName} ${optimizedDescription}`.trim() : sourceText;
+  const score = getKeywordScore(draftText, service, sourceText);
   const guardrailReasons = normalizeGuardrailReasons(service.guardrail_reasons);
   const manualReview = String(service.regeneration_status || '').trim().toLowerCase() === 'manual_review';
   const issueCodes: string[] = [];
@@ -295,11 +300,16 @@ export const getServiceQuality = (service: ServiceLike & {
   if (score.missing.length > 0) addIssue('missing_keywords', `не хватает запроса: ${score.missing.slice(0, 3).join(', ')}`);
   if (score.found > 0 && score.found === score.closeCount) addIssue('weak_matches_only', 'запрос использован слишком неточно');
   if (optimizedDescription && normalizeServiceText(optimizedDescription).includes('услуга по исходному формату записи')) addIssue('fallback_description', 'описание выглядит шаблонно');
-  if (service.fallback_used) addIssue('fallback_used', 'описание нужно переписать точнее');
+  if (service.fallback_used) {
+    const fallbackReason = String(service.fallback_reason || '').trim();
+    addIssue('fallback_used', fallbackReason ? `fallback: ${fallbackReason}` : 'описание нужно переписать точнее');
+  }
   if (guardrailReasons.length > 0) addIssue('guardrail_reasons', 'нужна проверка смысла и обещаний');
-  if (optimizedName && name && isDraftSimilarToCurrent(optimizedName, name)) addIssue('name_unchanged', 'название почти не изменилось');
-  if (optimizedDescription && description && isDraftSimilarToCurrent(optimizedDescription, description)) addIssue('description_unchanged', 'описание почти не изменилось');
-  if (!optimizedName && !optimizedDescription) addIssue('no_suggestion', 'нет SEO-предложения');
+  const descriptionUnchanged = Boolean(hasOptimizationDraft && optimizedDescription && description && isDraftSimilarToCurrent(optimizedDescription, description));
+  const nameUnchanged = Boolean(hasOptimizationDraft && optimizedName && name && isDraftSimilarToCurrent(optimizedName, name));
+  if (nameUnchanged && (!optimizedDescription || Boolean(service.fallback_used) || descriptionUnchanged)) addIssue('name_unchanged', 'название почти не изменилось');
+  if (descriptionUnchanged) addIssue('description_unchanged', 'описание почти не изменилось');
+  if (!hasOptimizationDraft && !sourceText) addIssue('no_suggestion', 'нет SEO-предложения');
   if (manualReview) addIssue('manual_review', 'нужна ручная проверка');
 
   return {

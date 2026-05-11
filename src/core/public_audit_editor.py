@@ -202,6 +202,18 @@ def _normalize_public_audit_copy(text: Any, *, audit_profile: str = "") -> str:
         ("можно сделать точнее", "стоит уточнить"),
         ("Для medical вертикали", "Для медицинской карточки"),
         ("Для beauty вертикали", "Для карточки услуг"),
+        ("clinic / medical center / diagnostics / rehabilitation / specialty doctor", "медицинский центр, клиника, диагностика, реабилитация, профильные врачи"),
+        ("Clinic / medical center / diagnostics / rehabilitation / specialty doctor", "Медицинский центр, клиника, диагностика, реабилитация, профильные врачи"),
+        ("3–5 updates", "3–5 публикаций"),
+        ("3-5 updates", "3–5 публикаций"),
+        ("updates:", "публикаций:"),
+        ("Updates:", "Публикаций:"),
+        ("lunch offers", "обеденные предложения"),
+        ("recovery journeys", "истории восстановления"),
+        ("recovery / therapy", "восстановление и терапия"),
+        ("Spa, Massage therapist, Wellness center", "спа, массаж, wellness-центр"),
+        ("ресепшен", "стойка администратора"),
+        ("в рабочей среде без визуального шума", "в рабочей обстановке"),
         ("social proof", "слой доверия"),
         ("часть спроса уходит", "часть клиентов выбирает конкурентов"),
     )
@@ -265,9 +277,17 @@ def normalize_public_audit_page_json(page_json: dict[str, Any], *, slug: str | N
     audit = _normalize_public_audit_copy_tree(audit, audit_profile=audit_profile)
     if isinstance(audit, dict):
         audit["audit_profile"] = audit_profile or audit.get("audit_profile")
+        lead_id = str(output.get("lead_id") or "").strip()
+        if lead_id:
+            audit["lead_id"] = lead_id
+        if output_slug:
+            audit["audit_slug"] = output_slug
         business_name = str(output.get("display_name") or output.get("name") or "").strip()
         if business_name and not str(audit.get("business_name") or "").strip():
             audit["business_name"] = business_name
+        business_address = str(output.get("address") or "").strip()
+        if business_address and not str(audit.get("business_address") or "").strip():
+            audit["business_address"] = business_address
         audit = apply_audit_editorial_pass(audit)
 
     if audit_profile == "beauty":

@@ -114,6 +114,11 @@ type OfferPagePayload = {
       services_with_price_count?: number;
       has_website?: boolean;
       has_recent_activity?: boolean;
+      news_count?: number;
+      recent_news_count?: number;
+      old_news_count?: number;
+      latest_news_at?: string;
+      news_status?: string;
       photos_state?: string;
       locations_count?: number;
       unverified_locations_count?: number;
@@ -166,11 +171,25 @@ type ReviewPreviewItem = {
   org_reply?: string;
   reply_preview?: string;
 };
-type NewsPreviewItem = { title?: string; text?: string; body?: string };
+type NewsPreviewItem = { title?: string; text?: string; body?: string; published_at?: string; date?: string };
 
 const formatNum = (value?: number | null): string => {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return '—';
   return Number(value).toLocaleString('ru-RU');
+};
+
+const formatDate = (value: string | undefined | null, lang: PageLang): string => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  const locale =
+    lang === 'ru' ? 'ru-RU' :
+    lang === 'tr' ? 'tr-TR' :
+    lang === 'el' ? 'el-GR' :
+    lang === 'ar' ? 'ar-EG' :
+    'en-GB';
+  return parsed.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' });
 };
 
 const UI_TEXT_BASE = {
@@ -237,6 +256,8 @@ const UI_TEXT_BASE = {
     freshReviewsMissing: 'Свежих отзывов нет в срезе.',
     newsPosts: 'Новости/посты',
     newsMissing: 'Публикаций в срезе не найдено.',
+    newsStale: 'В срезе есть публикации, но актуальных за последние месяцы не найдено.',
+    newsLatest: 'Последняя публикация',
     businessReply: 'Ответ бизнеса',
     nextTitle: 'Что делать дальше',
     nextText: 'Можно внедрить часть шагов самостоятельно. Если хотите, LocalOS возьмёт регулярную работу на себя: карточки, отзывы, новости, услуги и контроль изменений.',
@@ -318,6 +339,8 @@ const UI_TEXT_BASE = {
     freshReviewsMissing: 'No fresh reviews were found in the snapshot.',
     newsPosts: 'News / posts',
     newsMissing: 'No publications were found in the snapshot.',
+    newsStale: 'Publications exist, but no recent ones were found in the snapshot.',
+    newsLatest: 'Latest publication',
     businessReply: 'Business reply',
     nextTitle: 'What to do next',
     nextText: 'You can implement some steps yourself. If you want help, LocalOS can take the recurring work: listings, reviews, posts, services, and change control.',
@@ -399,6 +422,8 @@ const UI_TEXT_BASE = {
     freshReviewsMissing: 'Δεν βρέθηκαν πρόσφατες κριτικές στο στιγμιότυπο.',
     newsPosts: 'Νέα / δημοσιεύσεις',
     newsMissing: 'Δεν βρέθηκαν δημοσιεύσεις στο στιγμιότυπο.',
+    newsStale: 'Υπάρχουν δημοσιεύσεις, αλλά δεν βρέθηκαν πρόσφατες.',
+    newsLatest: 'Τελευταία δημοσίευση',
     businessReply: 'Απάντηση επιχείρησης',
     nextTitle: 'Τι να κάνετε μετά',
     nextText: 'Μπορείτε να εφαρμόσετε μερικά βήματα μόνοι σας. Αν χρειάζεστε βοήθεια, το LocalOS μπορεί να αναλάβει τη συνεχή εργασία: καταχωρίσεις, κριτικές, δημοσιεύσεις, υπηρεσίες και έλεγχο αλλαγών.',
@@ -480,6 +505,8 @@ const UI_TEXT_BASE = {
     freshReviewsMissing: 'Kesitte yeni yorum bulunamadı.',
     newsPosts: 'Haberler / gönderiler',
     newsMissing: 'Kesitte yayın bulunamadı.',
+    newsStale: 'Yayınlar var, ancak güncel yayın bulunamadı.',
+    newsLatest: 'Son yayın',
     businessReply: 'İşletme yanıtı',
     nextTitle: 'Sonraki adım',
     nextText: 'Yukarıdaki adımlarla iyileştirmeleri kendiniz uygulayabilirsiniz. Destek isterseniz bunu birlikte yapabiliriz.',
@@ -561,6 +588,8 @@ const UI_TEXT_BASE = {
     freshReviewsMissing: 'لم يتم العثور على مراجعات حديثة في هذه اللقطة.',
     newsPosts: 'الأخبار / المنشورات',
     newsMissing: 'لم يتم العثور على منشورات في هذه اللقطة.',
+    newsStale: 'توجد منشورات، لكن لم يتم العثور على منشورات حديثة.',
+    newsLatest: 'آخر منشور',
     businessReply: 'رد النشاط التجاري',
     nextTitle: 'ما الخطوة التالية',
     nextText: 'يمكنك تنفيذ التحسينات بنفسك عبر الخطوات أعلاه. وإذا أردت المساعدة، يمكننا تنفيذها معك.',
@@ -2016,9 +2045,10 @@ const localizeReviewPreview = (lang: PageLang, item: ReturnType<typeof normalize
 const normalizeNewsPreview = (item: NewsPreviewItem) => {
   const title = pickFirstNonEmpty(item.title);
   const text = pickFirstNonEmpty(item.text, item.body);
+  const publishedAt = pickFirstNonEmpty(item.published_at, item.date);
   const isDemoTemplate = title.toLowerCase().startsWith('пример новости:');
   const hasMeaningfulContent = Boolean((title || text) && !isDemoTemplate);
-  return { title, text, hasMeaningfulContent };
+  return { title, text, publishedAt, hasMeaningfulContent };
 };
 
 const localizeNewsPreview = (lang: PageLang, item: ReturnType<typeof normalizeNewsPreview>) => ({
@@ -2280,6 +2310,10 @@ const PublicPartnershipOfferPage: React.FC = () => {
     .map((item) => normalizeNewsPreview(item))
     .filter((item) => item.hasMeaningfulContent)
     .map((item) => localizeNewsPreview(lang, item));
+  const newsCount = Number(state.news_count || news.length || 0);
+  const recentNewsCount = Number(state.recent_news_count || 0);
+  const newsStatus = String(state.news_status || '').toLowerCase();
+  const hasOnlyStaleNews = newsCount > 0 && recentNewsCount <= 0 && (newsStatus === 'stale' || !state.has_recent_activity);
   const photos = (Array.isArray(page.photo_urls) ? page.photo_urls || [] : [])
     .map((item) => normalizeMediaUrl(item))
     .filter(Boolean);
@@ -2963,10 +2997,18 @@ const PublicPartnershipOfferPage: React.FC = () => {
                     {news.slice(0, 3).map((item, idx) => (
                       <div key={`news-${idx}`} className="text-sm text-slate-700 border-b border-slate-100 pb-2">
                         {item.title ? <div className="font-medium">{item.title}</div> : null}
+                        {item.publishedAt ? (
+                          <div className="text-xs text-slate-500">{formatDate(item.publishedAt, lang)}</div>
+                        ) : null}
                         {item.text ? <div>{item.text}</div> : null}
                       </div>
                     ))}
                   </div>
+                ) : hasOnlyStaleNews ? (
+                  <p className="text-sm text-slate-500 mt-2">
+                    {text.newsStale}
+                    {state.latest_news_at ? ` ${text.newsLatest}: ${formatDate(state.latest_news_at, lang)}.` : ''}
+                  </p>
                 ) : (
                   <p className="text-sm text-slate-500 mt-2">{text.newsMissing}</p>
                 )}

@@ -9,17 +9,22 @@ const SetPassword: React.FC = () => {
   const [info, setInfo] = useState<string | null>(null);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [showAlternativeReset, setShowAlternativeReset] = useState(false);
+  const [personalDataConsent, setPersonalDataConsent] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const [email, setEmail] = useState<string>('');
   const [token, setToken] = useState<string>('');
+  const isResetFlow = location.pathname.includes('reset-password');
 
   // Проверяем, что пользователь пришел с подтвержденным email или пропускаем проверку
   useEffect(() => {
     const checkUser = async () => {
       // Получаем email и токен из URL параметров
       const urlParams = new URLSearchParams(window.location.search);
-      const userEmail = urlParams.get('email');
+      const stateEmail = location.state && typeof location.state === 'object' && 'email' in location.state
+        ? String(location.state.email || '')
+        : '';
+      const userEmail = urlParams.get('email') || stateEmail;
       const userToken = urlParams.get('token');
       
       if (userEmail) {
@@ -37,7 +42,11 @@ const SetPassword: React.FC = () => {
         return;
       }
 
-      // Для новой системы просто разрешаем установку пароля
+      if (!isResetFlow && !userToken) {
+        setError('Ссылка установки пароля недействительна или устарела. Запросите новое письмо.');
+        return;
+      }
+
       setIsAuthorized(true);
     };
 
@@ -60,6 +69,11 @@ const SetPassword: React.FC = () => {
       return;
     }
 
+    if (!isResetFlow && !personalDataConsent) {
+      setError('Нужно согласие на обработку персональных данных.');
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setInfo(null);
@@ -67,8 +81,8 @@ const SetPassword: React.FC = () => {
     try {
       let result;
       
-      // Если есть токен, используем восстановление пароля
-      if (token) {
+      // Если это восстановление пароля, используем reset-token
+      if (isResetFlow) {
         const response = await fetch('/api/auth/confirm-reset', {
           method: 'POST',
           headers: {
@@ -95,7 +109,13 @@ const SetPassword: React.FC = () => {
         }
       } else {
         // Обычная установка пароля
-        result = await newAuth.setPassword(email, password);
+        result = await newAuth.setPassword(
+          email,
+          password,
+          token,
+          personalDataConsent,
+          'localos-personal-data-v1-2026-05-11'
+        );
         
         if (result.error) {
           setError(result.error);
@@ -123,7 +143,7 @@ const SetPassword: React.FC = () => {
   return (
     <div className="max-w-md mx-auto bg-white p-6 rounded-xl shadow-md flex flex-col gap-4 mt-12">
       <h2 className="text-2xl font-bold mb-2">
-        {token ? 'Восстановление пароля' : 'Установите пароль для входа'}
+        {isResetFlow ? 'Восстановление пароля' : 'Установите пароль для входа'}
       </h2>
       
       {!isAuthorized && !error && (
@@ -143,9 +163,25 @@ const SetPassword: React.FC = () => {
             className="border rounded px-3 py-2"
             placeholder="Новый пароль"
           />
+          {!isResetFlow && (
+            <label className="flex items-start gap-3 rounded border border-gray-200 px-3 py-3 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={personalDataConsent}
+                onChange={e => setPersonalDataConsent(e.target.checked)}
+                className="mt-1 h-4 w-4"
+              />
+              <span>
+                Я согласен на обработку персональных данных и принимаю{' '}
+                <a href="/policy" target="_blank" rel="noreferrer" className="text-blue-600 underline">
+                  политику сервиса
+                </a>
+              </span>
+            </label>
+          )}
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || (!isResetFlow && !personalDataConsent)}
             className="bg-primary text-white rounded px-4 py-2 font-semibold hover:bg-primary/90 transition disabled:opacity-50"
           >
             {loading ? 'Сохраняем...' : 'Установить пароль'}
@@ -208,4 +244,4 @@ const SetPassword: React.FC = () => {
   );
 };
 
-export default SetPassword; 
+export default SetPassword;

@@ -1,0 +1,16 @@
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0  4166    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+HTTP/1.1 200 OK
+Server: Werkzeug/3.1.8 Python/3.11.15
+Date: Wed, 06 May 2026 18:18:34 GMT
+Content-Disposition: inline; filename=index.html
+Content-Type: text/html; charset=utf-8
+Content-Length: 4166
+Last-Modified: Wed, 06 May 2026 18:01:39 GMT
+Cache-Control: no-cache
+ETag: "1778090499.0-4166-2731084557"
+Date: Wed, 06 May 2026 18:18:34 GMT
+Accept-Ranges: bytes
+Connection: close
+

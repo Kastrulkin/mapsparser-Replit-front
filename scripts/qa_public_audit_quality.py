@@ -17,6 +17,12 @@ BAD_MARKERS = (
     "без допрекламы",
     "social proof",
     "conversion layer",
+    "всего 1 фото",
+    "фото 1",
+    "первое действие",
+    "общее описание без структуры",
+    "нет цены или формата",
+    "ключевые направления",
 )
 
 TECHNICAL_KEYS = (
@@ -36,7 +42,13 @@ def _connect():
     return psycopg2.connect(os.environ["DATABASE_URL"], cursor_factory=RealDictCursor)
 
 
-def _load_offers(cur, group_id: str | None, group_name: str | None, limit: int | None) -> list[dict[str, Any]]:
+def _load_offers(
+    cur,
+    group_id: str | None,
+    group_name: str | None,
+    lead_ids: list[str] | None,
+    limit: int | None,
+) -> list[dict[str, Any]]:
     sql = """
         SELECT
             o.lead_id,
@@ -58,16 +70,20 @@ def _load_offers(cur, group_id: str | None, group_name: str | None, limit: int |
         WHERE o.is_active = TRUE
           AND (%s IS NULL OR g.id = %s)
           AND (%s IS NULL OR LOWER(g.name) LIKE %s)
+          AND (%s IS NULL OR o.lead_id = ANY(%s))
         ORDER BY o.updated_at DESC NULLS LAST, l.updated_at DESC NULLS LAST
     """
     normalized_group_id = str(group_id or "").strip() or None
     normalized_group_name = str(group_name or "").strip().lower() or None
+    normalized_lead_ids = [str(item).strip() for item in lead_ids or [] if str(item or "").strip()]
     group_name_pattern = f"%{normalized_group_name}%" if normalized_group_name else None
     params: list[Any] = [
         normalized_group_id,
         normalized_group_id,
         normalized_group_name,
         group_name_pattern,
+        normalized_lead_ids or None,
+        normalized_lead_ids or None,
     ]
     if limit and limit > 0:
         sql += " LIMIT %s"
@@ -121,9 +137,14 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--group-id", default="")
     parser.add_argument("--group-name", default="")
+    parser.add_argument("--lead-ids-file", default="")
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--sample", type=int, default=12)
     args = parser.parse_args()
+    lead_ids: list[str] = []
+    if args.lead_ids_file:
+        with open(args.lead_ids_file, encoding="utf-8") as handle:
+            lead_ids = [line.strip() for line in handle.readlines() if line.strip()]
 
     conn = _connect()
     try:
@@ -132,6 +153,7 @@ def main() -> None:
             cur,
             args.group_id,
             args.group_name,
+            lead_ids,
             args.limit if args.limit > 0 else None,
         )
     finally:
@@ -144,6 +166,7 @@ def main() -> None:
     technical_hits: list[dict[str, Any]] = []
     profile_conflicts: list[dict[str, Any]] = []
     gate_issues: list[dict[str, Any]] = []
+    photo_hard_claims: list[dict[str, Any]] = []
 
     for row in rows:
         page = _page(row)
@@ -154,7 +177,7 @@ def main() -> None:
         markers = [marker for marker in BAD_MARKERS if marker in blob]
         if markers:
             marker_hits.append({"lead_id": row.get("lead_id"), "name": row.get("name"), "markers": markers})
-        if len(summary) > 320:
+        if len(summary) > 300:
             long_summaries.append({"lead_id": row.get("lead_id"), "name": row.get("name"), "length": len(summary), "summary": summary[:220]})
         if not str(audit.get("summary_public") or "").strip() or not str(audit.get("summary_whatsapp") or "").strip():
             missing_variants.append({"lead_id": row.get("lead_id"), "name": row.get("name")})
@@ -168,11 +191,24 @@ def main() -> None:
         issues = gate.get("issues")
         if isinstance(issues, list) and issues:
             gate_issues.append({"lead_id": row.get("lead_id"), "name": row.get("name"), "issues": issues})
+        photo_confidence = str(audit.get("photo_signal_confidence") or "").strip().lower()
+        lowered_summary = summary.lower().replace("ё", "е")
+        if photo_confidence != "confirmed" and any(
+            claim in lowered_summary for claim in ("фотографий нет", "всего 1 фото", "фото 1", "только одно фото")
+        ):
+            photo_hard_claims.append(
+                {
+                    "lead_id": row.get("lead_id"),
+                    "name": row.get("name"),
+                    "photo_signal_confidence": photo_confidence,
+                    "summary": summary[:220],
+                }
+            )
 
     duplicate_summaries = [
         {"count": count, "summary": summary[:240]}
         for summary, count in summary_counter.most_common()
-        if summary and count >= 5
+        if summary and count >= 3
     ]
     payload = {
         "total": len(rows),
@@ -185,6 +221,8 @@ def main() -> None:
         "missing_summary_variants": missing_variants[: args.sample],
         "technical_key_hits_count": len(technical_hits),
         "technical_key_hits": technical_hits[: args.sample],
+        "photo_hard_claims_count": len(photo_hard_claims),
+        "photo_hard_claims": photo_hard_claims[: args.sample],
         "profile_conflicts_count": len(profile_conflicts),
         "profile_conflicts": profile_conflicts[: args.sample],
         "editorial_gate_issues_count": len(gate_issues),
@@ -195,6 +233,7 @@ def main() -> None:
             and not long_summaries
             and not missing_variants
             and not technical_hits
+            and not photo_hard_claims
             and not gate_issues
             and not duplicate_summaries
         ),

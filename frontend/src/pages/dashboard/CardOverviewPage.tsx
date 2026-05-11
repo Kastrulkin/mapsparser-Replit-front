@@ -1368,7 +1368,8 @@ export const CardOverviewPage = () => {
                 items={[
                   { label: 'Всего', value: servicesQualityAudit.summary.total },
                   { label: 'Готово', value: servicesQualityAudit.summary.good, tone: 'positive' },
-                  { label: 'Нужна проверка', value: servicesQualityAudit.summary.needsReview + servicesQualityAudit.summary.manualReview, tone: 'warning' },
+                  { label: 'Требуют доработки', value: servicesQualityAudit.summary.needsReview, tone: 'warning' },
+                  { label: 'Ручная проверка', value: servicesQualityAudit.summary.manualReview, tone: 'warning' },
                   { label: 'Без запросов', value: servicesQualityAudit.summary.noKeywords },
                 ]}
               />

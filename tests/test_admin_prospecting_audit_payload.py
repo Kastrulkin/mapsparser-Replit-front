@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from src.api import admin_prospecting
 from src.api.admin_prospecting import (
     _build_admin_lead_offer_payload,
@@ -27,6 +29,7 @@ from src.core.card_audit import (
     _build_medical_issue_blocks,
     _build_reasoning_fields,
     _build_wellness_issue_blocks,
+    _build_news_activity,
     _detect_audit_profile_details,
     _extract_lead_import_payload,
     _format_ru_location_prepositional,
@@ -443,6 +446,22 @@ def test_medical_reasoning_for_multispecialty_clinic_stays_broad() -> None:
     assert "гинеколог Пушкин" in joined
     assert "гастроэнтеролог Пушкин" in joined
     assert "невролог Пушкин" not in joined
+
+
+def test_news_activity_distinguishes_stale_publications_from_fresh_activity() -> None:
+    activity = _build_news_activity(
+        [
+            {"title": "Новость 1", "published_at": "2021-05-21T10:00:00+00:00"},
+            {"title": "Новость 2", "published_at": "2021-06-21T10:00:00+00:00"},
+        ],
+        now=datetime(2026, 5, 11, tzinfo=timezone.utc),
+    )
+
+    assert activity["news_count"] == 2
+    assert activity["recent_news_count"] == 0
+    assert activity["old_news_count"] == 2
+    assert activity["news_status"] == "stale"
+    assert activity["latest_news_at"] == "2021-06-21T10:00:00+00:00"
 
 
 class _FakeCursor:

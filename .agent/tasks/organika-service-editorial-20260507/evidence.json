@@ -1,0 +1,62 @@
+{
+  "task_id": "organika-service-editorial-20260507",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "All active Organika services have non-empty, human-readable descriptions that preserve service facts.",
+      "status": "PASS",
+      "proof": [
+        "Applied production editorial pass to 365 active Organika services.",
+        "Sample verified: waxing, biozavivka, injections, laser, manicure."
+      ],
+      "gaps": [
+        "14 descriptions are intentionally short because the service name is already a precise procedure/product phrase."
+      ]
+    },
+    {
+      "id": "AC2",
+      "text": "Descriptions use relevant beauty-industry patterns without unsafe promises or fallback text.",
+      "status": "PASS",
+      "proof": [
+        "No fallback, guardrail, or pattern_fit issues remain in production audit.",
+        "Descriptions are category-specific across beauty service groups."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "SEO keyword scoring for Organika remains clean.",
+      "status": "PASS",
+      "proof": [
+        "Final production audit: total 365, good 365, needs_review 0, manual_review 0, missing_keywords 0, weak_matches_only 0."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Production data change is backed up before write.",
+      "status": "PASS",
+      "proof": [
+        "/opt/seo-app/data/backups/postgres/local_20260507_171907_before_organika_prod_service_editorial.sql.gz"
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    ".agent/tasks/organika-service-editorial-20260507/raw/organika_prod_editorial_update.py",
+    ".agent/tasks/organika-service-editorial-20260507/spec.md",
+    ".agent/tasks/organika-service-editorial-20260507/evidence.md",
+    ".agent/tasks/organika-service-editorial-20260507/evidence.json",
+    ".agent/tasks/organika-service-editorial-20260507/verdict.json",
+    ".agent/tasks/organika-service-editorial-20260507/problems.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "ssh -i ~/.ssh/localos_prod root@80.78.242.105 'cd /opt/seo-app && docker compose ps'",
+    "ssh -i ~/.ssh/localos_prod root@80.78.242.105 'cd /opt/seo-app && curl -I http://localhost:8000'",
+    "ssh -i ~/.ssh/localos_prod root@80.78.242.105 'cd /opt/seo-app && docker compose exec -T app python3 - <<PY ... build_services_quality_audit for business_id 360b90ef-cf2b-4eb4-acd4-a8524e4600ae ... PY'"
+  ],
+  "known_gaps": [
+    "Duplicate service rows remain where source data contains repeated active rows; this task did not deduplicate production data."
+  ]
+}

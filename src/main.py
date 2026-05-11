@@ -47,7 +47,8 @@ from report import generate_html_report
 from services.gigachat_client import analyze_screenshot_with_gigachat, analyze_text_with_gigachat
 from database_manager import DatabaseManager, get_db_connection
 from parsequeue_status import STATUS_COMPLETED, STATUS_ERROR, normalize_status
-from auth_system import authenticate_user, create_session, normalize_email, verify_session
+from auth_system import CONSENT_VERSION, authenticate_user, create_session, normalize_email, verify_email_token, verify_session, rotate_verification_token
+from core.email_delivery import build_password_setup_link, send_email as deliver_email, send_password_setup_email, send_verification_email
 from init_database_schema import init_database_schema
 from core.default_ai_prompts import get_default_ai_prompts
 from core.beauty_service_optimization import (
@@ -289,6 +290,7 @@ PUBLIC_AUDIT_APP_ROUTES = {
     "card-recs",
     "set-password",
     "reset-password",
+    "verify-email",
     "bazich",
     "public-audit",
     "assets",
@@ -3071,6 +3073,55 @@ def unpause_user(user_id):
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+
+@app.route('/api/superadmin/users/<user_id>/send-password-setup', methods=['POST'])
+@rate_limit_if_available("20 per hour")
+def send_user_password_setup(user_id):
+    """Отправить безопасную ссылку установки пароля passwordless-пользователю."""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Требуется авторизация"}), 401
+
+        token = auth_header.split(' ')[1]
+        user_data = verify_session(token)
+        if not user_data:
+            return jsonify({"error": "Недействительный токен"}), 401
+
+        db = DatabaseManager()
+        try:
+            if not db.is_superadmin(user_data['user_id']):
+                return jsonify({"error": "Недостаточно прав"}), 403
+        finally:
+            db.close()
+
+        from auth_system import create_password_setup_token
+
+        result = create_password_setup_token(user_id)
+        if result.get("error"):
+            return jsonify({"error": result["error"]}), 400
+
+        setup_url = build_password_setup_link(result["email"], result["verification_token"])
+        email_sent = send_password_setup_email(
+            result["email"],
+            result.get("name"),
+            result["verification_token"],
+        )
+
+        return jsonify(
+            {
+                "success": True,
+                "email_sent": bool(email_sent),
+                "setup_url": setup_url,
+                "email": result["email"],
+                "message": "Ссылка установки пароля сформирована",
+            }
+        )
+    except Exception as e:
+        print(f"❌ Ошибка отправки ссылки установки пароля: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 # SPA-фолбэк: любые не-API пути возвращают index.html
 @app.route('/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'])
 def spa_fallback(path):
@@ -3808,7 +3859,7 @@ def _compose_service_seo_draft(
 
     if is_beauty_context:
         natural_name = _compose_beauty_service_name(base_name, keyword_items) or str(base_name or "").strip() or "Услуга"
-        return f"{natural_name}: услуга по исходному формату записи."
+        return f"{natural_name}."
 
     if keyword_items:
         lead_keywords = ", ".join(keyword_items[:3])
@@ -3825,6 +3876,7 @@ def _normalize_low_quality_service_suggestions(
     preferred_category: str | None = None,
     business_profile: str = "",
     business_vertical_key: str = "",
+    active_pattern_version_ids: list[str] | None = None,
 ) -> dict:
     if not isinstance(parsed_result, dict):
         return parsed_result
@@ -3835,6 +3887,11 @@ def _normalize_low_quality_service_suggestions(
     region_text = str(region or "").strip()
     normalized: list[dict] = []
     beauty_canonical_cache: dict[str, dict] = {}
+    pattern_version_ids = [
+        str(item or "").strip()
+        for item in (active_pattern_version_ids or [])
+        if str(item or "").strip()
+    ]
     for item in services:
         if not isinstance(item, dict):
             continue
@@ -3876,11 +3933,19 @@ def _normalize_low_quality_service_suggestions(
             or _normalize_text_for_semantic_compare(optimized_name) == _normalize_text_for_semantic_compare(original_name)
             or "в вашем районе" in optimized_name.lower()
         )
-        low_description = (
-            not seo_description
-            or seo_description.lower().startswith("описание услуги:")
-            or len(seo_description) < 80
-        )
+        fallback_reasons: list[str] = []
+        if not seo_description:
+            fallback_reasons.append("empty_description")
+        if seo_description.lower().startswith("описание услуги:"):
+            fallback_reasons.append("technical_description_prefix")
+        if (
+            seo_description
+            and "услуга по исходному формату записи" in seo_description.lower()
+        ):
+            fallback_reasons.append("legacy_fallback_phrase")
+        if seo_description and len(seo_description) < 80 and not is_beauty_context:
+            fallback_reasons.append("too_short_non_beauty_description")
+        low_description = bool(fallback_reasons)
         low_keywords = not isinstance(keywords, list) or len([k for k in keywords if str(k).strip()]) == 0
 
         if low_name:
@@ -3906,6 +3971,8 @@ def _normalize_low_quality_service_suggestions(
                 region=region_text,
                 preferred_category=category or preferred_category,
             )
+            if seo_description:
+                fallback_reasons.append("deterministic_description_fallback")
 
         optimized_name = _strip_unwanted_service_vertical_hallucinations(
             optimized_name,
@@ -3937,6 +4004,9 @@ def _normalize_low_quality_service_suggestions(
             item["beauty_attributes"] = guarded.get("beauty_attributes") or {}
             item["guardrail_reasons"] = guarded.get("guardrail_reasons") or []
             item["fallback_used"] = bool(guarded.get("fallback_used"))
+            guarded_reason = str(guarded.get("fallback_reason") or "").strip()
+            if guarded_reason:
+                fallback_reasons.append(guarded_reason)
 
         normalized_item = {
             "original_name": original_name or optimized_name,
@@ -3956,11 +4026,16 @@ def _normalize_low_quality_service_suggestions(
             ),
             "price": price if price is not None else "",
             "category": _normalize_service_category_value(category, fallback=preferred_category),
+            "fallback_used": bool(item.get("fallback_used")) or bool(fallback_reasons),
+            "fallback_reason": ",".join([reason for reason in fallback_reasons if reason]),
+            "pattern_version_ids": pattern_version_ids,
         }
         if is_beauty_context:
             normalized_item["beauty_attributes"] = item.get("beauty_attributes") or {}
             normalized_item["guardrail_reasons"] = item.get("guardrail_reasons") or []
             normalized_item["fallback_used"] = bool(item.get("fallback_used"))
+            if fallback_reasons:
+                normalized_item["fallback_used"] = True
             if beauty_cache_key:
                 beauty_canonical_cache[beauty_cache_key] = dict(normalized_item)
 
@@ -4065,6 +4140,11 @@ def services_optimize():
 
         seo_keywords_list: list[str] = []
         seo_keywords_top10 = ""
+        active_service_pattern_version_ids = [
+            str(pattern.get("id") or "").strip()
+            for pattern in active_service_patterns
+            if str(pattern.get("id") or "").strip()
+        ]
 
         def _build_service_optimization_fallback(
             content_text: str,
@@ -4576,6 +4656,7 @@ def services_optimize():
                 preferred_category=requested_service_category,
                 business_profile=business_profile,
                 business_vertical_key=business_vertical_key,
+                active_pattern_version_ids=active_service_pattern_version_ids,
             )
 
         # Apply quality normalization for fallback branch as well
@@ -4585,6 +4666,7 @@ def services_optimize():
             preferred_category=requested_service_category,
             business_profile=business_profile,
             business_vertical_key=business_vertical_key,
+            active_pattern_version_ids=active_service_pattern_version_ids,
         )
 
         # Сохраним в БД (как оптимизацию прайса, даже для текстового режима)
@@ -10431,71 +10513,127 @@ def calculate_roi():
 def register():
     """Регистрация пользователя"""
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
         email = normalize_email(data.get('email', ''))
         password = data.get('password', '').strip()
         name = data.get('name', '').strip()
         phone = data.get('phone', '').strip()
+        personal_data_consent = bool(data.get('personal_data_consent'))
+        consent_version = str(data.get('consent_version') or CONSENT_VERSION).strip()
 
         if not email or not password:
             return jsonify({"error": "Email и пароль обязательны"}), 400
+        if not personal_data_consent:
+            return jsonify({"error": "Необходимо согласие на обработку персональных данных"}), 400
 
         # Создаем пользователя
         from auth_system import create_user
-        result = create_user(email, password, name, phone)
+        result = create_user(
+            email,
+            password,
+            name,
+            phone,
+            personal_data_consent=personal_data_consent,
+            consent_version=consent_version,
+            consent_ip=request.headers.get('X-Forwarded-For') or request.remote_addr,
+            consent_user_agent=request.headers.get('User-Agent'),
+            is_verified=False,
+        )
 
         if 'error' in result:
             return jsonify({"error": result['error']}), 400
 
-        # Отправляем приветственное письмо
-        welcome_subject = "Добро пожаловать в BeautyBot!"
-        welcome_body = f"""
-Добро пожаловать в BeautyBot, {name}!
-
-Ваш аккаунт успешно создан:
-Email: {email}
-Имя: {name}
-Телефон: {phone if phone else 'Не указан'}
-
-Теперь вы можете:
-- Настроить описания услуг для Яндекс.Карт
-- Генерировать ответы на отзывы
-- Создавать новости для публикации
-- И многое другое!
-
-Начните с настройки вашего первого бизнеса.
-
----
-С уважением,
-Команда BeautyBot
-        """
-
-        send_email(email, welcome_subject, welcome_body)
-
-        # Создаем сессию
-        try:
-            session_token = create_session(result['id'])
-            if not session_token:
-                return jsonify({"error": "Ошибка создания сессии"}), 500
-        except Exception as session_error:
-            print(f"❌ Ошибка создания сессии: {session_error}")
-            import traceback
-            traceback.print_exc()
-            return jsonify({"error": "Ошибка создания сессии"}), 500
+        email_sent = send_verification_email(
+            result['email'],
+            result.get('name'),
+            result.get('verification_token'),
+        )
 
         return jsonify({
             "success": True,
+            "verification_required": True,
+            "email_sent": bool(email_sent),
+            "message": "Проверьте почту и подтвердите email",
             "user": {
                 "id": result['id'],
                 "email": result['email'],
                 "name": result['name'],
                 "phone": result['phone']
-            },
-            "token": session_token
-        })
+            }
+        }), 201
 
     except Exception as e:
         print(f"❌ Ошибка регистрации: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/auth/verify-email', methods=['POST'])
+@rate_limit_if_available("20 per hour")
+def auth_verify_email():
+    """Подтверждение email после регистрации."""
+    try:
+        data = request.get_json(silent=True) or {}
+        token = str(data.get('token') or '').strip()
+        if not token:
+            return jsonify({"error": "Токен подтверждения обязателен"}), 400
+
+        result = verify_email_token(token)
+        if result.get('error'):
+            return jsonify({"error": result['error']}), 400
+
+        session_token = create_session(
+            str(result['id']),
+            ip_address=request.headers.get('X-Forwarded-For') or request.remote_addr,
+            user_agent=request.headers.get('User-Agent'),
+        )
+        if not session_token:
+            return jsonify({"error": "Ошибка создания сессии"}), 500
+
+        return jsonify(
+            {
+                "success": True,
+                "token": session_token,
+                "user": {
+                    "id": result['id'],
+                    "email": result['email'],
+                    "name": result.get('name'),
+                    "phone": result.get('phone'),
+                },
+            }
+        )
+    except Exception as e:
+        print(f"❌ Ошибка подтверждения email: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/auth/resend-verification', methods=['POST'])
+@rate_limit_if_available("5 per hour")
+def auth_resend_verification():
+    """Повторно отправить письмо подтверждения email."""
+    try:
+        data = request.get_json(silent=True) or {}
+        email = normalize_email(data.get('email', ''))
+        if not email:
+            return jsonify({"error": "Email обязателен"}), 400
+
+        result = rotate_verification_token(email)
+        if result.get('error'):
+            return jsonify({"error": result['error']}), 400
+
+        email_sent = send_verification_email(
+            result['email'],
+            result.get('name'),
+            result.get('verification_token'),
+        )
+        return jsonify(
+            {
+                "success": True,
+                "email_sent": bool(email_sent),
+                "message": "Письмо подтверждения отправлено повторно",
+            }
+        )
+    except Exception as e:
+        print(f"❌ Ошибка повторной отправки подтверждения: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/auth/login', methods=['POST'])
@@ -13149,43 +13287,7 @@ def update_business_profile(business_id):
 
 def send_email(to_email, subject, body, from_name="LocalOS"):
     """Универсальная функция для отправки email"""
-    try:
-        import smtplib
-        from email.mime.text import MIMEText
-        from email.mime.multipart import MIMEMultipart
-
-        # Настройки SMTP из .env
-        smtp_server = os.getenv("SMTP_SERVER", "mail.hosting.reg.ru")
-        smtp_port = int(os.getenv("SMTP_PORT", "587"))
-        smtp_username = os.getenv("SMTP_USERNAME", "info@localos.pro")
-        smtp_password = os.getenv("SMTP_PASSWORD")
-
-        if not smtp_password:
-            print("❌ SMTP_PASSWORD не установлен в переменных окружения")
-            return False
-
-        # Создание сообщения
-        msg = MIMEMultipart()
-        msg['From'] = f"{from_name} <{smtp_username}>"
-        msg['To'] = to_email
-        msg['Subject'] = subject
-
-        msg.attach(MIMEText(body, 'plain', 'utf-8'))
-
-        # Отправка
-        # Bound SMTP waits so public flows do not hang on email delivery.
-        server = smtplib.SMTP(smtp_server, smtp_port, timeout=10)
-        server.starttls()
-        server.login(smtp_username, smtp_password)
-        server.send_message(msg)
-        server.quit()
-
-        print(f"✅ Email отправлен на {to_email}")
-        return True
-
-    except Exception as e:
-        print(f"❌ Ошибка отправки email: {e}")
-        return False
+    return deliver_email(to_email, subject, body, from_name)
 
 def send_contact_email(name, email, phone, message):
     """Отправка email с сообщением обратной связи"""
@@ -13226,7 +13328,11 @@ def reset_password():
         user = cursor.fetchone()
 
         if not user:
-            return jsonify({"error": "Пользователь с таким email не найден"}), 404
+            conn.close()
+            return jsonify({
+                "success": True,
+                "message": "Если email зарегистрирован, инструкции по восстановлению будут отправлены"
+            })
 
         # Генерируем токен восстановления
         import secrets
@@ -13243,10 +13349,6 @@ def reset_password():
         """, (reset_token, expires_at.isoformat(), email))
         conn.commit()
         conn.close()
-
-        # Отправляем email с токеном
-        print(f"🔑 Токен восстановления для {email}: {reset_token}")
-        print(f"⏰ Действителен до: {expires_at}")
 
         # Отправляем реальное письмо
         subject = "Восстановление пароля LocalOS"
@@ -13290,18 +13392,36 @@ def auth_set_password():
         data = request.get_json(silent=True) or {}
         email = str(data.get('email') or '').strip().lower()
         password = str(data.get('password') or '')
+        setup_token = str(data.get('token') or '').strip()
+        personal_data_consent = bool(data.get('personal_data_consent'))
+        consent_version = str(data.get('consent_version') or CONSENT_VERSION).strip()
 
         if not email or not password:
             return jsonify({"error": "Email и пароль обязательны"}), 400
         if len(password) < 6:
             return jsonify({"error": "Пароль должен содержать минимум 6 символов"}), 400
+        if not setup_token:
+            return jsonify({"error": "Ссылка установки пароля недействительна или устарела"}), 400
+        if not personal_data_consent:
+            return jsonify({"error": "Необходимо согласие на обработку персональных данных"}), 400
 
         conn = get_db_connection()
         try:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                SELECT id, email, name, phone, password_hash
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'users'
+                """
+            )
+            user_columns = {
+                str((row.get('column_name') if hasattr(row, 'get') else row[0]) or '').lower()
+                for row in (cursor.fetchall() or [])
+            }
+            cursor.execute(
+                """
+                SELECT id, email, name, phone, password_hash, verification_token
                 FROM users
                 WHERE LOWER(email) = %s
                 LIMIT 1
@@ -13317,17 +13437,48 @@ def auth_set_password():
             user_name = row.get('name') if hasattr(row, 'get') else row[2]
             user_phone = row.get('phone') if hasattr(row, 'get') else row[3]
             password_hash = row.get('password_hash') if hasattr(row, 'get') else row[4]
+            verification_token = row.get('verification_token') if hasattr(row, 'get') else row[5]
         finally:
             conn.close()
 
         if str(password_hash or '').strip():
             return jsonify({"error": "Для этого аккаунта пароль уже установлен. Используйте восстановление пароля."}), 400
+        if not str(verification_token or '').strip() or setup_token != str(verification_token):
+            return jsonify({"error": "Ссылка установки пароля недействительна или устарела"}), 400
 
         from auth_system import set_password
 
         result = set_password(str(user_id), password)
         if result.get('error'):
             return jsonify(result), 400
+
+        conn = get_db_connection()
+        try:
+            cursor = conn.cursor()
+            now = datetime.now().isoformat()
+            updates = ["verification_token = NULL", "is_verified = %s", "updated_at = %s"]
+            values = [True, now]
+            optional_updates = {
+                "email_verified_at": now,
+                "personal_data_consent_at": now,
+                "personal_data_consent_version": consent_version,
+                "privacy_accepted_at": now,
+                "terms_accepted_at": now,
+                "consent_ip": request.headers.get('X-Forwarded-For') or request.remote_addr,
+                "consent_user_agent": request.headers.get('User-Agent'),
+            }
+            for column, value in optional_updates.items():
+                if column in user_columns:
+                    updates.append(f"{column} = %s")
+                    values.append(value)
+            values.append(str(user_id))
+            cursor.execute(
+                f"UPDATE users SET {', '.join(updates)} WHERE id = %s",
+                tuple(values),
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
         session_token = create_session(
             str(user_id),

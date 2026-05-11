@@ -539,6 +539,59 @@ def _extract_int(value: Any) -> int:
         return 0
 
 
+def _extract_news_date(value: Any) -> Optional[datetime]:
+    if not isinstance(value, dict):
+        return None
+    for key in ("published_at", "publishedAt", "created_at", "createdAt", "date", "updated_at", "updatedAt"):
+        raw = value.get(key)
+        if raw is None or str(raw).strip() == "":
+            continue
+        if isinstance(raw, (int, float)) or (isinstance(raw, str) and raw.strip().isdigit()):
+            timestamp = int(raw)
+            if timestamp > 10_000_000_000:
+                timestamp = int(timestamp / 1000)
+            try:
+                return datetime.fromtimestamp(timestamp, timezone.utc)
+            except Exception:
+                continue
+        parsed = _coerce_dt(raw)
+        if parsed:
+            return parsed
+    return None
+
+
+def _build_news_activity(news_payload: Any, *, now: Optional[datetime] = None, recent_days: int = 180) -> Dict[str, Any]:
+    items = list(news_payload) if isinstance(news_payload, list) else list(news_payload.values()) if isinstance(news_payload, dict) else []
+    now_value = now or datetime.now(timezone.utc)
+    dated_items = []
+    recent_count = 0
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        published_at = _extract_news_date(item)
+        if not published_at:
+            continue
+        dated_items.append(published_at)
+        if published_at >= now_value - timedelta(days=recent_days):
+            recent_count += 1
+    latest = max(dated_items) if dated_items else None
+    return {
+        "news_count": len(items),
+        "recent_news_count": recent_count,
+        "old_news_count": max(0, len(items) - recent_count) if dated_items else 0,
+        "latest_news_at": latest.isoformat() if latest else None,
+        "news_status": (
+            "fresh"
+            if recent_count > 0
+            else "stale"
+            if len(items) > 0 and dated_items
+            else "unknown"
+            if len(items) > 0
+            else "missing"
+        ),
+    }
+
+
 def _normalize_media_url(value: Any) -> str:
     url = str(value or "").strip()
     if not url:
@@ -2099,11 +2152,19 @@ def _resolve_lead_business_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
                     title = str(item.get("title") or item.get("name") or "").strip() or "Новость"
                     body = str(item.get("body") or item.get("text") or item.get("description") or "").strip()
                     if title or body:
-                        news_preview.append({"title": title, "body": body or "Без текста"})
+                        published_at = _extract_news_date(item)
+                        news_preview.append(
+                            {
+                                "title": title,
+                                "body": body or "Без текста",
+                                "published_at": published_at.isoformat() if published_at else item.get("published_at") or item.get("date"),
+                            }
+                        )
                 elif isinstance(item, str):
                     text = item.strip()
                     if text:
                         news_preview.append({"title": "Новость", "body": text})
+        news_activity = _build_news_activity(news_payload, recent_days=recent_days)
 
         if active_services > 0 and not services_preview:
             active_services = 0
@@ -2118,10 +2179,17 @@ def _resolve_lead_business_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             "rating": _extract_numeric(metrics_card.get("rating")) if metrics_card.get("rating") is not None else _extract_numeric(business.get("yandex_rating")),
             "reviews_count": reviews_count_value,
             "unanswered_reviews_count": unanswered_reviews_count,
-            "photos_count": len(photos_payload) if isinstance(photos_payload, list) else 0,
+            "photos_count": max(
+                len(photos_payload) if isinstance(photos_payload, list) else 0,
+                _extract_int(overview_payload.get("photos_count") if isinstance(overview_payload, dict) else 0),
+            ),
             "photo_urls": photo_urls,
-            "news_count": len(news_payload) if isinstance(news_payload, list) else 0,
-            "has_recent_activity": bool(metrics_card.get("updated_at") or rich_card.get("updated_at") or latest_parse.get("updated_at")),
+            "news_count": int(news_activity.get("news_count") or 0),
+            "recent_news_count": int(news_activity.get("recent_news_count") or 0),
+            "old_news_count": int(news_activity.get("old_news_count") or 0),
+            "latest_news_at": news_activity.get("latest_news_at"),
+            "news_status": news_activity.get("news_status"),
+            "has_recent_activity": bool(int(news_activity.get("recent_news_count") or 0) > 0),
             "last_parse_at": latest_parse.get("updated_at") or metrics_card.get("updated_at") or rich_card.get("updated_at") or business.get("updated_at"),
             "last_parse_status": latest_parse.get("status") or "completed",
             "last_parse_task_id": latest_parse.get("id"),
@@ -2622,13 +2690,13 @@ def _build_medical_action_plan(
         )
     if photos_count < 8:
         next_7d.append(
-            "Добавить фото входа, ресепшен, кабинетов, оборудования и врачей в рабочей среде без визуального шума."
+            "Добавить фото входа, стойки администратора, кабинетов, оборудования и врачей в рабочей обстановке."
         )
     next_7d.append(
-        "Проверить категории и атрибуты: clinic / medical center / diagnostics / rehabilitation / specialty doctor."
+        "Проверить категории и атрибуты: медицинский центр, клиника, диагностика, реабилитация, профильные врачи."
     )
     next_7d.append(
-        "Подготовить 3–5 updates: как проходит приём, какие есть направления, как подготовиться к диагностике, когда обращаться."
+        "Подготовить 3–5 публикаций: как проходит приём, какие есть направления, как подготовиться к диагностике, когда обращаться."
     )
     if not next_24h:
         next_24h.append("Проверить, совпадает ли карточка с реальным маршрутом пациента: от запроса до записи.")
@@ -3994,7 +4062,11 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
     effective_photos = imported_photos if imported_photos else snapshot_photos
     photos_count = _extract_int(snapshot.get("photos_count") or len(effective_photos) or 0)
     news_count = _extract_int(snapshot.get("news_count") or 0)
-    has_recent_activity = bool(snapshot.get("has_recent_activity"))
+    recent_news_count = _extract_int(snapshot.get("recent_news_count") or 0)
+    old_news_count = _extract_int(snapshot.get("old_news_count") or 0)
+    latest_news_at = snapshot.get("latest_news_at")
+    news_status = str(snapshot.get("news_status") or "").strip().lower()
+    has_recent_activity = bool(snapshot.get("has_recent_activity") or recent_news_count > 0)
     cadence_news_min = int(policy_value("cadence", "news_posts_per_month_min", 4))
     cadence_photos_min = int(policy_value("cadence", "photos_per_month_min", 8))
     cadence_response_hours_max = int(policy_value("cadence", "reviews_response_hours_max", 48))
@@ -4576,6 +4648,11 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
             "paid_promotion_detected": paid_promotion_detected,
             "has_website": has_website,
             "has_recent_activity": has_recent_activity,
+            "news_count": news_count,
+            "recent_news_count": recent_news_count,
+            "old_news_count": old_news_count,
+            "latest_news_at": latest_news_at,
+            "news_status": news_status or None,
             "photos_state": photos_state,
             "photos_count": photos_count,
             "description_present": bool(snapshot.get("description_present") or lead.get("description")),
@@ -4776,15 +4853,15 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
 
         overview_photos_count = int(overview.get("photos_count") or 0) if isinstance(overview, dict) else 0
         if isinstance(photos, list):
-            photos_count = len(photos) or overview_photos_count
+            photos_count = max(len(photos), overview_photos_count)
         else:
             photos_count = overview_photos_count
-        if isinstance(news, list):
-            news_count = len(news)
-        elif isinstance(news, dict):
-            news_count = len(news)
-        else:
-            news_count = 0
+        news_activity = _build_news_activity(news, recent_days=recent_days)
+        news_count = int(news_activity.get("news_count") or 0)
+        recent_news_count = int(news_activity.get("recent_news_count") or 0)
+        old_news_count = int(news_activity.get("old_news_count") or 0)
+        latest_news_at = news_activity.get("latest_news_at")
+        news_status = str(news_activity.get("news_status") or "").strip().lower()
 
         rating = metrics_card.get("rating")
         rating_value = float(rating) if rating is not None else None
@@ -4820,7 +4897,7 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
         has_website = bool(str(business.get("website") or "").strip())
         parse_dt = _coerce_dt(latest_parse.get("updated_at"))
         now = datetime.now(timezone.utc)
-        has_recent_activity = bool(parse_dt and parse_dt >= now - timedelta(days=recent_days)) or news_count > 0
+        has_recent_activity = bool(parse_dt and parse_dt >= now - timedelta(days=recent_days)) or recent_news_count > 0
 
         photos_state = "good" if photos_count >= photos_good_min else "weak" if photos_count > 0 else "missing"
 
@@ -5443,6 +5520,10 @@ def build_card_audit_snapshot(business_id: str) -> Dict[str, Any]:
                 "raw_is_verified": is_verified,
                 "paid_promotion_detected": paid_promotion_detected,
                 "news_count": news_count,
+                "recent_news_count": recent_news_count,
+                "old_news_count": old_news_count,
+                "latest_news_at": latest_news_at,
+                "news_status": news_status or None,
                 "photos_state": photos_state,
                 "photos_count": photos_count,
                 "description_present": bool(description_text),

@@ -17,6 +17,25 @@ def test_afro_builds_safe_hair_seeds_without_raw_ambiguous_seed() -> None:
     assert "афрокудри на длинные волосы" in seeds
 
 
+def test_regular_biozavivka_does_not_get_afro_seed() -> None:
+    service = {"category": "Биозавивка", "name": "Биозавивка Экстра длинные волосы"}
+
+    seeds = build_safe_seed_queries(service)
+
+    assert "биозавивка" in seeds
+    assert "афрокудри" not in seeds
+
+
+def test_brows_without_lashes_do_not_get_lash_seed() -> None:
+    service = {"category": "Брови", "name": "Окрашивание бровей+коррекция бровей"}
+
+    seeds = build_safe_seed_queries(service)
+
+    assert "коррекция бровей" in seeds
+    assert "окрашивание бровей" in seeds
+    assert "ламинирование ресниц" not in seeds
+
+
 def test_afro_filter_blocks_adult_and_allows_hair_anchor() -> None:
     candidates = [
         {"keyword": "афро порно", "views": 1000},
@@ -46,6 +65,55 @@ def test_extract_preserves_critical_attributes() -> None:
     assert attributes["category"] == "injection_cosmetology"
     assert attributes["brand_or_drug"] == "belarti lift"
     assert attributes["volume"] == "1 ml"
+
+
+def test_botulinum_between_brows_is_not_classified_as_brows_lashes() -> None:
+    service = {
+        "category": "Инъекционная косметология",
+        "name": "Ботулинотерапия. Девушки. Комплекс Лоб+межбровье",
+    }
+
+    seeds = build_safe_seed_queries(service)
+
+    assert seeds[0] == "ботулинотерапия"
+    assert "коррекция бровей" not in seeds
+    assert "ламинирование ресниц" not in seeds
+
+
+def test_injection_filter_blocks_wrong_beauty_and_info_queries() -> None:
+    candidates = [
+        {"keyword": "коррекция бровей", "views": 1000},
+        {"keyword": "биоревитализация отзывы", "views": 900},
+        {"keyword": "ботулинотерапия что", "views": 850},
+        {"keyword": "ботулинотерапия", "views": 800},
+        {"keyword": "ботулинотерапия гипергидроз", "views": 700},
+    ]
+
+    result = filter_wordstat_candidates(candidates, "injection_cosmetology")
+
+    allowed = [item["keyword"] for item in result["allowed"]]
+    blocked = {item["keyword"]: item["reason"] for item in result["blocked"]}
+    assert "ботулинотерапия" in allowed
+    assert "ботулинотерапия гипергидроз" in allowed
+    assert blocked["коррекция бровей"] == "missing_category_anchor"
+    assert blocked["биоревитализация отзывы"] == "informational_query"
+    assert blocked["ботулинотерапия что"] == "informational_query"
+
+
+def test_injection_subtypes_get_specific_seeds() -> None:
+    contour = build_safe_seed_queries({
+        "category": "Инъекционная косметология",
+        "name": "Контурная пластика губ - Jufora M 1 ml",
+    })
+    collagen = build_safe_seed_queries({
+        "category": "Инъекционная косметология",
+        "name": "Коллагенотерапия - Collost (Micro 150 мг)",
+    })
+
+    assert contour[0] == "контурная пластика губ"
+    assert collagen[0] == "коллагенотерапия"
+    assert "инъекционная косметология" not in contour
+    assert "инъекционная косметология" not in collagen
 
 
 def test_duplicate_grouping_uses_canonical_service_key() -> None:

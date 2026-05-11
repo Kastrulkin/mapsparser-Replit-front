@@ -237,8 +237,9 @@ def evaluate_service_quality(service: dict[str, Any]) -> dict[str, Any]:
     optimized_name = str(service.get("optimized_name") or "").strip()
     optimized_description = str(service.get("optimized_description") or "").strip()
     keywords = service.get("keywords")
-    draft_text = f"{optimized_name} {optimized_description}".strip()
     source_text = f"{name} {description}".strip()
+    has_optimization_draft = bool(optimized_name or optimized_description)
+    draft_text = f"{optimized_name} {optimized_description}".strip() if has_optimization_draft else source_text
     score = evaluate_service_keyword_score(draft_text, keywords, source_text)
     pattern_fit = service.get("pattern_fit")
     if not isinstance(pattern_fit, dict):
@@ -267,20 +268,40 @@ def evaluate_service_quality(service: dict[str, Any]) -> dict[str, Any]:
         issue_labels.append("описание выглядит шаблонно")
     if bool(service.get("fallback_used")):
         issue_codes.append("fallback_used")
-        issue_labels.append("описание нужно переписать точнее")
+        fallback_reason = str(service.get("fallback_reason") or "").strip()
+        if fallback_reason:
+            issue_labels.append("fallback: " + fallback_reason)
+        else:
+            issue_labels.append("описание нужно переписать точнее")
     if guardrail_reasons:
         issue_codes.append("guardrail_reasons")
         issue_labels.append("нужна проверка смысла и обещаний")
     if pattern_fit.get("status") == "needs_review":
         issue_codes.append("pattern_fit")
         issue_labels.append("формулировка слабо совпадает с рабочими паттернами индустрии")
-    if optimized_name and name and normalize_service_text(optimized_name) == normalize_service_text(name):
+    description_unchanged = bool(
+        has_optimization_draft
+        and optimized_description
+        and description
+        and normalize_service_text(optimized_description) == normalize_service_text(description)
+    )
+    name_unchanged = bool(
+        has_optimization_draft
+        and optimized_name
+        and name
+        and normalize_service_text(optimized_name) == normalize_service_text(name)
+    )
+    if name_unchanged and (
+        not optimized_description
+        or bool(service.get("fallback_used"))
+        or description_unchanged
+    ):
         issue_codes.append("name_unchanged")
         issue_labels.append("название почти не изменилось")
-    if optimized_description and description and normalize_service_text(optimized_description) == normalize_service_text(description):
+    if description_unchanged:
         issue_codes.append("description_unchanged")
         issue_labels.append("описание почти не изменилось")
-    if not optimized_name and not optimized_description:
+    if not has_optimization_draft and not source_text:
         issue_codes.append("no_suggestion")
         issue_labels.append("нет SEO-предложения")
     if manual_review:
@@ -308,6 +329,7 @@ def evaluate_service_quality(service: dict[str, Any]) -> dict[str, Any]:
         "keyword_score": score,
         "pattern_fit": pattern_fit,
         "guardrail_reasons": guardrail_reasons,
+        "fallback_reason": str(service.get("fallback_reason") or "").strip(),
     }
 
 

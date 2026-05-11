@@ -148,3 +148,93 @@ def test_normalize_public_audit_removes_template_markers_and_adds_summary_varian
     assert "audit_full" not in normalized
     assert "ai_enrichment" not in audit
     assert audit["editorial_quality_gate"]["status"] == "pass"
+
+
+def test_normalize_public_audit_marks_uncertain_photos_without_hard_claim() -> None:
+    page_json = _sample_page_json()
+    page_json["audit"]["summary_text"] = "В карточке всего 1 фото, поэтому слабый визуальный слой режет доверие."
+    page_json["audit"]["current_state"]["photos_count"] = 1
+    page_json["audit"]["current_state"]["photos_state"] = "weak"
+    page_json["audit"]["issue_blocks"] = [
+        {
+            "id": "photo_story_gap",
+            "title": "Фото не усиливают доверие",
+            "evidence": "Фото в карточке: 1.",
+            "fix": "Добавить фото входа и кабинетов.",
+        }
+    ]
+
+    normalized = normalize_public_audit_page_json(page_json)
+    audit = normalized["audit"]
+    issue_evidence = audit["issue_blocks"][0]["evidence"].lower()
+
+    assert audit["photo_signal_confidence"] == "parser_uncertain"
+    assert "всего 1 фото" not in audit["summary_text"].lower()
+    assert "только одно фото" not in audit["summary_text"].lower()
+    assert "фото в карточке: 1" not in issue_evidence
+    assert "ручной проверки" in issue_evidence
+    assert "по собранным данным" in audit["summary_text"].lower()
+    assert audit["editorial_quality_gate"]["status"] == "pass"
+
+
+def test_normalize_public_audit_builds_concrete_next_action_from_services() -> None:
+    page_json = _sample_page_json()
+    page_json["audit"]["summary_text"] = "Описание карточки не объясняет, за чем сюда идти."
+    page_json["audit"]["search_intents_to_target"] = ["Педикюр", "Косметология", "Оформление бровей"]
+
+    normalized = normalize_public_audit_page_json(page_json)
+    summary = normalized["audit"]["summary_text"]
+
+    assert "Педикюр" in summary or "педикюр" in summary
+    assert "услуги не раскрыты" not in summary.lower()
+    assert len(summary) <= 300
+
+
+def test_normalize_public_audit_removes_public_action_plan_anglicisms() -> None:
+    page_json = _sample_page_json()
+    page_json["audit"]["audit_profile"] = "medical"
+    page_json["audit"]["action_plan"] = {
+        "next_24h": [],
+        "next_7d": [
+            "Добавить фото входа, ресепшен, кабинетов, оборудования и врачей в рабочей среде без визуального шума.",
+            "Проверить категории и атрибуты: clinic / medical center / diagnostics / rehabilitation / specialty doctor.",
+            "Подготовить 3–5 updates: как проходит приём, какие есть направления, как подготовиться к диагностике, когда обращаться.",
+        ],
+        "ongoing": [],
+    }
+
+    normalized = normalize_public_audit_page_json(page_json)
+    next_7d = normalized["audit"]["action_plan"]["next_7d"]
+    joined = " | ".join(next_7d).lower()
+
+    assert "clinic / medical center" not in joined
+    assert "updates" not in joined
+    assert "ресепшен" not in joined
+    assert "медицинский центр" in joined
+    assert "3–5 публикаций" in " | ".join(next_7d)
+
+
+def test_normalize_public_audit_removes_internal_fallback_terms_from_summary() -> None:
+    page_json = _sample_page_json()
+    page_json["audit"]["summary_text"] = "Описание карточки не объясняет, за чем сюда идти."
+    page_json["audit"]["services_preview"] = [
+        {"current_name": "общее описание без структуры"},
+        {"current_name": "нет цены или формата"},
+        {"current_name": "ключевые направления"},
+    ]
+    page_json["audit"]["search_intents_to_target"] = []
+    page_json["audit"]["recommended_actions"] = [
+        {
+            "title": "Описание не показывает основные услуги и поводы обратиться",
+            "description": "Добавить описание: главные направления (ключевые направления), нет цены или формата.",
+        }
+    ]
+
+    normalized = normalize_public_audit_page_json(page_json)
+    summary = normalized["audit"]["summary_text"].lower()
+
+    assert "первое действие" not in summary
+    assert "общее описание без структуры" not in summary
+    assert "нет цены или формата" not in summary
+    assert "ключевые направления" not in summary
+    assert normalized["audit"]["editorial_quality_gate"]["status"] == "pass"

@@ -71,6 +71,14 @@ def _network_business_where(column_name):
     return f"({column_name} IN (SELECT id FROM businesses WHERE network_id = %s) OR {column_name} = %s)"
 
 
+def _naive_utc_datetime(value):
+    if not isinstance(value, datetime):
+        return None
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 def _normalize_learning_text(value):
     return " ".join(str(value or "").strip().lower().replace("ё", "е").split())
 
@@ -104,7 +112,15 @@ def _load_active_services_for_business(cursor, business_id):
     )
     columns = [_cell(row, 'column_name', _cell(row, 0)) for row in cursor.fetchall()]
     select_fields = ['id', 'category', 'name', 'description', 'keywords', 'price', 'updated_at']
-    for optional_field in ['optimized_name', 'optimized_description', 'source', 'fallback_used', 'guardrail_reasons']:
+    for optional_field in [
+        'optimized_name',
+        'optimized_description',
+        'source',
+        'fallback_used',
+        'fallback_reason',
+        'guardrail_reasons',
+        'pattern_version_ids',
+    ]:
         if optional_field in columns:
             select_fields.append(optional_field)
 
@@ -169,6 +185,10 @@ def _attach_service_regeneration_metadata(cursor, services):
         service_id = str(service.get("id") or "")
         latest = latest_by_service_id.get(service_id)
         if not latest:
+            continue
+        service_updated_at = _naive_utc_datetime(service.get("updated_at"))
+        latest_updated_at = _naive_utc_datetime(latest.get("updated_at") or latest.get("created_at"))
+        if service_updated_at and latest_updated_at and service_updated_at > latest_updated_at:
             continue
         latest_status = str(latest.get("status") or "")
         service["regeneration_status"] = "manual_review" if latest_status == "manual_review_skipped" else latest_status
@@ -536,17 +556,28 @@ def _apply_regenerated_service(service, optimized):
     cursor = db.conn.cursor()
     optimized_name = str(optimized.get("optimized_name") or optimized.get("optimizedName") or "").strip()
     optimized_description = str(optimized.get("seo_description") or optimized.get("seoDescription") or "").strip()
+    fallback_reason = str(optimized.get("fallback_reason") or "").strip()
+    guardrail_reasons = optimized.get("guardrail_reasons") if isinstance(optimized.get("guardrail_reasons"), list) else []
+    pattern_version_ids = optimized.get("pattern_version_ids") if isinstance(optimized.get("pattern_version_ids"), list) else []
     cursor.execute(
         """
         UPDATE userservices
         SET optimized_name = %s,
             optimized_description = %s,
+            fallback_used = %s,
+            fallback_reason = %s,
+            guardrail_reasons = %s,
+            pattern_version_ids = %s,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = %s
         """,
         (
             optimized_name,
             optimized_description,
+            bool(optimized.get("fallback_used")),
+            fallback_reason,
+            Json(guardrail_reasons),
+            Json(pattern_version_ids),
             service.get("id"),
         ),
     )
@@ -555,6 +586,10 @@ def _apply_regenerated_service(service, optimized):
     return {
         "optimized_name": optimized_name,
         "optimized_description": optimized_description,
+        "fallback_used": bool(optimized.get("fallback_used")),
+        "fallback_reason": fallback_reason,
+        "guardrail_reasons": guardrail_reasons,
+        "pattern_version_ids": pattern_version_ids,
     }
 
 
@@ -1043,6 +1078,9 @@ def get_services():
         if has_price_from:
             select_fields.append('price_from')
             select_fields.append('price_to')
+        for optional_field in ['fallback_used', 'fallback_reason', 'guardrail_reasons', 'pattern_version_ids']:
+            if optional_field in columns:
+                select_fields.append(optional_field)
 
         def _service_source_condition(alias: str = ''):
             prefix = f"{alias}." if alias else ""
@@ -1335,6 +1373,9 @@ def get_services_seo_audit():
             select_fields.append('optimized_description')
         if 'source' in columns:
             select_fields.append('source')
+        for optional_field in ['fallback_used', 'fallback_reason', 'guardrail_reasons', 'pattern_version_ids']:
+            if optional_field in columns:
+                select_fields.append(optional_field)
 
         cursor.execute(
             f"""
@@ -1912,6 +1953,26 @@ def update_service(service_id):
                 data.get('price', 0),
                 service_id
             ))
+
+        metadata_updates = []
+        metadata_values = []
+        if 'fallback_used' in columns:
+            metadata_updates.append("fallback_used = %s")
+            metadata_values.append(bool(data.get('fallback_used')))
+        if 'fallback_reason' in columns:
+            metadata_updates.append("fallback_reason = %s")
+            metadata_values.append(str(data.get('fallback_reason') or '').strip())
+        if 'guardrail_reasons' in columns:
+            metadata_updates.append("guardrail_reasons = %s")
+            metadata_values.append(Json(data.get('guardrail_reasons') if isinstance(data.get('guardrail_reasons'), list) else []))
+        if 'pattern_version_ids' in columns:
+            metadata_updates.append("pattern_version_ids = %s")
+            metadata_values.append(Json(data.get('pattern_version_ids') if isinstance(data.get('pattern_version_ids'), list) else []))
+        if metadata_updates:
+            cursor.execute(
+                "UPDATE userservices SET " + ", ".join(metadata_updates) + ", updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                [*metadata_values, service_id],
+            )
         
         _record_service_optimization_learning(
             user_id=user_data["user_id"],

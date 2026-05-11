@@ -20,8 +20,9 @@ def _fetch_wordstat_candidates(cursor: Any, seeds: list[str], limit_per_seed: in
     elif table_row:
         table_ref = table_row[0]
     if not table_ref:
-        return candidates
+        return [{"keyword": seed, "views": 0, "category": "safe_seed"} for seed in seeds]
     for seed in seeds:
+        candidates.append({"keyword": seed, "views": 0, "category": "safe_seed"})
         like_value = f"%{seed}%"
         cursor.execute(
             """

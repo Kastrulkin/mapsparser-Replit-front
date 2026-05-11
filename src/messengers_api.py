@@ -9,7 +9,8 @@ API endpoints для ChatGPT интеграции
 from flask import Blueprint, request, jsonify
 import os
 from database_manager import DatabaseManager, get_db_connection
-from auth_system import verify_session, create_session
+from auth_system import CONSENT_VERSION, verify_session
+from core.email_delivery import send_verification_email
 from subscription_manager import get_automation_block_message, has_paid_automation_access
 from timezone_utils import get_timezone_from_address
 from core.telegram_token_store import (
@@ -186,6 +187,8 @@ def register_with_business():
         password = data.get('password', '').strip()
         name = data.get('name', '').strip()
         phone = data.get('phone', '').strip()
+        personal_data_consent = bool(data.get('personal_data_consent'))
+        consent_version = str(data.get('consent_version') or CONSENT_VERSION).strip()
         
         # Данные бизнеса
         business_name = data.get('business_name', '').strip()
@@ -196,6 +199,8 @@ def register_with_business():
         
         if not email or not password:
             return jsonify({"error": "Email и пароль обязательны"}), 400
+        if not personal_data_consent:
+            return jsonify({"error": "Необходимо согласие на обработку персональных данных"}), 400
         
         if not business_name or not business_address or not business_city:
             return jsonify({"error": "Название бизнеса, адрес и город обязательны"}), 400
@@ -208,7 +213,17 @@ def register_with_business():
         
         # Создаём пользователя
         from auth_system import create_user
-        result = create_user(email, password, name, phone)
+        result = create_user(
+            email,
+            password,
+            name,
+            phone,
+            personal_data_consent=personal_data_consent,
+            consent_version=consent_version,
+            consent_ip=request.headers.get('X-Forwarded-For') or request.remote_addr,
+            consent_user_agent=request.headers.get('User-Agent'),
+            is_verified=False,
+        )
         
         if 'error' in result:
             return jsonify({"error": result['error']}), 400
@@ -266,13 +281,17 @@ def register_with_business():
             db.close()
             return jsonify({"error": f"Ошибка создания бизнеса: {str(e)}"}), 500
         
-        # Создаём сессию
-        session_token = create_session(user_id)
-        if not session_token:
-            return jsonify({"error": "Ошибка создания сессии"}), 500
+        email_sent = send_verification_email(
+            result['email'],
+            result.get('name'),
+            result.get('verification_token'),
+        )
         
         return jsonify({
             "success": True,
+            "verification_required": True,
+            "email_sent": bool(email_sent),
+            "message": "Проверьте почту и подтвердите email",
             "user": {
                 "id": user_id,
                 "email": result['email'],
@@ -286,7 +305,6 @@ def register_with_business():
                 "claimed_from_audit_slug": claimed_business.get('claimed_from_audit_slug') if claimed_business else None,
             },
             "timezone": timezone_result.get('timezone', 'UTC'),
-            "token": session_token
         }), 201
         
     except Exception as e:

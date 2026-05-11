@@ -17,7 +17,9 @@ export type ServiceTableItem = {
   price?: string | number;
   updated_at?: string | null;
   fallback_used?: boolean;
+  fallback_reason?: string;
   guardrail_reasons?: string[];
+  pattern_version_ids?: string[];
   regeneration_status?: string;
   regeneration_attempts?: number;
   regeneration_history?: Array<{
@@ -104,6 +106,7 @@ function getDuplicateKey(service: ServiceTableItem) {
   return [
     normalizeCanonicalText(service.category),
     normalizeCanonicalText(service.name),
+    normalizeCanonicalText(service.description),
     normalizeCanonicalText(service.price),
   ].join('|');
 }

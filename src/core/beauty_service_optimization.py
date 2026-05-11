@@ -14,10 +14,14 @@ from typing import Any
 BEAUTY_FORBIDDEN_PHRASES = (
     "профессиональный",
     "профессиональная",
+    "профессиональное",
+    "профессиональные",
     "премиум",
     "премиальный",
     "натуральный",
     "натуральная",
+    "натуральное",
+    "натуральные",
     "натуральными",
     "эффект",
     "идеальный",
@@ -371,7 +375,7 @@ def compose_beauty_fallback_description(optimized_name: Any, original_name: Any)
     name = str(optimized_name or original_name or "").strip()
     if not name:
         return ""
-    return f"{name}: услуга по исходному формату записи."
+    return f"{name}."
 
 
 def apply_beauty_service_guardrails(
@@ -428,10 +432,19 @@ def apply_beauty_service_guardrails(
             "guardrail_reasons": reasons,
             "beauty_attributes": attributes,
             "fallback_used": True,
+            "fallback_reason": "guardrails_failed",
         }
 
     if not description:
         description = compose_beauty_fallback_description(name, original)
+        return {
+            "optimized_name": name,
+            "seo_description": description,
+            "guardrail_reasons": [],
+            "beauty_attributes": attributes,
+            "fallback_used": True,
+            "fallback_reason": "empty_description",
+        }
 
     return {
         "optimized_name": name,
@@ -439,4 +452,5 @@ def apply_beauty_service_guardrails(
         "guardrail_reasons": [],
         "beauty_attributes": attributes,
         "fallback_used": False,
+        "fallback_reason": "",
     }

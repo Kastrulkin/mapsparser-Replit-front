@@ -17,10 +17,45 @@ from typing import Optional, Dict, Any
 from pg_db_utils import get_db_connection
 
 PLACEHOLDER = "%s"
+CONSENT_VERSION = "localos-personal-data-v1-2026-05-11"
 
 def normalize_email(email: str) -> str:
     """Normalize email for identity lookup."""
     return str(email or "").strip().lower()
+
+def _row_value(row: Any, key: str, index: int = 0, default: Any = None) -> Any:
+    if row is None:
+        return default
+    if isinstance(row, dict):
+        return row.get(key, default)
+    if hasattr(row, "keys"):
+        try:
+            if key in row.keys():
+                return row[key]
+        except Exception:
+            return default
+    try:
+        return row[index]
+    except Exception:
+        return default
+
+def _table_columns(cursor: Any, table_name: str) -> set:
+    cursor.execute(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = %s
+        """,
+        (table_name.lower(),),
+    )
+    rows = cursor.fetchall() or []
+    columns = set()
+    for row in rows:
+        column_name = _row_value(row, "column_name", 0)
+        if column_name:
+            columns.add(str(column_name).lower())
+    return columns
 
 def hash_password(password: str) -> str:
     """Хеширование пароля"""
@@ -49,7 +84,18 @@ def verify_password(password: str, hashed: str) -> bool:
         traceback.print_exc()
         return False
 
-def create_user(email: str, password: str = None, name: str = None, phone: str = None) -> Dict[str, Any]:
+def create_user(
+    email: str,
+    password: str = None,
+    name: str = None,
+    phone: str = None,
+    *,
+    personal_data_consent: bool = False,
+    consent_version: str = CONSENT_VERSION,
+    consent_ip: str = None,
+    consent_user_agent: str = None,
+    is_verified: bool = False,
+) -> Dict[str, Any]:
     """Создать нового пользователя"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -61,40 +107,43 @@ def create_user(email: str, password: str = None, name: str = None, phone: str =
         if cursor.fetchone():
             return {"error": "Пользователь с таким email уже существует"}
         
-        # Создаем пользователя
         user_id = str(uuid.uuid4())
         password_hash = hash_password(password) if password else None
         verification_token = secrets.token_urlsafe(32)
+        now = datetime.now().isoformat()
+        columns = _table_columns(cursor, "users")
 
-        # Runtime-схема может отличаться на старых окружениях:
-        # если verification_token отсутствует, создаём пользователя без него.
+        insert_columns = ["id", "email", "password_hash", "name", "phone", "created_at"]
+        insert_values = [user_id, normalized_email, password_hash, name, phone, now]
+
+        optional_values = {
+            "updated_at": now,
+            "verification_token": verification_token,
+            "is_verified": bool(is_verified),
+        }
+        if personal_data_consent:
+            optional_values.update(
+                {
+                    "personal_data_consent_at": now,
+                    "personal_data_consent_version": consent_version,
+                    "privacy_accepted_at": now,
+                    "terms_accepted_at": now,
+                    "consent_ip": consent_ip,
+                    "consent_user_agent": consent_user_agent,
+                }
+            )
+
+        for column, value in optional_values.items():
+            if column in columns:
+                insert_columns.append(column)
+                insert_values.append(value)
+
+        placeholders = ", ".join([PLACEHOLDER] * len(insert_columns))
+        column_sql = ", ".join(insert_columns)
         cursor.execute(
-            """
-            SELECT 1
-            FROM information_schema.columns
-            WHERE table_schema = 'public'
-              AND table_name = 'users'
-              AND column_name = 'verification_token'
-            """
+            f"INSERT INTO Users ({column_sql}) VALUES ({placeholders})",
+            tuple(insert_values),
         )
-        has_verification_token = bool(cursor.fetchone())
-
-        if has_verification_token:
-            cursor.execute(
-                f"""
-                INSERT INTO Users (id, email, password_hash, name, phone, verification_token, created_at)
-                VALUES ({PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER})
-            """,
-                (user_id, normalized_email, password_hash, name, phone, verification_token, datetime.now().isoformat()),
-            )
-        else:
-            cursor.execute(
-                f"""
-                INSERT INTO Users (id, email, password_hash, name, phone, created_at)
-                VALUES ({PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER})
-            """,
-                (user_id, normalized_email, password_hash, name, phone, datetime.now().isoformat()),
-            )
         
         conn.commit()
         
@@ -161,6 +210,10 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
         if not is_active:
             print(f"❌ Аккаунт заблокирован: {email}")
             return {"error": "account_blocked", "message": "user is blocked"}
+
+        if is_verified is False:
+            print(f"❌ Email не подтвержден: {email}")
+            return {"error": "EMAIL_NOT_VERIFIED", "message": "Подтвердите email перед входом"}
         
         # Если у пользователя нет пароля, это новый пользователь
         if not password_hash:
@@ -216,6 +269,163 @@ def create_session(user_id: str, ip_address: str = None, user_agent: str = None)
         
     except Exception as e:
         return None
+    finally:
+        conn.close()
+
+def verify_email_token(token: str) -> Dict[str, Any]:
+    """Подтвердить email по verification token."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        columns = _table_columns(cursor, "users")
+        if "verification_token" not in columns:
+            return {"error": "Email-подтверждение не настроено"}
+
+        cursor.execute(
+            f"""
+            SELECT id, email, name, phone, is_verified
+            FROM Users
+            WHERE verification_token = {PLACEHOLDER}
+            LIMIT 1
+            """,
+            (str(token or "").strip(),),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return {"error": "Ссылка подтверждения недействительна или уже использована"}
+
+        user_id = _row_value(row, "id", 0)
+        email = _row_value(row, "email", 1)
+        name = _row_value(row, "name", 2)
+        phone = _row_value(row, "phone", 3)
+
+        updates = ["is_verified = %s", "verification_token = NULL", "updated_at = %s"]
+        values = [True, datetime.now().isoformat()]
+        if "email_verified_at" in columns:
+            updates.append("email_verified_at = %s")
+            values.append(datetime.now().isoformat())
+        values.append(user_id)
+
+        cursor.execute(
+            f"UPDATE Users SET {', '.join(updates)} WHERE id = %s",
+            tuple(values),
+        )
+        conn.commit()
+
+        return {
+            "success": True,
+            "id": user_id,
+            "email": email,
+            "name": name,
+            "phone": phone,
+        }
+    except Exception:
+        return {"error": "Ошибка подтверждения email"}
+    finally:
+        conn.close()
+
+def rotate_verification_token(email: str) -> Dict[str, Any]:
+    """Создать новый verification token для неподтвержденного пользователя."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    normalized_email = normalize_email(email)
+
+    try:
+        columns = _table_columns(cursor, "users")
+        if "verification_token" not in columns:
+            return {"error": "Email-подтверждение не настроено"}
+
+        cursor.execute(
+            f"""
+            SELECT id, email, name, is_verified
+            FROM Users
+            WHERE LOWER(email) = {PLACEHOLDER}
+            LIMIT 1
+            """,
+            (normalized_email,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return {"error": "Пользователь с таким email не найден"}
+
+        if _row_value(row, "is_verified", 3) is True:
+            return {"error": "Email уже подтвержден"}
+
+        token = secrets.token_urlsafe(32)
+        cursor.execute(
+            f"""
+            UPDATE Users
+            SET verification_token = {PLACEHOLDER}, updated_at = {PLACEHOLDER}
+            WHERE id = {PLACEHOLDER}
+            """,
+            (token, datetime.now().isoformat(), _row_value(row, "id", 0)),
+        )
+        conn.commit()
+        return {
+            "success": True,
+            "id": _row_value(row, "id", 0),
+            "email": _row_value(row, "email", 1),
+            "name": _row_value(row, "name", 2),
+            "verification_token": token,
+        }
+    except Exception:
+        return {"error": "Ошибка повторной отправки подтверждения"}
+    finally:
+        conn.close()
+
+def create_password_setup_token(user_id: str) -> Dict[str, Any]:
+    """Create or rotate a setup token for an active passwordless user."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        columns = _table_columns(cursor, "users")
+        if "verification_token" not in columns:
+            return {"error": "Установка пароля по ссылке не настроена"}
+
+        cursor.execute(
+            f"""
+            SELECT id, email, name, phone, password_hash, is_active
+            FROM Users
+            WHERE id = {PLACEHOLDER}
+            LIMIT 1
+            """,
+            (str(user_id or "").strip(),),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return {"error": "Пользователь не найден"}
+        is_active = _row_value(row, "is_active", 5)
+        if is_active in (False, 0, "0"):
+            return {"error": "Пользователь приостановлен"}
+        if str(_row_value(row, "password_hash", 4) or "").strip():
+            return {"error": "У пользователя уже установлен пароль"}
+
+        token = secrets.token_urlsafe(32)
+        updates = ["verification_token = %s", "updated_at = %s"]
+        values = [token, datetime.now().isoformat()]
+        if "is_verified" in columns:
+            updates.append("is_verified = %s")
+            values.append(False)
+        values.append(_row_value(row, "id", 0))
+
+        cursor.execute(
+            f"UPDATE Users SET {', '.join(updates)} WHERE id = %s",
+            tuple(values),
+        )
+        conn.commit()
+
+        return {
+            "success": True,
+            "id": _row_value(row, "id", 0),
+            "email": _row_value(row, "email", 1),
+            "name": _row_value(row, "name", 2),
+            "phone": _row_value(row, "phone", 3),
+            "verification_token": token,
+        }
+    except Exception:
+        return {"error": "Ошибка создания ссылки установки пароля"}
     finally:
         conn.close()
 
