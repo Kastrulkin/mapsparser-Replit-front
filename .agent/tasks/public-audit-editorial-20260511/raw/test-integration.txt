@@ -1,0 +1,10 @@
+Frontend preview route smoke:
+curl -I --max-time 10 'http://127.0.0.1:5176/evromedservis-pushkin-krasnoselskoe-shosse?lang=ru'
+
+HTTP/1.1 200 OK
+Content-Type: text/html
+
+Browser smoke:
+Opened http://127.0.0.1:5176/evromedservis-pushkin-krasnoselskoe-shosse?lang=ru in the in-app browser.
+Title: LocalOS.pro - Локальное продвижение локального бизнеса.
+Note: backend API was not running locally during preview, so data requests logged proxy connection errors.

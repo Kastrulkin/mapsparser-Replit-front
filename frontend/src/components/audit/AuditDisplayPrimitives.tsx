@@ -123,9 +123,9 @@ export const AuditProblemBlock: React.FC<{
   problem: string;
   meaning: string;
   action: string;
-  help: string;
+  outcome: string;
   evidence?: string;
-}> = ({ title, priority, problem, meaning, action, help, evidence }) => (
+}> = ({ title, priority, problem, meaning, action, outcome, evidence }) => (
   <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="flex items-center gap-2 text-base font-bold text-slate-950">
@@ -149,8 +149,8 @@ export const AuditProblemBlock: React.FC<{
         <div className="mt-2 text-sm leading-6 text-slate-700">{action}</div>
       </div>
       <div className="rounded-2xl bg-sky-50/75 p-4">
-        <div className="text-xs font-bold uppercase tracking-[0.18em] text-sky-700">Как помогает LocalOS</div>
-        <div className="mt-2 text-sm leading-6 text-slate-700">{help}</div>
+        <div className="text-xs font-bold uppercase tracking-[0.18em] text-sky-700">Как понять, что стало лучше</div>
+        <div className="mt-2 text-sm leading-6 text-slate-700">{outcome}</div>
       </div>
     </div>
   </article>

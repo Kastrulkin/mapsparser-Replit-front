@@ -1,0 +1,22 @@
+{
+  "task_id": "public-audit-editorial-20260511",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Implementation meets the public audit hierarchy, copy, CTA, and verification requirements."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/core/audit_editorial.py src/core/public_audit_editor.py src/core/card_audit.py",
+    "python3 -m pytest -q tests/test_public_audit_editor.py tests/test_admin_prospecting_audit_payload.py",
+    "npm --prefix frontend run build",
+    "rg public-facing old abstract phrases",
+    "git diff --check",
+    "curl route smoke"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/public-audit-editorial-20260511/evidence.md"
+  ]
+}

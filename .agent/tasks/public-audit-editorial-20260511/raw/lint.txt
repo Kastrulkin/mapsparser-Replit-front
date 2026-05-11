@@ -1,0 +1,9 @@
+python3 -m py_compile src/core/audit_editorial.py src/core/public_audit_editor.py src/core/card_audit.py
+PASS
+
+git diff --check
+PASS
+
+Public-facing old phrase grep:
+rg -n "визуальное доверие|визуального доверия|сценарии поиска|контентная активность|репутационные сигналы|Как помогает LocalOS|social proof карточки|Social proof" frontend/src/pages/PublicPartnershipOfferPage.tsx frontend/src/components/audit src/core/card_audit.py
+PASS: no matches

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import {
   AuditCtaPanel,
@@ -9,7 +9,6 @@ import {
 import {
   auditScoreBusinessLabel,
   compactAuditText,
-  localosOperationalHelp,
 } from '@/components/audit/auditDisplayUtils';
 import { newAuth } from '@/lib/auth_new';
 import {
@@ -192,6 +191,134 @@ const formatDate = (value: string | undefined | null, lang: PageLang): string =>
   return parsed.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' });
 };
 
+const textIncludesAny = (value: unknown, markers: string[]): boolean => {
+  const normalized = String(value || '').toLowerCase().replaceAll('ё', 'е');
+  return markers.some((marker) => normalized.includes(marker.toLowerCase().replaceAll('ё', 'е')));
+};
+
+const dedupeShortList = (items: string[], limit: number): string[] => {
+  const result: string[] = [];
+  const seen = new Set<string>();
+  items.forEach((item) => {
+    const text = String(item || '').trim();
+    const key = text.toLowerCase().replaceAll('ё', 'е');
+    if (!text || seen.has(key)) return;
+    seen.add(key);
+    result.push(text);
+  });
+  return result.slice(0, limit);
+};
+
+const buildReviewSignals = (reviews: ReturnType<typeof localizeReviewPreview>[], lang: PageLang): string[] => {
+  const source = reviews.map((item) => item.text).filter(Boolean).join(' ').toLowerCase();
+  const signals: string[] = [];
+  if (textIncludesAny(source, ['интерьер', 'атмосфер', 'уют', 'чист', 'кабинет', 'помещение'])) {
+    signals.push(lang === 'ru' ? 'В отзывах уже есть доверие к месту: интерьер, чистота или атмосфера.' : 'Reviews already mention trust signals: place, cleanliness, or atmosphere.');
+  }
+  if (textIncludesAny(source, ['мастер', 'специалист', 'врач', 'консультац', 'объяснил', 'объяснила', 'персонал', 'сервис'])) {
+    signals.push(lang === 'ru' ? 'Клиенты отмечают специалистов и сервис, это можно сильнее показать в карточке.' : 'Customers mention specialists and service; the listing can show this more clearly.');
+  }
+  if (textIncludesAny(source, ['результат', 'эффект', 'работ', 'качество', 'доволен', 'довольна', 'помог', 'помогла'])) {
+    signals.push(lang === 'ru' ? 'Есть отзывы про результат и качество, их стоит использовать как доказательство выбора.' : 'Reviews mention results and quality, which can support the decision to contact.');
+  }
+  return dedupeShortList(signals, 3);
+};
+
+const getIssueOutcome = (
+  issue: OfferPagePayload['audit']['issue_blocks'][number],
+  lang: PageLang,
+): string => {
+  const combined = `${issue?.id || ''} ${issue?.section || ''} ${issue?.title || ''} ${issue?.problem || ''}`.toLowerCase();
+  if (lang !== 'ru') {
+    if (combined.includes('review')) return 'More reviews have replies, and new customers see that the business is attentive.';
+    if (combined.includes('photo') || combined.includes('visual')) return 'The listing shows the place, team, and work examples clearly enough for a first-time customer.';
+    if (combined.includes('activity') || combined.includes('news')) return 'Recent posts and updates appear in the listing regularly.';
+    if (combined.includes('service') || combined.includes('positioning')) return 'The main services, prices or next step are clear before the customer calls.';
+    return 'The next customer can understand the offer and take action faster.';
+  }
+  if (combined.includes('review') || combined.includes('отзыв')) {
+    return 'У новых отзывов есть ответы, а в карточке чаще видны темы, за которые клиенты вас хвалят.';
+  }
+  if (combined.includes('photo') || combined.includes('visual') || combined.includes('фото') || combined.includes('визуал')) {
+    return 'В карточке видно вход, помещение, специалистов, оборудование или примеры работ без необходимости искать это отдельно.';
+  }
+  if (combined.includes('activity') || combined.includes('news') || combined.includes('новост') || combined.includes('актив')) {
+    return 'Последние публикации свежие, и у клиента есть повод перейти к звонку, маршруту или записи.';
+  }
+  if (combined.includes('service') || combined.includes('positioning') || combined.includes('услуг') || combined.includes('описан')) {
+    return 'Клиент быстро понимает основные услуги, ориентир по цене или формату и следующий шаг.';
+  }
+  return 'Следующему клиенту проще понять предложение и быстрее перейти к звонку, маршруту или записи.';
+};
+
+const buildSelfHelpMaterials = (
+  lang: PageLang,
+  displayName: string,
+  category: string | undefined,
+  strongDemand: string[],
+  photoShots: string[],
+  reviewSignals: string[],
+  news: ReturnType<typeof localizeNewsPreview>[],
+) => {
+  const serviceFocus = dedupeShortList(strongDemand, 3);
+  const focusText = serviceFocus.length > 0 ? serviceFocus.join(', ') : (lang === 'ru' ? 'основные услуги' : 'main services');
+  const businessType = String(category || '').trim() || (lang === 'ru' ? 'ваш бизнес' : 'your business');
+  const photoList = photoShots.length > 0
+    ? photoShots.slice(0, 5)
+    : lang === 'ru'
+      ? ['Вход и вывеска', 'Зал или кабинет', 'Специалисты в рабочей обстановке', 'Оборудование или рабочее место', 'Примеры результата']
+      : ['Entrance and sign', 'Room or workspace', 'Specialists at work', 'Equipment or workplace', 'Examples of results'];
+  const postIdeas = lang === 'ru'
+    ? [
+        `Как проходит ${serviceFocus[0] || 'популярная услуга'}: этапы, длительность и как записаться.`,
+        `Что выбрать впервые: ${focusText}.`,
+        news.length > 0 ? 'Обновить старую публикацию: что изменилось, какие услуги актуальны сейчас.' : 'Показать свежий повод: услуга недели, новый специалист или сезонный спрос.',
+      ]
+    : [
+        `How ${serviceFocus[0] || 'a popular service'} works: steps, timing, and booking.`,
+        `What to choose first: ${focusText}.`,
+        news.length > 0 ? 'Refresh an old post with what is relevant now.' : 'Post a fresh reason to visit: service of the week, specialist, or seasonal demand.',
+      ];
+  const reviewTemplates = lang === 'ru'
+    ? [
+        'Спасибо за отзыв. Рады, что вам понравились сервис и результат. Будем ждать вас снова.',
+        serviceFocus.length > 0
+          ? `Спасибо, что отметили детали. Если вам будет актуально, будем рады помочь и с направлением «${serviceFocus[0]}».`
+          : reviewSignals.length > 0
+            ? 'Спасибо, что отметили детали. Нам важно, чтобы клиенту было понятно и комфортно на каждом этапе.'
+            : 'Спасибо за обратную связь. Учтём ваш комментарий и постараемся сделать следующий визит удобнее.',
+      ]
+    : [
+        'Thank you for the review. We are glad you liked the service and result. We will be happy to see you again.',
+        serviceFocus.length > 0
+          ? `Thank you for the detail. If it becomes relevant, we will be happy to help with “${serviceFocus[0]}” as well.`
+          : 'Thank you for the detail. We want every visit to feel clear and comfortable.',
+      ];
+  return {
+    title: lang === 'ru' ? 'Что можно исправить самостоятельно' : 'What you can fix yourself',
+    description: lang === 'ru'
+      ? 'Это можно сделать без LocalOS. Ниже — короткие заготовки, чтобы карточка стала понятнее уже после первых правок.'
+      : 'You can do this without LocalOS. These templates help make the listing clearer after the first edits.',
+    descriptionTemplate: lang === 'ru'
+      ? `${displayName} — ${businessType}. Основные направления: ${focusText}. Коротко объясните, кому подходят услуги, как проходит визит и как записаться.`
+      : `${displayName} is a ${businessType}. Main directions: ${focusText}. Explain who the services suit, what the visit looks like, and how to book.`,
+    photoList,
+    postIdeas,
+    reviewTemplates,
+    plan: lang === 'ru'
+      ? {
+          today: 'Сегодня: обновить описание и закрыть самые заметные пробелы.',
+          week: 'За 7 дней: добавить фото, цены/формат услуг и 2–3 публикации.',
+          regular: 'Регулярно: отвечать на отзывы, добавлять новости и проверять, что изменилось после правок.',
+        }
+      : {
+          today: 'Today: update the description and close the most visible gaps.',
+          week: 'In 7 days: add photos, service price/format, and 2–3 posts.',
+          regular: 'Regularly: reply to reviews, add updates, and track what changed.',
+        },
+  };
+};
+
 const UI_TEXT_BASE = {
   ru: {
     loading: 'Загрузка страницы оффера...',
@@ -205,7 +332,7 @@ const UI_TEXT_BASE = {
     rating: 'Рейтинг',
     reviews: 'Отзывы',
     services: 'Услуги',
-    monthlyPotential: 'Потенциал в месяц',
+    monthlyPotential: 'Ориентир потерь',
     estimateUnavailable: 'Оценка недоступна',
     currentStateTitle: 'Текущее состояние карточки',
     currentStateText: 'Это срез по ключевым зонам. Ниже сразу видно, что уже в порядке, а что теряет заявки.',
@@ -229,7 +356,7 @@ const UI_TEXT_BASE = {
     sourceFallback: 'Источник',
     open: 'Открыть',
     updated: 'Обновлено',
-    improveFirstTitle: 'Что улучшить в первую очередь',
+    improveFirstTitle: 'Детальный разбор',
     issueFallback: 'Проблема',
     recommendationFallback: 'Рекомендация',
     noDescription: 'Описание не указано',
@@ -259,10 +386,10 @@ const UI_TEXT_BASE = {
     newsStale: 'В срезе есть публикации, но актуальных за последние месяцы не найдено.',
     newsLatest: 'Последняя публикация',
     businessReply: 'Ответ бизнеса',
-    nextTitle: 'Что делать дальше',
-    nextText: 'Можно внедрить часть шагов самостоятельно. Если хотите, LocalOS возьмёт регулярную работу на себя: карточки, отзывы, новости, услуги и контроль изменений.',
-    optimizeMaps: 'Оптимизировать карты',
-    contactExpert: 'Связаться с экспертом',
+    nextTitle: 'Разобрать карточку и план работ',
+    nextText: 'Часть правок можно сделать самостоятельно. LocalOS нужен, чтобы делать это быстрее, регулярнее и не терять контроль после новых сборов данных.',
+    optimizeMaps: 'Разобрать карточку и план работ',
+    contactExpert: 'Сначала исправить самому',
     contactTelegram: 'Связаться в Telegram',
     contactEmail: 'Написать на Email',
     goToWebsite: 'Перейти на сайт',
@@ -849,8 +976,8 @@ const AUDIT_TEXT_TRANSLATIONS = {
       'The description does not sell the property for search intent.',
     'Карточка не объясняет, что это за формат отдыха и кому он подходит.':
       'The listing does not explain the stay format or who it suits best.',
-    'У объекта Oludenizevleri нет сильного описания под сценарии поиска по Fethiye.':
-      'Oludenizevleri does not yet have a strong description tailored to search scenarios in Fethiye.',
+    'У объекта Oludenizevleri нет сильного описания под запросы гостей в Fethiye.':
+      'Oludenizevleri does not yet have a strong description tailored to guest searches in Fethiye.',
     'Недостаточно сигналов активности':
       'Not enough activity signals.',
     'Карточка не выглядит как живой активный объект.':
@@ -923,8 +1050,8 @@ const AUDIT_TEXT_TRANSLATIONS = {
       'Rewrite the listing description: position the property honestly, explain who it suits, and what benefits the guest gets.',
     'Проверить категории и атрибуты: resort/apartments/spa/wellness/family-friendly/parking/pool/kitchen.':
       'Review categories and attributes: resort/apartments/spa/wellness/family-friendly/parking/pool/kitchen.',
-    'Запустить регулярные posts/updates под сценарии поиска: quiet stay near city, family apartments, spa/wellness, airport nearby.':
-      'Launch regular posts/updates for search scenarios: quiet stay near city, family apartments, spa/wellness, airport nearby.',
+    'Запустить регулярные posts/updates под запросы гостей: quiet stay near city, family apartments, spa/wellness, airport nearby.':
+      'Launch regular posts/updates for guest searches: quiet stay near city, family apartments, spa/wellness, airport nearby.',
     'Отвечать на новые отзывы так, чтобы усиливать реальное позиционирование объекта.':
       'Reply to new reviews in a way that reinforces the property’s real positioning.',
     'Публиковать свежие фото и updates минимум 1–2 раза в неделю.':
@@ -1061,8 +1188,8 @@ const AUDIT_TEXT_TRANSLATIONS = {
     'Фото, которые честно показывают путь и расстояние до ключевых точек':
       'Önemli noktalara giden yolu ve gerçek mesafeyi dürüstçe gösteren fotoğraflar.',
     'Гостеприимство / размещение': 'Misafirperverlik / konaklama',
-    'У объекта Oludenizevleri нет сильного описания под сценарии поиска по Fethiye.':
-      'Oludenizevleri için Fethiye arama senaryolarına uygun güçlü bir açıklama yok.',
+    'У объекта Oludenizevleri нет сильного описания под запросы гостей в Fethiye.':
+      'Oludenizevleri için Fethiye misafir aramalarına uygun güçlü bir açıklama yok.',
     'Описание не продаёт объект под поисковое намерение':
       'Açıklama, tesisi arama niyetine göre satmıyor.',
     'Карточка не объясняет, что это за формат отдыха и кому он подходит.':
@@ -1099,8 +1226,8 @@ const AUDIT_TEXT_TRANSLATIONS = {
       'Profil açıklamasını yeniden yazın: tesisi dürüst biçimde konumlandırın, kimler için uygun olduğunu ve misafirin hangi avantajları elde ettiğini anlatın.',
     'Проверить категории и атрибуты: resort/apartments/spa/wellness/family-friendly/parking/pool/kitchen.':
       'Kategorileri ve nitelikleri kontrol edin: resort/apartments/spa/wellness/family-friendly/parking/pool/kitchen.',
-    'Запустить регулярные posts/updates под сценарии поиска: quiet stay near city, family apartments, spa/wellness, airport nearby.':
-      'Arama senaryolarına göre düzenli posts/updates başlatın: quiet stay near city, family apartments, spa/wellness, airport nearby.',
+    'Запустить регулярные posts/updates под запросы гостей: quiet stay near city, family apartments, spa/wellness, airport nearby.':
+      'Misafir aramalarına göre düzenli posts/updates başlatın: quiet stay near city, family apartments, spa/wellness, airport nearby.',
     'Отвечать на новые отзывы так, чтобы усиливать реальное позиционирование объекта.':
       'Yeni yorumlara, tesisin gerçek konumlandırmasını güçlendirecek şekilde yanıt verin.',
     'Публиковать свежие фото и updates минимум 1–2 раза в неделю.':
@@ -1198,8 +1325,8 @@ const AUDIT_TEXT_TRANSLATIONS = {
       'Tesisin foto-hikâyesini toplayın: dış cephe, tabela, odalar, kahvaltı, reception, otopark, pencere manzarası ve what-you-really-get.',
     'Проверить категории и атрибуты: hotel / budget hotel / family hotel / breakfast / airport transfer / Wi-Fi / 24-7 reception — по факту доступных опций.':
       'Kategorileri ve nitelikleri kontrol edin: hotel / budget hotel / family hotel / breakfast / airport transfer / Wi-Fi / 24-7 reception — gerçekten sunulan seçeneklere göre.',
-    'Запустить регулярные posts/updates под сценарии поиска: near landmark, budget stay, breakfast included, airport transfer, family stay.':
-      'Arama senaryolarına göre düzenli posts/updates başlatın: near landmark, budget stay, breakfast included, airport transfer, family stay.',
+    'Запустить регулярные posts/updates под запросы гостей: near landmark, budget stay, breakfast included, airport transfer, family stay.':
+      'Misafir aramalarına göre düzenli posts/updates başlatın: near landmark, budget stay, breakfast included, airport transfer, family stay.',
     'Нарастить объём свежих отзывов по правильному сценарию: просить конкретику про локацию, чистоту, сервис и удобство проживания.':
       'Taze yorum hacmini doğru senaryoyla artırın: konum, temizlik, hizmet ve konfor hakkında somut detaylar isteyin.',
     'Отвечать на новые отзывы так, чтобы усиливать реальное позиционирование объекта, доверие и сигналы видимости карточки.':
@@ -2108,7 +2235,6 @@ const stateBadgeClass = (score?: number) => {
 const PublicPartnershipOfferPage: React.FC = () => {
   const { offerSlug } = useParams<{ offerSlug: string }>();
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState<OfferPagePayload | null>(null);
@@ -2310,6 +2436,8 @@ const PublicPartnershipOfferPage: React.FC = () => {
     .map((item) => normalizeNewsPreview(item))
     .filter((item) => item.hasMeaningfulContent)
     .map((item) => localizeNewsPreview(lang, item));
+  const state = page.audit?.current_state || {};
+  const parse = page.audit?.parse_context || {};
   const newsCount = Number(state.news_count || news.length || 0);
   const recentNewsCount = Number(state.recent_news_count || 0);
   const newsStatus = String(state.news_status || '').toLowerCase();
@@ -2318,8 +2446,6 @@ const PublicPartnershipOfferPage: React.FC = () => {
     .map((item) => normalizeMediaUrl(item))
     .filter(Boolean);
   const logoUrl = normalizeMediaUrl(page.logo_url || '');
-  const state = page.audit?.current_state || {};
-  const parse = page.audit?.parse_context || {};
   const isNetworkAudit = String(page.audit?.audit_profile || '').trim().toLowerCase().startsWith('network_')
     || String(parse.scope || '').trim().toLowerCase() === 'network';
   const confirmedServicesCount = Number(state.services_count || 0);
@@ -2520,6 +2646,41 @@ const PublicPartnershipOfferPage: React.FC = () => {
     lang,
     String(page.audit?.audit_profile_label || page.audit?.audit_profile || '').trim(),
   );
+  const reviewSignals = buildReviewSignals(reviews, lang);
+  const firstFix = topIssues[0]?.problem || issueBlocks[0]?.fix || actions[0]?.description || localizedActionPlan.next_24h[0] || localizedActionPlan.next_7d[0] || '';
+  const visibleStrengths = dedupeShortList(
+    [
+      state.rating && Number(state.rating) >= 4.5
+        ? lang === 'ru'
+          ? `Высокий рейтинг: ${Number(state.rating).toFixed(1)}. Это уже хорошая база доверия.`
+          : `Strong rating: ${Number(state.rating).toFixed(1)}. This is already a trust base.`
+        : '',
+      Number(state.reviews_count || 0) > 0
+        ? lang === 'ru'
+          ? `Есть отзывы: ${formatValue(state.reviews_count)}. Их можно сильнее использовать в описании и ответах.`
+          : `Reviews exist: ${formatValue(state.reviews_count)}. They can support the description and replies.`
+        : '',
+      Number(state.services_count || 0) > 0
+        ? lang === 'ru'
+          ? `Услуги найдены: ${formatValue(state.services_count)}. Значит, есть материал для понятной структуры карточки.`
+          : `Services found: ${formatValue(state.services_count)}. There is material for a clearer listing structure.`
+        : '',
+      state.has_website
+        ? lang === 'ru'
+          ? 'Есть ссылка на сайт, клиент может перейти за подробностями.'
+          : 'A website link is present, so customers can continue to more detail.'
+        : '',
+      ...reviewSignals,
+    ],
+    3,
+  );
+  const topGrowthPoints = dedupeShortList(
+    topIssues
+      .map((item) => item.title || item.problem || '')
+      .concat(issueBlocks.map((item) => item.title || item.problem || '')),
+    3,
+  );
+  const selfHelp = buildSelfHelpMaterials(lang, displayName, page.category, strongDemand, photoShots, reviewSignals, news);
 
   const quickState = [
     {
@@ -2634,31 +2795,116 @@ const PublicPartnershipOfferPage: React.FC = () => {
               <div className="text-xs text-slate-500">{text.reviews}</div>
               <div className="mt-1 text-xl font-semibold text-slate-900">{formatValue(state.reviews_count)}</div>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-xs text-slate-500">{servicesMetricLabel}</div>
-              <div className="mt-1 text-xl font-semibold text-slate-900">{servicesMetricValue}</div>
-              <div className="mt-2 text-xs text-slate-500">{servicesMetricHint}</div>
-            </div>
-            {!hideMonthlyPotential ? (
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="text-xs text-slate-500">{text.monthlyPotential}</div>
-                <div className="mt-1 text-sm font-semibold text-slate-900">
-                  {revenue.total_min || revenue.total_max
-                    ? `${formatMoney(lang, revenue.total_min)} — ${formatMoney(lang, revenue.total_max)}`
-                    : text.estimateUnavailable}
-                </div>
+                <div className="text-xs text-slate-500">{servicesMetricLabel}</div>
+                <div className="mt-1 text-xl font-semibold text-slate-900">{servicesMetricValue}</div>
+                <div className="mt-2 text-xs text-slate-500">{servicesMetricHint}</div>
               </div>
-            ) : null}
-          </div>
-          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-            <div className="text-sm font-semibold text-slate-900">
-              {lang === 'ru' ? 'Что означает эта оценка' : 'What this score means'}
+              {!hideMonthlyPotential ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-xs text-slate-500">{text.monthlyPotential}</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900">
+                    {revenue.total_min || revenue.total_max
+                      ? `${formatMoney(lang, revenue.total_min)} — ${formatMoney(lang, revenue.total_max)}`
+                      : text.estimateUnavailable}
+                  </div>
+                  <div className="mt-2 text-xs text-slate-500">
+                    {lang === 'ru'
+                      ? 'Это не прогноз выручки, а ориентир: сколько обращений карточка может недополучать из-за слабых мест.'
+                      : 'This is not a revenue forecast, but a rough signal of missed demand caused by listing gaps.'}
+                  </div>
+                </div>
+              ) : null}
             </div>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              {lang === 'ru'
-                ? auditScoreBusinessLabel(score, localizedHealth)
-                : auditScoreBusinessLabel(score, localizedHealth)}
-            </p>
+            <div className="mt-6 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                <div className="text-sm font-semibold text-slate-900">
+                  {lang === 'ru' ? 'Короткий вывод' : 'Short summary'}
+                </div>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  {localizedSummary || auditScoreBusinessLabel(score, localizedHealth)}
+                </p>
+                {firstFix ? (
+                  <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/70 p-3">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+                      {lang === 'ru' ? 'С чего начать' : 'Start here'}
+                    </div>
+                    <div className="mt-1 text-sm leading-5 text-slate-800">{firstFix}</div>
+                  </div>
+                ) : null}
+              </div>
+              <div className="grid gap-3">
+                {visibleStrengths.length > 0 ? (
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4">
+                    <div className="text-sm font-semibold text-slate-900">
+                      {lang === 'ru' ? 'Что уже хорошо' : 'What already works'}
+                    </div>
+                    <div className="mt-2 space-y-2 text-sm text-slate-700">
+                      {visibleStrengths.map((item, idx) => <div key={`strength-${idx}`}>• {item}</div>)}
+                    </div>
+                  </div>
+                ) : null}
+                {topGrowthPoints.length > 0 ? (
+                  <div className="rounded-2xl border border-rose-200 bg-rose-50/70 p-4">
+                    <div className="text-sm font-semibold text-slate-900">
+                      {lang === 'ru' ? '3 главные точки роста' : 'Top growth points'}
+                    </div>
+                    <div className="mt-2 space-y-2 text-sm text-slate-700">
+                      {topGrowthPoints.map((item, idx) => <div key={`growth-${idx}`}>• {item}</div>)}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </section>
+
+        <section id="self-help" className="rounded-2xl border border-emerald-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">{selfHelp.title}</h2>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">{selfHelp.description}</p>
+            </div>
+            <a href="#details" className="text-sm font-semibold text-sky-700 underline-offset-4 hover:underline">
+              {lang === 'ru' ? 'Перейти к деталям' : 'Go to details'}
+            </a>
+          </div>
+          <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-sm font-semibold text-slate-900">{lang === 'ru' ? 'Шаблон описания' : 'Description template'}</div>
+              <p className="mt-2 text-sm leading-6 text-slate-700">{selfHelp.descriptionTemplate}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-sm font-semibold text-slate-900">{lang === 'ru' ? 'Чеклист фото' : 'Photo checklist'}</div>
+              <div className="mt-2 space-y-1 text-sm text-slate-700">
+                {selfHelp.photoList.slice(0, 5).map((item, idx) => <div key={`self-photo-${idx}`}>• {item}</div>)}
+              </div>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-sm font-semibold text-slate-900">{lang === 'ru' ? '3 идеи публикаций' : '3 post ideas'}</div>
+              <div className="mt-2 space-y-1 text-sm text-slate-700">
+                {selfHelp.postIdeas.map((item, idx) => <div key={`self-post-${idx}`}>• {item}</div>)}
+              </div>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-sm font-semibold text-slate-900">{lang === 'ru' ? '2 шаблона ответа на отзывы' : '2 review reply templates'}</div>
+              <div className="mt-2 space-y-2 text-sm text-slate-700">
+                {selfHelp.reviewTemplates.map((item, idx) => <div key={`self-review-${idx}`}>• {item}</div>)}
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 text-sm text-slate-700">
+              <div className="font-semibold text-slate-900">{lang === 'ru' ? 'Сегодня' : 'Today'}</div>
+              <div className="mt-1">{selfHelp.plan.today}</div>
+            </div>
+            <div className="rounded-xl border border-sky-200 bg-sky-50/70 p-4 text-sm text-slate-700">
+              <div className="font-semibold text-slate-900">{lang === 'ru' ? 'За 7 дней' : 'In 7 days'}</div>
+              <div className="mt-1">{selfHelp.plan.week}</div>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+              <div className="font-semibold text-slate-900">{lang === 'ru' ? 'Регулярно' : 'Regularly'}</div>
+              <div className="mt-1">{selfHelp.plan.regular}</div>
+            </div>
           </div>
         </section>
 
@@ -2688,7 +2934,7 @@ const PublicPartnershipOfferPage: React.FC = () => {
           ]}
         />
 
-        <section className="rounded-2xl border bg-white p-6 shadow-sm">
+        <section id="details" className="rounded-2xl border bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-sky-600" />
             {text.currentStateTitle}
@@ -2718,7 +2964,7 @@ const PublicPartnershipOfferPage: React.FC = () => {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-violet-600" />
-                {lang === 'en' ? 'Positioning and search scenarios' : lang === 'el' ? 'Τοποθέτηση και σενάρια αναζήτησης' : lang === 'tr' ? 'Konumlandırma ve arama senaryoları' : lang === 'ar' ? 'التموضع وسيناريوهات البحث' : 'Позиционирование и сценарии поиска'}
+                {lang === 'en' ? 'What customers understand from the listing' : lang === 'el' ? 'Τι καταλαβαίνει ο πελάτης από την κάρτα' : lang === 'tr' ? 'Müşteri profilden ne anlıyor' : lang === 'ar' ? 'ما الذي يفهمه العميل من البطاقة' : 'Что клиент понимает из карточки'}
               </h2>
               {auditProfileLabel ? (
                 <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
@@ -2853,7 +3099,7 @@ const PublicPartnershipOfferPage: React.FC = () => {
                   evidence={item.evidence}
                   meaning={compactAuditText(item.impact, lang === 'ru' ? 'Это может снижать доверие и мешать клиенту выбрать вас.' : 'This can reduce trust and make it harder for customers to choose you.')}
                   action={compactAuditText(item.fix, text.noDescription)}
-                  help={lang === 'ru' ? localosOperationalHelp : 'LocalOS can turn this into recurring work: listing updates, replies, posts, service structure, and change control.'}
+                  outcome={getIssueOutcome(item, lang)}
                 />
               ))
             ) : (
@@ -3017,6 +3263,40 @@ const PublicPartnershipOfferPage: React.FC = () => {
           </section>
         ) : null}
 
+        <section className="rounded-2xl border border-sky-200 bg-sky-50/60 p-6 shadow-sm">
+          <div className="flex items-center gap-2 text-lg font-semibold text-slate-900">
+            <Sparkles className="h-5 w-5 text-sky-700" />
+            {lang === 'ru' ? 'Что LocalOS делает быстрее' : 'What LocalOS makes faster'}
+          </div>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-700">
+            {lang === 'ru'
+              ? 'Можно сделать вручную. LocalOS нужен, чтобы вести карточки быстрее, регулярнее и без хаоса после каждого нового среза данных.'
+              : 'You can do it manually. LocalOS helps keep listings updated faster, more regularly, and with less chaos after each new data snapshot.'}
+          </p>
+          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-5">
+            {(lang === 'ru'
+              ? [
+                  'Находит слабые места карточки',
+                  'Готовит тексты услуг, описаний, публикаций и ответов',
+                  'Помогает вести Яндекс, 2ГИС и Google в одном кабинете',
+                  'Напоминает, что обновлять',
+                  'Показывает, что изменилось после правок',
+                ]
+              : [
+                  'Finds weak spots in the listing',
+                  'Prepares services, descriptions, posts, and replies',
+                  'Helps manage Yandex, 2GIS, and Google in one place',
+                  'Reminds what to update',
+                  'Shows what changed after edits',
+                ]).map((item, idx) => (
+              <div key={`localos-speed-${idx}`} className="rounded-xl border border-white bg-white/80 p-4 text-sm text-slate-700">
+                <CheckCircle2 className="mb-2 h-4 w-4 text-emerald-600" />
+                {item}
+              </div>
+            ))}
+          </div>
+        </section>
+
         <AuditCtaPanel
           title={text.nextTitle}
           description={text.nextText}
@@ -3025,40 +3305,19 @@ const PublicPartnershipOfferPage: React.FC = () => {
             lang === 'ru' ? 'Запустить регулярную работу с отзывами и новостями' : 'Start regular review and post work',
             lang === 'ru' ? 'Контролировать изменения после новых сборов данных' : 'Track changes after new data snapshots',
           ]}
-          primaryLabel={lang === 'ru' ? 'Открыть кабинет' : 'Open dashboard'}
+          primaryLabel={lang === 'ru' ? 'Разобрать карточку и план работ' : 'Review listing and work plan'}
           secondaryLabel={text.contactExpert}
           onPrimary={openDashboardRegistration}
-          secondaryHref="/contact"
+          secondaryHref="#self-help"
         />
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-wrap gap-3 text-sm text-slate-600">
-            <button className="font-semibold text-slate-700 underline-offset-4 hover:underline" onClick={() => navigate('/login')}>
-              {text.optimizeMaps}
-            </button>
-            <a className="font-semibold text-slate-700 underline-offset-4 hover:underline" href="https://t.me/Alexdemianov" target="_blank" rel="noreferrer">
-              {text.contactTelegram}
-            </a>
-            <a className="font-semibold text-slate-700 underline-offset-4 hover:underline" href="mailto:info@localos.pro">
-              {text.contactEmail}
-            </a>
-            {page.cta?.website ? (
-              <a className="font-semibold text-slate-700 underline-offset-4 hover:underline" href={page.cta.website} target="_blank" rel="noreferrer">
-                {text.goToWebsite}
-              </a>
-            ) : null}
-            {page.source_url ? (
-              <a className="font-semibold text-slate-700 underline-offset-4 hover:underline" href={page.source_url} target="_blank" rel="noreferrer">
-                {text.openMapCard}
-              </a>
-            ) : null}
-          </div>
-          {page.message ? (
-            <div className="mt-4 rounded-xl border border-sky-200 bg-white p-4">
+        {page.message ? (
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="rounded-xl border border-sky-200 bg-white p-4">
               <div className="text-xs uppercase tracking-wide text-slate-500">{text.firstDraft}</div>
               <div className="text-sm text-slate-800 whitespace-pre-wrap mt-2">{page.message}</div>
             </div>
-          ) : null}
-        </section>
+          </section>
+        ) : null}
       </div>
     </div>
   );

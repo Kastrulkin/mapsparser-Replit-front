@@ -214,6 +214,43 @@ def test_normalize_public_audit_removes_public_action_plan_anglicisms() -> None:
     assert "3–5 публикаций" in " | ".join(next_7d)
 
 
+def test_normalize_public_audit_rewrites_abstract_marketing_language() -> None:
+    page_json = _sample_page_json()
+    page_json["audit"]["summary_text"] = (
+        "Карточке не хватает визуального доверия, сценарии поиска раскрыты слабо, "
+        "контентная активность низкая, репутационные сигналы не используются."
+    )
+    page_json["audit"]["issue_blocks"] = [
+        {
+            "id": "photo_gap",
+            "title": "Фото и визуальное доверие",
+            "problem": "Social proof карточки слабый, а визуальное доверие не собрано.",
+            "impact": "Сценарии поиска и репутационные сигналы работают хуже.",
+            "fix": "Повысить контентная активность через регулярные посты.",
+        }
+    ]
+
+    normalized = normalize_public_audit_page_json(page_json)
+    joined = " ".join(
+        [
+            normalized["audit"]["summary_text"],
+            normalized["audit"]["issue_blocks"][0]["title"],
+            normalized["audit"]["issue_blocks"][0]["problem"],
+            normalized["audit"]["issue_blocks"][0]["impact"],
+            normalized["audit"]["issue_blocks"][0]["fix"],
+        ]
+    ).lower()
+
+    assert "визуальное доверие" not in joined
+    assert "визуального доверия" not in joined
+    assert "сценарии поиска" not in joined
+    assert "контентная активность" not in joined
+    assert "репутационные сигналы" not in joined
+    assert "social proof карточки" not in joined
+    assert "клиент не видит" in joined
+    assert normalized["audit"]["editorial_quality_gate"]["status"] == "pass"
+
+
 def test_normalize_public_audit_removes_internal_fallback_terms_from_summary() -> None:
     page_json = _sample_page_json()
     page_json["audit"]["summary_text"] = "Описание карточки не объясняет, за чем сюда идти."
