@@ -806,6 +806,28 @@ def _sanitize_uncertain_photo_issue(item: dict[str, Any], *, photo_confidence: s
     return next_item
 
 
+def _strengthen_review_issue(item: dict[str, Any]) -> dict[str, Any]:
+    next_item = copy.deepcopy(item)
+    item_id = str(next_item.get("id") or next_item.get("code") or "").strip().lower()
+    section = str(next_item.get("section") or "").strip().lower()
+    title = str(next_item.get("title") or "").lower().replace("ё", "е")
+    if item_id != "reviews_trust_underused" and section != "reviews" and "отзыв" not in title:
+        return next_item
+    next_item["problem"] = (
+        "Ответы на отзывы работают как короткие «спасибо», "
+        "но слабее помогают пациенту понять услуги и решиться на запись."
+    )
+    next_item["impact"] = (
+        "Отзывы — это инструмент доверия и продаж: если в ответе назвать услугу, "
+        "врача или направление, карточка получает больше понятных поисковых формулировок."
+    )
+    next_item["fix"] = (
+        "Отвечать не только «спасибо» или «извините»: упоминать услугу, "
+        "за которую благодарят, и мягко предлагать смежное направление, если оно уместно."
+    )
+    return next_item
+
+
 def apply_audit_editorial_pass(audit: dict[str, Any]) -> dict[str, Any]:
     output = copy.deepcopy(audit if isinstance(audit, dict) else {})
     audit_profile = str(output.get("audit_profile") or "").strip().lower()
@@ -830,6 +852,8 @@ def apply_audit_editorial_pass(audit: dict[str, Any]) -> dict[str, Any]:
                 if text_key in next_item:
                     next_item[text_key] = normalize_audit_text(next_item.get(text_key), audit_profile=audit_profile)
             next_item = _sanitize_uncertain_photo_issue(next_item, photo_confidence=photo_confidence)
+            if audit_profile == "medical":
+                next_item = _strengthen_review_issue(next_item)
             next_items.append(next_item)
         output[list_key] = next_items
 

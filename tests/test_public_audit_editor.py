@@ -256,6 +256,30 @@ def test_normalize_public_audit_builds_medical_summary_from_trust_and_patient_qu
     assert len(summary) <= 300
 
 
+def test_normalize_public_audit_strengthens_medical_review_issue() -> None:
+    page_json = _sample_page_json()
+    page_json["audit"]["audit_profile"] = "medical"
+    page_json["audit"]["issue_blocks"] = [
+        {
+            "id": "reviews_trust_underused",
+            "section": "reviews",
+            "title": "Отзывы дают доверие, но слабее влияют на запись и выбор",
+            "problem": "Карточка не использует ответы на отзывы, чтобы снижать тревожность.",
+            "evidence": "Отзывов: 95, без ответа: 0.",
+            "impact": "Отзывы есть, но они слабее превращаются в запись.",
+            "fix": "Отвечать на отзывы так, чтобы подсвечивать внимательность.",
+        }
+    ]
+
+    normalized = normalize_public_audit_page_json(page_json)
+    issue = normalized["audit"]["issue_blocks"][0]
+
+    assert "короткие «спасибо»" in issue["problem"]
+    assert "инструмент доверия и продаж" in issue["impact"]
+    assert "поисковых формулировок" in issue["impact"]
+    assert "смежное направление" in issue["fix"]
+
+
 def test_normalize_public_audit_rewrites_abstract_marketing_language() -> None:
     page_json = _sample_page_json()
     page_json["audit"]["summary_text"] = (

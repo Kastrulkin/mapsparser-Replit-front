@@ -304,6 +304,11 @@ def test_medical_issue_blocks_are_specific_for_multispecialty_clinic() -> None:
     assert "гинеколог" in first_issue["evidence"]
     assert "нет сильного описания" not in first_issue["evidence"]
 
+    review_issue = next(item for item in issues if item.get("id") == "reviews_trust_underused")
+    assert "не только «спасибо»" in review_issue["fix"]
+    assert "смежное направление" in review_issue["fix"]
+    assert "поисковых формулировок" in review_issue["impact"]
+
 
 def test_non_medical_issue_blocks_do_not_use_strong_description_water() -> None:
     default_issues = _build_default_local_business_issue_blocks(

@@ -237,7 +237,7 @@ const getIssueOutcome = (
     return 'The next customer can understand the offer and take action faster.';
   }
   if (combined.includes('review') || combined.includes('отзыв')) {
-    return 'У новых отзывов есть ответы, а в карточке чаще видны темы, за которые клиенты вас хвалят.';
+    return 'В ответах видны услуги, за которые благодарят клиенты, и мягкий следующий шаг по смежным направлениям.';
   }
   if (combined.includes('photo') || combined.includes('visual') || combined.includes('фото') || combined.includes('визуал')) {
     return 'В карточке видно вход, помещение, специалистов, оборудование или примеры работ без необходимости искать это отдельно.';
@@ -3270,24 +3270,26 @@ const PublicPartnershipOfferPage: React.FC = () => {
           </div>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-700">
             {lang === 'ru'
-              ? 'Можно сделать вручную. LocalOS нужен, чтобы вести карточки быстрее, регулярнее и без хаоса после каждого обновления данных.'
-              : 'You can do it manually. LocalOS helps keep listings updated faster, more regularly, and with less chaos after each new data snapshot.'}
+              ? 'Можно делать вручную. LocalOS берёт регулярное ведение на себя: помогает привлекать клиентов из карт, соцсетей и локальных партнёрств, быстро внедряет лучшие практики и показывает, что меняется после обновления данных.'
+              : 'You can do it manually. LocalOS takes recurring local growth work off your hands: it helps attract customers from maps, social channels, and local partnerships, applies best practices quickly, and shows what changes after each data refresh.'}
           </p>
-          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-5">
+          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
             {(lang === 'ru'
               ? [
-                  'Находит слабые места карточки',
-                  'Готовит тексты услуг, описаний, публикаций и ответов',
-                  'Помогает вести Яндекс, 2ГИС и Google в одном кабинете',
-                  'Напоминает, что обновлять',
-                  'Показывает, что изменилось после правок',
+                  'Ведёт карточки так, чтобы они чаще приводили клиентов',
+                  'Готовит и обновляет услуги, публикации, ответы на отзывы и SEO-тексты',
+                  'Помогает вести Яндекс, 2ГИС, Google и соцсети в одном процессе',
+                  'Находит партнёрства рядом с бизнесом и готовит идеи для совместных предложений',
+                  'Подсказывает, что делать после каждого обновления данных',
+                  'Показывает результат правок: что улучшилось, где остались точки роста',
                 ]
               : [
-                  'Finds weak spots in the listing',
-                  'Prepares services, descriptions, posts, and replies',
-                  'Helps manage Yandex, 2GIS, and Google in one place',
-                  'Reminds what to update',
-                  'Shows what changed after edits',
+                  'Runs listings so they are more likely to bring customers',
+                  'Prepares and updates services, posts, review replies, and SEO texts',
+                  'Connects Yandex, 2GIS, Google, and social channels into one process',
+                  'Finds local partnership opportunities and drafts joint offer ideas',
+                  'Shows what to do after every data refresh',
+                  'Tracks what improved and where growth points remain',
                 ]).map((item, idx) => (
               <div key={`localos-speed-${idx}`} className="rounded-xl border border-white bg-white/80 p-4 text-sm text-slate-700">
                 <CheckCircle2 className="mb-2 h-4 w-4 text-emerald-600" />
