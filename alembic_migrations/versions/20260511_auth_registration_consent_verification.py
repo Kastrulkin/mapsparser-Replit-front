@@ -15,7 +15,6 @@ depends_on = None
 
 
 def upgrade():
-    op.execute('CREATE EXTENSION IF NOT EXISTS "pgcrypto"')
     op.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMP")
     op.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS personal_data_consent_at TIMESTAMP")
     op.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS personal_data_consent_version TEXT")
@@ -40,7 +39,8 @@ def upgrade():
     op.execute(
         """
         UPDATE users
-        SET verification_token = encode(gen_random_bytes(32), 'hex'),
+        SET verification_token = md5(random()::text || clock_timestamp()::text || id::text)
+            || md5(random()::text || email::text || clock_timestamp()::text),
             updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP)
         WHERE is_active IS TRUE
           AND (password_hash IS NULL OR TRIM(password_hash) = '')
