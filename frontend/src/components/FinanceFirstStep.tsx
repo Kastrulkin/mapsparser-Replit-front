@@ -38,6 +38,7 @@ type FinanceDashboard = {
     approximate: string[];
     precise: string[];
     blocked: string[];
+    can_analyze?: string[];
   };
   recommendations: Array<FinanceRecommendation>;
   action_logs?: FinanceActionLog[];
@@ -332,6 +333,9 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
 
   const kpis = dashboard?.kpis || {};
   const quality = dashboard?.data_quality;
+  const analyzableItems = (quality?.can_analyze && quality.can_analyze.length > 0)
+    ? quality.can_analyze
+    : (quality?.precise || []);
   const hasFinanceData = Boolean(
     (Number(kpis.revenue || 0) > 0)
     || (dashboard?.services || []).length
@@ -481,10 +485,10 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
                   Первый запуск
                 </div>
                 <h3 className="mt-2 text-xl font-semibold text-slate-950">
-                  {hasFinanceData ? 'Финансовая картина уже собирается' : 'Заполните 5 чисел, чтобы увидеть первую картину'}
+                  {hasFinanceData ? 'Анализируем то, что уже есть' : 'Заполните 5 чисел, чтобы увидеть первую картину'}
                 </h3>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                  Начните с выручки, аренды, ФОТ, материалов и количества рабочих мест. Этого уже достаточно, чтобы увидеть плюс или минус, точку безубыточности и главные пробелы в данных.
+                  LocalOS уже показывает выручку, записи, клиентов и загрузку, если эти данные есть. Для прибыли и маржи система отдельно попросит расходы, ФОТ, материалы и выплаты мастерам.
                 </p>
               </div>
               <Button variant="outline" onClick={fillDemoSalon} className="gap-2">
@@ -628,6 +632,7 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 text-sm">
+              <InfoList title="Уже можно анализировать" items={analyzableItems} empty="Пока нет достаточных данных для выводов." />
               <InfoList title="Не хватает" items={quality?.missing || []} empty="Базовые поля заполнены." />
               <InfoList title="Считается приблизительно" items={quality?.approximate || []} empty="Критичных допущений нет." />
               <div className="rounded-2xl bg-slate-50 p-4 text-slate-700">

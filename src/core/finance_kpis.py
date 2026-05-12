@@ -225,6 +225,10 @@ def classify_service(metric: dict[str, Any]) -> str:
     return "entry_service"
 
 
+def _has_positive(items: list[dict[str, Any]], field: str) -> bool:
+    return any(_num(item.get(field)) > 0 for item in items)
+
+
 def calculate_finance_snapshot(payload: dict[str, Any], thresholds: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
     resolved_thresholds = merge_finance_thresholds(thresholds)
     entries = payload.get("entries") or []
@@ -240,6 +244,8 @@ def calculate_finance_snapshot(payload: dict[str, Any], thresholds: dict[str, di
     service_revenue = sum(_num(item.get("revenue")) for item in services)
     workplace_revenue = sum(_num(item.get("revenue")) for item in workplace_metrics)
     revenue = max(entry_revenue, service_revenue, workplace_revenue)
+    has_expense_data = len(expense_entries) > 0
+    has_service_cost_data = _has_positive(services, "material_cost") or _has_positive(services, "staff_payout")
 
     expenses = sum(_num(item.get("amount")) for item in expense_entries)
     fixed_costs = sum(
@@ -263,8 +269,8 @@ def calculate_finance_snapshot(payload: dict[str, Any], thresholds: dict[str, di
     payroll_total = max(payroll_from_expenses, staff_payouts)
     materials_total = max(materials_from_expenses, material_costs)
     variable_costs = payroll_total + materials_total
-    gross_profit = revenue - variable_costs
-    operating_profit = revenue - expenses
+    gross_profit = revenue - variable_costs if has_service_cost_data else None
+    operating_profit = revenue - expenses if has_expense_data else None
 
     visits_count = sum(_num(item.get("visits_count")) for item in services)
     if visits_count <= 0:
@@ -281,11 +287,20 @@ def calculate_finance_snapshot(payload: dict[str, Any], thresholds: dict[str, di
     workplace_available_minutes = sum(_num(item.get("available_minutes")) for item in workplace_metrics)
     workplace_booked_minutes = sum(_num(item.get("booked_minutes")) for item in workplace_metrics)
     workplace_gross_profit = sum(_num(item.get("gross_profit")) for item in workplace_metrics)
-    if workplace_gross_profit <= 0:
+    has_workplace_profit_data = workplace_gross_profit > 0
+    if not has_workplace_profit_data and gross_profit is not None:
         workplace_gross_profit = gross_profit
 
-    gross_margin = _pct(gross_profit, revenue, "Недостаточно выручки для расчета валовой маржи")
-    operating_margin = _pct(operating_profit, revenue, "Недостаточно выручки для расчета операционной маржи")
+    gross_margin = (
+        _pct(gross_profit, revenue, "Недостаточно выручки для расчета валовой маржи")
+        if gross_profit is not None
+        else {"value": None, "explanation": "Добавьте себестоимость материалов и выплаты мастерам для расчета валовой маржи"}
+    )
+    operating_margin = (
+        _pct(operating_profit, revenue, "Недостаточно выручки для расчета операционной маржи")
+        if operating_profit is not None
+        else {"value": None, "explanation": "Добавьте расходы для расчета операционной прибыли и маржи"}
+    )
     average_ticket = _safe_div(revenue, visits_count, "Нет визитов для расчета среднего чека")
     no_show_rate = _pct(no_show_count, visits_count + no_show_count, "Нет записей со статусами для расчета no-show")
     rebooking_rate = _pct(rebooking_count, visits_count, "Нет визитов для расчета повторной записи")
@@ -317,20 +332,20 @@ def calculate_finance_snapshot(payload: dict[str, Any], thresholds: dict[str, di
         active_workplaces,
         "Добавьте активные кресла, кабинеты или рабочие места",
     )
-    gross_profit_per_workplace = _safe_div(
-        workplace_gross_profit,
-        active_workplaces,
-        "Добавьте активные кресла, кабинеты или рабочие места",
+    gross_profit_per_workplace = (
+        _safe_div(workplace_gross_profit, active_workplaces, "Добавьте активные кресла, кабинеты или рабочие места")
+        if gross_profit is not None or has_workplace_profit_data
+        else {"value": None, "explanation": "Добавьте себестоимость или валовую прибыль по рабочим местам"}
     )
     revenue_per_workplace_hour = _safe_div(
         revenue,
         workplace_available_hours,
         "Добавьте доступные часы рабочих мест",
     )
-    gross_profit_per_workplace_hour = _safe_div(
-        workplace_gross_profit,
-        workplace_available_hours,
-        "Добавьте доступные часы рабочих мест",
+    gross_profit_per_workplace_hour = (
+        _safe_div(workplace_gross_profit, workplace_available_hours, "Добавьте доступные часы рабочих мест")
+        if gross_profit is not None or has_workplace_profit_data
+        else {"value": None, "explanation": "Добавьте себестоимость или валовую прибыль по рабочим местам"}
     )
 
     service_rows = []
@@ -341,11 +356,20 @@ def calculate_finance_snapshot(payload: dict[str, Any], thresholds: dict[str, di
         item_materials = _num(item.get("material_cost"))
         item_payout = _num(item.get("staff_payout"))
         item_duration = _num(item.get("duration_minutes"))
-        item_profit = item_revenue - item_materials - item_payout
-        item_margin = _pct(item_profit, item_revenue, "Нет выручки услуги")
+        has_item_cost_data = item_materials > 0 or item_payout > 0
+        item_profit = item_revenue - item_materials - item_payout if has_item_cost_data else None
+        item_margin = (
+            _pct(item_profit, item_revenue, "Нет выручки услуги")
+            if item_profit is not None
+            else {"value": None, "explanation": "Нет себестоимости или выплаты мастеру"}
+        )
         item_hours = item_duration * item_visits / 60
         item_revenue_hour = _safe_div(item_revenue, item_hours, "Нет длительности или продаж услуги")
-        item_profit_hour = _safe_div(item_profit, item_hours, "Нет длительности или продаж услуги")
+        item_profit_hour = (
+            _safe_div(item_profit, item_hours, "Нет длительности или продаж услуги")
+            if item_profit is not None
+            else {"value": None, "explanation": "Нет себестоимости или выплаты мастеру"}
+        )
         row = {
             "service_name": item.get("service_name"),
             "category": item.get("category"),
@@ -365,9 +389,21 @@ def calculate_finance_snapshot(payload: dict[str, Any], thresholds: dict[str, di
             low_margin_count += 1
         service_rows.append(row)
 
-    low_margin_share = _pct(low_margin_count, len(services), "Нет услуг для расчета доли низкомаржинальных")
-    payroll_share = _pct(payroll_total, revenue, "Недостаточно выручки для расчета доли ФОТ")
-    material_share = _pct(materials_total, revenue, "Недостаточно выручки для расчета доли материалов")
+    low_margin_share = (
+        _pct(low_margin_count, len(services), "Нет услуг для расчета доли низкомаржинальных")
+        if has_service_cost_data
+        else {"value": None, "explanation": "Добавьте себестоимость услуг для расчета низкомаржинальных услуг"}
+    )
+    payroll_share = (
+        _pct(payroll_total, revenue, "Недостаточно выручки для расчета доли ФОТ")
+        if payroll_total > 0
+        else {"value": None, "explanation": "Добавьте ФОТ или выплаты мастерам для расчета доли ФОТ"}
+    )
+    material_share = (
+        _pct(materials_total, revenue, "Недостаточно выручки для расчета доли материалов")
+        if materials_total > 0
+        else {"value": None, "explanation": "Добавьте себестоимость материалов для расчета доли материалов"}
+    )
 
     staff_rows = []
     for item in staff:
@@ -410,9 +446,9 @@ def calculate_finance_snapshot(payload: dict[str, Any], thresholds: dict[str, di
                 "idle_hours": max((available - booked) / 60, 0),
                 "occupancy": _pct(booked, available, "Нет доступных часов рабочего места")["value"],
                 "revenue": item_revenue,
-                "gross_profit": item_profit,
+                "gross_profit": item_profit if has_workplace_profit_data or gross_profit is not None else None,
                 "revenue_per_hour": _safe_div(item_revenue, hours, "Нет доступных часов рабочего места")["value"],
-                "gross_profit_per_hour": _safe_div(item_profit, hours, "Нет доступных часов рабочего места")["value"],
+                "gross_profit_per_hour": _safe_div(item_profit, hours, "Нет валовой прибыли или доступных часов рабочего места")["value"] if has_workplace_profit_data or gross_profit is not None else None,
             }
         )
 
@@ -484,9 +520,28 @@ def calculate_data_quality(payload: dict[str, Any], explanations: dict[str, Any]
 
     missing = []
     approximate = []
+    precise = []
     score = 100
+    has_revenue = any(_text(item.get("type")).lower() == "revenue" for item in entries) or _has_positive(services, "revenue")
+    has_service_visits = _has_positive(services, "visits_count")
+    has_staff_visits = _has_positive(staff, "visits_count")
+    has_expenses = any(_text(item.get("type")).lower() == "expense" for item in entries)
+    has_service_costs = _has_positive(services, "material_cost") or _has_positive(services, "staff_payout")
 
-    if not any(_text(item.get("type")).lower() == "expense" for item in entries):
+    if has_revenue:
+        precise.append("выручка")
+    if has_revenue and (has_service_visits or has_staff_visits or entries):
+        precise.append("средний чек")
+    if has_service_visits:
+        precise.append("продажи услуг")
+    if has_staff_visits:
+        precise.append("визиты и записи")
+    if staff and (_has_positive(staff, "no_show_count") or _has_positive(staff, "rebooking_count")):
+        precise.append("no-show и повторные записи")
+    if workplace_metrics and _has_positive(workplace_metrics, "available_minutes"):
+        precise.append("загрузка рабочих мест")
+
+    if not has_expenses:
         missing.append("расходы")
         score -= 15
     if not services:
@@ -496,11 +551,11 @@ def calculate_data_quality(payload: dict[str, Any], explanations: dict[str, Any]
         missing.append("длительность услуг")
         approximate.append("маржа и выручка на час по услугам")
         score -= 8
-    if services and any(_num(item.get("material_cost")) <= 0 for item in services):
+    if services and not has_service_costs:
         missing.append("себестоимость материалов")
         approximate.append("валовая маржа услуг")
         score -= 8
-    if services and any(_num(item.get("staff_payout")) <= 0 for item in services):
+    if services and not _has_positive(services, "staff_payout"):
         missing.append("выплаты мастерам")
         approximate.append("прибыльность услуг")
         score -= 8
@@ -529,7 +584,6 @@ def calculate_data_quality(payload: dict[str, Any], explanations: dict[str, Any]
         approximate.append("простой рабочих мест")
         score -= 8
 
-    precise = ["выручка", "расходы", "операционная прибыль"]
     if not explanations:
         explanations = {}
     blocked = [key for key, value in explanations.items() if value]
@@ -540,6 +594,7 @@ def calculate_data_quality(payload: dict[str, Any], explanations: dict[str, Any]
         "approximate": list(dict.fromkeys(approximate)),
         "precise": precise,
         "blocked": blocked,
+        "can_analyze": precise,
     }
 
 

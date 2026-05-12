@@ -185,6 +185,65 @@ def test_finance_recommendations_include_custom_norm_text() -> None:
     assert "норма от 30%" in low_margin["text"]
 
 
+def test_finance_snapshot_uses_partial_data_without_fake_profit() -> None:
+    snapshot = calculate_finance_snapshot(
+        {
+            "entries": [
+                {"type": "revenue", "category": "sales", "amount": 1193527},
+            ],
+            "services": [
+                {
+                    "service_name": "YClients агрегат",
+                    "category": "Услуги",
+                    "revenue": 1081888.62,
+                    "visits_count": 227,
+                    "avg_price": 4766.03,
+                    "duration_minutes": 0,
+                    "material_cost": 0,
+                    "staff_payout": 0,
+                }
+            ],
+            "staff": [
+                {
+                    "staff_name": "Все сотрудники",
+                    "revenue": 1193527,
+                    "visits_count": 244,
+                    "no_show_count": 105,
+                    "rebooking_count": 115,
+                }
+            ],
+            "workplaces": [
+                {"id": "aggregate", "name": "Рабочие места", "type": "other", "is_active": True},
+            ],
+            "workplace_metrics": [
+                {
+                    "workplace_id": "aggregate",
+                    "available_minutes": 28800,
+                    "booked_minutes": 6538,
+                    "revenue": 1193527,
+                    "gross_profit": 0,
+                }
+            ],
+        }
+    )
+
+    kpis = snapshot["kpis"]
+    quality = snapshot["data_quality"]
+
+    assert kpis["revenue"] == 1193527
+    assert kpis["operating_profit"] is None
+    assert kpis["operating_margin"] is None
+    assert kpis["gross_profit"] is None
+    assert kpis["gross_margin"] is None
+    assert round(kpis["workplace_occupancy"], 1) == 22.7
+    assert "выручка" in quality["can_analyze"]
+    assert "средний чек" in quality["can_analyze"]
+    assert "загрузка рабочих мест" in quality["can_analyze"]
+    assert "расходы" in quality["missing"]
+    assert "себестоимость материалов" in quality["missing"]
+    assert "операционная прибыль" not in quality["can_analyze"]
+
+
 def test_finance_recommendations_for_missing_data_include_onboarding_plan() -> None:
     snapshot = calculate_finance_snapshot({"entries": [], "services": [], "staff": [], "workplaces": [], "workplace_metrics": []})
     recommendation = snapshot["recommendations"][0]
