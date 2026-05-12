@@ -7,6 +7,7 @@ import { TelegramBotCredentials } from '@/components/TelegramBotCredentials';
 import { AIAgentSettings } from '@/components/AIAgentSettings';
 import { NetworkManagement } from '@/components/NetworkManagement';
 import { ExternalIntegrations } from '@/components/ExternalIntegrations';
+import FinanceCrmPanel from '@/components/FinanceCrmPanel';
 import { Settings } from 'lucide-react';
 import {
   DashboardActionPanel,
@@ -15,8 +16,18 @@ import {
   DashboardSection,
 } from '@/components/dashboard/DashboardPrimitives';
 
+type SettingsBusiness = {
+  network_id?: string | number | null;
+  telegram_bot_token?: string | null;
+  waba_phone_id?: string | null;
+  waba_access_token?: string | null;
+};
+
 export const SettingsPage = () => {
-  const { currentBusinessId, currentBusiness } = useOutletContext<any>();
+  const { currentBusinessId, currentBusiness } = useOutletContext<{
+    currentBusinessId?: string | null;
+    currentBusiness?: SettingsBusiness | null;
+  }>();
   const { t } = useLanguage();
 
   const hasNetwork = Boolean(currentBusiness?.network_id);
@@ -92,7 +103,10 @@ export const SettingsPage = () => {
         title="Интеграции"
         description="Внешние кабинеты и сервисы, которые помогают подтягивать данные и автоматизировать рутину."
       >
-        <ExternalIntegrations currentBusinessId={currentBusinessId} />
+        <div className="space-y-5">
+          <ExternalIntegrations currentBusinessId={currentBusinessId} />
+          <FinanceCrmPanel currentBusinessId={currentBusinessId} surface="embedded" />
+        </div>
       </DashboardSection>
 
       <DashboardSection

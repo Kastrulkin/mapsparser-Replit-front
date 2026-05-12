@@ -1,0 +1,2 @@
+cd frontend && npm exec -- eslint src/components/FinanceFirstStep.tsx src/pages/dashboard/FinancePage.tsx
+passed with no output

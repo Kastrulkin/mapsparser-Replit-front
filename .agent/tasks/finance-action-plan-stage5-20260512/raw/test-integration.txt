@@ -1,0 +1,5 @@
+Command:
+python3 -m py_compile src/core/finance_kpis.py src/main.py
+
+Result:
+Passed with no output.

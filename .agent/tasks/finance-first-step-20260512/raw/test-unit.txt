@@ -1,0 +1,5 @@
+Command: python3 -m pytest -q tests/test_finance_kpis.py
+Result: PASS
+
+.....                                                                    [100%]
+5 passed in 0.03s

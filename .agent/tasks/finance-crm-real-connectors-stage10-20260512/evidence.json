@@ -1,0 +1,80 @@
+{
+  "task_id": "finance-crm-real-connectors-stage10-20260512",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Проверить публичную доступность API YCLIENTS/Altegio и ограничения.",
+      "status": "PASS",
+      "proof": [
+        "Altegio public developer docs researched: partner + user auth, B2B APIs, limits.",
+        "YCLIENTS public support/docs researched: API access requires user token and app permissions."
+      ],
+      "gaps": [
+        "No vendor sandbox credentials yet."
+      ]
+    },
+    {
+      "id": "AC2",
+      "text": "Подготовить реальные YCLIENTS/Altegio adapters.",
+      "status": "PASS",
+      "proof": [
+        "src/core/finance_crm.py: YClientsCRMAdapter and AltegioCRMAdapter.",
+        "Provider registry marks yclients/altegio available with required auth fields."
+      ],
+      "gaps": [
+        "Live response mapping may need adjustment after sandbox test."
+      ]
+    },
+    {
+      "id": "AC3",
+      "text": "Не синхронизировать без credentials.",
+      "status": "PASS",
+      "proof": [
+        "Connector validate_credentials checks api_base_url, location_id, partner_token, user_token.",
+        "src/main.py connect endpoint rejects missing required fields."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "UI для ввода реквизитов и документации.",
+      "status": "PASS",
+      "proof": [
+        "frontend/src/components/FinanceCrmPanel.tsx renders credential inputs, docs link, capabilities and notes."
+      ],
+      "gaps": [
+        "Authenticated browser smoke not run."
+      ]
+    },
+    {
+      "id": "AC5",
+      "text": "Тесты.",
+      "status": "PASS",
+      "proof": [
+        "21 finance tests passed.",
+        "py_compile passed.",
+        "targeted eslint passed.",
+        "frontend production build passed."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/core/finance_crm.py",
+    "src/main.py",
+    "frontend/src/components/FinanceCrmPanel.tsx",
+    "tests/test_finance_crm.py",
+    "docs/FINANCE_MODULE.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m pytest -q tests/test_finance_crm.py tests/test_finance_imports.py tests/test_finance_kpis.py",
+    "python3 -m py_compile src/main.py src/core/finance_crm.py src/core/finance_imports.py src/core/finance_kpis.py",
+    "cd frontend && npx eslint src/components/FinanceCrmPanel.tsx src/components/FinanceFirstStep.tsx src/components/FinanceImportPanel.tsx src/pages/dashboard/FinancePage.tsx",
+    "cd frontend && npm run build"
+  ],
+  "known_gaps": [
+    "No real vendor credentials or partner agreement yet.",
+    "CRM appointment/client normalization remains a next-stage expansion."
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "task_id": "finance-crm-settings-stage11-20260512",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "CRM-подключение доступно в Настройки → Интеграции.",
+      "status": "PASS",
+      "proof": [
+        "SettingsPage renders FinanceCrmPanel in the integrations section."
+      ],
+      "gaps": [
+        "No authenticated browser smoke."
+      ]
+    },
+    {
+      "id": "AC2",
+      "text": "Embedded CRM surface avoids nested dashboard sections.",
+      "status": "PASS",
+      "proof": [
+        "FinanceCrmPanel supports surface='embedded'."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Finance page keeps CRM sync panel.",
+      "status": "PASS",
+      "proof": [
+        "FinancePage still renders default FinanceCrmPanel."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "No regression in checks.",
+      "status": "PASS",
+      "proof": [
+        "21 finance tests passed.",
+        "Backend py_compile passed.",
+        "Targeted eslint passed.",
+        "Frontend production build passed."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "frontend/src/components/FinanceCrmPanel.tsx",
+    "frontend/src/pages/dashboard/SettingsPage.tsx"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m pytest -q tests/test_finance_crm.py tests/test_finance_imports.py tests/test_finance_kpis.py",
+    "python3 -m py_compile src/main.py src/core/finance_crm.py src/core/finance_imports.py src/core/finance_kpis.py",
+    "cd frontend && npx eslint src/components/FinanceCrmPanel.tsx src/pages/dashboard/SettingsPage.tsx src/pages/dashboard/FinancePage.tsx",
+    "cd frontend && npm run build"
+  ],
+  "known_gaps": [
+    "No browser screenshot in this session.",
+    "Real CRM sync still requires vendor credentials and permissions."
+  ]
+}

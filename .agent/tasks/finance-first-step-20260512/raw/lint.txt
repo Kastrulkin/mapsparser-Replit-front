@@ -1,0 +1,2 @@
+Command: python3 -m py_compile src/main.py src/core/finance_kpis.py
+Result: PASS

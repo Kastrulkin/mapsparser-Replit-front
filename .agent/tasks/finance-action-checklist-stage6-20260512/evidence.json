@@ -1,0 +1,78 @@
+{
+  "task_id": "finance-action-checklist-stage6-20260512",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Finance action checklist state is persisted per business.",
+      "status": "PASS",
+      "proof": [
+        "alembic_migrations/versions/20260512_add_finance_first_step.py creates finance_action_logs."
+      ],
+      "gaps": [
+        "Production migration was not applied in this local stage."
+      ]
+    },
+    {
+      "id": "AC2",
+      "text": "Finance API can read and update action completion state.",
+      "status": "PASS",
+      "proof": [
+        "src/main.py adds GET /api/finance/actions and POST /api/finance/actions."
+      ],
+      "gaps": [
+        "Live API smoke against a migrated database was not run locally."
+      ]
+    },
+    {
+      "id": "AC3",
+      "text": "Finance dashboard returns action logs.",
+      "status": "PASS",
+      "proof": [
+        "GET /api/finance/dashboard includes action_logs for selected business period."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "UI renders checklist actions and completion progress.",
+      "status": "PASS",
+      "proof": [
+        "frontend/src/components/FinanceFirstStep.tsx renders checkboxes and progress X/Y."
+      ],
+      "gaps": [
+        "Authenticated browser visual QA was not run in this session."
+      ]
+    },
+    {
+      "id": "AC5",
+      "text": "Relevant checks pass.",
+      "status": "PASS",
+      "proof": [
+        "16 finance tests passed.",
+        "Backend syntax compile passed.",
+        "Targeted frontend lint passed.",
+        "Frontend production build passed."
+      ],
+      "gaps": [
+        "Full project lint still has unrelated legacy failures."
+      ]
+    }
+  ],
+  "changed_files": [
+    "alembic_migrations/versions/20260512_add_finance_first_step.py",
+    "src/main.py",
+    "frontend/src/components/FinanceFirstStep.tsx",
+    "docs/FINANCE_MODULE.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m pytest -q tests/test_finance_kpis.py tests/test_finance_imports.py tests/test_finance_crm.py",
+    "python3 -m py_compile src/main.py src/core/finance_kpis.py",
+    "cd frontend && npx eslint src/components/FinanceFirstStep.tsx src/components/FinanceThresholdsPanel.tsx src/pages/dashboard/FinancePage.tsx",
+    "cd frontend && npm run build"
+  ],
+  "known_gaps": [
+    "Full project lint remains blocked by unrelated existing lint debt.",
+    "Production still needs DB backup and Alembic migration before deploy."
+  ]
+}

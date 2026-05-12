@@ -1,0 +1,8 @@
+Command:
+python3 -m py_compile src/main.py src/core/finance_kpis.py src/core/finance_imports.py src/core/finance_crm.py
+
+Result:
+Passed with no output.
+
+Browser smoke:
+Opened http://127.0.0.1:5176/dashboard/finance. Unauthenticated session redirected to login. Browser console errors: [].

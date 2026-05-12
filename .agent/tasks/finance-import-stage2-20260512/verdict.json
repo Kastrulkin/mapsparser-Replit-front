@@ -1,0 +1,24 @@
+{
+  "task_id": "finance-import-stage2-20260512",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {"id": "AC1", "status": "PASS", "reason": "Import batch table and duplicate fields are present in migration."},
+    {"id": "AC2", "status": "PASS", "reason": "Import preview endpoint and parser are implemented."},
+    {"id": "AC3", "status": "PASS", "reason": "Import endpoint creates batches and skips duplicate rows."},
+    {"id": "AC4", "status": "PASS", "reason": "CSV import template endpoint is implemented and parser-tested."},
+    {"id": "AC5", "status": "PASS", "reason": "Finance import UI panel is wired into Finance page."},
+    {"id": "AC6", "status": "PASS", "reason": "Import returns recalculated dashboard and UI triggers refresh."},
+    {"id": "AC7", "status": "PASS", "reason": "Import parser and duplicate-key tests pass."},
+    {"id": "AC8", "status": "PASS", "reason": "Frontend production build passes."},
+    {"id": "AC9", "status": "PASS", "reason": "Pending Alembic migration covers stage 1 and stage 2 schema."}
+  ],
+  "commands_run": [
+    "python3 -m pytest -q tests/test_finance_kpis.py tests/test_finance_imports.py",
+    "python3 -m py_compile src/main.py src/core/finance_kpis.py src/core/finance_imports.py alembic_migrations/versions/20260512_add_finance_first_step.py",
+    "cd frontend && npm run build"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/finance-import-stage2-20260512/evidence.md",
+    ".agent/tasks/finance-import-stage2-20260512/evidence.json"
+  ]
+}

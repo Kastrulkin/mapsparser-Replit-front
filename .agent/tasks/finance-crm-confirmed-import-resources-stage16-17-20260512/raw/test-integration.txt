@@ -1,0 +1,2 @@
+python3 -m pytest tests/test_finance_crm.py tests/test_finance_imports.py tests/test_finance_kpis.py -q
+28 passed in 0.05s

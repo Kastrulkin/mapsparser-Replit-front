@@ -1,0 +1,58 @@
+{
+  "task_id": "finance-crm-confirmed-import-resources-stage16-17-20260512",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "CRM sync cannot write data until the user has run preview and sends the matching fresh preview token.",
+      "status": "PASS",
+      "proof": ["Sync requires confirm_preview_token and validates provider, period, token, and TTL."],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "If CRM data changes after preview, sync refuses to import and asks for a new preview.",
+      "status": "PASS",
+      "proof": ["Sync recomputes the token from fresh CRM data before importing.", "test_crm_preview_token_changes_when_dataset_changes"],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "CRM appointments with resource/workplace fields produce workplace finance rows with booked minutes and revenue.",
+      "status": "PASS",
+      "proof": ["crm_appointments_to_workplace_metrics", "test_crm_appointments_build_workplace_metrics_from_resources", "test_crm_dataset_adds_workplace_rows_from_appointments"],
+      "gaps": ["Separate provider schedule endpoint is not implemented yet."]
+    },
+    {
+      "id": "AC4",
+      "text": "Existing finance CRM, import, and KPI tests keep passing.",
+      "status": "PASS",
+      "proof": ["15 CRM tests passed", "28 finance tests passed", "py_compile passed"],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Finance CRM panel makes the safe flow clear: preview first, then confirmed import.",
+      "status": "PASS",
+      "proof": ["Import button disabled until preview_token exists.", "Targeted eslint passed.", "Frontend production build passed."],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/core/finance_crm.py",
+    "src/main.py",
+    "frontend/src/components/FinanceCrmPanel.tsx",
+    "tests/test_finance_crm.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m pytest tests/test_finance_crm.py -q",
+    "python3 -m pytest tests/test_finance_crm.py tests/test_finance_imports.py tests/test_finance_kpis.py -q",
+    "python3 -m py_compile src/core/finance_crm.py src/main.py",
+    "cd frontend && npm exec -- eslint src/components/FinanceCrmPanel.tsx",
+    "cd frontend && npm run build"
+  ],
+  "known_gaps": [
+    "Live YCLIENTS/Altegio sync still needs real credentials and provider agreement.",
+    "Separate provider schedule availability endpoint remains a later step."
+  ]
+}

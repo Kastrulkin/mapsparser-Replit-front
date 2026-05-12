@@ -1,0 +1,5 @@
+Command:
+python3 -m pytest -q tests/test_finance_crm.py tests/test_finance_imports.py tests/test_finance_kpis.py
+
+Result:
+22 passed in 0.06s

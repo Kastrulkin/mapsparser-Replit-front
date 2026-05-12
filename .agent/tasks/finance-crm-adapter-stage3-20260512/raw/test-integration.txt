@@ -1,0 +1,3 @@
+No migrated-DB API integration test was run in this pass.
+
+Reason: endpoints depend on the pending Alembic migration. CRM adapter contract, normalization, duplicate-key path, backend syntax, migration syntax and frontend build passed.

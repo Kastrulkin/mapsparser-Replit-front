@@ -1,0 +1,2 @@
+Command: python3 -m py_compile src/main.py src/core/finance_kpis.py src/core/finance_imports.py alembic_migrations/versions/20260512_add_finance_first_step.py
+Result: PASS

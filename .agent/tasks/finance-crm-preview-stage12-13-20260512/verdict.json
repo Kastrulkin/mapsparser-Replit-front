@@ -1,0 +1,46 @@
+{
+  "task_id": "finance-crm-preview-stage12-13-20260512",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Preview endpoint checks CRM contract without finance writes."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Preview includes dataset counts, normalized counts, errors and samples."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Raw samples are sanitized and covered by tests."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "UI exposes Проверить данные before sync."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Real sync remains explicit and separate."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "Tests, compile, eslint and build passed."
+    }
+  ],
+  "commands_run": [
+    "python3 -m pytest -q tests/test_finance_crm.py tests/test_finance_imports.py tests/test_finance_kpis.py",
+    "python3 -m py_compile src/main.py src/core/finance_crm.py src/core/finance_imports.py src/core/finance_kpis.py",
+    "cd frontend && npx eslint src/components/FinanceCrmPanel.tsx src/pages/dashboard/SettingsPage.tsx src/pages/dashboard/FinancePage.tsx",
+    "cd frontend && npm run build"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/finance-crm-preview-stage12-13-20260512/evidence.md",
+    ".agent/tasks/finance-crm-preview-stage12-13-20260512/evidence.json"
+  ]
+}

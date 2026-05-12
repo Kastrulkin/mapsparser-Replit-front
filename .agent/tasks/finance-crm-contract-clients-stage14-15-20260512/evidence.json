@@ -1,0 +1,85 @@
+{
+  "task_id": "finance-crm-contract-clients-stage14-15-20260512",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Add anonymized CRM contract fixture.",
+      "status": "PASS",
+      "proof": [
+        "tests/fixtures/crm/yclients_contract_sample.json added."
+      ],
+      "gaps": [
+        "Real sandbox payload still needed later."
+      ]
+    },
+    {
+      "id": "AC2",
+      "text": "Use fixture in tests.",
+      "status": "PASS",
+      "proof": [
+        "test_crm_contract_fixture_locks_preview_mapping asserts fixture preview mapping."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Normalize appointments to staff metrics.",
+      "status": "PASS",
+      "proof": [
+        "crm_appointments_to_staff_metrics implemented and tested."
+      ],
+      "gaps": [
+        "available_minutes still needs schedule/resources."
+      ]
+    },
+    {
+      "id": "AC4",
+      "text": "Normalize appointments to service metrics.",
+      "status": "PASS",
+      "proof": [
+        "crm_appointments_to_service_metrics implemented and tested."
+      ],
+      "gaps": [
+        "material costs and payouts need enrichment."
+      ]
+    },
+    {
+      "id": "AC5",
+      "text": "No real PII/secrets in fixtures.",
+      "status": "PASS",
+      "proof": [
+        "Fixture uses synthetic clients and placeholder phones."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC6",
+      "text": "Checks pass.",
+      "status": "PASS",
+      "proof": [
+        "25 tests passed.",
+        "py_compile passed.",
+        "targeted eslint passed.",
+        "frontend build passed."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/core/finance_crm.py",
+    "tests/test_finance_crm.py",
+    "tests/fixtures/crm/yclients_contract_sample.json",
+    "docs/FINANCE_MODULE.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m pytest -q tests/test_finance_crm.py tests/test_finance_imports.py tests/test_finance_kpis.py",
+    "python3 -m py_compile src/core/finance_crm.py src/core/finance_imports.py src/core/finance_kpis.py src/main.py",
+    "cd frontend && npx eslint src/components/FinanceCrmPanel.tsx src/pages/dashboard/SettingsPage.tsx src/pages/dashboard/FinancePage.tsx",
+    "cd frontend && npm run build"
+  ],
+  "known_gaps": [
+    "First real YCLIENTS/Altegio sandbox response may require field mapping refinements.",
+    "Available minutes, materials and payouts still need CRM-specific data or manual enrichment."
+  ]
+}

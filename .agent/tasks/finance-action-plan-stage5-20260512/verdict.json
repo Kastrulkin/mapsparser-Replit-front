@@ -1,0 +1,21 @@
+{
+  "task_id": "finance-action-plan-stage5-20260512",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Finance recommendations now include operational plans and are covered by tests/build/lint."
+    }
+  ],
+  "commands_run": [
+    "python3 -m pytest -q tests/test_finance_kpis.py tests/test_finance_imports.py tests/test_finance_crm.py",
+    "python3 -m py_compile src/core/finance_kpis.py src/main.py",
+    "cd frontend && npx eslint src/components/FinanceFirstStep.tsx src/components/FinanceThresholdsPanel.tsx src/pages/dashboard/FinancePage.tsx",
+    "cd frontend && npm run build"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/finance-action-plan-stage5-20260512/evidence.md",
+    ".agent/tasks/finance-action-plan-stage5-20260512/evidence.json"
+  ]
+}

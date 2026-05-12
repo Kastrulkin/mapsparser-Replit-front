@@ -1,0 +1,6 @@
+No unit test output captured yet.
+Command:
+python3 -m pytest -q tests/test_finance_crm.py tests/test_finance_imports.py tests/test_finance_kpis.py
+
+Result:
+21 passed in 0.08s

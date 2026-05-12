@@ -1,0 +1,41 @@
+{
+  "task_id": "finance-crm-real-connectors-stage10-20260512",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Public API research captured and implementation keeps live sync blocked until credentials exist."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "YCLIENTS and Altegio connector classes are available behind the existing CRM adapter layer."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Required credentials are validated on connect and sync."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Finance CRM panel exposes docs, capabilities and credential fields."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Tests, py_compile, targeted eslint and production build passed."
+    }
+  ],
+  "commands_run": [
+    "python3 -m pytest -q tests/test_finance_crm.py tests/test_finance_imports.py tests/test_finance_kpis.py",
+    "python3 -m py_compile src/main.py src/core/finance_crm.py src/core/finance_imports.py src/core/finance_kpis.py",
+    "cd frontend && npx eslint src/components/FinanceCrmPanel.tsx src/components/FinanceFirstStep.tsx src/components/FinanceImportPanel.tsx src/pages/dashboard/FinancePage.tsx",
+    "cd frontend && npm run build"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/finance-crm-real-connectors-stage10-20260512/evidence.md",
+    ".agent/tasks/finance-crm-real-connectors-stage10-20260512/evidence.json"
+  ]
+}

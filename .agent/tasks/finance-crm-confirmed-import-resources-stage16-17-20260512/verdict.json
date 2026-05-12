@@ -1,0 +1,42 @@
+{
+  "task_id": "finance-crm-confirmed-import-resources-stage16-17-20260512",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Sync requires and validates a fresh preview token before writing."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Sync recomputes the preview token from fresh CRM data and refuses changed datasets."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Appointment resource fields now produce workplace metrics and normalized workplace import rows."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Targeted backend tests, broader finance tests, py_compile, frontend eslint, and production build passed."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "UI requires preview before confirmed import and explains the flow."
+    }
+  ],
+  "commands_run": [
+    "python3 -m pytest tests/test_finance_crm.py -q",
+    "python3 -m pytest tests/test_finance_crm.py tests/test_finance_imports.py tests/test_finance_kpis.py -q",
+    "python3 -m py_compile src/core/finance_crm.py src/main.py",
+    "cd frontend && npm exec -- eslint src/components/FinanceCrmPanel.tsx",
+    "cd frontend && npm run build"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/finance-crm-confirmed-import-resources-stage16-17-20260512/evidence.md",
+    ".agent/tasks/finance-crm-confirmed-import-resources-stage16-17-20260512/evidence.json"
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "task_id": "finance-stage18-first-open-ux-20260512",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "First-open empty state now explains the minimum data to enter."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Mini-wizard step cards are visible and control the input flow."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Demo salon button fills local form state without saving."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "KPI cards include meaning and action guidance."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Priority panel appears above the raw KPI cards."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "Targeted lint, frontend build, and finance tests passed."
+    }
+  ],
+  "commands_run": [
+    "python3 -m pytest tests/test_finance_kpis.py tests/test_finance_imports.py tests/test_finance_crm.py -q",
+    "cd frontend && npm exec -- eslint src/components/FinanceFirstStep.tsx src/pages/dashboard/FinancePage.tsx",
+    "cd frontend && npm run build"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/finance-stage18-first-open-ux-20260512/evidence.md",
+    ".agent/tasks/finance-stage18-first-open-ux-20260512/evidence.json"
+  ]
+}

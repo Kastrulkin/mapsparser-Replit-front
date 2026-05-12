@@ -1,0 +1,6 @@
+No build output captured yet.
+Command:
+cd frontend && npm run build
+
+Result:
+Vite production build passed.

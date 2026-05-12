@@ -1,0 +1,5 @@
+Command:
+cd frontend && npx eslint src/components/FinanceFirstStep.tsx src/components/FinanceThresholdsPanel.tsx src/pages/dashboard/FinancePage.tsx
+
+Result:
+Passed with no output.

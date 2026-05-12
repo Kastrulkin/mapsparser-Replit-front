@@ -1,0 +1,61 @@
+{
+  "task_id": "finance-stage18-first-open-ux-20260512",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Finance tab has a clear first-open empty state that explains what to enter first.",
+      "status": "PASS",
+      "proof": ["First-launch block explains the 5 minimum inputs."],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "User can see a simple mini-wizard path: money, services, staff, workplaces.",
+      "status": "PASS",
+      "proof": ["Four visible step cards control the input tabs."],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "User can fill a demo salon example without writing data to DB automatically.",
+      "status": "PASS",
+      "proof": ["Demo button fills local form state only."],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "KPI cards explain what the metric means and what to do when it is weak.",
+      "status": "PASS",
+      "proof": ["KpiCard supports meaning/action and top KPI cards use it."],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Top of the finance block shows the first 2-3 priorities instead of only raw metrics.",
+      "status": "PASS",
+      "proof": ["Priority panel uses starter priorities, recommendations, and missing data."],
+      "gaps": []
+    },
+    {
+      "id": "AC6",
+      "text": "Frontend build, targeted lint, and finance tests pass.",
+      "status": "PASS",
+      "proof": ["Targeted eslint passed.", "Frontend production build passed.", "28 finance tests passed."],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "frontend/src/components/FinanceFirstStep.tsx",
+    "frontend/src/pages/dashboard/FinancePage.tsx"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m pytest tests/test_finance_kpis.py tests/test_finance_imports.py tests/test_finance_crm.py -q",
+    "cd frontend && npm exec -- eslint src/components/FinanceFirstStep.tsx src/pages/dashboard/FinancePage.tsx",
+    "cd frontend && npm run build"
+  ],
+  "known_gaps": [
+    "Browser visual smoke not run in this turn.",
+    "Production still needs deploying the fresh frontend build."
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "task_id": "finance-thresholds-stage4-20260512",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Schema, backend, UI and tests for configurable finance KPI thresholds are implemented and verified locally."
+    }
+  ],
+  "commands_run": [
+    "python3 -m pytest -q tests/test_finance_kpis.py tests/test_finance_imports.py tests/test_finance_crm.py",
+    "python3 -m py_compile src/main.py src/core/finance_kpis.py src/core/finance_imports.py src/core/finance_crm.py",
+    "cd frontend && npx eslint src/components/FinanceThresholdsPanel.tsx src/pages/dashboard/FinancePage.tsx",
+    "cd frontend && npm run build"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/finance-thresholds-stage4-20260512/evidence.md",
+    ".agent/tasks/finance-thresholds-stage4-20260512/evidence.json"
+  ]
+}

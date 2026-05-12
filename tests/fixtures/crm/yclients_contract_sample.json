@@ -1,0 +1,101 @@
+{
+  "provider": "yclients",
+  "period": {
+    "start_date": "2026-05-01",
+    "end_date": "2026-05-31"
+  },
+  "dataset": {
+    "appointments": [
+      {
+        "id": 101,
+        "datetime": "2026-05-03T10:00:00+03:00",
+        "attendance": 1,
+        "staff": {
+          "id": 11,
+          "name": "Анна",
+          "position": "Мастер"
+        },
+        "client": {
+          "id": 501,
+          "name": "Клиент 1",
+          "phone": "+79990000001"
+        },
+        "services": [
+          {
+            "id": 301,
+            "title": "Маникюр",
+            "cost": 3000,
+            "duration": 7200
+          }
+        ],
+        "paid": 3000
+      },
+      {
+        "id": 102,
+        "datetime": "2026-05-17T10:00:00+03:00",
+        "attendance": 1,
+        "staff": {
+          "id": 11,
+          "name": "Анна",
+          "position": "Мастер"
+        },
+        "client": {
+          "id": 501,
+          "name": "Клиент 1",
+          "phone": "+79990000001"
+        },
+        "services": [
+          {
+            "id": 302,
+            "title": "Педикюр",
+            "cost": 4000,
+            "duration": 5400
+          }
+        ],
+        "paid": 4000
+      },
+      {
+        "id": 103,
+        "datetime": "2026-05-21T14:00:00+03:00",
+        "attendance": -1,
+        "staff": {
+          "id": 11,
+          "name": "Анна",
+          "position": "Мастер"
+        },
+        "client": {
+          "id": 502,
+          "name": "Клиент 2",
+          "phone": "+79990000002"
+        },
+        "services": [
+          {
+            "id": 301,
+            "title": "Маникюр",
+            "cost": 3000,
+            "duration": 7200
+          }
+        ]
+      }
+    ],
+    "payments": [
+      {
+        "external_id": "payment-101",
+        "date": "2026-05-03",
+        "type": "revenue",
+        "category": "card",
+        "amount": 3000
+      }
+    ],
+    "clients": [
+      {
+        "id": 501,
+        "name": "Клиент 1",
+        "phone": "+79990000001"
+      }
+    ],
+    "services": [],
+    "staff": [],
+    "workplaces": []
+  }
+}

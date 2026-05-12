@@ -64,6 +64,10 @@ from core.service_optimization_verticals import (
     get_service_optimization_vertical_context,
 )
 from core.industry_patterns import detect_industry_key, evaluate_pattern_fit, format_industry_pattern_prompt
+from core.finance_kpis import calculate_finance_snapshot, default_period_range, get_default_finance_thresholds
+from core import finance_imports
+from core import finance_crm
+from auth_encryption import encrypt_auth_data, decrypt_auth_data
 from core.industry_pattern_recalibration import (
     build_pattern_impact_metrics,
     decide_industry_pattern_proposal,
@@ -8288,6 +8292,1766 @@ def gigachat_diagnostics():
         return jsonify({"error": f"Диагностика не удалась: {str(e)}"}), 500
 
 # ==================== ФИНАНСОВЫЕ ЭНДПОИНТЫ ====================
+
+def _require_finance_user_and_business():
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return None, None, (jsonify({"error": "Требуется авторизация"}), 401)
+
+    token = auth_header.split(' ')[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return None, None, (jsonify({"error": "Недействительный токен"}), 401)
+
+    requested_business_id = request.args.get('business_id')
+    if request.method in {'POST', 'PUT', 'PATCH'}:
+        request_json = request.get_json(silent=True) or {}
+        requested_business_id = requested_business_id or request_json.get('business_id')
+
+    business_id = get_business_id_from_user(user_data['user_id'], requested_business_id)
+    if not business_id:
+        return user_data, None, (jsonify({"error": "Сначала выберите бизнес"}), 400)
+
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    owner_id = get_business_owner_id(cursor, business_id, include_active_check=True)
+    db.close()
+
+    if not owner_id:
+        return user_data, business_id, (jsonify({"error": "Бизнес не найден"}), 404)
+    if owner_id != user_data['user_id'] and not user_data.get('is_superadmin'):
+        return user_data, business_id, (jsonify({"error": "Нет доступа к этому бизнесу"}), 403)
+
+    return user_data, business_id, None
+
+
+def _finance_period_from_request():
+    start_date = request.args.get('from') or request.args.get('start_date')
+    end_date = request.args.get('to') or request.args.get('end_date')
+    if start_date and end_date:
+        return start_date, end_date
+    return default_period_range()
+
+
+def _parse_finance_date(value):
+    return datetime.strptime(str(value), "%Y-%m-%d").date()
+
+
+def _add_months(value, months):
+    month_index = value.month - 1 + months
+    year = value.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(value.day, 28)
+    return value.replace(year=year, month=month, day=day)
+
+
+def _month_range(value):
+    start = value.replace(day=1)
+    next_month = _add_months(start, 1)
+    end = next_month - timedelta(days=1)
+    return start.isoformat(), end.isoformat()
+
+
+def _finance_row_value(row, key, index):
+    if row is None:
+        return None
+    if hasattr(row, "get"):
+        return row.get(key)
+    return row[index]
+
+
+def _load_finance_payload(cursor, business_id, start_date, end_date):
+    cursor.execute(
+        """
+        SELECT id, date, type, category, amount, source, comment
+        FROM finance_entries
+        WHERE business_id = %s AND date BETWEEN %s AND %s
+        ORDER BY date DESC, created_at DESC
+        """,
+        (business_id, start_date, end_date),
+    )
+    entries = [
+        {
+            "id": _finance_row_value(row, "id", 0),
+            "date": str(_finance_row_value(row, "date", 1)),
+            "type": _finance_row_value(row, "type", 2),
+            "category": _finance_row_value(row, "category", 3),
+            "amount": float(_finance_row_value(row, "amount", 4) or 0),
+            "source": _finance_row_value(row, "source", 5),
+            "comment": _finance_row_value(row, "comment", 6),
+        }
+        for row in cursor.fetchall() or []
+    ]
+
+    cursor.execute(
+        """
+        SELECT id, period_start, period_end, service_name, category, revenue, visits_count,
+               avg_price, duration_minutes, material_cost, staff_payout, source
+        FROM finance_service_metrics
+        WHERE business_id = %s AND period_start <= %s AND period_end >= %s
+        ORDER BY revenue DESC
+        """,
+        (business_id, end_date, start_date),
+    )
+    services = [
+        {
+            "id": _finance_row_value(row, "id", 0),
+            "period_start": str(_finance_row_value(row, "period_start", 1)),
+            "period_end": str(_finance_row_value(row, "period_end", 2)),
+            "service_name": _finance_row_value(row, "service_name", 3),
+            "category": _finance_row_value(row, "category", 4),
+            "revenue": float(_finance_row_value(row, "revenue", 5) or 0),
+            "visits_count": int(_finance_row_value(row, "visits_count", 6) or 0),
+            "avg_price": float(_finance_row_value(row, "avg_price", 7) or 0),
+            "duration_minutes": int(_finance_row_value(row, "duration_minutes", 8) or 0),
+            "material_cost": float(_finance_row_value(row, "material_cost", 9) or 0),
+            "staff_payout": float(_finance_row_value(row, "staff_payout", 10) or 0),
+            "source": _finance_row_value(row, "source", 11),
+        }
+        for row in cursor.fetchall() or []
+    ]
+
+    cursor.execute(
+        """
+        SELECT id, period_start, period_end, staff_name, role, revenue, visits_count,
+               booked_minutes, available_minutes, no_show_count, rebooking_count, source
+        FROM finance_staff_metrics
+        WHERE business_id = %s AND period_start <= %s AND period_end >= %s
+        ORDER BY revenue DESC
+        """,
+        (business_id, end_date, start_date),
+    )
+    staff = [
+        {
+            "id": _finance_row_value(row, "id", 0),
+            "period_start": str(_finance_row_value(row, "period_start", 1)),
+            "period_end": str(_finance_row_value(row, "period_end", 2)),
+            "staff_name": _finance_row_value(row, "staff_name", 3),
+            "role": _finance_row_value(row, "role", 4),
+            "revenue": float(_finance_row_value(row, "revenue", 5) or 0),
+            "visits_count": int(_finance_row_value(row, "visits_count", 6) or 0),
+            "booked_minutes": int(_finance_row_value(row, "booked_minutes", 7) or 0),
+            "available_minutes": int(_finance_row_value(row, "available_minutes", 8) or 0),
+            "no_show_count": int(_finance_row_value(row, "no_show_count", 9) or 0),
+            "rebooking_count": int(_finance_row_value(row, "rebooking_count", 10) or 0),
+            "source": _finance_row_value(row, "source", 11),
+        }
+        for row in cursor.fetchall() or []
+    ]
+
+    cursor.execute(
+        """
+        SELECT id, name, type, is_active
+        FROM finance_workplaces
+        WHERE business_id = %s
+        ORDER BY created_at ASC
+        """,
+        (business_id,),
+    )
+    workplaces = [
+        {
+            "id": _finance_row_value(row, "id", 0),
+            "name": _finance_row_value(row, "name", 1),
+            "type": _finance_row_value(row, "type", 2),
+            "is_active": bool(_finance_row_value(row, "is_active", 3)),
+        }
+        for row in cursor.fetchall() or []
+    ]
+
+    cursor.execute(
+        """
+        SELECT id, workplace_id, period_start, period_end, available_minutes, booked_minutes,
+               revenue, gross_profit, source
+        FROM finance_workplace_metrics
+        WHERE business_id = %s AND period_start <= %s AND period_end >= %s
+        ORDER BY revenue DESC
+        """,
+        (business_id, end_date, start_date),
+    )
+    workplace_metrics = [
+        {
+            "id": _finance_row_value(row, "id", 0),
+            "workplace_id": _finance_row_value(row, "workplace_id", 1),
+            "period_start": str(_finance_row_value(row, "period_start", 2)),
+            "period_end": str(_finance_row_value(row, "period_end", 3)),
+            "available_minutes": int(_finance_row_value(row, "available_minutes", 4) or 0),
+            "booked_minutes": int(_finance_row_value(row, "booked_minutes", 5) or 0),
+            "revenue": float(_finance_row_value(row, "revenue", 6) or 0),
+            "gross_profit": float(_finance_row_value(row, "gross_profit", 7) or 0),
+            "source": _finance_row_value(row, "source", 8),
+        }
+        for row in cursor.fetchall() or []
+    ]
+
+    return {
+        "entries": entries,
+        "services": services,
+        "staff": staff,
+        "workplaces": workplaces,
+        "workplace_metrics": workplace_metrics,
+    }
+
+
+def _load_finance_thresholds(cursor, business_id):
+    defaults = get_default_finance_thresholds()
+    cursor.execute(
+        """
+        SELECT metric_key, green_min, green_max, yellow_min, yellow_max,
+               red_rule, label, unit, profile
+        FROM finance_kpi_thresholds
+        WHERE business_id = %s AND is_active = TRUE
+        """,
+        (business_id,),
+    )
+    rows = cursor.fetchall() or []
+    custom = {}
+    for row in rows:
+        item = _row_to_dict(cursor, row)
+        metric_key = item.get("metric_key")
+        if not metric_key or metric_key not in defaults:
+            continue
+        custom[metric_key] = {
+            "green_min": float(item["green_min"]) if item.get("green_min") is not None else None,
+            "green_max": float(item["green_max"]) if item.get("green_max") is not None else None,
+            "yellow_min": float(item["yellow_min"]) if item.get("yellow_min") is not None else None,
+            "yellow_max": float(item["yellow_max"]) if item.get("yellow_max") is not None else None,
+            "red_rule": item.get("red_rule"),
+            "label": item.get("label"),
+            "unit": item.get("unit"),
+            "profile": item.get("profile") or "service_business",
+            "source": "custom",
+        }
+    thresholds = {}
+    for key, value in defaults.items():
+        merged = dict(value)
+        merged["profile"] = "service_business"
+        merged["source"] = "default"
+        if key in custom:
+            for field, field_value in custom[key].items():
+                if field_value is not None or field in {"green_min", "green_max", "yellow_min", "yellow_max"}:
+                    merged[field] = field_value
+        thresholds[key] = merged
+    return thresholds
+
+
+def _save_finance_thresholds(cursor, business_id, thresholds):
+    defaults = get_default_finance_thresholds()
+    saved = 0
+    for item in thresholds or []:
+        metric_key = str(item.get("metric_key") or "").strip()
+        if metric_key not in defaults:
+            continue
+        current = dict(defaults[metric_key])
+        for field in ("green_min", "green_max", "yellow_min", "yellow_max", "red_rule", "label", "unit"):
+            if field in item:
+                current[field] = item.get(field)
+        cursor.execute(
+            """
+            INSERT INTO finance_kpi_thresholds
+            (id, business_id, profile, metric_key, green_min, green_max, yellow_min,
+             yellow_max, red_rule, label, unit, is_active)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)
+            ON CONFLICT (business_id, metric_key) WHERE is_active = TRUE
+            DO UPDATE SET
+                profile = EXCLUDED.profile,
+                green_min = EXCLUDED.green_min,
+                green_max = EXCLUDED.green_max,
+                yellow_min = EXCLUDED.yellow_min,
+                yellow_max = EXCLUDED.yellow_max,
+                red_rule = EXCLUDED.red_rule,
+                label = EXCLUDED.label,
+                unit = EXCLUDED.unit,
+                updated_at = NOW()
+            """,
+            (
+                str(uuid.uuid4()),
+                business_id,
+                item.get("profile") or "service_business",
+                metric_key,
+                current.get("green_min"),
+                current.get("green_max"),
+                current.get("yellow_min"),
+                current.get("yellow_max"),
+                current.get("red_rule"),
+                current.get("label"),
+                current.get("unit"),
+            ),
+        )
+        saved += 1
+    return saved
+
+
+def _load_finance_action_logs(cursor, business_id, start_date=None, end_date=None):
+    params = [business_id]
+    period_filter = ""
+    if start_date and end_date:
+        period_filter = "AND (period_start IS NULL OR period_end IS NULL OR (period_start <= %s AND period_end >= %s))"
+        params.extend([end_date, start_date])
+    cursor.execute(
+        f"""
+        SELECT id, recommendation_code, action_key, action_bucket, action_text,
+               status, period_start, period_end, completed_at, created_by,
+               created_at, updated_at
+        FROM finance_action_logs
+        WHERE business_id = %s {period_filter}
+        ORDER BY updated_at DESC
+        """,
+        tuple(params),
+    )
+    actions = []
+    for row in cursor.fetchall() or []:
+        item = _row_to_dict(cursor, row)
+        for date_key in ("period_start", "period_end", "completed_at", "created_at", "updated_at"):
+            if item.get(date_key):
+                item[date_key] = str(item[date_key])
+        actions.append(item)
+    return actions
+
+
+def _finance_snapshot_for_period(cursor, business_id, start_date, end_date):
+    payload = _load_finance_payload(cursor, business_id, start_date, end_date)
+    thresholds = _load_finance_thresholds(cursor, business_id)
+    snapshot = calculate_finance_snapshot(payload, thresholds)
+    return payload, thresholds, snapshot
+
+
+def _finance_metric_delta(current_kpis, previous_kpis, metric_key):
+    current = current_kpis.get(metric_key)
+    previous = previous_kpis.get(metric_key)
+    if current is None or previous is None:
+        return {
+            "metric": metric_key,
+            "current": current,
+            "previous": previous,
+            "delta": None,
+            "direction": "unknown",
+        }
+    delta = current - previous
+    direction = "up" if delta > 0 else "down" if delta < 0 else "flat"
+    return {
+        "metric": metric_key,
+        "current": current,
+        "previous": previous,
+        "delta": delta,
+        "direction": direction,
+    }
+
+
+def _build_finance_impact(cursor, business_id, start_date, end_date):
+    current_start = _parse_finance_date(start_date)
+    current_end = _parse_finance_date(end_date)
+    period_days = max((current_end - current_start).days, 0)
+    previous_end = current_start - timedelta(days=1)
+    previous_start = previous_end - timedelta(days=period_days)
+
+    payload, thresholds, current_snapshot = _finance_snapshot_for_period(cursor, business_id, start_date, end_date)
+    previous_payload, previous_thresholds, previous_snapshot = _finance_snapshot_for_period(
+        cursor,
+        business_id,
+        previous_start.isoformat(),
+        previous_end.isoformat(),
+    )
+    actions = _load_finance_action_logs(cursor, business_id, start_date, end_date)
+    completed_actions = [item for item in actions if item.get("status") == "completed"]
+    metrics = [
+        "operating_margin",
+        "revenue",
+        "no_show_rate",
+        "rebooking_rate",
+        "workplace_occupancy",
+        "revenue_per_workplace_hour",
+        "gross_profit_per_workplace_hour",
+    ]
+    deltas = [
+        _finance_metric_delta(current_snapshot.get("kpis") or {}, previous_snapshot.get("kpis") or {}, metric)
+        for metric in metrics
+    ]
+    return {
+        "period": {"start_date": start_date, "end_date": end_date},
+        "previous_period": {"start_date": previous_start.isoformat(), "end_date": previous_end.isoformat()},
+        "completed_actions_count": len(completed_actions),
+        "completed_actions": completed_actions[:20],
+        "deltas": deltas,
+        "data_quality": current_snapshot.get("data_quality"),
+        "previous_data_quality": previous_snapshot.get("data_quality"),
+    }
+
+
+def _build_finance_history(cursor, business_id, months):
+    months = min(max(int(months or 6), 1), 12)
+    today = datetime.utcnow().date()
+    thresholds = _load_finance_thresholds(cursor, business_id)
+    points = []
+    for offset in range(months - 1, -1, -1):
+        month_date = _add_months(today.replace(day=1), -offset)
+        start_date, end_date = _month_range(month_date)
+        payload = _load_finance_payload(cursor, business_id, start_date, end_date)
+        snapshot = calculate_finance_snapshot(payload, thresholds)
+        kpis = snapshot.get("kpis") or {}
+        points.append({
+            "period_start": start_date,
+            "period_end": end_date,
+            "label": month_date.strftime("%Y-%m"),
+            "revenue": kpis.get("revenue"),
+            "operating_profit": kpis.get("operating_profit"),
+            "operating_margin": kpis.get("operating_margin"),
+            "no_show_rate": kpis.get("no_show_rate"),
+            "rebooking_rate": kpis.get("rebooking_rate"),
+            "workplace_occupancy": kpis.get("workplace_occupancy"),
+            "revenue_per_workplace_hour": kpis.get("revenue_per_workplace_hour"),
+            "data_quality_score": (snapshot.get("data_quality") or {}).get("score"),
+        })
+    return points
+
+
+def _insert_finance_manual_payload(cursor, business_id, data):
+    period_start = data.get('period_start') or data.get('from') or default_period_range()[0]
+    period_end = data.get('period_end') or data.get('to') or default_period_range()[1]
+    inserted = {"entries": 0, "services": 0, "staff": 0, "workplaces": 0, "workplace_metrics": 0}
+
+    for item in data.get('entries') or []:
+        cursor.execute(
+            """
+            INSERT INTO finance_entries (id, business_id, date, type, category, amount, source, comment)
+            VALUES (%s, %s, %s, %s, %s, %s, 'manual', %s)
+            """,
+            (
+                str(uuid.uuid4()),
+                business_id,
+                item.get('date') or period_end,
+                item.get('type') or 'revenue',
+                item.get('category') or 'other',
+                float(item.get('amount') or 0),
+                item.get('comment') or '',
+            ),
+        )
+        inserted["entries"] += 1
+
+    for item in data.get('services') or []:
+        cursor.execute(
+            """
+            INSERT INTO finance_service_metrics
+            (id, business_id, period_start, period_end, service_name, category, revenue,
+             visits_count, avg_price, duration_minutes, material_cost, staff_payout, source)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'manual')
+            """,
+            (
+                str(uuid.uuid4()),
+                business_id,
+                item.get('period_start') or period_start,
+                item.get('period_end') or period_end,
+                item.get('service_name') or item.get('name') or 'Услуга',
+                item.get('category') or '',
+                float(item.get('revenue') or 0),
+                int(item.get('visits_count') or 0),
+                float(item.get('avg_price') or 0),
+                int(item.get('duration_minutes') or 0),
+                float(item.get('material_cost') or 0),
+                float(item.get('staff_payout') or 0),
+            ),
+        )
+        inserted["services"] += 1
+
+    for item in data.get('staff') or []:
+        cursor.execute(
+            """
+            INSERT INTO finance_staff_metrics
+            (id, business_id, period_start, period_end, staff_name, role, revenue, visits_count,
+             booked_minutes, available_minutes, no_show_count, rebooking_count, source)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'manual')
+            """,
+            (
+                str(uuid.uuid4()),
+                business_id,
+                item.get('period_start') or period_start,
+                item.get('period_end') or period_end,
+                item.get('staff_name') or item.get('name') or 'Мастер',
+                item.get('role') or '',
+                float(item.get('revenue') or 0),
+                int(item.get('visits_count') or 0),
+                int(item.get('booked_minutes') or 0),
+                int(item.get('available_minutes') or 0),
+                int(item.get('no_show_count') or 0),
+                int(item.get('rebooking_count') or 0),
+            ),
+        )
+        inserted["staff"] += 1
+
+    workplace_ids_by_client_key = {}
+    for item in data.get('workplaces') or []:
+        workplace_id = item.get('id') or str(uuid.uuid4())
+        workplace_ids_by_client_key[item.get('client_key') or item.get('name') or workplace_id] = workplace_id
+        cursor.execute(
+            """
+            INSERT INTO finance_workplaces (id, business_id, name, type, is_active)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (id) DO UPDATE SET
+                name = EXCLUDED.name,
+                type = EXCLUDED.type,
+                is_active = EXCLUDED.is_active,
+                updated_at = NOW()
+            """,
+            (
+                workplace_id,
+                business_id,
+                item.get('name') or 'Рабочее место',
+                item.get('type') or 'other',
+                bool(item.get('is_active', True)),
+            ),
+        )
+        inserted["workplaces"] += 1
+
+    for item in data.get('workplace_metrics') or []:
+        client_key = item.get('workplace_client_key') or item.get('workplace_name') or item.get('workplace_id')
+        workplace_id = item.get('workplace_id') or workplace_ids_by_client_key.get(client_key)
+        cursor.execute(
+            """
+            INSERT INTO finance_workplace_metrics
+            (id, business_id, workplace_id, period_start, period_end, available_minutes,
+             booked_minutes, revenue, gross_profit, source)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'manual')
+            """,
+            (
+                str(uuid.uuid4()),
+                business_id,
+                workplace_id,
+                item.get('period_start') or period_start,
+                item.get('period_end') or period_end,
+                int(item.get('available_minutes') or 0),
+                int(item.get('booked_minutes') or 0),
+                float(item.get('revenue') or 0),
+                float(item.get('gross_profit') or 0),
+            ),
+        )
+        inserted["workplace_metrics"] += 1
+
+    return inserted
+
+
+def _finance_import_duplicate_exists(cursor, business_id, record_type, duplicate_key):
+    table_by_type = {
+        "entry": "finance_entries",
+        "service": "finance_service_metrics",
+        "staff": "finance_staff_metrics",
+        "workplace": "finance_workplace_metrics",
+    }
+    table_name = table_by_type.get(record_type)
+    if not table_name or not duplicate_key:
+        return False
+    cursor.execute(
+        f"SELECT 1 FROM {table_name} WHERE business_id = %s AND duplicate_key = %s LIMIT 1",
+        (business_id, duplicate_key),
+    )
+    return cursor.fetchone() is not None
+
+
+def _insert_finance_import_item(cursor, business_id, batch_id, item):
+    record_type = item.get("record_type")
+    duplicate_key = item.get("duplicate_key")
+    external_id = item.get("external_id") or None
+    if record_type == "entry":
+        cursor.execute(
+            """
+            INSERT INTO finance_entries
+            (id, business_id, date, type, category, amount, source, comment,
+             import_batch_id, external_id, duplicate_key)
+            VALUES (%s, %s, %s, %s, %s, %s, 'file', %s, %s, %s, %s)
+            """,
+            (
+                str(uuid.uuid4()),
+                business_id,
+                item.get("date"),
+                item.get("type"),
+                item.get("category"),
+                item.get("amount"),
+                item.get("comment") or "",
+                batch_id,
+                external_id,
+                duplicate_key,
+            ),
+        )
+        return
+    if record_type == "service":
+        cursor.execute(
+            """
+            INSERT INTO finance_service_metrics
+            (id, business_id, period_start, period_end, service_name, category, revenue,
+             visits_count, avg_price, duration_minutes, material_cost, staff_payout,
+             source, import_batch_id, external_id, duplicate_key)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    'file', %s, %s, %s)
+            """,
+            (
+                str(uuid.uuid4()),
+                business_id,
+                item.get("period_start"),
+                item.get("period_end"),
+                item.get("service_name"),
+                item.get("category") or "",
+                item.get("revenue") or 0,
+                item.get("visits_count") or 0,
+                item.get("avg_price") or 0,
+                item.get("duration_minutes") or 0,
+                item.get("material_cost") or 0,
+                item.get("staff_payout") or 0,
+                batch_id,
+                external_id,
+                duplicate_key,
+            ),
+        )
+        return
+    if record_type == "staff":
+        cursor.execute(
+            """
+            INSERT INTO finance_staff_metrics
+            (id, business_id, period_start, period_end, staff_name, role, revenue,
+             visits_count, booked_minutes, available_minutes, no_show_count,
+             rebooking_count, source, import_batch_id, external_id, duplicate_key)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    'file', %s, %s, %s)
+            """,
+            (
+                str(uuid.uuid4()),
+                business_id,
+                item.get("period_start"),
+                item.get("period_end"),
+                item.get("staff_name"),
+                item.get("role") or "",
+                item.get("revenue") or 0,
+                item.get("visits_count") or 0,
+                item.get("booked_minutes") or 0,
+                item.get("available_minutes") or 0,
+                item.get("no_show_count") or 0,
+                item.get("rebooking_count") or 0,
+                batch_id,
+                external_id,
+                duplicate_key,
+            ),
+        )
+        return
+    if record_type == "workplace":
+        cursor.execute(
+            """
+            SELECT id
+            FROM finance_workplaces
+            WHERE business_id = %s AND lower(name) = lower(%s)
+            LIMIT 1
+            """,
+            (business_id, item.get("workplace_name") or "Рабочее место"),
+        )
+        existing_workplace = cursor.fetchone()
+        workplace_id = _finance_row_value(existing_workplace, "id", 0) if existing_workplace else str(uuid.uuid4())
+        cursor.execute(
+            """
+            INSERT INTO finance_workplaces (id, business_id, name, type, is_active)
+            VALUES (%s, %s, %s, %s, TRUE)
+            ON CONFLICT (id) DO NOTHING
+            """,
+            (
+                workplace_id,
+                business_id,
+                item.get("workplace_name") or "Рабочее место",
+                item.get("workplace_type") or "other",
+            ),
+        )
+        cursor.execute(
+            """
+            INSERT INTO finance_workplace_metrics
+            (id, business_id, workplace_id, period_start, period_end, available_minutes,
+             booked_minutes, revenue, gross_profit, source, import_batch_id, external_id, duplicate_key)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'file', %s, %s, %s)
+            """,
+            (
+                str(uuid.uuid4()),
+                business_id,
+                workplace_id,
+                item.get("period_start"),
+                item.get("period_end"),
+                item.get("available_minutes") or 0,
+                item.get("booked_minutes") or 0,
+                item.get("revenue") or 0,
+                item.get("gross_profit") or 0,
+                batch_id,
+                external_id,
+                duplicate_key,
+            ),
+        )
+
+
+def _finance_import_payload_from_request():
+    uploaded_file = request.files.get("file")
+    if not uploaded_file:
+        raise ValueError("Файл обязателен")
+    filename = uploaded_file.filename or "finance-import.csv"
+    content = uploaded_file.read()
+    if not content:
+        raise ValueError("Файл пустой")
+    mapping_raw = request.form.get("mapping") or "{}"
+    try:
+        mapping = json.loads(mapping_raw)
+    except Exception:
+        mapping = {}
+    period_start = request.form.get("period_start") or default_period_range()[0]
+    period_end = request.form.get("period_end") or default_period_range()[1]
+    rows = finance_imports.parse_finance_file(filename, content)
+    normalized = finance_imports.normalize_finance_import_rows(rows, mapping, period_start, period_end)
+    return filename, content, normalized
+
+
+def _load_finance_crm_connection(cursor, business_id, provider):
+    cursor.execute(
+        """
+        SELECT id, business_id, provider, status, display_name, auth_data_encrypted,
+               settings_json, last_sync_at, sync_status, error_log, created_at, updated_at
+        FROM finance_crm_connections
+        WHERE business_id = %s AND provider = %s
+        LIMIT 1
+        """,
+        (business_id, provider),
+    )
+    row = cursor.fetchone()
+    if not row:
+        return None
+    item = _row_to_dict(cursor, row)
+    for json_key in ("settings_json", "error_log"):
+        if item.get(json_key) and isinstance(item[json_key], str):
+            try:
+                item[json_key] = json.loads(item[json_key])
+            except Exception:
+                item[json_key] = {} if json_key == "settings_json" else []
+    return item
+
+
+def _public_finance_crm_connection(item):
+    if not item:
+        return None
+    return {
+        "id": item.get("id"),
+        "business_id": item.get("business_id"),
+        "provider": item.get("provider"),
+        "status": item.get("status"),
+        "display_name": item.get("display_name"),
+        "settings": item.get("settings_json") or {},
+        "last_sync_at": str(item.get("last_sync_at")) if item.get("last_sync_at") else None,
+        "sync_status": item.get("sync_status"),
+        "error_log": item.get("error_log") or [],
+        "created_at": str(item.get("created_at")) if item.get("created_at") else None,
+        "updated_at": str(item.get("updated_at")) if item.get("updated_at") else None,
+    }
+
+
+@app.route('/api/finance/dashboard', methods=['GET'])
+def get_finance_dashboard():
+    try:
+        user_data, business_id, error_response = _require_finance_user_and_business()
+        if error_response:
+            return error_response
+
+        start_date, end_date = _finance_period_from_request()
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        payload, thresholds, snapshot = _finance_snapshot_for_period(cursor, business_id, start_date, end_date)
+        action_logs = _load_finance_action_logs(cursor, business_id, start_date, end_date)
+        action_impact = _build_finance_impact(cursor, business_id, start_date, end_date)
+        period_history = _build_finance_history(cursor, business_id, 6)
+        db.close()
+
+        return jsonify({
+            "success": True,
+            "business_id": business_id,
+            "period": {"start_date": start_date, "end_date": end_date},
+            "profile": {"global": True, "service_business": True, "beauty": True},
+            "thresholds": thresholds,
+            "action_logs": action_logs,
+            "action_impact": action_impact,
+            "period_history": period_history,
+            "source_data": payload,
+            **snapshot,
+        })
+    except Exception:
+        return jsonify({"error": f"Ошибка получения финансового дашборда: {str(sys.exc_info()[1])}"}), 500
+
+
+@app.route('/api/finance/manual-entry', methods=['POST', 'OPTIONS'])
+def add_finance_manual_entry():
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+
+        user_data, business_id, error_response = _require_finance_user_and_business()
+        if error_response:
+            return error_response
+
+        data = request.get_json() or {}
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        inserted = _insert_finance_manual_payload(cursor, business_id, data)
+        db.conn.commit()
+        payload, thresholds, snapshot = _finance_snapshot_for_period(
+            cursor,
+            business_id,
+            data.get('period_start') or data.get('from') or default_period_range()[0],
+            data.get('period_end') or data.get('to') or default_period_range()[1],
+        )
+        db.close()
+
+        return jsonify({
+            "success": True,
+            "business_id": business_id,
+            "inserted": inserted,
+            "thresholds": thresholds,
+            "dashboard": snapshot,
+        })
+    except Exception:
+        return jsonify({"error": f"Ошибка сохранения финансовых данных: {str(sys.exc_info()[1])}"}), 500
+
+
+@app.route('/api/finance/recalculate', methods=['POST', 'OPTIONS'])
+def recalculate_finance_snapshot():
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+
+        user_data, business_id, error_response = _require_finance_user_and_business()
+        if error_response:
+            return error_response
+
+        data = request.get_json() or {}
+        start_date = data.get('from') or data.get('period_start') or default_period_range()[0]
+        end_date = data.get('to') or data.get('period_end') or default_period_range()[1]
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        payload, thresholds, snapshot = _finance_snapshot_for_period(cursor, business_id, start_date, end_date)
+        snapshot_id = str(uuid.uuid4())
+        cursor.execute(
+            """
+            INSERT INTO finance_snapshots
+            (id, business_id, period_start, period_end, calculated_json, data_quality_json)
+            VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb)
+            """,
+            (
+                snapshot_id,
+                business_id,
+                start_date,
+                end_date,
+                json.dumps(snapshot.get("kpis") or {}, ensure_ascii=False),
+                json.dumps(snapshot.get("data_quality") or {}, ensure_ascii=False),
+            ),
+        )
+        db.conn.commit()
+        db.close()
+
+        return jsonify({"success": True, "snapshot_id": snapshot_id, "thresholds": thresholds, **snapshot})
+    except Exception:
+        return jsonify({"error": f"Ошибка пересчета финансов: {str(sys.exc_info()[1])}"}), 500
+
+
+@app.route('/api/finance/data-quality', methods=['GET'])
+def get_finance_data_quality():
+    try:
+        user_data, business_id, error_response = _require_finance_user_and_business()
+        if error_response:
+            return error_response
+
+        start_date, end_date = _finance_period_from_request()
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        payload, thresholds, snapshot = _finance_snapshot_for_period(cursor, business_id, start_date, end_date)
+        db.close()
+
+        return jsonify({
+            "success": True,
+            "business_id": business_id,
+            "period": {"start_date": start_date, "end_date": end_date},
+            "thresholds": thresholds,
+            "data_quality": snapshot["data_quality"],
+            "explanations": snapshot["explanations"],
+        })
+    except Exception:
+        return jsonify({"error": f"Ошибка оценки качества данных: {str(sys.exc_info()[1])}"}), 500
+
+
+@app.route('/api/finance/recommendations', methods=['GET'])
+def get_finance_recommendations():
+    try:
+        user_data, business_id, error_response = _require_finance_user_and_business()
+        if error_response:
+            return error_response
+
+        start_date, end_date = _finance_period_from_request()
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        payload, thresholds, snapshot = _finance_snapshot_for_period(cursor, business_id, start_date, end_date)
+        db.close()
+
+        return jsonify({
+            "success": True,
+            "business_id": business_id,
+            "period": {"start_date": start_date, "end_date": end_date},
+            "thresholds": thresholds,
+            "recommendations": snapshot["recommendations"],
+            "statuses": snapshot["statuses"],
+        })
+    except Exception:
+        return jsonify({"error": f"Ошибка получения рекомендаций: {str(sys.exc_info()[1])}"}), 500
+
+
+@app.route('/api/finance/thresholds', methods=['GET'])
+def get_finance_thresholds():
+    try:
+        user_data, business_id, error_response = _require_finance_user_and_business()
+        if error_response:
+            return error_response
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        thresholds = _load_finance_thresholds(cursor, business_id)
+        db.close()
+
+        return jsonify({
+            "success": True,
+            "business_id": business_id,
+            "thresholds": thresholds,
+        })
+    except Exception:
+        return jsonify({"error": f"Ошибка получения порогов KPI: {str(sys.exc_info()[1])}"}), 500
+
+
+@app.route('/api/finance/thresholds', methods=['PUT', 'OPTIONS'])
+def update_finance_thresholds():
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+
+        user_data, business_id, error_response = _require_finance_user_and_business()
+        if error_response:
+            return error_response
+
+        data = request.get_json() or {}
+        thresholds = data.get("thresholds")
+        if isinstance(thresholds, dict):
+            thresholds = [
+                {"metric_key": metric_key, **config}
+                for metric_key, config in thresholds.items()
+                if isinstance(config, dict)
+            ]
+        if not isinstance(thresholds, list):
+            return jsonify({"error": "thresholds должен быть списком или объектом"}), 400
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        saved = _save_finance_thresholds(cursor, business_id, thresholds)
+        db.conn.commit()
+        updated = _load_finance_thresholds(cursor, business_id)
+        db.close()
+
+        return jsonify({
+            "success": True,
+            "business_id": business_id,
+            "saved": saved,
+            "thresholds": updated,
+        })
+    except Exception:
+        return jsonify({"error": f"Ошибка сохранения порогов KPI: {str(sys.exc_info()[1])}"}), 500
+
+
+@app.route('/api/finance/thresholds/reset', methods=['POST', 'OPTIONS'])
+def reset_finance_thresholds():
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+
+        user_data, business_id, error_response = _require_finance_user_and_business()
+        if error_response:
+            return error_response
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            DELETE FROM finance_kpi_thresholds
+            WHERE business_id = %s
+            """,
+            (business_id,),
+        )
+        db.conn.commit()
+        thresholds = _load_finance_thresholds(cursor, business_id)
+        db.close()
+
+        return jsonify({
+            "success": True,
+            "business_id": business_id,
+            "thresholds": thresholds,
+        })
+    except Exception:
+        return jsonify({"error": f"Ошибка сброса порогов KPI: {str(sys.exc_info()[1])}"}), 500
+
+
+@app.route('/api/finance/actions', methods=['GET'])
+def get_finance_actions():
+    try:
+        user_data, business_id, error_response = _require_finance_user_and_business()
+        if error_response:
+            return error_response
+
+        start_date, end_date = _finance_period_from_request()
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        actions = _load_finance_action_logs(cursor, business_id, start_date, end_date)
+        db.close()
+
+        return jsonify({
+            "success": True,
+            "business_id": business_id,
+            "period": {"start_date": start_date, "end_date": end_date},
+            "actions": actions,
+        })
+    except Exception:
+        return jsonify({"error": f"Ошибка получения действий по финансам: {str(sys.exc_info()[1])}"}), 500
+
+
+@app.route('/api/finance/actions', methods=['POST', 'OPTIONS'])
+def update_finance_action():
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+
+        user_data, business_id, error_response = _require_finance_user_and_business()
+        if error_response:
+            return error_response
+
+        data = request.get_json() or {}
+        action_key = str(data.get("action_key") or "").strip()
+        recommendation_code = str(data.get("recommendation_code") or "").strip()
+        action_bucket = str(data.get("action_bucket") or "").strip()
+        action_text = str(data.get("action_text") or "").strip()
+        status = str(data.get("status") or "completed").strip()
+        if status not in {"pending", "completed"}:
+            return jsonify({"error": "status должен быть pending или completed"}), 400
+        if not action_key or not recommendation_code or not action_bucket or not action_text:
+            return jsonify({"error": "action_key, recommendation_code, action_bucket и action_text обязательны"}), 400
+
+        period_start = data.get("period_start") or data.get("from")
+        period_end = data.get("period_end") or data.get("to")
+        completed_at_sql = "NOW()" if status == "completed" else "NULL"
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        cursor.execute(
+            f"""
+            INSERT INTO finance_action_logs
+            (id, business_id, recommendation_code, action_key, action_bucket,
+             action_text, status, period_start, period_end, completed_at, created_by)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, {completed_at_sql}, %s)
+            ON CONFLICT (business_id, action_key) DO UPDATE SET
+                recommendation_code = EXCLUDED.recommendation_code,
+                action_bucket = EXCLUDED.action_bucket,
+                action_text = EXCLUDED.action_text,
+                status = EXCLUDED.status,
+                period_start = EXCLUDED.period_start,
+                period_end = EXCLUDED.period_end,
+                completed_at = {completed_at_sql},
+                created_by = EXCLUDED.created_by,
+                updated_at = NOW()
+            RETURNING id
+            """,
+            (
+                str(uuid.uuid4()),
+                business_id,
+                recommendation_code,
+                action_key,
+                action_bucket,
+                action_text,
+                status,
+                period_start,
+                period_end,
+                user_data.get("user_id"),
+            ),
+        )
+        row = cursor.fetchone()
+        action_id = _finance_row_value(row, "id", 0) if row else None
+        db.conn.commit()
+        actions = _load_finance_action_logs(cursor, business_id, period_start, period_end)
+        db.close()
+
+        return jsonify({
+            "success": True,
+            "business_id": business_id,
+            "action_id": action_id,
+            "actions": actions,
+        })
+    except Exception:
+        return jsonify({"error": f"Ошибка сохранения действия по финансам: {str(sys.exc_info()[1])}"}), 500
+
+
+@app.route('/api/finance/import-template', methods=['GET'])
+def get_finance_import_template():
+    profile = request.args.get("profile") or request.args.get("source") or "manual"
+    content = finance_imports.finance_import_template_csv(profile)
+    return Response(
+        content,
+        mimetype="text/csv; charset=utf-8",
+        headers={"Content-Disposition": "attachment; filename=finance-import-template.csv"},
+    )
+
+
+@app.route('/api/finance/import-templates', methods=['GET'])
+def get_finance_import_templates():
+    return jsonify({
+        "success": True,
+        "templates": finance_imports.finance_import_templates(),
+    })
+
+
+@app.route('/api/finance/history', methods=['GET'])
+def get_finance_history():
+    try:
+        user_data, business_id, error_response = _require_finance_user_and_business()
+        if error_response:
+            return error_response
+
+        months = request.args.get("months") or 6
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        points = _build_finance_history(cursor, business_id, months)
+        db.close()
+
+        return jsonify({
+            "success": True,
+            "business_id": business_id,
+            "months": min(max(int(months or 6), 1), 12),
+            "history": points,
+        })
+    except Exception:
+        return jsonify({"error": f"Ошибка получения истории финансов: {str(sys.exc_info()[1])}"}), 500
+
+
+@app.route('/api/finance/impact', methods=['GET'])
+def get_finance_action_impact():
+    try:
+        user_data, business_id, error_response = _require_finance_user_and_business()
+        if error_response:
+            return error_response
+
+        start_date, end_date = _finance_period_from_request()
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        impact = _build_finance_impact(cursor, business_id, start_date, end_date)
+        db.close()
+
+        return jsonify({
+            "success": True,
+            "business_id": business_id,
+            **impact,
+        })
+    except Exception:
+        return jsonify({"error": f"Ошибка расчета влияния действий: {str(sys.exc_info()[1])}"}), 500
+
+
+@app.route('/api/finance/import-preview', methods=['POST', 'OPTIONS'])
+def preview_finance_import():
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+
+        user_data, business_id, error_response = _require_finance_user_and_business()
+        if error_response:
+            return error_response
+
+        filename, content, normalized = _finance_import_payload_from_request()
+        preview_rows = normalized.get("rows", [])[:10]
+        return jsonify({
+            "success": True,
+            "business_id": business_id,
+            "file_name": filename,
+            "file_hash": finance_imports.file_hash(content),
+            "rows_total": normalized.get("total", 0),
+            "valid_rows": len(normalized.get("rows", [])),
+            "failed_rows": len(normalized.get("errors", [])),
+            "mapping": normalized.get("mapping", {}),
+            "preview": preview_rows,
+            "errors": normalized.get("errors", [])[:20],
+        })
+    except Exception:
+        return jsonify({"error": f"Ошибка preview импорта: {str(sys.exc_info()[1])}"}), 500
+
+
+@app.route('/api/finance/import-file', methods=['POST', 'OPTIONS'])
+def import_finance_file():
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+
+        user_data, business_id, error_response = _require_finance_user_and_business()
+        if error_response:
+            return error_response
+
+        filename, content, normalized = _finance_import_payload_from_request()
+        batch_id = str(uuid.uuid4())
+        content_hash = finance_imports.file_hash(content)
+        rows = normalized.get("rows", [])
+        errors = normalized.get("errors", [])
+        imported = 0
+        skipped = 0
+        import_errors = list(errors[:100])
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO finance_import_batches
+            (id, business_id, source_type, status, file_name, file_hash, rows_total,
+             mapping_json, error_log)
+            VALUES (%s, %s, 'file', 'processing', %s, %s, %s, %s::jsonb, %s::jsonb)
+            """,
+            (
+                batch_id,
+                business_id,
+                filename,
+                content_hash,
+                normalized.get("total", 0),
+                json.dumps(normalized.get("mapping", {}), ensure_ascii=False),
+                json.dumps(import_errors, ensure_ascii=False),
+            ),
+        )
+
+        for item in rows:
+            if _finance_import_duplicate_exists(cursor, business_id, item.get("record_type"), item.get("duplicate_key")):
+                skipped += 1
+                continue
+            try:
+                _insert_finance_import_item(cursor, business_id, batch_id, item)
+                imported += 1
+            except Exception:
+                if len(import_errors) < 100:
+                    import_errors.append({
+                        "row": item.get("row_number"),
+                        "errors": [str(sys.exc_info()[1])],
+                    })
+
+        failed = len(import_errors)
+        status = "completed" if failed == 0 else "completed_with_errors"
+        cursor.execute(
+            """
+            UPDATE finance_import_batches
+            SET status = %s,
+                rows_imported = %s,
+                rows_skipped = %s,
+                rows_failed = %s,
+                error_log = %s::jsonb,
+                completed_at = NOW()
+            WHERE id = %s
+            """,
+            (
+                status,
+                imported,
+                skipped,
+                failed,
+                json.dumps(import_errors, ensure_ascii=False),
+                batch_id,
+            ),
+        )
+        db.conn.commit()
+
+        start_date = request.form.get("period_start") or default_period_range()[0]
+        end_date = request.form.get("period_end") or default_period_range()[1]
+        payload, thresholds, snapshot = _finance_snapshot_for_period(cursor, business_id, start_date, end_date)
+        db.close()
+
+        return jsonify({
+            "success": True,
+            "batch_id": batch_id,
+            "file_hash": content_hash,
+            "rows_total": normalized.get("total", 0),
+            "rows_imported": imported,
+            "rows_skipped": skipped,
+            "rows_failed": failed,
+            "errors": import_errors[:20],
+            "thresholds": thresholds,
+            "dashboard": snapshot,
+        })
+    except Exception:
+        return jsonify({"error": f"Ошибка импорта финансов: {str(sys.exc_info()[1])}"}), 500
+
+
+@app.route('/api/finance/imports', methods=['GET'])
+def get_finance_import_batches():
+    try:
+        user_data, business_id, error_response = _require_finance_user_and_business()
+        if error_response:
+            return error_response
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            SELECT id, source_type, status, file_name, file_hash, rows_total,
+                   rows_imported, rows_skipped, rows_failed, error_log,
+                   created_at, completed_at
+            FROM finance_import_batches
+            WHERE business_id = %s
+            ORDER BY created_at DESC
+            LIMIT 20
+            """,
+            (business_id,),
+        )
+        batches = []
+        for row in cursor.fetchall() or []:
+            item = _row_to_dict(cursor, row)
+            if item.get("error_log") and isinstance(item["error_log"], str):
+                try:
+                    item["error_log"] = json.loads(item["error_log"])
+                except Exception:
+                    item["error_log"] = []
+            batches.append(item)
+        db.close()
+
+        return jsonify({"success": True, "business_id": business_id, "imports": batches})
+    except Exception:
+        return jsonify({"error": f"Ошибка получения истории импорта: {str(sys.exc_info()[1])}"}), 500
+
+
+@app.route('/api/finance/crm/providers', methods=['GET'])
+def get_finance_crm_providers():
+    try:
+        user_data, business_id, error_response = _require_finance_user_and_business()
+        if error_response:
+            return error_response
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        connections = []
+        for provider in finance_crm.CRM_PROVIDERS:
+            connection = _load_finance_crm_connection(cursor, business_id, provider["provider"])
+            enriched = dict(provider)
+            enriched["connection"] = _public_finance_crm_connection(connection)
+            connections.append(enriched)
+        db.close()
+
+        return jsonify({"success": True, "business_id": business_id, "providers": connections})
+    except Exception:
+        return jsonify({"error": f"Ошибка получения CRM провайдеров: {str(sys.exc_info()[1])}"}), 500
+
+
+@app.route('/api/finance/crm/connect', methods=['POST', 'OPTIONS'])
+def connect_finance_crm():
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+
+        user_data, business_id, error_response = _require_finance_user_and_business()
+        if error_response:
+            return error_response
+
+        data = request.get_json() or {}
+        provider = str(data.get("provider") or "").strip()
+        provider_meta = finance_crm.get_crm_provider(provider)
+        if not provider_meta:
+            return jsonify({"error": "CRM provider is not supported"}), 400
+        if provider_meta.get("status") != "available":
+            return jsonify({"error": "CRM provider is planned but not available yet"}), 400
+
+        auth_data = data.get("auth_data") or {}
+        settings = data.get("settings") or {}
+        missing_fields = []
+        for field in provider_meta.get("required_auth_fields") or []:
+            if not str(auth_data.get(field) or "").strip():
+                missing_fields.append(field)
+        for field in provider_meta.get("required_settings_fields") or []:
+            if not str(settings.get(field) or auth_data.get(field) or "").strip():
+                missing_fields.append(field)
+        if missing_fields:
+            return jsonify({
+                "error": "CRM credentials are incomplete",
+                "missing_fields": missing_fields,
+            }), 400
+
+        display_name = data.get("display_name") or provider_meta.get("label") or provider
+        encrypted_auth_data = encrypt_auth_data(json.dumps(auth_data, ensure_ascii=False)) if auth_data else ""
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        connection_id = str(uuid.uuid4())
+        cursor.execute(
+            """
+            INSERT INTO finance_crm_connections
+            (id, business_id, provider, status, display_name, auth_data_encrypted,
+             settings_json, sync_status, error_log)
+            VALUES (%s, %s, %s, 'connected', %s, %s, %s::jsonb, 'never_synced', '[]'::jsonb)
+            ON CONFLICT (business_id, provider) DO UPDATE SET
+                status = 'connected',
+                display_name = EXCLUDED.display_name,
+                auth_data_encrypted = EXCLUDED.auth_data_encrypted,
+                settings_json = EXCLUDED.settings_json,
+                sync_status = COALESCE(finance_crm_connections.sync_status, 'never_synced'),
+                updated_at = NOW()
+            RETURNING id
+            """,
+            (
+                connection_id,
+                business_id,
+                provider,
+                display_name,
+                encrypted_auth_data,
+                json.dumps(settings, ensure_ascii=False),
+            ),
+        )
+        row = cursor.fetchone()
+        resolved_id = _finance_row_value(row, "id", 0) if row else connection_id
+        db.conn.commit()
+        connection = _load_finance_crm_connection(cursor, business_id, provider)
+        db.close()
+
+        return jsonify({
+            "success": True,
+            "connection_id": resolved_id,
+            "connection": _public_finance_crm_connection(connection),
+        })
+    except Exception:
+        return jsonify({"error": f"Ошибка подключения CRM: {str(sys.exc_info()[1])}"}), 500
+
+
+@app.route('/api/finance/crm/status', methods=['GET'])
+def get_finance_crm_status():
+    try:
+        user_data, business_id, error_response = _require_finance_user_and_business()
+        if error_response:
+            return error_response
+
+        provider = request.args.get("provider")
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        if provider:
+            connection = _load_finance_crm_connection(cursor, business_id, provider)
+            db.close()
+            return jsonify({
+                "success": True,
+                "business_id": business_id,
+                "connection": _public_finance_crm_connection(connection),
+            })
+
+        cursor.execute(
+            """
+            SELECT id, business_id, provider, status, display_name, settings_json,
+                   last_sync_at, sync_status, error_log, created_at, updated_at
+            FROM finance_crm_connections
+            WHERE business_id = %s
+            ORDER BY updated_at DESC
+            """,
+            (business_id,),
+        )
+        connections = [_public_finance_crm_connection(_row_to_dict(cursor, row)) for row in cursor.fetchall() or []]
+        db.close()
+        return jsonify({"success": True, "business_id": business_id, "connections": connections})
+    except Exception:
+        return jsonify({"error": f"Ошибка статуса CRM: {str(sys.exc_info()[1])}"}), 500
+
+
+def _finance_crm_auth_settings_from_connection(connection):
+    auth_data = {}
+    encrypted = connection.get("auth_data_encrypted")
+    if encrypted:
+        decrypted = decrypt_auth_data(encrypted)
+        if decrypted:
+            try:
+                auth_data = json.loads(decrypted)
+            except Exception:
+                auth_data = {}
+    return auth_data, connection.get("settings_json") or {}
+
+
+def _store_finance_crm_preview(cursor, business_id, provider, preview):
+    connection = _load_finance_crm_connection(cursor, business_id, provider)
+    settings = dict((connection or {}).get("settings_json") or {})
+    expires_at = (datetime.now(timezone.utc) + timedelta(minutes=60)).isoformat()
+    settings["last_preview"] = {
+        "provider": provider,
+        "token": preview.get("preview_token"),
+        "period": preview.get("period") or {},
+        "rows_total": preview.get("rows_total"),
+        "valid_rows": preview.get("valid_rows"),
+        "failed_rows": preview.get("failed_rows"),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "expires_at": expires_at,
+    }
+    cursor.execute(
+        """
+        UPDATE finance_crm_connections
+        SET settings_json = %s::jsonb,
+            sync_status = 'preview_ok',
+            error_log = %s::jsonb,
+            updated_at = NOW()
+        WHERE business_id = %s AND provider = %s
+        """,
+        (
+            json.dumps(settings, ensure_ascii=False),
+            json.dumps(preview.get("errors") or [], ensure_ascii=False),
+            business_id,
+            provider,
+        ),
+    )
+
+
+def _validate_finance_crm_preview_confirmation(connection, provider, start_date, end_date, token):
+    if not token:
+        return "Сначала проверьте данные CRM через preview, затем подтвердите импорт."
+    settings = connection.get("settings_json") or {}
+    last_preview = settings.get("last_preview") or {}
+    if last_preview.get("provider") != provider:
+        return "Preview относится к другой CRM. Запустите проверку данных заново."
+    period = last_preview.get("period") or {}
+    if period.get("start_date") != start_date or period.get("end_date") != end_date:
+        return "Preview относится к другому периоду. Запустите проверку данных заново."
+    if last_preview.get("token") != token:
+        return "Preview устарел или не совпадает с импортом. Запустите проверку данных заново."
+    expires_at = last_preview.get("expires_at")
+    if expires_at:
+        try:
+            expires_at_dt = datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
+            if expires_at_dt < datetime.now(timezone.utc):
+                return "Preview устарел. Запустите проверку данных заново."
+        except Exception:
+            return "Preview сохранён некорректно. Запустите проверку данных заново."
+    return None
+
+
+def _run_finance_crm_preview(cursor, business_id, provider, start_date, end_date, sample_limit=5):
+    connection = _load_finance_crm_connection(cursor, business_id, provider)
+    if not connection or connection.get("status") != "connected":
+        raise finance_crm.CRMConnectionError("CRM is not connected")
+
+    auth_data, settings = _finance_crm_auth_settings_from_connection(connection)
+    connector = finance_crm.create_crm_connector(provider, auth_data, settings)
+    dataset = connector.fetch_all(start_date, end_date)
+    return finance_crm.build_crm_sync_preview(provider, dataset, start_date, end_date, sample_limit)
+
+
+@app.route('/api/finance/crm/preview', methods=['POST', 'OPTIONS'])
+def preview_finance_crm_sync():
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+
+        user_data, business_id, error_response = _require_finance_user_and_business()
+        if error_response:
+            return error_response
+
+        data = request.get_json() or {}
+        provider = str(data.get("provider") or "").strip()
+        if not provider:
+            return jsonify({"error": "provider is required"}), 400
+
+        start_date = data.get("from") or data.get("period_start") or default_period_range()[0]
+        end_date = data.get("to") or data.get("period_end") or default_period_range()[1]
+        sample_limit = int(data.get("sample_limit") or 5)
+        sample_limit = min(max(sample_limit, 1), 20)
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        try:
+            preview = _run_finance_crm_preview(cursor, business_id, provider, start_date, end_date, sample_limit)
+        except finance_crm.CRMConnectionError:
+            error_message = str(sys.exc_info()[1])
+            cursor.execute(
+                """
+                UPDATE finance_crm_connections
+                SET sync_status = 'preview_failed',
+                    error_log = %s::jsonb,
+                    updated_at = NOW()
+                WHERE business_id = %s AND provider = %s
+                """,
+                (
+                    json.dumps([{"errors": [error_message]}], ensure_ascii=False),
+                    business_id,
+                    provider,
+                ),
+            )
+            db.conn.commit()
+            db.close()
+            return jsonify({"error": error_message, "will_write": False}), 400
+
+        _store_finance_crm_preview(cursor, business_id, provider, preview)
+        db.conn.commit()
+        updated_connection = _load_finance_crm_connection(cursor, business_id, provider)
+        db.close()
+
+        return jsonify({
+            "success": True,
+            "business_id": business_id,
+            "connection": _public_finance_crm_connection(updated_connection),
+            **preview,
+        })
+    except Exception:
+        return jsonify({"error": f"Ошибка preview CRM: {str(sys.exc_info()[1])}"}), 500
+
+
+@app.route('/api/finance/crm/sync', methods=['POST', 'OPTIONS'])
+def sync_finance_crm():
+    try:
+        if request.method == 'OPTIONS':
+            return ('', 204)
+
+        user_data, business_id, error_response = _require_finance_user_and_business()
+        if error_response:
+            return error_response
+
+        data = request.get_json() or {}
+        provider = str(data.get("provider") or "").strip()
+        if not provider:
+            return jsonify({"error": "provider is required"}), 400
+
+        start_date = data.get("from") or data.get("period_start") or default_period_range()[0]
+        end_date = data.get("to") or data.get("period_end") or default_period_range()[1]
+        confirm_preview_token = str(data.get("confirm_preview_token") or data.get("preview_token") or "").strip()
+
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        connection = _load_finance_crm_connection(cursor, business_id, provider)
+        if not connection or connection.get("status") != "connected":
+            db.close()
+            return jsonify({"error": "CRM is not connected"}), 400
+
+        preview_error = _validate_finance_crm_preview_confirmation(
+            connection,
+            provider,
+            start_date,
+            end_date,
+            confirm_preview_token,
+        )
+        if preview_error:
+            db.close()
+            return jsonify({"error": preview_error, "requires_preview": True}), 400
+
+        auth_data, settings = _finance_crm_auth_settings_from_connection(connection)
+
+        connector = finance_crm.create_crm_connector(provider, auth_data, settings)
+        try:
+            dataset = connector.fetch_all(start_date, end_date)
+        except finance_crm.CRMConnectionError:
+            error_message = str(sys.exc_info()[1])
+            cursor.execute(
+                """
+                UPDATE finance_crm_connections
+                SET sync_status = 'failed',
+                    error_log = %s::jsonb,
+                    updated_at = NOW()
+                WHERE business_id = %s AND provider = %s
+                """,
+                (
+                    json.dumps([{"errors": [error_message]}], ensure_ascii=False),
+                    business_id,
+                    provider,
+                ),
+            )
+            db.conn.commit()
+            db.close()
+            return jsonify({"error": error_message}), 400
+        preview = finance_crm.build_crm_sync_preview(provider, dataset, start_date, end_date, 1)
+        if preview.get("preview_token") != confirm_preview_token:
+            db.close()
+            return jsonify({
+                "error": "Данные CRM изменились после preview. Запустите проверку данных заново.",
+                "requires_preview": True,
+            }), 400
+        normalized = finance_crm.crm_dataset_to_finance_rows(dataset, start_date, end_date)
+
+        batch_id = str(uuid.uuid4())
+        rows = normalized.get("rows", [])
+        import_errors = list((normalized.get("errors") or [])[:100])
+        imported = 0
+        skipped = 0
+
+        cursor.execute(
+            """
+            INSERT INTO finance_import_batches
+            (id, business_id, source_type, status, file_name, file_hash, rows_total,
+             mapping_json, error_log)
+            VALUES (%s, %s, 'crm', 'processing', %s, %s, %s, %s::jsonb, %s::jsonb)
+            """,
+            (
+                batch_id,
+                business_id,
+                f"{provider}-sync",
+                f"crm:{provider}:{start_date}:{end_date}",
+                normalized.get("total", 0),
+                json.dumps({"provider": provider}, ensure_ascii=False),
+                json.dumps(import_errors, ensure_ascii=False),
+            ),
+        )
+
+        for item in rows:
+            if _finance_import_duplicate_exists(cursor, business_id, item.get("record_type"), item.get("duplicate_key")):
+                skipped += 1
+                continue
+            try:
+                _insert_finance_import_item(cursor, business_id, batch_id, item)
+                imported += 1
+            except Exception:
+                if len(import_errors) < 100:
+                    import_errors.append({"row": item.get("row_number"), "errors": [str(sys.exc_info()[1])]})
+
+        failed = len(import_errors)
+        status = "completed" if failed == 0 else "completed_with_errors"
+        cursor.execute(
+            """
+            UPDATE finance_import_batches
+            SET status = %s,
+                rows_imported = %s,
+                rows_skipped = %s,
+                rows_failed = %s,
+                error_log = %s::jsonb,
+                completed_at = NOW()
+            WHERE id = %s
+            """,
+            (
+                status,
+                imported,
+                skipped,
+                failed,
+                json.dumps(import_errors, ensure_ascii=False),
+                batch_id,
+            ),
+        )
+        cursor.execute(
+            """
+            UPDATE finance_crm_connections
+            SET last_sync_at = NOW(),
+                sync_status = %s,
+                error_log = %s::jsonb,
+                updated_at = NOW()
+            WHERE business_id = %s AND provider = %s
+            """,
+            (
+                status,
+                json.dumps(import_errors, ensure_ascii=False),
+                business_id,
+                provider,
+            ),
+        )
+        db.conn.commit()
+
+        payload, thresholds, snapshot = _finance_snapshot_for_period(cursor, business_id, start_date, end_date)
+        updated_connection = _load_finance_crm_connection(cursor, business_id, provider)
+        db.close()
+
+        return jsonify({
+            "success": True,
+            "business_id": business_id,
+            "provider": provider,
+            "batch_id": batch_id,
+            "rows_total": normalized.get("total", 0),
+            "rows_imported": imported,
+            "rows_skipped": skipped,
+            "rows_failed": failed,
+            "errors": import_errors[:20],
+            "connection": _public_finance_crm_connection(updated_connection),
+            "thresholds": thresholds,
+            "dashboard": snapshot,
+        })
+    except Exception:
+        return jsonify({"error": f"Ошибка синхронизации CRM: {str(sys.exc_info()[1])}"}), 500
+
 
 @app.route('/api/finance/transaction', methods=['POST'])
 def add_transaction():

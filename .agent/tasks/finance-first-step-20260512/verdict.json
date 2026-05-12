@@ -1,0 +1,26 @@
+{
+  "task_id": "finance-first-step-20260512",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {"id": "AC1", "status": "PASS", "reason": "Onboarding component is rendered on Finance page."},
+    {"id": "AC2", "status": "PASS", "reason": "Manual entry endpoint accepts stage-1 finance data."},
+    {"id": "AC3", "status": "PASS", "reason": "Core P&L and KPI formulas are implemented and tested."},
+    {"id": "AC4", "status": "PASS", "reason": "Workplace tables and occupancy calculations are implemented."},
+    {"id": "AC5", "status": "PASS", "reason": "Revenue per workplace and workplace-hour are implemented."},
+    {"id": "AC6", "status": "PASS", "reason": "Break-even and daily revenue target are implemented."},
+    {"id": "AC7", "status": "PASS", "reason": "Data quality score and missing-data explanations are implemented."},
+    {"id": "AC8", "status": "PASS", "reason": "Red-zone recommendation rules are implemented."},
+    {"id": "AC9", "status": "PASS", "reason": "Division by zero returns null with explanation and is tested."},
+    {"id": "AC10", "status": "PASS", "reason": "Formula and recommendation tests were added and passed."},
+    {"id": "AC11", "status": "PASS", "reason": "docs/FINANCE_MODULE.md was added."}
+  ],
+  "commands_run": [
+    "python3 -m pytest -q tests/test_finance_kpis.py",
+    "cd frontend && npm run build",
+    "python3 -m py_compile src/main.py src/core/finance_kpis.py"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/finance-first-step-20260512/evidence.md",
+    ".agent/tasks/finance-first-step-20260512/evidence.json"
+  ]
+}

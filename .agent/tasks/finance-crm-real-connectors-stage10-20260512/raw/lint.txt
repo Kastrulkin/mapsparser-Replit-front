@@ -1,0 +1,6 @@
+No lint output captured yet.
+Command:
+cd frontend && npx eslint src/components/FinanceCrmPanel.tsx src/components/FinanceFirstStep.tsx src/components/FinanceImportPanel.tsx src/pages/dashboard/FinancePage.tsx
+
+Result:
+Passed with no output.

@@ -1,0 +1,36 @@
+{
+  "task_id": "finance-crm-settings-stage11-20260512",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "CRM connection UI is available under Settings integrations."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Embedded surface avoids nested DashboardSection."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Finance page keeps sync entrypoint."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Tests, compile, eslint and build passed."
+    }
+  ],
+  "commands_run": [
+    "python3 -m pytest -q tests/test_finance_crm.py tests/test_finance_imports.py tests/test_finance_kpis.py",
+    "python3 -m py_compile src/main.py src/core/finance_crm.py src/core/finance_imports.py src/core/finance_kpis.py",
+    "cd frontend && npx eslint src/components/FinanceCrmPanel.tsx src/pages/dashboard/SettingsPage.tsx src/pages/dashboard/FinancePage.tsx",
+    "cd frontend && npm run build"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/finance-crm-settings-stage11-20260512/evidence.md",
+    ".agent/tasks/finance-crm-settings-stage11-20260512/evidence.json"
+  ]
+}

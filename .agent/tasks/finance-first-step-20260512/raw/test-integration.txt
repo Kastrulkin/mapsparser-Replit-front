@@ -1,0 +1,5 @@
+Limited browser smoke was run against http://127.0.0.1:5176/dashboard/finance with Playwright.
+
+Result: PASS for frontend runtime errors; no console/page errors were captured.
+
+Note: the route is protected, so the smoke did not verify authenticated Finance UI content. API integration still depends on the new Alembic migration being applied in a database environment.

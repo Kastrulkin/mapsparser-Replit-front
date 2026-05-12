@@ -1,0 +1,86 @@
+{
+  "task_id": "finance-impact-history-import-stage7-9-20260512",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Finance impact compares KPI values and completed actions.",
+      "status": "PASS",
+      "proof": [
+        "src/main.py adds _build_finance_impact and GET /api/finance/impact.",
+        "Dashboard payload includes action_impact."
+      ],
+      "gaps": [
+        "Impact is directional comparison, not causal attribution."
+      ]
+    },
+    {
+      "id": "AC2",
+      "text": "Finance history returns monthly points for 3, 6 or 12 months.",
+      "status": "PASS",
+      "proof": [
+        "src/main.py adds _build_finance_history and GET /api/finance/history."
+      ],
+      "gaps": [
+        "Live DB smoke was not run locally."
+      ]
+    },
+    {
+      "id": "AC3",
+      "text": "Finance UI shows action impact and period history.",
+      "status": "PASS",
+      "proof": [
+        "frontend/src/components/FinanceFirstStep.tsx renders ImpactPanel and HistoryPanel."
+      ],
+      "gaps": [
+        "Authenticated browser visual QA was not run in this session."
+      ]
+    },
+    {
+      "id": "AC4",
+      "text": "Import wizard supports templates and manual mapping edits.",
+      "status": "PASS",
+      "proof": [
+        "src/core/finance_imports.py adds import template profiles.",
+        "frontend/src/components/FinanceImportPanel.tsx adds template selector and mapping editor.",
+        "tests/test_finance_imports.py covers template profiles."
+      ],
+      "gaps": [
+        "Real CRM export files were not tested."
+      ]
+    },
+    {
+      "id": "AC5",
+      "text": "Relevant checks pass.",
+      "status": "PASS",
+      "proof": [
+        "17 finance tests passed.",
+        "Backend syntax compile passed.",
+        "Targeted frontend lint passed.",
+        "Frontend production build passed."
+      ],
+      "gaps": [
+        "Full project lint still has unrelated legacy failures."
+      ]
+    }
+  ],
+  "changed_files": [
+    "src/main.py",
+    "src/core/finance_imports.py",
+    "frontend/src/components/FinanceFirstStep.tsx",
+    "frontend/src/components/FinanceImportPanel.tsx",
+    "tests/test_finance_imports.py",
+    "docs/FINANCE_MODULE.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m pytest -q tests/test_finance_kpis.py tests/test_finance_imports.py tests/test_finance_crm.py",
+    "python3 -m py_compile src/main.py src/core/finance_kpis.py src/core/finance_imports.py src/core/finance_crm.py",
+    "cd frontend && npx eslint src/components/FinanceFirstStep.tsx src/components/FinanceImportPanel.tsx src/components/FinanceThresholdsPanel.tsx src/pages/dashboard/FinancePage.tsx",
+    "cd frontend && npm run build"
+  ],
+  "known_gaps": [
+    "Full project lint remains blocked by unrelated existing lint debt.",
+    "Production still needs DB backup and Alembic migration from earlier finance stages.",
+    "Impact is a directional comparison, not proof that a specific action caused the KPI change."
+  ]
+}

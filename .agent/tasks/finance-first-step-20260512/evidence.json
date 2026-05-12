@@ -1,0 +1,103 @@
+{
+  "task_id": "finance-first-step-20260512",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Finance onboarding exists",
+      "status": "PASS",
+      "proof": ["frontend/src/components/FinanceFirstStep.tsx", "frontend/src/pages/dashboard/FinancePage.tsx"],
+      "gaps": ["Authenticated browser smoke not run in this pass."]
+    },
+    {
+      "id": "AC2",
+      "text": "Manual data for last 3 months can be entered",
+      "status": "PASS",
+      "proof": ["POST /api/finance/manual-entry"],
+      "gaps": ["File import and CRM connector remain non-goals for stage 1."]
+    },
+    {
+      "id": "AC3",
+      "text": "P&L and KPI are calculated",
+      "status": "PASS",
+      "proof": ["src/core/finance_kpis.py", "tests/test_finance_kpis.py"],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Workplace occupancy is calculated",
+      "status": "PASS",
+      "proof": ["finance_workplaces", "finance_workplace_metrics", "calculate_finance_snapshot"],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Revenue per workplace and workplace-hour is calculated",
+      "status": "PASS",
+      "proof": ["revenue_per_workplace", "revenue_per_workplace_hour"],
+      "gaps": []
+    },
+    {
+      "id": "AC6",
+      "text": "Break-even and daily target are shown",
+      "status": "PASS",
+      "proof": ["break_even_revenue", "daily_revenue_target"],
+      "gaps": ["Uses 22 working days as a stage-1 assumption."]
+    },
+    {
+      "id": "AC7",
+      "text": "Data quality score explains missing data",
+      "status": "PASS",
+      "proof": ["calculate_data_quality", "FinanceFirstStep quality card"],
+      "gaps": []
+    },
+    {
+      "id": "AC8",
+      "text": "Red-zone recommendations are shown",
+      "status": "PASS",
+      "proof": ["build_finance_recommendations"],
+      "gaps": ["Per-business threshold settings can be added later."]
+    },
+    {
+      "id": "AC9",
+      "text": "Incomplete data returns null plus explanation",
+      "status": "PASS",
+      "proof": ["test_finance_snapshot_handles_division_by_zero_with_explanations"],
+      "gaps": []
+    },
+    {
+      "id": "AC10",
+      "text": "Formula and recommendation tests exist",
+      "status": "PASS",
+      "proof": ["tests/test_finance_kpis.py"],
+      "gaps": ["API integration tests can be added after migration is applied in a test DB."]
+    },
+    {
+      "id": "AC11",
+      "text": "Finance docs exist",
+      "status": "PASS",
+      "proof": ["docs/FINANCE_MODULE.md"],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "alembic_migrations/versions/20260512_add_finance_first_step.py",
+    "docs/FINANCE_MODULE.md",
+    "frontend/src/components/FinanceFirstStep.tsx",
+    "frontend/src/pages/dashboard/FinancePage.tsx",
+    "src/core/finance_kpis.py",
+    "src/main.py",
+    "tests/test_finance_kpis.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m pytest -q tests/test_finance_kpis.py",
+    "cd frontend && npm run build",
+    "python3 -m py_compile src/main.py src/core/finance_kpis.py",
+    "Limited Playwright smoke against protected /dashboard/finance"
+  ],
+  "known_gaps": [
+    "Migration must be applied before the new API is used in an environment.",
+    "Authenticated browser smoke was not run in this pass.",
+    "CRM connectors and file import wizard are intentionally out of scope for stage 1."
+  ]
+}
