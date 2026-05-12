@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   Armchair,
+  ArrowRight,
   Calculator,
   CheckCircle2,
   CircleDollarSign,
@@ -60,6 +61,11 @@ type FinanceRecommendation = {
     seven_days?: string[];
     regular?: string[];
   };
+  localos_actions?: Array<{
+    label: string;
+    description?: string;
+    route: string;
+  }>;
 };
 
 type FinanceActionLog = {
@@ -880,6 +886,7 @@ const RecommendationCard: React.FC<{
 }> = ({ item, completedActions, savingActionKey, onToggleAction }) => {
   const actions = item.actions || {};
   const dataNeeded = item.data_needed || [];
+  const localosActions = item.localos_actions || [];
   const actionItems = [
     ...(actions.today || []).map((text) => ({ bucket: 'today', title: 'Сегодня', text })),
     ...(actions.seven_days || []).map((text) => ({ bucket: 'seven_days', title: '7 дней', text })),
@@ -942,6 +949,31 @@ const RecommendationCard: React.FC<{
               {itemName}
             </span>
           ))}
+        </div>
+      ) : null}
+
+      {localosActions.length > 0 ? (
+        <div className="mt-4 rounded-xl bg-white/70 p-3 ring-1 ring-slate-200">
+          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+            Что сделать в LocalOS
+          </div>
+          <div className="mt-2 grid gap-2 md:grid-cols-2">
+            {localosActions.map((action) => (
+              <a
+                key={`${action.route}-${action.label}`}
+                href={action.route}
+                className="group flex items-start justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm transition hover:border-blue-200 hover:bg-blue-50"
+              >
+                <span>
+                  <span className="font-medium text-slate-950">{action.label}</span>
+                  {action.description ? (
+                    <span className="mt-0.5 block text-xs leading-5 text-slate-500">{action.description}</span>
+                  ) : null}
+                </span>
+                <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-blue-600" />
+              </a>
+            ))}
+          </div>
         </div>
       ) : null}
     </div>

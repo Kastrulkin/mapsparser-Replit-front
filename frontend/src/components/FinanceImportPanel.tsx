@@ -45,6 +45,7 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
   const [templates, setTemplates] = useState<Record<string, ImportTemplateInfo>>({});
   const [templateProfile, setTemplateProfile] = useState('manual');
   const [mapping, setMapping] = useState<Record<string, string>>({});
+  const [mappingDirty, setMappingDirty] = useState(false);
   const [imports, setImports] = useState<ImportBatch[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -104,6 +105,7 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
       }
       setPreview(data);
       setMapping(data.mapping || {});
+      setMappingDirty(false);
       setMessage(`Найдено строк: ${data.rows_total}. Готово к импорту: ${data.valid_rows}. Ошибок: ${data.failed_rows}.`);
     } catch (error) {
       setMessage('Ошибка соединения с сервером');
@@ -114,6 +116,18 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
 
   const runImport = async () => {
     if (!file || !currentBusinessId) return;
+    if (!preview) {
+      setMessage('Сначала проверьте файл: LocalOS покажет preview, ошибки и дубли.');
+      return;
+    }
+    if (mappingDirty) {
+      setMessage('Вы изменили сопоставление колонок. Сначала снова нажмите «Проверить файл».');
+      return;
+    }
+    if (preview.valid_rows <= 0) {
+      setMessage('В файле нет строк, готовых к импорту. Исправьте ошибки и проверьте файл ещё раз.');
+      return;
+    }
     setLoading(true);
     setMessage(null);
     try {
@@ -130,6 +144,7 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
       setMessage(`Импортировано: ${data.rows_imported}. Пропущено дублей: ${data.rows_skipped}. Ошибок: ${data.rows_failed}.`);
       setPreview(null);
       setFile(null);
+      setMappingDirty(false);
       await loadImports();
       if (onImported) onImported();
     } catch (error) {
@@ -183,9 +198,21 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
                   const selected = event.target.files && event.target.files.length > 0 ? event.target.files[0] : null;
                   setFile(selected);
                   setPreview(null);
+                  setMappingDirty(false);
                   setMessage(null);
                 }}
               />
+              {file ? (
+                <div className="text-sm text-slate-500">
+                  Выбран файл: {file.name} · {Math.max(Math.round(file.size / 1024), 1)} КБ
+                </div>
+              ) : null}
+            </div>
+
+            <div className="grid gap-2 text-sm sm:grid-cols-3">
+              <ImportStep active={Boolean(file)} label="1. Файл выбран" />
+              <ImportStep active={Boolean(preview) && !mappingDirty} label="2. Preview проверен" />
+              <ImportStep active={Boolean(preview) && !mappingDirty && preview.valid_rows > 0} label="3. Можно импортировать" />
             </div>
 
             {message ? (
@@ -199,9 +226,13 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
                 <FileSpreadsheet className="h-4 w-4" />
                 Проверить файл
               </Button>
-              <Button onClick={runImport} disabled={!file || loading || !currentBusinessId} className="gap-2">
+              <Button
+                onClick={runImport}
+                disabled={!file || loading || !currentBusinessId || !preview || mappingDirty || preview.valid_rows <= 0}
+                className="gap-2"
+              >
                 <Upload className="h-4 w-4" />
-                Импортировать
+                Импортировать проверенные строки
               </Button>
             </div>
 
@@ -212,7 +243,18 @@ export const FinanceImportPanel: React.FC<FinanceImportPanelProps> = ({ currentB
                   <MiniStat label="Готово" value={preview.valid_rows} tone="green" />
                   <MiniStat label="Ошибки" value={preview.failed_rows} tone={preview.failed_rows > 0 ? 'red' : 'default'} />
                 </div>
-                <MappingEditor mapping={mapping} onChange={setMapping} />
+                {mappingDirty ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    Сопоставление изменено. Повторно проверьте файл перед импортом, чтобы не записать строки не в те поля.
+                  </div>
+                ) : null}
+                <MappingEditor
+                  mapping={mapping}
+                  onChange={(nextMapping) => {
+                    setMapping(nextMapping);
+                    setMappingDirty(true);
+                  }}
+                />
                 <PreviewTable rows={preview.preview} />
                 {preview.errors.length > 0 ? (
                   <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
@@ -274,6 +316,16 @@ const MiniStat: React.FC<{ label: string; value: number; tone?: 'default' | 'gre
   <div className={cn('rounded-2xl border px-4 py-3', tone === 'green' ? 'border-emerald-200 bg-emerald-50' : tone === 'red' ? 'border-rose-200 bg-rose-50' : 'border-slate-200 bg-white')}>
     <div className="text-xs uppercase tracking-[0.12em] text-slate-500">{label}</div>
     <div className="mt-1 text-xl font-semibold text-slate-950">{value}</div>
+  </div>
+);
+
+const ImportStep: React.FC<{ active: boolean; label: string }> = ({ active, label }) => (
+  <div className={cn(
+    'rounded-xl border px-3 py-2',
+    active ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-slate-200 bg-slate-50 text-slate-500',
+  )}>
+    <span className={cn('mr-2 inline-block h-2 w-2 rounded-full', active ? 'bg-emerald-500' : 'bg-slate-300')} />
+    {label}
   </div>
 );
 

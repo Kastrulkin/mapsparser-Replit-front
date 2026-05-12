@@ -5,7 +5,7 @@ import hashlib
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from core.finance_imports import normalize_finance_import_rows
@@ -32,7 +32,7 @@ CRM_PROVIDERS = [
         "api_base_url": "https://api.yclients.com/api/v1",
         "required_auth_fields": ["partner_token", "user_token"],
         "required_settings_fields": ["location_id"],
-        "capabilities": ["services", "staff", "appointments", "payments"],
+        "capabilities": ["services", "staff", "appointments", "payments", "workplaces", "schedules"],
         "notes": [
             "Для боевого доступа нужно приложение/интеграция в YCLIENTS и права системного пользователя.",
             "Без договоренности и токенов коннектор не выполняет синхронизацию.",
@@ -48,7 +48,7 @@ CRM_PROVIDERS = [
         "api_base_url": "https://api.alteg.io/api/v1",
         "required_auth_fields": ["partner_token", "user_token"],
         "required_settings_fields": ["location_id"],
-        "capabilities": ["services", "staff", "appointments", "payments", "analytics"],
+        "capabilities": ["services", "staff", "appointments", "payments", "workplaces", "schedules", "analytics"],
         "notes": [
             "Altegio документирует partner + user authorization для бизнес-данных.",
             "Лимит из публичной документации: 200 запросов/мин или 5 запросов/сек на IP.",
@@ -86,6 +86,9 @@ class CRMConnector:
     def fetch_workplaces(self, start_date: str, end_date: str) -> list[dict[str, Any]]:
         return []
 
+    def fetch_schedules(self, start_date: str, end_date: str) -> list[dict[str, Any]]:
+        return []
+
     def fetch_all(self, start_date: str, end_date: str) -> dict[str, list[dict[str, Any]]]:
         return {
             "appointments": self.fetch_appointments(start_date, end_date),
@@ -94,6 +97,7 @@ class CRMConnector:
             "services": self.fetch_services(start_date, end_date),
             "staff": self.fetch_staff(start_date, end_date),
             "workplaces": self.fetch_workplaces(start_date, end_date),
+            "schedules": self.fetch_schedules(start_date, end_date),
         }
 
 
@@ -179,6 +183,17 @@ class MockDemoCRMAdapter(CRMConnector):
                 "booked_hours": 92,
                 "revenue": 260000,
                 "gross_profit": 135000,
+            }
+        ]
+
+    def fetch_schedules(self, start_date: str, end_date: str) -> list[dict[str, Any]]:
+        return [
+            {
+                "external_id": f"mock-chair-1-schedule-{start_date}-{end_date}",
+                "workplace": {"name": "Кресло 1", "type": "hair_chair"},
+                "date": end_date,
+                "start_time": "10:00",
+                "end_time": "20:00",
             }
         ]
 
@@ -420,6 +435,7 @@ def crm_dataset_to_finance_rows(dataset: dict[str, list[dict[str, Any]]], start_
         raw_rows.append({"record_type": "workplace", **workplace})
     raw_rows.extend(crm_appointments_to_staff_metrics(dataset.get("appointments") or [], start_date, end_date))
     raw_rows.extend(crm_appointments_to_service_metrics(dataset.get("appointments") or [], start_date, end_date))
+    raw_rows.extend(crm_schedules_to_workplace_metrics(dataset.get("schedules") or [], start_date, end_date))
     raw_rows.extend(crm_appointments_to_workplace_metrics(dataset.get("appointments") or [], start_date, end_date))
     return normalize_finance_import_rows(raw_rows, period_start=start_date, period_end=end_date)
 
@@ -549,6 +565,35 @@ def crm_appointments_to_workplace_metrics(appointments: list[dict[str, Any]], st
     return list(grouped.values())
 
 
+def crm_schedules_to_workplace_metrics(schedules: list[dict[str, Any]], start_date: str, end_date: str) -> list[dict[str, Any]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    for schedule in schedules:
+        resource = _schedule_workplace(schedule)
+        name = _text_value(resource, ["name", "title", "workplace_name", "resource_name"])
+        if not name:
+            name = _text_value(schedule, ["workplace_name", "resource_name", "room_name", "chair_name", "cabinet_name"])
+        if not name:
+            continue
+        key = name.lower()
+        metric = grouped.setdefault(
+            key,
+            {
+                "record_type": "workplace",
+                "external_id": f"crm-schedule-workplace-{key}-{start_date}-{end_date}",
+                "workplace_name": name,
+                "workplace_type": _workplace_type(resource, schedule),
+                "period_start": start_date,
+                "period_end": end_date,
+                "available_minutes": 0,
+                "booked_minutes": 0,
+                "revenue": 0,
+                "gross_profit": 0,
+            },
+        )
+        metric["available_minutes"] += _schedule_available_minutes(schedule, resource)
+    return list(grouped.values())
+
+
 def build_crm_sync_preview(
     provider: str,
     dataset: dict[str, list[dict[str, Any]]],
@@ -566,6 +611,7 @@ def build_crm_sync_preview(
         "services": len(dataset.get("services") or []),
         "staff": len(dataset.get("staff") or []),
         "workplaces": len(dataset.get("workplaces") or []),
+        "schedules": len(dataset.get("schedules") or []),
     }
     normalized_counts: dict[str, int] = {}
     for row in rows:
@@ -709,6 +755,14 @@ def _appointment_workplaces(appointment: dict[str, Any]) -> list[dict[str, Any]]
     return unique
 
 
+def _schedule_workplace(schedule: dict[str, Any]) -> dict[str, Any]:
+    for key in ("workplace", "resource", "room", "chair", "cabinet"):
+        value = schedule.get(key)
+        if isinstance(value, dict):
+            return value
+    return schedule
+
+
 def _workplace_type(resource: dict[str, Any], appointment: dict[str, Any]) -> str:
     raw = (
         _text_value(resource, ["type", "workplace_type", "resource_type"])
@@ -732,6 +786,23 @@ def _resource_available_minutes(resource: dict[str, Any]) -> int:
         return direct
     hours = _moneyish(_first_from(resource, ["available_hours", "work_hours", "working_hours"]))
     return int(round(hours * 60)) if hours > 0 else 0
+
+
+def _schedule_available_minutes(schedule: dict[str, Any], resource: dict[str, Any]) -> int:
+    direct = _durationish_minutes(_first_from(schedule, ["available_minutes", "work_minutes", "working_minutes"]))
+    if direct > 0:
+        return direct
+    hours = _moneyish(_first_from(schedule, ["available_hours", "work_hours", "working_hours"]))
+    if hours > 0:
+        return int(round(hours * 60))
+    resource_minutes = _resource_available_minutes(resource)
+    if resource_minutes > 0:
+        return resource_minutes
+    return _minutes_between(
+        _text_value(schedule, ["start_at", "start", "from", "start_time", "time_from"]),
+        _text_value(schedule, ["end_at", "end", "to", "end_time", "time_to"]),
+        _text_value(schedule, ["date", "day"]),
+    )
 
 
 def _is_completed_appointment(appointment: dict[str, Any]) -> bool:
@@ -801,6 +872,40 @@ def _durationish_minutes(value: Any) -> int:
     if amount <= 0:
         return 0
     return int(round(amount / 60)) if amount > 600 else int(round(amount))
+
+
+def _minutes_between(start_value: str, end_value: str, day_value: str = "") -> int:
+    start_dt = _parse_datetimeish(start_value, day_value)
+    end_dt = _parse_datetimeish(end_value, day_value)
+    if not start_dt or not end_dt or end_dt <= start_dt:
+        return 0
+    return int(round((end_dt - start_dt).total_seconds() / 60))
+
+
+def _parse_datetimeish(value: str, day_value: str = "") -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    candidates = [raw]
+    if day_value and len(raw) <= 5:
+        candidates.append(f"{str(day_value)[:10]}T{raw}:00")
+        candidates.append(f"{str(day_value)[:10]} {raw}:00")
+    for candidate in candidates:
+        clean = candidate.replace("Z", "+00:00")
+        try:
+            return datetime.fromisoformat(clean)
+        except ValueError:
+            pass
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%H:%M:%S", "%H:%M"):
+            try:
+                parsed = datetime.strptime(clean, fmt)
+                if fmt.startswith("%H") and day_value:
+                    parsed_date = date.fromisoformat(str(day_value)[:10])
+                    return datetime.combine(parsed_date, parsed.time())
+                return parsed
+            except ValueError:
+                continue
+    return None
 
 
 def _moneyish(value: Any) -> float:

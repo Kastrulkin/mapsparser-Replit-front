@@ -1,0 +1,40 @@
+{
+  "task_id": "finance-finish-plan-20260512",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Recommendations expose LocalOS action links in API payload and UI."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "CRM schedules/resources are part of the adapter contract and normalize into workplace metrics."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Import wizard blocks stale or unpreviewed imports."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Finance docs include CRM resource validation and LocalOS action notes."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Targeted tests, lint, compile and frontend build passed."
+    }
+  ],
+  "commands_run": [
+    "python3 -m pytest tests/test_finance_kpis.py tests/test_finance_imports.py tests/test_finance_crm.py -q",
+    "cd frontend && npm exec -- eslint src/components/FinanceFirstStep.tsx src/components/FinanceImportPanel.tsx src/components/FinanceCrmPanel.tsx src/pages/dashboard/FinancePage.tsx",
+    "cd frontend && npm run build",
+    "python3 -m compileall -q src/core/finance_crm.py src/core/finance_kpis.py"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/finance-finish-plan-20260512/evidence.md"
+  ]
+}

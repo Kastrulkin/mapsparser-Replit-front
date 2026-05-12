@@ -10,6 +10,7 @@ from core.finance_crm import (
     crm_appointments_to_service_metrics,
     crm_appointments_to_staff_metrics,
     crm_appointments_to_workplace_metrics,
+    crm_schedules_to_workplace_metrics,
     create_crm_connector,
     crm_dataset_to_finance_rows,
     get_crm_provider,
@@ -36,6 +37,7 @@ def test_mock_crm_connector_returns_finance_dataset() -> None:
     assert dataset["services"]
     assert dataset["staff"]
     assert dataset["workplaces"]
+    assert dataset["schedules"]
 
 
 def test_crm_dataset_normalizes_to_finance_rows_with_duplicate_keys() -> None:
@@ -249,6 +251,32 @@ def test_crm_appointments_build_workplace_metrics_from_resources() -> None:
     assert by_name["Кабинет косметологии"]["available_minutes"] == 480
     assert by_name["Кабинет косметологии"]["booked_minutes"] == 120
     assert by_name["Кабинет косметологии"]["revenue"] == 5000
+
+
+def test_crm_schedules_build_available_workplace_minutes() -> None:
+    schedules = [
+        {
+            "id": 1,
+            "date": "2026-05-01",
+            "workplace": {"name": "Кресло 1", "type": "hair_chair"},
+            "start_time": "10:00",
+            "end_time": "18:00",
+        },
+        {
+            "id": 2,
+            "resource_name": "Кабинет косметологии",
+            "workplace_type": "cosmetology_room",
+            "available_hours": 6,
+        },
+    ]
+
+    metrics = crm_schedules_to_workplace_metrics(schedules, "2026-05-01", "2026-05-31")
+    by_name = {item["workplace_name"]: item for item in metrics}
+
+    assert by_name["Кресло 1"]["available_minutes"] == 480
+    assert by_name["Кресло 1"]["workplace_type"] == "hair_chair"
+    assert by_name["Кабинет косметологии"]["available_minutes"] == 360
+    assert by_name["Кабинет косметологии"]["workplace_type"] == "cosmetology_room"
 
 
 def test_crm_dataset_adds_workplace_rows_from_appointments() -> None:

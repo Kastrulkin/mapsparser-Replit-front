@@ -564,6 +564,7 @@ def build_finance_recommendations(kpis: dict[str, Any], thresholds: dict[str, di
         target_metric: str | None = None,
         data_needed: list[str] | None = None,
         actions: dict[str, list[str]] | None = None,
+        localos_actions: list[dict[str, str]] | None = None,
     ) -> None:
         items.append({
             "code": code,
@@ -577,6 +578,7 @@ def build_finance_recommendations(kpis: dict[str, Any], thresholds: dict[str, di
                 "seven_days": [],
                 "regular": [],
             },
+            "localos_actions": localos_actions or [],
         })
 
     operating_margin = kpis.get("operating_margin")
@@ -602,6 +604,18 @@ def build_finance_recommendations(kpis: dict[str, Any], thresholds: dict[str, di
                     "Не запускать акции без проверки маржи и загрузки.",
                 ],
             },
+            [
+                {
+                    "label": "Проверить услуги",
+                    "description": "Найти низкомаржинальные услуги и не продвигать их вслепую.",
+                    "route": "/dashboard/card",
+                },
+                {
+                    "label": "Запланировать публикации",
+                    "description": "Заполнить спрос услугами с лучшей экономикой.",
+                    "route": "/dashboard/card",
+                },
+            ],
         )
 
     payroll_share = kpis.get("payroll_share")
@@ -627,6 +641,13 @@ def build_finance_recommendations(kpis: dict[str, Any], thresholds: dict[str, di
                     "Привязывать продвижение к мастерам и услугам с лучшей экономикой.",
                 ],
             },
+            [
+                {
+                    "label": "Посмотреть записи",
+                    "description": "Сверить загрузку мастеров и слабые смены.",
+                    "route": "/dashboard/bookings",
+                },
+            ],
         )
 
     material_share = kpis.get("material_share")
@@ -652,6 +673,13 @@ def build_finance_recommendations(kpis: dict[str, Any], thresholds: dict[str, di
                     "Не продвигать услуги, где материалы съедают маржу.",
                 ],
             },
+            [
+                {
+                    "label": "Открыть услуги",
+                    "description": "Обновить себестоимость, длительность и приоритет продвижения.",
+                    "route": "/dashboard/card",
+                },
+            ],
         )
 
     no_show_rate = kpis.get("no_show_rate")
@@ -677,6 +705,18 @@ def build_finance_recommendations(kpis: dict[str, Any], thresholds: dict[str, di
                     "Отдельно обрабатывать клиентов, которые уже не приходили.",
                 ],
             },
+            [
+                {
+                    "label": "Проверить записи",
+                    "description": "Найти ближайшие записи, где нужно подтверждение.",
+                    "route": "/dashboard/bookings",
+                },
+                {
+                    "label": "Настроить бота",
+                    "description": "Подготовить напоминания и подтверждение записи.",
+                    "route": "/dashboard/chats",
+                },
+            ],
         )
 
     rebooking_rate = kpis.get("rebooking_rate")
@@ -702,6 +742,18 @@ def build_finance_recommendations(kpis: dict[str, Any], thresholds: dict[str, di
                     "Возвращать базу клиентов через сообщения и публикации.",
                 ],
             },
+            [
+                {
+                    "label": "Настроить коммуникации",
+                    "description": "Подготовить мягкие сообщения для следующей записи.",
+                    "route": "/dashboard/chats",
+                },
+                {
+                    "label": "Проверить записи",
+                    "description": "Найти клиентов без следующего визита.",
+                    "route": "/dashboard/bookings",
+                },
+            ],
         )
 
     occupancy = kpis.get("workplace_occupancy")
@@ -728,6 +780,18 @@ def build_finance_recommendations(kpis: dict[str, Any], thresholds: dict[str, di
                     "Продвигать услуги, которые заполняют пустые часы и дают маржу.",
                 ],
             },
+            [
+                {
+                    "label": "Сделать публикации",
+                    "description": "Заполнить слабые дни недели через новости и соцсети.",
+                    "route": "/dashboard/card",
+                },
+                {
+                    "label": "Найти партнеров",
+                    "description": "Подобрать локальные партнерства вокруг точки.",
+                    "route": "/dashboard/partnerships",
+                },
+            ],
         )
     if occupancy is not None and occupancy > 85 and revenue_hour is not None and statuses.get("revenue_per_workplace_hour") == "red":
         add(
@@ -751,6 +815,13 @@ def build_finance_recommendations(kpis: dict[str, Any], thresholds: dict[str, di
                     "Следить, чтобы высокая загрузка не маскировала низкую прибыль.",
                 ],
             },
+            [
+                {
+                    "label": "Оптимизировать услуги",
+                    "description": "Пересобрать меню услуг по цене, длительности и спросу.",
+                    "route": "/dashboard/card",
+                },
+            ],
         )
 
     idle_hours = kpis.get("idle_workplace_hours")
@@ -776,6 +847,18 @@ def build_finance_recommendations(kpis: dict[str, Any], thresholds: dict[str, di
                     "Держать короткий список клиентов для быстрого дозаполнения.",
                 ],
             },
+            [
+                {
+                    "label": "Запустить публикации",
+                    "description": "Дать повод записаться на ближайшие свободные окна.",
+                    "route": "/dashboard/card",
+                },
+                {
+                    "label": "Подключить партнерства",
+                    "description": "Найти соседние бизнесы для обмена аудиторией.",
+                    "route": "/dashboard/partnerships",
+                },
+            ],
         )
 
     profit_hour = kpis.get("gross_profit_per_workplace_hour")
@@ -801,6 +884,13 @@ def build_finance_recommendations(kpis: dict[str, Any], thresholds: dict[str, di
                     "Продвигать услуги с понятной экономикой, а не просто высоким спросом.",
                 ],
             },
+            [
+                {
+                    "label": "Проверить карточку",
+                    "description": "Сместить акцент на услуги с хорошей прибылью за час.",
+                    "route": "/dashboard/card",
+                },
+            ],
         )
 
     low_margin_share = kpis.get("low_margin_services_share")
@@ -826,6 +916,13 @@ def build_finance_recommendations(kpis: dict[str, Any], thresholds: dict[str, di
                     "Использовать входные услуги только как путь к следующей покупке.",
                 ],
             },
+            [
+                {
+                    "label": "Открыть услуги",
+                    "description": "Убрать слабые услуги из активного продвижения.",
+                    "route": "/dashboard/card",
+                },
+            ],
         )
 
     if not items:
@@ -850,6 +947,13 @@ def build_finance_recommendations(kpis: dict[str, Any], thresholds: dict[str, di
                     "После каждого обновления смотреть красные зоны и план действий.",
                 ],
             },
+            [
+                {
+                    "label": "Остаться в финансах",
+                    "description": "Дозаполнить данные для точных KPI.",
+                    "route": "/dashboard/finance",
+                },
+            ],
         )
 
     return items

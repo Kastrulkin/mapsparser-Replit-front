@@ -136,6 +136,7 @@ def test_finance_recommendations_include_red_zones() -> None:
     assert "seven_days" in low_margin["actions"]
     assert "regular" in low_margin["actions"]
     assert "расходы" in low_margin["data_needed"]
+    assert low_margin["localos_actions"][0]["route"].startswith("/dashboard/")
 
 
 def test_finance_snapshot_applies_custom_thresholds_to_statuses() -> None:
@@ -194,3 +195,4 @@ def test_finance_recommendations_for_missing_data_include_onboarding_plan() -> N
     assert recommendation["actions"]["today"]
     assert recommendation["actions"]["seven_days"]
     assert recommendation["actions"]["regular"]
+    assert recommendation["localos_actions"][0]["route"] == "/dashboard/finance"
