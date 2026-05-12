@@ -4,6 +4,7 @@ import {
   Armchair,
   ArrowRight,
   Calculator,
+  ChevronDown,
   CheckCircle2,
   CircleDollarSign,
   Clock3,
@@ -20,6 +21,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -138,7 +140,7 @@ const workplaceLabels: Record<string, string> = {
 const starterSteps = [
   { key: 'entry', title: '1. Деньги', text: 'Выручка и основные расходы за 3 месяца.' },
   { key: 'service', title: '2. Услуги', text: 'Цена, длительность, материалы и выплата мастеру.' },
-  { key: 'staff', title: '3. Мастера', text: 'Выручка, часы, визиты, no-show и повторная запись.' },
+  { key: 'staff', title: '3. Мастера', text: 'Выручка, часы, визиты, неявки и повторная запись.' },
   { key: 'workplace', title: '4. Кресла', text: 'Сколько мест доступно, занято и сколько они приносят.' },
 ];
 
@@ -151,6 +153,7 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
   const [historyMonths, setHistoryMonths] = useState(6);
   const [history, setHistory] = useState<FinanceHistoryPoint[]>([]);
   const [impact, setImpact] = useState<FinanceImpact | null>(null);
+  const [selectedMetric, setSelectedMetric] = useState<FinanceMetricKey | null>(null);
   const [activeInputStep, setActiveInputStep] = useState('entry');
   const [entry, setEntry] = useState({
     revenue: '',
@@ -342,10 +345,11 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
     || (dashboard?.staff || []).length
     || (dashboard?.workplaces || []).length,
   );
+  const dataState = getFinanceDataState(hasFinanceData, quality?.score || 0, quality?.missing || []);
   const priorityItems = useMemo(() => {
     const items = [];
     if (!hasFinanceData) {
-      items.push('Заполнить выручку и основные расходы: это даст первый P&L и понимание плюс/минус.');
+      items.push('Заполнить выручку и основные расходы: это даст первый отчёт доходов и расходов и понимание плюс/минус.');
       items.push('Добавить хотя бы одно рабочее место: тогда появится выручка на кресло и простой.');
       items.push('Добавить 3-5 ключевых услуг: станет видно, где прибыль, а где занятость без денег.');
       return items;
@@ -360,6 +364,7 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
     }
     return items;
   }, [dashboard?.recommendations, hasFinanceData, quality?.missing]);
+  const primaryAction = getPrimaryFinanceAction(dataState, quality?.missing || []);
 
   const fillDemoSalon = () => {
     setEntry({
@@ -452,11 +457,20 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
     }
   };
 
+  const runPrimaryAction = () => {
+    if (primaryAction.target === 'red-flags') {
+      document.getElementById('finance-red-flags')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    setActiveInputStep(primaryAction.target);
+    document.getElementById('finance-quick-input')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   return (
     <div className="space-y-6">
       <DashboardSection
-        title="Первый шаг к прибыльному бизнесу"
-        description={`Заполните базовые данные за последние 3 месяца: ${period.start} - ${period.end}. Этого достаточно, чтобы увидеть плюс/минус, точку безубыточности, загрузку мастеров и выручку на кресло.`}
+        title="Финансовый обзор"
+        description="Сначала смотрим на состояние данных, ключевые показатели и ближайшее действие. Детальный ввод и таблицы ниже."
         actions={
           <Button variant="outline" onClick={loadDashboard} disabled={loading || !currentBusinessId} className="gap-2">
             <RefreshCw className={cn('h-4 w-4', loading ? 'animate-spin' : '')} />
@@ -476,70 +490,71 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
           </div>
         ) : null}
 
-        <div className="mb-6 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-          <div className={cn('rounded-3xl border p-5', hasFinanceData ? 'border-slate-200 bg-white' : 'border-amber-200 bg-amber-50')}>
-            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-              <div>
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                  <Gauge className="h-4 w-4" />
-                  Первый запуск
-                </div>
-                <h3 className="mt-2 text-xl font-semibold text-slate-950">
-                  {hasFinanceData ? 'Анализируем то, что уже есть' : 'Заполните 5 чисел, чтобы увидеть первую картину'}
-                </h3>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                  LocalOS уже показывает выручку, записи, клиентов и загрузку, если эти данные есть. Для прибыли и маржи система отдельно попросит расходы, ФОТ, материалы и выплаты мастерам.
-                </p>
-              </div>
-              <Button variant="outline" onClick={fillDemoSalon} className="gap-2">
-                <PlayCircle className="h-4 w-4" />
-                Показать пример салона
-              </Button>
-            </div>
-            <div className="mt-5 grid gap-3 md:grid-cols-4">
-              {starterSteps.map((step) => (
-                <button
-                  key={step.key}
-                  type="button"
-                  onClick={() => setActiveInputStep(step.key)}
-                  className={cn(
-                    'rounded-2xl border bg-white p-3 text-left text-sm transition hover:border-slate-300',
-                    activeInputStep === step.key ? 'border-slate-950 ring-2 ring-slate-200' : 'border-slate-200',
-                  )}
-                >
-                  <div className="font-semibold text-slate-950">{step.title}</div>
-                  <div className="mt-1 leading-5 text-slate-600">{step.text}</div>
-                </button>
-              ))}
-            </div>
-          </div>
+        <ExecutiveFinanceSummary
+          dataState={dataState}
+          period={period}
+          quality={quality}
+          kpis={kpis}
+          explanations={dashboard?.explanations || {}}
+          statuses={dashboard?.statuses || {}}
+          history={history}
+          priorityItems={priorityItems}
+          primaryActionLabel={primaryAction.label}
+          onPrimaryAction={runPrimaryAction}
+          selectedMetric={selectedMetric}
+          onSelectMetric={setSelectedMetric}
+        />
 
-          <div className="rounded-3xl border border-slate-200 bg-white p-5">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-              <Target className="h-4 w-4" />
-              Что исправить первым
-            </div>
-            <div className="mt-3 space-y-2">
-              {priorityItems.map((item, index) => (
-                <div key={`${item}-${index}`} className="flex gap-3 rounded-2xl bg-slate-50 p-3 text-sm leading-5 text-slate-700">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-950 text-xs font-semibold text-white">{index + 1}</span>
-                  <span>{item}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <KpiCard icon={CircleDollarSign} label="Операционная прибыль" value={rub(kpis.operating_profit)} status={dashboard?.statuses?.operating_margin} hint={`Маржа: ${percent(kpis.operating_margin)}`} meaning="Остаётся после базовых расходов." action="Если красное: проверить ФОТ, материалы и низкомаржинальные услуги." />
-          <KpiCard icon={Calculator} label="Точка безубыточности" value={rub(kpis.break_even_revenue)} hint={`Дневная цель: ${rub(kpis.daily_revenue_target)}`} meaning="Минимальная выручка, чтобы не работать в минус." action="Если не считается: заполнить расходы и маржу." />
-          <KpiCard icon={Armchair} label="Выручка на кресло" value={rub(kpis.revenue_per_workplace)} status={dashboard?.statuses?.workplace_occupancy} hint={`Кресло-час: ${rub(kpis.revenue_per_workplace_hour)}`} meaning="Показывает, сколько приносит рабочее место." action="Если низко: проверить цену, длительность и загрузку." />
-          <KpiCard icon={Clock3} label="Загрузка рабочих мест" value={percent(kpis.workplace_occupancy)} status={dashboard?.statuses?.workplace_occupancy} hint={`Простой: ${numberValue(kpis.idle_workplace_hours)} ч`} meaning="Сколько доступного времени реально занято." action="Если низко: заполнять ближайшие окна и возвращать базу." />
-        </div>
+        {selectedMetric ? (
+          <MetricDrilldown
+            metric={selectedMetric}
+            kpis={kpis}
+            explanations={dashboard?.explanations || {}}
+            quality={quality}
+            servicesCount={dashboard?.services?.length || 0}
+            staffCount={dashboard?.staff?.length || 0}
+            workplacesCount={dashboard?.workplaces?.length || 0}
+            onClose={() => setSelectedMetric(null)}
+          />
+        ) : null}
 
         <div className="mt-6 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
           <ImpactPanel impact={impact} />
           <HistoryPanel history={history} months={historyMonths} onChangeMonths={loadHistory} />
+        </div>
+
+        <div id="finance-quick-input" className="mt-6 rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                <Gauge className="h-4 w-4" />
+                Быстрый ввод
+              </div>
+              <div className="mt-1 text-base font-semibold text-slate-950">
+                {hasFinanceData ? 'Дозаполните недостающие данные' : 'Начните с 5 чисел'}
+              </div>
+            </div>
+            <Button variant="outline" onClick={fillDemoSalon} className="gap-2">
+              <PlayCircle className="h-4 w-4" />
+              Показать пример салона
+            </Button>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-4">
+            {starterSteps.map((step) => (
+              <button
+                key={step.key}
+                type="button"
+                onClick={() => setActiveInputStep(step.key)}
+                className={cn(
+                  'rounded-2xl border bg-white p-3 text-left text-sm transition hover:border-slate-300',
+                  activeInputStep === step.key ? 'border-slate-950 ring-2 ring-slate-200' : 'border-slate-200',
+                )}
+              >
+                <div className="font-semibold text-slate-950">{step.title}</div>
+                <div className="mt-1 leading-5 text-slate-600">{step.text}</div>
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="mt-6 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
@@ -553,7 +568,7 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
             <CardContent>
               <Tabs value={activeInputStep} onValueChange={setActiveInputStep}>
                 <TabsList className="grid h-auto w-full grid-cols-2 gap-1 md:grid-cols-4">
-                  <TabsTrigger value="entry">P&L</TabsTrigger>
+                  <TabsTrigger value="entry">Доходы и расходы</TabsTrigger>
                   <TabsTrigger value="service">Услуги</TabsTrigger>
                   <TabsTrigger value="staff">Мастера</TabsTrigger>
                   <TabsTrigger value="workplace">Кресла</TabsTrigger>
@@ -593,7 +608,7 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
                     <NumberField label="Визиты" value={staff.visits_count} onChange={(value) => setStaff({ ...staff, visits_count: value })} />
                     <NumberField label="Занято часов" value={staff.booked_hours} onChange={(value) => setStaff({ ...staff, booked_hours: value })} />
                     <NumberField label="Доступно часов" value={staff.available_hours} onChange={(value) => setStaff({ ...staff, available_hours: value })} />
-                    <NumberField label="No-show" value={staff.no_show_count} onChange={(value) => setStaff({ ...staff, no_show_count: value })} />
+                    <NumberField label="Неявки" value={staff.no_show_count} onChange={(value) => setStaff({ ...staff, no_show_count: value })} />
                     <NumberField label="Повторные записи" value={staff.rebooking_count} onChange={(value) => setStaff({ ...staff, rebooking_count: value })} />
                   </div>
                   <SaveButton disabled={saving} onClick={() => saveManualData('staff')} />
@@ -638,10 +653,10 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
               <div className="rounded-2xl bg-slate-50 p-4 text-slate-700">
                 <div className="font-medium text-slate-950">Прогресс</div>
                 <div className="mt-2 space-y-1">
-                  <ProgressLine done={(quality?.missing || []).indexOf('расходы') === -1} label="Достаточно для базового P&L" />
+                  <ProgressLine done={(quality?.missing || []).indexOf('расходы') === -1} label="Достаточно для отчёта доходов и расходов" />
                   <ProgressLine done={(quality?.missing || []).indexOf('себестоимость материалов') === -1} label="Достаточно для маржи услуг" />
                   <ProgressLine done={(quality?.missing || []).indexOf('загрузка рабочих мест') === -1} label="Достаточно для загрузки кресел" />
-                  <ProgressLine done={(quality?.missing || []).indexOf('повторная запись') === -1} label="Достаточно для rebooking" />
+                  <ProgressLine done={(quality?.missing || []).indexOf('повторная запись') === -1} label="Достаточно для повторной записи" />
                 </div>
               </div>
             </CardContent>
@@ -670,7 +685,7 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
             ['staff_name', 'Мастер'],
             ['revenue', 'Выручка'],
             ['occupancy', 'Загрузка'],
-            ['rebooking_rate', 'Rebooking'],
+            ['rebooking_rate', 'Повторная запись'],
           ]}
           formatter={(key, value) => key === 'revenue' ? rub(value) : key.includes('rate') || key === 'occupancy' ? percent(value) : String(value || 'н/д')}
         />
@@ -688,19 +703,21 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
         />
       </div>
 
-      <DashboardSection title="Красные зоны и следующие действия" description="Рекомендации появляются только из введённых данных. Если данных мало, система сначала покажет, что дозаполнить.">
-        <div className="grid gap-3 md:grid-cols-2">
-          {(dashboard?.recommendations || []).map((item) => (
-            <RecommendationCard
-              key={item.code}
-              item={item}
-              completedActions={completedActions}
-              savingActionKey={savingActionKey}
-              onToggleAction={toggleAction}
-            />
-          ))}
-        </div>
-      </DashboardSection>
+      <div id="finance-red-flags">
+        <DashboardSection title="Красные зоны и следующие действия" description="Рекомендации появляются только из введённых данных. Если данных мало, система сначала покажет, что дозаполнить.">
+          <div className="grid gap-3 md:grid-cols-2">
+            {(dashboard?.recommendations || []).map((item) => (
+              <RecommendationCard
+                key={item.code}
+                item={item}
+                completedActions={completedActions}
+                savingActionKey={savingActionKey}
+                onToggleAction={toggleAction}
+              />
+            ))}
+          </div>
+        </DashboardSection>
+      </div>
     </div>
   );
 };
@@ -739,32 +756,375 @@ const SaveButton: React.FC<{ disabled: boolean; onClick: () => void }> = ({ disa
   </Button>
 );
 
-const KpiCard: React.FC<{
+type FinanceDataState = 'empty' | 'partial' | 'ready';
+
+type PrimaryFinanceAction = {
+  label: string;
+  target: 'entry' | 'service' | 'staff' | 'workplace' | 'red-flags';
+};
+
+type FinanceMetricKey = 'profit' | 'break_even' | 'workplace_revenue' | 'workplace_occupancy';
+
+const metricMeta: Record<FinanceMetricKey, {
+  title: string;
+  source: string;
+  formula: string;
+  missing: string[];
+  action: string;
+}> = {
+  profit: {
+    title: 'Прибыль и маржа',
+    source: 'Доходы, расходы, ФОТ, материалы и выплаты мастерам.',
+    formula: 'Операционная прибыль = выручка - расходы. Маржа = прибыль / выручка.',
+    missing: ['расходы', 'ФОТ', 'себестоимость материалов', 'выплаты мастерам'],
+    action: 'Дозаполнить расходы и себестоимость, затем проверить услуги с низкой маржей.',
+  },
+  break_even: {
+    title: 'Точка безубыточности',
+    source: 'Постоянные расходы и валовая маржа.',
+    formula: 'Точка безубыточности = постоянные расходы / валовая маржа.',
+    missing: ['расходы', 'постоянные расходы', 'себестоимость материалов', 'выплаты мастерам'],
+    action: 'Заполнить расходы и маржу услуг, чтобы увидеть минимальную дневную цель.',
+  },
+  workplace_revenue: {
+    title: 'Выручка на рабочее место',
+    source: 'Активные кресла/кабинеты, выручка и доступные часы.',
+    formula: 'Выручка на кресло = выручка / активные рабочие места.',
+    missing: ['рабочие места', 'доступные часы рабочих мест', 'выручка по рабочим местам'],
+    action: 'Добавить рабочие места и часы, чтобы видеть, какие места приносят деньги.',
+  },
+  workplace_occupancy: {
+    title: 'Загрузка рабочих мест',
+    source: 'Доступные и занятые минуты по креслам, кабинетам или рабочим местам.',
+    formula: 'Загрузка = занятые часы / доступные часы.',
+    missing: ['рабочие места', 'доступные часы рабочих мест', 'занятые часы рабочих мест'],
+    action: 'Заполнить расписание и занятые часы, затем искать простои по дням и местам.',
+  },
+};
+
+const getFinanceDataState = (hasFinanceData: boolean, qualityScore: number, missing: string[]): FinanceDataState => {
+  if (!hasFinanceData) return 'empty';
+  if (qualityScore >= 70 && missing.length <= 2) return 'ready';
+  return 'partial';
+};
+
+const getPrimaryFinanceAction = (state: FinanceDataState, missing: string[]): PrimaryFinanceAction => {
+  if (state === 'empty') return { label: 'Начать учёт', target: 'entry' };
+  if (state === 'ready') return { label: 'Проверить красные зоны', target: 'red-flags' };
+  if (missing.indexOf('расходы') !== -1) return { label: 'Заполнить расходы', target: 'entry' };
+  if (missing.indexOf('рабочие места') !== -1 || missing.indexOf('загрузка рабочих мест') !== -1) {
+    return { label: 'Добавить рабочие места', target: 'workplace' };
+  }
+  if (missing.indexOf('себестоимость материалов') !== -1 || missing.indexOf('выплаты мастерам') !== -1) {
+    return { label: 'Дозаполнить услуги', target: 'service' };
+  }
+  return { label: 'Дозаполнить данные', target: 'entry' };
+};
+
+const stateCopy: Record<FinanceDataState, { label: string; title: string; text: string; tone: string }> = {
+  empty: {
+    label: 'Нет данных',
+    title: 'Начните с короткого учёта',
+    text: 'Достаточно выручки, расходов и рабочих мест, чтобы увидеть первую финансовую картину.',
+    tone: 'border-amber-200 bg-amber-50',
+  },
+  partial: {
+    label: 'Данных мало',
+    title: 'Анализируем то, что уже есть',
+    text: 'Показатели по выручке и загрузке уже полезны. Для прибыли и маржи нужно дозаполнить расходы и себестоимость.',
+    tone: 'border-sky-200 bg-sky-50',
+  },
+  ready: {
+    label: 'Дашборд готов',
+    title: 'Можно смотреть красные зоны',
+    text: 'Данных достаточно для управленческого обзора. Следующий шаг - проверить проблемы и действия.',
+    tone: 'border-emerald-200 bg-emerald-50',
+  },
+};
+
+const metricDisplay = (value: KpiValue, formatter: (input: KpiValue) => string) => (
+  value == null ? 'Не хватает данных' : formatter(value)
+);
+
+const metricIsUnavailable = (value: KpiValue) => value == null;
+
+const ExecutiveFinanceSummary: React.FC<{
+  dataState: FinanceDataState;
+  period: { start: string; end: string };
+  quality?: FinanceDashboard['data_quality'];
+  kpis: Record<string, KpiValue>;
+  explanations: Record<string, string>;
+  statuses: Record<string, string>;
+  history: FinanceHistoryPoint[];
+  priorityItems: string[];
+  primaryActionLabel: string;
+  onPrimaryAction: () => void;
+  selectedMetric: FinanceMetricKey | null;
+  onSelectMetric: (metric: FinanceMetricKey) => void;
+}> = ({ dataState, period, quality, kpis, explanations, statuses, history, priorityItems, primaryActionLabel, onPrimaryAction, selectedMetric, onSelectMetric }) => {
+  const copy = stateCopy[dataState];
+  const qualityScore = quality?.score;
+  const qualityPercent = Math.max(0, Math.min(Number(qualityScore || 0), 100));
+
+  return (
+    <div className={cn('rounded-3xl border p-5 shadow-sm sm:p-6', copy.tone)}>
+      <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="space-y-5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-white/75 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600 ring-1 ring-slate-200">
+                  {copy.label}
+                </span>
+                <span className="rounded-full bg-white/60 px-3 py-1 text-xs text-slate-600 ring-1 ring-slate-200">
+                  {period.start} - {period.end}
+                </span>
+              </div>
+              <h3 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">{copy.title}</h3>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-700">{copy.text}</p>
+            </div>
+            <Button onClick={onPrimaryAction} className="gap-2">
+              {primaryActionLabel}
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <ExecutiveMetricCard
+              metricKey="profit"
+              icon={CircleDollarSign}
+              label="Прибыль"
+              value={metricDisplay(kpis.operating_profit, rub)}
+              hint={`Маржа: ${metricDisplay(kpis.operating_margin, percent)}`}
+              explanation={explanations.operating_profit || explanations.operating_margin}
+              unavailable={metricIsUnavailable(kpis.operating_profit)}
+              status={statuses.operating_margin}
+              selected={selectedMetric === 'profit'}
+              onSelect={onSelectMetric}
+            />
+            <ExecutiveMetricCard
+              metricKey="break_even"
+              icon={Calculator}
+              label="Безубыточность"
+              value={metricDisplay(kpis.break_even_revenue, rub)}
+              hint={`Дневная цель: ${metricDisplay(kpis.daily_revenue_target, rub)}`}
+              explanation={explanations.break_even_revenue || explanations.daily_revenue_target}
+              unavailable={metricIsUnavailable(kpis.break_even_revenue)}
+              selected={selectedMetric === 'break_even'}
+              onSelect={onSelectMetric}
+            />
+            <ExecutiveMetricCard
+              metricKey="workplace_revenue"
+              icon={Armchair}
+              label="Кресло"
+              value={metricDisplay(kpis.revenue_per_workplace, rub)}
+              hint={`Кресло-час: ${metricDisplay(kpis.revenue_per_workplace_hour, rub)}`}
+              explanation={explanations.revenue_per_workplace || explanations.revenue_per_workplace_hour}
+              unavailable={metricIsUnavailable(kpis.revenue_per_workplace)}
+              status={statuses.workplace_occupancy}
+              selected={selectedMetric === 'workplace_revenue'}
+              onSelect={onSelectMetric}
+            />
+            <ExecutiveMetricCard
+              metricKey="workplace_occupancy"
+              icon={Clock3}
+              label="Загрузка"
+              value={metricDisplay(kpis.workplace_occupancy, percent)}
+              hint={`Простой: ${metricDisplay(kpis.idle_workplace_hours, numberValue)} ч`}
+              explanation={explanations.workplace_occupancy || explanations.idle_workplace_hours}
+              unavailable={metricIsUnavailable(kpis.workplace_occupancy)}
+              status={statuses.workplace_occupancy}
+              selected={selectedMetric === 'workplace_occupancy'}
+              onSelect={onSelectMetric}
+            />
+          </div>
+
+          <MiniTrendBars history={history} />
+        </div>
+
+        <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-1">
+          <div className="rounded-2xl bg-white/75 p-4 ring-1 ring-slate-200">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Качество данных</div>
+                <div className="mt-1 text-2xl font-semibold text-slate-950">{qualityScore == null ? 'н/д' : `${qualityScore}/100`}</div>
+              </div>
+              {qualityScore != null && qualityScore >= 70 ? (
+                <CheckCircle2 className="h-8 w-8 text-emerald-600" />
+              ) : (
+                <AlertTriangle className="h-8 w-8 text-amber-600" />
+              )}
+            </div>
+            <div className="mt-3 text-sm leading-6 text-slate-600">
+              {(quality?.missing || []).length > 0
+                ? `Не хватает: ${(quality?.missing || []).slice(0, 3).join(', ')}.`
+                : 'Критичных пробелов в данных нет.'}
+            </div>
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200">
+              <div
+                className={cn(
+                  'h-full rounded-full transition-all',
+                  qualityPercent >= 70 ? 'bg-emerald-500' : qualityPercent >= 40 ? 'bg-amber-500' : 'bg-rose-500',
+                )}
+                style={{ width: `${qualityPercent}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-white/75 p-4 ring-1 ring-slate-200">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+              <Target className="h-4 w-4" />
+              3 главные точки внимания
+            </div>
+            <div className="mt-3 space-y-2">
+              {priorityItems.slice(0, 3).map((item, index) => (
+                <div key={`${item}-${index}`} className="flex gap-3 rounded-xl bg-slate-50 p-3 text-sm leading-5 text-slate-700">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-950 text-xs font-semibold text-white">{index + 1}</span>
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ExecutiveMetricCard: React.FC<{
+  metricKey: FinanceMetricKey;
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string;
   hint?: string;
-  meaning?: string;
-  action?: string;
+  explanation?: string;
+  unavailable?: boolean;
   status?: string;
-}> = ({ icon: Icon, label, value, hint, meaning, action, status }) => (
-  <div className={cn('rounded-2xl border p-4 shadow-sm', statusTone(status))}>
+  selected: boolean;
+  onSelect: (metric: FinanceMetricKey) => void;
+}> = ({ metricKey, icon: Icon, label, value, hint, explanation, unavailable = false, status, selected, onSelect }) => (
+  <button
+    type="button"
+    onClick={() => onSelect(metricKey)}
+    className={cn(
+      'rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md',
+      unavailable ? 'border-amber-200 bg-amber-50 text-amber-950' : statusTone(status),
+      selected ? 'ring-2 ring-slate-950/20' : '',
+    )}
+  >
     <div className="flex items-center justify-between gap-3">
       <div className="text-xs font-semibold uppercase tracking-[0.14em] opacity-70">{label}</div>
       <Icon className="h-5 w-5 shrink-0 opacity-70" />
     </div>
-    <div className="mt-3 text-2xl font-semibold tracking-tight">{value}</div>
+    <div className="mt-3 min-h-8 text-xl font-semibold tracking-tight">{value}</div>
     {hint ? <div className="mt-1 text-sm opacity-75">{hint}</div> : null}
-    {meaning ? <div className="mt-3 border-t border-current/10 pt-3 text-xs leading-5 opacity-75">{meaning}</div> : null}
-    {action ? <div className="mt-1 text-xs font-medium leading-5 opacity-90">{action}</div> : null}
+    {unavailable ? (
+      <div className="mt-3 rounded-xl bg-white/70 px-3 py-2 text-xs leading-5 ring-1 ring-amber-200">
+        {explanation || 'Нужно дозаполнить данные для расчёта.'}
+      </div>
+    ) : null}
+    <div className="mt-3 text-xs font-medium opacity-70">Нажмите, чтобы посмотреть расчёт</div>
+  </button>
+);
+
+const MetricDrilldown: React.FC<{
+  metric: FinanceMetricKey;
+  kpis: Record<string, KpiValue>;
+  explanations: Record<string, string>;
+  quality?: FinanceDashboard['data_quality'];
+  servicesCount: number;
+  staffCount: number;
+  workplacesCount: number;
+  onClose: () => void;
+}> = ({ metric, kpis, explanations, quality, servicesCount, staffCount, workplacesCount, onClose }) => {
+  const meta = metricMeta[metric];
+  const missing = (quality?.missing || []).filter((item) => meta.missing.indexOf(item) !== -1);
+
+  return (
+    <div className="mt-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Детализация KPI</div>
+          <h3 className="mt-1 text-lg font-semibold text-slate-950">{meta.title}</h3>
+          <p className="mt-1 text-sm leading-6 text-slate-600">{meta.source}</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={onClose}>Скрыть</Button>
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
+        <DrilldownCard title="Как считается" text={meta.formula} />
+        <DrilldownCard
+          title="Что мешает точности"
+          text={missing.length > 0 ? missing.join(', ') : 'Критичных пробелов для этого KPI не видно.'}
+        />
+        <DrilldownCard title="Следующее действие" text={meta.action} />
+      </div>
+      <div className="mt-4 grid gap-2 text-sm text-slate-600 sm:grid-cols-4">
+        <div className="rounded-2xl bg-slate-50 p-3">Выручка: <span className="font-medium text-slate-950">{rub(kpis.revenue)}</span></div>
+        <div className="rounded-2xl bg-slate-50 p-3">Услуги: <span className="font-medium text-slate-950">{servicesCount}</span></div>
+        <div className="rounded-2xl bg-slate-50 p-3">Мастера: <span className="font-medium text-slate-950">{staffCount}</span></div>
+        <div className="rounded-2xl bg-slate-50 p-3">Рабочие места: <span className="font-medium text-slate-950">{workplacesCount}</span></div>
+      </div>
+      {Object.keys(explanations).length > 0 ? (
+        <div className="mt-4 rounded-2xl bg-amber-50 p-3 text-sm leading-6 text-amber-900 ring-1 ring-amber-200">
+          {Object.values(explanations).slice(0, 2).join(' ')}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+const DrilldownCard: React.FC<{ title: string; text: string }> = ({ title, text }) => (
+  <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
+    <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{title}</div>
+    <div className="mt-2 text-sm leading-6 text-slate-700">{text}</div>
   </div>
 );
+
+const MiniTrendBars: React.FC<{ history: FinanceHistoryPoint[] }> = ({ history }) => {
+  const points = history
+    .filter((item) => Number(item.revenue || 0) > 0)
+    .slice(-6);
+  if (points.length < 2) {
+    return (
+      <div className="rounded-2xl bg-white/60 p-4 text-sm text-slate-600 ring-1 ring-slate-200">
+        Динамика появится после нескольких периодов с выручкой.
+      </div>
+    );
+  }
+  const maxRevenue = Math.max(...points.map((item) => Number(item.revenue || 0)), 1);
+  return (
+    <div className="rounded-2xl bg-white/70 p-4 ring-1 ring-slate-200">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Динамика выручки</div>
+          <div className="mt-1 text-sm text-slate-600">Последние периоды с данными</div>
+        </div>
+        <div className="text-sm font-semibold text-slate-950">{rub(points[points.length - 1]?.revenue)}</div>
+      </div>
+      <div className="mt-4 flex h-24 items-end gap-2">
+        {points.map((item) => {
+          const height = Math.max(12, Math.round((Number(item.revenue || 0) / maxRevenue) * 96));
+          return (
+            <div key={item.period_start} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+              <div
+                className="w-full rounded-t-xl bg-slate-900/85"
+                style={{ height: `${height}px` }}
+                title={`${item.label}: ${rub(item.revenue)}`}
+              />
+              <div className="max-w-full truncate text-[10px] text-slate-500">{item.label}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 
 const metricLabels: Record<string, string> = {
   revenue: 'Выручка',
   operating_margin: 'Маржа',
-  no_show_rate: 'No-show',
-  rebooking_rate: 'Rebooking',
+  no_show_rate: 'Неявки',
+  rebooking_rate: 'Повторная запись',
   workplace_occupancy: 'Загрузка',
   revenue_per_workplace_hour: 'Выручка/час',
   gross_profit_per_workplace_hour: 'Прибыль/час',
@@ -835,7 +1195,7 @@ const HistoryPanel: React.FC<{
                 <th className="pb-3 pr-3">Период</th>
                 <th className="pb-3 pr-3">Выручка</th>
                 <th className="pb-3 pr-3">Маржа</th>
-                <th className="pb-3 pr-3">No-show</th>
+                <th className="pb-3 pr-3">Неявки</th>
                 <th className="pb-3 pr-3">Загрузка</th>
               </tr>
             </thead>
@@ -889,6 +1249,7 @@ const RecommendationCard: React.FC<{
   savingActionKey: string | null;
   onToggleAction: (item: FinanceRecommendation, bucket: string, actionText: string, completed: boolean) => void;
 }> = ({ item, completedActions, savingActionKey, onToggleAction }) => {
+  const [showFullPlan, setShowFullPlan] = useState(false);
   const actions = item.actions || {};
   const dataNeeded = item.data_needed || [];
   const localosActions = item.localos_actions || [];
@@ -912,50 +1273,37 @@ const RecommendationCard: React.FC<{
       </div>
       <div className="mt-1 text-sm leading-6 text-slate-700">{item.text}</div>
       {totalCount > 0 ? (
-        <div className="mt-3 text-xs font-medium text-slate-600">
-          Выполнено: {completedCount}/{totalCount}
-        </div>
-      ) : null}
-
-      <div className="mt-4 grid gap-3 lg:grid-cols-3">
-        <ActionList
-          recommendation={item}
-          bucket="today"
-          title="Сегодня"
-          items={actions.today || []}
-          completedActions={completedActions}
-          savingActionKey={savingActionKey}
-          onToggleAction={onToggleAction}
-        />
-        <ActionList
-          recommendation={item}
-          bucket="seven_days"
-          title="7 дней"
-          items={actions.seven_days || []}
-          completedActions={completedActions}
-          savingActionKey={savingActionKey}
-          onToggleAction={onToggleAction}
-        />
-        <ActionList
-          recommendation={item}
-          bucket="regular"
-          title="Регулярно"
-          items={actions.regular || []}
-          completedActions={completedActions}
-          savingActionKey={savingActionKey}
-          onToggleAction={onToggleAction}
-        />
-      </div>
-
-      {dataNeeded.length > 0 ? (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {dataNeeded.map((itemName) => (
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
+          <span>Выполнено: {completedCount}/{totalCount}</span>
+          {dataNeeded.slice(0, 3).map((itemName) => (
             <span key={itemName} className="rounded-full bg-white/70 px-2.5 py-1 text-xs text-slate-600 ring-1 ring-slate-200">
               {itemName}
             </span>
           ))}
         </div>
       ) : null}
+
+      <div className="mt-4 rounded-xl bg-white/70 p-3 ring-1 ring-slate-200">
+        <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Сделать сегодня</div>
+        <ul className="mt-2 space-y-1.5 text-sm leading-5 text-slate-700">
+          {(actions.today || []).slice(0, 2).map((actionText) => {
+            const actionKey = buildActionKey(item.code, 'today', actionText);
+            const checked = completedActions.has(actionKey);
+            return (
+              <li key={actionText} className="flex gap-2">
+                <Checkbox
+                  checked={checked}
+                  disabled={savingActionKey === actionKey}
+                  onCheckedChange={(value) => onToggleAction(item, 'today', actionText, value === true)}
+                  className="mt-0.5"
+                />
+                <span className={cn(checked ? 'text-slate-400 line-through' : '')}>{actionText}</span>
+              </li>
+            );
+          })}
+          {(actions.today || []).length === 0 ? <li className="text-slate-500">Нет срочных действий.</li> : null}
+        </ul>
+      </div>
 
       {localosActions.length > 0 ? (
         <div className="mt-4 rounded-xl bg-white/70 p-3 ring-1 ring-slate-200">
@@ -981,6 +1329,44 @@ const RecommendationCard: React.FC<{
           </div>
         </div>
       ) : null}
+
+      <Collapsible open={showFullPlan} onOpenChange={setShowFullPlan}>
+        <CollapsibleTrigger asChild>
+          <Button variant="outline" size="sm" className="mt-4 gap-2">
+            {showFullPlan ? 'Скрыть полный план' : 'Показать полный план'}
+            <ChevronDown className={cn('h-4 w-4 transition-transform', showFullPlan ? 'rotate-180' : '')} />
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="mt-4 grid gap-3 lg:grid-cols-3">
+          <ActionList
+            recommendation={item}
+            bucket="today"
+            title="Сегодня"
+            items={actions.today || []}
+            completedActions={completedActions}
+            savingActionKey={savingActionKey}
+            onToggleAction={onToggleAction}
+          />
+          <ActionList
+            recommendation={item}
+            bucket="seven_days"
+            title="7 дней"
+            items={actions.seven_days || []}
+            completedActions={completedActions}
+            savingActionKey={savingActionKey}
+            onToggleAction={onToggleAction}
+          />
+          <ActionList
+            recommendation={item}
+            bucket="regular"
+            title="Регулярно"
+            items={actions.regular || []}
+            completedActions={completedActions}
+            savingActionKey={savingActionKey}
+            onToggleAction={onToggleAction}
+          />
+        </CollapsibleContent>
+      </Collapsible>
     </div>
   );
 };
