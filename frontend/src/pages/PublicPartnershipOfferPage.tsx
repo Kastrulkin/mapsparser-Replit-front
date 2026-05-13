@@ -2493,6 +2493,10 @@ const PublicPartnershipOfferPage: React.FC = () => {
     lang === 'en' ? 'Company' : lang === 'el' ? 'Εταιρεία' : lang === 'tr' ? 'İşletme' : lang === 'ar' ? 'الشركة' : 'Компания',
   );
   const mapsAnalysis = Array.isArray(page.maps_analysis) ? page.maps_analysis || [] : [];
+  const mapCardUrl = pickFirstNonEmpty(
+    page.source_url,
+    mapsAnalysis.find((item) => String(item?.url || '').trim())?.url,
+  );
   const multipleMaps = mapsAnalysis.length >= 2;
   const bestMapByReviews = mapsAnalysis.reduce<OfferPagePayload['maps_analysis'][number] | null>((best, item) => {
     if (!item) return best;
@@ -3312,6 +3316,19 @@ const PublicPartnershipOfferPage: React.FC = () => {
           onPrimary={openDashboardRegistration}
           secondaryHref="#self-help"
         />
+        {mapCardUrl ? (
+          <footer className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <a
+              href={mapCardUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-800 sm:w-auto"
+            >
+              {text.openMapCard}
+              <ExternalLink className="h-4 w-4" />
+            </a>
+          </footer>
+        ) : null}
         {page.message ? (
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="rounded-xl border border-sky-200 bg-white p-4">

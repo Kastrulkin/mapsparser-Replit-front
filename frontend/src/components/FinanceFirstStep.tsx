@@ -1,5 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import {
   AlertTriangle,
   Armchair,
   ArrowRight,
@@ -99,6 +110,8 @@ type FinanceHistoryPoint = {
 
 type FinanceFirstStepProps = {
   currentBusinessId?: string | null;
+  setupTools?: React.ReactNode;
+  legacyTools?: React.ReactNode;
 };
 
 const rub = (value: KpiValue) => {
@@ -118,6 +131,14 @@ const numberValue = (value: KpiValue) => {
 const percent = (value: KpiValue) => {
   if (value == null) return 'н/д';
   return `${numberValue(value)}%`;
+};
+
+const tooltipMoney = (value: unknown) => rub(Number(value));
+const tooltipPercent = (value: unknown) => percent(Number(value));
+
+const toFiniteNumber = (value: KpiValue) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 };
 
 const minutesFromHours = (value: string) => Math.round(Number(value || 0) * 60);
@@ -144,7 +165,7 @@ const starterSteps = [
   { key: 'workplace', title: '4. Кресла', text: 'Сколько мест доступно, занято и сколько они приносят.' },
 ];
 
-export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusinessId }) => {
+export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusinessId, setupTools, legacyTools }) => {
   const [dashboard, setDashboard] = useState<FinanceDashboard | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -155,6 +176,7 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
   const [impact, setImpact] = useState<FinanceImpact | null>(null);
   const [selectedMetric, setSelectedMetric] = useState<FinanceMetricKey | null>(null);
   const [activeInputStep, setActiveInputStep] = useState('entry');
+  const [activeFinanceTab, setActiveFinanceTab] = useState('overview');
   const [entry, setEntry] = useState({
     revenue: '',
     rent: '',
@@ -459,265 +481,272 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
 
   const runPrimaryAction = () => {
     if (primaryAction.target === 'red-flags') {
-      document.getElementById('finance-red-flags')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setActiveFinanceTab('overview');
+      document.getElementById('finance-next-action')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
     setActiveInputStep(primaryAction.target);
-    document.getElementById('finance-quick-input')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setActiveFinanceTab('data');
+    document.getElementById('finance-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   return (
     <div className="space-y-6">
-      <DashboardSection
-        title="Финансовый обзор"
-        description="Сначала смотрим на состояние данных, ключевые показатели и ближайшее действие. Детальный ввод и таблицы ниже."
-        actions={
-          <Button variant="outline" onClick={loadDashboard} disabled={loading || !currentBusinessId} className="gap-2">
-            <RefreshCw className={cn('h-4 w-4', loading ? 'animate-spin' : '')} />
-            Обновить
-          </Button>
-        }
-      >
-        {!currentBusinessId ? (
-          <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            Сначала выберите бизнес в верхнем переключателе.
-          </div>
-        ) : null}
+      {!currentBusinessId ? (
+        <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Сначала выберите бизнес в верхнем переключателе.
+        </div>
+      ) : null}
 
-        {message ? (
-          <div className="mb-4 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700 ring-1 ring-slate-200">
-            {message}
-          </div>
-        ) : null}
+      {message ? (
+        <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700 ring-1 ring-slate-200">
+          {message}
+        </div>
+      ) : null}
 
-        <ExecutiveFinanceSummary
+      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <FinanceHeader
           dataState={dataState}
           period={period}
           quality={quality}
-          kpis={kpis}
-          explanations={dashboard?.explanations || {}}
-          statuses={dashboard?.statuses || {}}
-          history={history}
-          priorityItems={priorityItems}
           primaryActionLabel={primaryAction.label}
           onPrimaryAction={runPrimaryAction}
-          selectedMetric={selectedMetric}
-          onSelectMetric={setSelectedMetric}
+          onRefresh={loadDashboard}
+          loading={loading}
+          disabled={!currentBusinessId}
         />
 
-        {selectedMetric ? (
-          <MetricDrilldown
-            metric={selectedMetric}
+        <div className="mt-5">
+          <FinanceKpiGrid kpis={kpis} statuses={dashboard?.statuses || {}} explanations={dashboard?.explanations || {}} />
+        </div>
+
+        <div className="mt-5 grid gap-5 xl:grid-cols-[1.35fr_0.95fr]">
+          <FinanceRevenueChart history={history} months={historyMonths} onChangeMonths={loadHistory} />
+          <FinanceAttentionCards
+            recommendations={dashboard?.recommendations || []}
             kpis={kpis}
-            explanations={dashboard?.explanations || {}}
-            quality={quality}
-            servicesCount={dashboard?.services?.length || 0}
-            staffCount={dashboard?.staff?.length || 0}
-            workplacesCount={dashboard?.workplaces?.length || 0}
-            onClose={() => setSelectedMetric(null)}
+            onOpenPlan={() => {
+              setActiveFinanceTab('overview');
+              document.getElementById('finance-next-action')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }}
           />
-        ) : null}
-
-        <div className="mt-6 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-          <ImpactPanel impact={impact} />
-          <HistoryPanel history={history} months={historyMonths} onChangeMonths={loadHistory} />
         </div>
 
-        <div id="finance-quick-input" className="mt-6 rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                <Gauge className="h-4 w-4" />
-                Быстрый ввод
-              </div>
-              <div className="mt-1 text-base font-semibold text-slate-950">
-                {hasFinanceData ? 'Дозаполните недостающие данные' : 'Начните с 5 чисел'}
-              </div>
-            </div>
-            <Button variant="outline" onClick={fillDemoSalon} className="gap-2">
-              <PlayCircle className="h-4 w-4" />
-              Показать пример салона
-            </Button>
-          </div>
-          <div className="mt-4 grid gap-3 md:grid-cols-4">
-            {starterSteps.map((step) => (
-              <button
-                key={step.key}
-                type="button"
-                onClick={() => setActiveInputStep(step.key)}
-                className={cn(
-                  'rounded-2xl border bg-white p-3 text-left text-sm transition hover:border-slate-300',
-                  activeInputStep === step.key ? 'border-slate-950 ring-2 ring-slate-200' : 'border-slate-200',
-                )}
-              >
-                <div className="font-semibold text-slate-950">{step.title}</div>
-                <div className="mt-1 leading-5 text-slate-600">{step.text}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-6 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-          <Card className="border-slate-200/80 shadow-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <ClipboardList className="h-4 w-4 text-slate-500" />
-                Мини-мастер ввода
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Tabs value={activeInputStep} onValueChange={setActiveInputStep}>
-                <TabsList className="grid h-auto w-full grid-cols-2 gap-1 md:grid-cols-4">
-                  <TabsTrigger value="entry">Доходы и расходы</TabsTrigger>
-                  <TabsTrigger value="service">Услуги</TabsTrigger>
-                  <TabsTrigger value="staff">Мастера</TabsTrigger>
-                  <TabsTrigger value="workplace">Кресла</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="entry" className="space-y-4 pt-4">
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <MoneyField label="Выручка" value={entry.revenue} onChange={(value) => setEntry({ ...entry, revenue: value })} />
-                    <MoneyField label="Аренда" value={entry.rent} onChange={(value) => setEntry({ ...entry, rent: value })} />
-                    <MoneyField label="ФОТ" value={entry.payroll} onChange={(value) => setEntry({ ...entry, payroll: value })} />
-                    <MoneyField label="Материалы" value={entry.materials} onChange={(value) => setEntry({ ...entry, materials: value })} />
-                    <MoneyField label="Маркетинг" value={entry.marketing} onChange={(value) => setEntry({ ...entry, marketing: value })} />
-                    <MoneyField label="Налоги" value={entry.taxes} onChange={(value) => setEntry({ ...entry, taxes: value })} />
-                  </div>
-                  <SaveButton disabled={saving} onClick={() => saveManualData('entry')} />
-                </TabsContent>
-
-                <TabsContent value="service" className="space-y-4 pt-4">
-                  <div className="grid gap-3 md:grid-cols-4">
-                    <TextField label="Услуга" value={service.service_name} onChange={(value) => setService({ ...service, service_name: value })} />
-                    <TextField label="Категория" value={service.category} onChange={(value) => setService({ ...service, category: value })} />
-                    <MoneyField label="Выручка" value={service.revenue} onChange={(value) => setService({ ...service, revenue: value })} />
-                    <NumberField label="Продаж" value={service.visits_count} onChange={(value) => setService({ ...service, visits_count: value })} />
-                    <MoneyField label="Средняя цена" value={service.avg_price} onChange={(value) => setService({ ...service, avg_price: value })} />
-                    <NumberField label="Минут" value={service.duration_minutes} onChange={(value) => setService({ ...service, duration_minutes: value })} />
-                    <MoneyField label="Материалы" value={service.material_cost} onChange={(value) => setService({ ...service, material_cost: value })} />
-                    <MoneyField label="Выплата мастеру" value={service.staff_payout} onChange={(value) => setService({ ...service, staff_payout: value })} />
-                  </div>
-                  <SaveButton disabled={saving} onClick={() => saveManualData('service')} />
-                </TabsContent>
-
-                <TabsContent value="staff" className="space-y-4 pt-4">
-                  <div className="grid gap-3 md:grid-cols-4">
-                    <TextField label="Мастер" value={staff.staff_name} onChange={(value) => setStaff({ ...staff, staff_name: value })} />
-                    <TextField label="Роль" value={staff.role} onChange={(value) => setStaff({ ...staff, role: value })} />
-                    <MoneyField label="Выручка" value={staff.revenue} onChange={(value) => setStaff({ ...staff, revenue: value })} />
-                    <NumberField label="Визиты" value={staff.visits_count} onChange={(value) => setStaff({ ...staff, visits_count: value })} />
-                    <NumberField label="Занято часов" value={staff.booked_hours} onChange={(value) => setStaff({ ...staff, booked_hours: value })} />
-                    <NumberField label="Доступно часов" value={staff.available_hours} onChange={(value) => setStaff({ ...staff, available_hours: value })} />
-                    <NumberField label="Неявки" value={staff.no_show_count} onChange={(value) => setStaff({ ...staff, no_show_count: value })} />
-                    <NumberField label="Повторные записи" value={staff.rebooking_count} onChange={(value) => setStaff({ ...staff, rebooking_count: value })} />
-                  </div>
-                  <SaveButton disabled={saving} onClick={() => saveManualData('staff')} />
-                </TabsContent>
-
-                <TabsContent value="workplace" className="space-y-4 pt-4">
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <TextField label="Название места" value={workplace.name} onChange={(value) => setWorkplace({ ...workplace, name: value })} />
-                    <div className="space-y-2">
-                      <Label>Тип</Label>
-                      <Select value={workplace.type} onValueChange={(value) => setWorkplace({ ...workplace, type: value })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(workplaceLabels).map(([value, label]) => (
-                            <SelectItem key={value} value={value}>{label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <NumberField label="Доступно часов" value={workplace.available_hours} onChange={(value) => setWorkplace({ ...workplace, available_hours: value })} />
-                    <NumberField label="Занято часов" value={workplace.booked_hours} onChange={(value) => setWorkplace({ ...workplace, booked_hours: value })} />
-                    <MoneyField label="Выручка" value={workplace.revenue} onChange={(value) => setWorkplace({ ...workplace, revenue: value })} />
-                    <MoneyField label="Валовая прибыль" value={workplace.gross_profit} onChange={(value) => setWorkplace({ ...workplace, gross_profit: value })} />
-                  </div>
-                  <SaveButton disabled={saving} onClick={() => saveManualData('workplace')} />
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-
-          <Card className="border-slate-200/80 shadow-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                {quality && quality.score >= 70 ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <AlertTriangle className="h-4 w-4 text-amber-600" />}
-                Качество данных: {quality ? `${quality.score}/100` : 'н/д'}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4 text-sm">
-              <InfoList title="Уже можно анализировать" items={analyzableItems} empty="Пока нет достаточных данных для выводов." />
-              <InfoList title="Не хватает" items={quality?.missing || []} empty="Базовые поля заполнены." />
-              <InfoList title="Считается приблизительно" items={quality?.approximate || []} empty="Критичных допущений нет." />
-              <div className="rounded-2xl bg-slate-50 p-4 text-slate-700">
-                <div className="font-medium text-slate-950">Прогресс</div>
-                <div className="mt-2 space-y-1">
-                  <ProgressLine done={(quality?.missing || []).indexOf('расходы') === -1} label="Достаточно для отчёта доходов и расходов" />
-                  <ProgressLine done={(quality?.missing || []).indexOf('себестоимость материалов') === -1} label="Достаточно для маржи услуг" />
-                  <ProgressLine done={(quality?.missing || []).indexOf('загрузка рабочих мест') === -1} label="Достаточно для загрузки кресел" />
-                  <ProgressLine done={(quality?.missing || []).indexOf('повторная запись') === -1} label="Достаточно для повторной записи" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </DashboardSection>
-
-      <div className="grid gap-6 xl:grid-cols-3">
-        <FinanceTable
-          title="Прибыльность услуг"
-          icon={Scissors}
-          rows={dashboard?.services || []}
-          columns={[
-            ['service_name', 'Услуга'],
-            ['gross_margin', 'Маржа'],
-            ['revenue_per_hour', 'Выручка/час'],
-            ['status', 'Статус'],
-          ]}
-          formatter={(key, value) => key.includes('margin') ? percent(value) : key.includes('hour') ? rub(value) : String(value || 'н/д')}
+        <FinanceNextAction
+          dataState={dataState}
+          missing={quality?.missing || []}
+          onSecondary={() => {
+            setActiveFinanceTab('data');
+            document.getElementById('finance-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }}
         />
-        <FinanceTable
-          title="Мастера"
-          icon={Users}
-          rows={dashboard?.staff || []}
-          columns={[
-            ['staff_name', 'Мастер'],
-            ['revenue', 'Выручка'],
-            ['occupancy', 'Загрузка'],
-            ['rebooking_rate', 'Повторная запись'],
-          ]}
-          formatter={(key, value) => key === 'revenue' ? rub(value) : key.includes('rate') || key === 'occupancy' ? percent(value) : String(value || 'н/д')}
-        />
-        <FinanceTable
-          title="Кресла и кабинеты"
-          icon={Armchair}
-          rows={dashboard?.workplaces || []}
-          columns={[
-            ['name', 'Место'],
-            ['occupancy', 'Загрузка'],
-            ['revenue_per_hour', 'Выручка/час'],
-            ['idle_hours', 'Простой'],
-          ]}
-          formatter={(key, value) => key.includes('hour') ? rub(value) : key === 'occupancy' ? percent(value) : key === 'idle_hours' ? `${numberValue(value)} ч` : String(value || 'н/д')}
-        />
-      </div>
+      </section>
 
-      <div id="finance-red-flags">
-        <DashboardSection title="Красные зоны и следующие действия" description="Рекомендации появляются только из введённых данных. Если данных мало, система сначала покажет, что дозаполнить.">
-          <div className="grid gap-3 md:grid-cols-2">
-            {(dashboard?.recommendations || []).map((item) => (
-              <RecommendationCard
-                key={item.code}
-                item={item}
-                completedActions={completedActions}
-                savingActionKey={savingActionKey}
-                onToggleAction={toggleAction}
+      <section id="finance-tabs" className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <Tabs value={activeFinanceTab} onValueChange={setActiveFinanceTab}>
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 lg:grid-cols-6">
+            <TabsTrigger value="overview">Обзор</TabsTrigger>
+            <TabsTrigger value="data">Данные</TabsTrigger>
+            <TabsTrigger value="services">Услуги</TabsTrigger>
+            <TabsTrigger value="team">Команда</TabsTrigger>
+            <TabsTrigger value="workplaces">Рабочие места</TabsTrigger>
+            <TabsTrigger value="history">История</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="overview" className="space-y-5 pt-5">
+            {selectedMetric ? (
+              <MetricDrilldown
+                metric={selectedMetric}
+                kpis={kpis}
+                explanations={dashboard?.explanations || {}}
+                quality={quality}
+                servicesCount={dashboard?.services?.length || 0}
+                staffCount={dashboard?.staff?.length || 0}
+                workplacesCount={dashboard?.workplaces?.length || 0}
+                onClose={() => setSelectedMetric(null)}
               />
-            ))}
-          </div>
-        </DashboardSection>
-      </div>
+            ) : null}
+            <ImpactPanel impact={impact} />
+            <div id="finance-next-action">
+              <DashboardSection title="План действий" description="Подробные рекомендации скрыты до клика, чтобы обзор не превращался в полотно.">
+                <div className="grid gap-3 md:grid-cols-2">
+                  {(dashboard?.recommendations || []).map((item) => (
+                    <RecommendationCard
+                      key={item.code}
+                      item={item}
+                      completedActions={completedActions}
+                      savingActionKey={savingActionKey}
+                      onToggleAction={toggleAction}
+                    />
+                  ))}
+                  {(dashboard?.recommendations || []).length === 0 ? (
+                    <FinanceEmptyState missing={quality?.missing || []} />
+                  ) : null}
+                </div>
+              </DashboardSection>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="data" className="space-y-5 pt-5">
+            <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
+              <Card id="finance-quick-input" className="border-slate-200/80 shadow-sm">
+                <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <ClipboardList className="h-4 w-4 text-slate-500" />
+                    Ввод данных
+                  </CardTitle>
+                  <Button variant="outline" onClick={fillDemoSalon} className="gap-2">
+                    <PlayCircle className="h-4 w-4" />
+                    Пример
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  <div className="mb-4 grid gap-3 md:grid-cols-4">
+                    {starterSteps.map((step) => (
+                      <button
+                        key={step.key}
+                        type="button"
+                        onClick={() => setActiveInputStep(step.key)}
+                        className={cn(
+                          'rounded-2xl border bg-white p-3 text-left text-sm transition hover:border-slate-300',
+                          activeInputStep === step.key ? 'border-slate-950 ring-2 ring-slate-200' : 'border-slate-200',
+                        )}
+                      >
+                        <div className="font-semibold text-slate-950">{step.title}</div>
+                        <div className="mt-1 leading-5 text-slate-600">{step.text}</div>
+                      </button>
+                    ))}
+                  </div>
+                  <Tabs value={activeInputStep} onValueChange={setActiveInputStep}>
+                    <TabsList className="grid h-auto w-full grid-cols-2 gap-1 md:grid-cols-4">
+                      <TabsTrigger value="entry">Доходы и расходы</TabsTrigger>
+                      <TabsTrigger value="service">Услуги</TabsTrigger>
+                      <TabsTrigger value="staff">Мастера</TabsTrigger>
+                      <TabsTrigger value="workplace">Рабочие места</TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="entry" className="space-y-4 pt-4">
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <MoneyField label="Выручка" value={entry.revenue} onChange={(value) => setEntry({ ...entry, revenue: value })} />
+                        <MoneyField label="Аренда" value={entry.rent} onChange={(value) => setEntry({ ...entry, rent: value })} />
+                        <MoneyField label="ФОТ" value={entry.payroll} onChange={(value) => setEntry({ ...entry, payroll: value })} />
+                        <MoneyField label="Материалы" value={entry.materials} onChange={(value) => setEntry({ ...entry, materials: value })} />
+                        <MoneyField label="Маркетинг" value={entry.marketing} onChange={(value) => setEntry({ ...entry, marketing: value })} />
+                        <MoneyField label="Налоги" value={entry.taxes} onChange={(value) => setEntry({ ...entry, taxes: value })} />
+                      </div>
+                      <SaveButton disabled={saving} onClick={() => saveManualData('entry')} />
+                    </TabsContent>
+
+                    <TabsContent value="service" className="space-y-4 pt-4">
+                      <div className="grid gap-3 md:grid-cols-4">
+                        <TextField label="Услуга" value={service.service_name} onChange={(value) => setService({ ...service, service_name: value })} />
+                        <TextField label="Категория" value={service.category} onChange={(value) => setService({ ...service, category: value })} />
+                        <MoneyField label="Выручка" value={service.revenue} onChange={(value) => setService({ ...service, revenue: value })} />
+                        <NumberField label="Продаж" value={service.visits_count} onChange={(value) => setService({ ...service, visits_count: value })} />
+                        <MoneyField label="Средняя цена" value={service.avg_price} onChange={(value) => setService({ ...service, avg_price: value })} />
+                        <NumberField label="Минут" value={service.duration_minutes} onChange={(value) => setService({ ...service, duration_minutes: value })} />
+                        <MoneyField label="Материалы" value={service.material_cost} onChange={(value) => setService({ ...service, material_cost: value })} />
+                        <MoneyField label="Выплата мастеру" value={service.staff_payout} onChange={(value) => setService({ ...service, staff_payout: value })} />
+                      </div>
+                      <SaveButton disabled={saving} onClick={() => saveManualData('service')} />
+                    </TabsContent>
+
+                    <TabsContent value="staff" className="space-y-4 pt-4">
+                      <div className="grid gap-3 md:grid-cols-4">
+                        <TextField label="Мастер" value={staff.staff_name} onChange={(value) => setStaff({ ...staff, staff_name: value })} />
+                        <TextField label="Роль" value={staff.role} onChange={(value) => setStaff({ ...staff, role: value })} />
+                        <MoneyField label="Выручка" value={staff.revenue} onChange={(value) => setStaff({ ...staff, revenue: value })} />
+                        <NumberField label="Визиты" value={staff.visits_count} onChange={(value) => setStaff({ ...staff, visits_count: value })} />
+                        <NumberField label="Занято часов" value={staff.booked_hours} onChange={(value) => setStaff({ ...staff, booked_hours: value })} />
+                        <NumberField label="Доступно часов" value={staff.available_hours} onChange={(value) => setStaff({ ...staff, available_hours: value })} />
+                        <NumberField label="Неявки" value={staff.no_show_count} onChange={(value) => setStaff({ ...staff, no_show_count: value })} />
+                        <NumberField label="Повторные записи" value={staff.rebooking_count} onChange={(value) => setStaff({ ...staff, rebooking_count: value })} />
+                      </div>
+                      <SaveButton disabled={saving} onClick={() => saveManualData('staff')} />
+                    </TabsContent>
+
+                    <TabsContent value="workplace" className="space-y-4 pt-4">
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <TextField label="Название места" value={workplace.name} onChange={(value) => setWorkplace({ ...workplace, name: value })} />
+                        <div className="space-y-2">
+                          <Label>Тип</Label>
+                          <Select value={workplace.type} onValueChange={(value) => setWorkplace({ ...workplace, type: value })}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {Object.entries(workplaceLabels).map(([value, label]) => (
+                                <SelectItem key={value} value={value}>{label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <NumberField label="Доступно часов" value={workplace.available_hours} onChange={(value) => setWorkplace({ ...workplace, available_hours: value })} />
+                        <NumberField label="Занято часов" value={workplace.booked_hours} onChange={(value) => setWorkplace({ ...workplace, booked_hours: value })} />
+                        <MoneyField label="Выручка" value={workplace.revenue} onChange={(value) => setWorkplace({ ...workplace, revenue: value })} />
+                        <MoneyField label="Валовая прибыль" value={workplace.gross_profit} onChange={(value) => setWorkplace({ ...workplace, gross_profit: value })} />
+                      </div>
+                      <SaveButton disabled={saving} onClick={() => saveManualData('workplace')} />
+                    </TabsContent>
+                  </Tabs>
+                </CardContent>
+              </Card>
+
+              <FinanceDataQualityPanel quality={quality} analyzableItems={analyzableItems} />
+            </div>
+            {setupTools ? <div>{setupTools}</div> : null}
+          </TabsContent>
+
+          <TabsContent value="services" className="pt-5">
+            <FinanceTable
+              title="Прибыльность услуг"
+              icon={Scissors}
+              rows={dashboard?.services || []}
+              columns={[
+                ['service_name', 'Услуга'],
+                ['gross_margin', 'Маржа'],
+                ['revenue_per_hour', 'Выручка/час'],
+                ['status', 'Статус'],
+              ]}
+              formatter={(key, value) => key.includes('margin') ? percent(value) : key.includes('hour') ? rub(value) : String(value || 'н/д')}
+            />
+          </TabsContent>
+
+          <TabsContent value="team" className="pt-5">
+            <FinanceTable
+              title="Команда"
+              icon={Users}
+              rows={dashboard?.staff || []}
+              columns={[
+                ['staff_name', 'Мастер'],
+                ['revenue', 'Выручка'],
+                ['occupancy', 'Загрузка'],
+                ['rebooking_rate', 'Повторная запись'],
+              ]}
+              formatter={(key, value) => key === 'revenue' ? rub(value) : key.includes('rate') || key === 'occupancy' ? percent(value) : String(value || 'н/д')}
+            />
+          </TabsContent>
+
+          <TabsContent value="workplaces" className="space-y-5 pt-5">
+            <FinanceVisuals history={[]} workplaces={dashboard?.workplaces || []} services={[]} />
+            <FinanceTable
+              title="Рабочие места"
+              icon={Armchair}
+              rows={dashboard?.workplaces || []}
+              columns={[
+                ['name', 'Место'],
+                ['occupancy', 'Загрузка'],
+                ['revenue_per_hour', 'Выручка/час'],
+                ['idle_hours', 'Простой'],
+              ]}
+              formatter={(key, value) => key.includes('hour') ? rub(value) : key === 'occupancy' ? percent(value) : key === 'idle_hours' ? `${numberValue(value)} ч` : String(value || 'н/д')}
+            />
+          </TabsContent>
+
+          <TabsContent value="history" className="space-y-5 pt-5">
+            <HistoryPanel history={history} months={historyMonths} onChangeMonths={loadHistory} />
+            {legacyTools ? <div>{legacyTools}</div> : null}
+          </TabsContent>
+        </Tabs>
+      </section>
     </div>
   );
 };
@@ -848,6 +877,302 @@ const metricDisplay = (value: KpiValue, formatter: (input: KpiValue) => string) 
 
 const metricIsUnavailable = (value: KpiValue) => value == null;
 
+const humanMetricLabel = (value?: string | null) => {
+  const key = String(value || '').trim();
+  const labels: Record<string, string> = {
+    no_show_rate: 'Неявки',
+    rebooking_rate: 'Повторная запись',
+    workplace_occupancy: 'Загрузка рабочих мест',
+    revenue: 'Выручка',
+    operating_profit: 'Прибыль',
+    operating_margin: 'Маржа',
+    money: 'Деньги',
+    aggregate: 'Сводные данные',
+  };
+  return labels[key] || key.replaceAll('_', ' ');
+};
+
+const FinanceHeader: React.FC<{
+  dataState: FinanceDataState;
+  period: { start: string; end: string };
+  quality?: FinanceDashboard['data_quality'];
+  primaryActionLabel: string;
+  onPrimaryAction: () => void;
+  onRefresh: () => void;
+  loading: boolean;
+  disabled: boolean;
+}> = ({ dataState, period, quality, primaryActionLabel, onPrimaryAction, onRefresh, loading, disabled }) => {
+  const copy = stateCopy[dataState];
+  const missing = quality?.missing || [];
+  return (
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white">
+            {copy.label}
+          </span>
+          <span className="rounded-full bg-slate-50 px-3 py-1 text-xs text-slate-600 ring-1 ring-slate-200">
+            {period.start} - {period.end}
+          </span>
+          <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+            Качество данных: {quality ? `${quality.score}/100` : 'н/д'}
+          </span>
+        </div>
+        <h2 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">{copy.title}</h2>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+          {missing.length > 0
+            ? `Для полного расчёта нужно дозаполнить: ${missing.slice(0, 3).join(', ')}.`
+            : 'Данных достаточно, чтобы смотреть ключевые зоны и план действий.'}
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2 lg:justify-end">
+        <Button onClick={onPrimaryAction} disabled={disabled} className="gap-2">
+          {primaryActionLabel}
+          <ArrowRight className="h-4 w-4" />
+        </Button>
+        <Button variant="outline" onClick={onRefresh} disabled={loading || disabled} className="gap-2">
+          <RefreshCw className={cn('h-4 w-4', loading ? 'animate-spin' : '')} />
+          Обновить
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+const FinanceKpiGrid: React.FC<{
+  kpis: Record<string, KpiValue>;
+  statuses: Record<string, string>;
+  explanations: Record<string, string>;
+}> = ({ kpis, statuses, explanations }) => {
+  const cards = [
+    {
+      label: 'Выручка',
+      value: kpis.revenue,
+      display: rub(kpis.revenue),
+      hint: kpis.average_ticket != null ? `Средний чек ${rub(kpis.average_ticket)}` : 'Нужны продажи или оплаты',
+      status: statuses.revenue,
+      icon: CircleDollarSign,
+    },
+    {
+      label: 'Прибыль',
+      value: kpis.operating_profit,
+      display: metricDisplay(kpis.operating_profit, rub),
+      hint: kpis.operating_margin != null ? `Маржа ${percent(kpis.operating_margin)}` : (explanations.operating_profit || 'Нужны расходы'),
+      status: statuses.operating_margin,
+      icon: Calculator,
+    },
+    {
+      label: 'Загрузка',
+      value: kpis.workplace_occupancy,
+      display: metricDisplay(kpis.workplace_occupancy, percent),
+      hint: kpis.idle_workplace_hours != null ? `Простой ${numberValue(kpis.idle_workplace_hours)} ч` : 'Нужны часы рабочих мест',
+      status: statuses.workplace_occupancy,
+      icon: Gauge,
+    },
+    {
+      label: 'Повторная запись',
+      value: kpis.rebooking_rate,
+      display: metricDisplay(kpis.rebooking_rate, percent),
+      hint: explanations.rebooking_rate || 'Нужны данные по следующим записям',
+      status: statuses.rebooking_rate,
+      icon: RefreshCw,
+    },
+  ];
+
+  return (
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      {cards.map((card) => {
+        const Icon = card.icon;
+        const unavailable = card.value == null;
+        return (
+          <div
+            key={card.label}
+            className={cn(
+              'flex min-h-[132px] flex-col justify-between rounded-2xl border p-4 shadow-sm',
+              unavailable ? 'border-amber-200 bg-amber-50' : statusTone(card.status),
+            )}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] opacity-70">{card.label}</div>
+              <Icon className="h-5 w-5 shrink-0 opacity-70" />
+            </div>
+            <div>
+              <div className="mt-3 text-2xl font-semibold tracking-tight">{card.display}</div>
+              <div className="mt-1 line-clamp-2 text-sm opacity-75">{card.hint}</div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const FinanceRevenueChart: React.FC<{
+  history: FinanceHistoryPoint[];
+  months: number;
+  onChangeMonths: (months: number) => void;
+}> = ({ history, months, onChangeMonths }) => {
+  const trendData = history
+    .map((item) => ({
+      label: item.label,
+      revenue: toFiniteNumber(item.revenue),
+    }))
+    .filter((item) => item.revenue != null)
+    .slice(-12);
+
+  return (
+    <Card className="border-slate-200/80 shadow-sm">
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <CardTitle className="text-base">Динамика выручки</CardTitle>
+          <div className="mt-1 text-sm text-slate-500">Один основной график без лишнего шума.</div>
+        </div>
+        <div className="flex gap-1">
+          {[3, 6, 12].map((item) => (
+            <Button key={item} size="sm" variant={months === item ? 'default' : 'outline'} onClick={() => onChangeMonths(item)}>
+              {item} мес.
+            </Button>
+          ))}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {trendData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={260}>
+            <AreaChart data={trendData} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="financeHeroRevenueGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#0f172a" stopOpacity={0.22} />
+                  <stop offset="95%" stopColor="#0f172a" stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+              <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#64748b' }} />
+              <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(value) => `${Math.round(Number(value) / 1000)}к`} />
+              <Tooltip formatter={(value) => [tooltipMoney(value), 'Выручка']} />
+              <Area type="monotone" dataKey="revenue" stroke="#0f172a" fill="url(#financeHeroRevenueGradient)" strokeWidth={2} connectNulls />
+            </AreaChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="flex h-[260px] items-center justify-center rounded-2xl bg-slate-50 px-5 text-center text-sm leading-6 text-slate-500">
+            График появится после ввода или импорта выручки.
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+const FinanceAttentionCards: React.FC<{
+  recommendations: FinanceRecommendation[];
+  kpis: Record<string, KpiValue>;
+  onOpenPlan: () => void;
+}> = ({ recommendations, kpis, onOpenPlan }) => {
+  const findRecommendation = (markers: string[]) => recommendations.find((item) => {
+    const value = `${item.code} ${item.target_metric} ${item.title} ${item.text}`.toLowerCase();
+    return markers.some((marker) => value.includes(marker));
+  });
+  const attention = [
+    {
+      title: 'Неявки',
+      value: percent(kpis.no_show_rate),
+      problem: findRecommendation(['no_show', 'неяв'])?.title || 'Потери из-за несостоявшихся визитов',
+      impact: 'Окна заняты в расписании, но не приносят деньги.',
+    },
+    {
+      title: 'Повторная запись',
+      value: percent(kpis.rebooking_rate),
+      problem: findRecommendation(['rebooking', 'повтор'])?.title || 'Клиенты уходят без следующего визита',
+      impact: 'Будущая выручка не закрепляется заранее.',
+    },
+    {
+      title: 'Загрузка рабочих мест',
+      value: percent(kpis.workplace_occupancy),
+      problem: findRecommendation(['workplace', 'occupancy', 'загруз'])?.title || 'Часть рабочих часов может простаивать',
+      impact: 'Кресла и кабинеты есть, но часть времени не монетизируется.',
+    },
+  ];
+  return (
+    <div className="grid gap-3">
+      {attention.map((item) => (
+        <div key={item.title} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-slate-950">{item.title}</div>
+              <div className="mt-1 text-sm leading-5 text-slate-600">{item.problem}</div>
+            </div>
+            <div className="text-sm font-semibold text-slate-900">{item.value}</div>
+          </div>
+          <div className="mt-3 text-sm leading-5 text-slate-600">{item.impact}</div>
+          <Button variant="outline" size="sm" className="mt-3" onClick={onOpenPlan}>
+            Открыть план
+          </Button>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const FinanceNextAction: React.FC<{
+  dataState: FinanceDataState;
+  missing: string[];
+  onSecondary: () => void;
+}> = ({ dataState, missing, onSecondary }) => (
+  <div className="mt-5 rounded-2xl border border-sky-200 bg-sky-50/70 p-4">
+    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div>
+        <div className="text-sm font-semibold text-slate-950">Следующее действие</div>
+        <div className="mt-1 text-sm leading-6 text-slate-700">
+          {dataState === 'ready'
+            ? 'Посмотрите план действий и отметьте, что команда уже сделала.'
+            : missing.length > 0
+              ? `Сначала закройте главный пробел в данных: ${missing[0]}.`
+              : 'Начните с базового ввода, чтобы появился первый расчёт.'}
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" onClick={onSecondary}>Что заполнить</Button>
+      </div>
+    </div>
+  </div>
+);
+
+const FinanceEmptyState: React.FC<{ missing: string[] }> = ({ missing }) => (
+  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
+    <div className="font-semibold">Что нужно заполнить для полного расчёта</div>
+    <div className="mt-1">
+      {missing.length > 0 ? missing.slice(0, 6).join(', ') : 'Выручку, расходы, услуги, мастеров и рабочие места.'}
+    </div>
+  </div>
+);
+
+const FinanceDataQualityPanel: React.FC<{
+  quality?: FinanceDashboard['data_quality'];
+  analyzableItems: string[];
+}> = ({ quality, analyzableItems }) => (
+  <Card className="border-slate-200/80 shadow-sm">
+    <CardHeader>
+      <CardTitle className="flex items-center gap-2 text-base">
+        {quality && quality.score >= 70 ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <AlertTriangle className="h-4 w-4 text-amber-600" />}
+        Что нужно заполнить для полного расчёта
+      </CardTitle>
+    </CardHeader>
+    <CardContent className="space-y-4 text-sm">
+      <InfoList title="Уже можно анализировать" items={analyzableItems} empty="Пока нет достаточных данных для выводов." />
+      <InfoList title="Не хватает" items={quality?.missing || []} empty="Базовые поля заполнены." />
+      <InfoList title="Считается приблизительно" items={quality?.approximate || []} empty="Критичных допущений нет." />
+      <div className="rounded-2xl bg-slate-50 p-4 text-slate-700">
+        <div className="font-medium text-slate-950">Прогресс</div>
+        <div className="mt-2 space-y-1">
+          <ProgressLine done={(quality?.missing || []).indexOf('расходы') === -1} label="Доходы и расходы" />
+          <ProgressLine done={(quality?.missing || []).indexOf('себестоимость материалов') === -1} label="Маржа услуг" />
+          <ProgressLine done={(quality?.missing || []).indexOf('загрузка рабочих мест') === -1} label="Загрузка рабочих мест" />
+          <ProgressLine done={(quality?.missing || []).indexOf('повторная запись') === -1} label="Повторная запись" />
+        </div>
+      </div>
+    </CardContent>
+  </Card>
+);
+
 const ExecutiveFinanceSummary: React.FC<{
   dataState: FinanceDataState;
   period: { start: string; end: string };
@@ -867,7 +1192,7 @@ const ExecutiveFinanceSummary: React.FC<{
   const qualityPercent = Math.max(0, Math.min(Number(qualityScore || 0), 100));
 
   return (
-    <div className={cn('rounded-3xl border p-5 shadow-sm sm:p-6', copy.tone)}>
+    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
       <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-5">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -881,7 +1206,7 @@ const ExecutiveFinanceSummary: React.FC<{
                 </span>
               </div>
               <h3 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">{copy.title}</h3>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-700">{copy.text}</p>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">{copy.text}</p>
             </div>
             <Button onClick={onPrimaryAction} className="gap-2">
               {primaryActionLabel}
@@ -916,9 +1241,9 @@ const ExecutiveFinanceSummary: React.FC<{
             <ExecutiveMetricCard
               metricKey="workplace_revenue"
               icon={Armchair}
-              label="Кресло"
+              label="Рабочее место"
               value={metricDisplay(kpis.revenue_per_workplace, rub)}
-              hint={`Кресло-час: ${metricDisplay(kpis.revenue_per_workplace_hour, rub)}`}
+              hint={`Выручка за час: ${metricDisplay(kpis.revenue_per_workplace_hour, rub)}`}
               explanation={explanations.revenue_per_workplace || explanations.revenue_per_workplace_hour}
               unavailable={metricIsUnavailable(kpis.revenue_per_workplace)}
               status={statuses.workplace_occupancy}
@@ -1007,23 +1332,26 @@ const ExecutiveMetricCard: React.FC<{
     type="button"
     onClick={() => onSelect(metricKey)}
     className={cn(
-      'rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md',
-      unavailable ? 'border-amber-200 bg-amber-50 text-amber-950' : statusTone(status),
+      'flex min-h-[148px] flex-col justify-between rounded-2xl border bg-white p-4 text-left text-slate-900 shadow-sm transition hover:border-slate-300 hover:shadow-md',
+      unavailable ? 'border-amber-200' : status === 'red' ? 'border-rose-200' : status === 'yellow' ? 'border-amber-200' : status === 'green' ? 'border-emerald-200' : 'border-slate-200',
       selected ? 'ring-2 ring-slate-950/20' : '',
     )}
   >
-    <div className="flex items-center justify-between gap-3">
-      <div className="text-xs font-semibold uppercase tracking-[0.14em] opacity-70">{label}</div>
-      <Icon className="h-5 w-5 shrink-0 opacity-70" />
+    <div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="truncate text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{label}</div>
+        <Icon className="h-5 w-5 shrink-0 text-slate-400" />
+      </div>
+      <div className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">{value}</div>
+      {hint ? <div className="mt-1 line-clamp-2 text-sm leading-5 text-slate-600">{hint}</div> : null}
     </div>
-    <div className="mt-3 min-h-8 text-xl font-semibold tracking-tight">{value}</div>
-    {hint ? <div className="mt-1 text-sm opacity-75">{hint}</div> : null}
     {unavailable ? (
-      <div className="mt-3 rounded-xl bg-white/70 px-3 py-2 text-xs leading-5 ring-1 ring-amber-200">
+      <div className="mt-3 line-clamp-2 rounded-xl bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900 ring-1 ring-amber-100">
         {explanation || 'Нужно дозаполнить данные для расчёта.'}
       </div>
-    ) : null}
-    <div className="mt-3 text-xs font-medium opacity-70">Нажмите, чтобы посмотреть расчёт</div>
+    ) : (
+      <div className="mt-3 text-xs font-medium text-slate-500">Открыть расчёт</div>
+    )}
   </button>
 );
 
@@ -1217,6 +1545,123 @@ const HistoryPanel: React.FC<{
           История появится после ввода или импорта данных за несколько месяцев.
         </div>
       )}
+    </CardContent>
+  </Card>
+);
+
+const FinanceVisuals: React.FC<{
+  history: FinanceHistoryPoint[];
+  workplaces: Array<Record<string, KpiValue | string>>;
+  services: Array<Record<string, KpiValue | string>>;
+}> = ({ history, workplaces, services }) => {
+  const trendData = history
+    .map((item) => ({
+      label: item.label,
+      revenue: toFiniteNumber(item.revenue),
+      margin: toFiniteNumber(item.operating_margin),
+      occupancy: toFiniteNumber(item.workplace_occupancy),
+    }))
+    .filter((item) => item.revenue != null || item.margin != null || item.occupancy != null)
+    .slice(-6);
+
+  const workplaceData = workplaces
+    .map((item) => ({
+      name: String(item.name || 'Рабочее место'),
+      revenuePerHour: toFiniteNumber(item.revenue_per_hour),
+      occupancy: toFiniteNumber(item.occupancy),
+    }))
+    .filter((item) => item.revenuePerHour != null || item.occupancy != null)
+    .slice(0, 8);
+
+  const serviceData = services
+    .map((item) => ({
+      name: String(item.service_name || item.name || 'Услуга'),
+      margin: toFiniteNumber(item.gross_margin),
+      revenuePerHour: toFiniteNumber(item.revenue_per_hour),
+    }))
+    .filter((item) => item.margin != null || item.revenuePerHour != null)
+    .slice(0, 8);
+
+  return (
+    <div className="mt-6 grid gap-4 xl:grid-cols-3">
+      <VisualCard
+        title="Динамика денег"
+        subtitle="Выручка и маржа по периодам"
+        empty={trendData.length < 2 ? 'График появится после двух периодов с данными.' : null}
+      >
+        <ResponsiveContainer width="100%" height={240}>
+          <AreaChart data={trendData} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id="financeRevenueGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#0f172a" stopOpacity={0.22} />
+                <stop offset="95%" stopColor="#0f172a" stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+            <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#64748b' }} />
+            <YAxis yAxisId="revenue" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(value) => `${Math.round(Number(value) / 1000)}к`} />
+            <YAxis yAxisId="margin" orientation="right" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(value) => `${Math.round(Number(value))}%`} />
+            <Tooltip formatter={(value, name) => [name === 'revenue' ? tooltipMoney(value) : tooltipPercent(value), name === 'revenue' ? 'Выручка' : 'Маржа']} />
+            <Area yAxisId="revenue" type="monotone" dataKey="revenue" stroke="#0f172a" fill="url(#financeRevenueGradient)" strokeWidth={2} connectNulls />
+            <Area yAxisId="margin" type="monotone" dataKey="margin" stroke="#059669" fill="transparent" strokeWidth={2} connectNulls />
+          </AreaChart>
+        </ResponsiveContainer>
+      </VisualCard>
+
+      <VisualCard
+        title="Рабочие места"
+        subtitle="Выручка за час и загрузка"
+        empty={workplaceData.length === 0 ? 'Добавьте кресла, кабинеты и часы, чтобы увидеть сравнение.' : null}
+      >
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart data={workplaceData} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+            <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: '#64748b' }} interval={0} height={52} />
+            <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(value) => `${Math.round(Number(value) / 1000)}к`} />
+            <Tooltip formatter={(value, name) => [name === 'revenuePerHour' ? tooltipMoney(value) : tooltipPercent(value), name === 'revenuePerHour' ? 'Выручка/час' : 'Загрузка']} />
+            <Bar dataKey="revenuePerHour" fill="#0f172a" radius={[8, 8, 0, 0]} />
+            <Bar dataKey="occupancy" fill="#38bdf8" radius={[8, 8, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </VisualCard>
+
+      <VisualCard
+        title="Услуги"
+        subtitle="Маржа и выручка за час"
+        empty={serviceData.length === 0 ? 'Заполните длительность, материалы и выплаты по услугам.' : null}
+      >
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart data={serviceData} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+            <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: '#64748b' }} interval={0} height={52} />
+            <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#64748b' }} />
+            <Tooltip formatter={(value, name) => [name === 'revenuePerHour' ? tooltipMoney(value) : tooltipPercent(value), name === 'revenuePerHour' ? 'Выручка/час' : 'Маржа']} />
+            <Bar dataKey="margin" fill="#059669" radius={[8, 8, 0, 0]} />
+            <Bar dataKey="revenuePerHour" fill="#0f172a" radius={[8, 8, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </VisualCard>
+    </div>
+  );
+};
+
+const VisualCard: React.FC<{
+  title: string;
+  subtitle: string;
+  empty: string | null;
+  children: React.ReactNode;
+}> = ({ title, subtitle, empty, children }) => (
+  <Card className="border-slate-200/80 shadow-sm">
+    <CardHeader>
+      <CardTitle className="text-base">{title}</CardTitle>
+      <div className="text-sm text-slate-500">{subtitle}</div>
+    </CardHeader>
+    <CardContent>
+      {empty ? (
+        <div className="flex h-60 items-center justify-center rounded-2xl bg-slate-50 px-5 text-center text-sm leading-6 text-slate-500">
+          {empty}
+        </div>
+      ) : children}
     </CardContent>
   </Card>
 );

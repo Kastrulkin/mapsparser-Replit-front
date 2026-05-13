@@ -1816,6 +1816,7 @@ def _resolve_lead_business_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
     Try to resolve an existing LocalOS business for a lead and enrich preview metrics.
     Returns partial snapshot; empty dict means no business match found.
     """
+    recent_days = int(policy_value("activity", "recent_days", 45))
     explicit_business_id = str(lead.get("business_id") or "").strip()
     raw_source_url = str(lead.get("source_url") or "").strip()
     normalized_source_url = normalize_map_url(raw_source_url) if raw_source_url else ""
@@ -3993,6 +3994,7 @@ def build_lead_card_preview_snapshot(lead: Dict[str, Any]) -> Dict[str, Any]:
     city = raw_city
     if not city and address:
         city = str(address.split(",", 1)[0] or "").strip()
+    recent_days = int(policy_value("activity", "recent_days", 45))
     snapshot = _resolve_lead_business_snapshot(lead)
     lead_import_payload = _extract_lead_import_payload(lead)
     business = snapshot.get("business") or {}

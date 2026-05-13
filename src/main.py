@@ -8360,6 +8360,35 @@ def _finance_row_value(row, key, index):
     return row[index]
 
 
+def _finance_period_overlap_ratio(row_start, row_end, request_start, request_end):
+    row_start_date = _parse_finance_date(row_start)
+    row_end_date = _parse_finance_date(row_end)
+    request_start_date = _parse_finance_date(request_start)
+    request_end_date = _parse_finance_date(request_end)
+    if not row_start_date or not row_end_date or not request_start_date or not request_end_date:
+        return 1.0
+
+    total_days = max((row_end_date - row_start_date).days + 1, 1)
+    overlap_start = max(row_start_date, request_start_date)
+    overlap_end = min(row_end_date, request_end_date)
+    if overlap_end < overlap_start:
+        return 0.0
+
+    overlap_days = (overlap_end - overlap_start).days + 1
+    return max(0.0, min(1.0, overlap_days / total_days))
+
+
+def _finance_prorate_value(value, ratio):
+    return float(value or 0) * ratio
+
+
+def _finance_prorate_count(value, ratio):
+    raw_value = float(value or 0)
+    if ratio >= 0.999:
+        return int(raw_value)
+    return raw_value * ratio
+
+
 def _load_finance_payload(cursor, business_id, start_date, end_date):
     cursor.execute(
         """
@@ -8393,23 +8422,25 @@ def _load_finance_payload(cursor, business_id, start_date, end_date):
         """,
         (business_id, end_date, start_date),
     )
-    services = [
-        {
+    services = []
+    for row in cursor.fetchall() or []:
+        period_start = str(_finance_row_value(row, "period_start", 1))
+        period_end = str(_finance_row_value(row, "period_end", 2))
+        ratio = _finance_period_overlap_ratio(period_start, period_end, start_date, end_date)
+        services.append({
             "id": _finance_row_value(row, "id", 0),
-            "period_start": str(_finance_row_value(row, "period_start", 1)),
-            "period_end": str(_finance_row_value(row, "period_end", 2)),
+            "period_start": period_start,
+            "period_end": period_end,
             "service_name": _finance_row_value(row, "service_name", 3),
             "category": _finance_row_value(row, "category", 4),
-            "revenue": float(_finance_row_value(row, "revenue", 5) or 0),
-            "visits_count": int(_finance_row_value(row, "visits_count", 6) or 0),
+            "revenue": _finance_prorate_value(_finance_row_value(row, "revenue", 5), ratio),
+            "visits_count": _finance_prorate_count(_finance_row_value(row, "visits_count", 6), ratio),
             "avg_price": float(_finance_row_value(row, "avg_price", 7) or 0),
             "duration_minutes": int(_finance_row_value(row, "duration_minutes", 8) or 0),
-            "material_cost": float(_finance_row_value(row, "material_cost", 9) or 0),
-            "staff_payout": float(_finance_row_value(row, "staff_payout", 10) or 0),
+            "material_cost": _finance_prorate_value(_finance_row_value(row, "material_cost", 9), ratio),
+            "staff_payout": _finance_prorate_value(_finance_row_value(row, "staff_payout", 10), ratio),
             "source": _finance_row_value(row, "source", 11),
-        }
-        for row in cursor.fetchall() or []
-    ]
+        })
 
     cursor.execute(
         """
@@ -8421,23 +8452,25 @@ def _load_finance_payload(cursor, business_id, start_date, end_date):
         """,
         (business_id, end_date, start_date),
     )
-    staff = [
-        {
+    staff = []
+    for row in cursor.fetchall() or []:
+        period_start = str(_finance_row_value(row, "period_start", 1))
+        period_end = str(_finance_row_value(row, "period_end", 2))
+        ratio = _finance_period_overlap_ratio(period_start, period_end, start_date, end_date)
+        staff.append({
             "id": _finance_row_value(row, "id", 0),
-            "period_start": str(_finance_row_value(row, "period_start", 1)),
-            "period_end": str(_finance_row_value(row, "period_end", 2)),
+            "period_start": period_start,
+            "period_end": period_end,
             "staff_name": _finance_row_value(row, "staff_name", 3),
             "role": _finance_row_value(row, "role", 4),
-            "revenue": float(_finance_row_value(row, "revenue", 5) or 0),
-            "visits_count": int(_finance_row_value(row, "visits_count", 6) or 0),
-            "booked_minutes": int(_finance_row_value(row, "booked_minutes", 7) or 0),
-            "available_minutes": int(_finance_row_value(row, "available_minutes", 8) or 0),
-            "no_show_count": int(_finance_row_value(row, "no_show_count", 9) or 0),
-            "rebooking_count": int(_finance_row_value(row, "rebooking_count", 10) or 0),
+            "revenue": _finance_prorate_value(_finance_row_value(row, "revenue", 5), ratio),
+            "visits_count": _finance_prorate_count(_finance_row_value(row, "visits_count", 6), ratio),
+            "booked_minutes": _finance_prorate_count(_finance_row_value(row, "booked_minutes", 7), ratio),
+            "available_minutes": _finance_prorate_count(_finance_row_value(row, "available_minutes", 8), ratio),
+            "no_show_count": _finance_prorate_count(_finance_row_value(row, "no_show_count", 9), ratio),
+            "rebooking_count": _finance_prorate_count(_finance_row_value(row, "rebooking_count", 10), ratio),
             "source": _finance_row_value(row, "source", 11),
-        }
-        for row in cursor.fetchall() or []
-    ]
+        })
 
     cursor.execute(
         """
@@ -8468,20 +8501,22 @@ def _load_finance_payload(cursor, business_id, start_date, end_date):
         """,
         (business_id, end_date, start_date),
     )
-    workplace_metrics = [
-        {
+    workplace_metrics = []
+    for row in cursor.fetchall() or []:
+        period_start = str(_finance_row_value(row, "period_start", 2))
+        period_end = str(_finance_row_value(row, "period_end", 3))
+        ratio = _finance_period_overlap_ratio(period_start, period_end, start_date, end_date)
+        workplace_metrics.append({
             "id": _finance_row_value(row, "id", 0),
             "workplace_id": _finance_row_value(row, "workplace_id", 1),
-            "period_start": str(_finance_row_value(row, "period_start", 2)),
-            "period_end": str(_finance_row_value(row, "period_end", 3)),
-            "available_minutes": int(_finance_row_value(row, "available_minutes", 4) or 0),
-            "booked_minutes": int(_finance_row_value(row, "booked_minutes", 5) or 0),
-            "revenue": float(_finance_row_value(row, "revenue", 6) or 0),
-            "gross_profit": float(_finance_row_value(row, "gross_profit", 7) or 0),
+            "period_start": period_start,
+            "period_end": period_end,
+            "available_minutes": _finance_prorate_count(_finance_row_value(row, "available_minutes", 4), ratio),
+            "booked_minutes": _finance_prorate_count(_finance_row_value(row, "booked_minutes", 5), ratio),
+            "revenue": _finance_prorate_value(_finance_row_value(row, "revenue", 6), ratio),
+            "gross_profit": _finance_prorate_value(_finance_row_value(row, "gross_profit", 7), ratio),
             "source": _finance_row_value(row, "source", 8),
-        }
-        for row in cursor.fetchall() or []
-    ]
+        })
 
     return {
         "entries": entries,
