@@ -8333,6 +8333,38 @@ def _finance_period_from_request():
     return default_period_range()
 
 
+def _finance_all_time_period(cursor, business_id):
+    cursor.execute(
+        """
+        SELECT MIN(period_start), MAX(period_end)
+        FROM (
+            SELECT date AS period_start, date AS period_end
+            FROM finance_entries
+            WHERE business_id = %s
+            UNION ALL
+            SELECT period_start, period_end
+            FROM finance_service_metrics
+            WHERE business_id = %s
+            UNION ALL
+            SELECT period_start, period_end
+            FROM finance_staff_metrics
+            WHERE business_id = %s
+            UNION ALL
+            SELECT period_start, period_end
+            FROM finance_workplace_metrics
+            WHERE business_id = %s
+        ) finance_dates
+        """,
+        (business_id, business_id, business_id, business_id),
+    )
+    row = cursor.fetchone()
+    start_date = _finance_row_value(row, "min", 0)
+    end_date = _finance_row_value(row, "max", 1)
+    if start_date and end_date:
+        return str(start_date), str(end_date)
+    return default_period_range()
+
+
 def _parse_finance_date(value):
     return datetime.strptime(str(value), "%Y-%m-%d").date()
 
@@ -9082,9 +9114,12 @@ def get_finance_dashboard():
         if error_response:
             return error_response
 
-        start_date, end_date = _finance_period_from_request()
         db = DatabaseManager()
         cursor = db.conn.cursor()
+        if request.args.get('range') == 'all':
+            start_date, end_date = _finance_all_time_period(cursor, business_id)
+        else:
+            start_date, end_date = _finance_period_from_request()
         payload, thresholds, snapshot = _finance_snapshot_for_period(cursor, business_id, start_date, end_date)
         action_logs = _load_finance_action_logs(cursor, business_id, start_date, end_date)
         action_impact = _build_finance_impact(cursor, business_id, start_date, end_date)

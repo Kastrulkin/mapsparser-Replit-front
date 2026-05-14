@@ -43,6 +43,10 @@ import { cn } from '@/lib/utils';
 type KpiValue = number | string | null | undefined;
 
 type FinanceDashboard = {
+  period?: {
+    start_date: string;
+    end_date: string;
+  };
   kpis: Record<string, KpiValue>;
   explanations: Record<string, string>;
   data_quality: {
@@ -114,6 +118,11 @@ type FinanceFirstStepProps = {
   legacyTools?: React.ReactNode;
 };
 
+type FinancePeriod = {
+  start: string;
+  end: string;
+};
+
 const rub = (value: KpiValue) => {
   if (value == null) return 'н/д';
   return new Intl.NumberFormat('ru-RU', {
@@ -131,6 +140,15 @@ const numberValue = (value: KpiValue) => {
 const percent = (value: KpiValue) => {
   if (value == null) return 'н/д';
   return `${numberValue(value)}%`;
+};
+
+const formatFinanceTableCell = (key: string, value: KpiValue | string) => {
+  if (value == null || value === '') return 'н/д';
+  if (key.indexOf('margin') !== -1 || key.indexOf('rate') !== -1 || key === 'occupancy') return percent(value);
+  if (key === 'idle_hours') return `${numberValue(value)} ч`;
+  if (key.indexOf('hour') !== -1 || key === 'revenue' || key === 'gross_profit') return rub(value);
+  if (key === 'visits_count') return numberValue(value);
+  return String(value);
 };
 
 const tooltipMoney = (value: unknown) => rub(Number(value));
@@ -159,11 +177,66 @@ const workplaceLabels: Record<string, string> = {
 };
 
 const starterSteps = [
-  { key: 'entry', title: '1. Деньги', text: 'Выручка и основные расходы за 3 месяца.' },
+  { key: 'entry', title: '1. Деньги', text: 'Выручка и основные расходы за выбранный период.' },
   { key: 'service', title: '2. Услуги', text: 'Цена, длительность, материалы и выплата мастеру.' },
   { key: 'staff', title: '3. Мастера', text: 'Выручка, часы, визиты, неявки и повторная запись.' },
   { key: 'workplace', title: '4. Кресла', text: 'Сколько мест доступно, занято и сколько они приносят.' },
 ];
+
+const dateToInputValue = (date: Date) => date.toISOString().slice(0, 10);
+
+const getDefaultFinancePeriod = (): FinancePeriod => {
+  const end = new Date();
+  const start = new Date(end);
+  start.setMonth(start.getMonth() - 3);
+  start.setDate(1);
+  return {
+    start: dateToInputValue(start),
+    end: dateToInputValue(end),
+  };
+};
+
+const getFinancePeriodByPreset = (preset: string): FinancePeriod => {
+  const today = new Date();
+  const end = new Date(today);
+  const start = new Date(today);
+
+  if (preset === 'last_30_days') {
+    start.setDate(start.getDate() - 29);
+    return { start: dateToInputValue(start), end: dateToInputValue(end) };
+  }
+
+  if (preset === 'current_month') {
+    start.setDate(1);
+    return { start: dateToInputValue(start), end: dateToInputValue(end) };
+  }
+
+  if (preset === 'previous_month') {
+    start.setMonth(start.getMonth() - 1, 1);
+    end.setDate(1);
+    end.setDate(0);
+    return { start: dateToInputValue(start), end: dateToInputValue(end) };
+  }
+
+  if (preset === 'last_year') {
+    start.setFullYear(start.getFullYear() - 1);
+    start.setDate(start.getDate() + 1);
+    return { start: dateToInputValue(start), end: dateToInputValue(end) };
+  }
+
+  if (preset === 'all_time') {
+    return { start: '', end: '' };
+  }
+
+  return getDefaultFinancePeriod();
+};
+
+const getMonthPeriod = (value: string): FinancePeriod => {
+  const date = value ? new Date(value) : new Date();
+  const start = new Date(date.getFullYear(), date.getMonth(), 1);
+  const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  return { start: dateToInputValue(start), end: dateToInputValue(end) };
+};
 
 export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusinessId, setupTools, legacyTools }) => {
   const [dashboard, setDashboard] = useState<FinanceDashboard | null>(null);
@@ -177,6 +250,8 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
   const [selectedMetric, setSelectedMetric] = useState<FinanceMetricKey | null>(null);
   const [activeInputStep, setActiveInputStep] = useState('entry');
   const [activeFinanceTab, setActiveFinanceTab] = useState('overview');
+  const [periodPreset, setPeriodPreset] = useState('last_3_months');
+  const [period, setPeriod] = useState<FinancePeriod>(getDefaultFinancePeriod);
   const [entry, setEntry] = useState({
     revenue: '',
     rent: '',
@@ -213,17 +288,16 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
     revenue: '',
     gross_profit: '',
   });
-
-  const period = useMemo(() => {
-    const end = new Date();
-    const start = new Date(end);
-    start.setMonth(start.getMonth() - 3);
-    start.setDate(1);
+  const [manualPeriod, setManualPeriod] = useState(() => {
+    const initial = getDefaultFinancePeriod();
     return {
-      start: start.toISOString().slice(0, 10),
-      end: end.toISOString().slice(0, 10),
+      periodType: 'custom',
+      date: initial.end,
+      start: initial.start,
+      end: initial.end,
+      comment: '',
     };
-  }, []);
+  });
 
   const loadDashboard = useCallback(async () => {
     if (!currentBusinessId) return;
@@ -231,8 +305,15 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
     setMessage(null);
     try {
       const token = localStorage.getItem('auth_token');
+      const params = new URLSearchParams({ business_id: currentBusinessId });
+      if (periodPreset === 'all_time') {
+        params.set('range', 'all');
+      } else {
+        params.set('from', period.start);
+        params.set('to', period.end);
+      }
       const response = await fetch(
-        `/api/finance/dashboard?business_id=${currentBusinessId}&from=${period.start}&to=${period.end}`,
+        `/api/finance/dashboard?${params.toString()}`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
       const data = await response.json();
@@ -248,7 +329,19 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
     } finally {
       setLoading(false);
     }
-  }, [currentBusinessId, period.end, period.start]);
+  }, [currentBusinessId, period.end, period.start, periodPreset]);
+
+  const changePeriodPreset = (preset: string) => {
+    setPeriodPreset(preset);
+    if (preset !== 'custom') {
+      setPeriod(getFinancePeriodByPreset(preset));
+    }
+  };
+
+  const changePeriod = (nextPeriod: FinancePeriod) => {
+    setPeriodPreset('custom');
+    setPeriod(nextPeriod);
+  };
 
   const loadHistory = useCallback(async (months: number) => {
     if (!currentBusinessId) return;
@@ -274,14 +367,18 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
     setSaving(true);
     setMessage(null);
 
+    const manualStart = manualPeriod.start || period.start;
+    const manualEnd = manualPeriod.end || period.end;
+    const manualDate = manualPeriod.date || manualEnd;
+    const commentSuffix = manualPeriod.comment ? ` · ${manualPeriod.comment}` : '';
     const entries = [];
     if (mode === 'entry') {
-      if (entry.revenue) entries.push({ date: period.end, type: 'revenue', category: 'sales', amount: Number(entry.revenue), comment: 'Выручка за период' });
-      if (entry.rent) entries.push({ date: period.end, type: 'expense', category: 'rent', amount: Number(entry.rent), comment: 'Аренда' });
-      if (entry.payroll) entries.push({ date: period.end, type: 'expense', category: 'payroll', amount: Number(entry.payroll), comment: 'ФОТ' });
-      if (entry.materials) entries.push({ date: period.end, type: 'expense', category: 'materials', amount: Number(entry.materials), comment: 'Материалы' });
-      if (entry.marketing) entries.push({ date: period.end, type: 'expense', category: 'marketing', amount: Number(entry.marketing), comment: 'Маркетинг' });
-      if (entry.taxes) entries.push({ date: period.end, type: 'expense', category: 'taxes', amount: Number(entry.taxes), comment: 'Налоги' });
+      if (entry.revenue) entries.push({ date: manualDate, type: 'revenue', category: 'sales', amount: Number(entry.revenue), comment: `Выручка за период ${manualStart} - ${manualEnd}${commentSuffix}` });
+      if (entry.rent) entries.push({ date: manualDate, type: 'expense', category: 'rent', amount: Number(entry.rent), comment: `Аренда за период ${manualStart} - ${manualEnd}${commentSuffix}` });
+      if (entry.payroll) entries.push({ date: manualDate, type: 'expense', category: 'payroll', amount: Number(entry.payroll), comment: `ФОТ за период ${manualStart} - ${manualEnd}${commentSuffix}` });
+      if (entry.materials) entries.push({ date: manualDate, type: 'expense', category: 'materials', amount: Number(entry.materials), comment: `Материалы за период ${manualStart} - ${manualEnd}${commentSuffix}` });
+      if (entry.marketing) entries.push({ date: manualDate, type: 'expense', category: 'marketing', amount: Number(entry.marketing), comment: `Маркетинг за период ${manualStart} - ${manualEnd}${commentSuffix}` });
+      if (entry.taxes) entries.push({ date: manualDate, type: 'expense', category: 'taxes', amount: Number(entry.taxes), comment: `Налоги за период ${manualStart} - ${manualEnd}${commentSuffix}` });
     }
 
     const workplaces = mode === 'workplace' ? [{
@@ -293,8 +390,8 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
 
     const payload = {
       business_id: currentBusinessId,
-      period_start: period.start,
-      period_end: period.end,
+      period_start: manualStart,
+      period_end: manualEnd,
       entries,
       services: mode === 'service' ? [{
         service_name: service.service_name || 'Услуга',
@@ -319,8 +416,8 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
       workplaces,
       workplace_metrics: mode === 'workplace' ? [{
         workplace_client_key: workplace.name || 'workplace',
-        period_start: period.start,
-        period_end: period.end,
+        period_start: manualStart,
+        period_end: manualEnd,
         available_minutes: minutesFromHours(workplace.available_hours),
         booked_minutes: minutesFromHours(workplace.booked_hours),
         revenue: Number(workplace.revenue || 0),
@@ -506,40 +603,26 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
 
       <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <FinanceHeader
-          dataState={dataState}
           period={period}
+          periodPreset={periodPreset}
+          actualPeriod={dashboard?.period}
           quality={quality}
-          primaryActionLabel={primaryAction.label}
-          onPrimaryAction={runPrimaryAction}
+          onPeriodPresetChange={changePeriodPreset}
+          onPeriodChange={changePeriod}
           onRefresh={loadDashboard}
           loading={loading}
           disabled={!currentBusinessId}
         />
 
-        <div className="mt-5">
-          <FinanceKpiGrid kpis={kpis} statuses={dashboard?.statuses || {}} explanations={dashboard?.explanations || {}} />
-        </div>
-
-        <div className="mt-5 grid gap-5 xl:grid-cols-[1.35fr_0.95fr]">
-          <FinanceRevenueChart history={history} months={historyMonths} onChangeMonths={loadHistory} />
-          <FinanceAttentionCards
-            recommendations={dashboard?.recommendations || []}
+        <div className="mt-5 grid gap-4 xl:grid-cols-[0.9fr_1.25fr]">
+          <FinanceKpiGrid
             kpis={kpis}
-            onOpenPlan={() => {
-              setActiveFinanceTab('overview');
-              document.getElementById('finance-next-action')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }}
+            statuses={dashboard?.statuses || {}}
+            explanations={dashboard?.explanations || {}}
+            impact={impact}
           />
+          <FinanceRevenueChart history={history} months={historyMonths} onChangeMonths={loadHistory} />
         </div>
-
-        <FinanceNextAction
-          dataState={dataState}
-          missing={quality?.missing || []}
-          onSecondary={() => {
-            setActiveFinanceTab('data');
-            document.getElementById('finance-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }}
-        />
       </section>
 
       <section id="finance-tabs" className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
@@ -550,7 +633,7 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
             <TabsTrigger value="services">Услуги</TabsTrigger>
             <TabsTrigger value="team">Команда</TabsTrigger>
             <TabsTrigger value="workplaces">Рабочие места</TabsTrigger>
-            <TabsTrigger value="history">История</TabsTrigger>
+            <TabsTrigger value="settings">Настройки</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-5 pt-5">
@@ -566,6 +649,23 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
                 onClose={() => setSelectedMetric(null)}
               />
             ) : null}
+            <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+              <FinanceAttentionCards
+                recommendations={dashboard?.recommendations || []}
+                kpis={kpis}
+                onOpenPlan={() => {
+                  document.getElementById('finance-next-action')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+              />
+              <FinanceNextAction
+                dataState={dataState}
+                missing={quality?.missing || []}
+                onSecondary={() => {
+                  setActiveFinanceTab('data');
+                  document.getElementById('finance-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+              />
+            </div>
             <ImpactPanel impact={impact} />
             <div id="finance-next-action">
               <DashboardSection title="План действий" description="Подробные рекомендации скрыты до клика, чтобы обзор не превращался в полотно.">
@@ -601,6 +701,10 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
                   </Button>
                 </CardHeader>
                 <CardContent>
+                  <ManualPeriodContext
+                    value={manualPeriod}
+                    onChange={setManualPeriod}
+                  />
                   <div className="mb-4 grid gap-3 md:grid-cols-4">
                     {starterSteps.map((step) => (
                       <button
@@ -692,7 +796,6 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
 
               <FinanceDataQualityPanel quality={quality} analyzableItems={analyzableItems} />
             </div>
-            {setupTools ? <div>{setupTools}</div> : null}
           </TabsContent>
 
           <TabsContent value="services" className="pt-5">
@@ -700,13 +803,16 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
               title="Прибыльность услуг"
               icon={Scissors}
               rows={dashboard?.services || []}
+              description="Что приносит деньги, занимает время и требует дозаполнения себестоимости."
               columns={[
                 ['service_name', 'Услуга'],
+                ['revenue', 'Выручка'],
+                ['visits_count', 'Продаж'],
                 ['gross_margin', 'Маржа'],
                 ['revenue_per_hour', 'Выручка/час'],
                 ['status', 'Статус'],
               ]}
-              formatter={(key, value) => key.includes('margin') ? percent(value) : key.includes('hour') ? rub(value) : String(value || 'н/д')}
+              formatter={formatFinanceTableCell}
             />
           </TabsContent>
 
@@ -715,13 +821,16 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
               title="Команда"
               icon={Users}
               rows={dashboard?.staff || []}
+              description="Выручка, загрузка и повторная запись по мастерам."
               columns={[
                 ['staff_name', 'Мастер'],
                 ['revenue', 'Выручка'],
+                ['visits_count', 'Визиты'],
                 ['occupancy', 'Загрузка'],
                 ['rebooking_rate', 'Повторная запись'],
+                ['no_show_rate', 'Неявки'],
               ]}
-              formatter={(key, value) => key === 'revenue' ? rub(value) : key.includes('rate') || key === 'occupancy' ? percent(value) : String(value || 'н/д')}
+              formatter={formatFinanceTableCell}
             />
           </TabsContent>
 
@@ -731,18 +840,21 @@ export const FinanceFirstStep: React.FC<FinanceFirstStepProps> = ({ currentBusin
               title="Рабочие места"
               icon={Armchair}
               rows={dashboard?.workplaces || []}
+              description="Кресла, кабинеты и места: загрузка, простой и деньги за час."
               columns={[
                 ['name', 'Место'],
+                ['revenue', 'Выручка'],
                 ['occupancy', 'Загрузка'],
                 ['revenue_per_hour', 'Выручка/час'],
                 ['idle_hours', 'Простой'],
               ]}
-              formatter={(key, value) => key.includes('hour') ? rub(value) : key === 'occupancy' ? percent(value) : key === 'idle_hours' ? `${numberValue(value)} ч` : String(value || 'н/д')}
+              formatter={formatFinanceTableCell}
             />
           </TabsContent>
 
-          <TabsContent value="history" className="space-y-5 pt-5">
+          <TabsContent value="settings" className="space-y-5 pt-5">
             <HistoryPanel history={history} months={historyMonths} onChangeMonths={loadHistory} />
+            {setupTools ? <div>{setupTools}</div> : null}
             {legacyTools ? <div>{legacyTools}</div> : null}
           </TabsContent>
         </Tabs>
@@ -761,6 +873,85 @@ const TextField: React.FC<FieldProps> = ({ label, value, onChange }) => (
   <div className="space-y-2">
     <Label>{label}</Label>
     <Input value={value} onChange={(event) => onChange(event.target.value)} />
+  </div>
+);
+
+type ManualPeriodValue = {
+  periodType: string;
+  date: string;
+  start: string;
+  end: string;
+  comment: string;
+};
+
+const ManualPeriodContext: React.FC<{
+  value: ManualPeriodValue;
+  onChange: (value: ManualPeriodValue) => void;
+}> = ({ value, onChange }) => {
+  const changeType = (periodType: string) => {
+    if (periodType === 'day') {
+      onChange({ ...value, periodType, start: value.date, end: value.date });
+      return;
+    }
+    if (periodType === 'month') {
+      const monthPeriod = getMonthPeriod(value.date);
+      onChange({ ...value, periodType, start: monthPeriod.start, end: monthPeriod.end });
+      return;
+    }
+    onChange({ ...value, periodType });
+  };
+
+  const changeDate = (date: string) => {
+    if (value.periodType === 'day') {
+      onChange({ ...value, date, start: date, end: date });
+      return;
+    }
+    if (value.periodType === 'month') {
+      const monthPeriod = getMonthPeriod(date);
+      onChange({ ...value, date, start: monthPeriod.start, end: monthPeriod.end });
+      return;
+    }
+    onChange({ ...value, date });
+  };
+
+  return (
+    <div className="mb-5 rounded-2xl border border-sky-200 bg-sky-50/70 p-4 ring-1 ring-sky-100">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <div className="text-sm font-semibold text-slate-950">Период, к которому относятся данные</div>
+          <div className="mt-1 text-sm text-slate-600">
+            Сохранение привяжет значения к периоду: <span className="font-medium text-slate-950">{formatPeriodLabel({ start: value.start, end: value.end })}</span>
+          </div>
+        </div>
+        <span className="w-fit rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
+          Источник: вручную
+        </span>
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-5">
+        <div className="space-y-2">
+          <Label>Тип периода</Label>
+          <Select value={value.periodType} onValueChange={changeType}>
+            <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="day">День</SelectItem>
+              <SelectItem value="month">Месяц</SelectItem>
+              <SelectItem value="custom">Произвольный период</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <DateField label={value.periodType === 'month' ? 'Месяц по дате' : 'Дата'} value={value.date} onChange={changeDate} />
+        <DateField label="Начало периода" value={value.start} onChange={(start) => onChange({ ...value, periodType: 'custom', start })} />
+        <DateField label="Конец периода" value={value.end} onChange={(end) => onChange({ ...value, periodType: 'custom', end })} />
+        <TextField label="Комментарий" value={value.comment} onChange={(comment) => onChange({ ...value, comment })} />
+      </div>
+    </div>
+  );
+};
+
+const DateField: React.FC<FieldProps> = ({ label, value, onChange }) => (
+  <div className="space-y-2">
+    <Label>{label}</Label>
+    <Input type="date" value={value} onChange={(event) => onChange(event.target.value)} />
   </div>
 );
 
@@ -892,49 +1083,111 @@ const humanMetricLabel = (value?: string | null) => {
   return labels[key] || key.replaceAll('_', ' ');
 };
 
+const getQuietStatusBorder = (status?: string) => {
+  if (status === 'green') return 'border-emerald-200';
+  if (status === 'yellow') return 'border-amber-200';
+  if (status === 'red') return 'border-rose-200';
+  return 'border-slate-200';
+};
+
+const getFinanceImpactDelta = (impact: FinanceImpact | null, metric: string) => {
+  const item = (impact?.deltas || []).find((delta) => delta.metric === metric);
+  if (!item || item.delta == null) return null;
+  const delta = Number(item.delta);
+  if (!Number.isFinite(delta) || delta === 0) {
+    return { label: 'без изменений', tone: 'bg-slate-50 text-slate-600 ring-1 ring-slate-200' };
+  }
+  const sign = delta > 0 ? '+' : '';
+  return {
+    label: `${sign}${rub(delta)} к прошлому периоду`,
+    tone: delta > 0
+      ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100'
+      : 'bg-rose-50 text-rose-700 ring-1 ring-rose-100',
+  };
+};
+
+const formatPeriodLabel = (period: { start: string; end: string }) => (
+  !period.start || !period.end
+    ? 'Всё время'
+    :
+  `${new Date(period.start).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' })} - ${new Date(period.end).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', year: 'numeric' })}`
+);
+
+const shortMissingLabel = (missing: string[]) => {
+  if (missing.indexOf('расходы') !== -1) return 'не хватает расходов';
+  if (missing.indexOf('себестоимость материалов') !== -1) return 'нет себестоимости';
+  if (missing.indexOf('выплаты мастерам') !== -1) return 'нет выплат мастерам';
+  if (missing.indexOf('повторная запись') !== -1) return 'нет повторной записи';
+  if (missing.indexOf('загрузка рабочих мест') !== -1) return 'нет загрузки мест';
+  return missing[0] || 'данные заполнены';
+};
+
 const FinanceHeader: React.FC<{
-  dataState: FinanceDataState;
-  period: { start: string; end: string };
+  period: FinancePeriod;
+  periodPreset: string;
+  actualPeriod?: { start_date: string; end_date: string };
   quality?: FinanceDashboard['data_quality'];
-  primaryActionLabel: string;
-  onPrimaryAction: () => void;
+  onPeriodPresetChange: (preset: string) => void;
+  onPeriodChange: (period: FinancePeriod) => void;
   onRefresh: () => void;
   loading: boolean;
   disabled: boolean;
-}> = ({ dataState, period, quality, primaryActionLabel, onPrimaryAction, onRefresh, loading, disabled }) => {
-  const copy = stateCopy[dataState];
+}> = ({ period, periodPreset, actualPeriod, quality, onPeriodPresetChange, onPeriodChange, onRefresh, loading, disabled }) => {
   const missing = quality?.missing || [];
+  const isAllTime = periodPreset === 'all_time';
+  const displayedPeriod = actualPeriod
+    ? { start: actualPeriod.start_date, end: actualPeriod.end_date }
+    : period;
   return (
-    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white">
-            {copy.label}
-          </span>
-          <span className="rounded-full bg-slate-50 px-3 py-1 text-xs text-slate-600 ring-1 ring-slate-200">
-            {period.start} - {period.end}
-          </span>
-          <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
-            Качество данных: {quality ? `${quality.score}/100` : 'н/д'}
-          </span>
-        </div>
-        <h2 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">{copy.title}</h2>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-          {missing.length > 0
-            ? `Для полного расчёта нужно дозаполнить: ${missing.slice(0, 3).join(', ')}.`
-            : 'Данных достаточно, чтобы смотреть ключевые зоны и план действий.'}
-        </p>
+    <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 xl:flex-row xl:items-center xl:justify-between">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-medium text-slate-500">Период</span>
+        <Select value={periodPreset} onValueChange={onPeriodPresetChange}>
+          <SelectTrigger className="h-9 w-[160px] bg-white">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="last_30_days">30 дней</SelectItem>
+            <SelectItem value="last_3_months">3 месяца</SelectItem>
+            <SelectItem value="current_month">Текущий месяц</SelectItem>
+            <SelectItem value="previous_month">Прошлый месяц</SelectItem>
+            <SelectItem value="last_year">Год</SelectItem>
+            <SelectItem value="all_time">Всё время</SelectItem>
+            <SelectItem value="custom">Свой период</SelectItem>
+          </SelectContent>
+        </Select>
+        {!isAllTime ? (
+          <>
+            <Input
+              type="date"
+              value={period.start}
+              onChange={(event) => onPeriodChange({ ...period, start: event.target.value })}
+              className="h-9 w-[150px]"
+              disabled={disabled}
+            />
+            <Input
+              type="date"
+              value={period.end}
+              onChange={(event) => onPeriodChange({ ...period, end: event.target.value })}
+              className="h-9 w-[150px]"
+              disabled={disabled}
+            />
+          </>
+        ) : null}
+        <span className="rounded-full bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+          {isAllTime ? `Всё время: ${formatPeriodLabel(displayedPeriod)}` : formatPeriodLabel(displayedPeriod)}
+        </span>
+        <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+          Качество: {quality ? `${quality.score}/100` : 'н/д'}
+        </span>
+        <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-medium text-white">
+          {missing.length > 0 ? shortMissingLabel(missing) : 'готово к анализу'}
+        </span>
       </div>
-      <div className="flex flex-wrap gap-2 lg:justify-end">
-        <Button onClick={onPrimaryAction} disabled={disabled} className="gap-2">
-          {primaryActionLabel}
-          <ArrowRight className="h-4 w-4" />
-        </Button>
-        <Button variant="outline" onClick={onRefresh} disabled={loading || disabled} className="gap-2">
-          <RefreshCw className={cn('h-4 w-4', loading ? 'animate-spin' : '')} />
-          Обновить
-        </Button>
-      </div>
+      <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading || disabled} className="gap-2">
+        <RefreshCw className={cn('h-4 w-4', loading ? 'animate-spin' : '')} />
+        Обновить
+      </Button>
     </div>
   );
 };
@@ -943,21 +1196,15 @@ const FinanceKpiGrid: React.FC<{
   kpis: Record<string, KpiValue>;
   statuses: Record<string, string>;
   explanations: Record<string, string>;
-}> = ({ kpis, statuses, explanations }) => {
+  impact: FinanceImpact | null;
+}> = ({ kpis, statuses, explanations, impact }) => {
+  const revenueDelta = getFinanceImpactDelta(impact, 'revenue');
   const cards = [
-    {
-      label: 'Выручка',
-      value: kpis.revenue,
-      display: rub(kpis.revenue),
-      hint: kpis.average_ticket != null ? `Средний чек ${rub(kpis.average_ticket)}` : 'Нужны продажи или оплаты',
-      status: statuses.revenue,
-      icon: CircleDollarSign,
-    },
     {
       label: 'Прибыль',
       value: kpis.operating_profit,
       display: metricDisplay(kpis.operating_profit, rub),
-      hint: kpis.operating_margin != null ? `Маржа ${percent(kpis.operating_margin)}` : (explanations.operating_profit || 'Нужны расходы'),
+      hint: kpis.operating_margin != null ? `Маржа ${percent(kpis.operating_margin)}` : 'Не хватает расходов',
       status: statuses.operating_margin,
       icon: Calculator,
     },
@@ -965,7 +1212,7 @@ const FinanceKpiGrid: React.FC<{
       label: 'Загрузка',
       value: kpis.workplace_occupancy,
       display: metricDisplay(kpis.workplace_occupancy, percent),
-      hint: kpis.idle_workplace_hours != null ? `Простой ${numberValue(kpis.idle_workplace_hours)} ч` : 'Нужны часы рабочих мест',
+      hint: kpis.idle_workplace_hours != null ? `Простой ${numberValue(kpis.idle_workplace_hours)} ч` : 'Нет часов рабочих мест',
       status: statuses.workplace_occupancy,
       icon: Gauge,
     },
@@ -973,36 +1220,58 @@ const FinanceKpiGrid: React.FC<{
       label: 'Повторная запись',
       value: kpis.rebooking_rate,
       display: metricDisplay(kpis.rebooking_rate, percent),
-      hint: explanations.rebooking_rate || 'Нужны данные по следующим записям',
+      hint: explanations.rebooking_rate ? 'Нужны записи клиентов' : 'Следующий визит',
       status: statuses.rebooking_rate,
       icon: RefreshCw,
     },
   ];
 
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-      {cards.map((card) => {
-        const Icon = card.icon;
-        const unavailable = card.value == null;
-        return (
-          <div
-            key={card.label}
-            className={cn(
-              'flex min-h-[132px] flex-col justify-between rounded-2xl border p-4 shadow-sm',
-              unavailable ? 'border-amber-200 bg-amber-50' : statusTone(card.status),
-            )}
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-xs font-semibold uppercase tracking-[0.14em] opacity-70">{card.label}</div>
-              <Icon className="h-5 w-5 shrink-0 opacity-70" />
-            </div>
-            <div>
-              <div className="mt-3 text-2xl font-semibold tracking-tight">{card.display}</div>
-              <div className="mt-1 line-clamp-2 text-sm opacity-75">{card.hint}</div>
+    <div className="grid gap-3">
+      <div className="rounded-2xl border border-slate-200 bg-white p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Выручка</div>
+            <div className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
+              {kpis.revenue == null ? 'Нет данных' : rub(kpis.revenue)}
             </div>
           </div>
-        );
-      })}
+          <CircleDollarSign className="h-5 w-5 text-slate-400" />
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+          <span>Средний чек: {kpis.average_ticket != null ? rub(kpis.average_ticket) : 'н/д'}</span>
+          {revenueDelta ? (
+            <span className={cn('rounded-full px-2.5 py-1 text-xs font-medium', revenueDelta.tone)}>
+              {revenueDelta.label}
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        {cards.map((card) => {
+          const Icon = card.icon;
+          const unavailable = card.value == null;
+          return (
+            <div
+              key={card.label}
+              className={cn(
+                'flex min-h-[116px] flex-col justify-between rounded-2xl border bg-white p-4',
+                unavailable ? 'border-slate-200' : getQuietStatusBorder(card.status),
+              )}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="truncate text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{card.label}</div>
+                <Icon className="h-4 w-4 shrink-0 text-slate-400" />
+              </div>
+              <div>
+                <div className="mt-3 text-xl font-semibold tracking-tight text-slate-950">{card.display}</div>
+                <div className="mt-1 truncate text-xs text-slate-500">{card.hint}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };
@@ -1025,7 +1294,7 @@ const FinanceRevenueChart: React.FC<{
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <CardTitle className="text-base">Динамика выручки</CardTitle>
-          <div className="mt-1 text-sm text-slate-500">Один основной график без лишнего шума.</div>
+          <div className="mt-1 text-sm text-slate-500">Помесячная динамика по выбранным данным.</div>
         </div>
         <div className="flex gap-1">
           {[3, 6, 12].map((item) => (
@@ -1092,22 +1361,33 @@ const FinanceAttentionCards: React.FC<{
     },
   ];
   return (
-    <div className="grid gap-3">
-      {attention.map((item) => (
-        <div key={item.title} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="text-sm font-semibold text-slate-950">{item.title}</div>
-              <div className="mt-1 text-sm leading-5 text-slate-600">{item.problem}</div>
-            </div>
-            <div className="text-sm font-semibold text-slate-900">{item.value}</div>
-          </div>
-          <div className="mt-3 text-sm leading-5 text-slate-600">{item.impact}</div>
-          <Button variant="outline" size="sm" className="mt-3" onClick={onOpenPlan}>
-            Открыть план
-          </Button>
+    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-slate-950">Красные зоны</div>
+          <div className="mt-1 text-sm text-slate-500">Три показателя, которые быстрее всего влияют на деньги.</div>
         </div>
-      ))}
+        <Button variant="outline" size="sm" onClick={onOpenPlan}>
+          План
+        </Button>
+      </div>
+      <div className="mt-4 divide-y divide-slate-100">
+        {attention.map((item) => (
+          <div key={item.title} className="grid gap-3 py-3 text-sm md:grid-cols-[0.7fr_1.2fr_auto] md:items-center">
+            <div>
+              <div className="font-medium text-slate-950">{item.title}</div>
+              <div className="mt-0.5 text-slate-500">{item.value}</div>
+            </div>
+            <div>
+              <div className="text-slate-700">{item.problem}</div>
+              <div className="mt-0.5 text-slate-500">{item.impact}</div>
+            </div>
+            <Button variant="ghost" size="sm" className="justify-start md:justify-center" onClick={onOpenPlan}>
+              Что сделать
+            </Button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
@@ -1117,7 +1397,7 @@ const FinanceNextAction: React.FC<{
   missing: string[];
   onSecondary: () => void;
 }> = ({ dataState, missing, onSecondary }) => (
-  <div className="mt-5 rounded-2xl border border-sky-200 bg-sky-50/70 p-4">
+  <div className="rounded-2xl border border-slate-200 bg-white p-4">
     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
       <div>
         <div className="text-sm font-semibold text-slate-950">Следующее действие</div>
@@ -1148,30 +1428,56 @@ const FinanceEmptyState: React.FC<{ missing: string[] }> = ({ missing }) => (
 const FinanceDataQualityPanel: React.FC<{
   quality?: FinanceDashboard['data_quality'];
   analyzableItems: string[];
-}> = ({ quality, analyzableItems }) => (
-  <Card className="border-slate-200/80 shadow-sm">
-    <CardHeader>
-      <CardTitle className="flex items-center gap-2 text-base">
-        {quality && quality.score >= 70 ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <AlertTriangle className="h-4 w-4 text-amber-600" />}
-        Что нужно заполнить для полного расчёта
-      </CardTitle>
-    </CardHeader>
-    <CardContent className="space-y-4 text-sm">
-      <InfoList title="Уже можно анализировать" items={analyzableItems} empty="Пока нет достаточных данных для выводов." />
-      <InfoList title="Не хватает" items={quality?.missing || []} empty="Базовые поля заполнены." />
-      <InfoList title="Считается приблизительно" items={quality?.approximate || []} empty="Критичных допущений нет." />
-      <div className="rounded-2xl bg-slate-50 p-4 text-slate-700">
-        <div className="font-medium text-slate-950">Прогресс</div>
-        <div className="mt-2 space-y-1">
-          <ProgressLine done={(quality?.missing || []).indexOf('расходы') === -1} label="Доходы и расходы" />
-          <ProgressLine done={(quality?.missing || []).indexOf('себестоимость материалов') === -1} label="Маржа услуг" />
-          <ProgressLine done={(quality?.missing || []).indexOf('загрузка рабочих мест') === -1} label="Загрузка рабочих мест" />
-          <ProgressLine done={(quality?.missing || []).indexOf('повторная запись') === -1} label="Повторная запись" />
+}> = ({ quality, analyzableItems }) => {
+  const score = Math.max(0, Math.min(Number(quality?.score || 0), 100));
+  const missing = quality?.missing || [];
+  const approximate = quality?.approximate || [];
+  return (
+    <Card className="border-slate-200/80 shadow-sm">
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between gap-3 text-base">
+          <span className="flex items-center gap-2">
+            {quality && score >= 70 ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <AlertTriangle className="h-4 w-4 text-amber-600" />}
+            Качество данных
+          </span>
+          <span className="text-sm font-semibold text-slate-950">{quality ? `${score}/100` : 'н/д'}</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4 text-sm">
+        <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+          <div
+            className={cn('h-full rounded-full', score >= 70 ? 'bg-emerald-500' : score >= 40 ? 'bg-amber-500' : 'bg-rose-500')}
+            style={{ width: `${score}%` }}
+          />
         </div>
-      </div>
-    </CardContent>
-  </Card>
-);
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Не хватает</div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {missing.length > 0 ? missing.slice(0, 6).map((item) => (
+              <span key={item} className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 ring-1 ring-amber-100">{item}</span>
+            )) : (
+              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-100">Базовые данные заполнены</span>
+            )}
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-2xl bg-slate-50 p-3">
+            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Можно анализировать</div>
+            <div className="mt-2 text-sm leading-5 text-slate-700">
+              {analyzableItems.length > 0 ? analyzableItems.slice(0, 3).join(', ') : 'Пока недостаточно данных'}
+            </div>
+          </div>
+          <div className="rounded-2xl bg-slate-50 p-3">
+            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Предварительно</div>
+            <div className="mt-2 text-sm leading-5 text-slate-700">
+              {approximate.length > 0 ? approximate.slice(0, 3).join(', ') : 'Критичных допущений нет'}
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
 
 const ExecutiveFinanceSummary: React.FC<{
   dataState: FinanceDataState;
@@ -1854,14 +2160,24 @@ const FinanceTable: React.FC<{
   icon: React.ComponentType<{ className?: string }>;
   rows: Array<Record<string, KpiValue | string>>;
   columns: Array<[string, string]>;
+  description?: string;
+  limit?: number;
   formatter: (key: string, value: KpiValue | string) => string;
-}> = ({ title, icon: Icon, rows, columns, formatter }) => (
+}> = ({ title, icon: Icon, rows, columns, description, limit = 12, formatter }) => (
   <Card className="border-slate-200/80 shadow-sm">
     <CardHeader>
-      <CardTitle className="flex items-center gap-2 text-base">
-        <Icon className="h-4 w-4 text-slate-500" />
-        {title}
-      </CardTitle>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Icon className="h-4 w-4 text-slate-500" />
+            {title}
+          </CardTitle>
+          {description ? <div className="mt-1 text-sm text-slate-500">{description}</div> : null}
+        </div>
+        <span className="w-fit rounded-full bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
+          {rows.length} строк
+        </span>
+      </div>
     </CardHeader>
     <CardContent>
       {rows.length > 0 ? (
@@ -1873,7 +2189,7 @@ const FinanceTable: React.FC<{
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {rows.slice(0, 6).map((row, index) => (
+              {rows.slice(0, limit).map((row, index) => (
                 <tr key={`${title}-${index}`} className="text-slate-800">
                   {columns.map(([key]) => (
                     <td key={key} className="py-3 pr-3 align-top">
@@ -1887,7 +2203,7 @@ const FinanceTable: React.FC<{
         </div>
       ) : (
         <div className="rounded-2xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-          Данных пока нет. Добавьте хотя бы одну строку в быстром вводе.
+          Данных пока нет. Добавьте строки во вкладке «Данные».
         </div>
       )}
     </CardContent>

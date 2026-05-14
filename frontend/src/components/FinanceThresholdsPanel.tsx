@@ -3,6 +3,14 @@ import { RefreshCw, RotateCcw, Save, SlidersHorizontal } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { DashboardSection } from '@/components/dashboard/DashboardPrimitives';
@@ -67,6 +75,7 @@ export const FinanceThresholdsPanel: React.FC<FinanceThresholdsPanelProps> = ({ 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
 
   const orderedKeys = useMemo(() => {
     const existing = Object.keys(thresholds);
@@ -177,84 +186,121 @@ export const FinanceThresholdsPanel: React.FC<FinanceThresholdsPanelProps> = ({ 
     }
   };
 
+  const customCount = orderedKeys.filter((metricKey) => thresholds[metricKey]?.source === 'custom').length;
+
   return (
-    <DashboardSection
-      title="Нормы KPI"
-      description="Настройте красные, жёлтые и зелёные зоны под конкретный бизнес. Эти нормы сразу влияют на статусы и управленческие рекомендации."
-      actions={
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={loadThresholds} disabled={loading || !currentBusinessId} className="gap-2">
-            <RefreshCw className={cn('h-4 w-4', loading ? 'animate-spin' : '')} />
-            Обновить
+    <>
+      <DashboardSection
+        title="Нормы KPI"
+        description="Красные, жёлтые и зелёные зоны влияют на статусы и рекомендации. Настройки открываются отдельно, чтобы не перегружать экран."
+        actions={
+          <Button onClick={() => setOpen(true)} disabled={!currentBusinessId} className="gap-2">
+            <SlidersHorizontal className="h-4 w-4" />
+            Настроить нормы
           </Button>
-          <Button variant="outline" onClick={resetThresholds} disabled={saving || !currentBusinessId} className="gap-2">
-            <RotateCcw className="h-4 w-4" />
-            Сбросить
-          </Button>
-          <Button onClick={saveThresholds} disabled={saving || !currentBusinessId} className="gap-2">
-            <Save className="h-4 w-4" />
-            Сохранить
-          </Button>
-        </div>
-      }
-    >
-      {message ? (
-        <div className="mb-4 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700 ring-1 ring-slate-200">
-          {message}
-        </div>
-      ) : null}
+        }
+      >
+        {!currentBusinessId ? (
+          <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Сначала выберите бизнес, чтобы настроить нормы KPI.
+          </div>
+        ) : (
+          <div className="grid gap-3 text-sm text-slate-700 md:grid-cols-3">
+            <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
+              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Показателей</div>
+              <div className="mt-2 text-2xl font-semibold text-slate-950">{orderedKeys.length || 'н/д'}</div>
+            </div>
+            <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
+              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Свои нормы</div>
+              <div className="mt-2 text-2xl font-semibold text-slate-950">{customCount}</div>
+            </div>
+            <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
+              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Статус</div>
+              <div className="mt-2 text-sm font-medium text-slate-950">
+                {loading ? 'Загружаем нормы' : 'Готово к настройке'}
+              </div>
+            </div>
+          </div>
+        )}
+      </DashboardSection>
 
-      {!currentBusinessId ? (
-        <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Сначала выберите бизнес, чтобы настроить нормы KPI.
-        </div>
-      ) : null}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-h-[88vh] max-w-5xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Нормы KPI</DialogTitle>
+            <DialogDescription>
+              Настройте пороги под конкретный бизнес. После сохранения статусы и управленческие рекомендации пересчитаются.
+            </DialogDescription>
+          </DialogHeader>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        {orderedKeys.map((metricKey) => {
-          const threshold = thresholds[metricKey] || {};
-          return (
-            <Card key={metricKey} className="border-slate-200/80 shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-start justify-between gap-3 text-base">
-                  <span className="flex items-center gap-2">
-                    <SlidersHorizontal className="h-4 w-4 text-slate-500" />
-                    {threshold.label || metricKey}
-                  </span>
-                  <span className={cn('rounded-full px-2.5 py-1 text-xs font-medium ring-1', sourceTone(threshold.source))}>
-                    {threshold.source === 'custom' ? 'своя норма' : 'базовая'}
-                  </span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-3 md:grid-cols-2">
-                  <ThresholdField
-                    label={`Зелёная зона от ${unitLabel(threshold.unit)}`}
-                    value={threshold.green_min}
-                    onChange={(value) => updateThreshold(metricKey, 'green_min', numOrNull(value))}
-                  />
-                  <ThresholdField
-                    label={`Зелёная зона до ${unitLabel(threshold.unit)}`}
-                    value={threshold.green_max}
-                    onChange={(value) => updateThreshold(metricKey, 'green_max', numOrNull(value))}
-                  />
-                  <ThresholdField
-                    label={`Жёлтая зона от ${unitLabel(threshold.unit)}`}
-                    value={threshold.yellow_min}
-                    onChange={(value) => updateThreshold(metricKey, 'yellow_min', numOrNull(value))}
-                  />
-                  <ThresholdField
-                    label={`Жёлтая зона до ${unitLabel(threshold.unit)}`}
-                    value={threshold.yellow_max}
-                    onChange={(value) => updateThreshold(metricKey, 'yellow_max', numOrNull(value))}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-    </DashboardSection>
+          {message ? (
+            <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700 ring-1 ring-slate-200">
+              {message}
+            </div>
+          ) : null}
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            {orderedKeys.map((metricKey) => {
+              const threshold = thresholds[metricKey] || {};
+              return (
+                <Card key={metricKey} className="border-slate-200/80 shadow-sm">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-start justify-between gap-3 text-base">
+                      <span className="flex items-center gap-2">
+                        <SlidersHorizontal className="h-4 w-4 text-slate-500" />
+                        {threshold.label || metricKey}
+                      </span>
+                      <span className={cn('rounded-full px-2.5 py-1 text-xs font-medium ring-1', sourceTone(threshold.source))}>
+                        {threshold.source === 'custom' ? 'своя норма' : 'базовая'}
+                      </span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <ThresholdField
+                        label={`Зелёная зона от ${unitLabel(threshold.unit)}`}
+                        value={threshold.green_min}
+                        onChange={(value) => updateThreshold(metricKey, 'green_min', numOrNull(value))}
+                      />
+                      <ThresholdField
+                        label={`Зелёная зона до ${unitLabel(threshold.unit)}`}
+                        value={threshold.green_max}
+                        onChange={(value) => updateThreshold(metricKey, 'green_max', numOrNull(value))}
+                      />
+                      <ThresholdField
+                        label={`Жёлтая зона от ${unitLabel(threshold.unit)}`}
+                        value={threshold.yellow_min}
+                        onChange={(value) => updateThreshold(metricKey, 'yellow_min', numOrNull(value))}
+                      />
+                      <ThresholdField
+                        label={`Жёлтая зона до ${unitLabel(threshold.unit)}`}
+                        value={threshold.yellow_max}
+                        onChange={(value) => updateThreshold(metricKey, 'yellow_max', numOrNull(value))}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+
+          <DialogFooter className="gap-2 sm:space-x-0">
+            <Button variant="outline" onClick={loadThresholds} disabled={loading || !currentBusinessId} className="gap-2">
+              <RefreshCw className={cn('h-4 w-4', loading ? 'animate-spin' : '')} />
+              Обновить
+            </Button>
+            <Button variant="outline" onClick={resetThresholds} disabled={saving || !currentBusinessId} className="gap-2">
+              <RotateCcw className="h-4 w-4" />
+              Сбросить
+            </Button>
+            <Button onClick={saveThresholds} disabled={saving || !currentBusinessId} className="gap-2">
+              <Save className="h-4 w-4" />
+              Сохранить
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 
