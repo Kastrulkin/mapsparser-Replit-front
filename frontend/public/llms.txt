@@ -1,0 +1,43 @@
+# LocalOS
+
+LocalOS is a platform for local businesses, agencies and operators who want to make local businesses more profitable through customer acquisition, higher average ticket, repeat sales, better occupancy, financial tracking and routine execution.
+
+Core business goal:
+- attract more customers from maps, search, reviews, posts and local partnerships;
+- increase average ticket through better service structure, add-ons and adjacent offers;
+- improve repeat visits through review work, communication and rebooking;
+- track revenue, expenses, occupancy, margins and weak spots;
+- turn diagnostics into a practical path to profit: today, 7 days, then regular work.
+
+Canonical human and agent documentation:
+- https://localos.pro/docs
+- https://localos.pro/docs/capabilities
+- https://localos.pro/docs/approval-policy
+- https://localos.pro/docs/api
+- https://localos.pro/docs/agent-use-cases
+- https://localos.pro/localos-agents.txt
+
+Core capabilities:
+- Map listing audits and improvement plans: available.
+- Service optimization with SEO keys, guardrails and industry patterns: available.
+- Review reply drafting: available. Publishing or messaging requires human approval.
+- News and post drafts: beta. Publishing requires human approval.
+- Finance dashboard, manual input, imports, KPI and recommendations: beta.
+- Telegram summaries and approval control surface: available/internal depending on scenario.
+- Partnership search and supervised outreach: internal.
+- Public stable MCP/API contract for third-party agents: gap.
+
+Human approval is required for:
+- publishing posts or replies;
+- mass edits;
+- sending messages to clients or partners;
+- payments;
+- destructive actions;
+- actions performed in external systems on behalf of a business.
+
+Agents should:
+- use LocalOS docs as a capability map;
+- avoid claiming unavailable integrations or guarantees;
+- prepare drafts, summaries, options and risk notes before asking for approval;
+- label planned or gap capabilities clearly;
+- preserve source facts from business listings and user-provided data.

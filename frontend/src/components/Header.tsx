@@ -61,6 +61,7 @@ const Header = () => {
     { name: "Статьи", href: "/articles", description: "Карты, отзывы и локальный маркетинг" },
     { name: "Документы", href: "/documents", description: "Чек-листы, шаблоны и таблицы" },
     { name: "Кейсы", href: "/cases", description: "Рост заявок, отзывов и повторных клиентов" },
+    { name: "Документация", href: "/docs", description: "LocalOS для пользователей, API и ИИ-агентов" },
   ];
 
   // Не показываем Header на страницах кабинета (/dashboard...)

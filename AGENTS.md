@@ -131,3 +131,29 @@ Legacy details remain in git history and must not be used as default runbook.
   - `agents/subagents/meta/` (installer/coordinator/performance/workflow)
 - Usage guidance is documented in `agents/subagents/README.md`.
 - If adding new upstream profiles, prefer curation over bulk import and document rationale in the README.
+
+## 13. Product Documentation Rules
+- Product name for external-facing docs: LocalOS.
+- Short description: LocalOS is an operating layer for local businesses that helps manage map presence, services, reviews, content, finance, locations, partnerships, and supervised automation.
+- Primary audiences:
+  - local business owners and managers;
+  - specialists managing local SEO/map listings for clients;
+  - networks with several locations;
+  - internal or external AI agents that need safe access to LocalOS workflows.
+- Documentation style:
+  - concise, factual, and implementation-aware;
+  - separate discovery docs from API/agent integration docs;
+  - mark capability status as `available`, `beta`, `internal`, `planned`, or `gap`;
+  - include inputs, outputs, limits, approval requirements, and examples when an API really exists.
+- Do not invent:
+  - MCP availability;
+  - public OpenAPI completeness;
+  - provider write support;
+  - prices, countries, guarantees, or legal claims;
+  - fully autonomous publish/send/payment behavior.
+- Human approval is mandatory in docs for publish, payments, destructive actions, mass changes, external sends, and actions made on behalf of a business in third-party systems.
+- Done means:
+  - docs link to the relevant source-of-truth files;
+  - real capabilities are distinguished from gaps;
+  - examples do not imply unsupported behavior;
+  - AGENTS.md remains a development rulebook and is not replaced by product marketing copy.

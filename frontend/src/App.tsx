@@ -15,6 +15,7 @@ const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
 const Contact = lazy(() => import("./pages/Contact"));
 const Policy = lazy(() => import("./pages/Policy"));
 const Requisites = lazy(() => import("./pages/Requisites"));
+const DocsPage = lazy(() => import("./pages/DocsPage"));
 const ArticlesPage = lazy(() => import("./pages/content/ArticlesPage"));
 const ArticleDetailPage = lazy(() => import("./pages/content/ArticleDetailPage"));
 const DocumentsPage = lazy(() => import("./pages/content/DocumentsPage"));
@@ -135,6 +136,8 @@ const AppShell = () => {
           <Route path="/contact" element={<Contact />} />
           <Route path="/policy" element={<Policy />} />
           <Route path="/requisites" element={<Requisites />} />
+          <Route path="/docs" element={<DocsPage />} />
+          <Route path="/docs/:section" element={<DocsPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/articles" element={<ArticlesPage />} />
           <Route path="/articles/:slug" element={<ArticleDetailPage />} />

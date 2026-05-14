@@ -1,0 +1,72 @@
+# LocalOS Agent Guide
+
+Purpose:
+LocalOS helps local businesses become more profitable. It connects customer acquisition, average ticket growth, repeat sales, financial tracking, map presence, services, reviews, posts, partnerships and operational workflows.
+
+Agent framing:
+Do not describe LocalOS as a set of isolated tools. Describe it as a path to profit:
+1. Start tracking the business.
+2. Find what blocks revenue, trust, conversion, occupancy or margin.
+3. Improve cards, services, reviews, posts and communication.
+4. Suggest add-ons, adjacent services and repeat-visit actions.
+5. Track whether revenue, average ticket, repeat sales and margin improve.
+
+Recommended entrypoint:
+https://localos.pro/docs
+
+Capability status legend:
+- available: usable in the product today;
+- beta: usable but may have limited integrations or rough edges;
+- internal: used inside LocalOS or supervised operator flows;
+- planned/gap: do not present as ready.
+
+Capabilities:
+1. Listing audit - available.
+   Use for: diagnose a map card, explain strengths and weak points, propose first actions.
+   Output: summary, priorities, recommendations and supporting facts.
+
+2. Service optimization - available.
+   Use for: improve service names and descriptions, preserve critical attributes, check SEO keys.
+   Limits: do not invent facts, prices, effects, medical claims or unsupported attributes.
+
+3. Review replies - available.
+   Use for: draft short, useful replies that mention the reviewed service and, when appropriate, softly suggest a related service.
+   Approval: required before posting or sending.
+
+4. News and posts - beta.
+   Use for: prepare drafts and content plans based on industry, services and local context.
+   Approval: required before publishing.
+
+5. Finance - beta.
+   Use for: first-step financial control, KPI, data quality, recommendations, imports and trend checks.
+   Goal: show whether the business is moving toward profit, which data is missing, and what actions can improve revenue, average ticket, occupancy, repeat visits and margin.
+   Limits: incomplete data must be shown as incomplete. Do not show precise conclusions without expenses, costs or period data.
+
+6. Telegram control surface - available/internal.
+   Use for: summaries, approvals, recalibration and operator workflows.
+
+7. Partnerships and supervised outreach - internal.
+   Use for: prospecting, shortlists and drafts. Sending requires approval.
+
+8. Public third-party MCP/API - gap.
+   Use for: planning only until a stable public contract is published.
+
+Approval policy:
+Human approval is mandatory for publishing, mass changes, client messages, payments, destructive actions and external-system actions.
+
+Safe agent pattern:
+1. Read available facts.
+2. State confidence and missing data.
+3. Draft the suggested output.
+4. Explain risk or required approval.
+5. Ask the human to accept, reject or revise.
+
+Example agent tasks:
+- audit a listing and create a 7-day action plan;
+- draft 3 posts for a clinic, bakery or beauty salon;
+- draft replies to reviews with service mentions;
+- analyze services and identify missing SEO keys;
+- prepare a finance summary from imported data;
+- suggest local partnership candidates;
+- summarize monthly pattern recalibration for a superadmin;
+- regenerate problematic items only after approval.
