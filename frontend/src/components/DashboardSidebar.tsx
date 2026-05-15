@@ -4,6 +4,7 @@ import {
   FileText,
   TrendingUp,
   DollarSign,
+  BadgeDollarSign,
   Settings,
   Calendar,
   MessageSquare,
@@ -102,6 +103,15 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       tooltip: language === 'ru'
         ? 'Финансовые показатели бизнеса и рабочая экономика.'
         : 'Business financial metrics and operating economics.',
+    },
+    {
+      id: 'average-ticket',
+      label: language === 'ru' ? 'Средний чек' : 'Average Ticket',
+      icon: BadgeDollarSign,
+      path: '/dashboard/average-ticket',
+      tooltip: language === 'ru'
+        ? 'Допродажи, скрипты и пакеты на основе услуг из раздела “Работа с картами”.'
+        : 'Upsells, scripts, and packages based on map services.',
     },
     {
       id: 'ai-chat-promotion',

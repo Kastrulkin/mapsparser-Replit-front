@@ -106,6 +106,7 @@ from api.admin_prospecting import (
 )
 from api.admin_industry_patterns_api import admin_industry_patterns_bp
 from api.agent_security_api import agent_security_bp
+from api.average_ticket_api import average_ticket_bp
 from core.agent_api_security import log_agent_discovery_event, should_track_discovery_path
 from services.prospecting_service import ProspectingService
 from core.card_audit import build_card_audit_snapshot, build_lead_card_preview_snapshot
@@ -249,6 +250,7 @@ app.register_blueprint(content_plans_bp)
 app.register_blueprint(admin_prospecting_bp)
 app.register_blueprint(admin_industry_patterns_bp)
 app.register_blueprint(agent_security_bp)
+app.register_blueprint(average_ticket_bp)
 
 # Dev-safeguard: не допускаем дублирования /api/services/list
 try:

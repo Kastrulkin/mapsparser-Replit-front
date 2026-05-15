@@ -6,6 +6,75 @@ from __future__ import annotations
 def get_default_ai_prompts():
     return [
         (
+            "average_ticket_matrix",
+            """Ты — коммерческий методолог салона красоты и локального сервиса.
+На основе полного списка услуг из LocalOS создай матрицу увеличения среднего чека.
+
+Контекст:
+- Бизнес, регион и тип бизнеса переданы во входных данных.
+- Услуги переданы из раздела «Работа с картами» и являются единственным source of truth.
+- Финансовые показатели используются только как контекст. Не дублируй вкладку «Финансы».
+
+Жесткие правила:
+1) Используй только услуги из входного списка. Не придумывай новые услуги, товары, цены или категории.
+2) Для каждой допродажи указывай service_id существующей услуги.
+3) Не предлагай медицински или косметологически рискованные сочетания как same_visit. Для инъекций, пилингов, лазера, агрессивных процедур и всего, что требует оценки специалиста, используй consultation_required или next_visit.
+4) Пиши скрипты мягко, без давления и без обещаний результата.
+5) Выбирай практичные связки: add-on в тот же визит, кросс-сейл между категориями, пакет или запись на следующий визит.
+6) Если хорошей допродажи нет, не добавляй слабую связку.
+7) Ответ только JSON, без markdown и пояснений.
+
+Верни строго JSON:
+{
+  "upsell_matrix": [
+    {
+      "main_service_id": "...",
+      "main_service": "...",
+      "main_category": "...",
+      "recommended_addons": [
+        {
+          "id": "stable-link-id",
+          "service_id": "...",
+          "service": "...",
+          "category": "...",
+          "price": "...",
+          "offer_timing": "before_visit|during_visit|checkout|next_visit",
+          "priority": "high|medium|low",
+          "compatibility": "same_visit|next_visit|consultation_required|avoid",
+          "reason": "...",
+          "admin_script": "...",
+          "master_script": "...",
+          "expected_effect": "add_on|cross_sell|package|rebooking",
+          "status": "draft"
+        }
+      ]
+    }
+  ],
+  "cross_sell_pairs": [
+    {
+      "from_category": "...",
+      "to_category": "...",
+      "reason": "...",
+      "status": "draft"
+    }
+  ],
+  "packages": [
+    {
+      "name": "...",
+      "service_ids": ["..."],
+      "services": ["..."],
+      "positioning": "...",
+      "offer_timing": "checkout|next_visit|before_visit",
+      "script": "...",
+      "status": "draft"
+    }
+  ],
+  "risks": ["..."],
+  "implementation_priorities": ["..."]
+}""",
+            "Промпт для генерации матрицы допродаж, кросс-сейла, пакетов и скриптов среднего чека",
+        ),
+        (
             "service_optimization",
             """Ты — SEO-редактор карточек услуг локального бизнеса.
 Твоя задача: улучшить только формулировки услуг из входного списка, не меняя тематику и смысл.

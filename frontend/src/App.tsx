@@ -58,6 +58,11 @@ const FinancePage = lazy(() =>
     default: module.FinancePage,
   })),
 );
+const AverageTicketPage = lazy(() =>
+  import("./pages/dashboard/AverageTicketPage").then((module) => ({
+    default: module.AverageTicketPage,
+  })),
+);
 const SettingsPage = lazy(() =>
   import("./pages/dashboard/SettingsPage").then((module) => ({
     default: module.SettingsPage,
@@ -152,6 +157,7 @@ const AppShell = () => {
             <Route path="card" element={<CardOverviewPage />} />
             <Route path="progress" element={<ProgressPage />} />
             <Route path="finance" element={<FinancePage />} />
+            <Route path="average-ticket" element={<AverageTicketPage />} />
             <Route path="ai-chat-promotion" element={<AIChatPromotionPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="partnerships" element={<PartnershipSearchPage />} />

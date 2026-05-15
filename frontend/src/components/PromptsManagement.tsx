@@ -135,6 +135,10 @@ export const PromptsManagement: React.FC = () => {
   const { t } = useLanguage();
 
   const PROMPT_TYPES = {
+    average_ticket_matrix: {
+      label: 'Средний чек: матрица допродаж',
+      description: 'Промпт для генерации допродаж, кросс-сейла, пакетов и скриптов из услуг раздела “Работа с картами”'
+    },
     service_optimization: {
       label: 'Оптимизация услуг',
       description: 'Промпт для оптимизации услуг и прайс-листа'
