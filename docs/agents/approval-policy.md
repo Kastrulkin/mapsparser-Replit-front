@@ -52,3 +52,21 @@ A safe approval record should include:
 ## Agent Rule
 
 If an agent is unsure whether approval is required, it must stop at draft/preview and ask.
+
+## Security Boundary
+
+Approval is part of the security model, not just UX.
+
+Agents should treat these as separate permissions:
+
+- read data;
+- create a draft;
+- request approval;
+- execute approved action;
+- read audit trail.
+
+Having permission to create a draft never implies permission to publish, message, pay, delete, or change external systems.
+
+Current Agent API foundation records approval requests through `POST /api/agent-api/approvals/request`. It stores the request in `agent_action_ledger` with `status=pending_human`.
+
+For the broader model, see [Agent API Security Model](security-model.md).

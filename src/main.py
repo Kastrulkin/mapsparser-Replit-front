@@ -105,6 +105,8 @@ from api.admin_prospecting import (
     _slugify_company_name,
 )
 from api.admin_industry_patterns_api import admin_industry_patterns_bp
+from api.agent_security_api import agent_security_bp
+from core.agent_api_security import log_agent_discovery_event, should_track_discovery_path
 from services.prospecting_service import ProspectingService
 from core.card_audit import build_card_audit_snapshot, build_lead_card_preview_snapshot
 from core.ai_learning import record_ai_learning_event
@@ -246,6 +248,7 @@ app.register_blueprint(network_health_bp)
 app.register_blueprint(content_plans_bp)
 app.register_blueprint(admin_prospecting_bp)
 app.register_blueprint(admin_industry_patterns_bp)
+app.register_blueprint(agent_security_bp)
 
 # Dev-safeguard: не допускаем дублирования /api/services/list
 try:
@@ -299,6 +302,34 @@ PUBLIC_AUDIT_APP_ROUTES = {
     "public-audit",
     "assets",
 }
+
+
+@app.after_request
+def track_agent_discovery_response(response):
+    try:
+        path = "/" + str(request.path or "").strip().lstrip("/")
+        if not should_track_discovery_path(path):
+            return response
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        log_agent_discovery_event(
+            cursor,
+            path=path,
+            method=str(request.method or "GET"),
+            status_code=int(getattr(response, "status_code", 0) or 0),
+            user_agent=str(request.headers.get("User-Agent") or ""),
+            ip_value=str(request.headers.get("X-Forwarded-For") or request.remote_addr or ""),
+            referrer=str(request.headers.get("Referer") or ""),
+            metadata={"source": "flask_after_request"},
+        )
+        db.conn.commit()
+        db.close()
+    except Exception:
+        try:
+            db.close()
+        except Exception:
+            pass
+    return response
 
 # HTML шаблон для главной страницы
 INDEX_HTML = """

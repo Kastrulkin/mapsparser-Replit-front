@@ -25,6 +25,7 @@ This page is a machine-readable human guide. Status values: `available`, `beta`,
 | `industry_patterns.recalibrate` | `internal` | `POST /api/admin/industry-patterns/recalibrate`, proposal decision endpoints | Superadmin required |
 | `ai_agent.webhooks` | `beta` | `POST /api/webhooks/telegram`, `POST|GET /api/webhooks/whatsapp` | Policy-based; escalation required for uncertain cases |
 | `mcp.tools` | `gap` | None confirmed | N/A |
+| `agent_api.security_model` | `beta/internal` | `GET /localos-agent-policy.json`, `GET /api/agent-api/security/policy`, `POST /api/agent-api/clients`, `POST /api/agent-api/approvals/request` | Required for high-risk actions |
 
 ## Capability Details
 
@@ -98,3 +99,13 @@ This page is a machine-readable human guide. Status values: `available`, `beta`,
 - Output: pending proposals with examples, risk, confidence.
 - Limits: proposals must not become active automatically.
 - Approval: superadmin required.
+
+### `agent_api.security_model`
+
+- Status: `beta/internal`
+- What it does: defines agent registration, scopes, sandbox mode, approval boundary, rate limits, abuse detection, webhook signing, and audit trail.
+- When to use: before opening LocalOS API/MCP to third-party agents.
+- Inputs: agent client identity, scopes, business tenant, action type, risk level.
+- Output: allow, deny, cooldown, approval required, or manual review.
+- Limits: this is a foundation for controlled access, not a fully public API/MCP implementation.
+- Approval: required for high-risk and critical actions.

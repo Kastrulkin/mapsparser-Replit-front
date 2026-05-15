@@ -8,6 +8,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from core.ai_learning import record_ai_learning_event
+from core.agent_api_security import build_agent_activity_digest
 from core.industry_patterns import detect_industry_key, format_industry_pattern_prompt
 from core.industry_pattern_recalibration import (
     build_pattern_impact_metrics,
@@ -1719,6 +1720,9 @@ def collect_due_telegram_digest_messages(conn) -> list[dict[str, Any]]:
             learning_block = _superadmin_learning_digest_block(conn)
             if learning_block:
                 text += f"\n\n{learning_block}"
+            agent_activity_block = _superadmin_agent_activity_block(conn)
+            if agent_activity_block:
+                text += f"\n\n{agent_activity_block}"
             monthly_block = _superadmin_monthly_recalibration_block(conn, sent_date)
             if monthly_block:
                 text += f"\n\n{monthly_block}"
@@ -1773,6 +1777,20 @@ def _superadmin_learning_digest_block(conn) -> str:
         except Exception:
             pass
         return ""
+
+
+def _superadmin_agent_activity_block(conn) -> str:
+    try:
+        return build_agent_activity_digest(conn, hours=24)
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return (
+            "🤖 ИИ-агенты\n"
+            "Не удалось собрать статистику docs/API. Проверь миграцию agent security."
+        )
 
 
 def _superadmin_monthly_recalibration_block(conn, local_today: date) -> str:

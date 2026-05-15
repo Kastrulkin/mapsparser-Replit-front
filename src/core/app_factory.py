@@ -47,6 +47,7 @@ def create_app():
     from ai_agent_webhooks import ai_webhooks_bp
     from ai_agents_api import ai_agents_api_bp
     from chats_api import chats_bp
+    from api.agent_security_api import agent_security_bp
     
     app.register_blueprint(messengers_bp)
     app.register_blueprint(chatgpt_search_bp)
@@ -58,6 +59,7 @@ def create_app():
     app.register_blueprint(ai_webhooks_bp)
     app.register_blueprint(ai_agents_api_bp)
     app.register_blueprint(chats_bp)
+    app.register_blueprint(agent_security_bp)
     
     return app, limiter
 

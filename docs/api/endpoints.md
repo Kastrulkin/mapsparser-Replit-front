@@ -98,6 +98,24 @@ Authorization: Bearer <auth_token>
 | `POST` | `/api/finance/crm/preview` | `beta` | Sync preview. |
 | `POST` | `/api/finance/crm/sync` | `beta` | Sync. Approval required. |
 
+## Agent API Security
+
+Status: `beta/internal`.
+
+These endpoints implement the first Agent API security foundation. They are not a full public MCP/API product yet.
+
+| Method | Path | Status | Notes |
+| --- | --- | --- | --- |
+| `GET` | `/api/agent-api/security/policy` | `beta/internal` | Returns current Agent API security policy summary. |
+| `POST` | `/api/agent-api/clients` | `beta/internal` | Superadmin creates a sandbox agent client. The key is returned once. |
+| `GET` | `/api/agent-api/clients` | `beta/internal` | Superadmin lists registered agent clients without key material. |
+| `POST` | `/api/agent-api/approvals/request` | `beta/internal` | Agent records a pending human approval request. Uses `X-LocalOS-Agent-Key`. |
+| `GET` | `/api/agent-api/ledger` | `beta/internal` | Superadmin lists recent agent action ledger events. |
+
+Agent keys may also be passed as `Authorization: Bearer <agent_key>`, but `X-LocalOS-Agent-Key` is preferred.
+
+New agent clients are created as `sandbox` by default. Direct publish, payment, customer messaging, destructive, or external-system actions remain blocked and must go through approval.
+
 ## Partnerships and Prospecting
 
 | Method | Path | Status | Notes |

@@ -20,6 +20,18 @@ Capability status legend:
 - internal: used inside LocalOS or supervised operator flows;
 - planned/gap: do not present as ready.
 
+Security entrypoint:
+https://localos.pro/localos-agent-policy.json
+
+Security model:
+- new agent clients should start in sandbox;
+- live access requires manual review and explicit scopes;
+- scopes must be narrow, for example audit:read, reviews:draft, finance:read, approvals:create, publish:request;
+- publishing, payments, destructive actions, customer messages and external-system actions require human approval;
+- suspicious behavior should cause rate limits, cooldown, manual review or suspension;
+- every call should be traceable in an action ledger.
+- current foundation includes /api/agent-api/security/policy, sandbox agent_clients, approval request recording and agent_action_ledger.
+
 Capabilities:
 1. Listing audit - available.
    Use for: diagnose a map card, explain strengths and weak points, propose first actions.

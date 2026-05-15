@@ -1,0 +1,172 @@
+{
+  "schema_version": "2026-05-14",
+  "product": "LocalOS",
+  "status": "implemented_foundation",
+  "summary": "Security policy for Agent API and future MCP access. The first technical foundation exists in code; this does not mean every listed capability is publicly available today.",
+  "principle": "Do not guess intent. Limit damage with identity, scopes, sandbox, human approval, rate limits, abuse detection, and audit trails.",
+  "agent_client": {
+    "default_status": "sandbox",
+    "statuses": ["sandbox", "live", "suspended"],
+    "required_fields": [
+      "client_id",
+      "owner_user_id",
+      "organization_name",
+      "contact_email",
+      "status",
+      "allowed_scopes",
+      "rate_limits",
+      "created_at",
+      "last_seen_at"
+    ]
+  },
+  "scopes": [
+    {
+      "scope": "audit:read",
+      "risk_level": "low",
+      "approval_required": false
+    },
+    {
+      "scope": "services:draft",
+      "risk_level": "medium",
+      "approval_required": false
+    },
+    {
+      "scope": "reviews:draft",
+      "risk_level": "medium",
+      "approval_required": false
+    },
+    {
+      "scope": "content:draft",
+      "risk_level": "medium",
+      "approval_required": false
+    },
+    {
+      "scope": "finance:read",
+      "risk_level": "low",
+      "approval_required": false
+    },
+    {
+      "scope": "partners:read",
+      "risk_level": "low",
+      "approval_required": false
+    },
+    {
+      "scope": "approvals:create",
+      "risk_level": "medium",
+      "approval_required": false
+    },
+    {
+      "scope": "publish:request",
+      "risk_level": "high",
+      "approval_required": true
+    }
+  ],
+  "blocked_direct_actions": [
+    "publish_posts",
+    "publish_review_replies",
+    "mass_edit_cards",
+    "send_customer_messages",
+    "send_partner_messages",
+    "initiate_payments",
+    "change_billing",
+    "delete_records",
+    "disable_records",
+    "rollback_records",
+    "change_external_credentials",
+    "act_in_external_systems"
+  ],
+  "risk_levels": {
+    "low": {
+      "examples": ["read_audit", "list_services", "summarize_data"],
+      "default_approval_required": false
+    },
+    "medium": {
+      "examples": ["generate_draft", "prepare_recommendation", "preview_import"],
+      "default_approval_required": false
+    },
+    "high": {
+      "examples": ["bulk_update_proposal", "crm_sync", "finance_import_after_preview"],
+      "default_approval_required": true
+    },
+    "critical": {
+      "examples": ["publish", "payment", "delete", "credential_change", "external_system_action"],
+      "default_approval_required": true
+    }
+  },
+  "sandbox": {
+    "required_for_new_clients": true,
+    "restrictions": [
+      "demo_business_only",
+      "fake_financial_data_only",
+      "no_customer_messages",
+      "no_external_publishing",
+      "no_live_credentials",
+      "no_destructive_actions"
+    ]
+  },
+  "abuse_detection": {
+    "signals": [
+      "business_id_enumeration",
+      "cross_tenant_access_attempt",
+      "repeated_auth_failures",
+      "missing_scope_attempt",
+      "high_volume_export",
+      "approval_bypass_attempt",
+      "anomalous_request_volume",
+      "declared_use_case_mismatch"
+    ],
+    "responses": [
+      "rate_limit",
+      "cooldown",
+      "remove_dangerous_scopes",
+      "require_reauthentication",
+      "manual_review",
+      "suspend_client",
+      "telegram_superadmin_alert"
+    ]
+  },
+  "ledger": {
+    "required": true,
+    "recommended_fields": [
+      "agent_client_id",
+      "business_id",
+      "action_type",
+      "risk_level",
+      "input_summary",
+      "output_summary",
+      "approval_id",
+      "status",
+      "ip",
+      "user_agent",
+      "created_at"
+    ],
+    "never_log": [
+      "raw_passwords",
+      "access_tokens",
+      "secrets",
+      "full_payment_credentials"
+    ]
+  },
+  "webhooks": {
+    "required_controls": [
+      "signed_payloads",
+      "timestamp",
+      "replay_protection",
+      "idempotency_key",
+      "secret_rotation",
+      "retry_policy"
+    ]
+  },
+  "superadmin_alerts": {
+    "channels": ["telegram"],
+    "trigger_on": ["high_risk_action", "critical_action", "abuse_signal"],
+    "actions": ["allow", "restrict", "suspend", "require_review"]
+  },
+  "implemented_endpoints": {
+    "policy": "GET /api/agent-api/security/policy",
+    "create_client": "POST /api/agent-api/clients",
+    "list_clients": "GET /api/agent-api/clients",
+    "request_approval": "POST /api/agent-api/approvals/request",
+    "ledger": "GET /api/agent-api/ledger"
+  }
+}

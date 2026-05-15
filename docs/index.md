@@ -23,6 +23,7 @@ This documentation has two layers:
 - [Capabilities](agents/capabilities.md)
 - [Agent use cases](agents/use-cases.md)
 - [Approval policy](agents/approval-policy.md)
+- [Agent API security model](agents/security-model.md)
 - [Authentication](api/authentication.md)
 - [API endpoints](api/endpoints.md)
 - [API examples](api/examples.md)

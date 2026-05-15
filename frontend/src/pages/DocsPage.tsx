@@ -126,6 +126,40 @@ const sections: DocSection[] = [
     ],
   },
   {
+    slug: "security-model",
+    title: "Security model",
+    kicker: "Agent API safety",
+    summary:
+      "Добронамеренность агента не угадывается по словам. LocalOS ограничивает риск через client registry, scopes, sandbox, approval, rate limits, abuse detection и action ledger.",
+    items: [
+      {
+        title: "Sandbox first",
+        text: "Новые agent-клиенты должны начинать с demo-данных, без реальных публикаций, сообщений клиентам, live-финансов, внешних credentials и destructive actions.",
+        status: "beta/internal",
+      },
+      {
+        title: "Минимальные scopes",
+        text: "Первые scopes: audit:read, services:draft, reviews:draft, content:draft, finance:read, partners:read, approvals:create и publish:request.",
+        status: "beta/internal",
+      },
+      {
+        title: "Approval boundary",
+        text: "Публикации, платежи, удаления, массовые изменения, отправка сообщений и действия во внешних системах не выполняются напрямую. Агент только создаёт approval request.",
+        status: "beta/internal",
+      },
+      {
+        title: "Abuse detection",
+        text: "Флаги: перебор business_id, доступ к чужому бизнесу, ошибки auth, попытки без scope, export-аномалии, обход approval и несоответствие заявленного сценария поведению.",
+        status: "planned",
+      },
+      {
+        title: "Action ledger",
+        text: "Каждый agent-вызов должен оставлять trace: client, business, action, risk, input/output summary, approval_id, status, ip, user_agent и created_at.",
+        status: "beta/internal",
+      },
+    ],
+  },
+  {
     slug: "api",
     title: "API и интеграции",
     kicker: "Integration docs",
@@ -266,6 +300,12 @@ const DocsPage = () => {
                   <ExternalLink className="ml-2 h-4 w-4" />
                 </a>
               </Button>
+              <Button asChild variant="outline">
+                <a href="/localos-agent-policy.json">
+                  Agent policy JSON
+                  <ExternalLink className="ml-2 h-4 w-4" />
+                </a>
+              </Button>
             </div>
           </div>
           <Card className="border-slate-200 bg-slate-950 text-white shadow-none">
@@ -382,6 +422,10 @@ const DocsPage = () => {
                     и
                     {" "}
                     <a className="font-medium text-blue-700 underline-offset-4 hover:underline" href="/localos-agents.txt">/localos-agents.txt</a>.
+                    {" "}
+                    Security policy is available as
+                    {" "}
+                    <a className="font-medium text-blue-700 underline-offset-4 hover:underline" href="/localos-agent-policy.json">/localos-agent-policy.json</a>.
                   </p>
                 </div>
               </div>
