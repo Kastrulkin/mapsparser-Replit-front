@@ -527,7 +527,7 @@ export const AverageTicketPage = () => {
           ) : !matrix ? (
             <DashboardEmptyState
               title="Матрица ещё не создана"
-              description="LocalOS возьмёт услуги из “Работы с картами”, а GigaChat подготовит черновик допродаж, скриптов и пакетов."
+              description="LocalOS возьмёт услуги из “Работы с картами” и подготовит черновик допродаж, скриптов и пакетов."
               action={<Button className="gap-2" onClick={generateMatrix} disabled={generating}><Sparkles className="h-4 w-4" />Сгенерировать черновик</Button>}
             />
           ) : (
