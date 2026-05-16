@@ -98,6 +98,7 @@ PIPELINE_POSTPONED = "postponed"
 PIPELINE_NOT_RELEVANT = "not_relevant"
 PIPELINE_CONTACTED = "contacted"
 PIPELINE_WAITING_REPLY = "waiting_reply"
+PIPELINE_SECOND_MESSAGE_SENT = "second_message_sent"
 PIPELINE_REPLIED = "replied"
 PIPELINE_CONVERTED = "converted"
 PIPELINE_CLOSED_LOST = "closed_lost"
@@ -108,6 +109,7 @@ ALLOWED_PIPELINE_STATUSES = {
     PIPELINE_NOT_RELEVANT,
     PIPELINE_CONTACTED,
     PIPELINE_WAITING_REPLY,
+    PIPELINE_SECOND_MESSAGE_SENT,
     PIPELINE_REPLIED,
     PIPELINE_CONVERTED,
     PIPELINE_CLOSED_LOST,
@@ -125,6 +127,23 @@ GROUP_STATUS_DRAFT = "draft"
 GROUP_STATUS_ACTIVE = "active"
 GROUP_STATUS_ARCHIVED = "archived"
 ALLOWED_GROUP_STATUSES = {GROUP_STATUS_DRAFT, GROUP_STATUS_ACTIVE, GROUP_STATUS_ARCHIVED}
+
+
+def _add_business_days(start_at: datetime | date | None, business_days: int) -> datetime:
+    base_date = start_at.date() if isinstance(start_at, datetime) else start_at
+    if not isinstance(base_date, date):
+        base_date = datetime.utcnow().date()
+    current = base_date
+    remaining = max(0, business_days)
+    while remaining > 0:
+        current = current + timedelta(days=1)
+        if current.isoweekday() <= 5:
+            remaining -= 1
+    return datetime.combine(current, datetime.min.time()).replace(tzinfo=timezone.utc)
+
+
+def _next_followup_at(anchor_at: datetime | date | None = None) -> datetime:
+    return _add_business_days(anchor_at or datetime.utcnow(), 3)
 
 
 def _normalize_learning_intent(raw_intent: str | None) -> str:
@@ -421,6 +440,7 @@ def _ensure_manual_crm_tables(conn) -> None:
             WHEN COALESCE(status, '') = 'sent' THEN %s
             WHEN COALESCE(status, '') = 'delivered' THEN %s
             WHEN COALESCE(status, '') = 'responded' THEN %s
+            WHEN COALESCE(status, '') = 'second_message_sent' THEN %s
             WHEN COALESCE(status, '') IN ('qualified', 'converted') THEN %s
             WHEN COALESCE(status, '') = 'closed' THEN %s
             ELSE %s
@@ -433,8 +453,9 @@ def _ensure_manual_crm_tables(conn) -> None:
             PIPELINE_POSTPONED,
             PIPELINE_NOT_RELEVANT,
             PIPELINE_CONTACTED,
-            PIPELINE_WAITING_REPLY,
+            PIPELINE_CONTACTED,
             PIPELINE_REPLIED,
+            PIPELINE_SECOND_MESSAGE_SENT,
             PIPELINE_CONVERTED,
             PIPELINE_CLOSED_LOST,
             PIPELINE_IN_PROGRESS,
@@ -506,9 +527,11 @@ def _derive_pipeline_status_from_lead(lead: dict[str, Any] | None) -> str:
     if legacy == "sent":
         return PIPELINE_CONTACTED
     if legacy == "delivered":
-        return PIPELINE_WAITING_REPLY
+        return PIPELINE_CONTACTED
     if legacy == "responded":
         return PIPELINE_REPLIED
+    if legacy == "second_message_sent":
+        return PIPELINE_SECOND_MESSAGE_SENT
     if legacy in {"qualified", "converted"}:
         return PIPELINE_CONVERTED
     return PIPELINE_IN_PROGRESS
@@ -575,7 +598,9 @@ def _apply_pipeline_transition(
     elif pipeline_status == PIPELINE_CONTACTED:
         legacy_status = "sent"
     elif pipeline_status == PIPELINE_WAITING_REPLY:
-        legacy_status = "delivered"
+        legacy_status = "sent"
+    elif pipeline_status == PIPELINE_SECOND_MESSAGE_SENT:
+        legacy_status = "second_message_sent"
     elif pipeline_status == PIPELINE_REPLIED:
         legacy_status = "responded"
     elif pipeline_status == PIPELINE_CONVERTED:
@@ -598,6 +623,11 @@ def _apply_pipeline_transition(
     if next_action_at is not None:
         assignments.append("next_action_at = %s")
         params.append(next_action_at or None)
+    elif pipeline_status == PIPELINE_CONTACTED:
+        assignments.append("next_action_at = %s")
+        params.append(_next_followup_at())
+    elif pipeline_status == PIPELINE_SECOND_MESSAGE_SENT:
+        assignments.append("next_action_at = NULL")
     if last_contact_channel is not None:
         assignments.append("last_contact_channel = %s")
         params.append(last_contact_channel or None)
@@ -4204,7 +4234,7 @@ def _load_send_queue_snapshot():
         conn.close()
 
 
-def _load_reactions(limit: int = 50):
+def _load_reactions(limit: int = 5000):
     conn = get_db_connection()
     try:
         cur = conn.cursor()
@@ -5635,22 +5665,29 @@ def _update_send_queue_delivery(queue_id: str, delivery_status: str, provider_me
             return None
         payload = dict(row)
         lead_status = "sent" if delivery_status in {QUEUE_STATUS_SENT, QUEUE_STATUS_DELIVERED} else CHANNEL_SELECTED
-        pipeline_status = (
-            PIPELINE_WAITING_REPLY
-            if delivery_status == QUEUE_STATUS_DELIVERED
-            else PIPELINE_CONTACTED
-            if delivery_status == QUEUE_STATUS_SENT
-            else PIPELINE_IN_PROGRESS
-        )
+        pipeline_status = PIPELINE_CONTACTED if delivery_status in {QUEUE_STATUS_SENT, QUEUE_STATUS_DELIVERED} else PIPELINE_IN_PROGRESS
+        next_action_value = _next_followup_at()
         cur.execute(
             """
             UPDATE prospectingleads
             SET status = %s,
                 pipeline_status = %s,
+                last_contact_at = CASE WHEN %s THEN NOW() ELSE last_contact_at END,
+                last_contact_channel = CASE WHEN %s THEN %s ELSE last_contact_channel END,
+                next_action_at = CASE WHEN %s THEN %s ELSE next_action_at END,
                 updated_at = NOW()
             WHERE id = %s
             """,
-            (lead_status, pipeline_status, payload.get("lead_id")),
+            (
+                lead_status,
+                pipeline_status,
+                delivery_status in {QUEUE_STATUS_SENT, QUEUE_STATUS_DELIVERED},
+                delivery_status in {QUEUE_STATUS_SENT, QUEUE_STATUS_DELIVERED},
+                payload.get("channel"),
+                delivery_status in {QUEUE_STATUS_SENT, QUEUE_STATUS_DELIVERED},
+                next_action_value,
+                payload.get("lead_id"),
+            ),
         )
         _record_lead_timeline_event(
             cur,
@@ -5773,7 +5810,7 @@ def _record_reaction(
             if next_lead_status in {"qualified", "converted"}
             else PIPELINE_REPLIED
             if next_lead_status == "responded"
-            else PIPELINE_WAITING_REPLY
+            else PIPELINE_CONTACTED
         )
         cur.execute(
             """
@@ -5985,15 +6022,24 @@ def _confirm_reaction(reaction_id: str, outcome: str, note: str | None, user_id:
             (normalized_outcome, note_value, reaction_id),
         )
         reaction = dict(cur.fetchone())
+        next_lead_status = _lead_status_for_outcome(normalized_outcome)
+        next_pipeline_status = (
+            PIPELINE_CONVERTED
+            if next_lead_status in {"qualified", "converted"}
+            else PIPELINE_REPLIED
+            if next_lead_status == "responded"
+            else PIPELINE_CONTACTED
+        )
 
         cur.execute(
             """
             UPDATE prospectingleads
             SET status = %s,
+                pipeline_status = %s,
                 updated_at = NOW()
             WHERE id = %s
             """,
-            (_lead_status_for_outcome(normalized_outcome), payload["lead_id"]),
+            (next_lead_status, next_pipeline_status, payload["lead_id"]),
         )
         conn.commit()
         return reaction, None
@@ -11414,7 +11460,8 @@ def update_lead_status(lead_id):
             "draft_ready": PIPELINE_IN_PROGRESS,
             QUEUED_FOR_SEND: PIPELINE_IN_PROGRESS,
             "sent": PIPELINE_CONTACTED,
-            "delivered": PIPELINE_WAITING_REPLY,
+            "delivered": PIPELINE_CONTACTED,
+            "second_message_sent": PIPELINE_SECOND_MESSAGE_SENT,
             "responded": PIPELINE_REPLIED,
             "qualified": PIPELINE_CONVERTED,
             "converted": PIPELINE_CONVERTED,
@@ -12917,6 +12964,7 @@ def mark_outreach_draft_sent_manually(draft_id):
                     last_contact_at = NOW(),
                     last_contact_channel = %s,
                     last_contact_comment = %s,
+                    next_action_at = %s,
                     last_manual_action_at = NOW(),
                     last_manual_action_by = %s,
                     updated_at = NOW()
@@ -12927,6 +12975,7 @@ def mark_outreach_draft_sent_manually(draft_id):
                     PIPELINE_CONTACTED,
                     channel,
                     "Marked sent manually from approved draft",
+                    _next_followup_at(),
                     str(user_data.get("user_id") or "") or None,
                     draft["lead_id"],
                 ),

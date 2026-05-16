@@ -107,7 +107,9 @@ class YandexSyncService:
                 print(f"[YandexSync] Бизнес {business_id} не найден")
                 return False
 
-            yandex_org_id, yandex_url, name = row
+            yandex_org_id = row[0]
+            yandex_url = row[1]
+            name = row[2]
             # Если org_id отсутствует, пробуем извлечь его из URL
             if not yandex_org_id and yandex_url:
                 yandex_org_id = self.adapter.parse_org_id_from_url(yandex_url)
@@ -158,7 +160,9 @@ class YandexSyncService:
                 print(f"[YandexSync] Для сети {network_id} нет активных бизнесов")
                 return 0
 
-            for business_id, name in businesses:
+            for business in businesses:
+                business_id = business[0]
+                name = business[1]
                 ok = self.sync_business(business_id)
                 if ok:
                     synced += 1
@@ -166,6 +170,5 @@ class YandexSyncService:
             return synced
         finally:
             db.close()
-
 
 

@@ -11,6 +11,7 @@ from typing import List, Dict, Any, Optional, Any
 from psycopg2.extras import Json
 import psycopg2
 from auth_system import normalize_email
+from query_adapter import QueryAdapter
 from core.telegram_token_store import (
     is_telegram_bot_token_configured,
     mask_telegram_bot_token,
@@ -22,13 +23,60 @@ except ImportError:
     STATUS_PENDING = "pending"
     def normalize_status(s): return (s or "").strip() or STATUS_PENDING
 
+class HybridRow(dict):
+    """Dict row that also supports legacy positional access."""
+
+    def __init__(self, row):
+        super().__init__(row)
+        self._ordered_keys = list(row.keys())
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return dict.__getitem__(self, self._ordered_keys[key])
+        return dict.__getitem__(self, key)
+
+
+class DBCursorWrapper:
+    """Cursor wrapper for PostgreSQL runtime with legacy query compatibility."""
+
+    def __init__(self, cursor):
+        self.cursor = cursor
+
+    def execute(self, query, params=None):
+        normalized_params = params
+        if isinstance(params, list):
+            normalized_params = tuple(params)
+        if isinstance(query, str) and "?" in query and normalized_params is not None:
+            query = QueryAdapter.adapt_query(query, tuple(normalized_params))
+            normalized_params = QueryAdapter.adapt_params(tuple(normalized_params))
+        return self.cursor.execute(query, normalized_params)
+
+    def fetchone(self):
+        return self._wrap_row(self.cursor.fetchone())
+
+    def fetchall(self):
+        return [self._wrap_row(row) for row in (self.cursor.fetchall() or [])]
+
+    def _wrap_row(self, row):
+        if isinstance(row, dict) and not isinstance(row, HybridRow):
+            return HybridRow(row)
+        return row
+
+    def __iter__(self):
+        for row in self.cursor:
+            yield self._wrap_row(row)
+
+    def __getattr__(self, name):
+        return getattr(self.cursor, name)
+
+
 class DBConnectionWrapper:
     """Wrapper around database connection"""
     def __init__(self, conn):
         self.conn = conn
         
     def cursor(self):
-        return self.conn.cursor()
+        return DBCursorWrapper(self.conn.cursor())
         
     def commit(self):
         return self.conn.commit()
@@ -59,6 +107,7 @@ class DatabaseManager:
     
     def __init__(self):
         self.conn = get_db_connection()
+        self.db_type = 'postgresql'
         self._closed = False
     
     def close(self):

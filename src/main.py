@@ -16,8 +16,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 import requests
 
-# Устанавливаем переменную окружения для отключения SSL проверки GigaChat
-os.environ.setdefault('GIGACHAT_SSL_VERIFY', 'false')
+# GigaChat TLS verification is explicit: use GIGACHAT_SSL_VERIFY=false only as a documented provider workaround.
+os.environ.setdefault('GIGACHAT_SSL_VERIFY', 'true')
 from flask import Flask, request, jsonify, render_template_string, send_from_directory, Response
 from flask_cors import CORS
 from werkzeug.serving import WSGIRequestHandler
@@ -35,8 +35,7 @@ def _optional_startup_notice(feature: str, error: Exception, *, enabled: bool = 
 try:
     from flask_limiter import Limiter
     from flask_limiter.util import get_remote_address
-    # Временно отключаем rate limiting для решения пробемы с 429
-    RATE_LIMITER_AVAILABLE = False
+    RATE_LIMITER_AVAILABLE = os.getenv('RATE_LIMITING_ENABLED', 'true').strip().lower() not in {'0', 'false', 'no', 'off'}
 except ImportError:
     RATE_LIMITER_AVAILABLE = False
     if VERBOSE_OPTIONAL_STARTUP:
@@ -195,22 +194,21 @@ except ImportError:
     db = None
     migrate = None
 
-# Настройка CORS для продакшена и разработки
-# В .env укажите: ALLOWED_ORIGINS=http://localhost:3000,https://yourdomain.com
+# Настройка CORS для продакшена и разработки.
+# В .env укажите: ALLOWED_ORIGINS=http://localhost:3000,https://localos.pro
 allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',')
 allowed_origins = [origin.strip() for origin in allowed_origins if origin.strip()]
-# For local debugging, allow all origins temporarily if needed, or ensure user's IP is here.
-CORS(app, supports_credentials=True, origins=["http://localhost:3000", "http://127.0.0.1:3000", "*"])
+CORS(app, supports_credentials=True, origins=allowed_origins)
 
 # Настройка rate limiting
 if RATE_LIMITER_AVAILABLE:
     limiter = Limiter(
         app=app,
         key_func=get_remote_address,
-        default_limits=["10000 per day", "1000 per hour"],
-        storage_uri="memory://"  # Для продакшена лучше использовать Redis
+        default_limits=[],
+        storage_uri=os.getenv("RATE_LIMIT_STORAGE_URI", "memory://")
     )
-    print("✅ Rate limiting включен (с расширенными лимитами)")
+    print("✅ Rate limiting включен для чувствительных endpoint'ов")
 else:
     limiter = None
     if VERBOSE_OPTIONAL_STARTUP:
@@ -224,6 +222,18 @@ def rate_limit_if_available(limit_str):
             return limiter.limit(limit_str)(f)
         return f
     return decorator
+
+
+if limiter:
+    @app.errorhandler(429)
+    def handle_rate_limit(error):
+        return jsonify(
+            {
+                "success": False,
+                "error": "rate_limited",
+                "message": "Слишком много запросов. Повторите позже.",
+            }
+        ), 429
 
 # Регистрируем Blueprint'ы сразу после создания app, чтобы они имели приоритет над SPA fallback
 app.register_blueprint(chatgpt_bp)
@@ -454,14 +464,38 @@ def save_card_to_db(card: dict) -> None:
 
     cur.execute(
         """
-        INSERT OR REPLACE INTO Cards (
+        INSERT INTO cards (
             id, url, title, address, phone, site, rating, reviews_count,
             categories, overview, products, news, photos, features_full,
             competitors, hours, hours_full, report_path, user_id, seo_score,
             ai_analysis, recommendations
         ) VALUES (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            %s::jsonb, %s::jsonb
         )
+        ON CONFLICT (id) DO UPDATE SET
+            url = EXCLUDED.url,
+            title = EXCLUDED.title,
+            address = EXCLUDED.address,
+            phone = EXCLUDED.phone,
+            site = EXCLUDED.site,
+            rating = EXCLUDED.rating,
+            reviews_count = EXCLUDED.reviews_count,
+            categories = EXCLUDED.categories,
+            overview = EXCLUDED.overview,
+            products = EXCLUDED.products,
+            news = EXCLUDED.news,
+            photos = EXCLUDED.photos,
+            features_full = EXCLUDED.features_full,
+            competitors = EXCLUDED.competitors,
+            hours = EXCLUDED.hours,
+            hours_full = EXCLUDED.hours_full,
+            report_path = EXCLUDED.report_path,
+            user_id = EXCLUDED.user_id,
+            seo_score = EXCLUDED.seo_score,
+            ai_analysis = EXCLUDED.ai_analysis,
+            recommendations = EXCLUDED.recommendations,
+            updated_at = CURRENT_TIMESTAMP
         """,
         (
             card_id,
@@ -484,8 +518,8 @@ def save_card_to_db(card: dict) -> None:
             card.get('report_path'),
             card.get('user_id'),
             card.get('seo_score'),
-            card.get('ai_analysis'),
-            card.get('recommendations'),
+            json.dumps(card.get('ai_analysis'), ensure_ascii=False) if card.get('ai_analysis') is not None else None,
+            json.dumps(card.get('recommendations'), ensure_ascii=False) if isinstance(card.get('recommendations'), (dict, list)) else card.get('recommendations'),
         ),
     )
     db.conn.commit()
@@ -3207,6 +3241,7 @@ def stub_users_queue():
     return jsonify({"success": True, "queue": []})
 
 @app.route('/api/analyze', methods=['POST'])
+@rate_limit_if_available("20 per hour")
 def analyze():
     """API для анализа карточки"""
     try:
@@ -4090,6 +4125,7 @@ def _ensure_usernews_learning_columns(cursor) -> None:
 
 # ==================== СЕРВИС: ОПТИМИЗАЦИЯ УСЛУГ ====================
 @app.route('/api/services/optimize', methods=['POST', 'OPTIONS'])
+@rate_limit_if_available("30 per hour")
 def services_optimize():
     """Единая точка: перефразирование услуг из текста или файла."""
     try:
@@ -4893,6 +4929,7 @@ def delete_user_service_example(example_id: str):
 
 # ==================== НОВОСТИ ДЛЯ КАРТ ====================
 @app.route('/api/news/generate', methods=['POST', 'OPTIONS'])
+@rate_limit_if_available("30 per hour")
 def news_generate():
     try:
         print(f"🔍 Начало обработки запроса /api/news/generate")
@@ -7905,6 +7942,7 @@ def get_map_report(parse_id):
 
 
 @app.route('/api/analyze-screenshot', methods=['POST'])
+@rate_limit_if_available("20 per hour")
 def analyze_screenshot():
     """Анализ скриншота карточки через GigaChat"""
     try:
@@ -8182,6 +8220,7 @@ def get_analysis(analysis_id):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/analyze-card-auto', methods=['POST'])
+@rate_limit_if_available("20 per hour")
 def analyze_card_auto():
     """Автоматический анализ карточки компании на Яндекс.Картах"""
     try:
@@ -12354,9 +12393,15 @@ def calculate_roi():
         period_end = data.get('period_end', datetime.now().strftime('%Y-%m-%d'))
 
         cursor.execute("""
-            INSERT OR REPLACE INTO ROIData
+            INSERT INTO roidata
             (id, user_id, investment_amount, returns_amount, roi_percentage, period_start, period_end)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (id) DO UPDATE SET
+                investment_amount = EXCLUDED.investment_amount,
+                returns_amount = EXCLUDED.returns_amount,
+                roi_percentage = EXCLUDED.roi_percentage,
+                period_start = EXCLUDED.period_start,
+                period_end = EXCLUDED.period_end
         """, (roi_id, user_data['user_id'], investment, returns, roi_percentage, period_start, period_end))
 
         db.conn.commit()
@@ -12557,9 +12602,7 @@ def login():
             if not session_token:
                 return jsonify({"error": "Ошибка создания сессии"}), 500
         except Exception as session_error:
-            print(f"❌ Ошибка создания сессии: {session_error}")
-            import traceback
-            traceback.print_exc()
+            logger.warning("Login session creation failed: %s", type(session_error).__name__)
             return jsonify({"error": "Ошибка создания сессии"}), 500
 
         return jsonify({
@@ -12574,14 +12617,11 @@ def login():
         })
 
     except Exception as e:
-        print(f"❌ Ошибка входа: {e}")
-        import traceback
-        error_traceback = traceback.format_exc()
-        print(f"❌ Полный traceback:\n{error_traceback}")
-        return jsonify({
-            "error": str(e),
-            "details": error_traceback if app.debug else None
-        }), 500
+        logger.warning("Login endpoint failed: %s", type(e).__name__)
+        payload = {"error": "Ошибка входа"}
+        if app.debug:
+            payload["details"] = str(e)
+        return jsonify(payload), 500
 
 @app.route('/api/auth/me', methods=['GET'])
 def get_user_info():
@@ -12600,10 +12640,6 @@ def get_user_info():
         # Заблокированный пользователь — 403 (не 401)
         if user_data.get('is_active') is False:
             return jsonify({"error": "account_blocked", "message": "user is blocked"}), 403
-
-        # Отладочное логирование
-        print(f"🔍 DEBUG get_user_info: user_data type = {type(user_data)}")
-        print(f"🔍 DEBUG get_user_info: user_data = {user_data}")
 
         # Получаем дополнительную информацию о пользователе
         db = DatabaseManager()
@@ -12668,14 +12704,11 @@ def get_user_info():
         })
 
     except Exception as e:
-        print(f"❌ Ошибка получения информации о пользователе: {e}")
-        import traceback
-        error_traceback = traceback.format_exc()
-        print(f"❌ Полный traceback:\n{error_traceback}")
-        return jsonify({
-            "error": str(e),
-            "details": error_traceback if app.debug else None
-        }), 500
+        logger.warning("User info endpoint failed: %s", type(e).__name__)
+        payload = {"error": "Ошибка получения информации о пользователе"}
+        if app.debug:
+            payload["details"] = str(e)
+        return jsonify(payload), 500
 
 @app.route('/api/auth/logout', methods=['POST'])
 def logout():
@@ -14228,37 +14261,28 @@ def get_users_with_businesses():
 
         users_with_businesses = db.get_all_users_with_businesses()
 
-        # Логируем для отладки
         total_blocked = 0
         for user in users_with_businesses:
-            email = user.get('email', 'N/A')
             blocked_direct = sum(1 for b in user.get('direct_businesses', []) if b.get('is_active') == 0)
             blocked_network = sum(1 for network in user.get('networks', []) for b in network.get('businesses', []) if b.get('is_active') == 0)
             total_blocked += blocked_direct + blocked_network
-            if blocked_direct > 0 or blocked_network > 0:
-                print(f"🔍 DEBUG API: Пользователь {email} имеет {blocked_direct} заблокированных прямых + {blocked_network} в сетях")
-                print(f"🔍 DEBUG API: Всего бизнесов у {email}: {len(user.get('direct_businesses', []))}")
-                for b in user.get('direct_businesses', []):
-                    print(f"  - {b.get('name')} (is_active: {b.get('is_active')})")
-        print(f"🔍 DEBUG API get_all_users_with_businesses: всего заблокированных бизнесов: {total_blocked}")
+        logger.debug("Admin users-with-businesses blocked business count: %s", total_blocked)
 
         db.close()
 
         return jsonify({"success": True, "users": users_with_businesses})
 
     except Exception as e:
-        import traceback
-        error_traceback = traceback.format_exc()
-        print(f"❌ Ошибка получения пользователей с бизнесами: {e}")
-        print(f"❌ Полный traceback:\n{error_traceback}")
-        # Всегда возвращаем JSON с подробной ошибкой (для dev).
+        logger.exception("Admin users-with-businesses failed")
         payload = {
             "detail": "internal_error in /api/admin/users-with-businesses",
             "where": "main.get_users_with_businesses",
             "error_type": e.__class__.__name__,
             "error": str(e),
-            "traceback": error_traceback,
         }
+        if app.debug:
+            import traceback
+            payload["traceback"] = traceback.format_exc()
         return jsonify(payload), 500
 
 @app.route('/api/admin/businesses/<business_id>/block', methods=['POST'])
@@ -14837,8 +14861,13 @@ def business_sprint(business_id):
             # Сохраняем спринт
             sprint_id = str(uuid.uuid4())
             cursor.execute("""
-                INSERT OR REPLACE INTO BusinessSprints (id, business_id, week_start, tasks, updated_at)
-                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                INSERT INTO businesssprints (id, business_id, week_start, tasks, updated_at)
+                VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (id) DO UPDATE SET
+                    business_id = EXCLUDED.business_id,
+                    week_start = EXCLUDED.week_start,
+                    tasks = EXCLUDED.tasks,
+                    updated_at = CURRENT_TIMESTAMP
             """, (sprint_id, business_id, week_start.isoformat(), json.dumps(tasks, ensure_ascii=False)))
 
             db.conn.commit()
@@ -15420,6 +15449,7 @@ def confirm_reset():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/public/request-report', methods=['POST', 'OPTIONS'])
+@rate_limit_if_available("10 per hour")
 def public_request_report():
     """Публичная заявка на отчёт без авторизации.
     Создаёт публичную страницу аудита, запускает фоновый парсинг карты и возвращает ссылку на отчёт.
@@ -15509,6 +15539,7 @@ def public_request_report():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/public/request-registration', methods=['POST', 'OPTIONS'])
+@rate_limit_if_available("10 per hour")
 def public_request_registration():
     """Публичная заявка на регистрацию без авторизации.
     Принимает данные регистрации, отправляет email на info@localos.pro о новой заявке.
@@ -15803,6 +15834,7 @@ def verify_telegram_bind_token():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/public/contact', methods=['POST', 'OPTIONS'])
+@rate_limit_if_available("10 per hour")
 def public_contact():
     """Обработка формы обратной связи"""
     try:
@@ -16754,10 +16786,11 @@ def handle_exception(e):
             return jsonify({"error": e.description}), e.code
         return e
 
-    import traceback
-    print(f"🚨 ГЛОБАЛЬНАЯ ОШИБКА: {str(e)}")
-    print(f"🚨 ТРАССИРОВКА: {traceback.format_exc()}")
-    return jsonify({"error": f"Внутренняя ошибка сервера: {str(e)}"}), 500
+    logger.exception("Unhandled application error")
+    payload = {"error": "Внутренняя ошибка сервера"}
+    if getattr(app, "debug", False):
+        payload["details"] = str(e)
+    return jsonify(payload), 500
 
 
 class QuietWSGIRequestHandler(WSGIRequestHandler):

@@ -1717,6 +1717,9 @@ def collect_due_telegram_digest_messages(conn) -> list[dict[str, Any]]:
         )
         if bool(bucket.get("is_superadmin")):
             reply_markup = {}
+            outreach_followup_block = _superadmin_outreach_followup_block(conn, sent_date)
+            if outreach_followup_block:
+                text += f"\n\n{outreach_followup_block}"
             learning_block = _superadmin_learning_digest_block(conn)
             if learning_block:
                 text += f"\n\n{learning_block}"
@@ -1771,6 +1774,51 @@ def _superadmin_learning_digest_block(conn) -> str:
     try:
         items = get_service_optimization_learning_candidates(conn, days=7, limit=3)
         return format_learning_candidates_for_digest(items, max_items=3)
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return ""
+
+
+def _superadmin_outreach_followup_block(conn, local_today: date) -> str:
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                COUNT(*)::INT AS due_total,
+                COUNT(*) FILTER (WHERE COALESCE(selected_channel, '') = 'telegram')::INT AS telegram_total,
+                COUNT(*) FILTER (WHERE COALESCE(selected_channel, '') = 'whatsapp')::INT AS whatsapp_total,
+                COUNT(*) FILTER (WHERE COALESCE(selected_channel, '') = 'email')::INT AS email_total
+            FROM prospectingleads
+            WHERE COALESCE(pipeline_status, '') = 'contacted'
+              AND next_action_at IS NOT NULL
+              AND DATE(next_action_at) = %s
+            """,
+            (local_today,),
+        )
+        row = cursor.fetchone()
+        row_dict = _row_to_dict(cursor, row) or {}
+        due_total = int(row_dict.get("due_total") or 0)
+        if due_total <= 0:
+            return ""
+        parts = []
+        telegram_total = int(row_dict.get("telegram_total") or 0)
+        whatsapp_total = int(row_dict.get("whatsapp_total") or 0)
+        email_total = int(row_dict.get("email_total") or 0)
+        if telegram_total:
+            parts.append(f"Telegram: {telegram_total}")
+        if whatsapp_total:
+            parts.append(f"WhatsApp: {whatsapp_total}")
+        if email_total:
+            parts.append(f"Email: {email_total}")
+        breakdown = f" ({', '.join(parts)})" if parts else ""
+        return (
+            "🔁 Повторные отправки\n"
+            f"На сегодня запланировано повторное сообщение по {due_total} лидам{breakdown}."
+        )
     except Exception:
         try:
             conn.rollback()

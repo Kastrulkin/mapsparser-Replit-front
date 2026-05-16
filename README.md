@@ -233,15 +233,15 @@ Backend будет доступен на `http://localhost:8000`. Проверк
 
 **Gate-тесты и smoke в Docker:**
 
-Тесты запускаются **из контейнера app** (не с хоста). Для gate-тестов с testcontainers нужны:
-- доступ к Docker daemon (в `docker-compose.yml` пробрасывается `/var/run/docker.sock`, задаётся `DOCKER_HOST=unix:///var/run/docker.sock`);
+Тесты запускаются **из контейнера app** (не с хоста). Для gate-тестов с testcontainers нужны test-only overrides:
+- доступ к Docker daemon (в `docker-compose.test.yml` пробрасывается `/var/run/docker.sock`, задаётся `DOCKER_HOST=unix:///var/run/docker.sock`);
 - `extra_hosts: host.docker.internal:host-gateway` — чтобы контейнер app мог достучаться до Postgres testcontainers;
 - переменная окружения `TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal`.
 
 Отдельная команда для gate-тестов client-info:
 
 ```bash
-docker compose exec app python -m pytest -q tests/test_client_info_gate.py
+docker compose -f docker-compose.yml -f docker-compose.test.yml exec app python -m pytest -q tests/test_client_info_gate.py
 ```
 
 Перед первым запуском установите тестовые зависимости в контейнере: `docker compose exec app pip install -r requirements.test.txt`.
@@ -375,10 +375,10 @@ python tests/smoke_test_parsing_results.py
 
 Входят в общий прогон `pytest -q` (см. выше). Проверяют, что эндпоинт работает только через Postgres (businessmaplinks + businesses), без PRAGMA/ClientInfo.
 
-**Запуск gate-тестов:** A–H (с testcontainers) выполняются **внутри контейнера app**. На хосте должен быть доступ к Docker daemon; в `docker-compose.yml` для сервиса `app` заданы проброс сокета, `DOCKER_HOST`, `extra_hosts: host.docker.internal:host-gateway` и `TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal`. Команда:
+**Запуск gate-тестов:** A–H (с testcontainers) выполняются **внутри контейнера app**. На хосте должен быть доступ к Docker daemon; testcontainers-настройки вынесены в `docker-compose.test.yml`, чтобы production compose не монтировал Docker socket. Команда:
 
 ```bash
-docker compose exec app python -m pytest -q tests/test_client_info_gate.py
+docker compose -f docker-compose.yml -f docker-compose.test.yml exec app python -m pytest -q tests/test_client_info_gate.py
 ```
 
 (Предварительно: `docker compose exec app pip install -r requirements.test.txt`.) Локально на хосте (без Docker) можно по-прежнему запускать:

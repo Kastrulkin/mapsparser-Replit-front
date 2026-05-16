@@ -187,7 +187,7 @@ class GigaChatClient:
             files = {'file': (filename, file_data, 'image/png')}
             data = {'purpose': 'general'}
             
-            response = requests.post(url, headers=headers, files=files, data=data, verify=False, timeout=120)
+            response = requests.post(url, headers=headers, files=files, data=data, verify=self.verify_tls, timeout=120)
             
             if response.status_code == 200:
                 result = response.json()

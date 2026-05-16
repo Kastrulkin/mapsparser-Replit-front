@@ -32,6 +32,15 @@ def _get_encryption_key() -> bytes:
     secret_key = os.getenv("EXTERNAL_AUTH_SECRET_KEY", "").strip()
     
     if not secret_key:
+        env_name = (
+            os.getenv("APP_ENV")
+            or os.getenv("FLASK_ENV")
+            or os.getenv("ENV")
+            or os.getenv("LOCALOS_ENV")
+            or ""
+        ).strip().lower()
+        if env_name in {"prod", "production"}:
+            raise RuntimeError("EXTERNAL_AUTH_SECRET_KEY is required in production")
         # Для dev: генерируем ключ из фиксированной строки (НЕБЕЗОПАСНО для продакшена!)
         print("⚠️ EXTERNAL_AUTH_SECRET_KEY не установлен. Используется dev-ключ (небезопасно).")
         secret_key = "dev_secret_key_change_in_production"
@@ -112,4 +121,3 @@ def decrypt_auth_data(encrypted_text: str) -> Optional[str]:
         if os.getenv("DEBUG_AUTH_DECRYPT", "0") == "1":
             traceback.print_exc()
         return None
-

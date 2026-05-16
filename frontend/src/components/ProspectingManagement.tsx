@@ -323,6 +323,20 @@ type TelegramReplySyncSummary = {
     failed: number;
 };
 
+type OutreachConversionSegmentRow = {
+    key: string;
+    label: string;
+    total: number;
+    activeWork: number;
+    firstTouch: number;
+    secondTouch: number;
+    replies: number;
+    workRate: string;
+    firstTouchRate: string;
+    secondTouchRate: string;
+    replyRate: string;
+};
+
 type LeadFilters = {
     pipelineStatus: string;
     city: string;
@@ -366,7 +380,7 @@ const toOutreachTab = (value: string): OutreachTab => {
 type OutreachTab = 'drafts' | 'queue' | 'sent';
 type PipelineViewMode = 'kanban' | 'list';
 type PipelineQuickFilter = 'all' | 'without_audit' | 'with_audit' | 'priority';
-type PipelineBoardColumnId = 'in_progress' | 'postponed' | 'not_relevant' | 'contacted' | 'waiting_reply' | 'replied' | 'converted';
+type PipelineBoardColumnId = 'in_progress' | 'postponed' | 'not_relevant' | 'contacted' | 'second_message_sent' | 'replied' | 'converted';
 
 const inferLeadAuditLanguage = (lead: Lead | null): string => {
     const preferred = String(lead?.preferred_language || '').trim().toLowerCase();
@@ -705,6 +719,7 @@ const PIPELINE_POSTPONED = 'postponed';
 const PIPELINE_NOT_RELEVANT = 'not_relevant';
 const PIPELINE_CONTACTED = 'contacted';
 const PIPELINE_WAITING_REPLY = 'waiting_reply';
+const PIPELINE_SECOND_MESSAGE_SENT = 'second_message_sent';
 const PIPELINE_REPLIED = 'replied';
 const PIPELINE_CONVERTED = 'converted';
 const PIPELINE_CLOSED_LOST = 'closed_lost';
@@ -720,7 +735,8 @@ const getLeadPipelineStatus = (lead?: Partial<Lead> | null) => {
     if (legacy === 'deferred') return PIPELINE_POSTPONED;
     if ([shortlistRejected, 'rejected'].includes(legacy)) return PIPELINE_NOT_RELEVANT;
     if (legacy === 'sent') return PIPELINE_CONTACTED;
-    if (legacy === 'delivered') return PIPELINE_WAITING_REPLY;
+    if (legacy === 'delivered') return PIPELINE_CONTACTED;
+    if (legacy === 'second_message_sent') return PIPELINE_SECOND_MESSAGE_SENT;
     if (legacy === 'responded') return PIPELINE_REPLIED;
     if (['qualified', 'converted'].includes(legacy)) return PIPELINE_CONVERTED;
     if (legacy === 'closed') return PIPELINE_CLOSED_LOST;
@@ -740,7 +756,9 @@ const pipelineStatusLabel = (status?: string | null) => {
         case PIPELINE_CONTACTED:
             return 'Отправлено';
         case PIPELINE_WAITING_REPLY:
-            return 'Ждём ответ';
+            return 'Отправлено';
+        case PIPELINE_SECOND_MESSAGE_SENT:
+            return 'Второе сообщение отправлено';
         case PIPELINE_REPLIED:
             return 'Ответил';
         case PIPELINE_CONVERTED:
@@ -831,7 +849,7 @@ const nextKanbanColumn = (columnId: KanbanColumnId): KanbanColumnId | null => {
     return kanbanColumnOrder[idx + 1];
 };
 
-const pipelineBoardColumnOrder: PipelineBoardColumnId[] = ['in_progress', 'contacted', 'waiting_reply', 'replied', 'converted', 'postponed', 'not_relevant'];
+const pipelineBoardColumnOrder: PipelineBoardColumnId[] = ['in_progress', 'contacted', 'second_message_sent', 'replied', 'converted', 'postponed', 'not_relevant'];
 
 const pipelineBoardColumnMeta: Record<PipelineBoardColumnId, { label: string; description: string; statusToSet: string }> = {
     in_progress: {
@@ -854,10 +872,10 @@ const pipelineBoardColumnMeta: Record<PipelineBoardColumnId, { label: string; de
         description: 'Первичный контакт уже состоялся: вручную или через отправку.',
         statusToSet: PIPELINE_CONTACTED,
     },
-    waiting_reply: {
-        label: 'Ждём ответ',
-        description: 'Первое касание уже сделано, сейчас ждём реакцию.',
-        statusToSet: PIPELINE_WAITING_REPLY,
+    second_message_sent: {
+        label: 'Второе сообщение отправлено',
+        description: 'Повторное касание отправлено через другой доступный канал.',
+        statusToSet: PIPELINE_SECOND_MESSAGE_SENT,
     },
     replied: {
         label: 'Ответил',
@@ -886,7 +904,10 @@ const leadToPipelineBoardColumn = (lead: Lead): PipelineBoardColumnId => {
         return 'contacted';
     }
     if (status === PIPELINE_WAITING_REPLY) {
-        return 'waiting_reply';
+        return 'contacted';
+    }
+    if (status === PIPELINE_SECOND_MESSAGE_SENT) {
+        return 'second_message_sent';
     }
     if (status === PIPELINE_REPLIED) {
         return 'replied';
@@ -936,7 +957,8 @@ const normalizeBooleanFilter = (value: string) => {
 const formatLeadSource = (source?: string) => sourceLabel(source);
 
 const formatLeadChannel = (channel?: string) => {
-    switch (channel) {
+    const normalized = String(channel || '').trim().toLowerCase();
+    switch (normalized) {
         case 'telegram':
             return 'Telegram';
         case 'whatsapp':
@@ -948,8 +970,13 @@ const formatLeadChannel = (channel?: string) => {
         case 'manual':
             return 'Manual';
         default:
-            return channel || 'Канал не выбран';
+            return normalized || 'Канал не выбран';
     }
+};
+
+const normalizeAnalyticsSegmentLabel = (value: unknown, fallback: string) => {
+    const normalized = String(value || '').trim();
+    return normalized || fallback;
 };
 
 const formatQueueProvider = (providerName?: string | null) => {
@@ -1672,10 +1699,6 @@ export const ProspectingManagement: React.FC = () => {
     const displayedSearchResultsCount = displayedSearchResults.length;
     const unresolvedSearchResultsCount = unresolvedSearchResults.length;
     const duplicateSearchResultsCount = duplicateSearchResults.length;
-    const searchJobResultCount = searchJob?.status === 'completed'
-        ? Number(searchJob.result_count || displayedSearchResultsCount || 0)
-        : displayedSearchResultsCount;
-
     const lastSearchSummary = useMemo(() => {
         if (loading && !searchJob) {
             return {
@@ -2179,7 +2202,10 @@ export const ProspectingManagement: React.FC = () => {
             return PIPELINE_CONTACTED;
         }
         if (normalized === 'delivered') {
-            return PIPELINE_WAITING_REPLY;
+            return PIPELINE_CONTACTED;
+        }
+        if (normalized === 'second_message_sent') {
+            return PIPELINE_SECOND_MESSAGE_SENT;
         }
         if (normalized === 'responded') {
             return PIPELINE_REPLIED;
@@ -2939,7 +2965,7 @@ export const ProspectingManagement: React.FC = () => {
             postponed: [],
             not_relevant: [],
             contacted: [],
-            waiting_reply: [],
+            second_message_sent: [],
             replied: [],
             converted: [],
         };
@@ -2982,7 +3008,7 @@ export const ProspectingManagement: React.FC = () => {
             postponed: 0,
             not_relevant: 0,
             contacted: 0,
-            waiting_reply: 0,
+            second_message_sent: 0,
             replied: 0,
             converted: 0,
         };
@@ -2999,14 +3025,67 @@ export const ProspectingManagement: React.FC = () => {
             }).length,
         [reactions]
     );
-    const pipelineLeadCount = filteredLeadsForKanban.length;
-    const inProgressLeadCount = pipelineBoardTotals.in_progress;
     const postponedLeadCount = pipelineBoardTotals.postponed;
     const notRelevantLeadCount = pipelineBoardTotals.not_relevant;
-    const contactedLeadCount = pipelineBoardTotals.contacted;
-    const waitingReplyLeadCount = pipelineBoardTotals.waiting_reply;
     const repliedLeadCount = pipelineBoardTotals.replied;
     const convertedLeadCount = pipelineBoardTotals.converted;
+    const analyticsTotalLeadCount = useMemo(
+        () => savedLeads.filter(isDisplayableLead).filter((lead) => !isRawImportedLead(lead)).length,
+        [savedLeads]
+    );
+    const leadIdsWithRecordedReplies = useMemo(() => {
+        const next = new Set<string>();
+        reactions.forEach((reaction) => {
+            const leadId = String(reaction.lead_id || '').trim();
+            if (!leadId) {
+                return;
+            }
+            const outcome = String(reaction.human_confirmed_outcome || reaction.classified_outcome || '').trim().toLowerCase();
+            const hasReplyText = Boolean(String(reaction.raw_reply || '').trim());
+            if (hasReplyText || (outcome && outcome !== 'no_response')) {
+                next.add(leadId);
+            }
+        });
+        return next;
+    }, [reactions]);
+    const outreachFunnelSummary = useMemo(() => {
+        let activeWork = 0;
+        let firstTouch = 0;
+        let secondTouch = 0;
+        const replyLeadIds = new Set<string>();
+
+        sourceFilteredLeads.forEach((lead) => {
+            const stage = leadToPipelineBoardColumn(lead);
+            const leadId = String(lead.id || '').trim();
+            if (stage !== 'not_relevant') {
+                activeWork += 1;
+            }
+            if (['contacted', 'second_message_sent', 'replied', 'converted'].includes(stage)) {
+                firstTouch += 1;
+            }
+            if (stage === 'second_message_sent') {
+                secondTouch += 1;
+            }
+            if (['replied', 'converted'].includes(stage) && leadId) {
+                replyLeadIds.add(leadId);
+            }
+            if (leadId && leadIdsWithRecordedReplies.has(leadId)) {
+                replyLeadIds.add(leadId);
+            }
+        });
+
+        return {
+            total: analyticsTotalLeadCount,
+            activeWork,
+            firstTouch,
+            secondTouch,
+            replies: replyLeadIds.size,
+            workRate: formatConversion(activeWork, analyticsTotalLeadCount),
+            firstTouchRate: formatConversion(firstTouch, activeWork),
+            secondTouchRate: formatConversion(secondTouch, firstTouch),
+            replyRate: formatConversion(replyLeadIds.size, firstTouch),
+        };
+    }, [analyticsTotalLeadCount, leadIdsWithRecordedReplies, sourceFilteredLeads]);
     const pipelineHeaderSummary = useMemo(() => {
         let withoutAudit = 0;
         let withAudit = 0;
@@ -3034,43 +3113,29 @@ export const ProspectingManagement: React.FC = () => {
                 key: 'in_progress',
                 label: 'В работе',
                 hint: 'Идёт оценка и подготовка лида',
-                count: inProgressLeadCount,
-                conversion: formatConversion(inProgressLeadCount, pipelineLeadCount),
-            },
-            {
-                key: 'postponed',
-                label: 'Отложенные',
-                hint: 'Лиды со следующим шагом на потом',
-                count: postponedLeadCount,
-                conversion: formatConversion(postponedLeadCount, pipelineLeadCount),
-            },
-            {
-                key: 'not_relevant',
-                label: 'Неактуален',
-                hint: 'Лиды, которые не подходят или сняты с процесса',
-                count: notRelevantLeadCount,
-                conversion: formatConversion(notRelevantLeadCount, pipelineLeadCount),
+                count: outreachFunnelSummary.activeWork,
+                conversion: outreachFunnelSummary.workRate,
             },
             {
                 key: 'contacted',
-                label: 'Отправлено',
-                hint: 'Первое касание уже сделано',
-                count: contactedLeadCount,
-                conversion: formatConversion(contactedLeadCount, inProgressLeadCount),
+                label: 'Первое касание',
+                hint: 'Лиды, которым уже отправлено первое сообщение',
+                count: outreachFunnelSummary.firstTouch,
+                conversion: outreachFunnelSummary.firstTouchRate,
             },
             {
-                key: 'waiting_reply',
-                label: 'Ждём ответ',
-                hint: 'Сообщение ушло и ждём реакцию',
-                count: waitingReplyLeadCount,
-                conversion: formatConversion(waitingReplyLeadCount, contactedLeadCount),
+                key: 'second_message_sent',
+                label: 'Второе касание',
+                hint: 'Лиды, которым уже отправлено повторное сообщение',
+                count: outreachFunnelSummary.secondTouch,
+                conversion: outreachFunnelSummary.secondTouchRate,
             },
             {
                 key: 'replied',
-                label: 'Ответил',
-                hint: 'Лид ответил и находится в переписке',
-                count: repliedLeadCount,
-                conversion: formatConversion(repliedLeadCount, waitingReplyLeadCount),
+                label: 'Ответы',
+                hint: 'Любой зафиксированный входящий ответ, кроме no response',
+                count: outreachFunnelSummary.replies,
+                conversion: outreachFunnelSummary.replyRate,
             },
             {
                 key: 'converted',
@@ -3082,31 +3147,24 @@ export const ProspectingManagement: React.FC = () => {
         ];
         return stages;
     }, [
-        contactedLeadCount,
         convertedLeadCount,
-        inProgressLeadCount,
-        notRelevantLeadCount,
-        pipelineLeadCount,
-        postponedLeadCount,
+        outreachFunnelSummary,
         repliedLeadCount,
-        waitingReplyLeadCount,
     ]);
     const pipelineEfficiencySummary = useMemo(() => {
         return {
-            foundCount: searchJobResultCount,
-            pipelineCount: pipelineLeadCount,
-            saveRate: formatConversion(pipelineLeadCount, searchJobResultCount),
-            readyRate: formatConversion(contactedLeadCount, pipelineLeadCount),
-            replyRate: formatConversion(repliedLeadCount, waitingReplyLeadCount),
+            foundCount: outreachFunnelSummary.total,
+            pipelineCount: outreachFunnelSummary.activeWork,
+            saveRate: outreachFunnelSummary.workRate,
+            readyRate: outreachFunnelSummary.firstTouchRate,
+            secondTouchRate: outreachFunnelSummary.secondTouchRate,
+            replyRate: outreachFunnelSummary.replyRate,
             qualifiedRate: formatConversion(convertedLeadCount, repliedLeadCount),
         };
     }, [
-        contactedLeadCount,
         convertedLeadCount,
-        pipelineLeadCount,
+        outreachFunnelSummary,
         repliedLeadCount,
-        searchJobResultCount,
-        waitingReplyLeadCount,
     ]);
     const draftReadyLeads = useMemo(
         () => sourceFilteredLeads.filter((lead) => lead.status === channelSelected),
@@ -3232,6 +3290,101 @@ export const ProspectingManagement: React.FC = () => {
         });
         return next;
     }, [sendBatches]);
+    const buildOutreachConversionSegments = useCallback(
+        (
+            segmentForLead: (lead: Lead, queueItem?: OutreachQueueItem | null) => { key: string; label: string }
+        ): OutreachConversionSegmentRow[] => {
+            const buckets = new Map<string, {
+                key: string;
+                label: string;
+                total: number;
+                activeWork: number;
+                firstTouch: number;
+                secondTouch: number;
+                replyLeadIds: Set<string>;
+            }>();
+
+            sourceFilteredLeads.forEach((lead) => {
+                const leadId = String(lead.id || '').trim();
+                const queueItem = leadId ? latestQueueItemByLeadId.get(leadId) || null : null;
+                const segment = segmentForLead(lead, queueItem);
+                const key = segment.key || segment.label;
+                if (!buckets.has(key)) {
+                    buckets.set(key, {
+                        key,
+                        label: segment.label,
+                        total: 0,
+                        activeWork: 0,
+                        firstTouch: 0,
+                        secondTouch: 0,
+                        replyLeadIds: new Set<string>(),
+                    });
+                }
+                const bucket = buckets.get(key);
+                if (!bucket) {
+                    return;
+                }
+                const stage = leadToPipelineBoardColumn(lead);
+                bucket.total += 1;
+                if (stage !== 'not_relevant') {
+                    bucket.activeWork += 1;
+                }
+                if (['contacted', 'second_message_sent', 'replied', 'converted'].includes(stage)) {
+                    bucket.firstTouch += 1;
+                }
+                if (stage === 'second_message_sent') {
+                    bucket.secondTouch += 1;
+                }
+                if (leadId && (['replied', 'converted'].includes(stage) || leadIdsWithRecordedReplies.has(leadId))) {
+                    bucket.replyLeadIds.add(leadId);
+                }
+            });
+
+            return Array.from(buckets.values())
+                .map((bucket) => ({
+                    key: bucket.key,
+                    label: bucket.label,
+                    total: bucket.total,
+                    activeWork: bucket.activeWork,
+                    firstTouch: bucket.firstTouch,
+                    secondTouch: bucket.secondTouch,
+                    replies: bucket.replyLeadIds.size,
+                    workRate: formatConversion(bucket.activeWork, bucket.total),
+                    firstTouchRate: formatConversion(bucket.firstTouch, bucket.activeWork),
+                    secondTouchRate: formatConversion(bucket.secondTouch, bucket.firstTouch),
+                    replyRate: formatConversion(bucket.replyLeadIds.size, bucket.firstTouch),
+                }))
+                .sort((left, right) =>
+                    right.firstTouch - left.firstTouch ||
+                    right.replies - left.replies ||
+                    right.total - left.total ||
+                    left.label.localeCompare(right.label)
+                );
+        },
+        [latestQueueItemByLeadId, leadIdsWithRecordedReplies, sourceFilteredLeads]
+    );
+    const channelConversionRows = useMemo(
+        () => buildOutreachConversionSegments((lead, queueItem) => {
+            const rawChannel = queueItem?.channel || lead.last_contact_channel || lead.selected_channel || '';
+            const key = String(rawChannel || '').trim().toLowerCase() || 'none';
+            return { key, label: formatLeadChannel(key === 'none' ? undefined : key) };
+        }),
+        [buildOutreachConversionSegments]
+    );
+    const cityConversionRows = useMemo(
+        () => buildOutreachConversionSegments((lead) => {
+            const label = normalizeAnalyticsSegmentLabel(lead.city || lead.address, 'Город не указан');
+            return { key: label.toLowerCase(), label };
+        }).slice(0, 12),
+        [buildOutreachConversionSegments]
+    );
+    const businessTypeConversionRows = useMemo(
+        () => buildOutreachConversionSegments((lead) => {
+            const label = normalizeAnalyticsSegmentLabel(lead.category, 'Тип не указан');
+            return { key: label.toLowerCase(), label };
+        }).slice(0, 12),
+        [buildOutreachConversionSegments]
+    );
     const sentLeads = useMemo(
         () => sourceFilteredLeads.filter((lead) => {
             if (!lead.id) {
@@ -3364,16 +3517,25 @@ export const ProspectingManagement: React.FC = () => {
         ];
         return windows.map((window) => {
             const pipelineLeads = filteredLeadsForKanban.filter((lead) => isWithinLastDays(lead.created_at, window.days));
-            const shortlistLeads = pipelineLeads.filter((lead) => leadToKanbanColumn(lead) === 'shortlist');
-            const inProgressLeads = pipelineLeads.filter((lead) => leadToKanbanColumn(lead) === 'in_progress');
-            const contactedLeads = pipelineLeads.filter((lead) => leadToKanbanColumn(lead) === 'contacted');
-            const closedLeads = pipelineLeads.filter((lead) => leadToKanbanColumn(lead) === 'closed');
+            const activeLeads = pipelineLeads.filter((lead) => leadToPipelineBoardColumn(lead) !== 'not_relevant');
+            const firstTouchLeads = pipelineLeads.filter((lead) => ['contacted', 'second_message_sent', 'replied', 'converted'].includes(leadToPipelineBoardColumn(lead)));
+            const secondTouchLeads = pipelineLeads.filter((lead) => leadToPipelineBoardColumn(lead) === 'second_message_sent');
+            const inactiveLeads = pipelineLeads.filter((lead) => ['postponed', 'not_relevant'].includes(leadToPipelineBoardColumn(lead)));
             const draftsWindow = drafts.filter((draft) => isWithinLastDays(draft.created_at, window.days));
             const approvedDraftsWindow = draftsWindow.filter((draft) => String(draft.status || '').trim().toLowerCase() === 'approved');
             const queueItemsWindow = visibleQueueItems.filter((item) => isWithinLastDays(item.created_at || item.sent_at || item.updated_at, window.days));
             const deliveredWindow = queueItemsWindow.filter((item) => item.delivery_status === 'delivered');
             const failedWindow = queueItemsWindow.filter((item) => item.delivery_status === 'failed');
             const reactionsWindow = reactions.filter((reaction) => isWithinLastDays(reaction.created_at || reaction.updated_at, window.days));
+            const replyWindowLeadIds = new Set<string>();
+            reactionsWindow.forEach((reaction) => {
+                const leadId = String(reaction.lead_id || '').trim();
+                const outcome = String(reaction.human_confirmed_outcome || reaction.classified_outcome || '').trim().toLowerCase();
+                const hasReplyText = Boolean(String(reaction.raw_reply || '').trim());
+                if (leadId && (hasReplyText || (outcome && outcome !== 'no_response'))) {
+                    replyWindowLeadIds.add(leadId);
+                }
+            });
             const positiveWindow = reactionsWindow.filter((reaction) => {
                 const outcome = String(reaction.human_confirmed_outcome || reaction.classified_outcome || '').trim().toLowerCase();
                 return outcome === 'positive';
@@ -3382,16 +3544,16 @@ export const ProspectingManagement: React.FC = () => {
                 key: window.key,
                 label: window.label,
                 pipelineCount: pipelineLeads.length,
-                shortlistCount: shortlistLeads.length,
-                inProgressCount: inProgressLeads.length,
-                contactedCount: contactedLeads.length,
-                closedCount: closedLeads.length,
+                activeCount: activeLeads.length,
+                firstTouchCount: firstTouchLeads.length,
+                secondTouchCount: secondTouchLeads.length,
+                inactiveCount: inactiveLeads.length,
                 draftCount: draftsWindow.length,
                 approvedDraftCount: approvedDraftsWindow.length,
                 queueCount: queueItemsWindow.length,
                 deliveredCount: deliveredWindow.length,
                 failedCount: failedWindow.length,
-                reactionCount: reactionsWindow.length,
+                reactionCount: replyWindowLeadIds.size,
                 positiveCount: positiveWindow.length,
             };
         });
@@ -4206,6 +4368,58 @@ export const ProspectingManagement: React.FC = () => {
         );
     };
 
+    const renderConversionSegmentTable = (
+        title: string,
+        description: string,
+        rows: OutreachConversionSegmentRow[]
+    ) => (
+        <AnalyticsSection title={title} description={description}>
+            <div className="overflow-x-auto">
+                <Table className="min-w-[760px]">
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Сегмент</TableHead>
+                            <TableHead className="text-right">Всего</TableHead>
+                            <TableHead className="text-right">В работе</TableHead>
+                            <TableHead className="text-right">1 касание</TableHead>
+                            <TableHead className="text-right">2 касание</TableHead>
+                            <TableHead className="text-right">Ответы</TableHead>
+                            <TableHead className="text-right">Ответ / 1 касание</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {rows.length > 0 ? rows.map((row) => (
+                            <TableRow key={row.key}>
+                                <TableCell className="max-w-[240px] truncate font-medium">{row.label}</TableCell>
+                                <TableCell className="text-right">{row.total}</TableCell>
+                                <TableCell className="text-right">
+                                    <div>{row.activeWork}</div>
+                                    <div className="text-xs text-muted-foreground">{row.workRate}</div>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                    <div>{row.firstTouch}</div>
+                                    <div className="text-xs text-muted-foreground">{row.firstTouchRate}</div>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                    <div>{row.secondTouch}</div>
+                                    <div className="text-xs text-muted-foreground">{row.secondTouchRate}</div>
+                                </TableCell>
+                                <TableCell className="text-right">{row.replies}</TableCell>
+                                <TableCell className="text-right font-medium">{row.replyRate}</TableCell>
+                            </TableRow>
+                        )) : (
+                            <TableRow>
+                                <TableCell colSpan={7} className="py-6 text-center text-muted-foreground">
+                                    Пока нет данных для этого среза.
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </div>
+        </AnalyticsSection>
+    );
+
     const renderSentWorkspace = () => {
         const selectedLead = selectedSentDetail?.lead || null;
         const selectedQueue = selectedSentDetail?.queueItem || null;
@@ -4282,7 +4496,7 @@ export const ProspectingManagement: React.FC = () => {
                                         title={lead.name}
                                         subtitle={lead.category || 'Без категории'}
                                         location={lead.city || lead.address || 'Локация не указана'}
-                                        statusLabel={state === 'problem' ? 'Нужна проверка' : state === 'ready' ? 'Ждём ответ' : 'История'}
+                                        statusLabel={state === 'problem' ? 'Нужна проверка' : state === 'ready' ? 'Готов к повтору' : 'История'}
                                         statusTone={state === 'problem' ? 'danger' : state === 'ready' ? 'info' : 'success'}
                                         channelLabel={`Канал: ${formatLeadChannel(queueItem?.channel || lead.selected_channel)}`}
                                         languageLabel={leadLanguageLabel(lead)}
@@ -4899,7 +5113,7 @@ export const ProspectingManagement: React.FC = () => {
                                 <option value={PIPELINE_POSTPONED}>Отложенные</option>
                                 <option value={PIPELINE_NOT_RELEVANT}>Неактуален</option>
                                 <option value={PIPELINE_CONTACTED}>Отправлено</option>
-                                <option value={PIPELINE_WAITING_REPLY}>Ждём ответ</option>
+                                <option value={PIPELINE_SECOND_MESSAGE_SENT}>Второе сообщение отправлено</option>
                                 <option value={PIPELINE_REPLIED}>Ответил</option>
                                 <option value={PIPELINE_CONVERTED}>Конвертирован</option>
                             </select>
@@ -5123,11 +5337,11 @@ export const ProspectingManagement: React.FC = () => {
                         <CardContent className="space-y-6">
                             <AnalyticsSummaryGrid
                                 items={[
-                                    { key: 'found', label: 'Найдено', value: pipelineEfficiencySummary.foundCount, helper: 'Последний поиск / импорт' },
-                                    { key: 'pipeline', label: 'В pipeline', value: pipelineEfficiencySummary.pipelineCount, helper: `Сохранение: ${pipelineEfficiencySummary.saveRate}` },
-                                    { key: 'contacted', label: 'Отправлено', value: contactedLeadCount, helper: `Из pipeline: ${pipelineEfficiencySummary.readyRate}` },
-                                    { key: 'waiting', label: 'Ждём ответ', value: waitingReplyLeadCount, helper: 'Сообщение ушло, но ответа ещё нет' },
-                                    { key: 'replied', label: 'Ответили', value: repliedLeadCount, helper: `От ответа: ${pipelineEfficiencySummary.replyRate}` },
+                                    { key: 'total', label: 'Всего лидов', value: pipelineEfficiencySummary.foundCount, helper: 'Все сохранённые лиды в поиске клиентов' },
+                                    { key: 'pipeline', label: 'В работе', value: pipelineEfficiencySummary.pipelineCount, helper: `От всех: ${pipelineEfficiencySummary.saveRate}` },
+                                    { key: 'first-touch', label: 'Первое касание', value: outreachFunnelSummary.firstTouch, helper: `Из работы: ${pipelineEfficiencySummary.readyRate}` },
+                                    { key: 'second-touch', label: 'Второе касание', value: outreachFunnelSummary.secondTouch, helper: `Из первого: ${pipelineEfficiencySummary.secondTouchRate}` },
+                                    { key: 'replied', label: 'Ответы', value: outreachFunnelSummary.replies, helper: `От отправленных: ${pipelineEfficiencySummary.replyRate}` },
                                     { key: 'converted', label: 'Конвертировано', value: convertedLeadCount, helper: `Из ответа: ${pipelineEfficiencySummary.qualifiedRate}` },
                                     { key: 'inactive', label: 'Неактуально / отложено', value: notRelevantLeadCount + postponedLeadCount, helper: 'Сняты с процесса или отложены' },
                                 ]}
@@ -5156,11 +5370,11 @@ export const ProspectingManagement: React.FC = () => {
                                     badgeLabel: 'Pipeline',
                                     badgeValue: window.pipelineCount,
                                     stats: [
-                                        { key: `${window.key}-progress`, label: 'В работе', value: window.inProgressCount, helper: `Conv: ${formatConversion(window.inProgressCount, window.pipelineCount)}` },
-                                        { key: `${window.key}-contacted`, label: 'Отправлено', value: window.contactedCount, helper: `Conv: ${formatConversion(window.contactedCount, window.inProgressCount)}` },
-                                        { key: `${window.key}-inactive`, label: 'Неактуально / отложено', value: window.closedCount, helper: `Conv: ${formatConversion(window.closedCount, window.pipelineCount)}` },
-                                        { key: `${window.key}-queue`, label: 'Ждём ответ', value: window.deliveredCount, helper: `Conv: ${formatConversion(window.deliveredCount, window.contactedCount)}` },
-                                        { key: `${window.key}-reply`, label: 'Ответили', value: window.reactionCount, helper: `Conv: ${formatConversion(window.reactionCount, window.deliveredCount)}` },
+                                        { key: `${window.key}-progress`, label: 'В работе', value: window.activeCount, helper: `Conv: ${formatConversion(window.activeCount, window.pipelineCount)}` },
+                                        { key: `${window.key}-contacted`, label: 'Первое касание', value: window.firstTouchCount, helper: `Conv: ${formatConversion(window.firstTouchCount, window.activeCount)}` },
+                                        { key: `${window.key}-second-touch`, label: 'Второе касание', value: window.secondTouchCount, helper: `Conv: ${formatConversion(window.secondTouchCount, window.firstTouchCount)}` },
+                                        { key: `${window.key}-inactive`, label: 'Неактуально / отложено', value: window.inactiveCount, helper: `Conv: ${formatConversion(window.inactiveCount, window.pipelineCount)}` },
+                                        { key: `${window.key}-reply`, label: 'Ответы', value: window.reactionCount, helper: `Conv: ${formatConversion(window.reactionCount, window.firstTouchCount)}` },
                                         { key: `${window.key}-positive`, label: 'Позитивный ответ', value: window.positiveCount, helper: `Conv: ${formatConversion(window.positiveCount, window.reactionCount)}` },
                                     ],
                                 }))}
@@ -5172,6 +5386,24 @@ export const ProspectingManagement: React.FC = () => {
                             >
                                 <AnalyticsMetricGrid items={outreachOperatorMetrics} columnsClassName="md:grid-cols-3" />
                             </AnalyticsSection>
+
+                            {renderConversionSegmentTable(
+                                'Конверсии по каналу',
+                                'Срез по фактическому каналу последней отправки или выбранному каналу лида.',
+                                channelConversionRows
+                            )}
+
+                            {renderConversionSegmentTable(
+                                'Конверсии по городу',
+                                'Топ городов по количеству первых касаний. Конверсия ответа считается от первого касания.',
+                                cityConversionRows
+                            )}
+
+                            {renderConversionSegmentTable(
+                                'Конверсии по типу бизнеса',
+                                'Топ категорий/типов бизнеса по количеству первых касаний.',
+                                businessTypeConversionRows
+                            )}
                         </CardContent>
                     </Card>
                 </TabsContent>

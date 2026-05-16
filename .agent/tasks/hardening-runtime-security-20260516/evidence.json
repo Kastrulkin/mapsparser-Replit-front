@@ -1,0 +1,120 @@
+{
+  "task_id": "hardening-runtime-security-20260516",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Runtime PostgreSQL compatibility improved without broad rewrite.",
+      "status": "PASS",
+      "proof": [
+        "DB cursor wrapper adapts legacy ? placeholders through QueryAdapter.",
+        "HybridRow supports dict(row), key access, and positional access.",
+        "INSERT OR REPLACE runtime occurrences in src/main.py were removed."
+      ],
+      "gaps": [
+        "Legacy ? SQL remains in source and is handled at the cursor boundary."
+      ]
+    },
+    {
+      "id": "AC2",
+      "text": "CORS uses ALLOWED_ORIGINS.",
+      "status": "PASS",
+      "proof": [
+        "src/main.py passes allowed_origins into CORS."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Dangerous auth/debug logs reduced.",
+      "status": "PASS",
+      "proof": [
+        "Password hash/salt auth prints removed.",
+        "Selected traceback/session payload debug prints removed."
+      ],
+      "gaps": [
+        "Additional non-auth debug prints remain for future cleanup."
+      ]
+    },
+    {
+      "id": "AC4",
+      "text": "Targeted rate limiting restored.",
+      "status": "PASS",
+      "proof": [
+        "Limiter now follows RATE_LIMITING_ENABLED.",
+        "Sensitive endpoints have decorators.",
+        "No global default API limit is configured."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Production compose avoids Docker socket.",
+      "status": "PASS",
+      "proof": [
+        "Docker socket removed from docker-compose.yml.",
+        "docker-compose.test.yml added for testcontainers."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC6",
+      "text": "GigaChat SSL workaround is explicit.",
+      "status": "PASS",
+      "proof": [
+        "GIGACHAT_SSL_VERIFY defaults to true.",
+        "GigaChat request paths use verify_tls instead of hard-coded verify=False."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC7",
+      "text": "External auth encryption fails closed in production.",
+      "status": "PASS",
+      "proof": [
+        "auth_encryption raises without EXTERNAL_AUTH_SECRET_KEY when production env is detected."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC8",
+      "text": "Safe cleanup and lint baseline.",
+      "status": "PASS",
+      "proof": [
+        "Tracked cookie/backup artifacts removed.",
+        "Duplicate * (2)* files removed.",
+        "npm run lint -- --quiet passes."
+      ],
+      "gaps": [
+        "Full TypeScript warning cleanup remains a larger follow-up."
+      ]
+    }
+  ],
+  "changed_files": [
+    "README.md",
+    "docker-compose.yml",
+    "docker-compose.test.yml",
+    "frontend/eslint.config.js",
+    "src/auth_encryption.py",
+    "src/auth_system.py",
+    "src/database_manager.py",
+    "src/gigachat_analyzer.py",
+    "src/main.py",
+    "src/services/gigachat_client.py",
+    "src/yandex_sync_service.py",
+    "COOKIES_STRING.txt",
+    "beautybot_20260219_185959.sql.gz"
+  ],
+  "commands_for_fresh_verifier": [
+    "git ls-files '*.py' | xargs python3 -m py_compile",
+    "python3 -m pytest -q tests/test_query_adapter.py tests/test_parsed_payload_validation.py tests/test_auth_email_case_insensitive.py tests/test_checkout_payment_providers.py tests/test_crypto_pay_client.py tests/test_map_url_normalizer.py tests/test_review_response_utils.py tests/test_service_keyword_scoring.py tests/test_finance_kpis.py",
+    "cd frontend && npm run lint -- --quiet",
+    "cd frontend && npm run build",
+    "PYTHONPATH=src python3 -c 'import main; print(bool(main.limiter), main.allowed_origins)'"
+  ],
+  "known_gaps": [
+    "Full pytest/testcontainers gate was not run.",
+    "Full src/main.py decomposition remains a larger P2 follow-up.",
+    "TypeScript warnings remain visible without --quiet."
+  ]
+}

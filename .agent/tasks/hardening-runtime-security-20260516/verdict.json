@@ -1,0 +1,59 @@
+{
+  "task_id": "hardening-runtime-security-20260516",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Runtime DB compatibility improved through cursor-level placeholder adaptation and removal of INSERT OR REPLACE runtime paths found in main.py."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "CORS now uses ALLOWED_ORIGINS."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Sensitive auth/debug logging was reduced."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Targeted rate limiting is enabled with no global blanket limit."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Docker socket moved from production compose to test override."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "GigaChat TLS verification now defaults to true with explicit fallback."
+    },
+    {
+      "id": "AC7",
+      "status": "PASS",
+      "reason": "Production external auth encryption fails closed without EXTERNAL_AUTH_SECRET_KEY."
+    },
+    {
+      "id": "AC8",
+      "status": "PASS",
+      "reason": "Tracked artifacts and duplicate files cleaned; lint no-error gate restored. Legacy warnings remain as documented residual debt."
+    }
+  ],
+  "commands_run": [
+    "git ls-files '*.py' | xargs python3 -m py_compile",
+    "python3 -m pytest -q tests/test_query_adapter.py tests/test_parsed_payload_validation.py tests/test_auth_email_case_insensitive.py tests/test_checkout_payment_providers.py tests/test_crypto_pay_client.py tests/test_map_url_normalizer.py tests/test_review_response_utils.py tests/test_service_keyword_scoring.py tests/test_finance_kpis.py",
+    "npm run lint -- --quiet",
+    "npm run build",
+    "PYTHONPATH=src python3 import main smoke"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/hardening-runtime-security-20260516/raw/build.txt",
+    ".agent/tasks/hardening-runtime-security-20260516/raw/test-unit.txt",
+    ".agent/tasks/hardening-runtime-security-20260516/raw/test-integration.txt",
+    ".agent/tasks/hardening-runtime-security-20260516/raw/lint.txt"
+  ]
+}

@@ -43,6 +43,13 @@ class GigaChatAnalyzer:
 
         self.current_index = 0
         self.base_url = "https://gigachat.devices.sberbank.ru/api/v1"
+        ca_bundle = os.getenv("GIGACHAT_CA_BUNDLE") or os.getenv("REQUESTS_CA_BUNDLE")
+        if ca_bundle and os.path.exists(ca_bundle):
+            self.verify_tls = ca_bundle
+        elif os.getenv("GIGACHAT_SSL_VERIFY", "true").lower() == "false":
+            self.verify_tls = False
+        else:
+            self.verify_tls = True
         self.access_token = None
         self.token_expires_at = 0
         self.last_auth_error = None
@@ -84,7 +91,7 @@ class GigaChatAnalyzer:
                 "Authorization": f"Basic {auth_base64}"
             }
             try:
-                response = requests.post(url, data=data, headers=headers, timeout=30, verify=False)
+                response = requests.post(url, data=data, headers=headers, timeout=30, verify=self.verify_tls)
                 if response.status_code in (401, 403):
                     # Неверный/просроченный ключ — пробуем следующий
                     last_error = RuntimeError(f"Auth failed for key index {self.current_index}: {response.status_code}")
@@ -408,7 +415,7 @@ class GigaChatAnalyzer:
                 "max_tokens": 4000
             }
             
-            response = requests.post(url, headers=headers, json=data, timeout=60, verify=False)
+            response = requests.post(url, headers=headers, json=data, timeout=60, verify=self.verify_tls)
             response.raise_for_status()
             
             result = response.json()

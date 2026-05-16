@@ -1,0 +1,6 @@
+✅ Rate limiting включен для чувствительных endpoint'ов
+⚠️  Файл с популярными запросами не найден
+✅ Rate limiting включен для чувствительных endpoint'ов
+main-import-ok
+rate-limiter True
+cors-origins http://localhost:3000,http://127.0.0.1:3000

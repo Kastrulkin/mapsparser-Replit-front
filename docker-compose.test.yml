@@ -1,0 +1,10 @@
+# Test-only overrides for gate tests that need Docker/testcontainers from inside app.
+
+services:
+  app:
+    environment:
+      DOCKER_HOST: unix:///var/run/docker.sock
+      TESTCONTAINERS_RYUK_DISABLED: "true"
+      TESTCONTAINERS_HOST_OVERRIDE: host.docker.internal
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

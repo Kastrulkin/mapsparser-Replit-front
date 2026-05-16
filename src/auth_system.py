@@ -11,6 +11,7 @@ from typing import Optional, Dict, Any
 import hashlib
 import secrets
 import time
+import logging
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 
@@ -18,6 +19,7 @@ from pg_db_utils import get_db_connection
 
 PLACEHOLDER = "%s"
 CONSENT_VERSION = "localos-personal-data-v1-2026-05-11"
+logger = logging.getLogger(__name__)
 
 def normalize_email(email: str) -> str:
     """Normalize email for identity lookup."""
@@ -67,21 +69,16 @@ def verify_password(password: str, hashed: str) -> bool:
     """Проверка пароля"""
     try:
         if not hashed or ':' not in hashed:
-            print(f"❌ Неверный формат хеша: {hashed[:50] if hashed else 'None'}...")
+            logger.warning("Invalid password hash format")
             return False
         
         salt, pwd_hash = hashed.split(':', 1)
-        print(f"🔍 Соль: {salt[:20]}..., Хеш: {pwd_hash[:20]}...")
         new_hash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), 100000)
         new_hash_hex = new_hash.hex()
-        print(f"🔍 Новый хеш: {new_hash_hex[:20]}...")
-        result = new_hash_hex == pwd_hash
-        print(f"🔍 Сравнение: {result}")
+        result = secrets.compare_digest(new_hash_hex, pwd_hash)
         return result
     except Exception as e:
-        print(f"❌ Ошибка при проверке пароля: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.warning("Password verification failed: %s", type(e).__name__)
         return False
 
 def create_user(
@@ -178,7 +175,7 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
         
         user = cursor.fetchone()
         if not user:
-            print(f"❌ Пользователь не найден: {email}")
+            logger.info("Authentication failed: user not found")
             return {"error": "Пользователь не найден"}
         
         # Безопасное извлечение данных из sqlite3.Row
@@ -202,34 +199,29 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
                 is_active = user[5] if len(user) > 5 else None
                 is_verified = user[6] if len(user) > 6 else None
         except Exception as e:
-            print(f"❌ Ошибка извлечения данных пользователя: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.warning("Authentication failed: user row extraction error: %s", type(e).__name__)
             return {"error": "Ошибка обработки данных пользователя"}
         
         if not is_active:
-            print(f"❌ Аккаунт заблокирован: {email}")
+            logger.info("Authentication blocked inactive account")
             return {"error": "account_blocked", "message": "user is blocked"}
 
         if is_verified is False:
-            print(f"❌ Email не подтвержден: {email}")
+            logger.info("Authentication blocked unverified account")
             return {"error": "EMAIL_NOT_VERIFIED", "message": "Подтвердите email перед входом"}
         
         # Если у пользователя нет пароля, это новый пользователь
         if not password_hash:
-            print(f"❌ У пользователя нет пароля: {email}")
+            logger.info("Authentication requires password setup")
             return {"error": "NEED_PASSWORD", "message": "Необходимо установить пароль"}
         
-        print(f"🔍 Проверка пароля для: {email}")
-        print(f"🔍 Формат хеша в БД: {password_hash[:50] if password_hash else 'None'}...")
         password_valid = verify_password(password, password_hash)
-        print(f"🔍 Результат проверки пароля: {password_valid}")
         
         if not password_valid:
-            print(f"❌ Неверный пароль для: {email}")
+            logger.info("Authentication failed: invalid password")
             return {"error": "Неверный пароль"}
         
-        print(f"✅ Успешная авторизация: {email}")
+        logger.info("Authentication succeeded")
         return {
             "id": user_id,
             "email": user_email,
@@ -239,9 +231,7 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        print(f"❌ Ошибка при авторизации: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.warning("Authentication error: %s", type(e).__name__)
         return {"error": str(e)}
     finally:
         conn.close()
@@ -477,15 +467,11 @@ def verify_session(token: str) -> Optional[Dict[str, Any]]:
                 "is_superadmin": bool(is_superadmin_val) if is_superadmin_val is not None else False
             }
         except Exception as e:
-            print(f"❌ Ошибка извлечения данных сессии: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.warning("Session row extraction error: %s", type(e).__name__)
             return None
         
     except Exception as e:
-        print(f"❌ Ошибка проверки сессии: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.warning("Session verification error: %s", type(e).__name__)
         return None
     finally:
         conn.close()
