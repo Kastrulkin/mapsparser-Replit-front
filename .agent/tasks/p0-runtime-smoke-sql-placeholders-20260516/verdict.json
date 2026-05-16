@@ -1,0 +1,51 @@
+{
+  "task_id": "p0-runtime-smoke-sql-placeholders-20260516",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "growth_api.py no longer contains SQLite ? placeholders locally or in live runtime after deployment."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "yandex_sync_service.py no longer contains SQLite ? placeholders locally or in live runtime after deployment."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "py_compile, import smoke, and tests/test_query_adapter.py passed."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Live app, worker, and postgres are up; HTTP root returned 200 OK after restart."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Host and app-container scans confirm no SQLite ? placeholders in target files."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/api/growth_api.py src/yandex_sync_service.py",
+    "python3 -m pytest -q tests/test_query_adapter.py",
+    "PYTHONPATH=src import smoke for api.growth_api and YandexSyncService",
+    "rg placeholder scan on target files",
+    "server backup of target files",
+    "scp target files to /opt/seo-app/src",
+    "docker compose restart app worker",
+    "live host/container placeholder scans",
+    "live docker compose ps/logs/curl smoke"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/p0-runtime-smoke-sql-placeholders-20260516/raw/build.txt",
+    ".agent/tasks/p0-runtime-smoke-sql-placeholders-20260516/raw/test-unit.txt",
+    ".agent/tasks/p0-runtime-smoke-sql-placeholders-20260516/raw/test-integration.txt",
+    ".agent/tasks/p0-runtime-smoke-sql-placeholders-20260516/raw/lint.txt",
+    ".agent/tasks/p0-runtime-smoke-sql-placeholders-20260516/raw/live-runtime-smoke-after.txt",
+    ".agent/tasks/p0-runtime-smoke-sql-placeholders-20260516/raw/live-host-placeholder-scan-after.txt",
+    ".agent/tasks/p0-runtime-smoke-sql-placeholders-20260516/raw/live-container-placeholder-scan-after.txt"
+  ]
+}

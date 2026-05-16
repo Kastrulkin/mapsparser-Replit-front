@@ -22,7 +22,7 @@ def get_business_stages(business_id):
         cursor = db.conn.cursor()
         
         # Проверка доступа
-        cursor.execute("SELECT owner_id, business_type FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("SELECT owner_id, business_type FROM Businesses WHERE id = %s", (business_id,))
         business = cursor.fetchone()
         
         if not business:
@@ -44,7 +44,7 @@ def get_business_stages(business_id):
             return jsonify({"error": "Нет доступа"}), 403
             
         # Находим ID типа бизнеса
-        cursor.execute("SELECT id FROM BusinessTypes WHERE type_key = ? OR id = ?", (business_type_key, business_type_key))
+        cursor.execute("SELECT id FROM BusinessTypes WHERE type_key = %s OR id = %s", (business_type_key, business_type_key))
         bt_row = cursor.fetchone()
         
         if not bt_row:
@@ -58,7 +58,7 @@ def get_business_stages(business_id):
             return jsonify({"success": True, "stages": []})
             
         # Получаем текущий шаг визарда
-        cursor.execute("SELECT step FROM BusinessOptimizationWizard WHERE business_id = ?", (business_id,))
+        cursor.execute("SELECT step FROM BusinessOptimizationWizard WHERE business_id = %s", (business_id,))
         wiz_row = cursor.fetchone()
         current_step = wiz_row[0] if wiz_row else 1
         
@@ -78,7 +78,7 @@ def get_business_stages(business_id):
         cursor.execute("""
             SELECT rating, reviews_count, photos_count 
             FROM MapParseResults 
-            WHERE business_id = ? 
+            WHERE business_id = %s
             ORDER BY created_at DESC LIMIT 1
         """, (business_id,))
         map_row = cursor.fetchone()
@@ -91,12 +91,12 @@ def get_business_stages(business_id):
                 pass
 
         # 2. UserServices (Services Added)
-        cursor.execute("SELECT COUNT(*) FROM UserServices WHERE business_id = ?", (business_id,))
+        cursor.execute("SELECT COUNT(*) FROM UserServices WHERE business_id = %s", (business_id,))
         svc_row = cursor.fetchone()
         metrics["services_count"] = svc_row[0] if svc_row else 0
         
         # 3. Business Profile (Contacts)
-        cursor.execute("SELECT phone, address, website, yandex_url FROM Businesses WHERE id = ?", (business_id,))
+        cursor.execute("SELECT phone, address, website, yandex_url FROM Businesses WHERE id = %s", (business_id,))
         biz_info = cursor.fetchone()
         if biz_info:
             metrics["has_phone"] = bool(biz_info[0])
@@ -134,7 +134,7 @@ def get_business_stages(business_id):
         cursor.execute("""
             SELECT id, stage_number, title, description, goal, expected_result, duration
             FROM GrowthStages
-            WHERE business_type_id = ?
+            WHERE business_type_id = %s
             ORDER BY stage_number
         """, (business_type_id,))
         stages_rows = cursor.fetchall()
@@ -148,7 +148,7 @@ def get_business_stages(business_id):
             cursor.execute("""
                 SELECT id, task_number, task_text, check_logic, reward_value, reward_type, tooltip, link_url, link_text, is_auto_verifiable
                 FROM GrowthTasks
-                WHERE stage_id = ?
+                WHERE stage_id = %s
                 ORDER BY task_number
             """, (stage_id,))
             tasks_rows = cursor.fetchall()

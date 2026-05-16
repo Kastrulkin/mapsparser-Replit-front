@@ -1,0 +1,75 @@
+{
+  "task_id": "p0-runtime-smoke-sql-placeholders-20260516",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "src/api/growth_api.py uses PostgreSQL %s placeholders instead of SQLite ? placeholders.",
+      "status": "PASS",
+      "proof": [
+        "src/api/growth_api.py updated",
+        ".agent/tasks/p0-runtime-smoke-sql-placeholders-20260516/raw/lint.txt"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "src/yandex_sync_service.py uses PostgreSQL %s placeholders instead of SQLite ? placeholders.",
+      "status": "PASS",
+      "proof": [
+        "src/yandex_sync_service.py updated",
+        ".agent/tasks/p0-runtime-smoke-sql-placeholders-20260516/raw/lint.txt"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Local Python checks pass for touched modules and DB placeholder adapter contract.",
+      "status": "PASS",
+      "proof": [
+        ".agent/tasks/p0-runtime-smoke-sql-placeholders-20260516/raw/build.txt",
+        ".agent/tasks/p0-runtime-smoke-sql-placeholders-20260516/raw/test-unit.txt",
+        ".agent/tasks/p0-runtime-smoke-sql-placeholders-20260516/raw/test-integration.txt"
+      ],
+      "gaps": [
+        "tests/test_yandex_business_connection.py has a pre-existing missing business_id fixture issue and was not used as pass/fail proof."
+      ]
+    },
+    {
+      "id": "AC4",
+      "text": "Live runtime smoke confirms app, worker, postgres, and HTTP root are healthy after hotfix.",
+      "status": "PASS",
+      "proof": [
+        ".agent/tasks/p0-runtime-smoke-sql-placeholders-20260516/raw/live-runtime-smoke-after.txt"
+      ],
+      "gaps": [
+        "Local Docker daemon was unavailable, so local container smoke could not run."
+      ]
+    },
+    {
+      "id": "AC5",
+      "text": "Live host and app-container copies of touched files no longer contain SQLite ? placeholders.",
+      "status": "PASS",
+      "proof": [
+        ".agent/tasks/p0-runtime-smoke-sql-placeholders-20260516/raw/live-host-placeholder-scan-after.txt",
+        ".agent/tasks/p0-runtime-smoke-sql-placeholders-20260516/raw/live-container-placeholder-scan-after.txt",
+        ".agent/tasks/p0-runtime-smoke-sql-placeholders-20260516/raw/live-backup.txt"
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/api/growth_api.py",
+    "src/yandex_sync_service.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/api/growth_api.py src/yandex_sync_service.py",
+    "python3 -m pytest -q tests/test_query_adapter.py",
+    "rg -n \"\\\\?\" src/api/growth_api.py src/yandex_sync_service.py",
+    "ssh -i \"$HOME/.ssh/localos_prod\" root@80.78.242.105 'cd /opt/seo-app && docker compose ps && curl -I --max-time 10 http://localhost:8000'"
+  ],
+  "known_gaps": [
+    "Local Docker daemon was unavailable during this run.",
+    "tests/test_yandex_business_connection.py has a pre-existing missing business_id fixture issue."
+  ]
+}

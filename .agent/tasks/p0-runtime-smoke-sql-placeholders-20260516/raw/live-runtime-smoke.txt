@@ -1,0 +1,36 @@
+NAME                 IMAGE            COMMAND                  SERVICE    CREATED       STATUS                 PORTS
+seo-app-app-1        seo-app-app      "/app/entrypoint.sh …"   app        2 days ago    Up 17 hours            0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp
+seo-app-postgres-1   postgres:16      "docker-entrypoint.s…"   postgres   4 weeks ago   Up 12 days (healthy)   5432/tcp
+seo-app-worker-1     seo-app-worker   "/app/entrypoint.sh …"   worker     2 days ago    Up 17 hours            
+
+--- app logs ---
+app-1  | 85.142.100.143 - - [16/May/2026 09:36:04] "GET / HTTP/1.1" 200 -
+app-1  | 85.142.100.143 - - [16/May/2026 09:36:06] "GET /favicon.svg HTTP/1.1" 200 -
+app-1  | 85.142.100.143 - - [16/May/2026 09:36:08] "GET /favicon.ico HTTP/1.1" 200 -
+app-1  | 85.142.100.143 - - [16/May/2026 09:36:10] "GET /favicon.ico HTTP/1.1" 200 -
+app-1  | 172.18.0.1 - - [16/May/2026 09:37:41] "GET /assets/index-BYTwBHka.js HTTP/1.0" 200 -
+app-1  | 85.142.100.143 - - [16/May/2026 09:41:12] "GET / HTTP/1.1" 200 -
+app-1  | 85.142.100.143 - - [16/May/2026 09:41:13] "GET /favicon.svg HTTP/1.1" 200 -
+app-1  | 85.142.100.143 - - [16/May/2026 09:41:16] "GET /favicon.ico HTTP/1.1" 200 -
+app-1  | 85.142.100.143 - - [16/May/2026 09:41:17] "GET /favicon.ico HTTP/1.1" 200 -
+app-1  | 172.18.0.1 - - [16/May/2026 09:41:54] "POST /xmlrpc.php HTTP/1.0" 200 -
+
+--- worker logs ---
+
+--- curl ---
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0  4166    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+HTTP/1.1 200 OK
+Server: Werkzeug/3.1.8 Python/3.11.15
+Date: Sat, 16 May 2026 09:50:34 GMT
+Content-Disposition: inline; filename=index.html
+Content-Type: text/html; charset=utf-8
+Content-Length: 4166
+Last-Modified: Sat, 16 May 2026 08:35:41 GMT
+Cache-Control: no-cache
+ETag: "1778920541.0-4166-2731084557"
+Date: Sat, 16 May 2026 09:50:34 GMT
+Accept-Ranges: bytes
+Connection: close
+
