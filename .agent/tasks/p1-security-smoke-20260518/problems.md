@@ -9,3 +9,6 @@
 - Affected files/config: `/opt/seo-app/.env`, external auth encryption/decryption.
 - Smallest safe fix: recover the original encryption secret and set it in `/opt/seo-app/.env`, then recreate `app worker`.
 - Corrective hint: there are 3 encrypted `externalbusinessaccounts` records. If the original secret is unavailable, choose a new 32+ char secret only with approval, then re-save/rotate external account auth data.
+
+Follow-up note:
+- Return to this question later. User asked whether this secret is for OpenClaw/Telegram; current conclusion: `EXTERNAL_AUTH_SECRET_KEY` is a general encryption key for stored external credentials, not the OpenClaw connection secret and not a Telegram connection token by itself. It may protect Telegram userbot/session credentials only if those are stored through `encrypt_auth_data()`.
