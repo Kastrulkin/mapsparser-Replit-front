@@ -243,7 +243,7 @@ export const BottomCta = () => (
       <Button asChild className="bg-white text-orange-600 hover:bg-orange-50">
         <Link to="/login">Получить бесплатный аудит</Link>
       </Button>
-      <Button asChild className="border-white/70 text-white hover:bg-white/10" variant="outline">
+      <Button asChild className="border-white bg-white text-orange-700 shadow-sm hover:bg-orange-50 hover:text-orange-800" variant="outline">
         <Link to="/contact">Обсудить внедрение</Link>
       </Button>
     </div>
