@@ -1,0 +1,60 @@
+{
+  "task_id": "p2-growth-blueprint-20260518",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Growth workflow runtime routes are extracted from main.py into a blueprint without changing URL rules.",
+      "status": "PASS",
+      "proof": [
+        "src/api/growth_workflow_api.py owns /api/progress, /api/business/<business_id>/optimization-wizard, and /api/business/<business_id>/sprint.",
+        "raw/test-integration.txt confirms route ownership."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Duplicate-priority-sensitive stages routes are not moved in this iteration.",
+      "status": "PASS",
+      "proof": [
+        "main.py still owns the legacy duplicate stages handlers."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Backend lint baseline includes import, route ownership, main.py ownership, and SQLite placeholder guardrails for the new blueprint.",
+      "status": "PASS",
+      "proof": [
+        "raw/lint.txt passed."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Focused local tests and live smoke pass after deployment.",
+      "status": "PASS",
+      "proof": [
+        "raw/test-unit.txt: 12 passed.",
+        "raw/live-route-ownership.txt: live route ownership OK.",
+        "raw/live-smoke-runtime.txt: app and worker up; root endpoint 200 OK."
+      ],
+      "gaps": [
+        "Server host does not include tests, so host-side lint script is not an acceptance artifact."
+      ]
+    }
+  ],
+  "changed_files": [
+    "src/main.py",
+    "src/api/growth_workflow_api.py",
+    "scripts/lint_backend_baseline.sh",
+    "tests/test_growth_workflow_routes.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "scripts/lint_backend_baseline.sh",
+    "PYTHONPATH=src python3 -m pytest -q tests/test_growth_workflow_routes.py tests/test_reports_api_routes.py tests/test_security_runtime_config.py tests/test_query_adapter.py"
+  ],
+  "known_gaps": [
+    "business/stages and admin/growth-stages still need a separate duplicate-priority-preserving extraction pass."
+  ]
+}

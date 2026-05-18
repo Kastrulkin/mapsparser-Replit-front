@@ -1,0 +1,12 @@
+[backend-lint] py_compile focused backend modules
+[backend-lint] import and route ownership smoke
+✅ Rate limiting включен для чувствительных endpoint'ов
+⚠️  Файл с популярными запросами не найден
+✅ Rate limiting включен для чувствительных endpoint'ов
+OK: extracted routes are registered through their API blueprints
+[backend-lint] growth workflow stays out of main.py
+OK: growth workflow routes are not declared in main.py
+[backend-lint] runtime SQL placeholder scan
+OK: no direct runtime SQLite ? placeholders outside allowed legacy reports blueprint
+[backend-lint] growth workflow SQL placeholder scan
+OK: growth workflow blueprint uses PostgreSQL placeholders

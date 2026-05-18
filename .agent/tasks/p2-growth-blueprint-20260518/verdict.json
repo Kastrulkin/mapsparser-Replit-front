@@ -1,0 +1,40 @@
+{
+  "task_id": "p2-growth-blueprint-20260518",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Growth workflow routes are owned by growth_workflow_api and no longer declared in main.py."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Duplicate-priority-sensitive stages routes were intentionally left untouched."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Focused backend lint baseline now covers new blueprint import, route ownership, main.py ownership, and SQLite placeholder checks."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Focused local tests and live route/runtime smoke passed."
+    }
+  ],
+  "commands_run": [
+    "scripts/lint_backend_baseline.sh",
+    "python3 -m py_compile src/main.py src/api/growth_workflow_api.py tests/test_growth_workflow_routes.py",
+    "PYTHONPATH=src python3 -m pytest -q tests/test_growth_workflow_routes.py tests/test_reports_api_routes.py tests/test_security_runtime_config.py tests/test_query_adapter.py",
+    "SMOKE_SINCE=5m SMOKE_LOG_LINES=120 scripts/smoke_runtime.sh server"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/p2-growth-blueprint-20260518/raw/lint.txt",
+    ".agent/tasks/p2-growth-blueprint-20260518/raw/build.txt",
+    ".agent/tasks/p2-growth-blueprint-20260518/raw/test-unit.txt",
+    ".agent/tasks/p2-growth-blueprint-20260518/raw/test-integration.txt",
+    ".agent/tasks/p2-growth-blueprint-20260518/raw/live-route-ownership.txt",
+    ".agent/tasks/p2-growth-blueprint-20260518/raw/live-smoke-runtime.txt"
+  ]
+}

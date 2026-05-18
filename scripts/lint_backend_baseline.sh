@@ -8,18 +8,25 @@ echo "[backend-lint] py_compile focused backend modules"
 python3 -m py_compile \
   src/main.py \
   src/api/reports_api.py \
+  src/api/growth_workflow_api.py \
   src/auth_encryption.py \
   tests/test_reports_api_routes.py \
+  tests/test_growth_workflow_routes.py \
   tests/test_security_runtime_config.py
 
-echo "[backend-lint] import and route smoke"
+echo "[backend-lint] import and route ownership smoke"
 PYTHONPATH=src python3 - <<'PY'
 import main
+import api.growth_workflow_api
+import api.reports_api
 
 rules = {
     "/api/download-report/<card_id>": "reports_api.download_report",
     "/api/view-report/<card_id>": "reports_api.view_report",
     "/api/reports/<card_id>/status": "reports_api.report_status",
+    "/api/progress": "growth_workflow_api.get_business_progress",
+    "/api/business/<business_id>/optimization-wizard": "growth_workflow_api.business_optimization_wizard",
+    "/api/business/<business_id>/sprint": "growth_workflow_api.business_sprint",
 }
 
 for rule, endpoint in rules.items():
@@ -27,7 +34,23 @@ for rule, endpoint in rules.items():
     if actual != endpoint:
         raise SystemExit(f"{rule}: expected {endpoint}, got {actual}")
 
-print("OK: report routes are registered through reports_api")
+print("OK: extracted routes are registered through their API blueprints")
+PY
+
+echo "[backend-lint] growth workflow stays out of main.py"
+python3 - <<'PY'
+from pathlib import Path
+
+main_text = Path("src/main.py").read_text(encoding="utf-8")
+for marker in (
+    "/api/progress",
+    "/api/business/<business_id>/optimization-wizard",
+    "/api/business/<business_id>/sprint",
+):
+    if marker in main_text:
+        raise SystemExit(f"route still owned by main.py: {marker}")
+
+print("OK: growth workflow routes are not declared in main.py")
 PY
 
 echo "[backend-lint] runtime SQL placeholder scan"
@@ -68,4 +91,33 @@ if findings:
     raise SystemExit(1)
 
 print("OK: no direct runtime SQLite ? placeholders outside allowed legacy reports blueprint")
+PY
+
+echo "[backend-lint] growth workflow SQL placeholder scan"
+python3 - <<'PY'
+import ast
+from pathlib import Path
+
+path = Path("src/api/growth_workflow_api.py")
+tree = ast.parse(path.read_text(encoding="utf-8"))
+findings = []
+
+for node in ast.walk(tree):
+    if not isinstance(node, ast.Call):
+        continue
+    func = node.func
+    name = getattr(func, "attr", None) or getattr(func, "id", None)
+    if name not in {"execute", "executemany"} or not node.args:
+        continue
+    arg = node.args[0]
+    value = arg.value if isinstance(arg, ast.Constant) and isinstance(arg.value, str) else None
+    if value and "?" in value:
+        first_line = value.strip().splitlines()[0][:120]
+        findings.append(f"{path}:{node.lineno}: {first_line}")
+
+if findings:
+    print("\n".join(findings))
+    raise SystemExit(1)
+
+print("OK: growth workflow blueprint uses PostgreSQL placeholders")
 PY
