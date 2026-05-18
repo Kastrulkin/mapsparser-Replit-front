@@ -1,0 +1,5 @@
+ALLOWED_ORIGINS=https://localos.pro,https://www.localos.pro,http://localhost:3000,http://127.0.0.1:3000
+RATE_LIMITING_ENABLED=true
+RATE_LIMIT_STORAGE_URI=memory://
+APP_ENV=missing
+EXTERNAL_AUTH_SECRET_KEY=missing

@@ -1,0 +1,75 @@
+{
+  "task_id": "p1-security-smoke-20260518",
+  "overall_status": "FAIL",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Docker runtime passes security env needed by the code.",
+      "status": "PASS",
+      "proof": [
+        "docker-compose.yml",
+        ".agent/tasks/p1-security-smoke-20260518/raw/live-container-env-presence.txt"
+      ],
+      "gaps": [
+        "Live .env still lacks EXTERNAL_AUTH_SECRET_KEY."
+      ]
+    },
+    {
+      "id": "AC2",
+      "text": "CORS live smoke allows https://localos.pro and blocks an unrelated origin.",
+      "status": "PASS",
+      "proof": [
+        ".agent/tasks/p1-security-smoke-20260518/raw/live-security-smoke-after-auth-guard.txt"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Rate limiting live smoke proves login throttling without adjacent false 429.",
+      "status": "PASS",
+      "proof": [
+        ".agent/tasks/p1-security-smoke-20260518/raw/live-security-smoke-after-auth-guard.txt",
+        ".agent/tasks/p1-security-smoke-20260518/raw/live-no-false-429-smoke.txt"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Production secret guard raises when APP_ENV=production and EXTERNAL_AUTH_SECRET_KEY is missing.",
+      "status": "PASS",
+      "proof": [
+        ".agent/tasks/p1-security-smoke-20260518/raw/live-secret-guard-behavior.txt"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Live production secret is present and non-weak.",
+      "status": "FAIL",
+      "proof": [
+        ".agent/tasks/p1-security-smoke-20260518/raw/live-container-env-presence.txt",
+        ".agent/tasks/p1-security-smoke-20260518/raw/live-security-smoke-after-auth-guard.txt",
+        ".agent/tasks/p1-security-smoke-20260518/raw/live-encrypted-auth-count.txt"
+      ],
+      "gaps": [
+        "EXTERNAL_AUTH_SECRET_KEY is missing on live.",
+        "3 encrypted external account records exist, so setting a new secret blindly may break existing credentials."
+      ]
+    }
+  ],
+  "changed_files": [
+    "docker-compose.yml",
+    "scripts/smoke_security_runtime.sh",
+    "tests/test_security_runtime_config.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/main.py src/auth_encryption.py tests/test_security_runtime_config.py",
+    "bash -n scripts/smoke_security_runtime.sh",
+    "PYTHONPATH=src python3 -m pytest -q tests/test_security_runtime_config.py tests/test_query_adapter.py",
+    "scripts/smoke_security_runtime.sh server"
+  ],
+  "known_gaps": [
+    "Live EXTERNAL_AUTH_SECRET_KEY is missing.",
+    "3 encrypted external account records exist; secret rotation/recovery needs user decision."
+  ]
+}

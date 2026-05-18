@@ -1,0 +1,3 @@
+auth_me_attempt=1 status=401
+auth_me_attempt=2 status=401
+auth_me_attempt=3 status=401

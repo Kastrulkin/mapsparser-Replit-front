@@ -26,8 +26,13 @@ services:
       DEBUG_DIR: /app/debug_data
       DATABASE_URL: postgresql://${POSTGRES_USER:-beautybot}:${POSTGRES_PASSWORD:-beautybot}@postgres:5432/${POSTGRES_DB:-beautybot}
       FLASK_APP: src.main:app
+      APP_ENV: ${APP_ENV:-}
       FRONTEND_DIST_DIR: /app/frontend/dist
       PUBLIC_FRONTEND_DIST_DIR: /app/frontend/public-dist
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      RATE_LIMITING_ENABLED: ${RATE_LIMITING_ENABLED:-true}
+      RATE_LIMIT_STORAGE_URI: ${RATE_LIMIT_STORAGE_URI:-memory://}
+      EXTERNAL_AUTH_SECRET_KEY: ${EXTERNAL_AUTH_SECRET_KEY:-}
       POSTGRES_USER: ${POSTGRES_USER:-beautybot}
       POSTGRES_DB: ${POSTGRES_DB:-beautybot}
       PYTHONPATH: /app:/app/src
@@ -99,6 +104,11 @@ services:
       DEBUG_DIR: /app/debug_data
       DATABASE_URL: postgresql://${POSTGRES_USER:-beautybot}:${POSTGRES_PASSWORD:-beautybot}@postgres:5432/${POSTGRES_DB:-beautybot}
       FLASK_APP: src.main:app
+      APP_ENV: ${APP_ENV:-}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      RATE_LIMITING_ENABLED: ${RATE_LIMITING_ENABLED:-true}
+      RATE_LIMIT_STORAGE_URI: ${RATE_LIMIT_STORAGE_URI:-memory://}
+      EXTERNAL_AUTH_SECRET_KEY: ${EXTERNAL_AUTH_SECRET_KEY:-}
       POSTGRES_USER: ${POSTGRES_USER:-beautybot}
       POSTGRES_DB: ${POSTGRES_DB:-beautybot}
       PYTHONPATH: /app:/app/src

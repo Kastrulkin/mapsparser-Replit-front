@@ -1,0 +1,12 @@
+[security] CORS allowed origin: https://localos.pro
+Access-Control-Allow-Origin: https://localos.pro
+[security] CORS blocked origin: https://evil.example
+[security] rate limit /api/auth/login
+attempt=1 status=401
+attempt=2 status=401
+attempt=3 status=401
+attempt=4 status=401
+attempt=5 status=401
+attempt=6 status=429
+[security] production secret presence
+EXTERNAL_AUTH_SECRET_KEY=missing
