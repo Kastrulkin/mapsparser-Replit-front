@@ -27,6 +27,9 @@ rules = {
     "/api/progress": "growth_workflow_api.get_business_progress",
     "/api/business/<business_id>/optimization-wizard": "growth_workflow_api.business_optimization_wizard",
     "/api/business/<business_id>/sprint": "growth_workflow_api.business_sprint",
+    "/api/business/<string:business_id>/stages": "growth_api.get_business_stages",
+    "/api/admin/growth-stages/<type_id>": "admin_growth_api.get_growth_stages",
+    "/api/admin/growth-stages": "admin_growth_api.create_growth_stage",
 }
 
 for rule, endpoint in rules.items():
@@ -37,7 +40,7 @@ for rule, endpoint in rules.items():
 print("OK: extracted routes are registered through their API blueprints")
 PY
 
-echo "[backend-lint] growth workflow stays out of main.py"
+echo "[backend-lint] extracted growth routes stay out of main.py"
 python3 - <<'PY'
 from pathlib import Path
 
@@ -46,11 +49,48 @@ for marker in (
     "/api/progress",
     "/api/business/<business_id>/optimization-wizard",
     "/api/business/<business_id>/sprint",
+    "/api/business/<string:business_id>/stages",
+    "/api/admin/growth-stages/<business_type_id>",
+    "/api/admin/growth-stages",
+    "/api/admin/growth-stages/<stage_id>",
 ):
     if marker in main_text:
         raise SystemExit(f"route still owned by main.py: {marker}")
 
-print("OK: growth workflow routes are not declared in main.py")
+print("OK: extracted growth routes are not declared in main.py")
+PY
+
+echo "[backend-lint] growth stage duplicate route smoke"
+PYTHONPATH=src python3 - <<'PY'
+import main
+
+route_methods = {}
+for rule in main.app.url_map.iter_rules():
+    methods = frozenset(rule.methods - {"HEAD", "OPTIONS"})
+    route_methods[(rule.rule, methods)] = rule.endpoint
+
+expected_methods = {
+    ("/api/admin/growth-stages/<stage_id>", frozenset({"PUT"})): "admin_growth_api.update_growth_stage",
+    ("/api/admin/growth-stages/<stage_id>", frozenset({"DELETE"})): "admin_growth_api.delete_growth_stage",
+}
+
+for key, endpoint in expected_methods.items():
+    actual = route_methods.get(key)
+    if actual != endpoint:
+        raise SystemExit(f"{key}: expected {endpoint}, got {actual}")
+
+stale_main_endpoints = {
+    "get_business_stages",
+    "get_growth_stages",
+    "create_growth_stage",
+    "update_or_delete_growth_stage",
+}
+actual_endpoints = {rule.endpoint for rule in main.app.url_map.iter_rules()}
+stale = stale_main_endpoints.intersection(actual_endpoints)
+if stale:
+    raise SystemExit(f"stale main.py growth endpoints still registered: {sorted(stale)}")
+
+print("OK: growth stage routes have no stale main.py duplicates")
 PY
 
 echo "[backend-lint] runtime SQL placeholder scan"

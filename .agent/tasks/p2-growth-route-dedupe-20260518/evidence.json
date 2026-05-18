@@ -1,0 +1,57 @@
+{
+  "task_id": "p2-growth-route-dedupe-20260518",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Duplicate growth stage handlers are removed from src/main.py.",
+      "status": "PASS",
+      "proof": [
+        "Removed stale get_business_stages, get_growth_stages, create_growth_stage, and update_or_delete_growth_stage handlers from src/main.py."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Active route ownership remains unchanged on growth/admin growth blueprints.",
+      "status": "PASS",
+      "proof": [
+        "raw/test-integration.txt confirms local route ownership.",
+        "raw/live-route-ownership.txt confirms live route ownership."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Backend lint baseline and focused tests guard against stale main.py duplicate endpoints.",
+      "status": "PASS",
+      "proof": [
+        "raw/lint.txt passed.",
+        "tests/test_growth_workflow_routes.py covers stale endpoint absence."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Local checks and live route/runtime smoke pass after deployment.",
+      "status": "PASS",
+      "proof": [
+        "raw/test-unit.txt: 13 passed.",
+        "raw/live-smoke-runtime.txt: app and worker up; root endpoint 200 OK."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/main.py",
+    "scripts/lint_backend_baseline.sh",
+    "tests/test_growth_workflow_routes.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "scripts/lint_backend_baseline.sh",
+    "PYTHONPATH=src python3 -m pytest -q tests/test_growth_workflow_routes.py tests/test_reports_api_routes.py tests/test_security_runtime_config.py tests/test_query_adapter.py"
+  ],
+  "known_gaps": [
+    "api.growth_api and api.admin_growth_api still contain older implementation style; this pass only removed duplicate main.py handlers."
+  ]
+}
