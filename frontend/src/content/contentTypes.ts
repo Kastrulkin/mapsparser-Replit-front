@@ -14,7 +14,7 @@ export type ArticleContent = {
   title: string;
   slug: string;
   excerpt: string;
-  category: "Карты" | "Отзывы" | "Клиенты" | "Кафе" | "Финансы";
+  category: "Карты" | "Отзывы" | "Клиенты" | "Кафе" | "Финансы" | "Бизнес";
   tags: string[];
   publishedAt: string;
   updatedAt: string;
