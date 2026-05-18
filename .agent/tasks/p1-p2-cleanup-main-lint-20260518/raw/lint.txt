@@ -1,0 +1,8 @@
+[backend-lint] py_compile focused backend modules
+[backend-lint] import and route smoke
+✅ Rate limiting включен для чувствительных endpoint'ов
+⚠️  Файл с популярными запросами не найден
+✅ Rate limiting включен для чувствительных endpoint'ов
+OK: report routes are registered through reports_api
+[backend-lint] runtime SQL placeholder scan
+OK: no direct runtime SQLite ? placeholders outside allowed legacy reports blueprint

@@ -1,0 +1,14 @@
+?? .agent/tasks/agent-api-security-20260514/
+?? .agent/tasks/agent-api-security-impl-20260514/
+?? .agent/tasks/average-ticket-module-20260515/
+?? .agent/tasks/finance-stripe-top-20260514/
+?? .agent/tasks/finance-ux-stage1-2-20260512/
+?? .agent/tasks/finance-ux-stage3-4-20260512/
+?? .agent/tasks/finance-ux-stage3-5-20260514/
+?? .agent/tasks/finance-ux-stage5-6-20260512/
+?? .agent/tasks/finance-ux-stage7-8-20260512/
+?? .agent/tasks/finance-ux-stage8-10-20260514/
+?? .agent/tasks/finance-ux-stage9-visuals-20260512/
+?? .agent/tasks/localos-agent-docs-20260514/
+?? .agent/tasks/p1-p2-cleanup-main-lint-20260518/
+?? tmp_docx_work/

@@ -1,0 +1,4 @@
+✅ Rate limiting включен для чувствительных endpoint'ов
+⚠️  Файл с популярными запросами не найден
+✅ Rate limiting включен для чувствительных endpoint'ов
+OK: live report routes are owned by reports_api

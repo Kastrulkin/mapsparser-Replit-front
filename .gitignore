@@ -24,6 +24,7 @@ node_modules/
 *.db-shm
 *.db-wal
 tmp_*.py
+tmp_docx_work/
 data/backups/
 debug_data/
 legacy.sqlite

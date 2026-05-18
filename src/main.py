@@ -106,6 +106,7 @@ from api.admin_prospecting import (
 from api.admin_industry_patterns_api import admin_industry_patterns_bp
 from api.agent_security_api import agent_security_bp
 from api.average_ticket_api import average_ticket_bp
+from api.reports_api import reports_bp
 from core.agent_api_security import log_agent_discovery_event, should_track_discovery_path
 from services.prospecting_service import ProspectingService
 from core.card_audit import build_card_audit_snapshot, build_lead_card_preview_snapshot
@@ -261,6 +262,7 @@ app.register_blueprint(admin_prospecting_bp)
 app.register_blueprint(admin_industry_patterns_bp)
 app.register_blueprint(agent_security_bp)
 app.register_blueprint(average_ticket_bp)
+app.register_blueprint(reports_bp)
 
 # Dev-safeguard: не допускаем дублирования /api/services/list
 try:
@@ -15870,153 +15872,6 @@ def public_contact():
     except Exception as e:
         print(f"❌ Ошибка обработки формы обратной связи: {e}")
         return jsonify({"error": str(e)}), 500
-
-@app.route('/api/download-report/<card_id>', methods=['GET'])
-def download_report(card_id):
-    """
-    Скачивание HTML отчёта по ID карточки
-    """
-    try:
-        from safe_db_utils import get_db_connection
-        # Нормализуем ID
-        normalized_id = card_id.replace('_', '-')
-
-        # Получаем данные карточки из SQLite
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM Cards WHERE id = ?", (normalized_id,))
-        card_data = cursor.fetchone()
-        conn.close()
-
-        if not card_data:
-            return jsonify({"error": "Отчёт не найден"}), 404
-
-        report_path = card_data['report_path']
-
-        if not report_path:
-            return jsonify({"error": "Отчёт ещё не сгенерирован"}), 404
-
-        if not os.path.exists(report_path):
-            return jsonify({"error": "Файл отчёта не найден"}), 404
-
-        # Формируем имя файла для скачивания (только латинские символы)
-        title = card_data['title'] if card_data['title'] else 'report'
-        # Транслитерация русских символов
-        translit_map = {
-            'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'zh', 'з': 'z',
-            'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r',
-            'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch',
-            'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
-            'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'YO', 'Ж': 'ZH', 'З': 'Z',
-            'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M', 'Н': 'N', 'О': 'O', 'П': 'P', 'Р': 'R',
-            'С': 'S', 'Т': 'T', 'У': 'U', 'Ф': 'F', 'Х': 'H', 'Ц': 'TS', 'Ч': 'CH', 'Ш': 'SH', 'Щ': 'SCH',
-            'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'YU', 'Я': 'YA'
-        }
-
-        safe_title = ""
-        for char in title:
-            if char in translit_map:
-                safe_title += translit_map[char]
-            elif char.isalnum() or char in (' ', '-', '_'):
-                safe_title += char
-            else:
-                safe_title += '_'
-
-        safe_title = safe_title.strip().replace(' ', '_')
-        filename = f"seo_report_{safe_title}_{card_id}.html"
-
-        # Читаем содержимое файла
-        with open(report_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-
-        # Создаём ответ с правильными заголовками для скачивания
-        from flask import Response
-        response = Response(content, mimetype='text/html; charset=utf-8')
-        response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
-        response.headers['Content-Type'] = 'text/html; charset=utf-8'
-
-        return response
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/view-report/<card_id>', methods=['GET'])
-def view_report(card_id):
-    """
-    Просмотр HTML отчёта в браузере
-    """
-    try:
-        from safe_db_utils import get_db_connection
-        from flask import Response
-        # Нормализуем ID
-        normalized_id = card_id.replace('_', '-')
-
-        # Получаем данные карточки из SQLite
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM Cards WHERE id = ?", (normalized_id,))
-        card_data = cursor.fetchone()
-        conn.close()
-
-        if not card_data:
-            return jsonify({"error": "Отчёт не найден"}), 404
-
-        report_path = card_data['report_path']
-
-        if not report_path:
-            return jsonify({"error": "Отчёт ещё не сгенерирован"}), 404
-
-        if not os.path.exists(report_path):
-            return jsonify({"error": "Файл отчёта не найден"}), 404
-
-        # Читаем содержимое файла
-        with open(report_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-
-        # Создаём ответ для просмотра в браузере
-        response = Response(content, mimetype='text/html; charset=utf-8')
-        response.headers['Content-Type'] = 'text/html; charset=utf-8'
-        # Разрешаем отображение в iframe для просмотра
-        response.headers['X-Frame-Options'] = 'ALLOWALL'
-
-        return response
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/reports/<card_id>/status', methods=['GET'])
-def report_status(card_id):
-    """
-    Проверка статуса отчёта
-    """
-    try:
-        from safe_db_utils import get_db_connection
-        # Нормализуем ID
-        normalized_id = card_id.replace('_', '-')
-
-        # Получаем данные карточки из SQLite
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM Cards WHERE id = ?", (normalized_id,))
-        card_data = cursor.fetchone()
-        conn.close()
-
-        if not card_data:
-            return jsonify({"error": "Отчёт не найден"}), 404
-
-        return jsonify({
-            "success": True,
-            "card_id": card_id,
-            "title": card_data['title'],
-            "seo_score": card_data['seo_score'],
-            "has_report": bool(card_data['report_path']),
-            "has_ai_analysis": bool(card_data['ai_analysis']),
-            "report_path": card_data['report_path']
-        })
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
 
 _RU_LAT = {
     "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "e", "ж": "zh", "з": "z",

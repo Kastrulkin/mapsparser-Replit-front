@@ -1,0 +1,6 @@
+✅ Rate limiting включен для чувствительных endpoint'ов
+⚠️  Файл с популярными запросами не найден
+✅ Rate limiting включен для чувствительных endpoint'ов
+/api/download-report/<card_id> reports_api.download_report
+/api/view-report/<card_id> reports_api.view_report
+/api/reports/<card_id>/status reports_api.report_status
