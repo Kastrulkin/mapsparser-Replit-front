@@ -1,0 +1,6 @@
+✅ Rate limiting включен для чувствительных endpoint'ов
+⚠️  Файл с популярными запросами не найден
+✅ Rate limiting включен для чувствительных endpoint'ов
+main imported
+YandexSyncService
+growth_api

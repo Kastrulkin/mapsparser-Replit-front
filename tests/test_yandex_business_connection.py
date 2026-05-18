@@ -31,13 +31,15 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 src_path = os.path.join(project_root, 'src')
 sys.path.insert(0, src_path)
 
+import json
+import pytest
+
 from database_manager import DatabaseManager
 from auth_encryption import decrypt_auth_data
 from yandex_business_parser import YandexBusinessParser
-import json
 
 
-def test_business_connection(business_id: str):
+def run_business_connection_check(business_id: str):
     """Тестирует подключение Яндекс.Бизнес для конкретного бизнеса."""
     print(f"=" * 60)
     print(f"🧪 Тест подключения Яндекс.Бизнес для бизнеса: {business_id}")
@@ -60,7 +62,7 @@ def test_business_connection(business_id: str):
             """
             SELECT id, external_id, display_name, auth_data_encrypted, is_active, last_sync_at, last_error
             FROM ExternalBusinessAccounts
-            WHERE business_id = ? AND source = 'yandex_business'
+            WHERE business_id = %s AND source = 'yandex_business'
             """,
             (business_id,),
         )
@@ -214,6 +216,14 @@ def test_business_connection(business_id: str):
         db.close()
 
 
+@pytest.mark.integration
+def test_business_connection_from_env():
+    business_id = os.getenv("YANDEX_TEST_BUSINESS_ID", "").strip()
+    if not business_id:
+        pytest.skip("Set YANDEX_TEST_BUSINESS_ID to run the Yandex Business live connection smoke.")
+    run_business_connection_check(business_id)
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Использование: python src/test_yandex_business_connection.py <business_id>")
@@ -222,5 +232,4 @@ if __name__ == "__main__":
         sys.exit(1)
     
     business_id = sys.argv[1]
-    test_business_connection(business_id)
-
+    run_business_connection_check(business_id)

@@ -418,7 +418,7 @@ def competitor_exists(url: str) -> bool:
     try:
         db = DatabaseManager()
         cur = db.conn.cursor()
-        cur.execute("SELECT id FROM Cards WHERE url = ? LIMIT 1", (url,))
+        cur.execute("SELECT id FROM Cards WHERE url = %s LIMIT 1", (url,))
         row = cur.fetchone()
         db.close()
         return row is not None
@@ -3069,14 +3069,14 @@ def pause_user(user_id):
         cursor.execute("""
             UPDATE Users
             SET is_active = 0, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            WHERE id = %s
         """, (user_id,))
 
         # Деактивируем все бизнесы пользователя
         cursor.execute("""
             UPDATE Businesses
             SET is_active = 0, updated_at = CURRENT_TIMESTAMP
-            WHERE owner_id = ?
+            WHERE owner_id = %s
         """, (user_id,))
 
         db.conn.commit()
@@ -3123,14 +3123,14 @@ def unpause_user(user_id):
         cursor.execute("""
             UPDATE Users
             SET is_active = 1, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            WHERE id = %s
         """, (user_id,))
 
         # Активируем все бизнесы пользователя
         cursor.execute("""
             UPDATE Businesses
             SET is_active = 1, updated_at = CURRENT_TIMESTAMP
-            WHERE owner_id = ?
+            WHERE owner_id = %s
         """, (user_id,))
 
         db.conn.commit()
@@ -11945,7 +11945,7 @@ def _sync_yandex_business_sync_task(sync_id, business_id, account_id):
                             # Проверяем, есть ли уже такая услуга
                             cursor.execute("""
                                 SELECT id FROM UserServices
-                                WHERE business_id = ? AND name = ?
+                                WHERE business_id = %s AND name = %s
                                 LIMIT 1
                             """, (business_id, service["name"]))
                             existing = cursor.fetchone()
@@ -11969,7 +11969,7 @@ def _sync_yandex_business_sync_task(sync_id, business_id, account_id):
                                 service_id = str(uuid.uuid4())
                                 cursor.execute("""
                                     INSERT INTO UserServices (id, user_id, business_id, category, name, description, keywords, price, created_at, updated_at)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                                 """, (
                                     service_id,
                                     user_id,
@@ -11985,8 +11985,8 @@ def _sync_yandex_business_sync_task(sync_id, business_id, account_id):
                                 # Обновляем существующую услугу
                                 cursor.execute("""
                                     UPDATE UserServices
-                                    SET category = ?, description = ?, keywords = ?, price = ?, updated_at = CURRENT_TIMESTAMP
-                                    WHERE business_id = ? AND name = ?
+                                    SET category = %s, description = %s, keywords = %s, price = %s, updated_at = CURRENT_TIMESTAMP
+                                    WHERE business_id = %s AND name = %s
                                 """, (
                                     category,
                                     description,
@@ -12318,7 +12318,7 @@ def get_roi_data():
         # Получаем последние данные ROI
         cursor.execute("""
             SELECT * FROM ROIData
-            WHERE user_id = ?
+            WHERE user_id = %s
             ORDER BY created_at DESC
             LIMIT 1
         """, (user_data['user_id'],))
@@ -12770,10 +12770,10 @@ def update_user_profile():
         db = DatabaseManager()
         cursor = db.conn.cursor()
 
-        set_clause = ', '.join([f"{key} = ?" for key in updates.keys()])
+        set_clause = ', '.join([f"{key} = %s" for key in updates.keys()])
         values = list(updates.values()) + [user['user_id']]
 
-        cursor.execute(f"UPDATE Users SET {set_clause} WHERE id = ?", values)
+        cursor.execute(f"UPDATE Users SET {set_clause} WHERE id = %s", values)
         db.conn.commit()
         db.close()
 
@@ -12867,7 +12867,7 @@ def create_business():
                     try:
                         cursor.execute("""
                             INSERT INTO Users (id, email, name, phone, created_at, is_active, is_verified)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s)
                         """, (
                             owner_id,
                             owner_email,
@@ -13708,7 +13708,7 @@ def get_business_progress():
         cursor.execute("""
             SELECT id, stage_number, title, description, goal, expected_result, duration, is_permanent
             FROM GrowthStages
-            WHERE business_type_id = ?
+            WHERE business_type_id = %s
             ORDER BY stage_number
         """, (business_type_id,))
         stages_rows = cursor.fetchall()
@@ -13722,7 +13722,7 @@ def get_business_progress():
             cursor.execute("""
                 SELECT id, task_number, task_text
                 FROM GrowthTasks
-                WHERE stage_id = ?
+                WHERE stage_id = %s
                 ORDER BY task_number
             """, (stage_id,))
             tasks_rows = cursor.fetchall()
@@ -13890,7 +13890,7 @@ def get_growth_stages(business_type_id):
         cursor.execute("""
             SELECT id, stage_number, title, description, goal, expected_result, duration, is_permanent
             FROM GrowthStages
-            WHERE business_type_id = ?
+            WHERE business_type_id = %s
             ORDER BY stage_number
         """, (business_type_id,))
         stages_rows = cursor.fetchall()
@@ -13902,7 +13902,7 @@ def get_growth_stages(business_type_id):
             cursor.execute("""
                 SELECT id, task_number, task_text
                 FROM GrowthTasks
-                WHERE stage_id = ?
+                WHERE stage_id = %s
                 ORDER BY task_number
             """, (stage_id,))
             tasks_rows = cursor.fetchall()
@@ -13968,7 +13968,7 @@ def create_growth_stage():
         cursor = db.conn.cursor()
         cursor.execute("""
             INSERT INTO GrowthStages (id, business_type_id, stage_number, title, description, goal, expected_result, duration, is_permanent)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (stage_id, business_type_id, stage_number, title, description, goal, expected_result, duration, 1 if is_permanent else 0))
 
         # Добавляем задачи
@@ -13976,7 +13976,7 @@ def create_growth_stage():
             task_id = f"gt_{uuid.uuid4().hex[:12]}"
             cursor.execute("""
                 INSERT INTO GrowthTasks (id, stage_id, task_number, task_text)
-                VALUES (?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s)
             """, (task_id, stage_id, task_idx, task_text.strip()))
 
         db.conn.commit()
@@ -14033,17 +14033,17 @@ def update_or_delete_growth_stage(stage_id):
 
         cursor.execute("""
             UPDATE GrowthStages
-            SET stage_number = ?, title = ?, description = ?, goal = ?, expected_result = ?, duration = ?, is_permanent = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            SET stage_number = %s, title = %s, description = %s, goal = %s, expected_result = %s, duration = %s, is_permanent = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
         """, (stage_number, title, description, goal, expected_result, duration, 1 if is_permanent else 0, stage_id))
 
         # Удаляем старые задачи и добавляем новые
-        cursor.execute("DELETE FROM GrowthTasks WHERE stage_id = ?", (stage_id,))
+        cursor.execute("DELETE FROM GrowthTasks WHERE stage_id = %s", (stage_id,))
         for task_idx, task_text in enumerate(tasks, 1):
             task_id = f"gt_{uuid.uuid4().hex[:12]}"
             cursor.execute("""
                 INSERT INTO GrowthTasks (id, stage_id, task_number, task_text)
-                VALUES (?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s)
             """, (task_id, stage_id, task_idx, task_text.strip()))
 
         db.conn.commit()
@@ -14082,7 +14082,7 @@ def send_business_credentials(business_id):
             SELECT b.*, u.email, u.name as owner_name
             FROM Businesses b
             LEFT JOIN Users u ON b.owner_id = u.id
-            WHERE b.id = ?
+            WHERE b.id = %s
         """, (business_id,))
         business_row = cursor.fetchone()
 
@@ -14696,15 +14696,15 @@ def business_optimization_wizard(business_id):
                 # Обновляем существующую запись
                 cursor.execute("""
                     UPDATE BusinessOptimizationWizard
-                    SET data = ?, completed = 1, updated_at = CURRENT_TIMESTAMP
-                    WHERE business_id = ?
+                    SET data = %s, completed = 1, updated_at = CURRENT_TIMESTAMP
+                    WHERE business_id = %s
                 """, (json.dumps(wizard_data, ensure_ascii=False), business_id))
             else:
                 # Создаем новую запись
                 wizard_id = str(uuid.uuid4())
                 cursor.execute("""
                     INSERT INTO BusinessOptimizationWizard (id, business_id, step, data, completed)
-                    VALUES (?, ?, 3, ?, 1)
+                    VALUES (%s, %s, 3, %s, 1)
                 """, (wizard_id, business_id, json.dumps(wizard_data, ensure_ascii=False)))
 
             db.conn.commit()
@@ -14719,7 +14719,7 @@ def business_optimization_wizard(business_id):
             # Получаем данные мастера
             cursor.execute("""
                 SELECT data, completed FROM BusinessOptimizationWizard
-                WHERE business_id = ?
+                WHERE business_id = %s
                 ORDER BY updated_at DESC
                 LIMIT 1
             """, (business_id,))
@@ -14799,7 +14799,7 @@ def business_sprint(business_id):
             # Получаем данные мастера
             cursor.execute("""
                 SELECT data FROM BusinessOptimizationWizard
-                WHERE business_id = ? AND completed = 1
+                WHERE business_id = %s AND completed = 1
                 ORDER BY updated_at DESC
                 LIMIT 1
             """, (business_id,))
@@ -14886,7 +14886,7 @@ def business_sprint(business_id):
             # Получаем спринт на текущую неделю
             cursor.execute("""
                 SELECT id, tasks, updated_at FROM BusinessSprints
-                WHERE business_id = ? AND week_start = ?
+                WHERE business_id = %s AND week_start = %s
                 ORDER BY updated_at DESC
                 LIMIT 1
             """, (business_id, week_start.isoformat()))

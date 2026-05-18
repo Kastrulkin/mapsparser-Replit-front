@@ -1,0 +1,52 @@
+{
+  "task_id": "p0-p1-runtime-hardening-20260518",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "AST scan found no direct runtime SQLite ? placeholders outside allowed legacy report reads."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Yandex Business check now collects under pytest and skips without YANDEX_TEST_BUSINESS_ID."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "scripts/smoke_runtime.sh exists and passed server mode smoke."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "py_compile, script syntax, import smoke, and targeted pytest checks passed."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Live app/worker restarted, HTTP root returned 200 OK, and live host/container scans confirmed main.py."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/main.py tests/test_yandex_business_connection.py",
+    "bash -n scripts/smoke_runtime.sh",
+    "python3 -m pytest -q tests/test_query_adapter.py tests/test_yandex_business_connection.py",
+    "PYTHONPATH=src import main/YandexSyncService/growth_bp",
+    "AST runtime placeholder scan",
+    "scripts/smoke_runtime.sh local",
+    "server backup and scp of src/main.py and scripts/smoke_runtime.sh",
+    "docker compose restart app worker",
+    "scripts/smoke_runtime.sh server",
+    "live host/container AST placeholder scans"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/p0-p1-runtime-hardening-20260518/raw/build.txt",
+    ".agent/tasks/p0-p1-runtime-hardening-20260518/raw/test-unit.txt",
+    ".agent/tasks/p0-p1-runtime-hardening-20260518/raw/test-integration.txt",
+    ".agent/tasks/p0-p1-runtime-hardening-20260518/raw/lint.txt",
+    ".agent/tasks/p0-p1-runtime-hardening-20260518/raw/live-smoke-runtime-script.txt",
+    ".agent/tasks/p0-p1-runtime-hardening-20260518/raw/live-main-placeholder-scan.txt",
+    ".agent/tasks/p0-p1-runtime-hardening-20260518/raw/live-container-main-placeholder-scan.txt"
+  ]
+}

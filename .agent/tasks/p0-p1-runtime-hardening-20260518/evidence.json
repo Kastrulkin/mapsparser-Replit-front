@@ -1,0 +1,83 @@
+{
+  "task_id": "p0-p1-runtime-hardening-20260518",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Remaining direct runtime SQL calls in src do not use SQLite ? placeholders, excluding explicitly legacy SQLite report reads through safe_db_utils.",
+      "status": "PASS",
+      "proof": [
+        "src/main.py updated",
+        ".agent/tasks/p0-p1-runtime-hardening-20260518/raw/lint.txt"
+      ],
+      "gaps": [
+        "Three legacy report reads intentionally still use ? through safe_db_utils/SQLite."
+      ]
+    },
+    {
+      "id": "AC2",
+      "text": "The Yandex Business connection check no longer breaks pytest collection and remains available as an explicit live smoke.",
+      "status": "PASS",
+      "proof": [
+        "tests/test_yandex_business_connection.py updated",
+        ".agent/tasks/p0-p1-runtime-hardening-20260518/raw/test-unit.txt"
+      ],
+      "gaps": [
+        "YANDEX_TEST_BUSINESS_ID was not provided, so the live Yandex external smoke skipped by design."
+      ]
+    },
+    {
+      "id": "AC3",
+      "text": "A reusable runtime smoke script exists for local and server checks.",
+      "status": "PASS",
+      "proof": [
+        "scripts/smoke_runtime.sh",
+        ".agent/tasks/p0-p1-runtime-hardening-20260518/raw/live-smoke-runtime-script.txt"
+      ],
+      "gaps": [
+        "Local Docker daemon is unavailable in this workstation session."
+      ]
+    },
+    {
+      "id": "AC4",
+      "text": "Local build/import/unit checks pass.",
+      "status": "PASS",
+      "proof": [
+        ".agent/tasks/p0-p1-runtime-hardening-20260518/raw/build.txt",
+        ".agent/tasks/p0-p1-runtime-hardening-20260518/raw/test-unit.txt",
+        ".agent/tasks/p0-p1-runtime-hardening-20260518/raw/test-integration.txt"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Live server receives the backend fix, app/worker restart cleanly, HTTP root returns 200 OK, and live host/container scans confirm the fixed main.py.",
+      "status": "PASS",
+      "proof": [
+        ".agent/tasks/p0-p1-runtime-hardening-20260518/raw/live-backup.txt",
+        ".agent/tasks/p0-p1-runtime-hardening-20260518/raw/live-restart.txt",
+        ".agent/tasks/p0-p1-runtime-hardening-20260518/raw/live-smoke-runtime-script.txt",
+        ".agent/tasks/p0-p1-runtime-hardening-20260518/raw/live-main-placeholder-scan.txt",
+        ".agent/tasks/p0-p1-runtime-hardening-20260518/raw/live-container-main-placeholder-scan.txt"
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/main.py",
+    "tests/test_yandex_business_connection.py",
+    "scripts/smoke_runtime.sh",
+    "pytest.ini"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/main.py tests/test_yandex_business_connection.py",
+    "bash -n scripts/smoke_runtime.sh",
+    "python3 -m pytest -q tests/test_query_adapter.py tests/test_yandex_business_connection.py",
+    "scripts/smoke_runtime.sh server"
+  ],
+  "known_gaps": [
+    "Local Docker daemon is unavailable.",
+    "YANDEX_TEST_BUSINESS_ID was not provided, so live Yandex external smoke skipped by design.",
+    "Legacy report reads through safe_db_utils intentionally still use SQLite placeholders."
+  ]
+}
