@@ -110,7 +110,7 @@ export const articles: ArticleContent[] = [
     ],
     related: [
       {
-        title: "Почему салон с полной записью может работать в минус",
+        title: "Почему полная запись не равно прибыль",
         href: "/articles/pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus",
         label: "Статья",
       },
@@ -127,7 +127,7 @@ export const articles: ArticleContent[] = [
     ],
   },
   {
-    title: "Почему салон с полной записью может работать в минус",
+    title: "Почему полная запись не равно прибыль",
     slug: "pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus",
     excerpt:
       "Полная запись не гарантирует прибыль. Разбираем, почему занятые мастера, скидки и поток клиентов могут скрывать слабую экономику салона.",
@@ -135,7 +135,7 @@ export const articles: ArticleContent[] = [
     tags: ["салон красоты", "прибыль", "средний чек", "повторные визиты", "KPI"],
     publishedAt: "2026-05-18",
     updatedAt: "2026-05-18",
-    seoTitle: "Почему салон с полной записью может работать в минус — LocalOS",
+    seoTitle: "Почему полная запись не равно прибыль — LocalOS",
     seoDescription:
       "Почему полная запись в салоне красоты не означает прибыль: экономика услуг, скидки, повторные визиты, выручка за час кресла и управленческие KPI.",
     draft: false,
