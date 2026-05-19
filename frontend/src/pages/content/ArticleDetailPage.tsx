@@ -70,8 +70,18 @@ const ArticleDetailPage = () => {
         tags={article.tags}
         title={article.title}
       />
-      <main className="px-4 py-14 sm:px-6 lg:px-8">
+      <main className={`px-4 pb-14 sm:px-6 lg:px-8 ${article.coverImage ? "pt-6" : "pt-14"}`}>
         <article className="mx-auto max-w-4xl">
+          {article.coverImage ? (
+            <img
+              alt={article.coverAlt ?? article.title}
+              className="mb-8 h-52 w-full rounded-[20px] object-cover sm:h-80 lg:h-[420px]"
+              height="1024"
+              loading="eager"
+              src={article.coverImage}
+              width="1536"
+            />
+          ) : null}
           <SectionRenderer sections={article.body} />
           <RelatedMaterials items={[...article.related, ...otherArticles]} />
           <BottomCta />

@@ -1,0 +1,85 @@
+{
+  "task_id": "agent-api-onboarding-self-test",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Self-test endpoint validates agent key/status/scopes and writes safe ledger event.",
+      "status": "PASS",
+      "proof": [
+        "src/api/agent_security_api.py adds POST /api/agent-api/self-test.",
+        "src/core/agent_api_security.py adds build_agent_self_test_summary.",
+        "tests/test_agent_api_security.py covers success and missing-key denial."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Docs explain Agent API onboarding flow.",
+      "status": "PASS",
+      "proof": [
+        "docs/api/authentication.md and docs/api/examples.md include self-test and quickstart examples.",
+        "frontend/src/pages/DocsPage.tsx includes Agent onboarding and Sandbox self-test items."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Admin Agent API UI supports quickstart copy, key self-test, and self-test visibility.",
+      "status": "PASS",
+      "proof": [
+        "frontend/src/components/AgentApiManagement.tsx adds onboarding steps, Quickstart copy, self-test input/result, and metrics."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Superadmin morning digest includes self-test observability.",
+      "status": "PASS",
+      "proof": [
+        "src/core/agent_api_security.py build_agent_activity_digest now reports self-tests, auth/scope errors, tested agents and promotion requests.",
+        "src/core/card_automation.py already calls build_agent_activity_digest for superadmins."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "OpenAPI and manifests include self-test safely.",
+      "status": "PASS",
+      "proof": [
+        "frontend/public/localos-agent-openapi.json includes POST /api/agent-api/self-test.",
+        "frontend/public/localos-agent-policy.json and localos-agent-tools.json include self-test metadata.",
+        "JSON manifests validated with python3 -m json.tool."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/api/agent_security_api.py",
+    "src/core/agent_api_security.py",
+    "frontend/src/components/AgentApiManagement.tsx",
+    "frontend/src/pages/DocsPage.tsx",
+    "frontend/public/localos-agent-openapi.json",
+    "frontend/public/localos-agent-policy.json",
+    "frontend/public/localos-agent-tools.json",
+    "frontend/public/localos-agents.txt",
+    "frontend/public/llms.txt",
+    "docs/api/endpoints.md",
+    "docs/api/authentication.md",
+    "docs/api/examples.md",
+    "docs/agents/index.md",
+    "docs/agents/security-model.md",
+    "docs/agents/tool-registry.md",
+    "tests/test_agent_api_security.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m json.tool frontend/public/localos-agent-openapi.json >/dev/null",
+    "python3 -m py_compile src/core/agent_api_security.py src/api/agent_security_api.py src/core/card_automation.py",
+    "venv/bin/python -m pytest -q tests/test_agent_api_security.py",
+    "cd frontend && npm run build"
+  ],
+  "known_gaps": [
+    "Browser visual smoke was not run.",
+    "Changes are not committed or deployed in this turn."
+  ]
+}

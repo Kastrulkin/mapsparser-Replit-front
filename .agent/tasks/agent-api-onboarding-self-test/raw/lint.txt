@@ -1,0 +1,4 @@
+$ python3 -m json.tool frontend/public/localos-agent-openapi.json >/dev/null && python3 -m json.tool frontend/public/localos-agent-policy.json >/dev/null && python3 -m json.tool frontend/public/localos-agent-tools.json >/dev/null
+OK
+$ python3 -m py_compile src/core/agent_api_security.py src/api/agent_security_api.py src/core/card_automation.py
+OK

@@ -19,6 +19,7 @@ export type ArticleContent = {
   publishedAt: string;
   updatedAt: string;
   coverImage?: string;
+  coverAlt?: string;
   seoTitle: string;
   seoDescription: string;
   draft: boolean;

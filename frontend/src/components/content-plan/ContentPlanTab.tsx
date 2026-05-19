@@ -241,7 +241,7 @@ type ItemFilterKey = 'all' | 'urgent' | 'needs_draft' | 'has_draft' | 'news_crea
 type SignalFilterKey = 'all' | ContentMixKey;
 type ViewPresetKey = 'overview' | 'urgent' | 'ready' | 'published' | 'focus' | 'custom';
 type QuickActionKey = 'create_month_plan' | 'open_week' | 'weak_locations' | 'fix_gaps' | 'repeat_template';
-type ContentPlanZone = 'overview' | 'plan' | 'queue' | 'editor';
+type ContentPlanZone = 'overview' | 'plan' | 'queue';
 type ContentPlanMode = 'point' | 'network';
 
 const CONTENT_MIX_OPTIONS: Array<{ key: ContentMixKey; labelRu: string; labelEn: string }> = [
@@ -306,6 +306,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [activeZone, setActiveZone] = useState<ContentPlanZone>('overview');
   const [contentMode, setContentMode] = useState<ContentPlanMode>('point');
   const [selectedQueueItemId, setSelectedQueueItemId] = useState('');
+  const [editorItemId, setEditorItemId] = useState('');
   const [showSelectedItemDetails, setShowSelectedItemDetails] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<Record<string, boolean>>({});
   const [showRecentPlans, setShowRecentPlans] = useState(false);
@@ -409,6 +410,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const selectedQueueItem = useMemo(() => (
     visibleItems.find((item) => item.id === selectedQueueItemId) || visibleItems[0] || null
   ), [selectedQueueItemId, visibleItems]);
+  const editorItem = useMemo(() => (
+    visibleItems.find((item) => item.id === editorItemId)
+    || currentPlan?.items?.find((item) => item.id === editorItemId)
+    || null
+  ), [currentPlan?.items, editorItemId, visibleItems]);
   const itemFilterCounts = useMemo(() => {
     const items = currentPlan?.items || [];
     return ITEM_FILTER_OPTIONS.reduce<Record<ItemFilterKey, number>>((acc, filterKey) => {
@@ -993,11 +999,18 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   useEffect(() => {
     if (visibleItems.length === 0) {
       if (selectedQueueItemId) setSelectedQueueItemId('');
+      if (editorItemId) setEditorItemId('');
       return;
     }
     if (selectedQueueItemId && visibleItems.some((item) => item.id === selectedQueueItemId)) return;
     setSelectedQueueItemId(visibleItems[0].id);
-  }, [selectedQueueItemId, visibleItems]);
+  }, [editorItemId, selectedQueueItemId, visibleItems]);
+
+  useEffect(() => {
+    if (!editorItemId) return;
+    if (visibleItems.some((item) => item.id === editorItemId)) return;
+    setEditorItemId('');
+  }, [editorItemId, visibleItems]);
 
   useEffect(() => {
     setSelectedItemIds((prev) => {
@@ -1943,8 +1956,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const contentPlanZones: Array<{ key: ContentPlanZone; titleRu: string; titleEn: string; hintRu: string; hintEn: string }> = [
     { key: 'overview', titleRu: 'Обзор', titleEn: 'Overview', hintRu: 'Состояние и следующий шаг', hintEn: 'Status and next step' },
     { key: 'plan', titleRu: 'План', titleEn: 'Plan', hintRu: 'Точка, сеть и источники', hintEn: 'Location, network, inputs' },
-    { key: 'queue', titleRu: 'Очередь', titleEn: 'Queue', hintRu: 'Темы без лишних деталей', hintEn: 'Topics without noise' },
-    { key: 'editor', titleRu: 'Редактор', titleEn: 'Editor', hintRu: 'Одна тема до новости', hintEn: 'One topic to news' },
+    { key: 'queue', titleRu: 'Очередь', titleEn: 'Queue', hintRu: 'Темы и редактор в окне', hintEn: 'Topics and modal editor' },
   ];
 
   if (!businessId) {
@@ -1985,7 +1997,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       </div>
 
       <div className="rounded-[28px] border border-slate-200 bg-white p-2 shadow-sm">
-        <div className="grid gap-2 md:grid-cols-4">
+        <div className="grid gap-2 md:grid-cols-3">
           {contentPlanZones.map((zone) => (
             <button
               key={zone.key}
@@ -2685,7 +2697,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
 
       </div>
 
-      <div className={activeZone === 'queue' || activeZone === 'editor' ? 'rounded-2xl border border-slate-200 bg-white p-5 shadow-sm' : 'hidden'}>
+      <div className={activeZone === 'queue' ? 'rounded-2xl border border-slate-200 bg-white p-5 shadow-sm' : 'hidden'}>
         <div className="flex items-center justify-between gap-4">
           <div>
             <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -3517,14 +3529,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
               ) : null}
             </div>
             {visibleItems.length > 0 ? (
-              <div className={activeZone === 'editor' ? 'grid gap-4' : 'grid gap-4 xl:grid-cols-[minmax(280px,0.75fr)_minmax(0,1.35fr)]'}>
-                <div className={activeZone === 'editor' ? 'hidden' : 'rounded-[28px] border border-slate-200 bg-slate-50 p-3'}>
+              <div className="grid gap-4">
+                <div className="rounded-[28px] border border-slate-200 bg-slate-50 p-3">
                   <div className="px-2 pb-3">
                     <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                       {isRu ? 'Очередь тем' : 'Topic queue'}
                     </div>
                     <div className="mt-1 text-sm text-slate-600">
-                      {isRu ? 'Выберите одну тему для работы справа.' : 'Select one item to work on at the right.'}
+                      {isRu ? 'Выберите тему, чтобы открыть редактор в окне.' : 'Select one item to open the editor in a modal.'}
                     </div>
                   </div>
                   <div className="max-h-[680px] space-y-2 overflow-y-auto pr-1">
@@ -3535,11 +3547,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                         <button
                           key={item.id}
                           type="button"
-	                          onClick={() => {
-	                            setSelectedQueueItemId(item.id);
-	                            setShowSelectedItemDetails(false);
-                            setActiveZone('editor');
-	                          }}
+                          onClick={() => {
+                            setSelectedQueueItemId(item.id);
+                            setEditorItemId(item.id);
+                            setShowSelectedItemDetails(false);
+                          }}
                           className={[
                             'w-full rounded-2xl border px-4 py-3 text-left transition-colors',
                             isSelected
@@ -3547,7 +3559,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               : 'border-transparent bg-white/70 hover:border-slate-200 hover:bg-white',
                           ].join(' ')}
                         >
-	                          <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start justify-between gap-3">
                             <span className="flex items-center gap-2">
                               <span
                                 role="checkbox"
@@ -3565,7 +3577,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               >
                                 <CheckSquare className="h-3.5 w-3.5" />
                               </span>
-	                            <span className={status.className}>{status.label}</span>
+                              <span className={status.className}>{status.label}</span>
                             </span>
                             <span className="shrink-0 text-xs font-medium text-slate-400">
                               {_formatPlanItemDate(item.scheduled_for, isRu)}
@@ -3597,8 +3609,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   </div>
                 </div>
 
-                {activeZone === 'editor' && selectedQueueItem ? (() => {
-                  const item = selectedQueueItem;
+                {editorItem ? (() => {
+                  const item = editorItem;
                   const currentDraft = draftEdits[item.id] !== undefined ? draftEdits[item.id] : item.draft_text;
                   const currentTheme = themeEdits[item.id] !== undefined ? themeEdits[item.id] : item.theme;
                   const currentDate = dateEdits[item.id] !== undefined ? dateEdits[item.id] : item.scheduled_for;
@@ -3610,7 +3622,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   const hasDraft = Boolean(String(currentDraft || '').trim());
                   const hasNews = Boolean(String(item.usernews_id || '').trim());
                   return (
-                    <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+                    <div
+                      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm"
+                      onClick={() => setEditorItemId('')}
+                    >
+                      <div
+                        className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-[28px] border border-slate-200 bg-white p-5 shadow-2xl"
+                        onClick={(event) => event.stopPropagation()}
+                      >
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
@@ -3636,6 +3655,13 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           ) : null}
                         </div>
                         <div className="grid min-w-[180px] grid-cols-2 gap-2 text-center text-xs text-slate-500">
+                          <button
+                            type="button"
+                            onClick={() => setEditorItemId('')}
+                            className="col-span-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                          >
+                            {isRu ? 'Закрыть редактор' : 'Close editor'}
+                          </button>
                           <div className="rounded-2xl bg-slate-50 px-3 py-3">
                             <div className="text-sm font-semibold text-slate-950">{_formatPlanItemDate(currentDate, isRu)}</div>
                             <div>{isRu ? 'дата' : 'date'}</div>
@@ -3862,6 +3888,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           </div>
                         </div>
                       ) : null}
+                      </div>
                     </div>
                   );
                 })() : null}
