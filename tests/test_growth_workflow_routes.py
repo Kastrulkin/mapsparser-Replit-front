@@ -46,3 +46,31 @@ def test_growth_stage_routes_are_owned_by_existing_growth_blueprints():
     actual_endpoints = {rule.endpoint for rule in main.app.url_map.iter_rules()}
 
     assert not stale_main_endpoints.intersection(actual_endpoints)
+
+
+def test_admin_business_type_routes_are_owned_by_admin_growth_blueprint():
+    import main
+
+    route_methods = {}
+    for rule in main.app.url_map.iter_rules():
+        methods = frozenset(rule.methods - {"HEAD", "OPTIONS"})
+        route_methods[(rule.rule, methods)] = rule.endpoint
+
+    expected_methods = {
+        ("/api/admin/business-types", frozenset({"GET"})): "admin_growth_api.get_business_types",
+        ("/api/admin/business-types", frozenset({"POST"})): "admin_growth_api.create_business_type",
+        ("/api/admin/business-types/<type_id>", frozenset({"PUT"})): "admin_growth_api.update_business_type",
+        ("/api/admin/business-types/<type_id>", frozenset({"DELETE"})): "admin_growth_api.delete_business_type",
+    }
+
+    for route_method, endpoint in expected_methods.items():
+        assert route_methods.get(route_method) == endpoint
+
+    stale_main_endpoints = {
+        "get_business_types",
+        "create_business_type",
+        "update_or_delete_business_type",
+    }
+    actual_endpoints = {rule.endpoint for rule in main.app.url_map.iter_rules()}
+
+    assert not stale_main_endpoints.intersection(actual_endpoints)

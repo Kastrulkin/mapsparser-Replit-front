@@ -7,6 +7,7 @@ cd "$ROOT_DIR"
 echo "[backend-lint] py_compile focused backend modules"
 python3 -m py_compile \
   src/main.py \
+  src/api/admin_growth_api.py \
   src/api/reports_api.py \
   src/api/growth_workflow_api.py \
   src/auth_encryption.py \
@@ -17,6 +18,7 @@ python3 -m py_compile \
 echo "[backend-lint] import and route ownership smoke"
 PYTHONPATH=src python3 - <<'PY'
 import main
+import api.admin_growth_api
 import api.growth_workflow_api
 import api.reports_api
 
@@ -28,6 +30,8 @@ rules = {
     "/api/business/<business_id>/optimization-wizard": "growth_workflow_api.business_optimization_wizard",
     "/api/business/<business_id>/sprint": "growth_workflow_api.business_sprint",
     "/api/business/<string:business_id>/stages": "growth_api.get_business_stages",
+    "/api/admin/business-types": "admin_growth_api.get_business_types",
+    "/api/admin/business-types/<type_id>": "admin_growth_api.delete_business_type",
     "/api/admin/growth-stages/<type_id>": "admin_growth_api.get_growth_stages",
     "/api/admin/growth-stages": "admin_growth_api.create_growth_stage",
 }
@@ -53,6 +57,8 @@ for marker in (
     "/api/admin/growth-stages/<business_type_id>",
     "/api/admin/growth-stages",
     "/api/admin/growth-stages/<stage_id>",
+    "/api/admin/business-types",
+    "/api/admin/business-types/<type_id>",
 ):
     if marker in main_text:
         raise SystemExit(f"route still owned by main.py: {marker}")
@@ -91,6 +97,40 @@ if stale:
     raise SystemExit(f"stale main.py growth endpoints still registered: {sorted(stale)}")
 
 print("OK: growth stage routes have no stale main.py duplicates")
+PY
+
+echo "[backend-lint] admin business-type duplicate route smoke"
+PYTHONPATH=src python3 - <<'PY'
+import main
+
+route_methods = {}
+for rule in main.app.url_map.iter_rules():
+    methods = frozenset(rule.methods - {"HEAD", "OPTIONS"})
+    route_methods[(rule.rule, methods)] = rule.endpoint
+
+expected_methods = {
+    ("/api/admin/business-types", frozenset({"GET"})): "admin_growth_api.get_business_types",
+    ("/api/admin/business-types", frozenset({"POST"})): "admin_growth_api.create_business_type",
+    ("/api/admin/business-types/<type_id>", frozenset({"PUT"})): "admin_growth_api.update_business_type",
+    ("/api/admin/business-types/<type_id>", frozenset({"DELETE"})): "admin_growth_api.delete_business_type",
+}
+
+for key, endpoint in expected_methods.items():
+    actual = route_methods.get(key)
+    if actual != endpoint:
+        raise SystemExit(f"{key}: expected {endpoint}, got {actual}")
+
+stale_main_endpoints = {
+    "get_business_types",
+    "create_business_type",
+    "update_or_delete_business_type",
+}
+actual_endpoints = {rule.endpoint for rule in main.app.url_map.iter_rules()}
+stale = stale_main_endpoints.intersection(actual_endpoints)
+if stale:
+    raise SystemExit(f"stale main.py admin business-type endpoints still registered: {sorted(stale)}")
+
+print("OK: admin business-type routes have no stale main.py duplicates")
 PY
 
 echo "[backend-lint] runtime SQL placeholder scan"

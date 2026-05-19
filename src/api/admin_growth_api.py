@@ -118,6 +118,51 @@ def delete_business_type(type_id):
         if db:
             db.close()
 
+@admin_growth_bp.route('/api/admin/business-types/<type_id>', methods=['PUT'])
+def update_business_type(type_id):
+    """Update a business type"""
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Требуется авторизация"}), 401
+
+    token = auth_header.split(' ')[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return jsonify({"error": "Недействительный токен"}), 401
+
+    db = None
+    try:
+        db = DatabaseManager()
+        if not db.is_superadmin(user_data['user_id']):
+            return jsonify({"error": "Недостаточно прав"}), 403
+
+        data = request.get_json() or {}
+        label = data.get('label', '').strip()
+        description = data.get('description', '').strip()
+        is_active = data.get('is_active', True)
+
+        if not label:
+            return jsonify({"error": "label обязателен"}), 400
+
+        ensure_growth_schema(db)
+        cursor = db.conn.cursor()
+        cursor.execute("""
+            UPDATE businesstypes
+            SET label = %s, description = %s, is_active = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        """, (label, description, bool(is_active), type_id))
+
+        db.conn.commit()
+
+        return jsonify({"success": True})
+    except Exception:
+        import sys
+        error = sys.exc_info()[1]
+        return jsonify({"error": str(error)}), 500
+    finally:
+        if db:
+            db.close()
+
 # ===== GROWTH STAGES =====
 
 @admin_growth_bp.route('/api/admin/growth-stages/<type_id>', methods=['GET'])
