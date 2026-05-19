@@ -24,6 +24,7 @@ This documentation has two layers:
 - [Agent use cases](agents/use-cases.md)
 - [Approval policy](agents/approval-policy.md)
 - [Agent API security model](agents/security-model.md)
+- [Telegram bot-to-bot security](agents/telegram-bot-to-bot-security.md)
 - [Authentication](api/authentication.md)
 - [API endpoints](api/endpoints.md)
 - [API examples](api/examples.md)

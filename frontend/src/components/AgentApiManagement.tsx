@@ -90,6 +90,7 @@ export const AgentApiManagement = () => {
     allowed_scopes: 'audit:read\nservices:draft\nreviews:draft\ncontent:draft\nfinance:read\npartners:read\napprovals:create\npublish:request',
   });
   const [editingScopes, setEditingScopes] = useState<Record<string, string>>({});
+  const [promotionNotes, setPromotionNotes] = useState<Record<string, string>>({});
   const { toast } = useToast();
 
   const metrics = useMemo(() => {
@@ -219,6 +220,35 @@ export const AgentApiManagement = () => {
       toast({
         title: 'Ошибка rotate key',
         description: error instanceof Error ? error.message : 'Не удалось перевыпустить ключ',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const decidePromotion = async (client: AgentClient, decision: 'approve' | 'reject') => {
+    try {
+      const response = await apiRequest(`/api/agent-api/clients/${client.id}/promotion/decide`, {
+        method: 'POST',
+        body: JSON.stringify({
+          decision,
+          allowed_scopes: parseScopes(editingScopes[client.id] || ''),
+          note: promotionNotes[client.id] || '',
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Не удалось принять решение');
+      }
+      toast({
+        title: decision === 'approve' ? 'Live-доступ выдан' : 'Promotion отклонён',
+        description: 'Решение записано в ledger и отправлено суперадмину в Telegram.',
+      });
+      setPromotionNotes((previous) => ({ ...previous, [client.id]: '' }));
+      loadData();
+    } catch (error) {
+      toast({
+        title: 'Ошибка promotion flow',
+        description: error instanceof Error ? error.message : 'Не удалось принять решение',
         variant: 'destructive',
       });
     }
@@ -358,7 +388,6 @@ export const AgentApiManagement = () => {
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Button size="sm" variant="outline" onClick={() => updateClient(client, 'sandbox')}>Sandbox</Button>
-                      <Button size="sm" variant="outline" onClick={() => updateClient(client, 'live')}>Live</Button>
                       <Button size="sm" variant="outline" onClick={() => updateClient(client, 'suspended')}>Suspend</Button>
                       <Button size="sm" variant="outline" onClick={() => rotateKey(client)}>
                         <KeyRound className="mr-1 h-3.5 w-3.5" />
@@ -376,6 +405,23 @@ export const AgentApiManagement = () => {
                     <Button size="sm" variant="secondary" onClick={() => updateClient(client)}>
                       Сохранить scopes
                     </Button>
+                  </div>
+                  <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <Label>Promotion review</Label>
+                    <Textarea
+                      value={promotionNotes[client.id] || ''}
+                      onChange={(event) => setPromotionNotes((previous) => ({ ...previous, [client.id]: event.target.value }))}
+                      placeholder="Комментарий: кто проверил, почему можно дать live или почему отказали"
+                      className="mt-2 min-h-[70px] bg-white text-sm"
+                    />
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button size="sm" onClick={() => decidePromotion(client, 'approve')}>
+                        Approve live
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => decidePromotion(client, 'reject')}>
+                        Reject
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))

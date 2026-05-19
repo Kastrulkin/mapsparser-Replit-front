@@ -10,6 +10,10 @@ from core.agent_api_security import (
     public_agent_policy,
     should_track_discovery_path,
 )
+from core.telegram_agent_transport import (
+    classify_telegram_sender,
+    should_accept_telegram_agent_message,
+)
 
 
 def test_agent_key_generation_and_hashing_are_stable():
@@ -107,3 +111,27 @@ def test_agent_family_detection_for_known_crawlers():
     assert identify_agent_family("ClaudeBot") == "anthropic"
     assert identify_agent_family("PerplexityBot") == "perplexity"
     assert identify_agent_family("Mozilla/5.0") == "browser_or_unknown"
+
+
+def test_telegram_bot_to_bot_sender_classification_and_guardrails():
+    update = {
+        "message": {
+            "message_id": 10,
+            "from": {"id": 777, "is_bot": True, "username": "PartnerAgentBot"},
+            "chat": {"id": 555},
+        }
+    }
+    sender = classify_telegram_sender(update, local_bot_username="LocalOSBot")
+    assert sender["sender_type"] == "telegram_bot"
+    assert sender["username"] == "PartnerAgentBot"
+
+    denied = should_accept_telegram_agent_message(sender, trusted_bot_usernames=set(), hop_count=0)
+    assert denied["ok"] is False
+    assert denied["code"] == "UNKNOWN_TELEGRAM_BOT"
+
+    allowed = should_accept_telegram_agent_message(sender, trusted_bot_usernames={"partneragentbot"}, hop_count=1)
+    assert allowed["ok"] is True
+
+    loop_block = should_accept_telegram_agent_message(sender, trusted_bot_usernames={"partneragentbot"}, hop_count=4)
+    assert loop_block["ok"] is False
+    assert loop_block["code"] == "BOT_TO_BOT_HOP_LIMIT"

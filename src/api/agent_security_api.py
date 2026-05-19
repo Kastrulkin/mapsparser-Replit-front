@@ -6,6 +6,7 @@ from auth_system import verify_session
 from database_manager import DatabaseManager
 from core.agent_api_security import (
     create_agent_client,
+    decide_agent_client_promotion,
     ensure_agent_security_tables,
     evaluate_agent_access,
     load_agent_client_by_key,
@@ -13,9 +14,11 @@ from core.agent_api_security import (
     mark_agent_seen,
     normalize_risk_level,
     public_agent_policy,
+    request_agent_client_promotion,
     rotate_agent_client_key,
     update_agent_client,
 )
+from core.agent_api_alerts import notify_superadmins_agent_alert
 
 
 agent_security_bp = Blueprint("agent_security_api", __name__)
@@ -66,6 +69,13 @@ def _load_agent_client(cursor):
     if not agent_key:
         return None
     return load_agent_client_by_key(cursor, agent_key)
+
+
+def _notify_agent_alert(cursor, title: str, details: dict | None = None) -> None:
+    try:
+        notify_superadmins_agent_alert(cursor, title, details)
+    except Exception:
+        pass
 
 
 @agent_security_bp.route("/api/agent-api/security/policy", methods=["GET"])
@@ -204,6 +214,15 @@ def update_agent_client_endpoint(client_id: str):
             ip=str(_request_meta().get("ip") or ""),
             user_agent=str(_request_meta().get("user_agent") or ""),
         )
+        _notify_agent_alert(
+            cursor,
+            "Agent client settings changed",
+            {
+                "client_id": client_id,
+                "status": result.get("status"),
+                "reason_code": "SUPERADMIN_UPDATE",
+            },
+        )
         db.conn.commit()
         return jsonify({"success": True, "client": result})
     finally:
@@ -237,6 +256,15 @@ def rotate_agent_client_key_endpoint(client_id: str):
             ip=str(_request_meta().get("ip") or ""),
             user_agent=str(_request_meta().get("user_agent") or ""),
         )
+        _notify_agent_alert(
+            cursor,
+            "Agent key rotated",
+            {
+                "client_id": client_id,
+                "status": result.get("status"),
+                "reason_code": "KEY_ROTATED",
+            },
+        )
         db.conn.commit()
         return jsonify(
             {
@@ -249,6 +277,119 @@ def rotate_agent_client_key_endpoint(client_id: str):
                 },
             }
         )
+    finally:
+        db.close()
+
+
+@agent_security_bp.route("/api/agent-api/clients/promotion/request", methods=["POST", "OPTIONS"])
+def request_agent_client_promotion_endpoint():
+    if request.method == "OPTIONS":
+        return "", 200
+    payload = request.get_json(silent=True) or {}
+    requested_scopes = payload.get("requested_scopes")
+    if requested_scopes is not None and not isinstance(requested_scopes, list):
+        return _json_error("requested_scopes must be an array", 400, "VALIDATION_ERROR")
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    meta = _request_meta()
+    try:
+        client = _load_agent_client(cursor)
+        access = evaluate_agent_access(
+            client,
+            required_scope="approvals:create",
+            risk_level="low",
+            action_type="agent_client_promotion_request",
+        )
+        if not access.get("ok"):
+            log_agent_action(
+                cursor,
+                agent_client_id=str(client.get("id")) if client else None,
+                business_id=None,
+                action_type="agent_client_promotion_request",
+                capability="agent_api.security",
+                required_scope="approvals:create",
+                risk_level="high",
+                input_summary=payload,
+                status="denied",
+                reason_code=str(access.get("code") or "DENIED"),
+                ip=str(meta.get("ip") or ""),
+                user_agent=str(meta.get("user_agent") or ""),
+            )
+            _notify_agent_alert(
+                cursor,
+                "Promotion request denied",
+                {
+                    "client_id": str(client.get("id")) if client else "",
+                    "action_type": "agent_client_promotion_request",
+                    "risk_level": "high",
+                    "status": "denied",
+                    "reason_code": str(access.get("code") or "DENIED"),
+                },
+            )
+            db.conn.commit()
+            return _json_error(str(access.get("reason") or "agent access denied"), int(access.get("http_status") or 403), str(access.get("code") or "DENIED"))
+        mark_agent_seen(cursor, str(client.get("id")))
+        promotion_id = request_agent_client_promotion(
+            cursor,
+            client=client,
+            requested_scopes=requested_scopes,
+            use_case=str(payload.get("use_case") or ""),
+            contact=str(payload.get("contact") or ""),
+        )
+        _notify_agent_alert(
+            cursor,
+            "Agent requested live promotion",
+            {
+                "client": str(client.get("organization_name") or ""),
+                "client_id": str(client.get("id") or ""),
+                "action_type": "agent_client_promotion_request",
+                "risk_level": "high",
+                "status": "pending_human",
+                "approval_id": promotion_id,
+            },
+        )
+        db.conn.commit()
+        return jsonify({"success": True, "promotion_id": promotion_id, "status": "pending_human"})
+    finally:
+        db.close()
+
+
+@agent_security_bp.route("/api/agent-api/clients/<client_id>/promotion/decide", methods=["POST", "OPTIONS"])
+def decide_agent_client_promotion_endpoint(client_id: str):
+    if request.method == "OPTIONS":
+        return "", 200
+    user_data, error_response = _require_superadmin()
+    if error_response:
+        return error_response
+    payload = request.get_json(silent=True) or {}
+    allowed_scopes = payload.get("allowed_scopes")
+    if allowed_scopes is not None and not isinstance(allowed_scopes, list):
+        return _json_error("allowed_scopes must be an array", 400, "VALIDATION_ERROR")
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        result = decide_agent_client_promotion(
+            cursor,
+            client_id=client_id,
+            decision=str(payload.get("decision") or ""),
+            reviewer_user_id=str(user_data.get("user_id") or user_data.get("id") or ""),
+            allowed_scopes=allowed_scopes,
+            note=str(payload.get("note") or ""),
+        )
+        if not result:
+            return _json_error("Agent client not found", 404, "NOT_FOUND")
+        _notify_agent_alert(
+            cursor,
+            "Agent promotion decision",
+            {
+                "client_id": client_id,
+                "decision": result.get("decision"),
+                "status": result.get("status"),
+                "reason_code": "PROMOTION_DECISION",
+            },
+        )
+        db.conn.commit()
+        return jsonify({"success": True, "promotion": result})
     finally:
         db.close()
 
@@ -291,6 +432,18 @@ def agent_approval_request_endpoint():
                 ip=str(meta.get("ip") or ""),
                 user_agent=str(meta.get("user_agent") or ""),
             )
+            _notify_agent_alert(
+                cursor,
+                "Agent action denied",
+                {
+                    "client_id": str(client.get("id")) if client else "",
+                    "action_type": action_type or "approval_request",
+                    "risk_level": risk_level,
+                    "status": "denied",
+                    "reason_code": str(access.get("code") or "DENIED"),
+                    "business_id": business_id,
+                },
+            )
             db.conn.commit()
             return _json_error(str(access.get("reason") or "agent access denied"), int(access.get("http_status") or 403), str(access.get("code") or "DENIED"))
         mark_agent_seen(cursor, str(client.get("id")))
@@ -315,6 +468,20 @@ def agent_approval_request_endpoint():
                 "proposed_output": payload.get("proposed_output"),
             },
         )
+        if risk_level in {"high", "critical"}:
+            _notify_agent_alert(
+                cursor,
+                "High-risk agent approval request",
+                {
+                    "client": str(client.get("organization_name") or ""),
+                    "client_id": str(client.get("id") or ""),
+                    "action_type": action_type,
+                    "risk_level": risk_level,
+                    "status": "pending_human",
+                    "approval_id": approval_id,
+                    "business_id": business_id,
+                },
+            )
         db.conn.commit()
         return jsonify(
             {

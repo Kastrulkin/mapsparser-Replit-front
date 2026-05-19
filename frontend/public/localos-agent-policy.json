@@ -104,6 +104,19 @@
       "no_destructive_actions"
     ]
   },
+  "promotion_flow": {
+    "live_access_requires_human_review": true,
+    "request_endpoint": "POST /api/agent-api/clients/promotion/request",
+    "decision_endpoint": "POST /api/agent-api/clients/{client_id}/promotion/decide",
+    "decision_log": "agent_action_ledger"
+  },
+  "telegram_transport": {
+    "status": "planned_foundation",
+    "trust_chain": "agent_clients -> scopes -> agent_action_ledger -> human approval",
+    "unknown_bots": "deny automation and alert superadmin",
+    "max_bot_to_bot_hops": 3,
+    "max_auto_turns_per_thread": 6
+  },
   "abuse_detection": {
     "signals": [
       "business_id_enumeration",
@@ -166,7 +179,12 @@
     "policy": "GET /api/agent-api/security/policy",
     "create_client": "POST /api/agent-api/clients",
     "list_clients": "GET /api/agent-api/clients",
+    "update_client": "PATCH /api/agent-api/clients/{client_id}",
+    "rotate_key": "POST /api/agent-api/clients/{client_id}/rotate-key",
+    "request_promotion": "POST /api/agent-api/clients/promotion/request",
+    "decide_promotion": "POST /api/agent-api/clients/{client_id}/promotion/decide",
     "request_approval": "POST /api/agent-api/approvals/request",
-    "ledger": "GET /api/agent-api/ledger"
+    "ledger": "GET /api/agent-api/ledger",
+    "discovery": "GET /api/agent-api/discovery"
   }
 }

@@ -510,6 +510,122 @@ def rotate_agent_client_key(cursor, client_id: str) -> dict[str, Any] | None:
     }
 
 
+def request_agent_client_promotion(
+    cursor,
+    *,
+    client: dict[str, Any],
+    requested_scopes: list[str] | None = None,
+    use_case: str = "",
+    contact: str = "",
+) -> str:
+    scopes = [normalize_scope(item) for item in (requested_scopes or []) if normalize_scope(item)]
+    return log_agent_action(
+        cursor,
+        agent_client_id=str(client.get("id") or ""),
+        business_id=None,
+        action_type="agent_client_promotion_request",
+        capability="agent_api.security",
+        required_scope="approvals:create",
+        risk_level="high",
+        input_summary={
+            "requested_scopes": scopes,
+            "use_case": str(use_case or "").strip(),
+            "contact": str(contact or "").strip(),
+        },
+        status="pending_human",
+        reason_code="PROMOTION_REVIEW_REQUIRED",
+        metadata={
+            "current_status": str(client.get("status") or ""),
+            "organization_name": str(client.get("organization_name") or ""),
+        },
+    )
+
+
+def decide_agent_client_promotion(
+    cursor,
+    *,
+    client_id: str,
+    decision: str,
+    reviewer_user_id: str,
+    allowed_scopes: list[str] | None = None,
+    note: str = "",
+) -> dict[str, Any] | None:
+    normalized_decision = str(decision or "").strip().lower()
+    if normalized_decision not in {"approve", "reject"}:
+        normalized_decision = "reject"
+    cursor.execute(
+        """
+        SELECT id, organization_name, contact_email, status, allowed_scopes, rate_limits, metadata_json
+        FROM agent_clients
+        WHERE id = %s
+        LIMIT 1
+        """,
+        (str(client_id or "").strip(),),
+    )
+    existing = _cursor_row_to_dict(cursor, cursor.fetchone())
+    if not existing:
+        return None
+    scopes = [normalize_scope(item) for item in (allowed_scopes or _to_json(existing.get("allowed_scopes"), [])) if normalize_scope(item)]
+    if normalized_decision == "approve":
+        update_agent_client(
+            cursor,
+            client_id=client_id,
+            status="live",
+            allowed_scopes=scopes,
+            metadata={
+                "promotion_decision": "approved",
+                "promotion_reviewed_by": str(reviewer_user_id or ""),
+                "promotion_note": str(note or "").strip(),
+                "promotion_reviewed_at": utcnow_iso(),
+            },
+        )
+        status = "completed"
+        reason_code = "PROMOTION_APPROVED"
+        final_status = "live"
+    else:
+        update_agent_client(
+            cursor,
+            client_id=client_id,
+            metadata={
+                "promotion_decision": "rejected",
+                "promotion_reviewed_by": str(reviewer_user_id or ""),
+                "promotion_note": str(note or "").strip(),
+                "promotion_reviewed_at": utcnow_iso(),
+            },
+        )
+        status = "rejected"
+        reason_code = "PROMOTION_REJECTED"
+        final_status = str(existing.get("status") or "sandbox")
+    ledger_id = log_agent_action(
+        cursor,
+        agent_client_id=str(client_id or "").strip(),
+        business_id=None,
+        action_type=f"agent_client_promotion_{normalized_decision}",
+        capability="agent_api.security",
+        required_scope="superadmin",
+        risk_level="high",
+        input_summary={
+            "decision": normalized_decision,
+            "allowed_scopes": scopes,
+            "note": str(note or "").strip(),
+        },
+        status=status,
+        reason_code=reason_code,
+        metadata={
+            "reviewer_user_id": str(reviewer_user_id or ""),
+            "previous_status": str(existing.get("status") or ""),
+            "final_status": final_status,
+        },
+    )
+    return {
+        "client_id": str(client_id or "").strip(),
+        "decision": normalized_decision,
+        "status": final_status,
+        "allowed_scopes": scopes,
+        "ledger_id": ledger_id,
+    }
+
+
 def load_agent_client_by_key(cursor, agent_key: str) -> dict[str, Any] | None:
     key_hash = hash_agent_key(agent_key)
     ensure_agent_security_tables(cursor)
@@ -651,4 +767,15 @@ def public_agent_policy() -> dict[str, Any]:
         "risk_levels": sorted(RISK_LEVELS),
         "new_client_default_status": "sandbox",
         "approval_required_risks": sorted(APPROVAL_REQUIRED_RISKS),
+        "promotion_flow": {
+            "request_endpoint": "/api/agent-api/clients/promotion/request",
+            "decision_endpoint": "/api/agent-api/clients/{client_id}/promotion/decide",
+            "live_access_requires_human_review": True,
+        },
+        "telegram_transport": {
+            "status": "planned_foundation",
+            "trust_chain": "agent_clients -> scopes -> agent_action_ledger -> human approval",
+            "unknown_bots": "deny automation and alert superadmin",
+            "max_bot_to_bot_hops": 3,
+        },
     }

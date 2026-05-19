@@ -185,6 +185,7 @@ Implemented foundation:
 - superadmin ledger view;
 - 24-hour agent activity summary in the superadmin morning Telegram digest;
 - machine-readable `/localos-agent-policy.json`.
+- Telegram bot-to-bot security foundation: sender classification and routing plan in [Telegram Bot-to-Bot Security](telegram-bot-to-bot-security.md).
 
 Still planned:
 
