@@ -110,6 +110,11 @@
     "decision_endpoint": "POST /api/agent-api/clients/{client_id}/promotion/decide",
     "decision_log": "agent_action_ledger"
   },
+  "onboarding": {
+    "self_test_endpoint": "POST /api/agent-api/self-test",
+    "self_test_writes_ledger": true,
+    "self_test_side_effect": "safe internal ledger record only"
+  },
   "telegram_transport": {
     "status": "foundation_with_binding_ledger_alerts",
     "trust_chain": "agent_clients -> scopes -> agent_action_ledger -> human approval",
@@ -185,6 +190,7 @@
     "request_promotion": "POST /api/agent-api/clients/promotion/request",
     "decide_promotion": "POST /api/agent-api/clients/{client_id}/promotion/decide",
     "telegram_binding_lookup": "POST /api/agent-api/clients/telegram-binding/lookup",
+    "self_test": "POST /api/agent-api/self-test",
     "request_approval": "POST /api/agent-api/approvals/request",
     "ledger": "GET /api/agent-api/ledger",
     "discovery": "GET /api/agent-api/discovery"

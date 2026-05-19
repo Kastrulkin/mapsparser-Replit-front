@@ -101,6 +101,59 @@ curl -s -X POST "https://localos.pro/api/finance/import-preview" \
 
 Agent rule: preview first, ask approval, then import.
 
+## Agent API Quickstart
+
+Read policy:
+
+```bash
+curl -s "https://localos.pro/api/agent-api/security/policy"
+```
+
+Run sandbox self-test:
+
+```bash
+curl -s -X POST "https://localos.pro/api/agent-api/self-test" \
+  -H "X-LocalOS-Agent-Key: $LOCALOS_AGENT_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "purpose": "sandbox onboarding",
+    "checks": ["auth", "scopes", "ledger"]
+  }'
+```
+
+Create a test approval request:
+
+```bash
+curl -s -X POST "https://localos.pro/api/agent-api/approvals/request" \
+  -H "X-LocalOS-Agent-Key: $LOCALOS_AGENT_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action_type": "test_publish_review_reply",
+    "capability": "reviews.reply.publish",
+    "risk_level": "high",
+    "requested_scope": "publish:request",
+    "input_summary": {
+      "source": "sandbox quickstart"
+    },
+    "proposed_output": "Test approval request only."
+  }'
+```
+
+Request live promotion:
+
+```bash
+curl -s -X POST "https://localos.pro/api/agent-api/clients/promotion/request" \
+  -H "X-LocalOS-Agent-Key: $LOCALOS_AGENT_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "requested_scopes": ["audit:read", "reviews:draft", "approvals:create"],
+    "use_case": "Read audits and draft review replies under human approval.",
+    "contact": "ops@example.com"
+  }'
+```
+
+Superadmin can confirm the flow in `GET /api/agent-api/ledger`.
+
 ## Partnership Draft Offer
 
 ```bash

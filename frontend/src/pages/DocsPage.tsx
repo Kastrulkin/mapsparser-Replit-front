@@ -99,8 +99,8 @@ const sections: DocSection[] = [
       },
       {
         title: "Публичный MCP-контракт",
-        text: "Отдельный публичный MCP/API-контракт для внешних агентов ещё не оформлен. Используйте docs как карту возможностей, а не как готовый SDK.",
-        status: "gap",
+        text: "MCP-сервер ещё не оформлен. Минимальный OpenAPI contract для Agent API security уже есть, но продуктовые workflow пока не являются полноценным публичным SDK.",
+        status: "planned/gap",
       },
     ],
   },
@@ -185,6 +185,16 @@ const sections: DocSection[] = [
         title: "External integrations",
         text: "Карты, Telegram и подготовка CRM adapter layer присутствуют. Подключение новых внешних систем требует настройки и проверки контракта.",
         status: "beta",
+      },
+      {
+        title: "Agent onboarding",
+        text: "Минимальный путь подключения: sandbox client, agent_key, self-test, тестовый approval request и проверка события в ledger.",
+        status: "beta/internal",
+      },
+      {
+        title: "Sandbox self-test",
+        text: "POST /api/agent-api/self-test проверяет ключ, статус и scopes агента, возвращает доступные безопасные действия и пишет test-событие в ledger.",
+        status: "beta/internal",
       },
     ],
   },

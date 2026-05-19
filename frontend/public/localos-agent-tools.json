@@ -104,6 +104,18 @@
       "limits": ["Sending outreach is not allowed without approval."]
     },
     {
+      "name": "agent.self_test",
+      "status": "beta/internal",
+      "risk_class": "write_internal",
+      "required_scope": "none",
+      "approval_required": false,
+      "endpoint": "POST /api/agent-api/self-test",
+      "purpose": "Validate an agent key, status and scopes, then write a safe self-test ledger record.",
+      "inputs": ["X-LocalOS-Agent-Key", "purpose optional", "checks optional"],
+      "outputs": ["self_test", "ledger_id"],
+      "limits": ["Does not execute business actions.", "Does not grant live access."]
+    },
+    {
       "name": "approval.request.create",
       "status": "beta/internal",
       "risk_class": "write_internal",

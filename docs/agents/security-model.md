@@ -182,6 +182,7 @@ Implemented foundation:
 - superadmin UI for agent clients, scopes, status, key rotation, ledger and discovery events;
 - direct blocking for dangerous actions;
 - pending human approval request endpoint;
+- sandbox self-test endpoint that validates agent key/status/scopes and writes a safe ledger record;
 - superadmin ledger view;
 - 24-hour agent activity summary in the superadmin morning Telegram digest;
 - machine-readable `/localos-agent-policy.json`.

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Bot, KeyRound, RefreshCcw, ShieldCheck, Terminal, Activity } from 'lucide-react';
+import { AlertTriangle, Bot, CheckCircle2, Copy, KeyRound, RefreshCcw, ShieldCheck, Terminal, Activity } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
@@ -70,6 +70,25 @@ interface DiscoverySummary {
   api_hits?: number;
 }
 
+interface SelfTestResult {
+  ledger_id?: string;
+  self_test?: {
+    client?: {
+      client_id?: string;
+      organization_name?: string;
+      status?: string;
+      allowed_scopes?: string[];
+    };
+    available?: {
+      read_scopes?: string[];
+      draft_scopes?: string[];
+      can_create_approval_request?: boolean;
+      can_request_publish_approval?: boolean;
+    };
+    next_steps?: string[];
+  };
+}
+
 const statusLabels: Record<string, string> = {
   sandbox: 'Sandbox',
   live: 'Live',
@@ -131,6 +150,9 @@ export const AgentApiManagement = () => {
   const [editingScopes, setEditingScopes] = useState<Record<string, string>>({});
   const [telegramBindings, setTelegramBindings] = useState<Record<string, { username: string; botId: string }>>({});
   const [promotionNotes, setPromotionNotes] = useState<Record<string, string>>({});
+  const [selfTestKey, setSelfTestKey] = useState('');
+  const [selfTestResult, setSelfTestResult] = useState<SelfTestResult | null>(null);
+  const [ledgerFilter, setLedgerFilter] = useState<'all' | 'self_test'>('all');
   const { toast } = useToast();
 
   const metrics = useMemo(() => {
@@ -139,7 +161,9 @@ export const AgentApiManagement = () => {
     const suspended = clients.filter((client) => client.status === 'suspended').length;
     const pending = ledger.filter((item) => item.status === 'pending_human').length;
     const denied = ledger.filter((item) => item.status === 'denied').length;
-    return { live, sandbox, suspended, pending, denied };
+    const selfTests = ledger.filter((item) => item.action_type === 'agent_api_self_test').length;
+    const promotionRequests = ledger.filter((item) => item.action_type === 'agent_client_promotion_request').length;
+    return { live, sandbox, suspended, pending, denied, selfTests, promotionRequests };
   }, [clients, ledger]);
 
   const telegramEvents = useMemo(
@@ -153,6 +177,13 @@ export const AgentApiManagement = () => {
     const sandbox = telegramEvents.filter((item) => item.reason_code === 'TELEGRAM_AGENT_TRANSPORT_SANDBOX').length;
     return { total: telegramEvents.length, unbound, blocked, sandbox };
   }, [telegramEvents]);
+
+  const visibleLedger = useMemo(() => {
+    if (ledgerFilter === 'self_test') {
+      return ledger.filter((item) => item.action_type === 'agent_api_self_test');
+    }
+    return ledger;
+  }, [ledger, ledgerFilter]);
 
   const apiRequest = async (url: string, options?: RequestInit) => {
     const token = await newAuth.getToken();
@@ -217,6 +248,73 @@ export const AgentApiManagement = () => {
       .split(/\n|,/)
       .map((item) => item.trim().toLowerCase())
       .filter(Boolean);
+
+  const buildQuickstart = (agentKey = '$LOCALOS_AGENT_KEY') => `# LocalOS Agent API quickstart
+
+curl -s "https://localos.pro/api/agent-api/security/policy"
+
+curl -s -X POST "https://localos.pro/api/agent-api/self-test" \\
+  -H "X-LocalOS-Agent-Key: ${agentKey}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"purpose":"sandbox onboarding","checks":["auth","scopes","ledger"]}'
+
+curl -s -X POST "https://localos.pro/api/agent-api/approvals/request" \\
+  -H "X-LocalOS-Agent-Key: ${agentKey}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"action_type":"test_publish_review_reply","capability":"reviews.reply.publish","risk_level":"high","requested_scope":"publish:request","input_summary":{"source":"sandbox quickstart"},"proposed_output":"Test approval request only."}'
+
+curl -s -X POST "https://localos.pro/api/agent-api/clients/promotion/request" \\
+  -H "X-LocalOS-Agent-Key: ${agentKey}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"requested_scopes":["audit:read","reviews:draft","approvals:create"],"use_case":"Read audits and draft review replies under human approval.","contact":"ops@example.com"}'
+`;
+
+  const copyQuickstart = async (agentKey = '') => {
+    try {
+      await navigator.clipboard.writeText(buildQuickstart(agentKey || '$LOCALOS_AGENT_KEY'));
+      toast({ title: 'Quickstart скопирован', description: 'Вставьте agent_key перед отправкой внешнему агенту.' });
+    } catch (error) {
+      toast({
+        title: 'Не удалось скопировать',
+        description: error instanceof Error ? error.message : 'Скопируйте quickstart вручную',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const runSelfTest = async () => {
+    const key = selfTestKey.trim();
+    if (!key) {
+      toast({ title: 'Нужен agent_key', description: 'Вставьте ключ sandbox/live клиента.', variant: 'destructive' });
+      return;
+    }
+    try {
+      const response = await fetch('/api/agent-api/self-test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-LocalOS-Agent-Key': key,
+        },
+        body: JSON.stringify({
+          purpose: 'admin sandbox onboarding self-test',
+          checks: ['auth', 'scopes', 'ledger'],
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Self-test failed');
+      }
+      setSelfTestResult(data);
+      toast({ title: 'Self-test прошёл', description: 'Событие записано в ledger.' });
+      loadData();
+    } catch (error) {
+      toast({
+        title: 'Self-test не прошёл',
+        description: error instanceof Error ? error.message : 'Проверьте ключ и статус клиента',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const createClient = async () => {
     try {
@@ -366,10 +464,67 @@ export const AgentApiManagement = () => {
           <CardContent className="p-4">
             <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Approval</div>
             <div className="mt-2 text-2xl font-semibold text-slate-950">{metrics.pending}</div>
-            <div className="mt-1 text-xs text-slate-500">отказов {metrics.denied}</div>
+            <div className="mt-1 text-xs text-slate-500">self-test {metrics.selfTests} · promotion {metrics.promotionRequests}</div>
           </CardContent>
         </Card>
       </div>
+
+      <Card className="rounded-2xl border-slate-200 shadow-none">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CheckCircle2 className="h-5 w-5" />
+            Как подключить агента
+          </CardTitle>
+          <CardDescription>
+            Минимальный безопасный flow: sandbox client → agent_key → self-test → test approval request → ledger.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+          <div className="grid gap-3 sm:grid-cols-5">
+            {[
+              'Создать sandbox client',
+              'Сохранить agent_key',
+              'Вызвать security policy',
+              'Сделать test approval',
+              'Проверить ledger',
+            ].map((step, index) => (
+              <div key={step} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Шаг {index + 1}</div>
+                <div className="mt-1 text-sm font-medium text-slate-900">{step}</div>
+              </div>
+            ))}
+          </div>
+          <div className="space-y-3 rounded-2xl border border-slate-200 p-4">
+            <div className="grid gap-2 md:grid-cols-[1fr_auto_auto]">
+              <Input
+                value={selfTestKey}
+                onChange={(event) => setSelfTestKey(event.target.value)}
+                placeholder="Вставьте agent_key для self-test"
+              />
+              <Button variant="outline" onClick={() => copyQuickstart(selfTestKey)}>
+                <Copy className="mr-2 h-4 w-4" />
+                Quickstart
+              </Button>
+              <Button onClick={runSelfTest}>Проверить ключ</Button>
+            </div>
+            {selfTestResult ? (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950">
+                <div className="font-semibold">
+                  {selfTestResult.self_test?.client?.organization_name || 'Agent'} · {selfTestResult.self_test?.client?.status || 'status'}
+                </div>
+                <div className="mt-1">
+                  Scopes: {(selfTestResult.self_test?.client?.allowed_scopes || []).join(', ') || 'нет'}
+                </div>
+                <div className="mt-1 text-emerald-800">Ledger: {selfTestResult.ledger_id || 'записан'}</div>
+              </div>
+            ) : (
+              <div className="text-sm text-slate-500">
+                Self-test безопасен: он только проверяет ключ и пишет служебную запись в ledger.
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="rounded-2xl border-slate-200 shadow-none">
         <CardHeader>
@@ -541,6 +696,10 @@ export const AgentApiManagement = () => {
                         <KeyRound className="mr-1 h-3.5 w-3.5" />
                         Rotate
                       </Button>
+                      <Button size="sm" variant="outline" onClick={() => copyQuickstart()}>
+                        <Copy className="mr-1 h-3.5 w-3.5" />
+                        Quickstart
+                      </Button>
                     </div>
                   </div>
                   <div className="mt-4 space-y-2">
@@ -631,19 +790,31 @@ export const AgentApiManagement = () => {
 
       <Card className="rounded-2xl border-slate-200 shadow-none">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Terminal className="h-5 w-5" />
-            Action ledger
-          </CardTitle>
-          <CardDescription>Последние approval requests, denied и служебные действия суперадмина.</CardDescription>
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Terminal className="h-5 w-5" />
+                Action ledger
+              </CardTitle>
+              <CardDescription>Последние approval requests, denied, self-test и служебные действия суперадмина.</CardDescription>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant={ledgerFilter === 'all' ? 'default' : 'outline'} onClick={() => setLedgerFilter('all')}>
+                Все события
+              </Button>
+              <Button size="sm" variant={ledgerFilter === 'self_test' ? 'default' : 'outline'} onClick={() => setLedgerFilter('self_test')}>
+                Последние self-test
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-2">
-          {ledger.length === 0 ? (
+          {visibleLedger.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-              Ledger пока пуст.
+              {ledgerFilter === 'self_test' ? 'Self-test событий пока нет.' : 'Ledger пока пуст.'}
             </div>
           ) : (
-            ledger.slice(0, 30).map((item) => (
+            visibleLedger.slice(0, 30).map((item) => (
               <div key={item.id} className="grid gap-3 rounded-2xl border border-slate-200 p-3 text-sm md:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr]">
                 <div>
                   <div className="font-medium text-slate-950">{item.action_type}</div>

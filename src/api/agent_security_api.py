@@ -10,6 +10,7 @@ from core.agent_api_security import (
     ensure_agent_security_tables,
     evaluate_agent_access,
     find_agent_client_by_telegram_sender,
+    build_agent_self_test_summary,
     load_agent_client_by_key,
     log_agent_action,
     mark_agent_seen,
@@ -407,6 +408,77 @@ def request_agent_client_promotion_endpoint():
         )
         db.conn.commit()
         return jsonify({"success": True, "promotion_id": promotion_id, "status": "pending_human"})
+    finally:
+        db.close()
+
+
+@agent_security_bp.route("/api/agent-api/self-test", methods=["POST", "OPTIONS"])
+def agent_self_test_endpoint():
+    if request.method == "OPTIONS":
+        return "", 200
+    payload = request.get_json(silent=True) or {}
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    meta = _request_meta()
+    try:
+        client = _load_agent_client(cursor)
+        access = evaluate_agent_access(
+            client,
+            required_scope="",
+            risk_level="low",
+            action_type="agent_api_self_test",
+        )
+        if not access.get("ok"):
+            log_agent_action(
+                cursor,
+                agent_client_id=str(client.get("id")) if client else None,
+                business_id=None,
+                action_type="agent_api_self_test",
+                capability="agent_api.onboarding",
+                required_scope=None,
+                risk_level="low",
+                input_summary={
+                    "purpose": str(payload.get("purpose") or "sandbox_self_test")[:120],
+                    "has_key": bool(_agent_key_from_request()),
+                },
+                status="denied",
+                reason_code=str(access.get("code") or "DENIED"),
+                ip=str(meta.get("ip") or ""),
+                user_agent=str(meta.get("user_agent") or ""),
+            )
+            db.conn.commit()
+            return _json_error(
+                str(access.get("reason") or "agent access denied"),
+                int(access.get("http_status") or 403),
+                str(access.get("code") or "DENIED"),
+            )
+        mark_agent_seen(cursor, str(client.get("id")))
+        summary = build_agent_self_test_summary(client, access)
+        ledger_id = log_agent_action(
+            cursor,
+            agent_client_id=str(client.get("id")),
+            business_id=None,
+            action_type="agent_api_self_test",
+            capability="agent_api.onboarding",
+            required_scope=None,
+            risk_level="low",
+            input_summary={
+                "purpose": str(payload.get("purpose") or "sandbox_self_test")[:120],
+                "requested_checks": payload.get("checks") if isinstance(payload.get("checks"), list) else [],
+            },
+            output_summary={
+                "status": summary.get("client", {}).get("status"),
+                "scopes": summary.get("client", {}).get("allowed_scopes"),
+                "can_create_approval_request": summary.get("available", {}).get("can_create_approval_request"),
+            },
+            status="completed",
+            reason_code="SELF_TEST_OK",
+            ip=str(meta.get("ip") or ""),
+            user_agent=str(meta.get("user_agent") or ""),
+            metadata={"onboarding_step": "self_test"},
+        )
+        db.conn.commit()
+        return jsonify({"success": True, "self_test": summary, "ledger_id": ledger_id})
     finally:
         db.close()
 

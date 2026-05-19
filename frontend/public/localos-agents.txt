@@ -37,6 +37,7 @@ Security model:
 - suspicious behavior should cause rate limits, cooldown, manual review or suspension;
 - every call should be traceable in an action ledger.
 - current foundation includes /api/agent-api/security/policy, sandbox agent_clients, approval request recording and agent_action_ledger.
+- onboarding self-test is available at POST /api/agent-api/self-test. It validates the agent key, returns status/scopes and writes a safe ledger record.
 
 Capabilities:
 1. Listing audit - available.

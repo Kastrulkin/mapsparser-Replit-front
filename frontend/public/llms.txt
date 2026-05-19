@@ -46,6 +46,7 @@ Agent API security:
 - every agent action should leave an audit trail.
 - current foundation includes agent_clients, scoped keys, approval request ledger and superadmin ledger view.
 - minimal Agent API OpenAPI contract is available at https://localos.pro/localos-agent-openapi.json.
+- sandbox onboarding self-test is available at POST https://localos.pro/api/agent-api/self-test.
 
 Agents should:
 - use LocalOS docs as a capability map;

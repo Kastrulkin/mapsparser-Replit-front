@@ -60,7 +60,8 @@ Preferred public Agent API flow:
 - revocation, cooldown, and suspension;
 - action ledger and approval trace.
 
-Status: `gap` for a complete public agent-token system.
+Status: `beta/internal` for the current Agent API security foundation; `gap` for a complete public product-wide agent-token system.
+The minimal contract is published at `/localos-agent-openapi.json`.
 
 See also [Agent API Security Model](../agents/security-model.md).
 
@@ -96,3 +97,24 @@ Current behavior:
 - scopes are checked before agent actions;
 - denied attempts are written to `agent_action_ledger`;
 - high-risk direct actions are blocked and should be represented as approval requests.
+
+## Agent Self-Test
+
+After a sandbox client receives `agent_key`, run:
+
+```bash
+curl -s -X POST "https://localos.pro/api/agent-api/self-test" \
+  -H "X-LocalOS-Agent-Key: $LOCALOS_AGENT_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "purpose": "sandbox onboarding",
+    "checks": ["auth", "scopes", "ledger"]
+  }'
+```
+
+Expected result:
+
+- key is valid or rejected with a structured error;
+- status and allowed scopes are returned;
+- a safe `agent_api_self_test` event appears in `agent_action_ledger`;
+- no business action is executed.

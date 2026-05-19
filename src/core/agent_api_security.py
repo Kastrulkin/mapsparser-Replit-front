@@ -41,6 +41,8 @@ TRACKED_DISCOVERY_FILES = {
     "/llms.txt",
     "/localos-agents.txt",
     "/localos-agent-policy.json",
+    "/localos-agent-tools.json",
+    "/localos-agent-openapi.json",
 }
 
 
@@ -328,13 +330,31 @@ def build_agent_activity_digest(conn, now_value: datetime | None = None, hours: 
         SELECT
             COUNT(*)::INT total_actions,
             COUNT(*) FILTER (WHERE status = 'pending_human')::INT pending_human,
-            COUNT(*) FILTER (WHERE status = 'denied')::INT denied
+            COUNT(*) FILTER (WHERE status = 'denied')::INT denied,
+            COUNT(*) FILTER (WHERE action_type = 'agent_api_self_test')::INT self_tests,
+            COUNT(*) FILTER (WHERE reason_code IN ('AGENT_AUTH_REQUIRED', 'SCOPE_REQUIRED'))::INT auth_scope_errors,
+            COUNT(*) FILTER (WHERE action_type = 'agent_client_promotion_request')::INT promotion_requests
         FROM agent_action_ledger
         WHERE created_at >= %s
         """,
         (since_dt,),
     )
     ledger = _cursor_row_to_dict(cursor, cursor.fetchone())
+    cursor.execute(
+        """
+        SELECT COALESCE(c.organization_name, l.agent_client_id, 'unknown') AS agent_name,
+               COUNT(*)::INT total
+        FROM agent_action_ledger l
+        LEFT JOIN agent_clients c ON c.id = l.agent_client_id
+        WHERE l.created_at >= %s
+          AND l.action_type = 'agent_api_self_test'
+        GROUP BY COALESCE(c.organization_name, l.agent_client_id, 'unknown')
+        ORDER BY total DESC, agent_name
+        LIMIT 5
+        """,
+        (since_dt,),
+    )
+    self_test_rows = [_cursor_row_to_dict(cursor, row) for row in cursor.fetchall() or []]
     cursor.execute(
         """
         SELECT COUNT(*)::INT seen_clients
@@ -352,6 +372,9 @@ def build_agent_activity_digest(conn, now_value: datetime | None = None, hours: 
     total_actions = int(ledger.get("total_actions") or 0)
     pending_human = int(ledger.get("pending_human") or 0)
     denied = int(ledger.get("denied") or 0)
+    self_tests = int(ledger.get("self_tests") or 0)
+    auth_scope_errors = int(ledger.get("auth_scope_errors") or 0)
+    promotion_requests = int(ledger.get("promotion_requests") or 0)
     families = []
     for item in family_rows:
         family = str(item.get("agent_family") or "unknown").strip()
@@ -359,6 +382,13 @@ def build_agent_activity_digest(conn, now_value: datetime | None = None, hours: 
         if total > 0:
             families.append(f"{family}: {total}")
     family_text = ", ".join(families) if families else "не обнаружены"
+    tested_agents = []
+    for item in self_test_rows:
+        agent_name = str(item.get("agent_name") or "unknown").strip()
+        total = int(item.get("total") or 0)
+        if total > 0:
+            tested_agents.append(f"{agent_name}: {total}")
+    tested_agents_text = ", ".join(tested_agents) if tested_agents else "нет"
     if docs_views <= 0 and machine_docs <= 0 and api_hits <= 0 and total_actions <= 0 and seen_clients <= 0:
         return (
             "🤖 ИИ-агенты\n"
@@ -368,6 +398,8 @@ def build_agent_activity_digest(conn, now_value: datetime | None = None, hours: 
         "🤖 ИИ-агенты\n"
         f"Docs: {docs_views}, agent-файлы: {machine_docs}, API hits: {api_hits}.\n"
         f"Клиенты API: активных за 24ч — {seen_clients}; действий — {total_actions}, approval — {pending_human}, отказов — {denied}.\n"
+        f"Self-test: {self_tests}; auth/scope ошибок — {auth_scope_errors}; promotion requests — {promotion_requests}.\n"
+        f"Проверялись: {tested_agents_text}.\n"
         f"User-Agent группы: {family_text}."
     )
 
@@ -740,6 +772,56 @@ def evaluate_agent_access(
     }
 
 
+def build_agent_self_test_summary(client: dict[str, Any], access: dict[str, Any]) -> dict[str, Any]:
+    scopes = []
+    for item in client.get("allowed_scopes") or []:
+        normalized = normalize_scope(item)
+        if normalized:
+            scopes.append(normalized)
+    scope_set = set(scopes)
+    draft_scopes = [
+        scope for scope in ["services:draft", "reviews:draft", "content:draft", "approvals:create"] if scope in scope_set
+    ]
+    read_scopes = [
+        scope for scope in ["audit:read", "finance:read", "partners:read"] if scope in scope_set
+    ]
+    blocked_actions = sorted(BLOCKED_DIRECT_ACTIONS)
+    return {
+        "client": {
+            "client_id": str(client.get("id") or ""),
+            "organization_name": str(client.get("organization_name") or ""),
+            "status": str(client.get("status") or ""),
+            "allowed_scopes": scopes,
+        },
+        "access": {
+            "ok": bool(access.get("ok")),
+            "code": str(access.get("code") or ""),
+            "reason": str(access.get("reason") or ""),
+        },
+        "available": {
+            "read_scopes": read_scopes,
+            "draft_scopes": draft_scopes,
+            "can_create_approval_request": "approvals:create" in scope_set,
+            "can_request_publish_approval": "publish:request" in scope_set,
+            "live_external_execution": False,
+        },
+        "approval_required_for": [
+            "publishing",
+            "customer_messages",
+            "partner_messages",
+            "payments",
+            "destructive_actions",
+            "external_system_actions",
+        ],
+        "blocked_direct_actions": blocked_actions,
+        "next_steps": [
+            "Read /localos-agent-openapi.json.",
+            "Create a test approval request with POST /api/agent-api/approvals/request.",
+            "Ask a superadmin to review promotion before live access.",
+        ],
+    }
+
+
 def log_agent_action(
     cursor,
     *,
@@ -805,6 +887,11 @@ def public_agent_policy() -> dict[str, Any]:
             "request_endpoint": "/api/agent-api/clients/promotion/request",
             "decision_endpoint": "/api/agent-api/clients/{client_id}/promotion/decide",
             "live_access_requires_human_review": True,
+        },
+        "onboarding": {
+            "self_test_endpoint": "/api/agent-api/self-test",
+            "self_test_writes_ledger": True,
+            "self_test_side_effect": "safe internal ledger record only",
         },
         "telegram_transport": {
             "status": "foundation_with_binding_ledger_alerts",

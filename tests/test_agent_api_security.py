@@ -1,6 +1,7 @@
 from core.agent_api_security import (
     BLOCKED_DIRECT_ACTIONS,
     action_requires_approval,
+    build_agent_self_test_summary,
     classify_discovery_path,
     evaluate_agent_access,
     generate_agent_key,
@@ -16,6 +17,30 @@ from core.telegram_agent_transport import (
     should_accept_telegram_agent_message,
     telegram_bot_to_bot_policy_decision,
 )
+from flask import Flask
+import api.agent_security_api as agent_security_api
+
+
+class FakeAgentCursor:
+    def execute(self, _sql, _params=None):
+        return None
+
+
+class FakeAgentDb:
+    def __init__(self):
+        self.conn = self
+        self.committed = False
+        self.closed = False
+        self.cursor_instance = FakeAgentCursor()
+
+    def cursor(self):
+        return self.cursor_instance
+
+    def commit(self):
+        self.committed = True
+
+    def close(self):
+        self.closed = True
 
 
 def test_agent_key_generation_and_hashing_are_stable():
@@ -101,11 +126,84 @@ def test_agent_discovery_classification_tracks_docs_and_policy_files():
     assert should_track_discovery_path("/docs/security-model") is True
     assert should_track_discovery_path("/llms.txt") is True
     assert should_track_discovery_path("/localos-agent-policy.json") is True
+    assert should_track_discovery_path("/localos-agent-tools.json") is True
+    assert should_track_discovery_path("/localos-agent-openapi.json") is True
     assert should_track_discovery_path("/api/agent-api/security/policy") is True
     assert should_track_discovery_path("/dashboard/finance") is False
     assert classify_discovery_path("/docs") == "docs_view"
     assert classify_discovery_path("/llms.txt") == "machine_readable_docs"
+    assert classify_discovery_path("/localos-agent-openapi.json") == "machine_readable_docs"
     assert classify_discovery_path("/api/agent-api/ledger") == "agent_api"
+
+
+def test_agent_self_test_summary_is_safe_and_scope_aware():
+    client = {
+        "id": "client-1",
+        "organization_name": "Sandbox Agent",
+        "status": "sandbox",
+        "allowed_scopes": ["audit:read", "reviews:draft", "approvals:create"],
+    }
+    access = {"ok": True, "code": "OK", "reason": ""}
+
+    summary = build_agent_self_test_summary(client, access)
+
+    assert summary["client"]["client_id"] == "client-1"
+    assert summary["client"]["status"] == "sandbox"
+    assert summary["available"]["read_scopes"] == ["audit:read"]
+    assert summary["available"]["draft_scopes"] == ["reviews:draft", "approvals:create"]
+    assert summary["available"]["can_create_approval_request"] is True
+    assert summary["available"]["live_external_execution"] is False
+    assert "send_customer_messages" in summary["blocked_direct_actions"]
+
+
+def test_agent_self_test_endpoint_records_safe_ledger(monkeypatch):
+    app = Flask(__name__)
+    app.register_blueprint(agent_security_api.agent_security_bp)
+    fake_db = FakeAgentDb()
+    monkeypatch.setattr(agent_security_api, "DatabaseManager", lambda: fake_db)
+    monkeypatch.setattr(
+        agent_security_api,
+        "_load_agent_client",
+        lambda _cursor: {
+            "id": "client-1",
+            "organization_name": "Sandbox Agent",
+            "status": "sandbox",
+            "allowed_scopes": ["audit:read", "approvals:create"],
+        },
+    )
+    monkeypatch.setattr(agent_security_api, "log_agent_action", lambda _cursor, **_kwargs: "ledger-1")
+
+    response = app.test_client().post(
+        "/api/agent-api/self-test",
+        headers={"X-LocalOS-Agent-Key": "localos_agent_sandbox_test"},
+        json={"purpose": "test"},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["success"] is True
+    assert payload["ledger_id"] == "ledger-1"
+    assert payload["self_test"]["client"]["status"] == "sandbox"
+    assert fake_db.committed is True
+    assert fake_db.closed is True
+
+
+def test_agent_self_test_endpoint_rejects_missing_key(monkeypatch):
+    app = Flask(__name__)
+    app.register_blueprint(agent_security_api.agent_security_bp)
+    fake_db = FakeAgentDb()
+    monkeypatch.setattr(agent_security_api, "DatabaseManager", lambda: fake_db)
+    monkeypatch.setattr(agent_security_api, "_load_agent_client", lambda _cursor: None)
+    monkeypatch.setattr(agent_security_api, "log_agent_action", lambda _cursor, **_kwargs: "ledger-denied")
+
+    response = app.test_client().post("/api/agent-api/self-test", json={"purpose": "test"})
+    payload = response.get_json()
+
+    assert response.status_code == 401
+    assert payload["success"] is False
+    assert payload["code"] == "AGENT_AUTH_REQUIRED"
+    assert fake_db.committed is True
+    assert fake_db.closed is True
 
 
 def test_agent_family_detection_for_known_crawlers():

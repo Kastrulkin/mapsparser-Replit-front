@@ -158,6 +158,61 @@
         }
       }
     },
+    "/api/agent-api/self-test": {
+      "post": {
+        "tags": ["Policy"],
+        "operationId": "agentApiSelfTest",
+        "summary": "Run sandbox onboarding self-test",
+        "description": "Agent-key endpoint. Validates the key, status and scopes, returns available safe capabilities, and writes a safe internal ledger record. It does not execute business actions or grant live access.",
+        "security": [
+          {
+            "AgentApiKey": []
+          }
+        ],
+        "x-localos": {
+          "status": "beta/internal",
+          "risk_class": "write_internal",
+          "approval_required": false,
+          "side_effect": "safe internal ledger record only"
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelfTestRequest"
+              },
+              "examples": {
+                "basicSelfTest": {
+                  "value": {
+                    "purpose": "sandbox onboarding",
+                    "checks": ["auth", "scopes", "ledger"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Self-test completed and written to ledger.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelfTestResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AgentAccessDenied"
+          },
+          "403": {
+            "$ref": "#/components/responses/AgentAccessDenied"
+          }
+        }
+      }
+    },
     "/api/agent-api/clients/{client_id}": {
       "patch": {
         "tags": ["Agent Clients"],
@@ -1047,6 +1102,71 @@
           }
         },
         "additionalProperties": true
+      },
+      "SelfTestRequest": {
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string"
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "SelfTestResponse": {
+        "type": "object",
+        "required": ["success", "self_test", "ledger_id"],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "self_test": {
+            "type": "object",
+            "required": ["client", "access", "available", "approval_required_for", "blocked_direct_actions", "next_steps"],
+            "properties": {
+              "client": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "access": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "available": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "approval_required_for": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "blocked_direct_actions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "next_steps": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": true
+          },
+          "ledger_id": {
+            "type": "string"
+          }
+        }
       },
       "ApprovalRequestResponse": {
         "type": "object",
