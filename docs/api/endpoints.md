@@ -110,6 +110,7 @@ These endpoints implement the first Agent API security foundation. They are not 
 | `POST` | `/api/agent-api/clients` | `beta/internal` | Superadmin creates a sandbox agent client. The key is returned once. |
 | `GET` | `/api/agent-api/clients` | `beta/internal` | Superadmin lists registered agent clients without key material. |
 | `PATCH` | `/api/agent-api/clients/{client_id}` | `beta/internal` | Superadmin updates status, scopes, or rate-limit config. |
+| `POST` | `/api/agent-api/clients/telegram-binding/lookup` | `beta/internal` | Superadmin checks which agent client is bound to a Telegram bot username/id. |
 | `POST` | `/api/agent-api/clients/{client_id}/rotate-key` | `beta/internal` | Superadmin rotates an agent key; the new key is returned once. |
 | `POST` | `/api/agent-api/clients/promotion/request` | `beta/internal` | Agent requests review for live access. Requires `approvals:create`. |
 | `POST` | `/api/agent-api/clients/{client_id}/promotion/decide` | `beta/internal` | Superadmin approves or rejects sandbox-to-live promotion. |

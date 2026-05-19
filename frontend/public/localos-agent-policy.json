@@ -111,9 +111,10 @@
     "decision_log": "agent_action_ledger"
   },
   "telegram_transport": {
-    "status": "planned_foundation",
+    "status": "foundation_with_binding_ledger_alerts",
     "trust_chain": "agent_clients -> scopes -> agent_action_ledger -> human approval",
-    "unknown_bots": "deny automation and alert superadmin",
+    "binding": "telegram_bot_username and telegram_bot_id are stored in agent_clients.metadata_json",
+    "unknown_bots": "deny automation, write ledger, and alert superadmin",
     "max_bot_to_bot_hops": 3,
     "max_auto_turns_per_thread": 6
   },

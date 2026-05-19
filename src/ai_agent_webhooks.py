@@ -11,8 +11,7 @@ from ai_agent import process_message, get_business_info
 from core.telegram_token_store import decode_telegram_bot_token
 from core.telegram_network import build_requests_proxy_kwargs
 from core.telegram_agent_transport import (
-    parse_trusted_telegram_agent_bots,
-    telegram_bot_to_bot_policy_decision,
+    evaluate_and_record_telegram_agent_transport,
 )
 
 ai_webhooks_bp = Blueprint('ai_webhooks', __name__)
@@ -228,11 +227,20 @@ def telegram_webhook():
         if not message_text or not chat_id:
             return jsonify({"status": "ok"}), 200
 
-        agent_transport_decision = telegram_bot_to_bot_policy_decision(
-            data,
-            trusted_bot_usernames=parse_trusted_telegram_agent_bots(os.getenv("LOCALOS_TRUSTED_TELEGRAM_AGENT_BOTS", "")),
-            local_bot_username=os.getenv("TELEGRAM_BOT_USERNAME", ""),
-        )
+        agent_transport_decision = {"allow_normal_routing": True, "code": "HUMAN_SENDER"}
+        if bool(from_user.get("is_bot")):
+            agent_transport_db = DatabaseManager()
+            try:
+                agent_transport_decision = evaluate_and_record_telegram_agent_transport(
+                    agent_transport_db.conn.cursor(),
+                    data,
+                    local_bot_username=os.getenv("TELEGRAM_BOT_USERNAME", ""),
+                    ip=request.headers.get("X-Forwarded-For", request.remote_addr or ""),
+                    user_agent=request.headers.get("User-Agent", ""),
+                )
+                agent_transport_db.conn.commit()
+            finally:
+                agent_transport_db.close()
         if not agent_transport_decision.get("allow_normal_routing"):
             print(
                 "⚠️ Telegram agent transport blocked: "

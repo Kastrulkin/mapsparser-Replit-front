@@ -16,6 +16,10 @@ interface AgentClient {
   status: string;
   allowed_scopes: string[];
   rate_limits?: Record<string, unknown>;
+  metadata_json?: {
+    telegram_bot_username?: string;
+    telegram_bot_id?: string;
+  };
   created_at?: string;
   updated_at?: string;
   last_seen_at?: string | null;
@@ -87,9 +91,12 @@ export const AgentApiManagement = () => {
   const [form, setForm] = useState({
     organization_name: '',
     contact_email: '',
+    telegram_bot_username: '',
+    telegram_bot_id: '',
     allowed_scopes: 'audit:read\nservices:draft\nreviews:draft\ncontent:draft\nfinance:read\npartners:read\napprovals:create\npublish:request',
   });
   const [editingScopes, setEditingScopes] = useState<Record<string, string>>({});
+  const [telegramBindings, setTelegramBindings] = useState<Record<string, { username: string; botId: string }>>({});
   const [promotionNotes, setPromotionNotes] = useState<Record<string, string>>({});
   const { toast } = useToast();
 
@@ -134,6 +141,17 @@ export const AgentApiManagement = () => {
         }
         return next;
       });
+      setTelegramBindings((previous) => {
+        const next: Record<string, { username: string; botId: string }> = {};
+        for (const client of clientsData.clients || []) {
+          const metadata = client.metadata_json || {};
+          next[client.id] = previous[client.id] || {
+            username: metadata.telegram_bot_username || '',
+            botId: metadata.telegram_bot_id || '',
+          };
+        }
+        return next;
+      });
     } catch (error) {
       toast({
         title: 'Не удалось загрузить Agent API',
@@ -162,6 +180,8 @@ export const AgentApiManagement = () => {
         body: JSON.stringify({
           organization_name: form.organization_name,
           contact_email: form.contact_email,
+          telegram_bot_username: form.telegram_bot_username,
+          telegram_bot_id: form.telegram_bot_id,
           allowed_scopes: parseScopes(form.allowed_scopes),
         }),
       });
@@ -170,7 +190,7 @@ export const AgentApiManagement = () => {
         throw new Error(data.error || 'Не удалось создать клиента');
       }
       setNewKey(data.client?.agent_key || '');
-      setForm((previous) => ({ ...previous, organization_name: '', contact_email: '' }));
+      setForm((previous) => ({ ...previous, organization_name: '', contact_email: '', telegram_bot_username: '', telegram_bot_id: '' }));
       toast({ title: 'Agent client создан', description: 'Ключ показан один раз. Сохраните его сейчас.' });
       loadData();
     } catch (error) {
@@ -189,6 +209,8 @@ export const AgentApiManagement = () => {
         body: JSON.stringify({
           status: status || client.status,
           allowed_scopes: parseScopes(editingScopes[client.id] || ''),
+          telegram_bot_username: telegramBindings[client.id]?.username || '',
+          telegram_bot_id: telegramBindings[client.id]?.botId || '',
         }),
       });
       const data = await response.json();
@@ -326,7 +348,7 @@ export const AgentApiManagement = () => {
           </CardTitle>
           <CardDescription>Создаёт ключ для интеграции. Live-доступ выдаётся только после ручной проверки.</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 lg:grid-cols-[1fr_1fr_1.4fr_auto] lg:items-end">
+        <CardContent className="grid gap-4 lg:grid-cols-[1fr_1fr_1fr_1fr_1.4fr_auto] lg:items-end">
           <div className="space-y-2">
             <Label>Организация</Label>
             <Input
@@ -341,6 +363,22 @@ export const AgentApiManagement = () => {
               value={form.contact_email}
               onChange={(event) => setForm((previous) => ({ ...previous, contact_email: event.target.value }))}
               placeholder="agent@example.com"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Telegram bot username</Label>
+            <Input
+              value={form.telegram_bot_username}
+              onChange={(event) => setForm((previous) => ({ ...previous, telegram_bot_username: event.target.value }))}
+              placeholder="@PartnerAgentBot"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Telegram bot ID</Label>
+            <Input
+              value={form.telegram_bot_id}
+              onChange={(event) => setForm((previous) => ({ ...previous, telegram_bot_id: event.target.value }))}
+              placeholder="опционально"
             />
           </div>
           <div className="space-y-2">
@@ -393,6 +431,30 @@ export const AgentApiManagement = () => {
                         <KeyRound className="mr-1 h-3.5 w-3.5" />
                         Rotate
                       </Button>
+                    </div>
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    <Label>Telegram binding</Label>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      <Input
+                        value={telegramBindings[client.id]?.username || ''}
+                        onChange={(event) => setTelegramBindings((previous) => ({
+                          ...previous,
+                          [client.id]: { ...(previous[client.id] || { username: '', botId: '' }), username: event.target.value },
+                        }))}
+                        placeholder="@PartnerAgentBot"
+                      />
+                      <Input
+                        value={telegramBindings[client.id]?.botId || ''}
+                        onChange={(event) => setTelegramBindings((previous) => ({
+                          ...previous,
+                          [client.id]: { ...(previous[client.id] || { username: '', botId: '' }), botId: event.target.value },
+                        }))}
+                        placeholder="Telegram bot ID"
+                      />
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      Bot-to-bot события от этого username/ID будут писаться в ledger с этим client id.
                     </div>
                   </div>
                   <div className="mt-4 space-y-2">

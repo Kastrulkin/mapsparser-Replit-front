@@ -37,8 +37,10 @@ Current default behavior:
 
 - human messages continue through the current Telegram UX;
 - messages from LocalOS bot itself are ignored;
-- unknown bots do not trigger automation;
-- trusted agent bots are stopped before normal routing until they are bound to Agent API clients;
+- unknown bots do not trigger automation, are written to `agent_action_ledger`, and alert superadmin;
+- bound Telegram agent bots are resolved through `agent_clients.metadata_json`;
+- sandbox/suspended Telegram agent bots are stopped before normal routing and logged;
+- live Telegram agent bots must still use Agent API scopes and approval flow instead of direct chat automation;
 - publish/send/payment/destructive requests still require human approval.
 
 ## Loop Protection
@@ -70,6 +72,10 @@ Trusted Telegram bots should be bound to `agent_clients` through metadata:
 
 Unknown Telegram bots can ask for a promotion or registration flow, but cannot run actions.
 
+Binding can be managed in the Agent API admin UI. The backend also exposes:
+
+- `POST /api/agent-api/clients/telegram-binding/lookup`
+
 ## Ledger
 
 Bot-to-bot messages that request LocalOS work should be recorded in `agent_action_ledger` with:
@@ -97,12 +103,12 @@ Notify superadmin when:
 ## Implementation Steps
 
 1. Add sender classification helper. Done in foundation.
-2. Add `telegram_bot_username` / `telegram_bot_id` metadata to Agent API admin UI.
+2. Add `telegram_bot_username` / `telegram_bot_id` metadata to Agent API admin UI. Done.
 3. In Telegram webhook/polling handlers, classify sender before intent routing. Done in foundation.
 4. Ignore `localos_bot` self-messages. Done in foundation.
-5. Deny `unknown_bot` automation and alert superadmin. Partly done: automation is denied; alert routing follows Agent API alerts.
-6. Bind trusted bots to `agent_clients`.
-7. Route trusted bot requests through scopes and `agent_action_ledger`.
+5. Deny `unknown_bot` automation and alert superadmin. Done for Telegram transport guardrails.
+6. Bind trusted bots to `agent_clients`. Done through metadata.
+7. Route trusted bot requests through scopes and `agent_action_ledger`. Partly done: transport events are logged; executable requests still require Agent API endpoints.
 8. Add hop count and cooldown to bot-to-bot replies.
 9. Add regression tests for unknown bot, trusted bot, self-message, hop limit.
 10. Only after this, enable Telegram as an Agent API transport.

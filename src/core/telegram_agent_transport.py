@@ -96,8 +96,13 @@ def telegram_bot_to_bot_policy_decision(
     trusted_bot_usernames: set[str] | None = None,
     local_bot_username: str = "",
     hop_count: int = 0,
+    bound_agent_client: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     sender_context = classify_telegram_sender(update_payload, local_bot_username=local_bot_username)
+    client_status = str((bound_agent_client or {}).get("status") or "").strip().lower()
+    effective_trusted = set(trusted_bot_usernames or set())
+    if bound_agent_client and sender_context.get("username"):
+        effective_trusted.add(str(sender_context.get("username") or "").strip().lower())
     if sender_context.get("sender_type") == "human":
         return {
             "allow_normal_routing": True,
@@ -108,26 +113,129 @@ def telegram_bot_to_bot_policy_decision(
             "ledger_payload": build_telegram_agent_ledger_payload(sender_context, hop_count),
         }
 
-    verdict = should_accept_telegram_agent_message(
-        sender_context,
-        trusted_bot_usernames=trusted_bot_usernames,
-        hop_count=hop_count,
-    )
+    verdict = should_accept_telegram_agent_message(sender_context, trusted_bot_usernames=effective_trusted, hop_count=hop_count)
     if not verdict.get("ok"):
+        code = str(verdict.get("code") or "TELEGRAM_AGENT_BLOCKED")
         return {
             "allow_normal_routing": False,
-            "should_alert": True,
-            "code": str(verdict.get("code") or "TELEGRAM_AGENT_BLOCKED"),
+            "should_alert": code != "LOCALOS_SELF_MESSAGE",
+            "code": code,
             "reason": str(verdict.get("reason") or "Telegram bot message blocked by policy"),
             "sender": sender_context,
             "ledger_payload": build_telegram_agent_ledger_payload(sender_context, hop_count),
+            "agent_client_id": str((bound_agent_client or {}).get("id") or ""),
+            "agent_client_status": client_status,
+        }
+
+    if not bound_agent_client:
+        return {
+            "allow_normal_routing": False,
+            "should_alert": True,
+            "code": "TELEGRAM_AGENT_CLIENT_BINDING_REQUIRED",
+            "reason": "trusted Telegram bot must be bound to an Agent API client before automation",
+            "sender": sender_context,
+            "ledger_payload": build_telegram_agent_ledger_payload(sender_context, hop_count),
+            "agent_client_id": "",
+            "agent_client_status": "",
+        }
+
+    if client_status == "suspended":
+        return {
+            "allow_normal_routing": False,
+            "should_alert": True,
+            "code": "AGENT_CLIENT_SUSPENDED",
+            "reason": "bound Agent API client is suspended",
+            "sender": sender_context,
+            "ledger_payload": build_telegram_agent_ledger_payload(sender_context, hop_count),
+            "agent_client_id": str(bound_agent_client.get("id") or ""),
+            "agent_client_status": client_status,
+        }
+
+    if client_status == "live":
+        return {
+            "allow_normal_routing": False,
+            "should_alert": False,
+            "code": "TELEGRAM_AGENT_API_REQUIRED",
+            "reason": "live Telegram agent must use Agent API scopes and approval flow",
+            "sender": sender_context,
+            "ledger_payload": build_telegram_agent_ledger_payload(sender_context, hop_count),
+            "agent_client_id": str(bound_agent_client.get("id") or ""),
+            "agent_client_status": client_status,
         }
 
     return {
         "allow_normal_routing": False,
         "should_alert": True,
         "code": "TELEGRAM_AGENT_TRANSPORT_SANDBOX",
-        "reason": "trusted Telegram bot requires Agent API client binding before automation",
+        "reason": "sandbox Telegram agent cannot trigger automation without human approval",
         "sender": sender_context,
         "ledger_payload": build_telegram_agent_ledger_payload(sender_context, hop_count),
+        "agent_client_id": str(bound_agent_client.get("id") or ""),
+        "agent_client_status": client_status,
     }
+
+
+def evaluate_and_record_telegram_agent_transport(
+    cursor,
+    update_payload: dict[str, Any],
+    *,
+    local_bot_username: str = "",
+    hop_count: int = 0,
+    business_id: str | None = None,
+    ip: str | None = None,
+    user_agent: str | None = None,
+) -> dict[str, Any]:
+    from core.agent_api_alerts import notify_superadmins_agent_alert
+    from core.agent_api_security import find_agent_client_by_telegram_sender, log_agent_action
+
+    sender = classify_telegram_sender(update_payload, local_bot_username=local_bot_username)
+    if sender.get("sender_type") == "human":
+        return telegram_bot_to_bot_policy_decision(update_payload, local_bot_username=local_bot_username, hop_count=hop_count)
+
+    client = find_agent_client_by_telegram_sender(cursor, sender)
+    decision = telegram_bot_to_bot_policy_decision(
+        update_payload,
+        local_bot_username=local_bot_username,
+        hop_count=hop_count,
+        bound_agent_client=client,
+    )
+    code = str(decision.get("code") or "TELEGRAM_AGENT_TRANSPORT_EVENT")
+    if code == "LOCALOS_SELF_MESSAGE":
+        return decision
+    status = "denied"
+    if code in {"TELEGRAM_AGENT_TRANSPORT_SANDBOX", "TELEGRAM_AGENT_API_REQUIRED"}:
+        status = "recorded"
+    ledger_id = log_agent_action(
+        cursor,
+        agent_client_id=str((client or {}).get("id") or "") or None,
+        business_id=business_id,
+        action_type="telegram_agent_transport_message",
+        capability="agent_api.telegram_transport",
+        required_scope="telegram:transport",
+        risk_level="medium",
+        input_summary=decision.get("ledger_payload") or {},
+        output_summary={"allow_normal_routing": bool(decision.get("allow_normal_routing"))},
+        status=status,
+        reason_code=code,
+        ip=ip,
+        user_agent=user_agent,
+        metadata={
+            "sender": sender,
+            "agent_client_status": str((client or {}).get("status") or ""),
+            "transport_reason": str(decision.get("reason") or ""),
+        },
+    )
+    decision["ledger_id"] = ledger_id
+    if decision.get("should_alert"):
+        notify_superadmins_agent_alert(
+            cursor,
+            "Telegram agent transport event",
+            {
+                "reason_code": code,
+                "agent_client_id": str((client or {}).get("id") or ""),
+                "agent_status": str((client or {}).get("status") or ""),
+                "telegram_bot": str(sender.get("username") or sender.get("telegram_id") or ""),
+                "ledger_id": ledger_id,
+            },
+        )
+    return decision

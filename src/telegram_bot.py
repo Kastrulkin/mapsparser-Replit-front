@@ -47,8 +47,7 @@ from core.industry_pattern_recalibration import (
 )
 from core.telegram_network import build_requests_proxy_kwargs, resolve_telegram_http_proxy
 from core.telegram_agent_transport import (
-    parse_trusted_telegram_agent_bots,
-    telegram_bot_to_bot_policy_decision,
+    evaluate_and_record_telegram_agent_transport,
 )
 from crypto_pay_client import (
     CryptoPayClient,
@@ -4907,6 +4906,8 @@ async def handle_optimize_photo(update: Update, context: ContextTypes.DEFAULT_TY
 def _telegram_agent_message_decision(update: Update) -> dict[str, Any]:
     user = update.effective_user
     message = update.message
+    if not bool(getattr(user, "is_bot", False)):
+        return {"allow_normal_routing": True, "code": "HUMAN_SENDER"}
     payload = {
         "message": {
             "message_id": getattr(message, "message_id", None),
@@ -4921,11 +4922,20 @@ def _telegram_agent_message_decision(update: Update) -> dict[str, Any]:
             "text": getattr(message, "text", "") or "",
         }
     }
-    return telegram_bot_to_bot_policy_decision(
-        payload,
-        trusted_bot_usernames=parse_trusted_telegram_agent_bots(os.getenv("LOCALOS_TRUSTED_TELEGRAM_AGENT_BOTS", "")),
-        local_bot_username=os.getenv("TELEGRAM_BOT_USERNAME", ""),
-    )
+    conn = get_db_connection()
+    try:
+        decision = evaluate_and_record_telegram_agent_transport(
+            conn.cursor(),
+            payload,
+            local_bot_username=os.getenv("TELEGRAM_BOT_USERNAME", ""),
+        )
+        conn.commit()
+        return decision
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):

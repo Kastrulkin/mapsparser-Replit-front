@@ -150,6 +150,18 @@ def test_telegram_bot_to_bot_policy_blocks_normal_routing_for_bots():
     human_decision = telegram_bot_to_bot_policy_decision(human_update)
     assert human_decision["allow_normal_routing"] is True
 
+    self_update = {
+        "message": {
+            "message_id": 13,
+            "from": {"id": 780, "is_bot": True, "username": "LocalOSBot"},
+            "chat": {"id": 558},
+        }
+    }
+    self_decision = telegram_bot_to_bot_policy_decision(self_update, local_bot_username="LocalOSBot")
+    assert self_decision["allow_normal_routing"] is False
+    assert self_decision["should_alert"] is False
+    assert self_decision["code"] == "LOCALOS_SELF_MESSAGE"
+
     trusted = parse_trusted_telegram_agent_bots("@PartnerAgentBot, other_bot")
     bot_update = {
         "message": {
@@ -161,4 +173,21 @@ def test_telegram_bot_to_bot_policy_blocks_normal_routing_for_bots():
     bot_decision = telegram_bot_to_bot_policy_decision(bot_update, trusted_bot_usernames=trusted)
     assert bot_decision["allow_normal_routing"] is False
     assert bot_decision["should_alert"] is True
-    assert bot_decision["code"] == "TELEGRAM_AGENT_TRANSPORT_SANDBOX"
+    assert bot_decision["code"] == "TELEGRAM_AGENT_CLIENT_BINDING_REQUIRED"
+
+    sandbox_decision = telegram_bot_to_bot_policy_decision(
+        bot_update,
+        bound_agent_client={"id": "client-1", "status": "sandbox"},
+    )
+    assert sandbox_decision["allow_normal_routing"] is False
+    assert sandbox_decision["should_alert"] is True
+    assert sandbox_decision["code"] == "TELEGRAM_AGENT_TRANSPORT_SANDBOX"
+    assert sandbox_decision["agent_client_id"] == "client-1"
+
+    live_decision = telegram_bot_to_bot_policy_decision(
+        bot_update,
+        bound_agent_client={"id": "client-1", "status": "live"},
+    )
+    assert live_decision["allow_normal_routing"] is False
+    assert live_decision["should_alert"] is False
+    assert live_decision["code"] == "TELEGRAM_AGENT_API_REQUIRED"

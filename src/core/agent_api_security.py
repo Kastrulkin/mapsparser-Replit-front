@@ -115,6 +115,10 @@ def _safe_text(value: Any, limit: int = 1200) -> str:
     return text[:limit] + "..."
 
 
+def normalize_telegram_bot_username(value: Any) -> str:
+    return str(value or "").strip().lstrip("@").lower()
+
+
 def ensure_agent_security_tables(cursor) -> None:
     cursor.execute(
         """
@@ -476,6 +480,36 @@ def update_agent_client(
     }
 
 
+def find_agent_client_by_telegram_sender(cursor, sender_context: dict[str, Any]) -> dict[str, Any] | None:
+    ensure_agent_security_tables(cursor)
+    username = normalize_telegram_bot_username(sender_context.get("username"))
+    telegram_id = str(sender_context.get("telegram_id") or "").strip()
+    if not username and not telegram_id:
+        return None
+    cursor.execute(
+        """
+        SELECT id, organization_name, contact_email, status, allowed_scopes, rate_limits, metadata_json
+        FROM agent_clients
+        WHERE (
+            %s <> '' AND LOWER(COALESCE(metadata_json->>'telegram_bot_username', '')) = %s
+        ) OR (
+            %s <> '' AND COALESCE(metadata_json->>'telegram_bot_id', '') = %s
+        )
+        ORDER BY updated_at DESC
+        LIMIT 1
+        """,
+        (username, username, telegram_id, telegram_id),
+    )
+    row = cursor.fetchone()
+    payload = _cursor_row_to_dict(cursor, row)
+    if not payload:
+        return None
+    payload["allowed_scopes"] = _to_json(payload.get("allowed_scopes"), [])
+    payload["rate_limits"] = _to_json(payload.get("rate_limits"), {})
+    payload["metadata_json"] = _to_json(payload.get("metadata_json"), {})
+    return payload
+
+
 def rotate_agent_client_key(cursor, client_id: str) -> dict[str, Any] | None:
     ensure_agent_security_tables(cursor)
     cursor.execute(
@@ -773,9 +807,10 @@ def public_agent_policy() -> dict[str, Any]:
             "live_access_requires_human_review": True,
         },
         "telegram_transport": {
-            "status": "planned_foundation",
+            "status": "foundation_with_binding_ledger_alerts",
             "trust_chain": "agent_clients -> scopes -> agent_action_ledger -> human approval",
-            "unknown_bots": "deny automation and alert superadmin",
+            "binding": "telegram_bot_username and telegram_bot_id are stored in agent_clients.metadata_json",
+            "unknown_bots": "deny automation, write ledger, and alert superadmin",
             "max_bot_to_bot_hops": 3,
         },
     }

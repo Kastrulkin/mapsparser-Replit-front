@@ -9,6 +9,7 @@ from core.agent_api_security import (
     decide_agent_client_promotion,
     ensure_agent_security_tables,
     evaluate_agent_access,
+    find_agent_client_by_telegram_sender,
     load_agent_client_by_key,
     log_agent_action,
     mark_agent_seen,
@@ -17,6 +18,7 @@ from core.agent_api_security import (
     request_agent_client_promotion,
     rotate_agent_client_key,
     update_agent_client,
+    normalize_telegram_bot_username,
 )
 from core.agent_api_alerts import notify_superadmins_agent_alert
 
@@ -78,6 +80,20 @@ def _notify_agent_alert(cursor, title: str, details: dict | None = None) -> None
         pass
 
 
+def _agent_client_metadata_from_payload(payload: dict) -> dict:
+    metadata = {}
+    if "telegram_bot_username" in payload:
+        telegram_username = normalize_telegram_bot_username(payload.get("telegram_bot_username"))
+        metadata["telegram_bot_username"] = telegram_username
+    if "telegram_bot_id" in payload:
+        telegram_id = str(payload.get("telegram_bot_id") or "").strip()
+        metadata["telegram_bot_id"] = telegram_id
+    note = str(payload.get("note") or "").strip()
+    if note:
+        metadata["note"] = note
+    return metadata
+
+
 @agent_security_bp.route("/api/agent-api/security/policy", methods=["GET"])
 def agent_security_policy():
     return jsonify({"success": True, "policy": public_agent_policy()})
@@ -112,7 +128,10 @@ def create_agent_client_endpoint():
             allowed_scopes=allowed_scopes,
             status=status,
             rate_limits=payload.get("rate_limits") if isinstance(payload.get("rate_limits"), dict) else None,
-            metadata={"created_by": "superadmin", "note": str(payload.get("note") or "").strip()},
+            metadata={
+                "created_by": "superadmin",
+                **_agent_client_metadata_from_payload(payload),
+            },
         )
         db.conn.commit()
         return jsonify(
@@ -143,7 +162,7 @@ def list_agent_clients_endpoint():
         cursor.execute(
             """
             SELECT id, owner_user_id, organization_name, contact_email, status,
-                   allowed_scopes, rate_limits, created_at, updated_at, last_seen_at
+                   allowed_scopes, rate_limits, metadata_json, created_at, updated_at, last_seen_at
             FROM agent_clients
             ORDER BY created_at DESC
             LIMIT 200
@@ -153,7 +172,7 @@ def list_agent_clients_endpoint():
         clients = []
         for row in rows:
             item = dict(row)
-            for key in ["allowed_scopes", "rate_limits"]:
+            for key in ["allowed_scopes", "rate_limits", "metadata_json"]:
                 value = item.get(key)
                 if isinstance(value, str):
                     try:
@@ -183,16 +202,18 @@ def update_agent_client_endpoint(client_id: str):
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
+        metadata = {
+            "updated_by": str(user_data.get("user_id") or user_data.get("id") or ""),
+            "update_note": str(payload.get("note") or "").strip(),
+            **_agent_client_metadata_from_payload(payload),
+        }
         result = update_agent_client(
             cursor,
             client_id=client_id,
             status=payload.get("status"),
             allowed_scopes=allowed_scopes,
             rate_limits=rate_limits,
-            metadata={
-                "updated_by": str(user_data.get("user_id") or user_data.get("id") or ""),
-                "update_note": str(payload.get("note") or "").strip(),
-            },
+            metadata=metadata,
         )
         if not result:
             return _json_error("Agent client not found", 404, "NOT_FOUND")
@@ -225,6 +246,29 @@ def update_agent_client_endpoint(client_id: str):
         )
         db.conn.commit()
         return jsonify({"success": True, "client": result})
+    finally:
+        db.close()
+
+
+@agent_security_bp.route("/api/agent-api/clients/telegram-binding/lookup", methods=["POST", "OPTIONS"])
+def lookup_agent_client_by_telegram_binding_endpoint():
+    if request.method == "OPTIONS":
+        return "", 200
+    user_data, error_response = _require_superadmin()
+    if error_response:
+        return error_response
+    payload = request.get_json(silent=True) or {}
+    sender = {
+        "username": normalize_telegram_bot_username(payload.get("telegram_bot_username")),
+        "telegram_id": str(payload.get("telegram_bot_id") or "").strip(),
+    }
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        client = find_agent_client_by_telegram_sender(cursor, sender)
+        if not client:
+            return jsonify({"success": True, "client": None})
+        return jsonify({"success": True, "client": client})
     finally:
         db.close()
 
