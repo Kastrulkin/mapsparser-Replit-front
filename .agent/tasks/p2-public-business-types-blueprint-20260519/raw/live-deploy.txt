@@ -1,0 +1,8 @@
+ Container seo-app-app-1 Restarting 
+ Container seo-app-worker-1 Restarting 
+ Container seo-app-worker-1 Started 
+ Container seo-app-app-1 Started 
+NAME                 IMAGE            COMMAND                  SERVICE    CREATED        STATUS                  PORTS
+seo-app-app-1        seo-app-app      "/app/entrypoint.sh …"   app        13 hours ago   Up Less than a second   0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp
+seo-app-postgres-1   postgres:16      "docker-entrypoint.s…"   postgres   4 weeks ago    Up 2 weeks (healthy)    5432/tcp
+seo-app-worker-1     seo-app-worker   "/app/entrypoint.sh …"   worker     13 hours ago   Up Less than a second   

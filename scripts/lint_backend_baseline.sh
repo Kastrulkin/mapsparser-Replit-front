@@ -8,6 +8,7 @@ echo "[backend-lint] py_compile focused backend modules"
 python3 -m py_compile \
   src/main.py \
   src/api/admin_growth_api.py \
+  src/api/business_types_api.py \
   src/api/reports_api.py \
   src/api/growth_workflow_api.py \
   src/auth_encryption.py \
@@ -19,6 +20,7 @@ echo "[backend-lint] import and route ownership smoke"
 PYTHONPATH=src python3 - <<'PY'
 import main
 import api.admin_growth_api
+import api.business_types_api
 import api.growth_workflow_api
 import api.reports_api
 
@@ -29,6 +31,7 @@ rules = {
     "/api/progress": "growth_workflow_api.get_business_progress",
     "/api/business/<business_id>/optimization-wizard": "growth_workflow_api.business_optimization_wizard",
     "/api/business/<business_id>/sprint": "growth_workflow_api.business_sprint",
+    "/api/business-types": "business_types_api.get_business_types_public",
     "/api/business/<string:business_id>/stages": "growth_api.get_business_stages",
     "/api/admin/business-types": "admin_growth_api.get_business_types",
     "/api/admin/business-types/<type_id>": "admin_growth_api.delete_business_type",
@@ -59,6 +62,7 @@ for marker in (
     "/api/admin/growth-stages/<stage_id>",
     "/api/admin/business-types",
     "/api/admin/business-types/<type_id>",
+    "/api/business-types",
 ):
     if marker in main_text:
         raise SystemExit(f"route still owned by main.py: {marker}")

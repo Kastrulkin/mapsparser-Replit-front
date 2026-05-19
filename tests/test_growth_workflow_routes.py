@@ -74,3 +74,12 @@ def test_admin_business_type_routes_are_owned_by_admin_growth_blueprint():
     actual_endpoints = {rule.endpoint for rule in main.app.url_map.iter_rules()}
 
     assert not stale_main_endpoints.intersection(actual_endpoints)
+
+
+def test_public_business_type_route_is_owned_by_business_types_blueprint():
+    import main
+
+    actual = {rule.rule: rule.endpoint for rule in main.app.url_map.iter_rules()}
+
+    assert actual.get("/api/business-types") == "business_types_api.get_business_types_public"
+    assert "get_business_types_public" not in {rule.endpoint for rule in main.app.url_map.iter_rules()}

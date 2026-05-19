@@ -89,6 +89,7 @@ from ai_agents_api import ai_agents_api_bp
 from chats_api import chats_bp
 from messengers_api import messengers_bp
 from api.services_api import services_bp
+from api.business_types_api import business_types_bp
 from api.growth_api import growth_bp
 from api.admin_growth_api import admin_growth_bp
 from api.growth_workflow_api import growth_workflow_bp
@@ -251,6 +252,7 @@ app.register_blueprint(chats_bp)
 if "messengers" not in app.blueprints:
     app.register_blueprint(messengers_bp)
 app.register_blueprint(services_bp)
+app.register_blueprint(business_types_bp)
 app.register_blueprint(growth_bp)
 app.register_blueprint(admin_growth_bp)
 app.register_blueprint(growth_workflow_bp)
@@ -13462,47 +13464,6 @@ def get_prompt_from_db(prompt_type: str, fallback: str = None) -> str:
         import traceback
         traceback.print_exc()
         return fallback or ""
-
-# ==================== СХЕМА РОСТА (GROWTH PLAN) ====================
-@app.route('/api/business-types', methods=['GET'])
-def get_business_types_public():
-    """Получить все активные типы бизнеса (для всех пользователей)"""
-    try:
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-
-        token = auth_header.split(' ')[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-        cursor.execute("""
-            SELECT type_key, label
-            FROM businesstypes
-            WHERE COALESCE(LOWER(is_active::text), '1') IN ('1', 'true', 't')
-            ORDER BY label
-        """)
-        rows = cursor.fetchall()
-
-        types = []
-        for row in rows:
-            row_data = _row_to_dict(cursor, row) if row else {}
-            types.append({
-                'type_key': row_data.get('type_key'),
-                'label': row_data.get('label')
-            })
-
-        db.close()
-        return jsonify({"types": types})
-
-    except Exception as e:
-        print(f"❌ Ошибка получения типов бизнеса: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/superadmin/businesses/<business_id>/send-credentials', methods=['POST'])
 def send_business_credentials(business_id):

@@ -1,0 +1,25 @@
+git status after initial cleanup and proof generation:
+ M scripts/lint_backend_baseline.sh
+ M src/main.py
+ M tests/test_growth_workflow_routes.py
+?? .agent/tasks/p2-public-business-types-blueprint-20260519/evidence.json
+?? .agent/tasks/p2-public-business-types-blueprint-20260519/evidence.md
+?? .agent/tasks/p2-public-business-types-blueprint-20260519/problems.md
+?? .agent/tasks/p2-public-business-types-blueprint-20260519/raw/artifact-hygiene.txt
+?? .agent/tasks/p2-public-business-types-blueprint-20260519/raw/build.txt
+?? .agent/tasks/p2-public-business-types-blueprint-20260519/raw/lint.txt
+?? .agent/tasks/p2-public-business-types-blueprint-20260519/raw/live-backup.txt
+?? .agent/tasks/p2-public-business-types-blueprint-20260519/raw/live-deploy.txt
+?? .agent/tasks/p2-public-business-types-blueprint-20260519/raw/live-route-ownership.txt
+?? .agent/tasks/p2-public-business-types-blueprint-20260519/raw/live-smoke-runtime.txt
+?? .agent/tasks/p2-public-business-types-blueprint-20260519/raw/screenshot-1.png
+?? .agent/tasks/p2-public-business-types-blueprint-20260519/raw/test-integration.txt
+?? .agent/tasks/p2-public-business-types-blueprint-20260519/raw/test-unit.txt
+?? .agent/tasks/p2-public-business-types-blueprint-20260519/spec.md
+?? .agent/tasks/p2-public-business-types-blueprint-20260519/verdict.json
+?? src/api/business_types_api.py
+
+artifact policy decision:
+- Keep committed .agent/tasks/<task_id> bundles as autonomous development evidence.
+- Do not gitignore .agent/tasks globally because proof-loop validation depends on committed task artifacts.
+- Remove ignored generated caches (__pycache__, .pytest_cache) before final commit when they reappear after local checks.
