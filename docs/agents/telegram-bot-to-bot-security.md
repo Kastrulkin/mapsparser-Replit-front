@@ -76,6 +76,13 @@ Binding can be managed in the Agent API admin UI. The backend also exposes:
 
 - `POST /api/agent-api/clients/telegram-binding/lookup`
 
+The Agent API admin UI includes a `Telegram transport` panel with:
+
+- recent bot-to-bot events;
+- unbound bot count;
+- blocked/sandbox counts;
+- reason codes and ledger references.
+
 ## Ledger
 
 Bot-to-bot messages that request LocalOS work should be recorded in `agent_action_ledger` with:
@@ -108,7 +115,7 @@ Notify superadmin when:
 4. Ignore `localos_bot` self-messages. Done in foundation.
 5. Deny `unknown_bot` automation and alert superadmin. Done for Telegram transport guardrails.
 6. Bind trusted bots to `agent_clients`. Done through metadata.
-7. Route trusted bot requests through scopes and `agent_action_ledger`. Partly done: transport events are logged; executable requests still require Agent API endpoints.
+7. Route trusted bot requests through scopes and `agent_action_ledger`. Partly done: transport events are logged and visible in admin; executable requests still require Agent API endpoints.
 8. Add hop count and cooldown to bot-to-bot replies.
 9. Add regression tests for unknown bot, trusted bot, self-message, hop limit.
 10. Only after this, enable Telegram as an Agent API transport.

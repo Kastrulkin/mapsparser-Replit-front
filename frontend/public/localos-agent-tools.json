@@ -1,0 +1,136 @@
+{
+  "schema_version": "2026-05-19",
+  "product": "LocalOS",
+  "status": "beta_manifest_not_mcp_server",
+  "summary": "Machine-readable capability map for AI agents. This is not a public MCP server and not a guarantee that every tool is externally callable today.",
+  "security_policy": "https://localos.pro/localos-agent-policy.json",
+  "human_docs": "https://localos.pro/docs",
+  "agent_guide": "https://localos.pro/localos-agents.txt",
+  "principles": [
+    "Start in sandbox.",
+    "Use narrow scopes.",
+    "Read and draft before asking to publish or send.",
+    "Publishing, payments, mass changes, customer messages and destructive actions require human approval.",
+    "Incomplete data must be labelled as incomplete.",
+    "Every agent action should be recorded in the action ledger."
+  ],
+  "scope_legend": {
+    "audit:read": "Read listing audit and card diagnostics.",
+    "services:draft": "Draft service names, descriptions and optimization suggestions.",
+    "reviews:draft": "Draft review replies.",
+    "content:draft": "Draft posts, news and content plans.",
+    "finance:read": "Read finance dashboard, KPI and data-quality summaries.",
+    "partners:read": "Read partnership candidates and supervised outreach context.",
+    "approvals:create": "Create a human approval request.",
+    "publish:request": "Request publication or external action through human approval."
+  },
+  "tools": [
+    {
+      "name": "listing.audit.read",
+      "status": "available",
+      "risk_class": "read_only",
+      "required_scope": "audit:read",
+      "approval_required": false,
+      "purpose": "Read listing audit facts, strengths, weak spots and recommended next actions.",
+      "inputs": ["business_id or public audit slug", "language"],
+      "outputs": ["summary", "strengths", "issues", "priorities", "recommended_actions"],
+      "limits": ["Do not invent listing facts.", "If source data is old or partial, mark it as partial."]
+    },
+    {
+      "name": "growth.plan.draft",
+      "status": "available",
+      "risk_class": "draft_only",
+      "required_scope": "audit:read",
+      "approval_required": false,
+      "purpose": "Draft a plan for today, 7 days and regular work to improve leads, trust, average ticket and repeat visits.",
+      "inputs": ["audit facts", "business type", "current weak spots"],
+      "outputs": ["today_actions", "seven_day_actions", "regular_actions"],
+      "limits": ["Recommendations must be tied to available facts."]
+    },
+    {
+      "name": "services.optimize.draft",
+      "status": "available",
+      "risk_class": "draft_only",
+      "required_scope": "services:draft",
+      "approval_required": false,
+      "purpose": "Draft improved service names and descriptions with SEO keys and industry guardrails.",
+      "inputs": ["service list", "industry profile", "SEO keywords when available"],
+      "outputs": ["draft_name", "draft_description", "keyword_match", "guardrail_reasons"],
+      "limits": ["Preserve source facts.", "Do not add medical promises, unsupported effects, fake prices or unsupported attributes."]
+    },
+    {
+      "name": "reviews.reply.draft",
+      "status": "available",
+      "risk_class": "draft_only",
+      "required_scope": "reviews:draft",
+      "approval_required": false,
+      "purpose": "Draft short replies to reviews, mentioning the reviewed service when known and softly suggesting adjacent services when appropriate.",
+      "inputs": ["review text", "rating", "service context", "tone"],
+      "outputs": ["reply_draft", "risk_notes"],
+      "limits": ["Do not post automatically.", "Do not promise fixes or compensation without confirmation."]
+    },
+    {
+      "name": "content.post.draft",
+      "status": "beta",
+      "risk_class": "draft_only",
+      "required_scope": "content:draft",
+      "approval_required": false,
+      "purpose": "Draft posts, updates and content-plan items for maps and social channels.",
+      "inputs": ["business type", "services", "local context", "content goal"],
+      "outputs": ["post_draft", "schedule_hint", "approval_required_for_publish"],
+      "limits": ["Do not invent promotions, prices, addresses, credentials or unsupported services."]
+    },
+    {
+      "name": "finance.summary.read",
+      "status": "beta",
+      "risk_class": "read_only",
+      "required_scope": "finance:read",
+      "approval_required": false,
+      "purpose": "Read first-step financial control: revenue, expenses, margin, occupancy, rebooking, no-shows, data quality and red zones.",
+      "inputs": ["business_id", "period_start", "period_end"],
+      "outputs": ["kpi", "data_quality", "red_flags", "next_actions"],
+      "limits": ["Do not give precise conclusions when expenses, costs or period data are missing."]
+    },
+    {
+      "name": "partners.candidates.read",
+      "status": "internal",
+      "risk_class": "read_only",
+      "required_scope": "partners:read",
+      "approval_required": false,
+      "purpose": "Read supervised partnership candidates and context for local collaboration.",
+      "inputs": ["business_id", "location", "partner category"],
+      "outputs": ["candidate_list", "fit_notes", "draft_offer_context"],
+      "limits": ["Sending outreach is not allowed without approval."]
+    },
+    {
+      "name": "approval.request.create",
+      "status": "beta/internal",
+      "risk_class": "write_internal",
+      "required_scope": "approvals:create",
+      "approval_required": false,
+      "endpoint": "POST /api/agent-api/approvals/request",
+      "purpose": "Create a human approval request for high-risk or externally visible action.",
+      "inputs": ["action_type", "business_id", "risk_level", "input_summary", "proposed_output"],
+      "outputs": ["approval_id", "status", "risk_level"],
+      "limits": ["This records a request only. It does not execute the action."]
+    },
+    {
+      "name": "publish.request",
+      "status": "planned",
+      "risk_class": "write_external",
+      "required_scope": "publish:request",
+      "approval_required": true,
+      "purpose": "Request publishing a post, review reply or external-system change after human review.",
+      "inputs": ["approved draft", "target channel", "business_id"],
+      "outputs": ["pending or approved action"],
+      "limits": ["Direct publish is blocked. Use approval flow."]
+    }
+  ],
+  "not_available_yet": [
+    "Public MCP server",
+    "Stable public OpenAPI for all product workflows",
+    "Autonomous publishing to maps or social channels",
+    "Autonomous customer or partner messaging",
+    "Autonomous payment or billing changes"
+  ]
+}

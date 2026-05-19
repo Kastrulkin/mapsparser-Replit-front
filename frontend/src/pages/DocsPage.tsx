@@ -306,6 +306,12 @@ const DocsPage = () => {
                   <ExternalLink className="ml-2 h-4 w-4" />
                 </a>
               </Button>
+              <Button asChild variant="outline">
+                <a href="/localos-agent-tools.json">
+                  Agent tools JSON
+                  <ExternalLink className="ml-2 h-4 w-4" />
+                </a>
+              </Button>
             </div>
           </div>
           <Card className="border-slate-200 bg-slate-950 text-white shadow-none">
@@ -426,6 +432,10 @@ const DocsPage = () => {
                     Security policy is available as
                     {" "}
                     <a className="font-medium text-blue-700 underline-offset-4 hover:underline" href="/localos-agent-policy.json">/localos-agent-policy.json</a>.
+                    {" "}
+                    The current capability map is
+                    {" "}
+                    <a className="font-medium text-blue-700 underline-offset-4 hover:underline" href="/localos-agent-tools.json">/localos-agent-tools.json</a>.
                   </p>
                 </div>
               </div>

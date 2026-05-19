@@ -14,6 +14,9 @@
 - `Agent`: доменный исполнитель (например, оптимизация услуг, ответы, бронирование, партнёрства).
 - `Capability`: контрактная операция (например, `services.optimize`).
 - `Orchestrator`: управляющий слой выполнения (`tenant guard`, `policy`, `approval`, `idempotency`, `billing`, `callbacks`).
+- `Harness`: runtime вокруг модели, который собирает контекст, показывает доступные tools/capabilities, валидирует вызовы, применяет permissions, пишет traces и возвращает observations.
+- `Tool`: узкий типизированный контракт, который модель может запросить, но выполняет только harness/orchestrator.
+- `Goal`: долгоживущая, но ограниченная цель с budget, checkpoints, validation и stop condition.
 - `Intent`: тип бизнес-сценария:
   - `operations`
   - `client_outreach`
@@ -25,6 +28,68 @@
 3. Источник промптов для production-agent'ов: Административная панель (template store), не hardcode.
 4. Любые исходящие касания клиенту/партнёру идут через human approval.
 5. Ralph loop общий для аутрича и партнёрств, но с жёсткой сегментацией по `intent`.
+6. Модель не исполняет side effects напрямую: она предлагает tool/capability call, а harness валидирует, авторизует, исполняет или возвращает `pending_human`/denial.
+7. Любой tool/capability call обязан получить структурированный result: success, validation error, permission denial, timeout, `pending_human` или failure.
+8. Для долгих задач goal-loop управляет исполнением; Ralph loop собирает learning signals после human edits/outcomes.
+
+## Harness Boundary
+
+LocalOS разделяет роли модели и runtime:
+
+- модель интерпретирует задачу, выбирает следующий шаг, запрашивает tool/capability и синтезирует observations;
+- harness/orchestrator собирает контекст, проверяет envelope, валидирует аргументы, применяет tenant/policy/approval/billing rules, пишет ledger/traces и выполняет callbacks;
+- внешние публикации, отправки, платежи, destructive actions и действия в third-party systems требуют approval record вне prompt.
+
+Каноничный loop:
+
+```text
+context builder
+  -> model call
+  -> tool/capability proposal
+  -> schema validation
+  -> permission/approval check
+  -> execute, deny, or pending_human
+  -> structured observation
+  -> next step or final response
+```
+
+Подробный runtime guide: [docs/agents/harness-architecture.md](agents/harness-architecture.md).
+
+## Event Model
+
+Agent runtime должен быть отлаживаемым через typed events, а не только через историю чата.
+
+Рекомендуемые события:
+
+- `user_message`
+- `assistant_message`
+- `model_call`
+- `tool_call`
+- `tool_result`
+- `permission_decision`
+- `approval_request`
+- `approval_result`
+- `plan_update`
+- `goal_update`
+- `context_compaction`
+- `callback_attempt`
+- `error`
+- `final_answer`
+
+Trace должен отвечать: что агент пытался сделать, какие данные использовал, какое действие изменило состояние, кто подтвердил действие, что сломалось и почему run остановился.
+
+## Goal Loop vs Ralph Loop
+
+`Goal loop` и `Ralph loop` не заменяют друг друга.
+
+| Loop | Назначение | Где применять |
+| --- | --- | --- |
+| `Goal loop` | безопасно довести ограниченную цель до done/blocked/pending_human | outreach batches, partnership shortlist, многошаговые ops-задачи |
+| `Ralph loop` | учиться на human edits, outcomes и результатах отправок | тексты услуг, ответы, новости, outreach/partnership outcomes |
+
+Goal-loop state должен иметь objective, `intent`, budget, checkpoints, validation, forbidden actions и stop condition. Ralph-loop signal сохраняет draft/final/outcome/edit distance/intent/agent/capability.
+
+Подробный guide: [docs/agents/planning-and-goals.md](agents/planning-and-goals.md).
 
 ## Реестр агентов (v1)
 

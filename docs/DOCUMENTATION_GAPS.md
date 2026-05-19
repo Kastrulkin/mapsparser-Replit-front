@@ -18,7 +18,7 @@ Recommended next step:
 
 Status: `gap`
 
-No confirmed MCP server, tool manifest, or tool-level auth model exists in the repository.
+No confirmed MCP server exists in the repository. A lightweight `/localos-agent-tools.json` capability map exists, but it is not an MCP server and should not be treated as executable tooling by itself.
 
 Recommended next step:
 

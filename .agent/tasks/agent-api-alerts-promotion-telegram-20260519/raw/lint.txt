@@ -1,0 +1,11 @@
+./venv/bin/python -m py_compile src/core/agent_api_security.py src/api/agent_security_api.py src/core/agent_api_alerts.py src/core/telegram_agent_transport.py
+
+PASS
+
+python3 -m json.tool frontend/public/localos-agent-policy.json
+
+PASS
+
+rg -n "\bas\b| as " src/core/agent_api_alerts.py src/core/telegram_agent_transport.py src/core/agent_api_security.py src/api/agent_security_api.py tests/test_agent_api_security.py frontend/src/components/AgentApiManagement.tsx
+
+PASS: no matches

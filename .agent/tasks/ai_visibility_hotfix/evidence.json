@@ -1,0 +1,38 @@
+{
+  "task_id": "ai_visibility_hotfix",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "AI visibility remarks are fixed for served LocalOS pages: static root JSON-LD, route-specific article JSON-LD in raw HTML, non-localhost OG image, updated sitemap lastmod, and open crawler access.",
+      "status": "PASS",
+      "proof": [
+        "python3 -m py_compile src/main.py passed",
+        "cd frontend && npm run build passed",
+        "Flask test client confirmed Article JSON-LD in raw article HTML",
+        "Production frontend and backend deploys completed",
+        "curl https://localos.pro/ confirmed Organization/WebSite/SoftwareApplication JSON-LD and production OG image",
+        "curl article URL confirmed Article JSON-LD, canonical, og:type=article, dateModified=2026-05-19",
+        "curl sitemap.xml confirmed 2026-05-19 lastmod values for updated pages"
+      ],
+      "gaps": [
+        "Search and AI assistant caches may update only after recrawl."
+      ]
+    }
+  ],
+  "changed_files": [
+    "frontend/index.html",
+    "frontend/public/content-seo.json",
+    "frontend/public/sitemap.xml",
+    "src/main.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "curl -s https://localos.pro/ | rg -n 'application/ld\\\\+json|SoftwareApplication|Organization|og:image|localhost:8000|canonical'",
+    "curl -s https://localos.pro/articles/kak-otzyvy-vliyayut-na-potok-klientov | rg -n 'application/ld\\\\+json|\\\"@type\\\":\\\"Article\\\"|dateModified|og:type|canonical|localhost:8000'",
+    "curl -s https://localos.pro/sitemap.xml | rg -n 'kak-otzyvy|kak-oformit|pochemu-konkurent|2026-05-19'",
+    "scripts/proof_loop.sh validate ai_visibility_hotfix"
+  ],
+  "known_gaps": [
+    "External recrawl latency is outside LocalOS runtime."
+  ]
+}

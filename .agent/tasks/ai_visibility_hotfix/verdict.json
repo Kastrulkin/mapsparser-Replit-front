@@ -1,0 +1,22 @@
+{
+  "task_id": "ai_visibility_hotfix",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Local and live checks confirm static AI/SEO visibility fixes: root JSON-LD, article raw HTML Article schema, canonical/OG metadata, non-localhost OG image, and updated sitemap lastmod values."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/main.py",
+    "cd frontend && npm run build",
+    "Flask test client checks for / and /articles/kak-otzyvy-vliyayut-na-potok-klientov",
+    "scripts/deploy_frontend_dist.sh --build",
+    "scripts/deploy_backend_src.sh",
+    "curl live HTML and sitemap checks"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/ai_visibility_hotfix/evidence.md"
+  ]
+}

@@ -31,8 +31,13 @@ The safe pattern is:
 
 ## Related Docs
 
+- Machine-readable tool map: `/localos-agent-tools.json`
 - [Capabilities](capabilities.md)
+- [Harness architecture](harness-architecture.md)
+- [Tool registry](tool-registry.md)
+- [Planning and goal loops](planning-and-goals.md)
 - [Agent use cases](use-cases.md)
 - [Approval policy](approval-policy.md)
+- [Agent API security model](security-model.md)
 - [API endpoints](../api/endpoints.md)
 - [API examples](../api/examples.md)

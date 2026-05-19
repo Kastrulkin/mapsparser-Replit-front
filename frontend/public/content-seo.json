@@ -1,0 +1,146 @@
+{
+  "siteUrl": "https://localos.pro",
+  "image": "https://localos.pro/assets/hero-image-BXgvVNKj.jpg",
+  "default": {
+    "title": "LocalOS.pro - Локальное продвижение локального бизнеса",
+    "description": "Получите больше клиентов с карт и через партнёрства. Автоматизируйте свой бизнес с помощью AI-агентов.",
+    "ogType": "website"
+  },
+  "organization": {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "@id": "https://localos.pro/#organization",
+    "name": "LocalOS",
+    "url": "https://localos.pro/",
+    "logo": "https://localos.pro/assets/logo-BY03Vnee.png",
+    "description": "LocalOS помогает локальному бизнесу получать больше клиентов с карт и через партнёрства, работать с отзывами, контентом и AI-агентами."
+  },
+  "routes": {
+    "/": {
+      "title": "LocalOS.pro - Локальное продвижение локального бизнеса",
+      "description": "Получите больше клиентов с карт и через партнёрства. Автоматизируйте свой бизнес с помощью AI-агентов.",
+      "ogType": "website",
+      "schema": [
+        {
+          "@context": "https://schema.org",
+          "@type": "Organization",
+          "@id": "https://localos.pro/#organization",
+          "name": "LocalOS",
+          "url": "https://localos.pro/",
+          "logo": "https://localos.pro/assets/logo-BY03Vnee.png",
+          "description": "LocalOS помогает локальному бизнесу получать больше клиентов с карт и через партнёрства, работать с отзывами, контентом и AI-агентами."
+        },
+        {
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          "@id": "https://localos.pro/#website",
+          "name": "LocalOS.pro",
+          "url": "https://localos.pro/",
+          "publisher": {
+            "@id": "https://localos.pro/#organization"
+          },
+          "inLanguage": "ru-RU"
+        },
+        {
+          "@context": "https://schema.org",
+          "@type": "SoftwareApplication",
+          "@id": "https://localos.pro/#software",
+          "name": "LocalOS",
+          "applicationCategory": "BusinessApplication",
+          "operatingSystem": "Web",
+          "url": "https://localos.pro/",
+          "description": "Операционный слой для локального бизнеса: карты, отзывы, партнёрства, контент, заявки и supervised automation.",
+          "publisher": {
+            "@id": "https://localos.pro/#organization"
+          },
+          "offers": {
+            "@type": "Offer",
+            "availability": "https://schema.org/InStock",
+            "url": "https://localos.pro/"
+          }
+        }
+      ]
+    },
+    "/articles": {
+      "title": "Статьи о локальном маркетинге — LocalOS",
+      "description": "Статьи LocalOS о картах, отзывах, локальном маркетинге и привлечении клиентов без лишних рекламных затрат.",
+      "ogType": "website",
+      "schema": [
+        {
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "LocalOS",
+              "item": "https://localos.pro/"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Статьи",
+              "item": "https://localos.pro/articles"
+            }
+          ]
+        }
+      ]
+    },
+    "/articles/pochemu-predprinimateli-vygorayut": {
+      "title": "Почему предприниматели выгорают — LocalOS",
+      "description": "Почему владельцы малого бизнеса выгорают: хроническая перегрузка, ручное управление, хаос, кассовые разрывы, рост без системы и отсутствие контроля.",
+      "ogType": "article",
+      "publishedAt": "2026-05-18",
+      "updatedAt": "2026-05-18",
+      "articleTitle": "Почему предприниматели выгорают"
+    },
+    "/articles/pochemu-salon-s-polnoi-zapisyu-mozhet-rabotat-v-minus": {
+      "title": "Почему полная запись не равно прибыль — LocalOS",
+      "description": "Почему полная запись в салоне красоты не означает прибыль: экономика услуг, скидки, повторные визиты, выручка за час кресла и управленческие KPI.",
+      "ogType": "article",
+      "publishedAt": "2026-05-18",
+      "updatedAt": "2026-05-18",
+      "articleTitle": "Почему полная запись не равно прибыль"
+    },
+    "/articles/onlain-karty-stali-kanalom-prodazh": {
+      "title": "Онлайн-карты стали каналом продаж — LocalOS",
+      "description": "Почему карточка бизнеса в картах уже работает как нижняя часть воронки: влияет на звонки, маршруты, записи и выбор клиента прямо внутри платформы.",
+      "ogType": "article",
+      "publishedAt": "2026-04-23",
+      "updatedAt": "2026-05-19",
+      "articleTitle": "Онлайн-карты стали каналом продаж: почему уже недостаточно просто быть на карте"
+    },
+    "/articles/pochemu-konkurent-vyshe-na-kartah": {
+      "title": "Почему конкурент выше на картах даже при таком же рейтинге — LocalOS",
+      "description": "Почему рейтинг 5.0 не гарантирует высокие позиции в Яндекс Картах и Google Maps: свежие отзывы, ответы, фото, активность карточки и поведенческие сигналы.",
+      "ogType": "article",
+      "publishedAt": "2026-04-20",
+      "updatedAt": "2026-05-19",
+      "articleTitle": "Почему конкурент выше вас на картах?"
+    },
+    "/articles/kak-oformit-kartochku-kompanii": {
+      "title": "Как оформить карточку компании — LocalOS",
+      "description": "Как оформить карточку компании в Яндекс Картах, Google Maps и 2ГИС: категории, услуги, цены, фотографии, отзывы, активность и быстрые действия.",
+      "ogType": "article",
+      "publishedAt": "2026-04-18",
+      "updatedAt": "2026-05-19",
+      "articleTitle": "Как оформить карточку компании, чтобы она продавала"
+    },
+    "/articles/kak-otzyvy-vliyayut-na-potok-klientov": {
+      "title": "Как отзывы влияют на поток клиентов — LocalOS",
+      "description": "Как отзывы влияют на поток клиентов локального бизнеса: доверие, свежесть, ответы на негатив, позиции в картах, конверсия и повторные визиты.",
+      "ogType": "article",
+      "publishedAt": "2026-04-15",
+      "updatedAt": "2026-05-19",
+      "articleTitle": "Как отзывы влияют на поток клиентов"
+    },
+    "/articles/kak-kafe-poluchat-gostei-iz-kart": {
+      "title": "Как кафе получать больше гостей из карт — LocalOS",
+      "description": "Практические советы для кафе: как оформить карточку, меню, фото и отзывы, чтобы чаще попадать в выбор гостей рядом.",
+      "ogType": "article",
+      "publishedAt": "2026-04-13",
+      "updatedAt": "2026-04-13",
+      "articleTitle": "Как кафе получать больше гостей из карт"
+    }
+  }
+}

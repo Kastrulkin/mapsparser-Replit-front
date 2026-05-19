@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, Lock, MapPinned, Sparkles, Wand2 } from 'lucide-react';
+import { CalendarDays, CheckSquare, Lock, MapPinned, MoreHorizontal, Sparkles, Wand2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
@@ -241,6 +241,8 @@ type ItemFilterKey = 'all' | 'urgent' | 'needs_draft' | 'has_draft' | 'news_crea
 type SignalFilterKey = 'all' | ContentMixKey;
 type ViewPresetKey = 'overview' | 'urgent' | 'ready' | 'published' | 'focus' | 'custom';
 type QuickActionKey = 'create_month_plan' | 'open_week' | 'weak_locations' | 'fix_gaps' | 'repeat_template';
+type ContentPlanZone = 'overview' | 'plan' | 'queue' | 'editor';
+type ContentPlanMode = 'point' | 'network';
 
 const CONTENT_MIX_OPTIONS: Array<{ key: ContentMixKey; labelRu: string; labelEn: string }> = [
   { key: 'services', labelRu: 'Услуги', labelEn: 'Services' },
@@ -301,9 +303,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [bulkNewsReview, setBulkNewsReview] = useState<BulkNewsReview | null>(null);
   const [bulkActionReview, setBulkActionReview] = useState<BulkActionReview | null>(null);
   const [recentGeneratedItemId, setRecentGeneratedItemId] = useState('');
-  const [activeStage, setActiveStage] = useState<'build' | 'work'>('build');
+  const [activeZone, setActiveZone] = useState<ContentPlanZone>('overview');
+  const [contentMode, setContentMode] = useState<ContentPlanMode>('point');
   const [selectedQueueItemId, setSelectedQueueItemId] = useState('');
   const [showSelectedItemDetails, setShowSelectedItemDetails] = useState(false);
+  const [selectedItemIds, setSelectedItemIds] = useState<Record<string, boolean>>({});
+  const [showRecentPlans, setShowRecentPlans] = useState(false);
 
   const allowedHorizons = context?.subscription?.allowed_horizons || [30];
   const scopeOptions = context?.scope?.scope_options || [];
@@ -319,6 +324,16 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const hasSearchFoundation = mapLinksCount > 0 && seoKeywordsCount > 0;
   const hasOnlyServicesGap = missingInputs.length === 1 && missingInputs.includes('services');
   const networkHasSearchPlanFoundation = isNetworkContext && hasSearchFoundation && hasOnlyServicesGap;
+  const isNetworkMode = contentMode === 'network' && isNetworkContext;
+  const networkScopeOption = useMemo(() => (
+    scopeOptions.find((item) => item.scope_type === 'network_parent') || null
+  ), [scopeOptions]);
+  const pointScopeOption = useMemo(() => (
+    scopeOptions.find((item) => item.is_current)
+    || scopeOptions.find((item) => item.scope_type !== 'network_parent')
+    || scopeOptions[0]
+    || null
+  ), [scopeOptions]);
 
   const selectedScopeOption = useMemo(() => (
     scopeOptions.find((item) => `${item.scope_type}:${item.scope_target_id}` === selectedScopeKey) || null
@@ -506,6 +521,15 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const bulkNewsCandidates = useMemo(() => (
     visibleItems.filter((item) => String(item.draft_text || '').trim() && !String(item.usernews_id || '').trim())
   ), [visibleItems]);
+  const selectedItems = useMemo(() => (
+    visibleItems.filter((item) => Boolean(selectedItemIds[item.id]))
+  ), [selectedItemIds, visibleItems]);
+  const selectedDraftCandidates = useMemo(() => (
+    selectedItems.filter((item) => !String(item.draft_text || '').trim() && !String(item.usernews_id || '').trim())
+  ), [selectedItems]);
+  const selectedNewsCandidates = useMemo(() => (
+    selectedItems.filter((item) => String(item.draft_text || '').trim() && !String(item.usernews_id || '').trim())
+  ), [selectedItems]);
   const missingDateCandidates = useMemo(() => (
     visibleItems.filter((item) => !_inputDateValue(item.scheduled_for) && !String(item.usernews_id || '').trim())
   ), [visibleItems]);
@@ -535,6 +559,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       },
     );
   }, [currentPlan?.items]);
+  const overviewRiskScore = useMemo(() => {
+    const networkRisk = Math.max(...(learningMetrics?.network_quality || []).map((item) => Number(item.risk_score || 0)), 0);
+    const skippedRisk = planOperationalSummary.skipped > 0 ? Math.min(100, planOperationalSummary.skipped * 12) : 0;
+    const emptyRisk = planOperationalSummary.total > 0 && planOperationalSummary.needsDraft === planOperationalSummary.total ? 35 : 0;
+    return Math.max(networkRisk, skippedRisk, emptyRisk);
+  }, [learningMetrics?.network_quality, planOperationalSummary.needsDraft, planOperationalSummary.skipped, planOperationalSummary.total]);
   const repeatTemplateCandidate = useMemo(() => (
     (currentPlan?.items || []).find((item) => (
       Boolean(String(item.draft_text || item.usernews_id || '').trim())
@@ -552,7 +582,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     },
     {
       key: 'ready',
-      label: isRu ? 'К публикации' : 'Ready to publish',
+      label: isRu ? 'Готово к публикации' : 'Ready to publish',
     },
     {
       key: 'published',
@@ -623,7 +653,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       .slice(0, 6);
   }, [currentPlan?.items, isRu]);
   const networkOperatingSlices = useMemo<NetworkOperatingSlice[]>(() => {
-    if (!isNetworkContext || !currentPlan?.items?.length) return [];
+    if (!isNetworkMode || !currentPlan?.items?.length) return [];
     const qualityByLocation = new Map<string, NonNullable<LearningMetricsPayload['network_quality']>[number]>();
     for (const item of learningMetrics?.network_quality || []) {
       const key = String(item.key || '').trim();
@@ -698,7 +728,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         return right.total - left.total;
       })
       .slice(0, 5);
-  }, [currentPlan?.items, isNetworkContext, isRu, learningMetrics?.network_quality]);
+  }, [currentPlan?.items, isNetworkMode, isRu, learningMetrics?.network_quality]);
   const quickActions = useMemo(() => {
     const weakLocation = (learningMetrics?.network_quality || [])[0];
     const focusSlice = locationWeekFocusSummary[0];
@@ -738,7 +768,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       },
       {
         key: 'fix_gaps',
-        title: isRu ? 'Исправить пропуски' : 'Fix gaps',
+        title: isRu ? 'Дописать пустые темы' : 'Fill empty topics',
         description: isRu
           ? 'Открыть темы без текста и готовые черновики, которые ещё не стали новостями.'
           : 'Open items without drafts and drafts that are not yet news.',
@@ -943,6 +973,19 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   }, [selectedScopeKey, businessId]);
 
   useEffect(() => {
+    if (!scopeOptions.length) return;
+    if (contentMode === 'network' && networkScopeOption) {
+      const nextKey = `${networkScopeOption.scope_type}:${networkScopeOption.scope_target_id}`;
+      if (selectedScopeKey !== nextKey) setSelectedScopeKey(nextKey);
+      return;
+    }
+    if (contentMode === 'point' && pointScopeOption) {
+      const nextKey = `${pointScopeOption.scope_type}:${pointScopeOption.scope_target_id}`;
+      if (selectedScopeKey !== nextKey) setSelectedScopeKey(nextKey);
+    }
+  }, [contentMode, networkScopeOption, pointScopeOption, scopeOptions.length, selectedScopeKey]);
+
+  useEffect(() => {
     if (availableWeeks.some((week) => week.key === selectedWeekKey)) return;
     setSelectedWeekKey('all');
   }, [availableWeeks, selectedWeekKey]);
@@ -955,6 +998,17 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (selectedQueueItemId && visibleItems.some((item) => item.id === selectedQueueItemId)) return;
     setSelectedQueueItemId(visibleItems[0].id);
   }, [selectedQueueItemId, visibleItems]);
+
+  useEffect(() => {
+    setSelectedItemIds((prev) => {
+      const visibleIds = new Set(visibleItems.map((item) => item.id));
+      const next: Record<string, boolean> = {};
+      for (const [itemId, isSelected] of Object.entries(prev)) {
+        if (isSelected && visibleIds.has(itemId)) next[itemId] = true;
+      }
+      return next;
+    });
+  }, [visibleItems]);
 
   useEffect(() => {
     if (!businessId) return;
@@ -1047,6 +1101,22 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     setContentMix((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
+  const toggleSelectedItem = (itemId: string) => {
+    setSelectedItemIds((prev) => {
+      const next = { ...prev };
+      if (next[itemId]) {
+        delete next[itemId];
+      } else {
+        next[itemId] = true;
+      }
+      return next;
+    });
+  };
+
+  const clearSelectedItems = () => {
+    setSelectedItemIds({});
+  };
+
   const generatePlan = async (periodOverride?: string) => {
     if (!businessId || !selectedScopeOption) return;
     setGenerating(true);
@@ -1065,7 +1135,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         }),
       });
       setCurrentPlan(response.plan || null);
-      setActiveStage('work');
+      setActiveZone('queue');
       await loadPlans();
       await loadLearningMetrics();
     } catch (generationError) {
@@ -1195,6 +1265,62 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     } finally {
       setBulkBusyAction('');
     }
+  };
+
+  const runSelectedGenerateDrafts = async () => {
+    if (selectedDraftCandidates.length === 0) return;
+    setBulkBusyAction('selected-drafts');
+    setError('');
+    setActionSummary(null);
+    try {
+      let generatedCount = 0;
+      let failedCount = 0;
+      const failedThemes: string[] = [];
+      const generatedIds: string[] = [];
+      for (const item of selectedDraftCandidates) {
+        try {
+          const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}/generate-draft`, {
+            method: 'POST',
+          });
+          setCurrentPlan(response.plan || null);
+          generatedCount += 1;
+          generatedIds.push(item.id);
+        } catch {
+          failedCount += 1;
+          failedThemes.push(String(item.theme || item.goal || item.id || '').trim());
+        }
+      }
+      if (generatedIds.length > 0) {
+        setDraftEdits((prev) => _removeRecordKeys(prev, generatedIds));
+      }
+      await loadLearningMetrics();
+      clearSelectedItems();
+      setActionSummary({
+        tone: failedCount > 0 ? 'warning' : 'success',
+        text_ru: _bulkResultText('drafts', generatedCount, failedCount, true),
+        text_en: _bulkResultText('drafts', generatedCount, failedCount, false),
+        details_ru: _bulkResultDetails(failedThemes, true),
+        details_en: _bulkResultDetails(failedThemes, false),
+      });
+    } catch (draftError) {
+      const message = draftError instanceof Error ? draftError.message : (isRu ? 'Не удалось сгенерировать тексты' : 'Could not generate texts');
+      setError(message);
+    } finally {
+      setBulkBusyAction('');
+    }
+  };
+
+  const runSelectedCreateNews = () => {
+    if (selectedNewsCandidates.length === 0) return;
+    setBulkNewsReview({
+      key: 'selected',
+      titleRu: 'Создать выбранные новости',
+      titleEn: 'Create selected news',
+      descriptionRu: 'Будут созданы новости только из отмеченных тем. Проверьте выборку перед запуском.',
+      descriptionEn: 'News will be created only from selected topics. Review the selection before continuing.',
+      items: selectedNewsCandidates,
+      busyAction: 'selected-news',
+    });
   };
 
   const runBulkCreateNews = async () => {
@@ -1814,6 +1940,13 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }
   };
 
+  const contentPlanZones: Array<{ key: ContentPlanZone; titleRu: string; titleEn: string; hintRu: string; hintEn: string }> = [
+    { key: 'overview', titleRu: 'Обзор', titleEn: 'Overview', hintRu: 'Состояние и следующий шаг', hintEn: 'Status and next step' },
+    { key: 'plan', titleRu: 'План', titleEn: 'Plan', hintRu: 'Точка, сеть и источники', hintEn: 'Location, network, inputs' },
+    { key: 'queue', titleRu: 'Очередь', titleEn: 'Queue', hintRu: 'Темы без лишних деталей', hintEn: 'Topics without noise' },
+    { key: 'editor', titleRu: 'Редактор', titleEn: 'Editor', hintRu: 'Одна тема до новости', hintEn: 'One topic to news' },
+  ];
+
   if (!businessId) {
     return (
       <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-6 py-8 text-sm text-gray-600">
@@ -1832,12 +1965,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
               {isRu ? 'Контент-план' : 'Content plan'}
             </div>
             <h4 className="text-xl font-semibold text-slate-950">
-              {isRu ? 'План публикаций для карт' : 'Maps content plan'}
+              {isRu ? 'Новости, сторис и контент-план' : 'News, stories, and content plan'}
             </h4>
             <p className="max-w-3xl text-sm leading-6 text-slate-600">
               {isRu
-                ? 'Соберите план на 30/60/90 дней на основе услуг, SEO-ключей, продаж, отзывов и слабых зон карточки.'
-                : 'Build a 30/60/90 day plan using services, SEO, sales, reviews, and listing weak spots.'}
+                ? 'Один рабочий экран: понять состояние, собрать план, разобрать очередь и довести выбранную тему до новости.'
+                : 'One workspace: understand status, build the plan, work the queue, and turn one selected topic into news.'}
             </p>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
@@ -1852,54 +1985,157 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       </div>
 
       <div className="rounded-[28px] border border-slate-200 bg-white p-2 shadow-sm">
-        <div className="grid gap-2 md:grid-cols-2">
+        <div className="grid gap-2 md:grid-cols-4">
+          {contentPlanZones.map((zone) => (
+            <button
+              key={zone.key}
+              type="button"
+              onClick={() => setActiveZone(zone.key)}
+              className={[
+                'rounded-3xl px-4 py-4 text-left transition-colors',
+                activeZone === zone.key
+                  ? 'bg-slate-950 text-white shadow-sm'
+                  : 'bg-transparent text-slate-600 hover:bg-slate-50',
+              ].join(' ')}
+            >
+              <div className="text-lg font-semibold">{isRu ? zone.titleRu : zone.titleEn}</div>
+              <div className={['mt-1 text-sm leading-5', activeZone === zone.key ? 'text-slate-300' : 'text-slate-500'].join(' ')}>
+                {isRu ? zone.hintRu : zone.hintEn}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="text-sm font-semibold text-slate-950">
+            {isRu ? 'Режим работы' : 'Mode'}
+          </div>
+          <div className="text-sm text-slate-500">
+            {isRu
+              ? 'В точке показываем только локальную работу. В сети — операционный обзор по точкам.'
+              : 'Location mode shows local work. Network mode shows the operating view across locations.'}
+          </div>
+        </div>
+        <div className="grid w-full grid-cols-2 rounded-2xl bg-slate-100 p-1 sm:w-[260px]">
           <button
             type="button"
-            onClick={() => setActiveStage('build')}
+            onClick={() => setContentMode('point')}
             className={[
-              'rounded-3xl px-5 py-4 text-left transition-colors',
-              activeStage === 'build'
-                ? 'bg-slate-950 text-white shadow-sm'
-                : 'bg-transparent text-slate-600 hover:bg-slate-50',
+              'rounded-xl px-4 py-2 text-sm font-medium transition-colors',
+              contentMode === 'point' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-950',
             ].join(' ')}
           >
-            <div className="text-xs font-semibold uppercase tracking-[0.18em] opacity-70">
-              {isRu ? 'Этап 1' : 'Step 1'}
-            </div>
-            <div className="mt-1 text-lg font-semibold">{isRu ? 'Собрать план' : 'Build plan'}</div>
-            <div className={['mt-1 text-sm leading-6', activeStage === 'build' ? 'text-slate-300' : 'text-slate-500'].join(' ')}>
-              {isRu ? 'Точка или сеть, горизонт, плотность и источники.' : 'Scope, horizon, density, and data sources.'}
-            </div>
+            {isRu ? 'Точка' : 'Location'}
           </button>
           <button
             type="button"
-            onClick={() => setActiveStage('work')}
+            onClick={() => setContentMode('network')}
+            disabled={!isNetworkContext}
             className={[
-              'rounded-3xl px-5 py-4 text-left transition-colors',
-              activeStage === 'work'
-                ? 'bg-slate-950 text-white shadow-sm'
-                : 'bg-transparent text-slate-600 hover:bg-slate-50',
+              'rounded-xl px-4 py-2 text-sm font-medium transition-colors',
+              contentMode === 'network' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-950',
+              !isNetworkContext ? 'cursor-not-allowed opacity-50' : '',
             ].join(' ')}
           >
-            <div className="text-xs font-semibold uppercase tracking-[0.18em] opacity-70">
-              {isRu ? 'Этап 2' : 'Step 2'}
-            </div>
-            <div className="mt-1 flex items-center gap-2 text-lg font-semibold">
-              {isRu ? 'Рабочая очередь' : 'Work queue'}
-              {currentPlan?.items?.length ? (
-                <span className={['rounded-full px-2.5 py-1 text-xs', activeStage === 'work' ? 'bg-white/10 text-white' : 'bg-slate-100 text-slate-600'].join(' ')}>
-                  {currentPlan.items.length}
-                </span>
-              ) : null}
-            </div>
-            <div className={['mt-1 text-sm leading-6', activeStage === 'work' ? 'text-slate-300' : 'text-slate-500'].join(' ')}>
-              {isRu ? 'Одна выбранная тема, быстрые действия и массовые операции.' : 'One selected topic, quick actions, and bulk operations.'}
-            </div>
+            {isRu ? 'Сеть' : 'Network'}
           </button>
         </div>
       </div>
 
-      <div className={activeStage === 'build' ? 'space-y-6' : 'hidden'}>
+      <div className={activeZone === 'overview' ? 'space-y-6' : 'hidden'}>
+        <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+                {isRu ? 'Обзор' : 'Overview'}
+              </div>
+              <div className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
+                {currentPlan?.items?.length
+                  ? (planOperationalSummary.needsDraft > 0
+                    ? (isRu ? 'Сначала допишите пустые темы' : 'Start by filling empty topics')
+                    : planOperationalSummary.readyToPublish > 0
+                      ? (isRu ? 'Готовые тексты можно превратить в новости' : 'Ready texts can become news')
+                      : (isRu ? 'План выглядит спокойно' : 'The plan looks calm'))
+                  : (isRu ? 'Соберите первый план публикаций' : 'Build the first content plan')}
+              </div>
+              <div className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                {isRu
+                  ? 'Здесь только главное: состояние плана, слабое место и одно действие, которое двигает работу дальше.'
+                  : 'Only the essentials: plan status, weak spot, and one action that moves the work forward.'}
+              </div>
+            </div>
+            {!currentPlan?.items?.length ? (
+              <Button onClick={() => setActiveZone('plan')} disabled={loading}>
+                <Sparkles className="mr-2 h-4 w-4" />
+                {isRu ? 'Перейти к плану' : 'Go to plan'}
+              </Button>
+            ) : planOperationalSummary.needsDraft > 0 ? (
+              <Button onClick={() => { applyViewPreset('urgent'); setActiveZone('queue'); }}>
+                {isRu ? 'Дописать пустые темы' : 'Fill empty topics'}
+              </Button>
+            ) : planOperationalSummary.readyToPublish > 0 ? (
+              <Button onClick={() => { applyViewPreset('ready'); setActiveZone('queue'); }}>
+                {isRu ? 'Открыть готовые к публикации' : 'Open ready to publish'}
+              </Button>
+            ) : (
+              <Button onClick={() => setActiveZone('plan')}>
+                {isRu ? 'Собрать новый план' : 'Build a new plan'}
+              </Button>
+            )}
+          </div>
+
+          <div className="mt-6 grid gap-3 md:grid-cols-5">
+            <div className="rounded-2xl bg-emerald-50 px-4 py-4">
+              <div className="text-2xl font-semibold text-emerald-950">{planOperationalSummary.readyToPublish}</div>
+              <div className="mt-1 text-sm text-emerald-800">{isRu ? 'Готово к публикации' : 'Ready to publish'}</div>
+            </div>
+            <div className="rounded-2xl bg-amber-50 px-4 py-4">
+              <div className="text-2xl font-semibold text-amber-950">{planOperationalSummary.needsDraft}</div>
+              <div className="mt-1 text-sm text-amber-800">{isRu ? 'Без текста' : 'No text'}</div>
+            </div>
+            <div className="rounded-2xl bg-slate-50 px-4 py-4">
+              <div className="text-2xl font-semibold text-slate-950">{planOperationalSummary.published}</div>
+              <div className="mt-1 text-sm text-slate-600">{isRu ? 'Создано' : 'Created'}</div>
+            </div>
+            <div className="rounded-2xl bg-rose-50 px-4 py-4">
+              <div className="text-2xl font-semibold text-rose-950">{Number(overviewRiskScore || 0).toFixed(0)}</div>
+              <div className="mt-1 text-sm text-rose-800">{isRu ? 'Риск / слабые точки' : 'Risk / weak spots'}</div>
+            </div>
+            <div className="rounded-2xl bg-blue-50 px-4 py-4">
+              <div className="text-2xl font-semibold text-blue-950">{planOperationalSummary.total}</div>
+              <div className="mt-1 text-sm text-blue-800">{isRu ? 'Тем в плане' : 'Plan topics'}</div>
+            </div>
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <button
+              type="button"
+              onClick={() => setShowLearningDetails((prev) => !prev)}
+              className="flex w-full items-center justify-between gap-3 text-left text-sm font-semibold text-slate-900"
+            >
+              <span>{isRu ? 'Что система уже поняла' : 'What the system already learned'}</span>
+              <span className="text-xs text-slate-500">{showLearningDetails ? (isRu ? 'Скрыть' : 'Hide') : (isRu ? 'Показать' : 'Show')}</span>
+            </button>
+            {showLearningDetails ? (
+              <div className="mt-3 grid gap-2 lg:grid-cols-2">
+                {(operatorQualityInsights.length > 0 ? operatorQualityInsights : [{
+                  key: 'empty-learning',
+                  textRu: 'Пока мало истории. После публикаций здесь появятся подсказки по темам и источникам.',
+                  textEn: 'There is not enough history yet. Topic and source hints will appear after publications.',
+                }]).map((item) => (
+                  <div key={item.key} className="rounded-xl bg-white px-3 py-2 text-sm leading-6 text-slate-700">
+                    {isRu ? item.textRu : item.textEn}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
+      <div className={activeZone === 'plan' ? 'space-y-6' : 'hidden'}>
       {selectedScopeDescription ? (
         <div className="rounded-2xl border border-indigo-100 bg-indigo-50/70 px-5 py-4 text-sm text-indigo-950">
           <div className="font-semibold">
@@ -2449,7 +2685,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
 
       </div>
 
-      <div className={activeStage === 'work' ? 'rounded-2xl border border-slate-200 bg-white p-5 shadow-sm' : 'hidden'}>
+      <div className={activeZone === 'queue' || activeZone === 'editor' ? 'rounded-2xl border border-slate-200 bg-white p-5 shadow-sm' : 'hidden'}>
         <div className="flex items-center justify-between gap-4">
           <div>
             <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -2462,9 +2698,16 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
           <div className="text-sm text-slate-600">
             {plans.length > 0 ? `${plans.length}` : '0'}
           </div>
+          <button
+            type="button"
+            onClick={() => setShowRecentPlans((prev) => !prev)}
+            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+          >
+            {showRecentPlans ? (isRu ? 'Скрыть' : 'Hide') : (isRu ? 'Показать' : 'Show')}
+          </button>
         </div>
 
-        {plans.length > 0 ? (
+        {showRecentPlans && plans.length > 0 ? (
           <div className="mt-4 space-y-3">
             <div className="flex flex-wrap gap-2">
               {availablePlanTargets.map((target) => (
@@ -2574,7 +2817,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 ))}
               </div>
             </div>
-            {itemLocationSummary.length > 1 ? (
+            {isNetworkMode && itemLocationSummary.length > 1 ? (
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
                 <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                   {isRu ? 'Распределение по точкам' : 'Distribution by location'}
@@ -2780,7 +3023,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                           {isRu ? 'Без текста' : 'No draft'} · {focus.needsDraft}
                         </span>
                         <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-800">
-                          {isRu ? 'К публикации' : 'Ready'} · {focus.readyToPublish}
+                          {isRu ? 'Готово к публикации' : 'Ready'} · {focus.readyToPublish}
                         </span>
                       </div>
                     </button>
@@ -3096,7 +3339,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 </button>
               ))}
             </div>
-            {availableItemLocations.length > 1 ? (
+            {isNetworkMode && availableItemLocations.length > 1 ? (
               <div className="flex flex-wrap gap-2">
                 {availableItemLocations.map((location) => (
                   <button
@@ -3115,7 +3358,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 ))}
               </div>
             ) : null}
-            {locationOperationalSummary.length > 1 ? (
+            {isNetworkMode && locationOperationalSummary.length > 1 ? (
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {locationOperationalSummary.map((location) => (
                   <button
@@ -3243,40 +3486,39 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   {isRu ? 'Сбросить вид' : 'Reset view'}
                 </button>
               </div>
-              <Button
-                variant="outline"
-                onClick={() => { void runBulkGenerateDrafts(); }}
-                disabled={Boolean(bulkBusyAction) || bulkDraftCandidates.length === 0}
-              >
-                <Sparkles className="mr-2 h-4 w-4" />
-                {bulkBusyAction === 'drafts'
-                  ? (isRu ? 'Генерируем черновики...' : 'Generating drafts...')
-                  : `${isRu ? 'Сгенерировать по выборке' : 'Generate for filtered'} · ${bulkDraftCandidates.length}`}
-              </Button>
-              {missingDateCandidates.length > 0 ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => { void runBulkAutofillDates(); }}
-                  disabled={Boolean(bulkBusyAction)}
-                >
-                  {bulkBusyAction === 'autofill-dates'
-                    ? (isRu ? 'Расставляем даты...' : 'Assigning dates...')
-                    : `${isRu ? 'Расставить даты автоматически' : 'Auto-assign dates'} · ${missingDateCandidates.length}`}
-                </Button>
+              {selectedItems.length > 0 ? (
+                <div className="flex w-full flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-3">
+                  <div className="mr-auto flex items-center gap-2 text-sm font-medium text-slate-900">
+                    <CheckSquare className="h-4 w-4" />
+                    {isRu ? `Выбрано: ${selectedItems.length}` : `Selected: ${selectedItems.length}`}
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => { void runSelectedGenerateDrafts(); }}
+                    disabled={Boolean(bulkBusyAction) || selectedDraftCandidates.length === 0}
+                  >
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    {bulkBusyAction === 'selected-drafts'
+                      ? (isRu ? 'Генерируем тексты...' : 'Generating texts...')
+                      : `${isRu ? 'Сгенерировать тексты' : 'Generate texts'} · ${selectedDraftCandidates.length}`}
+                  </Button>
+                  <Button
+                    onClick={runSelectedCreateNews}
+                    disabled={Boolean(bulkBusyAction) || selectedNewsCandidates.length === 0}
+                  >
+                    {bulkBusyAction === 'selected-news'
+                      ? (isRu ? 'Создаём новости...' : 'Creating news...')
+                      : `${isRu ? 'Создать выбранные новости' : 'Create selected news'} · ${selectedNewsCandidates.length}`}
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={clearSelectedItems}>
+                    {isRu ? 'Снять выбор' : 'Clear'}
+                  </Button>
+                </div>
               ) : null}
-              <Button
-                onClick={() => { void runBulkCreateNews(); }}
-                disabled={Boolean(bulkBusyAction) || bulkNewsCandidates.length === 0}
-              >
-                {bulkBusyAction === 'news'
-                  ? (isRu ? 'Создаём новости...' : 'Creating news...')
-                  : `${isRu ? 'Создать новости по выборке' : 'Create news for filtered'} · ${bulkNewsCandidates.length}`}
-              </Button>
             </div>
             {visibleItems.length > 0 ? (
-              <div className="grid gap-4 xl:grid-cols-[minmax(280px,0.75fr)_minmax(0,1.35fr)]">
-                <div className="rounded-[28px] border border-slate-200 bg-slate-50 p-3">
+              <div className={activeZone === 'editor' ? 'grid gap-4' : 'grid gap-4 xl:grid-cols-[minmax(280px,0.75fr)_minmax(0,1.35fr)]'}>
+                <div className={activeZone === 'editor' ? 'hidden' : 'rounded-[28px] border border-slate-200 bg-slate-50 p-3'}>
                   <div className="px-2 pb-3">
                     <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                       {isRu ? 'Очередь тем' : 'Topic queue'}
@@ -3293,10 +3535,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                         <button
                           key={item.id}
                           type="button"
-                          onClick={() => {
-                            setSelectedQueueItemId(item.id);
-                            setShowSelectedItemDetails(false);
-                          }}
+	                          onClick={() => {
+	                            setSelectedQueueItemId(item.id);
+	                            setShowSelectedItemDetails(false);
+                            setActiveZone('editor');
+	                          }}
                           className={[
                             'w-full rounded-2xl border px-4 py-3 text-left transition-colors',
                             isSelected
@@ -3304,8 +3547,26 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               : 'border-transparent bg-white/70 hover:border-slate-200 hover:bg-white',
                           ].join(' ')}
                         >
-                          <div className="flex items-start justify-between gap-3">
-                            <span className={status.className}>{status.label}</span>
+	                          <div className="flex items-start justify-between gap-3">
+                            <span className="flex items-center gap-2">
+                              <span
+                                role="checkbox"
+                                aria-checked={Boolean(selectedItemIds[item.id])}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  toggleSelectedItem(item.id);
+                                }}
+                                className={[
+                                  'flex h-5 w-5 items-center justify-center rounded-md border transition-colors',
+                                  selectedItemIds[item.id]
+                                    ? 'border-slate-900 bg-slate-900 text-white'
+                                    : 'border-slate-300 bg-white text-transparent',
+                                ].join(' ')}
+                              >
+                                <CheckSquare className="h-3.5 w-3.5" />
+                              </span>
+	                            <span className={status.className}>{status.label}</span>
+                            </span>
                             <span className="shrink-0 text-xs font-medium text-slate-400">
                               {_formatPlanItemDate(item.scheduled_for, isRu)}
                             </span>
@@ -3323,7 +3584,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                                 <span>{_seoViewsLabel(item, isRu)}</span>
                               </>
                             ) : null}
-                            {item.location_label ? (
+                            {isNetworkMode && item.location_label ? (
                               <>
                                 <span>·</span>
                                 <span className="line-clamp-1">{_itemLocationLabel(item, isRu)}</span>
@@ -3336,7 +3597,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   </div>
                 </div>
 
-                {selectedQueueItem ? (() => {
+                {activeZone === 'editor' && selectedQueueItem ? (() => {
                   const item = selectedQueueItem;
                   const currentDraft = draftEdits[item.id] !== undefined ? draftEdits[item.id] : item.draft_text;
                   const currentTheme = themeEdits[item.id] !== undefined ? themeEdits[item.id] : item.theme;
@@ -3357,7 +3618,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
                               {_contentTypeLabel(item.content_type, isRu)}
                             </span>
-                            {item.location_label ? (
+                            {isNetworkMode && item.location_label ? (
                               <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-800">
                                 {_itemLocationLabel(item, isRu)}
                               </span>
@@ -3431,16 +3692,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                         />
                       </div>
 
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {!hasDraft ? (
-                          <Button
-                            onClick={() => generateDraft(item.id)}
-                            disabled={busyItemId === item.id}
-                          >
-                            <Sparkles className="mr-2 h-4 w-4" />
-                            {isRu ? 'Сгенерировать текст' : 'Generate draft'}
-                          </Button>
-                        ) : (
+                      <div className="sticky bottom-3 z-10 mt-5 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white/95 px-3 py-3 shadow-lg backdrop-blur">
                           <Button
                             onClick={() => createNews(item.id)}
                             disabled={busyItemId === item.id || !String(currentDraft || '').trim() || hasNews}
@@ -3449,59 +3701,74 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               ? (isRu ? 'Новость создана' : 'News created')
                               : (isRu ? 'Создать новость' : 'Create news')}
                           </Button>
-                        )}
-                        <Button
-                          variant="outline"
-                          onClick={() => saveItem(item.id)}
-                          disabled={busyItemId === item.id}
-                        >
-                          {isRu ? 'Сохранить' : 'Save'}
-                        </Button>
-                        {hasDraft ? (
                           <Button
-                            type="button"
                             variant="outline"
-                            onClick={() => generateDraft(item.id)}
+                            onClick={() => saveItem(item.id)}
                             disabled={busyItemId === item.id}
                           >
-                            <Sparkles className="mr-2 h-4 w-4" />
-                            {isRu ? 'Перегенерировать' : 'Regenerate'}
+                            {isRu ? 'Сохранить' : 'Save'}
                           </Button>
-                        ) : null}
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => runItemReschedule(item.id, currentDate, 7)}
-                          disabled={busyItemId === item.id}
-                        >
-                          {isRu ? '+7 дней' : '+7 days'}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => runItemDuplicate(item.id)}
-                          disabled={busyItemId === item.id}
-                        >
-                          {isRu ? 'Дублировать' : 'Duplicate'}
-                        </Button>
-                        {availableItemLocations.length > 2 ? (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => openDuplicateTargetPicker(item)}
-                            disabled={busyItemId === item.id || !String(currentDraft || item.usernews_id || '').trim()}
-                          >
-                            {isRu ? 'Выбрать точки' : 'Choose locations'}
-                          </Button>
-                        ) : null}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          onClick={() => runItemSkip(item.id)}
-                          disabled={busyItemId === item.id}
-                        >
-                          {isRu ? 'Пропустить' : 'Skip'}
-                        </Button>
+                          {!hasDraft ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => generateDraft(item.id)}
+                              disabled={busyItemId === item.id}
+                            >
+                              <Sparkles className="mr-2 h-4 w-4" />
+                              {isRu ? 'Сгенерировать текст' : 'Generate text'}
+                            </Button>
+                          ) : null}
+                          <details className="relative">
+                            <summary className="flex cursor-pointer list-none items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                              <MoreHorizontal className="h-4 w-4" />
+                              {isRu ? 'Ещё' : 'More'}
+                            </summary>
+                            <div className="absolute bottom-11 right-0 z-20 w-56 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+                              <button
+                                type="button"
+                                onClick={() => generateDraft(item.id)}
+                                disabled={busyItemId === item.id}
+                                className="block w-full rounded-xl px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                              >
+                                {hasDraft ? (isRu ? 'Перегенерировать' : 'Regenerate') : (isRu ? 'Сгенерировать текст' : 'Generate text')}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => runItemReschedule(item.id, currentDate, 7)}
+                                disabled={busyItemId === item.id}
+                                className="block w-full rounded-xl px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                              >
+                                {isRu ? 'Перенести на 7 дней' : 'Move by 7 days'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => runItemDuplicate(item.id)}
+                                disabled={busyItemId === item.id}
+                                className="block w-full rounded-xl px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                              >
+                                {isRu ? 'Дублировать' : 'Duplicate'}
+                              </button>
+                              {isNetworkMode && availableItemLocations.length > 2 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => openDuplicateTargetPicker(item)}
+                                  disabled={busyItemId === item.id || !String(currentDraft || item.usernews_id || '').trim()}
+                                  className="block w-full rounded-xl px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                >
+                                  {isRu ? 'Выбрать точки' : 'Choose locations'}
+                                </button>
+                              ) : null}
+                              <button
+                                type="button"
+                                onClick={() => runItemSkip(item.id)}
+                                disabled={busyItemId === item.id}
+                                className="block w-full rounded-xl px-3 py-2 text-left text-sm text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                              >
+                                {isRu ? 'Пропустить' : 'Skip'}
+                              </button>
+                            </div>
+                          </details>
                       </div>
 
                       <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
@@ -3784,7 +4051,7 @@ function _planItemStatus(item: Pick<PlanItem, 'draft_text' | 'usernews_id' | 'st
   }
   if (hasDraft) {
     return {
-      label: isRu ? 'К публикации' : 'Ready',
+      label: isRu ? 'Готово к публикации' : 'Ready',
       className: `${baseClassName} bg-sky-100 text-sky-800`,
     };
   }
@@ -3904,10 +4171,10 @@ function _signalFilterLabel(filterKey: SignalFilterKey, isRu: boolean): string {
 function _sourceKindLabel(sourceKind: string, isRu: boolean): string {
   const normalized = String(sourceKind || '').trim().toLowerCase();
   if (normalized === 'seo_keyword') return isRu ? 'SEO-сигнал' : 'SEO signal';
-  if (normalized === 'service') return isRu ? 'Сигнал услуги' : 'Service signal';
-  if (normalized === 'transaction') return isRu ? 'Сигнал продаж' : 'Sales signal';
-  if (normalized === 'audit_signal') return isRu ? 'Сигнал аудита' : 'Audit signal';
-  if (normalized === 'seasonal') return isRu ? 'Сезонный сигнал' : 'Seasonal signal';
+  if (normalized === 'service') return isRu ? 'Основание: услуга' : 'Reason: service';
+  if (normalized === 'transaction') return isRu ? 'Основание: продажи' : 'Reason: sales';
+  if (normalized === 'audit_signal') return isRu ? 'Основание: аудит' : 'Reason: audit';
+  if (normalized === 'seasonal') return isRu ? 'Основание: сезон' : 'Reason: season';
   if (normalized === 'fallback') return isRu ? 'Базовый сигнал' : 'Baseline signal';
   return isRu ? 'Сигнал' : 'Signal';
 }

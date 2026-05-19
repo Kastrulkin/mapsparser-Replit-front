@@ -25,6 +25,14 @@ interface AgentClient {
   last_seen_at?: string | null;
 }
 
+interface TelegramSender {
+  username?: string;
+  telegram_id?: string;
+  sender_type?: string;
+  chat_id?: string;
+  message_id?: string;
+}
+
 interface LedgerItem {
   id: string;
   agent_client_id?: string;
@@ -35,6 +43,13 @@ interface LedgerItem {
   risk_level: string;
   status: string;
   reason_code?: string;
+  input_summary?: unknown;
+  output_summary?: unknown;
+  metadata_json?: {
+    sender?: TelegramSender;
+    agent_client_status?: string;
+    transport_reason?: string;
+  };
   created_at?: string;
 }
 
@@ -81,6 +96,24 @@ const formatDateTime = (value?: string | null) => {
 
 const normalizeScopesText = (scopes: string[]) => scopes.join('\n');
 
+const extractTelegramSender = (item: LedgerItem): TelegramSender => {
+  const metadataSender = item.metadata_json?.sender;
+  if (metadataSender) return metadataSender;
+  if (item.input_summary && typeof item.input_summary === 'object') {
+    const input = Object(item.input_summary);
+    if ('username' in input || 'telegram_id' in input) {
+      return {
+        username: typeof input.username === 'string' ? input.username : '',
+        telegram_id: typeof input.telegram_id === 'string' ? input.telegram_id : '',
+        sender_type: typeof input.sender_type === 'string' ? input.sender_type : '',
+        chat_id: typeof input.chat_id === 'string' ? input.chat_id : '',
+        message_id: typeof input.message_id === 'string' ? input.message_id : '',
+      };
+    }
+  }
+  return {};
+};
+
 export const AgentApiManagement = () => {
   const [clients, setClients] = useState<AgentClient[]>([]);
   const [ledger, setLedger] = useState<LedgerItem[]>([]);
@@ -108,6 +141,18 @@ export const AgentApiManagement = () => {
     const denied = ledger.filter((item) => item.status === 'denied').length;
     return { live, sandbox, suspended, pending, denied };
   }, [clients, ledger]);
+
+  const telegramEvents = useMemo(
+    () => ledger.filter((item) => item.action_type === 'telegram_agent_transport_message'),
+    [ledger],
+  );
+
+  const telegramMetrics = useMemo(() => {
+    const unbound = telegramEvents.filter((item) => !item.agent_client_id).length;
+    const blocked = telegramEvents.filter((item) => item.status === 'denied').length;
+    const sandbox = telegramEvents.filter((item) => item.reason_code === 'TELEGRAM_AGENT_TRANSPORT_SANDBOX').length;
+    return { total: telegramEvents.length, unbound, blocked, sandbox };
+  }, [telegramEvents]);
 
   const apiRequest = async (url: string, options?: RequestInit) => {
     const token = await newAuth.getToken();
@@ -325,6 +370,71 @@ export const AgentApiManagement = () => {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="rounded-2xl border-slate-200 shadow-none">
+        <CardHeader>
+          <CardTitle>Telegram transport</CardTitle>
+          <CardDescription>
+            Bot-to-bot события не идут в обычную автоматизацию: сначала binding, ledger и approval flow.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="rounded-2xl border border-slate-200 p-3">
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">События</div>
+              <div className="mt-1 text-xl font-semibold text-slate-950">{telegramMetrics.total}</div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 p-3">
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Без binding</div>
+              <div className="mt-1 text-xl font-semibold text-slate-950">{telegramMetrics.unbound}</div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 p-3">
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Blocked</div>
+              <div className="mt-1 text-xl font-semibold text-slate-950">{telegramMetrics.blocked}</div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 p-3">
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Sandbox</div>
+              <div className="mt-1 text-xl font-semibold text-slate-950">{telegramMetrics.sandbox}</div>
+            </div>
+          </div>
+          {telegramEvents.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 p-5 text-sm text-slate-500">
+              Telegram-agent событий пока нет. Если внешний бот напишет в LocalOS, событие появится здесь и в ledger.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {telegramEvents.slice(0, 8).map((item) => {
+                const sender = extractTelegramSender(item);
+                const botLabel = sender.username || sender.telegram_id || 'unknown bot';
+                return (
+                  <div key={item.id} className="grid gap-3 rounded-2xl border border-slate-200 p-3 text-sm lg:grid-cols-[1.1fr_0.8fr_1fr_0.7fr]">
+                    <div>
+                      <div className="font-semibold text-slate-950">{botLabel}</div>
+                      <div className="text-xs text-slate-500">
+                        {item.agent_client_id ? `client ${item.agent_client_id.slice(0, 8)}` : 'не привязан к agent client'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs uppercase tracking-[0.14em] text-slate-400">Причина</div>
+                      <div className="font-medium text-slate-800">{item.reason_code || 'recorded'}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs uppercase tracking-[0.14em] text-slate-400">Что сделали</div>
+                      <div className="text-slate-700">
+                        {item.metadata_json?.transport_reason || 'Записано в ledger, прямой routing отключён.'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs uppercase tracking-[0.14em] text-slate-400">Время</div>
+                      <div className="font-medium text-slate-800">{formatDateTime(item.created_at)}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {newKey ? (
         <Card className="rounded-2xl border-amber-200 bg-amber-50 shadow-none">

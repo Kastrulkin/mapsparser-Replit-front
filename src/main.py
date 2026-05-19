@@ -7,6 +7,7 @@ import json
 import sqlite3
 import uuid
 import base64
+import html
 import random
 import re
 import threading
@@ -301,6 +302,9 @@ PUBLIC_FRONTEND_DIST_DIR = os.path.abspath(
         os.path.join(os.path.dirname(__file__), '..', 'frontend', 'public-dist'),
     )
 )
+CONTENT_SEO_FILE = "content-seo.json"
+SITE_URL = "https://localos.pro"
+DEFAULT_OG_IMAGE = "https://localos.pro/assets/hero-image-BXgvVNKj.jpg"
 PUBLIC_AUDIT_APP_ROUTES = {
     "about",
     "contact",
@@ -570,13 +574,181 @@ def _detect_country_code() -> str:
     return 'US'
 
 
+def _normalize_content_route(path: str = "") -> str:
+    clean_path = str(path or "").strip().split("?", 1)[0].strip("/")
+    if not clean_path:
+        return "/"
+    return f"/{clean_path}"
+
+
+def _read_frontend_index_html() -> Optional[str]:
+    index_path = os.path.join(FRONTEND_DIST_DIR, "index.html")
+    try:
+        with open(index_path, "r", encoding="utf-8") as file:
+            return file.read()
+    except OSError as error:
+        logger.warning("Could not read frontend index.html for SEO injection: %s", error)
+        return None
+
+
+def _load_content_seo_data() -> Dict[str, Any]:
+    seo_path = os.path.join(FRONTEND_DIST_DIR, CONTENT_SEO_FILE)
+    try:
+        with open(seo_path, "r", encoding="utf-8") as file:
+            loaded = json.load(file)
+        if isinstance(loaded, dict):
+            return loaded
+    except OSError as error:
+        logger.info("Content SEO file is unavailable: %s", error)
+    except json.JSONDecodeError as error:
+        logger.warning("Content SEO file is invalid JSON: %s", error)
+    return {}
+
+
+def _escape_head_value(value: Any) -> str:
+    return html.escape(str(value or ""), quote=True)
+
+
+def _route_article_schema(route_path: str, route_seo: Dict[str, Any]) -> List[Dict[str, Any]]:
+    article_title = route_seo.get("articleTitle") or route_seo.get("title") or "LocalOS"
+    return [
+        {
+            "@context": "https://schema.org",
+            "@type": "Article",
+            "headline": article_title,
+            "description": route_seo.get("description") or "",
+            "datePublished": route_seo.get("publishedAt") or route_seo.get("updatedAt") or "",
+            "dateModified": route_seo.get("updatedAt") or route_seo.get("publishedAt") or "",
+            "mainEntityOfPage": f"{SITE_URL}{route_path}",
+            "author": {
+                "@type": "Organization",
+                "name": "LocalOS",
+            },
+            "publisher": {
+                "@type": "Organization",
+                "name": "LocalOS",
+            },
+        },
+        {
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+                {
+                    "@type": "ListItem",
+                    "position": 1,
+                    "name": "LocalOS",
+                    "item": f"{SITE_URL}/",
+                },
+                {
+                    "@type": "ListItem",
+                    "position": 2,
+                    "name": "Статьи",
+                    "item": f"{SITE_URL}/articles",
+                },
+                {
+                    "@type": "ListItem",
+                    "position": 3,
+                    "name": article_title,
+                    "item": f"{SITE_URL}{route_path}",
+                },
+            ],
+        },
+    ]
+
+
+def _schema_for_route(route_path: str, route_seo: Dict[str, Any]) -> Any:
+    explicit_schema = route_seo.get("schema")
+    if explicit_schema:
+        return explicit_schema
+    if route_seo.get("ogType") == "article":
+        return _route_article_schema(route_path, route_seo)
+    return None
+
+
+def _replace_or_insert_tag(html_text: str, pattern: str, replacement: str) -> str:
+    updated, count = re.subn(pattern, replacement, html_text, count=1, flags=re.IGNORECASE | re.DOTALL)
+    if count:
+        return updated
+    return html_text.replace("</head>", f"  {replacement}\n</head>", 1)
+
+
+def _set_named_meta(html_text: str, attribute: str, key: str, content: str) -> str:
+    escaped_content = _escape_head_value(content)
+    escaped_key = re.escape(key)
+    pattern = rf'<meta\s+{attribute}="{escaped_key}"[^>]*>'
+    replacement = f'<meta {attribute}="{key}" content="{escaped_content}" />'
+    return _replace_or_insert_tag(html_text, pattern, replacement)
+
+
+def _set_canonical(html_text: str, url: str) -> str:
+    replacement = f'<link rel="canonical" href="{_escape_head_value(url)}" />'
+    return _replace_or_insert_tag(html_text, r'<link\s+rel="canonical"[^>]*>', replacement)
+
+
+def _set_jsonld(html_text: str, schema: Any) -> str:
+    if not schema:
+        return html_text
+    jsonld = json.dumps(schema, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+    script = f'<script id="localos-jsonld" type="application/ld+json">{jsonld}</script>'
+    updated, count = re.subn(
+        r'<script\s+id="localos-jsonld"\s+type="application/ld\+json">.*?</script>',
+        script,
+        html_text,
+        count=1,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if count:
+        return updated
+    return html_text.replace("</head>", f"  {script}\n</head>", 1)
+
+
+def _render_spa_index(path: str = ""):
+    route_path = _normalize_content_route(path)
+    index_html = _read_frontend_index_html()
+    if index_html is None:
+        return send_from_directory(FRONTEND_DIST_DIR, "index.html")
+
+    seo_data = _load_content_seo_data()
+    routes = seo_data.get("routes") if isinstance(seo_data.get("routes"), dict) else {}
+    default_seo = seo_data.get("default") if isinstance(seo_data.get("default"), dict) else {}
+    route_seo = routes.get(route_path) if isinstance(routes.get(route_path), dict) else default_seo
+    title = route_seo.get("title") or default_seo.get("title") or "LocalOS.pro - Локальное продвижение локального бизнеса"
+    description = route_seo.get("description") or default_seo.get("description") or ""
+    og_type = route_seo.get("ogType") or default_seo.get("ogType") or "website"
+    image = seo_data.get("image") or DEFAULT_OG_IMAGE
+    canonical_url = f"{SITE_URL}{route_path if route_path != '/' else '/'}"
+
+    index_html = re.sub(
+        r"<title>.*?</title>",
+        f"<title>{_escape_head_value(title)}</title>",
+        index_html,
+        count=1,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    index_html = _set_named_meta(index_html, "name", "description", description)
+    index_html = _set_named_meta(index_html, "property", "og:title", title)
+    index_html = _set_named_meta(index_html, "property", "og:description", description)
+    index_html = _set_named_meta(index_html, "property", "og:type", og_type)
+    index_html = _set_named_meta(index_html, "property", "og:url", canonical_url)
+    index_html = _set_named_meta(index_html, "property", "og:image", image)
+    index_html = _set_named_meta(index_html, "name", "twitter:image", image)
+    index_html = _set_canonical(index_html, canonical_url)
+    index_html = _set_jsonld(index_html, _schema_for_route(route_path, route_seo))
+
+    response = Response(index_html, mimetype="text/html")
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
+
 @app.route('/', methods=['GET', 'HEAD', 'OPTIONS', 'POST', 'PUT', 'PATCH', 'DELETE'])
 def index():
     """Главная страница - раздаём собранный SPA"""
     if request.method not in ('GET', 'HEAD', 'OPTIONS'):
         return ('', 405)
     try:
-        return send_from_directory(FRONTEND_DIST_DIR, 'index.html')
+        return _render_spa_index("/")
     except Exception as e:
         # Фолбэк на встроенный шаблон, если сборка отсутствует
         return render_template_string(INDEX_HTML)
@@ -3228,14 +3400,8 @@ def spa_fallback(path):
             response.headers["Expires"] = "0"
         return response
 
-    # Иначе - SPA индекс
-    response = send_from_directory(FRONTEND_DIST_DIR, 'index.html')
-    # Для index.html отключаем кэширование, чтобы всегда получать свежую версию приложения
-    if response:
-         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-         response.headers["Pragma"] = "no-cache"
-         response.headers["Expires"] = "0"
-    return response
+    # Иначе - SPA индекс с route-specific SEO/JSON-LD для краулеров без JavaScript.
+    return _render_spa_index(path)
 
 # Временные заглушки для тихой работы фронтенда
 @app.route('/api/users/reports', methods=['GET'])

@@ -94,6 +94,19 @@ def _agent_client_metadata_from_payload(payload: dict) -> dict:
     return metadata
 
 
+def _parse_json_field(value, default):
+    if value is None:
+        return default
+    if isinstance(value, (dict, list)):
+        return value
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except Exception:
+            return default
+    return default
+
+
 @agent_security_bp.route("/api/agent-api/security/policy", methods=["GET"])
 def agent_security_policy():
     return jsonify({"success": True, "policy": public_agent_policy()})
@@ -577,7 +590,14 @@ def agent_action_ledger_endpoint():
                 (limit,),
             )
         rows = cursor.fetchall() or []
-        return jsonify({"success": True, "items": [dict(row) for row in rows]})
+        items = []
+        for row in rows:
+            item = dict(row)
+            item["input_summary"] = _parse_json_field(item.get("input_summary"), item.get("input_summary") or "")
+            item["output_summary"] = _parse_json_field(item.get("output_summary"), item.get("output_summary") or "")
+            item["metadata_json"] = _parse_json_field(item.get("metadata_json"), {})
+            items.append(item)
+        return jsonify({"success": True, "items": items})
     finally:
         db.close()
 

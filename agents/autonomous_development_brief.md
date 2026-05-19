@@ -71,6 +71,20 @@ Stop and ask user only when:
   - what was verified
   - residual risks (if any)
 
+## 9.1) Agent/Runtime Task DoD Addendum
+For tasks that change agent runtime, orchestrator behavior, Agent API, tools/capabilities, approvals, MCP/external connectors, prompt/context assembly, compaction, or supervised outreach:
+
+- Harness boundary is documented: what the model proposes and what LocalOS code enforces.
+- Tool/capability contract is narrow and typed: input, output, risk class, side effects, permission policy, timeout, retry behavior, audit event.
+- Risky actions keep draft and commit separated.
+- Approval is enforced outside prompt text for publishing, external sends, payments, destructive changes, credential changes, and third-party actions.
+- Every tool/capability call returns a structured observation, including denial, timeout, validation error, and `pending_human`.
+- Agent state that must survive resume/compaction is stored outside prompt context or has a documented rehydration path.
+- Stop conditions and budgets are explicit for long-running or batch work.
+- Trace/audit evidence exists for tool calls, permission decisions, approvals, failures, and final status.
+- Evals or targeted tests cover at least one happy path and one safety/failure path, such as approval bypass, invalid arguments, missing scope, malformed tool result, or budget exhaustion.
+- Public docs do not imply unsupported MCP, provider write support, autonomous publishing/sending/payment, or direct external-system action.
+
 ## 10) Task Template
 Use this template when starting autonomous work:
 

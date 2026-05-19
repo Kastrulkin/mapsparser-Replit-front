@@ -23,6 +23,9 @@ Capability status legend:
 Security entrypoint:
 https://localos.pro/localos-agent-policy.json
 
+Machine-readable tool map:
+https://localos.pro/localos-agent-tools.json
+
 Security model:
 - new agent clients should start in sandbox;
 - live access requires manual review and explicit scopes;
@@ -62,6 +65,7 @@ Capabilities:
 
 8. Public third-party MCP/API - gap.
    Use for: planning only until a stable public contract is published.
+   Note: /localos-agent-tools.json is a capability map, not an MCP server.
 
 Approval policy:
 Human approval is mandatory for publishing, mass changes, client messages, payments, destructive actions and external-system actions.

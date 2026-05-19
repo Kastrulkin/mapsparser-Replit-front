@@ -17,6 +17,7 @@ Canonical human and agent documentation:
 - https://localos.pro/docs/agent-use-cases
 - https://localos.pro/localos-agents.txt
 - https://localos.pro/localos-agent-policy.json
+- https://localos.pro/localos-agent-tools.json
 
 Core capabilities:
 - Map listing audits and improvement plans: available.
