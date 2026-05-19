@@ -1,6 +1,6 @@
 # Telegram Bot-to-Bot Security
 
-Status: `planned/foundation`
+Status: `foundation`
 
 Telegram bot-to-bot communication can become a transport for LocalOS Agent API. LocalOS should not trust a Telegram message by itself. The trust chain remains:
 
@@ -26,15 +26,19 @@ Every Telegram update should be classified before routing:
 - `unknown_bot`.
 
 The foundation helper is `src/core/telegram_agent_transport.py`.
+It is wired into:
+
+- `src/telegram_bot.py`;
+- `src/ai_agent_webhooks.py`.
 
 ## Routing Rules
 
-Default behavior:
+Current default behavior:
 
 - human messages continue through the current Telegram UX;
 - messages from LocalOS bot itself are ignored;
 - unknown bots do not trigger automation;
-- trusted agent bots can only create ledger events or approval requests;
+- trusted agent bots are stopped before normal routing until they are bound to Agent API clients;
 - publish/send/payment/destructive requests still require human approval.
 
 ## Loop Protection
@@ -94,9 +98,9 @@ Notify superadmin when:
 
 1. Add sender classification helper. Done in foundation.
 2. Add `telegram_bot_username` / `telegram_bot_id` metadata to Agent API admin UI.
-3. In Telegram webhook/polling handlers, classify sender before intent routing.
-4. Ignore `localos_bot` self-messages.
-5. Deny `unknown_bot` automation and alert superadmin.
+3. In Telegram webhook/polling handlers, classify sender before intent routing. Done in foundation.
+4. Ignore `localos_bot` self-messages. Done in foundation.
+5. Deny `unknown_bot` automation and alert superadmin. Partly done: automation is denied; alert routing follows Agent API alerts.
 6. Bind trusted bots to `agent_clients`.
 7. Route trusted bot requests through scopes and `agent_action_ledger`.
 8. Add hop count and cooldown to bot-to-bot replies.

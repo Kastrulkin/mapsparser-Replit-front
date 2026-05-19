@@ -12,7 +12,9 @@ from core.agent_api_security import (
 )
 from core.telegram_agent_transport import (
     classify_telegram_sender,
+    parse_trusted_telegram_agent_bots,
     should_accept_telegram_agent_message,
+    telegram_bot_to_bot_policy_decision,
 )
 
 
@@ -135,3 +137,28 @@ def test_telegram_bot_to_bot_sender_classification_and_guardrails():
     loop_block = should_accept_telegram_agent_message(sender, trusted_bot_usernames={"partneragentbot"}, hop_count=4)
     assert loop_block["ok"] is False
     assert loop_block["code"] == "BOT_TO_BOT_HOP_LIMIT"
+
+
+def test_telegram_bot_to_bot_policy_blocks_normal_routing_for_bots():
+    human_update = {
+        "message": {
+            "message_id": 11,
+            "from": {"id": 778, "is_bot": False, "username": "owner"},
+            "chat": {"id": 556},
+        }
+    }
+    human_decision = telegram_bot_to_bot_policy_decision(human_update)
+    assert human_decision["allow_normal_routing"] is True
+
+    trusted = parse_trusted_telegram_agent_bots("@PartnerAgentBot, other_bot")
+    bot_update = {
+        "message": {
+            "message_id": 12,
+            "from": {"id": 779, "is_bot": True, "username": "PartnerAgentBot"},
+            "chat": {"id": 557},
+        }
+    }
+    bot_decision = telegram_bot_to_bot_policy_decision(bot_update, trusted_bot_usernames=trusted)
+    assert bot_decision["allow_normal_routing"] is False
+    assert bot_decision["should_alert"] is True
+    assert bot_decision["code"] == "TELEGRAM_AGENT_TRANSPORT_SANDBOX"

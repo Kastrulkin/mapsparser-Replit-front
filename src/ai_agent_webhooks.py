@@ -10,6 +10,10 @@ import json
 from ai_agent import process_message, get_business_info
 from core.telegram_token_store import decode_telegram_bot_token
 from core.telegram_network import build_requests_proxy_kwargs
+from core.telegram_agent_transport import (
+    parse_trusted_telegram_agent_bots,
+    telegram_bot_to_bot_policy_decision,
+)
 
 ai_webhooks_bp = Blueprint('ai_webhooks', __name__)
 
@@ -223,6 +227,22 @@ def telegram_webhook():
         
         if not message_text or not chat_id:
             return jsonify({"status": "ok"}), 200
+
+        agent_transport_decision = telegram_bot_to_bot_policy_decision(
+            data,
+            trusted_bot_usernames=parse_trusted_telegram_agent_bots(os.getenv("LOCALOS_TRUSTED_TELEGRAM_AGENT_BOTS", "")),
+            local_bot_username=os.getenv("TELEGRAM_BOT_USERNAME", ""),
+        )
+        if not agent_transport_decision.get("allow_normal_routing"):
+            print(
+                "⚠️ Telegram agent transport blocked: "
+                f"{agent_transport_decision.get('code')} "
+                f"{agent_transport_decision.get('ledger_payload')}"
+            )
+            return jsonify({
+                "status": "ignored",
+                "reason": agent_transport_decision.get("code"),
+            }), 200
         
         print(f"📱 Получено Telegram сообщение от {user_id} ({username}): {message_text}")
         

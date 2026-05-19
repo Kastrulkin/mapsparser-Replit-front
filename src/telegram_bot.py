@@ -46,6 +46,10 @@ from core.industry_pattern_recalibration import (
     summarize_industry_pattern_health,
 )
 from core.telegram_network import build_requests_proxy_kwargs, resolve_telegram_http_proxy
+from core.telegram_agent_transport import (
+    parse_trusted_telegram_agent_bots,
+    telegram_bot_to_bot_policy_decision,
+)
 from crypto_pay_client import (
     CryptoPayClient,
     apply_crypto_invoice_paid,
@@ -4899,10 +4903,48 @@ async def handle_optimize_photo(update: Update, context: ContextTypes.DEFAULT_TY
     except Exception as e:
         await update.message.reply_text(f"❌ Ошибка обработки фото: {str(e)}")
 
+
+def _telegram_agent_message_decision(update: Update) -> dict[str, Any]:
+    user = update.effective_user
+    message = update.message
+    payload = {
+        "message": {
+            "message_id": getattr(message, "message_id", None),
+            "from": {
+                "id": getattr(user, "id", None),
+                "is_bot": bool(getattr(user, "is_bot", False)),
+                "username": getattr(user, "username", "") or "",
+            },
+            "chat": {
+                "id": getattr(getattr(message, "chat", None), "id", None),
+            },
+            "text": getattr(message, "text", "") or "",
+        }
+    }
+    return telegram_bot_to_bot_policy_decision(
+        payload,
+        trusted_bot_usernames=parse_trusted_telegram_agent_bots(os.getenv("LOCALOS_TRUSTED_TELEGRAM_AGENT_BOTS", "")),
+        local_bot_username=os.getenv("TELEGRAM_BOT_USERNAME", ""),
+    )
+
+
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик текстовых сообщений"""
     user_id = str(update.effective_user.id)
     text = update.message.text
+    telegram_agent_decision = _telegram_agent_message_decision(update)
+    if not telegram_agent_decision.get("allow_normal_routing"):
+        logger.warning(
+            "Telegram agent transport blocked: %s %s",
+            telegram_agent_decision.get("code"),
+            telegram_agent_decision.get("ledger_payload"),
+        )
+        if telegram_agent_decision.get("code") == "TELEGRAM_AGENT_TRANSPORT_SANDBOX":
+            await update.message.reply_text(
+                "Сообщение от Telegram-агента принято, но прямое выполнение пока отключено. "
+                "Подключите агента через Agent API и approval flow."
+            )
+        return
     
     # Обработка команды /cancel
     if text.startswith('/cancel'):

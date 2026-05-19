@@ -80,3 +80,54 @@ def build_telegram_agent_ledger_payload(sender_context: dict[str, Any], hop_coun
         "hop_count": normalize_bot_to_bot_hop_count(hop_count),
         "max_hops": MAX_BOT_TO_BOT_HOPS,
     }
+
+
+def parse_trusted_telegram_agent_bots(value: str) -> set[str]:
+    return {
+        str(item or "").strip().lower().lstrip("@")
+        for item in str(value or "").split(",")
+        if str(item or "").strip()
+    }
+
+
+def telegram_bot_to_bot_policy_decision(
+    update_payload: dict[str, Any],
+    *,
+    trusted_bot_usernames: set[str] | None = None,
+    local_bot_username: str = "",
+    hop_count: int = 0,
+) -> dict[str, Any]:
+    sender_context = classify_telegram_sender(update_payload, local_bot_username=local_bot_username)
+    if sender_context.get("sender_type") == "human":
+        return {
+            "allow_normal_routing": True,
+            "should_alert": False,
+            "code": "HUMAN_SENDER",
+            "reason": "",
+            "sender": sender_context,
+            "ledger_payload": build_telegram_agent_ledger_payload(sender_context, hop_count),
+        }
+
+    verdict = should_accept_telegram_agent_message(
+        sender_context,
+        trusted_bot_usernames=trusted_bot_usernames,
+        hop_count=hop_count,
+    )
+    if not verdict.get("ok"):
+        return {
+            "allow_normal_routing": False,
+            "should_alert": True,
+            "code": str(verdict.get("code") or "TELEGRAM_AGENT_BLOCKED"),
+            "reason": str(verdict.get("reason") or "Telegram bot message blocked by policy"),
+            "sender": sender_context,
+            "ledger_payload": build_telegram_agent_ledger_payload(sender_context, hop_count),
+        }
+
+    return {
+        "allow_normal_routing": False,
+        "should_alert": True,
+        "code": "TELEGRAM_AGENT_TRANSPORT_SANDBOX",
+        "reason": "trusted Telegram bot requires Agent API client binding before automation",
+        "sender": sender_context,
+        "ledger_payload": build_telegram_agent_ledger_payload(sender_context, hop_count),
+    }
