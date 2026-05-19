@@ -18,6 +18,9 @@ import {
 const AIAgentsManagement = lazy(() =>
   import('../../components/AIAgentsManagement').then((module) => ({ default: module.AIAgentsManagement })),
 );
+const AgentApiManagement = lazy(() =>
+  import('../../components/AgentApiManagement').then((module) => ({ default: module.AgentApiManagement })),
+);
 const TokenUsageStats = lazy(() =>
   import('../../components/TokenUsageStats').then((module) => ({ default: module.TokenUsageStats })),
 );
@@ -37,7 +40,7 @@ const IndustryPatternsManagement = lazy(() =>
   import('../../components/IndustryPatternsManagement').then((module) => ({ default: module.IndustryPatternsManagement })),
 );
 
-type AdminTabId = 'businesses' | 'agents' | 'tokens' | 'growth' | 'prompts' | 'patterns' | 'proxies' | 'parsing' | 'prospecting';
+type AdminTabId = 'businesses' | 'agents' | 'agentApi' | 'tokens' | 'growth' | 'prompts' | 'patterns' | 'proxies' | 'parsing' | 'prospecting';
 interface Business {
   id: string;
   name: string;
@@ -91,6 +94,7 @@ type AdminTabConfig = {
 const adminTabs: AdminTabConfig[] = [
   { id: 'businesses', label: 'Пользователи и бизнесы', icon: User },
   { id: 'agents', label: 'ИИ агенты', icon: Bot },
+  { id: 'agentApi', label: 'Agent API', icon: KeyRound },
   { id: 'prospecting', label: 'Поиск клиентов', icon: Search },
   { id: 'tokens', label: 'Статистика кредитов', icon: BarChart3 },
   { id: 'growth', label: 'Схема роста', icon: TrendingUp },
@@ -103,6 +107,7 @@ const adminTabs: AdminTabConfig[] = [
 const primaryAdminTabs: AdminTabConfig[] = [
   { id: 'businesses', label: 'Пользователи', icon: User },
   { id: 'agents', label: 'ИИ агенты', icon: Bot },
+  { id: 'agentApi', label: 'Agent API', icon: KeyRound },
   { id: 'prospecting', label: 'Поиск клиентов', icon: Search },
 ];
 
@@ -681,6 +686,14 @@ export const AdminPage: React.FC = () => {
             contentClassName="p-0"
           >
             <AIAgentsManagement />
+          </DashboardSection>
+        ) : activeTab === 'agentApi' ? (
+          <DashboardSection
+            title={activeTabConfig.label}
+            description="Внешние ИИ-подключения: ключи, scopes, ledger и заходы в agent-документацию."
+            contentClassName="p-0"
+          >
+            <AgentApiManagement />
           </DashboardSection>
         ) : activeTab === 'tokens' ? (
           <DashboardSection

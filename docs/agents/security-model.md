@@ -179,6 +179,7 @@ Implemented foundation:
 - `agent_discovery_events` table for docs/API discovery tracking;
 - scoped agent key authentication;
 - sandbox-first client creation;
+- superadmin UI for agent clients, scopes, status, key rotation, ledger and discovery events;
 - direct blocking for dangerous actions;
 - pending human approval request endpoint;
 - superadmin ledger view;

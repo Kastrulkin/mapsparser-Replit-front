@@ -13,6 +13,8 @@ from core.agent_api_security import (
     mark_agent_seen,
     normalize_risk_level,
     public_agent_policy,
+    rotate_agent_client_key,
+    update_agent_client,
 )
 
 
@@ -154,6 +156,103 @@ def list_agent_clients_endpoint():
         db.close()
 
 
+@agent_security_bp.route("/api/agent-api/clients/<client_id>", methods=["PATCH", "OPTIONS"])
+def update_agent_client_endpoint(client_id: str):
+    if request.method == "OPTIONS":
+        return "", 200
+    user_data, error_response = _require_superadmin()
+    if error_response:
+        return error_response
+    payload = request.get_json(silent=True) or {}
+    allowed_scopes = payload.get("allowed_scopes")
+    if allowed_scopes is not None and not isinstance(allowed_scopes, list):
+        return _json_error("allowed_scopes must be an array", 400, "VALIDATION_ERROR")
+    rate_limits = payload.get("rate_limits")
+    if rate_limits is not None and not isinstance(rate_limits, dict):
+        return _json_error("rate_limits must be an object", 400, "VALIDATION_ERROR")
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        result = update_agent_client(
+            cursor,
+            client_id=client_id,
+            status=payload.get("status"),
+            allowed_scopes=allowed_scopes,
+            rate_limits=rate_limits,
+            metadata={
+                "updated_by": str(user_data.get("user_id") or user_data.get("id") or ""),
+                "update_note": str(payload.get("note") or "").strip(),
+            },
+        )
+        if not result:
+            return _json_error("Agent client not found", 404, "NOT_FOUND")
+        log_agent_action(
+            cursor,
+            agent_client_id=client_id,
+            business_id=None,
+            action_type="agent_client_update",
+            capability="agent_api.security",
+            required_scope="superadmin",
+            risk_level="medium",
+            input_summary={
+                "status": payload.get("status"),
+                "allowed_scopes": allowed_scopes,
+                "rate_limits": rate_limits,
+            },
+            status="completed",
+            reason_code="SUPERADMIN_UPDATE",
+            ip=str(_request_meta().get("ip") or ""),
+            user_agent=str(_request_meta().get("user_agent") or ""),
+        )
+        db.conn.commit()
+        return jsonify({"success": True, "client": result})
+    finally:
+        db.close()
+
+
+@agent_security_bp.route("/api/agent-api/clients/<client_id>/rotate-key", methods=["POST", "OPTIONS"])
+def rotate_agent_client_key_endpoint(client_id: str):
+    if request.method == "OPTIONS":
+        return "", 200
+    _, error_response = _require_superadmin()
+    if error_response:
+        return error_response
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        result = rotate_agent_client_key(cursor, client_id)
+        if not result:
+            return _json_error("Agent client not found", 404, "NOT_FOUND")
+        log_agent_action(
+            cursor,
+            agent_client_id=client_id,
+            business_id=None,
+            action_type="agent_client_key_rotate",
+            capability="agent_api.security",
+            required_scope="superadmin",
+            risk_level="high",
+            input_summary={"client_id": client_id},
+            status="completed",
+            reason_code="KEY_ROTATED",
+            ip=str(_request_meta().get("ip") or ""),
+            user_agent=str(_request_meta().get("user_agent") or ""),
+        )
+        db.conn.commit()
+        return jsonify(
+            {
+                "success": True,
+                "client": {
+                    "client_id": result["client_id"],
+                    "status": result["status"],
+                    "agent_key": result["agent_key"],
+                    "agent_key_warning": "Store this key now. It is returned only once.",
+                },
+            }
+        )
+    finally:
+        db.close()
+
+
 @agent_security_bp.route("/api/agent-api/approvals/request", methods=["POST", "OPTIONS"])
 def agent_approval_request_endpoint():
     if request.method == "OPTIONS":
@@ -268,5 +367,43 @@ def agent_action_ledger_endpoint():
             )
         rows = cursor.fetchall() or []
         return jsonify({"success": True, "items": [dict(row) for row in rows]})
+    finally:
+        db.close()
+
+
+@agent_security_bp.route("/api/agent-api/discovery", methods=["GET"])
+def agent_discovery_events_endpoint():
+    user_data, error_response = _require_superadmin()
+    if error_response:
+        return error_response
+    limit = max(1, min(int(request.args.get("limit", "100") or 100), 500))
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        ensure_agent_security_tables(cursor)
+        cursor.execute(
+            """
+            SELECT id, event_type, path, method, status_code, agent_family,
+                   ip_hash, user_agent, referrer, metadata_json, created_at
+            FROM agent_discovery_events
+            ORDER BY created_at DESC
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        rows = cursor.fetchall() or []
+        cursor.execute(
+            """
+            SELECT
+                COUNT(*) FILTER (WHERE event_type = 'docs_view')::INT docs_views,
+                COUNT(*) FILTER (WHERE event_type = 'machine_readable_docs')::INT machine_docs,
+                COUNT(*) FILTER (WHERE event_type = 'agent_api')::INT api_hits
+            FROM agent_discovery_events
+            WHERE created_at >= NOW() - INTERVAL '24 hours'
+            """
+        )
+        summary_row = cursor.fetchone()
+        summary = dict(summary_row) if summary_row else {}
+        return jsonify({"success": True, "items": [dict(row) for row in rows], "summary_24h": summary})
     finally:
         db.close()

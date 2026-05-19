@@ -414,6 +414,102 @@ def create_agent_client(
     }
 
 
+def update_agent_client(
+    cursor,
+    *,
+    client_id: str,
+    status: str | None = None,
+    allowed_scopes: list[str] | None = None,
+    rate_limits: dict[str, Any] | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    ensure_agent_security_tables(cursor)
+    cursor.execute(
+        """
+        SELECT id, status, allowed_scopes, rate_limits, metadata_json
+        FROM agent_clients
+        WHERE id = %s
+        LIMIT 1
+        """,
+        (str(client_id or "").strip(),),
+    )
+    row = cursor.fetchone()
+    existing = _cursor_row_to_dict(cursor, row)
+    if not existing:
+        return None
+    normalized_status = str(status or existing.get("status") or "sandbox").strip().lower()
+    if normalized_status not in AGENT_CLIENT_STATUSES:
+        normalized_status = str(existing.get("status") or "sandbox").strip().lower()
+    existing_scopes = _to_json(existing.get("allowed_scopes"), [])
+    scopes_source = allowed_scopes if isinstance(allowed_scopes, list) else existing_scopes
+    scopes = [normalize_scope(item) for item in scopes_source if normalize_scope(item)]
+    existing_rate_limits = _to_json(existing.get("rate_limits"), {})
+    rate_limit_payload = rate_limits if isinstance(rate_limits, dict) else existing_rate_limits
+    existing_metadata = _to_json(existing.get("metadata_json"), {})
+    metadata_payload = existing_metadata if isinstance(existing_metadata, dict) else {}
+    if isinstance(metadata, dict):
+        metadata_payload.update(metadata)
+    cursor.execute(
+        """
+        UPDATE agent_clients
+        SET status = %s,
+            allowed_scopes = %s::jsonb,
+            rate_limits = %s::jsonb,
+            metadata_json = %s::jsonb,
+            updated_at = NOW()
+        WHERE id = %s
+        """,
+        (
+            normalized_status,
+            json.dumps(scopes, ensure_ascii=False),
+            json.dumps(rate_limit_payload or {}, ensure_ascii=False),
+            json.dumps(metadata_payload or {}, ensure_ascii=False),
+            str(client_id or "").strip(),
+        ),
+    )
+    return {
+        "client_id": str(client_id or "").strip(),
+        "status": normalized_status,
+        "allowed_scopes": scopes,
+        "rate_limits": rate_limit_payload or {},
+        "metadata": metadata_payload or {},
+    }
+
+
+def rotate_agent_client_key(cursor, client_id: str) -> dict[str, Any] | None:
+    ensure_agent_security_tables(cursor)
+    cursor.execute(
+        """
+        SELECT id, status
+        FROM agent_clients
+        WHERE id = %s
+        LIMIT 1
+        """,
+        (str(client_id or "").strip(),),
+    )
+    row = cursor.fetchone()
+    existing = _cursor_row_to_dict(cursor, row)
+    if not existing:
+        return None
+    status = str(existing.get("status") or "sandbox").strip().lower()
+    agent_key = generate_agent_key(status)
+    cursor.execute(
+        """
+        UPDATE agent_clients
+        SET key_hash = %s,
+            updated_at = NOW(),
+            last_seen_at = NULL
+        WHERE id = %s
+        """,
+        (hash_agent_key(agent_key), str(client_id or "").strip()),
+    )
+    return {
+        "client_id": str(client_id or "").strip(),
+        "status": status,
+        "agent_key": agent_key,
+    }
+
+
 def load_agent_client_by_key(cursor, agent_key: str) -> dict[str, Any] | None:
     key_hash = hash_agent_key(agent_key)
     ensure_agent_security_tables(cursor)

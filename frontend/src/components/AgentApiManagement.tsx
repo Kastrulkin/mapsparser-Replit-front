@@ -1,0 +1,460 @@
+import { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, Bot, KeyRound, RefreshCcw, ShieldCheck, Terminal, Activity } from 'lucide-react';
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
+import { Textarea } from './ui/textarea';
+import { useToast } from '../hooks/use-toast';
+import { newAuth } from '../lib/auth_new';
+
+interface AgentClient {
+  id: string;
+  organization_name: string;
+  contact_email: string;
+  status: string;
+  allowed_scopes: string[];
+  rate_limits?: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string;
+  last_seen_at?: string | null;
+}
+
+interface LedgerItem {
+  id: string;
+  agent_client_id?: string;
+  business_id?: string;
+  action_type: string;
+  capability?: string;
+  required_scope?: string;
+  risk_level: string;
+  status: string;
+  reason_code?: string;
+  created_at?: string;
+}
+
+interface DiscoveryItem {
+  id: string;
+  event_type: string;
+  path: string;
+  method: string;
+  status_code?: number;
+  agent_family: string;
+  user_agent?: string;
+  created_at?: string;
+}
+
+interface DiscoverySummary {
+  docs_views?: number;
+  machine_docs?: number;
+  api_hits?: number;
+}
+
+const statusLabels: Record<string, string> = {
+  sandbox: 'Sandbox',
+  live: 'Live',
+  suspended: 'Suspended',
+};
+
+const statusClassName = (status: string) => {
+  if (status === 'live') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  if (status === 'suspended') return 'border-rose-200 bg-rose-50 text-rose-700';
+  return 'border-amber-200 bg-amber-50 text-amber-700';
+};
+
+const formatDateTime = (value?: string | null) => {
+  if (!value) return 'нет данных';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+const normalizeScopesText = (scopes: string[]) => scopes.join('\n');
+
+export const AgentApiManagement = () => {
+  const [clients, setClients] = useState<AgentClient[]>([]);
+  const [ledger, setLedger] = useState<LedgerItem[]>([]);
+  const [discovery, setDiscovery] = useState<DiscoveryItem[]>([]);
+  const [summary, setSummary] = useState<DiscoverySummary>({});
+  const [loading, setLoading] = useState(true);
+  const [newKey, setNewKey] = useState('');
+  const [form, setForm] = useState({
+    organization_name: '',
+    contact_email: '',
+    allowed_scopes: 'audit:read\nservices:draft\nreviews:draft\ncontent:draft\nfinance:read\npartners:read\napprovals:create\npublish:request',
+  });
+  const [editingScopes, setEditingScopes] = useState<Record<string, string>>({});
+  const { toast } = useToast();
+
+  const metrics = useMemo(() => {
+    const live = clients.filter((client) => client.status === 'live').length;
+    const sandbox = clients.filter((client) => client.status === 'sandbox').length;
+    const suspended = clients.filter((client) => client.status === 'suspended').length;
+    const pending = ledger.filter((item) => item.status === 'pending_human').length;
+    const denied = ledger.filter((item) => item.status === 'denied').length;
+    return { live, sandbox, suspended, pending, denied };
+  }, [clients, ledger]);
+
+  const apiRequest = async (url: string, options?: RequestInit) => {
+    const token = await newAuth.getToken();
+    const headers = new Headers(options?.headers || {});
+    headers.set('Authorization', `Bearer ${token}`);
+    if (options?.body) {
+      headers.set('Content-Type', 'application/json');
+    }
+    return fetch(url, { ...options, headers });
+  };
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [clientsResponse, ledgerResponse, discoveryResponse] = await Promise.all([
+        apiRequest('/api/agent-api/clients'),
+        apiRequest('/api/agent-api/ledger?limit=80'),
+        apiRequest('/api/agent-api/discovery?limit=80'),
+      ]);
+      const clientsData = await clientsResponse.json();
+      const ledgerData = await ledgerResponse.json();
+      const discoveryData = await discoveryResponse.json();
+      setClients(clientsData.clients || []);
+      setLedger(ledgerData.items || []);
+      setDiscovery(discoveryData.items || []);
+      setSummary(discoveryData.summary_24h || {});
+      setEditingScopes((previous) => {
+        const next: Record<string, string> = {};
+        for (const client of clientsData.clients || []) {
+          next[client.id] = previous[client.id] || normalizeScopesText(client.allowed_scopes || []);
+        }
+        return next;
+      });
+    } catch (error) {
+      toast({
+        title: 'Не удалось загрузить Agent API',
+        description: 'Проверьте backend и миграцию agent security.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const parseScopes = (value: string) =>
+    value
+      .split(/\n|,/)
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean);
+
+  const createClient = async () => {
+    try {
+      const response = await apiRequest('/api/agent-api/clients', {
+        method: 'POST',
+        body: JSON.stringify({
+          organization_name: form.organization_name,
+          contact_email: form.contact_email,
+          allowed_scopes: parseScopes(form.allowed_scopes),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Не удалось создать клиента');
+      }
+      setNewKey(data.client?.agent_key || '');
+      setForm((previous) => ({ ...previous, organization_name: '', contact_email: '' }));
+      toast({ title: 'Agent client создан', description: 'Ключ показан один раз. Сохраните его сейчас.' });
+      loadData();
+    } catch (error) {
+      toast({
+        title: 'Ошибка создания',
+        description: error instanceof Error ? error.message : 'Не удалось создать клиента',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const updateClient = async (client: AgentClient, status?: string) => {
+    try {
+      const response = await apiRequest(`/api/agent-api/clients/${client.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          status: status || client.status,
+          allowed_scopes: parseScopes(editingScopes[client.id] || ''),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Не удалось обновить клиента');
+      }
+      toast({ title: 'Agent client обновлён' });
+      loadData();
+    } catch (error) {
+      toast({
+        title: 'Ошибка обновления',
+        description: error instanceof Error ? error.message : 'Не удалось обновить клиента',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const rotateKey = async (client: AgentClient) => {
+    try {
+      const response = await apiRequest(`/api/agent-api/clients/${client.id}/rotate-key`, { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Не удалось перевыпустить ключ');
+      }
+      setNewKey(data.client?.agent_key || '');
+      toast({ title: 'Ключ перевыпущен', description: 'Новый ключ показан один раз.' });
+      loadData();
+    } catch (error) {
+      toast({
+        title: 'Ошибка rotate key',
+        description: error instanceof Error ? error.message : 'Не удалось перевыпустить ключ',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  return (
+    <div className="space-y-6 p-6">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+            <ShieldCheck className="h-4 w-4" />
+            Agent API control
+          </div>
+          <h2 className="mt-2 text-2xl font-semibold text-slate-950">Доступ ИИ-агентов</h2>
+          <p className="mt-1 max-w-2xl text-sm text-slate-500">
+            Клиенты API, scopes, последние действия и заходы в agent-документацию. Опасные действия остаются через human approval.
+          </p>
+        </div>
+        <Button variant="outline" onClick={loadData} disabled={loading} className="rounded-2xl">
+          <RefreshCcw className="mr-2 h-4 w-4" />
+          Обновить
+        </Button>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-4">
+        <Card className="rounded-2xl border-slate-200 shadow-none">
+          <CardContent className="p-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Клиенты</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-950">{clients.length}</div>
+            <div className="mt-1 text-xs text-slate-500">live {metrics.live} · sandbox {metrics.sandbox} · suspended {metrics.suspended}</div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-2xl border-slate-200 shadow-none">
+          <CardContent className="p-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Docs 24ч</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-950">{summary.docs_views || 0}</div>
+            <div className="mt-1 text-xs text-slate-500">agent-файлы {summary.machine_docs || 0}</div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-2xl border-slate-200 shadow-none">
+          <CardContent className="p-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">API 24ч</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-950">{summary.api_hits || 0}</div>
+            <div className="mt-1 text-xs text-slate-500">попытки обращения к Agent API</div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-2xl border-slate-200 shadow-none">
+          <CardContent className="p-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Approval</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-950">{metrics.pending}</div>
+            <div className="mt-1 text-xs text-slate-500">отказов {metrics.denied}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {newKey ? (
+        <Card className="rounded-2xl border-amber-200 bg-amber-50 shadow-none">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <KeyRound className="mt-1 h-5 w-5 text-amber-700" />
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold text-amber-950">Новый ключ показан один раз</div>
+                <code className="mt-2 block overflow-x-auto rounded-xl bg-white p-3 text-xs text-slate-900">{newKey}</code>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <Card className="rounded-2xl border-slate-200 shadow-none">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bot className="h-5 w-5" />
+            Новый sandbox client
+          </CardTitle>
+          <CardDescription>Создаёт ключ для интеграции. Live-доступ выдаётся только после ручной проверки.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 lg:grid-cols-[1fr_1fr_1.4fr_auto] lg:items-end">
+          <div className="space-y-2">
+            <Label>Организация</Label>
+            <Input
+              value={form.organization_name}
+              onChange={(event) => setForm((previous) => ({ ...previous, organization_name: event.target.value }))}
+              placeholder="Например, OpenAI connector"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Email контакта</Label>
+            <Input
+              value={form.contact_email}
+              onChange={(event) => setForm((previous) => ({ ...previous, contact_email: event.target.value }))}
+              placeholder="agent@example.com"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Scopes</Label>
+            <Textarea
+              value={form.allowed_scopes}
+              onChange={(event) => setForm((previous) => ({ ...previous, allowed_scopes: event.target.value }))}
+              className="min-h-[86px]"
+            />
+          </div>
+          <Button
+            onClick={createClient}
+            disabled={!form.organization_name.trim() || !form.contact_email.trim()}
+            className="rounded-2xl"
+          >
+            Создать
+          </Button>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+        <Card className="rounded-2xl border-slate-200 shadow-none">
+          <CardHeader>
+            <CardTitle>Agent clients</CardTitle>
+            <CardDescription>Статус, scopes и ключевые действия по каждому подключению.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {clients.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                Пока нет зарегистрированных agent clients.
+              </div>
+            ) : (
+              clients.map((client) => (
+                <div key={client.id} className="rounded-2xl border border-slate-200 p-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-semibold text-slate-950">{client.organization_name}</h3>
+                        <Badge className={statusClassName(client.status)} variant="outline">
+                          {statusLabels[client.status] || client.status}
+                        </Badge>
+                      </div>
+                      <div className="mt-1 text-sm text-slate-500">{client.contact_email}</div>
+                      <div className="mt-1 text-xs text-slate-400">Last seen: {formatDateTime(client.last_seen_at)}</div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" onClick={() => updateClient(client, 'sandbox')}>Sandbox</Button>
+                      <Button size="sm" variant="outline" onClick={() => updateClient(client, 'live')}>Live</Button>
+                      <Button size="sm" variant="outline" onClick={() => updateClient(client, 'suspended')}>Suspend</Button>
+                      <Button size="sm" variant="outline" onClick={() => rotateKey(client)}>
+                        <KeyRound className="mr-1 h-3.5 w-3.5" />
+                        Rotate
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    <Label>Scopes</Label>
+                    <Textarea
+                      value={editingScopes[client.id] || ''}
+                      onChange={(event) => setEditingScopes((previous) => ({ ...previous, [client.id]: event.target.value }))}
+                      className="min-h-[92px] font-mono text-xs"
+                    />
+                    <Button size="sm" variant="secondary" onClick={() => updateClient(client)}>
+                      Сохранить scopes
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl border-slate-200 shadow-none">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5" />
+              Discovery
+            </CardTitle>
+            <CardDescription>Кто смотрел docs, agent-файлы и Agent API.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {discovery.slice(0, 12).map((item) => (
+              <div key={item.id} className="rounded-2xl border border-slate-200 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <Badge variant="outline">{item.agent_family}</Badge>
+                  <span className="text-xs text-slate-400">{formatDateTime(item.created_at)}</span>
+                </div>
+                <div className="mt-2 truncate text-sm font-medium text-slate-900">{item.method} {item.path}</div>
+                <div className="mt-1 truncate text-xs text-slate-500">{item.user_agent || 'user-agent не указан'}</div>
+              </div>
+            ))}
+            {discovery.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                Заходов в docs/API пока не видно.
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="rounded-2xl border-slate-200 shadow-none">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Terminal className="h-5 w-5" />
+            Action ledger
+          </CardTitle>
+          <CardDescription>Последние approval requests, denied и служебные действия суперадмина.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {ledger.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+              Ledger пока пуст.
+            </div>
+          ) : (
+            ledger.slice(0, 30).map((item) => (
+              <div key={item.id} className="grid gap-3 rounded-2xl border border-slate-200 p-3 text-sm md:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr]">
+                <div>
+                  <div className="font-medium text-slate-950">{item.action_type}</div>
+                  <div className="text-xs text-slate-500">{item.capability || 'capability не указана'}</div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-[0.14em] text-slate-400">Статус</div>
+                  <div className="font-medium text-slate-800">{item.status}</div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-[0.14em] text-slate-400">Риск</div>
+                  <div className="font-medium text-slate-800">{item.risk_level}</div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-[0.14em] text-slate-400">Время</div>
+                  <div className="font-medium text-slate-800">{formatDateTime(item.created_at)}</div>
+                </div>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <div>
+          API остаётся beta/internal. Перед продом нужна миграция БД; live scopes выдаём только после ручного review.
+        </div>
+      </div>
+    </div>
+  );
+};

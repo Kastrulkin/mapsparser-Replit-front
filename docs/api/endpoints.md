@@ -109,8 +109,11 @@ These endpoints implement the first Agent API security foundation. They are not 
 | `GET` | `/api/agent-api/security/policy` | `beta/internal` | Returns current Agent API security policy summary. |
 | `POST` | `/api/agent-api/clients` | `beta/internal` | Superadmin creates a sandbox agent client. The key is returned once. |
 | `GET` | `/api/agent-api/clients` | `beta/internal` | Superadmin lists registered agent clients without key material. |
+| `PATCH` | `/api/agent-api/clients/{client_id}` | `beta/internal` | Superadmin updates status, scopes, or rate-limit config. |
+| `POST` | `/api/agent-api/clients/{client_id}/rotate-key` | `beta/internal` | Superadmin rotates an agent key; the new key is returned once. |
 | `POST` | `/api/agent-api/approvals/request` | `beta/internal` | Agent records a pending human approval request. Uses `X-LocalOS-Agent-Key`. |
 | `GET` | `/api/agent-api/ledger` | `beta/internal` | Superadmin lists recent agent action ledger events. |
+| `GET` | `/api/agent-api/discovery` | `beta/internal` | Superadmin lists recent docs/API discovery events and 24h summary. |
 
 Agent keys may also be passed as `Authorization: Bearer <agent_key>`, but `X-LocalOS-Agent-Key` is preferred.
 
