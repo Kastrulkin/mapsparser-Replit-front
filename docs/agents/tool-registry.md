@@ -132,6 +132,7 @@ Initial LocalOS registry entries should be derived from:
 - [Agent Registry v1](../AGENT_REGISTRY_V1.md);
 - `/localos-agent-policy.json`.
 - `/localos-agent-tools.json`.
+- `/localos-agent-openapi.json`.
 
 ## Public Manifest
 
@@ -144,6 +145,8 @@ It is deliberately narrower than a public MCP server:
 - it marks unavailable capabilities as gaps.
 
 It must not be described as a live MCP endpoint until a server, auth flow, request schemas, tests and deployment checks exist.
+
+`/localos-agent-openapi.json` is the minimal machine-readable HTTP contract for the implemented Agent API security endpoints only. It covers policy, clients, approvals, ledger, discovery and Telegram binding lookup, but not product-wide automation APIs.
 
 ## Checklist For Adding A Tool
 

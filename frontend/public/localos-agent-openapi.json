@@ -1,0 +1,1221 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "LocalOS Agent API Security Contract",
+    "version": "2026-05-19",
+    "summary": "Minimal beta/internal OpenAPI contract for the implemented LocalOS Agent API security endpoints.",
+    "description": "This contract describes only the Agent API security endpoints that exist in LocalOS today: policy, client registry, promotion requests, approval requests, ledger, discovery and Telegram binding lookup. It is not an MCP server contract and does not imply autonomous publish, payment, destructive or external-system execution."
+  },
+  "servers": [
+    {
+      "url": "https://localos.pro",
+      "description": "Production"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Policy",
+      "description": "Public security policy summary for agents."
+    },
+    {
+      "name": "Agent Clients",
+      "description": "Superadmin-managed agent client registry."
+    },
+    {
+      "name": "Approvals",
+      "description": "Agent-created human approval requests."
+    },
+    {
+      "name": "Ledger",
+      "description": "Superadmin audit trail for agent actions."
+    },
+    {
+      "name": "Discovery",
+      "description": "Superadmin visibility into docs/API discovery events."
+    },
+    {
+      "name": "Telegram Binding",
+      "description": "Superadmin lookup for Telegram bot to agent client binding."
+    }
+  ],
+  "paths": {
+    "/api/agent-api/security/policy": {
+      "get": {
+        "tags": ["Policy"],
+        "operationId": "getAgentSecurityPolicy",
+        "summary": "Get current Agent API security policy",
+        "description": "Returns the public LocalOS Agent API security model. No key is required.",
+        "x-localos": {
+          "status": "beta/internal",
+          "risk_class": "read_only",
+          "approval_required": false
+        },
+        "responses": {
+          "200": {
+            "description": "Policy returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent-api/clients": {
+      "get": {
+        "tags": ["Agent Clients"],
+        "operationId": "listAgentClients",
+        "summary": "List agent clients",
+        "description": "Superadmin-only endpoint. Returns registered agent clients without key material.",
+        "security": [
+          {
+            "SuperadminBearer": []
+          }
+        ],
+        "x-localos": {
+          "status": "beta/internal",
+          "risk_class": "privileged_admin",
+          "approval_required": false
+        },
+        "responses": {
+          "200": {
+            "description": "Client list returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentClientListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/SuperadminRequired"
+          }
+        }
+      },
+      "post": {
+        "tags": ["Agent Clients"],
+        "operationId": "createAgentClient",
+        "summary": "Create sandbox agent client",
+        "description": "Superadmin-only endpoint. New live clients are forced to sandbox at creation. The generated agent key is returned once.",
+        "security": [
+          {
+            "SuperadminBearer": []
+          }
+        ],
+        "x-localos": {
+          "status": "beta/internal",
+          "risk_class": "identity_access",
+          "approval_required": false
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAgentClientRequest"
+              },
+              "examples": {
+                "sandboxClient": {
+                  "value": {
+                    "organization_name": "Example AI Operator",
+                    "contact_email": "ops@example.com",
+                    "allowed_scopes": ["audit:read", "reviews:draft", "approvals:create"],
+                    "telegram_bot_username": "example_agent_bot",
+                    "note": "Sandbox test client"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Client created. Store agent_key immediately.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateAgentClientResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/SuperadminRequired"
+          }
+        }
+      }
+    },
+    "/api/agent-api/clients/{client_id}": {
+      "patch": {
+        "tags": ["Agent Clients"],
+        "operationId": "updateAgentClient",
+        "summary": "Update agent client",
+        "description": "Superadmin-only endpoint. Updates status, scopes, rate limits and Telegram binding metadata.",
+        "security": [
+          {
+            "SuperadminBearer": []
+          }
+        ],
+        "x-localos": {
+          "status": "beta/internal",
+          "risk_class": "identity_access",
+          "approval_required": false
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ClientId"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAgentClientRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Client updated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentClientResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/SuperadminRequired"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/agent-api/clients/{client_id}/rotate-key": {
+      "post": {
+        "tags": ["Agent Clients"],
+        "operationId": "rotateAgentClientKey",
+        "summary": "Rotate agent client key",
+        "description": "Superadmin-only endpoint. The new agent key is returned once.",
+        "security": [
+          {
+            "SuperadminBearer": []
+          }
+        ],
+        "x-localos": {
+          "status": "beta/internal",
+          "risk_class": "identity_access",
+          "approval_required": false
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ClientId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Key rotated. Store agent_key immediately.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RotateAgentClientKeyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/SuperadminRequired"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/agent-api/clients/promotion/request": {
+      "post": {
+        "tags": ["Agent Clients"],
+        "operationId": "requestAgentClientPromotion",
+        "summary": "Request sandbox to live review",
+        "description": "Agent-key endpoint. Requires the approvals:create scope. Creates a pending human review request for live access.",
+        "security": [
+          {
+            "AgentApiKey": []
+          }
+        ],
+        "x-localos": {
+          "status": "beta/internal",
+          "risk_class": "identity_access",
+          "required_scope": "approvals:create",
+          "approval_required": true
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromotionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Promotion request recorded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromotionRequestResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "403": {
+            "$ref": "#/components/responses/AgentAccessDenied"
+          }
+        }
+      }
+    },
+    "/api/agent-api/clients/{client_id}/promotion/decide": {
+      "post": {
+        "tags": ["Agent Clients"],
+        "operationId": "decideAgentClientPromotion",
+        "summary": "Decide live promotion request",
+        "description": "Superadmin-only endpoint. Approves or rejects a sandbox-to-live promotion request.",
+        "security": [
+          {
+            "SuperadminBearer": []
+          }
+        ],
+        "x-localos": {
+          "status": "beta/internal",
+          "risk_class": "privileged_admin",
+          "approval_required": false
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ClientId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromotionDecisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Promotion decision saved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromotionDecisionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/SuperadminRequired"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/agent-api/clients/telegram-binding/lookup": {
+      "post": {
+        "tags": ["Telegram Binding"],
+        "operationId": "lookupTelegramAgentBinding",
+        "summary": "Lookup Telegram bot binding",
+        "description": "Superadmin-only endpoint. Checks whether a Telegram bot username or id is bound to an agent client.",
+        "security": [
+          {
+            "SuperadminBearer": []
+          }
+        ],
+        "x-localos": {
+          "status": "beta/internal",
+          "risk_class": "privileged_admin",
+          "approval_required": false
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TelegramBindingLookupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Binding lookup completed. client may be null.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelegramBindingLookupResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/SuperadminRequired"
+          }
+        }
+      }
+    },
+    "/api/agent-api/approvals/request": {
+      "post": {
+        "tags": ["Approvals"],
+        "operationId": "createAgentApprovalRequest",
+        "summary": "Create human approval request",
+        "description": "Agent-key endpoint. Requires the approvals:create scope. Records a pending human approval request; it does not execute the requested action.",
+        "security": [
+          {
+            "AgentApiKey": []
+          }
+        ],
+        "x-localos": {
+          "status": "beta/internal",
+          "risk_class": "write_internal",
+          "required_scope": "approvals:create",
+          "approval_required": false
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalRequest"
+              },
+              "examples": {
+                "publishReviewReply": {
+                  "value": {
+                    "action_type": "publish_review_reply",
+                    "business_id": "123",
+                    "capability": "reviews.reply.publish",
+                    "risk_level": "high",
+                    "requested_scope": "publish:request",
+                    "input_summary": {
+                      "review_id": "review_1",
+                      "channel": "yandex"
+                    },
+                    "proposed_output": "Спасибо за отзыв. Будем рады видеть вас снова."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Approval request recorded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequestResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "403": {
+            "$ref": "#/components/responses/AgentAccessDenied"
+          }
+        }
+      }
+    },
+    "/api/agent-api/ledger": {
+      "get": {
+        "tags": ["Ledger"],
+        "operationId": "listAgentActionLedger",
+        "summary": "List agent action ledger",
+        "description": "Superadmin-only endpoint. Returns recent agent actions, denied attempts and pending human approval requests.",
+        "security": [
+          {
+            "SuperadminBearer": []
+          }
+        ],
+        "x-localos": {
+          "status": "beta/internal",
+          "risk_class": "privileged_admin",
+          "approval_required": false
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BusinessIdQuery"
+          },
+          {
+            "$ref": "#/components/parameters/LimitQuery"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ledger events returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/SuperadminRequired"
+          }
+        }
+      }
+    },
+    "/api/agent-api/discovery": {
+      "get": {
+        "tags": ["Discovery"],
+        "operationId": "listAgentDiscoveryEvents",
+        "summary": "List agent discovery events",
+        "description": "Superadmin-only endpoint. Returns recent docs/API discovery events and a 24h summary.",
+        "security": [
+          {
+            "SuperadminBearer": []
+          }
+        ],
+        "x-localos": {
+          "status": "beta/internal",
+          "risk_class": "privileged_admin",
+          "approval_required": false
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/LimitQuery"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Discovery events returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/SuperadminRequired"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "SuperadminBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "LocalOS user session token for a superadmin user."
+      },
+      "AgentApiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-LocalOS-Agent-Key",
+        "description": "Agent key issued through the agent client registry. Authorization: Bearer <agent_key> is also accepted by current backend code, but this header is preferred."
+      }
+    },
+    "parameters": {
+      "ClientId": {
+        "name": "client_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "BusinessIdQuery": {
+        "name": "business_id",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "LimitQuery": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500,
+          "default": 100
+        }
+      }
+    },
+    "responses": {
+      "AuthRequired": {
+        "description": "Authorization required.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "SuperadminRequired": {
+        "description": "Superadmin privileges required.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "AgentAccessDenied": {
+        "description": "Agent key missing, invalid, suspended, sandbox-limited, or missing required scope.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "ValidationError": {
+        "description": "Validation error.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource not found.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "AnyJson": {
+        "description": "Arbitrary JSON value.",
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": true
+          },
+          {
+            "type": "array",
+            "items": {}
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": ["success", "error"],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "error": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          }
+        }
+      },
+      "PolicyResponse": {
+        "type": "object",
+        "required": ["success", "policy"],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "policy": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "AgentClient": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "client_id": {
+            "type": "string"
+          },
+          "owner_user_id": {
+            "type": "string"
+          },
+          "organization_name": {
+            "type": "string"
+          },
+          "contact_email": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["sandbox", "live", "suspended"]
+          },
+          "allowed_scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rate_limits": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "metadata_json": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "last_seen_at": {
+            "type": ["string", "null"]
+          }
+        },
+        "additionalProperties": true
+      },
+      "CreateAgentClientRequest": {
+        "type": "object",
+        "required": ["organization_name", "contact_email"],
+        "properties": {
+          "organization_name": {
+            "type": "string"
+          },
+          "contact_email": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["sandbox", "live", "suspended"],
+            "default": "sandbox",
+            "description": "If live is provided at creation, current backend forces sandbox."
+          },
+          "allowed_scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rate_limits": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "telegram_bot_username": {
+            "type": "string"
+          },
+          "telegram_bot_id": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "UpdateAgentClientRequest": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["sandbox", "live", "suspended"]
+          },
+          "allowed_scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rate_limits": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "telegram_bot_username": {
+            "type": "string"
+          },
+          "telegram_bot_id": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "AgentClientListResponse": {
+        "type": "object",
+        "required": ["success", "clients"],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "clients": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentClient"
+            }
+          }
+        }
+      },
+      "AgentClientResponse": {
+        "type": "object",
+        "required": ["success", "client"],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "client": {
+            "$ref": "#/components/schemas/AgentClient"
+          }
+        }
+      },
+      "CreateAgentClientResponse": {
+        "type": "object",
+        "required": ["success", "client"],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "client": {
+            "type": "object",
+            "required": ["client_id", "status", "allowed_scopes", "agent_key", "agent_key_warning"],
+            "properties": {
+              "client_id": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "allowed_scopes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "agent_key": {
+                "type": "string"
+              },
+              "agent_key_warning": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "RotateAgentClientKeyResponse": {
+        "type": "object",
+        "required": ["success", "client"],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "client": {
+            "type": "object",
+            "required": ["client_id", "status", "agent_key", "agent_key_warning"],
+            "properties": {
+              "client_id": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "agent_key": {
+                "type": "string"
+              },
+              "agent_key_warning": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "PromotionRequest": {
+        "type": "object",
+        "properties": {
+          "requested_scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "use_case": {
+            "type": "string"
+          },
+          "contact": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "PromotionRequestResponse": {
+        "type": "object",
+        "required": ["success", "promotion_id", "status"],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "promotion_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "const": "pending_human"
+          }
+        }
+      },
+      "PromotionDecisionRequest": {
+        "type": "object",
+        "required": ["decision"],
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": ["approve", "reject", "accepted", "rejected"]
+          },
+          "allowed_scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "PromotionDecisionResponse": {
+        "type": "object",
+        "required": ["success", "promotion"],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "promotion": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "TelegramBindingLookupRequest": {
+        "type": "object",
+        "properties": {
+          "telegram_bot_username": {
+            "type": "string",
+            "description": "Bot username with or without @."
+          },
+          "telegram_bot_id": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "TelegramBindingLookupResponse": {
+        "type": "object",
+        "required": ["success", "client"],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "client": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AgentClient"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "ApprovalRequest": {
+        "type": "object",
+        "required": ["action_type"],
+        "properties": {
+          "action_type": {
+            "type": "string"
+          },
+          "business_id": {
+            "type": "string"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "risk_level": {
+            "type": "string",
+            "enum": ["low", "medium", "high", "critical"]
+          },
+          "requested_scope": {
+            "type": "string"
+          },
+          "input_summary": {
+            "$ref": "#/components/schemas/AnyJson"
+          },
+          "proposed_output": {
+            "$ref": "#/components/schemas/AnyJson"
+          }
+        },
+        "additionalProperties": true
+      },
+      "ApprovalRequestResponse": {
+        "type": "object",
+        "required": ["success", "approval_id", "status", "risk_level", "message"],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "approval_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "const": "pending_human"
+          },
+          "risk_level": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "LedgerItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "agent_client_id": {
+            "type": ["string", "null"]
+          },
+          "business_id": {
+            "type": ["string", "null"]
+          },
+          "action_type": {
+            "type": "string"
+          },
+          "capability": {
+            "type": ["string", "null"]
+          },
+          "required_scope": {
+            "type": ["string", "null"]
+          },
+          "risk_level": {
+            "type": "string"
+          },
+          "input_summary": {
+            "$ref": "#/components/schemas/AnyJson"
+          },
+          "output_summary": {
+            "$ref": "#/components/schemas/AnyJson"
+          },
+          "approval_id": {
+            "type": ["string", "null"]
+          },
+          "status": {
+            "type": "string"
+          },
+          "reason_code": {
+            "type": ["string", "null"]
+          },
+          "ip": {
+            "type": ["string", "null"]
+          },
+          "user_agent": {
+            "type": ["string", "null"]
+          },
+          "metadata_json": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "created_at": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "LedgerResponse": {
+        "type": "object",
+        "required": ["success", "items"],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LedgerItem"
+            }
+          }
+        }
+      },
+      "DiscoveryItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "event_type": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "status_code": {
+            "type": "integer"
+          },
+          "agent_family": {
+            "type": ["string", "null"]
+          },
+          "ip_hash": {
+            "type": ["string", "null"]
+          },
+          "user_agent": {
+            "type": ["string", "null"]
+          },
+          "referrer": {
+            "type": ["string", "null"]
+          },
+          "metadata_json": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "created_at": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "DiscoverySummary24h": {
+        "type": "object",
+        "properties": {
+          "docs_views": {
+            "type": "integer"
+          },
+          "machine_docs": {
+            "type": "integer"
+          },
+          "api_hits": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": true
+      },
+      "DiscoveryResponse": {
+        "type": "object",
+        "required": ["success", "items", "summary_24h"],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryItem"
+            }
+          },
+          "summary_24h": {
+            "$ref": "#/components/schemas/DiscoverySummary24h"
+          }
+        }
+      }
+    }
+  }
+}

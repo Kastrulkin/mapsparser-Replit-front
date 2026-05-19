@@ -104,6 +104,8 @@ Status: `beta/internal`.
 
 These endpoints implement the first Agent API security foundation. They are not a full public MCP/API product yet.
 
+Machine-readable minimal contract: `/localos-agent-openapi.json`.
+
 | Method | Path | Status | Notes |
 | --- | --- | --- | --- |
 | `GET` | `/api/agent-api/security/policy` | `beta/internal` | Returns current Agent API security policy summary. |

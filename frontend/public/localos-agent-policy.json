@@ -184,6 +184,7 @@
     "rotate_key": "POST /api/agent-api/clients/{client_id}/rotate-key",
     "request_promotion": "POST /api/agent-api/clients/promotion/request",
     "decide_promotion": "POST /api/agent-api/clients/{client_id}/promotion/decide",
+    "telegram_binding_lookup": "POST /api/agent-api/clients/telegram-binding/lookup",
     "request_approval": "POST /api/agent-api/approvals/request",
     "ledger": "GET /api/agent-api/ledger",
     "discovery": "GET /api/agent-api/discovery"

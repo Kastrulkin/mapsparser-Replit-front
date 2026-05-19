@@ -32,6 +32,7 @@ The safe pattern is:
 ## Related Docs
 
 - Machine-readable tool map: `/localos-agent-tools.json`
+- Minimal Agent API OpenAPI contract: `/localos-agent-openapi.json`
 - [Capabilities](capabilities.md)
 - [Harness architecture](harness-architecture.md)
 - [Tool registry](tool-registry.md)

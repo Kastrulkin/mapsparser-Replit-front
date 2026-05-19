@@ -312,6 +312,12 @@ const DocsPage = () => {
                   <ExternalLink className="ml-2 h-4 w-4" />
                 </a>
               </Button>
+              <Button asChild variant="outline">
+                <a href="/localos-agent-openapi.json">
+                  Agent OpenAPI
+                  <ExternalLink className="ml-2 h-4 w-4" />
+                </a>
+              </Button>
             </div>
           </div>
           <Card className="border-slate-200 bg-slate-950 text-white shadow-none">

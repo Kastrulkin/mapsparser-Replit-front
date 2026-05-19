@@ -26,6 +26,9 @@ https://localos.pro/localos-agent-policy.json
 Machine-readable tool map:
 https://localos.pro/localos-agent-tools.json
 
+Minimal Agent API OpenAPI contract:
+https://localos.pro/localos-agent-openapi.json
+
 Security model:
 - new agent clients should start in sandbox;
 - live access requires manual review and explicit scopes;
