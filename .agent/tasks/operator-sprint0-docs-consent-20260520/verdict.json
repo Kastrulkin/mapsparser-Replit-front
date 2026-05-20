@@ -1,0 +1,58 @@
+{
+  "task_id": "operator-sprint0-docs-consent-20260520",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "docs/agents/localos-operator.md defines LocalOS Operator as the planned main control layer above the dashboard and models web chat plus Telegram as transport adapters to one governed Operator core."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "docs/agents/localos-operator.md and docs/agents/tool-registry.md define free_cached, paid_compute, paid_external, manual_external, approval_required, and planned_gap."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "docs/agents/localos-operator.md, docs/agents/approval-policy.md, and docs/agents/tool-registry.md document paid action consent modes, limits, low-balance warnings, and billing/ledger expectations."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "docs/agents/localos-operator.md, docs/agents/approval-policy.md, and docs/agents/index.md state that LocalOS prepares drafts and manual copy flows, but does not claim autonomous publication to maps or third-party systems."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "docs/agents/tool-registry.md and docs/agents/approval-policy.md link the Operator model and include billing, consent, audit, and ledger expectations; docs/agents/harness-architecture.md identifies paid action consent as harness-owned."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "The proof-loop bundle records changed files, grep/readback validation checks, known gaps, and this PASS verdict."
+    }
+  ],
+  "commands_run": [
+    "sed -n '1,180p' README.md",
+    "sed -n '1,240p' agents/autonomous_development_brief.md",
+    "scripts/proof_loop.sh init operator-sprint0-docs-consent-20260520 \"Sprint 0: docs + action taxonomy + consent model for LocalOS Operator. Document Operator as main control layer over cabinet with web chat and Telegram transports, paid action taxonomy, consent/budget model, manual external publication limits, and implementation acceptance criteria. No runtime changes.\"",
+    "rg -n \"LocalOS Operator|free_cached|paid_compute|paid_external|manual_external|approval_required|planned_gap|auto_with_limits|ask_each_time|disabled|Apify actual cost|copy|manual|provider write|MCP\" docs/agents docs/index.md .agent/tasks/operator-sprint0-docs-consent-20260520/spec.md",
+    "rg -n \"опубликовал ответ|отправил ответ в карты|autonomously write|public MCP server is confirmed|direct map reply publishing\" docs/agents",
+    "git diff -- docs/agents/localos-operator.md docs/agents/index.md docs/index.md docs/agents/tool-registry.md docs/agents/approval-policy.md docs/agents/harness-architecture.md .agent/tasks/operator-sprint0-docs-consent-20260520/spec.md",
+    "scripts/proof_loop.sh validate operator-sprint0-docs-consent-20260520",
+    "scripts/proof_loop.sh status operator-sprint0-docs-consent-20260520"
+  ],
+  "artifacts_used": [
+    "docs/agents/localos-operator.md",
+    "docs/agents/index.md",
+    "docs/index.md",
+    "docs/agents/tool-registry.md",
+    "docs/agents/approval-policy.md",
+    "docs/agents/harness-architecture.md",
+    ".agent/tasks/operator-sprint0-docs-consent-20260520/spec.md",
+    ".agent/tasks/operator-sprint0-docs-consent-20260520/evidence.md",
+    ".agent/tasks/operator-sprint0-docs-consent-20260520/evidence.json",
+    ".agent/tasks/operator-sprint0-docs-consent-20260520/problems.md"
+  ]
+}

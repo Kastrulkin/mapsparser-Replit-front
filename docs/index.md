@@ -21,6 +21,7 @@ This documentation has two layers:
 
 - [Agent overview](agents/index.md)
 - [Capabilities](agents/capabilities.md)
+- [LocalOS Operator](agents/localos-operator.md)
 - [Harness architecture](agents/harness-architecture.md)
 - [Tool registry](agents/tool-registry.md)
 - [Planning and goal loops](agents/planning-and-goals.md)

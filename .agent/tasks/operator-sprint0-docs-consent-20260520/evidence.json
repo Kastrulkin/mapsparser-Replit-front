@@ -1,0 +1,96 @@
+{
+  "task_id": "operator-sprint0-docs-consent-20260520",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "A canonical Operator document explains LocalOS Operator as the main control layer above the dashboard, with web chat and Telegram as transport adapters to one core.",
+      "status": "PASS",
+      "proof": [
+        "docs/agents/localos-operator.md defines Operator as the planned main control layer above the dashboard.",
+        "docs/agents/localos-operator.md defines web chat and Telegram as surfaces for one governed Operator core.",
+        "docs/agents/index.md and docs/index.md link to the Operator document."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Documentation defines action taxonomy for free cached reads, paid compute, paid external refresh, manual external actions, approval-required actions, and planned gaps.",
+      "status": "PASS",
+      "proof": [
+        "docs/agents/localos-operator.md defines free_cached, paid_compute, paid_external, manual_external, approval_required, and planned_gap.",
+        "docs/agents/tool-registry.md adds Operator action classes and operator_action_class guidance."
+      ],
+      "gaps": [
+        "Runtime tool metadata is future work."
+      ]
+    },
+    {
+      "id": "AC3",
+      "text": "Documentation defines consent and budget policy for paid actions, including first-use disclosure, auto-with-limits, ask-each-time, disabled, per-action/day/month limits, and low-balance warnings.",
+      "status": "PASS",
+      "proof": [
+        "docs/agents/localos-operator.md defines business-level paid action consent policy.",
+        "docs/agents/approval-policy.md distinguishes paid action consent from approval.",
+        "docs/agents/tool-registry.md defines paid action contract fields."
+      ],
+      "gaps": [
+        "Runtime billing and consent implementation is future work."
+      ]
+    },
+    {
+      "id": "AC4",
+      "text": "Documentation states that LocalOS currently prepares review replies/posts/news/service optimizations as drafts, but does not publish replies to maps or third-party systems; users copy/paste or publish manually where provider write support is unavailable.",
+      "status": "PASS",
+      "proof": [
+        "docs/agents/localos-operator.md documents review replies and manual publication limits.",
+        "docs/agents/approval-policy.md adds Manual External Publication.",
+        "docs/agents/index.md warns not to assume autonomous review reply publishing."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Tool registry and approval docs link to the Operator model and include billing/audit/ledger expectations for paid actions.",
+      "status": "PASS",
+      "proof": [
+        "docs/agents/tool-registry.md links to LocalOS Operator and defines paid action contract.",
+        "docs/agents/approval-policy.md links paid action classes to Operator and Tool registry.",
+        "docs/agents/harness-architecture.md lists paid action consent policy as harness-owned."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC6",
+      "text": "Proof-loop evidence records the files changed and validation checks.",
+      "status": "PASS",
+      "proof": [
+        ".agent/tasks/operator-sprint0-docs-consent-20260520/evidence.md records changed docs and checks.",
+        ".agent/tasks/operator-sprint0-docs-consent-20260520/verdict.json records PASS."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "docs/agents/localos-operator.md",
+    "docs/agents/index.md",
+    "docs/index.md",
+    "docs/agents/tool-registry.md",
+    "docs/agents/approval-policy.md",
+    "docs/agents/harness-architecture.md",
+    ".agent/tasks/operator-sprint0-docs-consent-20260520/spec.md",
+    ".agent/tasks/operator-sprint0-docs-consent-20260520/evidence.md",
+    ".agent/tasks/operator-sprint0-docs-consent-20260520/evidence.json",
+    ".agent/tasks/operator-sprint0-docs-consent-20260520/verdict.json",
+    ".agent/tasks/operator-sprint0-docs-consent-20260520/problems.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "rg -n \"LocalOS Operator|free_cached|paid_compute|paid_external|manual_external|approval_required|planned_gap|auto_with_limits|ask_each_time|disabled|Apify actual cost|provider write\" docs/agents docs/index.md",
+    "rg -n \"No public MCP server is confirmed|planned_gap|must not claim it published replies\" docs/agents",
+    "scripts/proof_loop.sh validate operator-sprint0-docs-consent-20260520",
+    "scripts/proof_loop.sh status operator-sprint0-docs-consent-20260520"
+  ],
+  "known_gaps": [
+    "Sprint 0 is documentation-only. Runtime implementation remains future work."
+  ]
+}

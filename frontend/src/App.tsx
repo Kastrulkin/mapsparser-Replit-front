@@ -93,6 +93,11 @@ const PartnershipSearchPage = lazy(() =>
     default: module.PartnershipSearchPage,
   })),
 );
+const OperatorPage = lazy(() =>
+  import("./pages/dashboard/OperatorPage").then((module) => ({
+    default: module.OperatorPage,
+  })),
+);
 const Header = lazy(() => import("./components/Header"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const PublicPartnershipOfferPage = lazy(() => import("./pages/PublicPartnershipOfferPage"));
@@ -161,6 +166,7 @@ const AppShell = () => {
             <Route path="ai-chat-promotion" element={<AIChatPromotionPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="partnerships" element={<PartnershipSearchPage />} />
+            <Route path="operator" element={<OperatorPage />} />
             <Route path="bookings" element={<BookingsPage />} />
             <Route path="chats" element={<ChatsPage />} />
             <Route path="network" element={<NetworkDashboardPage />} />

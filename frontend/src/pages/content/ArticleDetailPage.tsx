@@ -8,7 +8,47 @@ import {
   RelatedMaterials,
   SectionRenderer,
 } from "./ContentShared";
+import type { ArticleContent, ContentSection } from "@/content/contentTypes";
 import { SITE_URL, makeBreadcrumbSchema } from "./contentSeo";
+
+const STATS_SECTION_TITLE = "Масштаб проблемы";
+const STATS_SECTION_END = "примерно каждый второй владелец бизнеса.";
+const SCHEME_SECTION_TITLE = "Рост без системы усиливает хаос";
+const SCHEME_SECTION_END = "хаос начинает расти быстрее самого бизнеса.";
+
+const articleVisualClassName = "mt-6 mb-10 h-auto w-full rounded-[20px]";
+
+const renderArticleVisual = (src: string, alt: string) => (
+  <img
+    alt={alt}
+    className={articleVisualClassName}
+    height="1024"
+    src={src}
+    width="1536"
+  />
+);
+
+const renderInlineArticleVisual = (article: ArticleContent, section: ContentSection) => {
+  const body = section.body?.trim();
+
+  if (
+    article.statsImage &&
+    section.title === STATS_SECTION_TITLE &&
+    body?.endsWith(STATS_SECTION_END)
+  ) {
+    return renderArticleVisual(article.statsImage, article.statsImageAlt ?? "");
+  }
+
+  if (
+    article.schemeImage &&
+    section.title === SCHEME_SECTION_TITLE &&
+    body?.endsWith(SCHEME_SECTION_END)
+  ) {
+    return renderArticleVisual(article.schemeImage, article.schemeImageAlt ?? "");
+  }
+
+  return null;
+};
 
 const ArticleDetailPage = () => {
   const { slug } = useParams();
@@ -82,7 +122,10 @@ const ArticleDetailPage = () => {
               width="1536"
             />
           ) : null}
-          <SectionRenderer sections={article.body} />
+          <SectionRenderer
+            renderAfterSection={(section) => renderInlineArticleVisual(article, section)}
+            sections={article.body}
+          />
           <RelatedMaterials items={[...article.related, ...otherArticles]} />
           <BottomCta />
         </article>

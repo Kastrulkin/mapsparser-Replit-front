@@ -1,0 +1,7 @@
+python3 -m pytest -q tests/test_operator_attention.py
+
+Result: PASS
+
+Output:
+..                                                                       [100%]
+2 passed in 0.02s

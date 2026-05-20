@@ -13,7 +13,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Sparkles,
-  Handshake
+  Handshake,
+  Bot
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { useState } from 'react';
@@ -41,6 +42,15 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   const [isOpen, setIsOpen] = useState(false);
 
   const menuItems = [
+    {
+      id: 'operator',
+      label: language === 'ru' ? 'Оператор' : 'Operator',
+      icon: Bot,
+      path: '/dashboard/operator',
+      tooltip: language === 'ru'
+        ? 'Управляйте LocalOS через единый чатовый слой: сводки, действия и безопасные следующие шаги.'
+        : 'Control LocalOS through one chat layer: briefs, actions, and safe next steps.',
+    },
     {
       id: 'profile',
       label: t.dashboard.sidebar.profile,

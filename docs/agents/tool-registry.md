@@ -51,6 +51,34 @@ Use these classes when adding or reviewing tools:
 
 High-risk classes require approval unless a narrow product policy explicitly allows automation.
 
+## Operator Action Classes
+
+LocalOS Operator uses product-level action classes in addition to tool risk classes. See [LocalOS Operator](localos-operator.md) for the full product contract.
+
+| Action class | Meaning | Tool examples | Consent and billing |
+| --- | --- | --- | --- |
+| `free_cached` | Read already stored LocalOS data | last known reviews, saved audit, pending approvals | no paid charge by default |
+| `paid_compute` | Use model/AI compute to create or transform content | `reviews.reply_draft`, `news.generate`, `social.post.generate`, `services.optimize` | charge credits/tokens through ledger; allow auto-with-limits only after consent |
+| `paid_external` | Call paid external data providers or parsers | map refresh through Apify, competitor parse, enrichment | charge provider actual cost converted to credits; Apify planning rule is actual cost to credits x10 |
+| `manual_external` | Help user perform an external action manually | copy reply draft, open provider console, mark manually published | no external write by LocalOS |
+| `approval_required` | Publish, send, pay, delete, change third-party state, or bulk mutate | outreach send, external publish when supported, payment changes, destructive writes | human approval outside prompt text |
+| `planned_gap` | Desired but unavailable capability | direct map reply publishing, public MCP endpoint, unsupported provider write | not executable; must be shown as unavailable/planned |
+
+Tool registry entries for Operator-facing tools should include both `risk_class` and `operator_action_class`.
+
+## Paid Action Contract
+
+Tools with `operator_action_class` of `paid_compute` or `paid_external` must define:
+
+- `cost_source`: model tokens, provider actual cost, fixed credit price, or estimate-only.
+- `estimate_policy`: whether the tool can estimate before execution.
+- `charge_policy`: when credits are charged and how actual usage is recorded.
+- `consent_policy`: `ask_each_time`, `auto_with_limits`, or `disabled`.
+- `budget_fields`: max credits per action, day, and month where applicable.
+- `ledger_event`: usage/credit ledger record expected after execution.
+
+Paid actions should never be hidden inside a generic chat response. The user must see first-use cost disclosure or have an existing business-level consent policy that allows the action within limits.
+
 ## Permission Decisions
 
 The permission engine should return one of:
@@ -82,13 +110,15 @@ Examples:
 
 | Draft/preview | Commit |
 | --- | --- |
-| `reviews.reply_draft` | `reviews.google_publish` |
+| `reviews.reply_draft` | `reviews.publish_external` when provider write support exists |
 | `news.generate` | `content.publish_external` |
 | `partnership.draft_offer` | `partnership.send_batch` |
 | `finance.import_preview` | `finance.import_apply` |
 | `agent.approval_request` | `execute_approved_action` |
 
 Permission to draft never implies permission to publish, send, pay, delete, or change external systems.
+
+Current LocalOS review-reply flow is draft/manual for map providers. `reviews.publish_external` is a `planned_gap` unless a provider write integration is explicitly implemented, tested, approved, and documented. Operator should present copy/manual-publication actions instead of claiming it published replies to maps.
 
 ## Schema Rules
 
@@ -130,6 +160,7 @@ Initial LocalOS registry entries should be derived from:
 - [Approval policy](approval-policy.md);
 - [Agent API security model](security-model.md);
 - [Agent Registry v1](../AGENT_REGISTRY_V1.md);
+- [LocalOS Operator](localos-operator.md);
 - `/localos-agent-policy.json`.
 - `/localos-agent-tools.json`.
 - `/localos-agent-openapi.json`.

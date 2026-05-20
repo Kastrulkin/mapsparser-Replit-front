@@ -1,0 +1,13 @@
+Partial SPA route smoke run.
+
+Commands:
+- npm --prefix frontend run dev -- --host 127.0.0.1
+- curl -s -o /tmp/operator-route.html -w '%{http_code} %{content_type}\n' http://127.0.0.1:3001/dashboard/operator
+
+Result:
+- Vite served on http://127.0.0.1:3001 because port 3000 was already in use.
+- /dashboard/operator returned 200 text/html.
+- Full authenticated endpoint smoke was not run because it requires a live database-backed login session.
+
+Note:
+- Browser/Playwright visual verification was attempted through node_repl, but Playwright was not installed in the available Node module roots.

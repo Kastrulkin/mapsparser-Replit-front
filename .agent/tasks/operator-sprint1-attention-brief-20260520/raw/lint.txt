@@ -1,0 +1,6 @@
+python3 -m py_compile src/services/operator_attention.py src/api/operator_api.py src/main.py
+
+Result: PASS
+
+Unsupported-claim grep:
+- direct map reply publishing, public MCP, and autonomous map writes appear only in explicit planned-gap / not-allowed contexts.

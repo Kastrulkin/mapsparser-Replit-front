@@ -21,12 +21,21 @@ The safe pattern is:
 - Route Telegram/WhatsApp messages through configured AI-agent webhooks.
 - Help superadmin review industry-pattern proposals.
 
+## LocalOS Operator
+
+[LocalOS Operator](localos-operator.md) is the beta main control layer above the dashboard. It treats web chat and Telegram as two surfaces for the same governed Operator core.
+
+Sprint 1 includes the first cached-data web intent at `/dashboard/operator`: `Что требует моего внимания сегодня?`. It reads existing LocalOS data only and does not run paid refreshes, AI generation, external provider writes, or publication.
+
+The Operator model keeps one context, one permission system, one credit/usage ledger, one approval policy, and one audit trail across web and Telegram. Sprint 0 defines the product contract only; it does not imply that the web-chat runtime or Telegram Operator runtime is fully implemented.
+
 ## What Agents Must Not Assume
 
 - No public MCP server is confirmed.
 - Not every Flask endpoint is a stable public API.
 - Not all external providers support write actions.
 - Publishing and sending require human approval.
+- Review reply publishing to maps is not currently autonomous; LocalOS can prepare drafts, while users copy and publish manually unless a provider write flow is explicitly implemented and approved.
 - Billing and payment operations must not be automated by a general agent.
 
 ## Related Docs
@@ -35,6 +44,7 @@ The safe pattern is:
 - Minimal Agent API OpenAPI contract: `/localos-agent-openapi.json`
 - Sandbox self-test: `POST /api/agent-api/self-test`
 - [Capabilities](capabilities.md)
+- [LocalOS Operator](localos-operator.md)
 - [Harness architecture](harness-architecture.md)
 - [Tool registry](tool-registry.md)
 - [Planning and goal loops](planning-and-goals.md)

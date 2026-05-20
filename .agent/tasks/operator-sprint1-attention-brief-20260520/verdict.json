@@ -1,0 +1,60 @@
+{
+  "task_id": "operator-sprint1-attention-brief-20260520",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "GET /api/operator/attention-brief is authenticated, business-scoped, registered in main.py, and returns the first Operator attention brief."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "The backend builder returns structured cached-data JSON with summary, metrics, freshness, items, action classes, and execution limits."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "The implementation is read-only and does not execute paid refreshes, AI generation, provider writes, publication, migrations, or production data changes."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "The dashboard now has /dashboard/operator with a first Operator surface that calls the endpoint and displays the cached brief and limitations."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Docs mark the Sprint 1 cached MVP as beta/available while preserving unsupported provider write and public MCP boundaries."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "Proof-loop evidence records changed files, validation commands, known gaps, and this PASS verdict."
+    }
+  ],
+  "commands_run": [
+    "scripts/proof_loop.sh init operator-sprint1-attention-brief-20260520 \"Sprint 1: implement the first LocalOS Operator MVP intent 'Что требует моего внимания сегодня?' as a cached-data attention brief. Add a minimal governed Operator backend surface that returns structured attention items from existing LocalOS data only, with no paid external refresh, no AI generation billing changes, no schema migrations, no provider writes, and no deployment. Reuse existing auth/business scoping patterns and document verification evidence.\"",
+    "python3 -m pytest -q tests/test_operator_attention.py",
+    "python3 -m py_compile src/services/operator_attention.py src/api/operator_api.py src/main.py",
+    "npm --prefix frontend run build",
+    "npm --prefix frontend run dev -- --host 127.0.0.1",
+    "curl -s -o /tmp/operator-route.html -w '%{http_code} %{content_type}\\n' http://127.0.0.1:3001/dashboard/operator",
+    "rg -n \"operator|attention-brief|Что требует моего внимания|paid_actions_performed|external_writes_performed|paid refresh|provider write|MCP\" src frontend/src docs/agents .agent/tasks/operator-sprint1-attention-brief-20260520/spec.md",
+    "rg -n \"опубликовал ответ|отправил ответ в карты|autonomously write|public MCP server is confirmed|direct map reply publishing\" docs/agents src frontend/src"
+  ],
+  "artifacts_used": [
+    "src/services/operator_attention.py",
+    "src/api/operator_api.py",
+    "src/main.py",
+    "frontend/src/pages/dashboard/OperatorPage.tsx",
+    "frontend/src/App.tsx",
+    "frontend/src/components/DashboardSidebar.tsx",
+    "tests/test_operator_attention.py",
+    "docs/agents/localos-operator.md",
+    "docs/agents/index.md",
+    ".agent/tasks/operator-sprint1-attention-brief-20260520/spec.md",
+    ".agent/tasks/operator-sprint1-attention-brief-20260520/evidence.json",
+    ".agent/tasks/operator-sprint1-attention-brief-20260520/problems.md"
+  ]
+}

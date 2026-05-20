@@ -58,6 +58,47 @@ type DownloadBlockProps = {
   href: string;
 };
 
+type SectionRendererProps = {
+  sections: ContentSection[];
+  renderAfterSection?: (section: ContentSection) => ReactNode;
+};
+
+const inlineLinkClassName = "font-semibold text-orange-600 underline underline-offset-4 hover:text-orange-700";
+
+const renderLinkedText = (text: string, links: ContentSection["bodyLinks"] = []) => {
+  const nodes: ReactNode[] = [];
+  let remaining = text;
+  let key = 0;
+
+  links.forEach((link) => {
+    const index = remaining.indexOf(link.text);
+
+    if (index < 0) {
+      return;
+    }
+
+    const before = remaining.slice(0, index);
+
+    if (before) {
+      nodes.push(before);
+    }
+
+    nodes.push(
+      <Link className={inlineLinkClassName} key={`${link.href}-${key}`} to={link.href}>
+        {link.text}
+      </Link>
+    );
+    key += 1;
+    remaining = remaining.slice(index + link.text.length);
+  });
+
+  if (remaining) {
+    nodes.push(remaining);
+  }
+
+  return nodes;
+};
+
 export const PageFrame = ({ children }: PageFrameProps) => (
   <div className="min-h-screen bg-background">
     {children}
@@ -185,12 +226,16 @@ export const DetailHeader = ({ backHref, backLabel, label, title, excerpt, date,
   </section>
 );
 
-export const SectionRenderer = ({ sections }: { sections: ContentSection[] }) => (
+export const SectionRenderer = ({ sections, renderAfterSection }: SectionRendererProps) => (
   <div className="space-y-10">
     {sections.map((section) => (
       <section key={section.title}>
         <h2 className="text-2xl font-bold text-gray-950">{section.title}</h2>
-        {section.body ? <p className="mt-4 text-lg leading-8 text-gray-700">{section.body}</p> : null}
+        {section.body ? (
+          <p className="mt-4 text-lg leading-8 text-gray-700">
+            {renderLinkedText(section.body, section.bodyLinks)}
+          </p>
+        ) : null}
         {section.items ? (
           <ul className="mt-5 space-y-3">
             {section.items.map((item) => (
@@ -201,6 +246,7 @@ export const SectionRenderer = ({ sections }: { sections: ContentSection[] }) =>
             ))}
           </ul>
         ) : null}
+        {renderAfterSection ? renderAfterSection(section) : null}
       </section>
     ))}
   </div>

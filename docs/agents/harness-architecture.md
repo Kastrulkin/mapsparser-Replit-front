@@ -14,6 +14,7 @@ The harness owns:
 - capability routing;
 - tool schema validation;
 - approval policy;
+- paid action consent policy;
 - idempotency;
 - billing and token ledger;
 - audit trails;
@@ -136,6 +137,7 @@ The final response should include the stop reason when the task did not fully co
 - `agent_clients` and `agent_action_ledger` are the current Agent API security foundation.
 - `billing_ledger` records token/cost accounting for orchestrated actions.
 - `/localos-agent-policy.json` exposes a machine-readable policy summary.
+- [LocalOS Operator](localos-operator.md) is the planned web/Telegram control layer that will reuse the same harness boundary, consent policy, billing ledger, and audit model.
 
 ## Launch Gate
 

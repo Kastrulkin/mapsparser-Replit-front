@@ -4,9 +4,15 @@ export type RelatedLink = {
   label: string;
 };
 
+export type InlineContentLink = {
+  text: string;
+  href: string;
+};
+
 export type ContentSection = {
   title: string;
   body?: string;
+  bodyLinks?: InlineContentLink[];
   items?: string[];
 };
 
@@ -20,6 +26,10 @@ export type ArticleContent = {
   updatedAt: string;
   coverImage?: string;
   coverAlt?: string;
+  statsImage?: string;
+  statsImageAlt?: string;
+  schemeImage?: string;
+  schemeImageAlt?: string;
   seoTitle: string;
   seoDescription: string;
   draft: boolean;
