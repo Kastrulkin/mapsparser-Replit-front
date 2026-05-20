@@ -84,6 +84,7 @@ The first version is available as a cached-data MVP through:
 
 - web route: `/dashboard/operator`;
 - API route: `GET /api/operator/attention-brief?business_id=<id>`;
+- Telegram owner-bot route: `client_today` / `Что требует моего внимания сегодня?`;
 - shared backend builder: `services.operator_attention.build_attention_brief`.
 
 This version uses cached LocalOS data only:
@@ -96,7 +97,9 @@ This version uses cached LocalOS data only:
 - finance warnings when already available;
 - recent support or audit events.
 
-If the answer needs fresh external data, Operator must ask for paid refresh consent or follow a previously configured consent policy. Sprint 1 does not execute paid refreshes, AI generation, provider writes, or external publication.
+If the answer needs fresh external data, Operator must ask for paid refresh consent or follow a previously configured consent policy. Sprint 1/Sprint 2 do not execute paid refreshes, AI generation, provider writes, or external publication.
+
+Sprint 2 connects the same cached brief to the existing Telegram owner-bot control surface. The Telegram response is a compact transport-specific formatter over the same Operator core, not a separate data path.
 
 ## Action Taxonomy
 

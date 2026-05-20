@@ -8,6 +8,7 @@ from typing import Any
 from billing_constants import TARIFFS
 from core.action_orchestrator import ActionOrchestrator
 from database_manager import get_db_connection
+from services.operator_attention import build_attention_brief
 from subscription_manager import get_subscription_access, get_subscription_info
 
 
@@ -118,6 +119,13 @@ def _format_date(value: Any) -> str:
         return "—"
     if isinstance(value, datetime):
         return value.strftime("%d.%m %H:%M")
+    if isinstance(value, str):
+        raw = value.strip()
+        if raw:
+            try:
+                return datetime.fromisoformat(raw.replace("Z", "+00:00")).strftime("%d.%m %H:%M")
+            except Exception:
+                return raw
     return str(value)
 
 
@@ -171,68 +179,82 @@ def _subscription_upgrade_prompt(info: dict[str, Any], access: dict[str, Any]) -
     return "Следующий шаг — использовать подписку плотнее через ежедневные действия в Telegram и в кабинете."
 
 
+def _operator_action_class_label(action_class: str) -> str:
+    labels = {
+        "free_cached": "бесплатно, сохранённые данные",
+        "paid_compute": "платная генерация",
+        "paid_external": "платное обновление данных",
+        "manual_external": "ручное внешнее действие",
+        "approval_required": "требует подтверждения",
+        "planned_gap": "планируется",
+    }
+    return labels.get(str(action_class or "").strip(), "сохранённые данные")
+
+
+def _format_operator_attention_text(brief: dict[str, Any]) -> str:
+    business = brief.get("business") if isinstance(brief.get("business"), dict) else {}
+    summary = brief.get("summary") if isinstance(brief.get("summary"), dict) else {}
+    metrics = brief.get("metrics") if isinstance(brief.get("metrics"), dict) else {}
+    freshness = brief.get("freshness") if isinstance(brief.get("freshness"), dict) else {}
+    items = brief.get("items") if isinstance(brief.get("items"), list) else []
+
+    lines = [
+        "LocalOS Operator",
+        "Что требует внимания сегодня",
+        f"Бизнес: {business.get('name') or 'Бизнес'}",
+        "",
+        str(summary.get("text") or "Показываю последние известные данные LocalOS."),
+        "",
+        "Сводка:",
+        f"• Отзывы без ответа: {int(metrics.get('reviews_without_response') or 0)}",
+        f"• Ждут подтверждения: {int(metrics.get('pending_approvals') or 0)}",
+        f"• Черновики новостей: {int(metrics.get('pending_news') or 0)}",
+        f"• Черновики ответов: {int(metrics.get('review_reply_drafts') or 0)}",
+        f"• Партнёрства к разбору: {int(metrics.get('partnership_leads_ready') or 0)}",
+    ]
+
+    if items:
+        lines.extend(["", "Следующие шаги:"])
+        for index, item in enumerate(items[:4], start=1):
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title") or "Пункт").strip()
+            description = str(item.get("description") or "").strip()
+            action_class = _operator_action_class_label(str(item.get("action_class") or "free_cached"))
+            count = int(item.get("count") or 0)
+            prefix = f"{index}. {title}"
+            if count > 0:
+                prefix += f" — {count}"
+            lines.append(prefix)
+            if description:
+                lines.append(f"   {description}")
+            lines.append(f"   Класс действия: {action_class}.")
+
+    latest_card_at = _format_date(freshness.get("latest_card_at"))
+    card_age_days = freshness.get("card_age_days")
+    age_text = f"{int(card_age_days)} дн." if card_age_days is not None else "нет данных"
+    lines.extend(
+        [
+            "",
+            f"Свежесть данных: карточка обновлялась {latest_card_at}; возраст: {age_text}",
+            "Платные действия не выполнялись. Чтобы получить свежие данные с карт, нужно отдельное платное обновление и consent-политика.",
+            "Публикация ответов в карты сейчас ручная: LocalOS готовит черновики, а пользователь копирует и вставляет их сам.",
+        ]
+    )
+
+    return "\n".join(lines)
+
+
 def build_today_text(business_ctx: dict) -> str:
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
         business_id = str(business_ctx.get("business_id") or "")
         user_id = str(business_ctx.get("user_id") or "")
-        card = _load_card_snapshot(cursor, business_id)
-        reviews = _load_reviews_counts(cursor, business_id)
-        pending_news = _count_if_table_exists(
-            cursor,
-            "usernews",
-            "SELECT COUNT(*) AS cnt FROM usernews WHERE user_id = %s AND COALESCE(approved, 0) = 0",
-            (user_id,),
-        )
-        reply_drafts = _count_if_table_exists(
-            cursor,
-            "reviewreplydrafts",
-            "SELECT COUNT(*) AS cnt FROM reviewreplydrafts WHERE business_id = %s AND status IN ('generated', 'pending_review')",
-            (business_id,),
-        )
-        pending_partnership_drafts = _count_if_table_exists(
-            cursor,
-            "outreachmessagedrafts",
-            """
-            SELECT COUNT(*) AS cnt
-            FROM outreachmessagedrafts d
-            JOIN prospectingleads l ON l.id = d.lead_id
-            WHERE l.business_id = %s
-              AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
-              AND d.status IN ('generated', 'approved')
-            """,
-            (business_id,),
-        )
+        brief = build_attention_brief(cursor, business_id, user_id)
+        return _format_operator_attention_text(brief)
     finally:
         conn.close()
-
-    pending_approvals = _pending_approvals_count(business_ctx)
-    action_hint = "Начните с аудита карточки." if not card else "Разберите отзывы и подтверждения, если они есть."
-    if reviews["without_response"] > 0:
-        action_hint = "Сначала разберите отзывы без ответа."
-    elif pending_approvals > 0:
-        action_hint = "У вас есть действия, которые ждут подтверждения."
-    elif pending_news > 0:
-        action_hint = "Проверьте подготовленные новости."
-
-    signals = reviews["without_response"] + pending_approvals + pending_news + reply_drafts
-    return "\n".join(
-        [
-            "Что важно сегодня",
-            f"Бизнес: {business_ctx['business_name']}",
-            "",
-            f"Сигналов на сегодня: {signals}",
-            f"• Отзывы без ответа: {reviews['without_response']}",
-            f"• Ждут подтверждения: {pending_approvals}",
-            f"• Черновики новостей: {pending_news}",
-            f"• Черновики ответов: {reply_drafts}",
-            f"• Партнёрские черновики: {pending_partnership_drafts}",
-            f"• Последнее обновление карточки: {_format_date(card.get('created_at')) if card else 'ещё не было'}",
-            "",
-            f"Следующий шаг: {action_hint}",
-        ]
-    )
 
 
 def build_card_text(business_ctx: dict) -> str:

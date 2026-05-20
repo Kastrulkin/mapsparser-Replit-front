@@ -1,6 +1,7 @@
 import telegram_bot
 from services.telegram_static_answers import guest_welcome_text, tariff_detail_text
 from services import telegram_dashboard
+from services.telegram_response_router import classify_client_intent
 from telegram_bot import (
     _build_guest_audit_result_menu,
     _build_guest_compare_result_menu,
@@ -121,3 +122,47 @@ def test_starter_copy_positions_tariff_as_path_from_audit_to_fix() -> None:
     assert "самый короткий путь от бесплатного аудита к исправлениям" in text
     assert "1200 ₽/мес" in text
     assert "10 и более раз дороже" in text
+
+
+def test_operator_attention_text_keeps_paid_actions_manual_and_cached() -> None:
+    text = telegram_dashboard._format_operator_attention_text(
+        {
+            "business": {"name": "Салон LocalOS"},
+            "summary": {"text": "Нашёл 2 пункта по последним сохранённым данным."},
+            "metrics": {
+                "reviews_without_response": 2,
+                "pending_approvals": 1,
+                "pending_news": 0,
+                "review_reply_drafts": 1,
+                "partnership_leads_ready": 0,
+            },
+            "freshness": {
+                "latest_card_at": "2026-05-20T10:00:00+00:00",
+                "card_age_days": 0,
+            },
+            "items": [
+                {
+                    "title": "Отзывы без ответа",
+                    "description": "Это последние сохранённые данные.",
+                    "count": 2,
+                    "action_class": "free_cached",
+                },
+                {
+                    "title": "Данные карт стоит обновить",
+                    "description": "Обновление карт относится к платным внешним действиям.",
+                    "count": 0,
+                    "action_class": "paid_external",
+                },
+            ],
+        }
+    )
+
+    assert "LocalOS Operator" in text
+    assert "последним сохранённым данным" in text
+    assert "Платные действия не выполнялись" in text
+    assert "Публикация ответов в карты сейчас ручная" in text
+    assert "платное обновление данных" in text
+
+
+def test_client_intent_recognizes_operator_attention_request() -> None:
+    assert classify_client_intent("Что требует моего внимания сегодня?") == "today"

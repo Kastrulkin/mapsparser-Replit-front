@@ -25,7 +25,7 @@ The safe pattern is:
 
 [LocalOS Operator](localos-operator.md) is the beta main control layer above the dashboard. It treats web chat and Telegram as two surfaces for the same governed Operator core.
 
-Sprint 1 includes the first cached-data web intent at `/dashboard/operator`: `Что требует моего внимания сегодня?`. It reads existing LocalOS data only and does not run paid refreshes, AI generation, external provider writes, or publication.
+Sprint 1 includes the first cached-data web intent at `/dashboard/operator`: `Что требует моего внимания сегодня?`. Sprint 2 connects the same cached brief to the existing Telegram owner-bot `client_today` flow. Both read existing LocalOS data only and do not run paid refreshes, AI generation, external provider writes, or publication.
 
 The Operator model keeps one context, one permission system, one credit/usage ledger, one approval policy, and one audit trail across web and Telegram. Sprint 0 defines the product contract only; it does not imply that the web-chat runtime or Telegram Operator runtime is fully implemented.
 

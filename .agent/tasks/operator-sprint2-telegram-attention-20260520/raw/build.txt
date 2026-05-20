@@ -1,0 +1,3 @@
+No frontend build required for Sprint 2.
+
+Reason: backend/Telegram Python-only change; no frontend files changed.

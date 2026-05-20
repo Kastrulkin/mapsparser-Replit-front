@@ -1,0 +1,98 @@
+{
+  "task_id": "operator-sprint2-telegram-attention-20260520",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Telegram owner-bot `client_today` callback and free-text today intent use the shared Sprint 1 Operator attention core.",
+      "status": "PASS",
+      "proof": [
+        "src/services/telegram_dashboard.py imports services.operator_attention.build_attention_brief.",
+        "build_today_text now calls build_attention_brief and formats its response for Telegram.",
+        "src/telegram_bot.py already routes client_today callbacks and today intents through build_today_text."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Telegram output clearly states cached-data mode, no paid actions executed, and manual publication boundary for map replies.",
+      "status": "PASS",
+      "proof": [
+        "src/services/telegram_dashboard.py formats LocalOS Operator output with saved-data wording.",
+        "The formatter says paid actions were not executed and fresh map data requires separate paid update consent.",
+        "The formatter says map reply publication remains manual copy/paste."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Client intent classifier recognizes `Что требует моего внимания сегодня?` as the today/attention intent.",
+      "status": "PASS",
+      "proof": [
+        "src/services/telegram_response_router.py adds `что требует внимания` and `требует моего внимания` patterns.",
+        "tests/test_telegram_dashboard_copy.py verifies the phrase maps to `today`."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "No paid refresh, AI generation, external provider write, schema migration, production data change, commit, push, or deploy is performed.",
+      "status": "PASS",
+      "proof": [
+        "The implementation only changes Telegram formatting/routing, docs, tests, and proof artifacts.",
+        "No migration files were added.",
+        "No deploy, commit, or push commands were run for Sprint 2."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Operator documentation records Sprint 2 Telegram transport coverage without implying full freeform chat, public MCP, or provider write support.",
+      "status": "PASS",
+      "proof": [
+        "docs/agents/localos-operator.md documents the Telegram owner-bot route and Sprint 2 transport-specific formatter.",
+        "docs/agents/index.md states web and Telegram use cached data only and do not run paid refreshes, AI generation, external writes, or publication."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC6",
+      "text": "Proof-loop evidence records changed files and validation checks.",
+      "status": "PASS",
+      "proof": [
+        "This evidence file lists changed files and fresh verifier commands.",
+        "verdict.json records PASS."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/services/telegram_dashboard.py",
+    "src/services/telegram_response_router.py",
+    "tests/test_telegram_dashboard_copy.py",
+    "docs/agents/localos-operator.md",
+    "docs/agents/index.md",
+    ".agent/tasks/operator-sprint2-telegram-attention-20260520/spec.md",
+    ".agent/tasks/operator-sprint2-telegram-attention-20260520/evidence.md",
+    ".agent/tasks/operator-sprint2-telegram-attention-20260520/evidence.json",
+    ".agent/tasks/operator-sprint2-telegram-attention-20260520/verdict.json",
+    ".agent/tasks/operator-sprint2-telegram-attention-20260520/problems.md",
+    ".agent/tasks/operator-sprint2-telegram-attention-20260520/raw/build.txt",
+    ".agent/tasks/operator-sprint2-telegram-attention-20260520/raw/test-unit.txt",
+    ".agent/tasks/operator-sprint2-telegram-attention-20260520/raw/test-integration.txt",
+    ".agent/tasks/operator-sprint2-telegram-attention-20260520/raw/lint.txt"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m pytest -q tests/test_telegram_dashboard_copy.py tests/test_operator_attention.py",
+    "python3 -m py_compile src/services/telegram_dashboard.py src/services/telegram_response_router.py src/telegram_bot.py",
+    "rg -n \"LocalOS Operator|client_today|Что требует моего внимания|paid refresh|Платные действия не выполнялись|Публикация ответов в карты|provider write|MCP\" src/services/telegram_dashboard.py src/services/telegram_response_router.py src/telegram_bot.py docs/agents .agent/tasks/operator-sprint2-telegram-attention-20260520/spec.md tests/test_telegram_dashboard_copy.py",
+    "scripts/proof_loop.sh validate operator-sprint2-telegram-attention-20260520",
+    "scripts/proof_loop.sh status operator-sprint2-telegram-attention-20260520"
+  ],
+  "known_gaps": [
+    "Sprint 2 does not implement freeform LLM Operator chat.",
+    "Sprint 2 does not implement paid refresh consent storage or charging.",
+    "Sprint 2 does not implement provider writes or map publication.",
+    "Sprint 2 was not deployed."
+  ]
+}

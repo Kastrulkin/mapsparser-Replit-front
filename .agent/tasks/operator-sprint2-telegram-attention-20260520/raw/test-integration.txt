@@ -1,0 +1,3 @@
+Not run.
+
+Reason: production Telegram polling requires a live bot token/runtime. Sprint 2 is covered by unit tests for formatter and intent routing plus Python compile checks.
