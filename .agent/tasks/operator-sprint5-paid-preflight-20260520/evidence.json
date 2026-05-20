@@ -1,0 +1,86 @@
+{
+  "task_id": "operator-sprint5-paid-preflight-20260520",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Add paid action preflight for map_reviews_refresh and future paid action keys using the Sprint 4 consent policy.",
+      "status": "PASS",
+      "proof": [
+        "Added services.operator_paid_preflight with shared PAID_ACTIONS lookup."
+      ],
+      "gaps": [
+        "Actual execution remains disabled."
+      ]
+    },
+    {
+      "id": "AC2",
+      "text": "Preflight checks action key, estimated credits, user balance, consent mode, per-action/day/month limits, and disabled policy.",
+      "status": "PASS",
+      "proof": [
+        "Unit tests cover allowed and blocked paths."
+      ],
+      "gaps": [
+        "Historical daily/monthly usage reservation is not implemented yet."
+      ]
+    },
+    {
+      "id": "AC3",
+      "text": "Preflight must be read-only: no Apify calls, no parsequeue insertion, no AI generation, no credit ledger writes, no external writes.",
+      "status": "PASS",
+      "proof": [
+        "Preflight response explicitly reports execution_enabled=false, paid_actions_performed=false, credit_charged=false, external_calls_performed=false."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Add authenticated Operator API endpoint for preflight after business access verification.",
+      "status": "PASS",
+      "proof": [
+        "Added POST /api/operator/paid-actions/<action_key>/preflight using require_auth_from_request and verify_business_access."
+      ],
+      "gaps": [
+        "No live Flask integration fixture added."
+      ]
+    },
+    {
+      "id": "AC5",
+      "text": "Add Operator web controls to enter estimated credits and inspect the preflight result before any future execution.",
+      "status": "PASS",
+      "proof": [
+        "OperatorPage renders estimated credits, explicit consent, preflight button, and result details."
+      ],
+      "gaps": [
+        "No screenshot captured."
+      ]
+    },
+    {
+      "id": "AC6",
+      "text": "Tests and proof evidence cover allowed, blocked, missing estimate, disabled policy, insufficient balance, and no-execution status.",
+      "status": "PASS",
+      "proof": [
+        "28 focused tests passed."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/services/operator_paid_preflight.py",
+    "src/api/operator_api.py",
+    "frontend/src/pages/dashboard/OperatorPage.tsx",
+    "tests/test_operator_paid_preflight.py",
+    "docs/agents/localos-operator.md",
+    "docs/agents/index.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m pytest -q tests/test_operator_paid_preflight.py tests/test_operator_consent_policy.py tests/test_operator_paid_actions.py tests/test_operator_attention.py tests/test_telegram_dashboard_copy.py",
+    "python3 -m py_compile src/services/operator_paid_preflight.py src/api/operator_api.py src/services/operator_consent_policy.py src/services/operator_paid_actions.py src/services/operator_attention.py",
+    "npm run build",
+    "git diff --check"
+  ],
+  "known_gaps": [
+    "No Apify execution, parsequeue insertion, credit reservation, credit charge, AI generation, or external publication in Sprint 5.",
+    "Historical daily/monthly usage accounting remains future execution work."
+  ]
+}

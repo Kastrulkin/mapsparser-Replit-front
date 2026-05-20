@@ -138,6 +138,16 @@ Sprint 4 code source of truth:
 
 Sprint 4 persists consent policy only. It still does not execute paid actions, call Apify, generate content, charge credits, write to providers, or publish externally.
 
+Sprint 5 adds a paid action preflight gate:
+
+- backend service: `services.operator_paid_preflight`;
+- API endpoint: `POST /api/operator/paid-actions/<action_key>/preflight`;
+- first supported action: `map_reviews_refresh`;
+- checks: action key, estimated credits, user balance, consent mode, per-action/day/month limits, and disabled policy;
+- status: `preflight_only`.
+
+Sprint 5 is still read-only. It does not create parsequeue jobs, call Apify, reserve or charge credits, generate AI content, write to providers, or publish externally.
+
 Policy modes:
 
 - `ask_each_time`: explain the cost and ask before every paid action.

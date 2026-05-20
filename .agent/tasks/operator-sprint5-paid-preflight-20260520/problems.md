@@ -1,0 +1,17 @@
+# Problems: operator-sprint5-paid-preflight-20260520
+
+No open problems. Verdict: PASS.
+
+Use this file only when `verdict.json` is not `PASS`.
+
+## Template for each non-PASS acceptance criterion
+
+### ACX: <criterion text>
+- Status: FAIL or UNKNOWN
+- Why it is not proven:
+- Minimal reproduction steps:
+- Expected:
+- Actual:
+- Affected files:
+- Smallest safe fix:
+- Corrective hint:

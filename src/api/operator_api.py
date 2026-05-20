@@ -8,6 +8,7 @@ from core.auth_helpers import require_auth_from_request, verify_business_access
 from database_manager import DatabaseManager
 from services.operator_consent_policy import list_consent_policies, upsert_consent_policy
 from services.operator_attention import build_attention_brief
+from services.operator_paid_preflight import build_paid_action_preflight
 
 
 operator_bp = Blueprint("operator_api", __name__, url_prefix="/api/operator")
@@ -95,6 +96,42 @@ def operator_consent_policy_update(action_key: str):
         return jsonify({"success": True, "policy": policy})
     except Exception:
         db.conn.rollback()
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+    finally:
+        db.close()
+
+
+@operator_bp.route("/paid-actions/<action_key>/preflight", methods=["POST"])
+def operator_paid_action_preflight(action_key: str):
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    business_id = str(payload.get("business_id") or "").strip()
+    if not business_id:
+        return jsonify({"success": False, "error": "business_id обязателен"}), 400
+
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        if not has_access:
+            status_code = 403 if owner_id else 404
+            message = "Нет доступа" if owner_id else "Бизнес не найден"
+            return jsonify({"success": False, "error": message}), status_code
+
+        user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        preflight = build_paid_action_preflight(
+            cursor,
+            business_id=business_id,
+            user_id=user_id,
+            action_key=action_key,
+            estimated_credits=payload.get("estimated_credits"),
+            explicit_consent=bool(payload.get("explicit_consent")),
+        )
+        return jsonify({"success": True, "preflight": preflight})
+    except Exception:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
     finally:
         db.close()

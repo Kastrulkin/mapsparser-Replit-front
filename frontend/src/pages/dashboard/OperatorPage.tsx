@@ -97,6 +97,33 @@ type ConsentDraft = {
   low_balance_warning_threshold: string;
 };
 
+type PreflightDraft = {
+  estimated_credits: string;
+  explicit_consent: boolean;
+};
+
+type PreflightResult = {
+  action_key: string;
+  status: 'ready' | 'blocked';
+  execution_status: string;
+  execution_enabled: boolean;
+  would_be_allowed: boolean;
+  can_execute_now: boolean;
+  blocked_reasons: string[];
+  warnings: string[];
+  estimated_credits: number | null;
+  balance_credits: number | null;
+  paid_actions_performed: boolean;
+  credit_charged: boolean;
+  external_calls_performed: boolean;
+  next_step: string;
+  copy: {
+    summary: string;
+    ready: string;
+    blocked: string;
+  };
+};
+
 type AttentionBrief = {
   business: {
     id: string;
@@ -180,6 +207,9 @@ export const OperatorPage = () => {
   const [savingConsentKey, setSavingConsentKey] = useState<string | null>(null);
   const [consentDrafts, setConsentDrafts] = useState<Record<string, ConsentDraft>>({});
   const [consentMessage, setConsentMessage] = useState<string | null>(null);
+  const [preflightDrafts, setPreflightDrafts] = useState<Record<string, PreflightDraft>>({});
+  const [preflightResults, setPreflightResults] = useState<Record<string, PreflightResult>>({});
+  const [preflightingKey, setPreflightingKey] = useState<string | null>(null);
 
   const loadBrief = async () => {
     if (!currentBusinessId) {
@@ -196,6 +226,7 @@ export const OperatorPage = () => {
       setBrief(nextBrief);
       if (nextBrief?.paid_action_offers) {
         setConsentDrafts(buildConsentDrafts(nextBrief.paid_action_offers));
+        setPreflightDrafts(buildPreflightDrafts(nextBrief.paid_action_offers));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить сводку');
@@ -244,6 +275,44 @@ export const OperatorPage = () => {
       setConsentMessage(err instanceof Error ? err.message : 'Не удалось сохранить consent policy');
     } finally {
       setSavingConsentKey(null);
+    }
+  };
+
+  const updatePreflightDraft = (actionKey: string, patch: Partial<PreflightDraft>) => {
+    setPreflightDrafts((current) => {
+      const currentDraft = current[actionKey] || emptyPreflightDraft();
+      return {
+        ...current,
+        [actionKey]: {
+          ...currentDraft,
+          ...patch,
+        },
+      };
+    });
+  };
+
+  const runPreflight = async (offer: PaidActionOffer) => {
+    if (!currentBusinessId) return;
+    const draft = preflightDrafts[offer.action_key] || makePreflightDraft(offer);
+    setPreflightingKey(offer.action_key);
+    setConsentMessage(null);
+    try {
+      const response = await api.post(`/operator/paid-actions/${offer.action_key}/preflight`, {
+        business_id: currentBusinessId,
+        estimated_credits: draft.estimated_credits,
+        explicit_consent: draft.explicit_consent,
+      });
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Не удалось выполнить preflight');
+      }
+      setPreflightResults((current) => ({
+        ...current,
+        [offer.action_key]: response.data.preflight,
+      }));
+    } catch (err) {
+      setConsentMessage(err instanceof Error ? err.message : 'Не удалось выполнить preflight');
+    } finally {
+      setPreflightingKey(null);
     }
   };
 
@@ -422,6 +491,8 @@ export const OperatorPage = () => {
               <div className="space-y-3">
                 {brief.paid_action_offers.map((offer) => {
                   const draft = consentDrafts[offer.action_key] || makeConsentDraft(offer);
+                  const preflightDraft = preflightDrafts[offer.action_key] || makePreflightDraft(offer);
+                  const preflightResult = preflightResults[offer.action_key];
                   const autoMode = draft.mode === 'auto_with_limits';
                   return (
                     <div key={offer.action_key} className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
@@ -508,6 +579,62 @@ export const OperatorPage = () => {
                           </Button>
                         </div>
                       </div>
+                      <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-3">
+                        <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
+                          <ConsentLimitInput
+                            label="Оценка, кредитов"
+                            value={preflightDraft.estimated_credits}
+                            onChange={(value) => updatePreflightDraft(offer.action_key, { estimated_credits: value })}
+                          />
+                          <label className="flex items-center gap-2 pt-7 text-sm font-medium text-slate-700">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-slate-300"
+                              checked={preflightDraft.explicit_consent}
+                              onChange={(event) => updatePreflightDraft(offer.action_key, { explicit_consent: event.target.checked })}
+                            />
+                            Проверить как разовое явное согласие
+                          </label>
+                        </div>
+                        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="text-sm leading-6 text-slate-700">
+                            Preflight проверит баланс, лимиты и consent. Запуск, Apify и списание кредитов отключены.
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => void runPreflight(offer)}
+                            disabled={preflightingKey === offer.action_key}
+                          >
+                            {preflightingKey === offer.action_key ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            Проверить запуск
+                          </Button>
+                        </div>
+                        {preflightResult ? (
+                          <div className={cn(
+                            'mt-3 rounded-xl border px-3 py-2 text-sm leading-6',
+                            preflightResult.status === 'ready'
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                              : 'border-amber-200 bg-amber-50 text-amber-950',
+                          )}>
+                            <div className="font-semibold">
+                              {preflightResult.status === 'ready' ? 'Preflight пройден' : 'Preflight заблокирован'}
+                            </div>
+                            <div>{preflightResult.copy.summary}</div>
+                            <div>
+                              Оценка: {preflightResult.estimated_credits ?? 'нет'} кредитов;
+                              баланс: {preflightResult.balance_credits ?? 'нет данных'}.
+                            </div>
+                            {preflightResult.blocked_reasons.length > 0 ? (
+                              <div>Причины: {preflightResult.blocked_reasons.join(', ')}</div>
+                            ) : null}
+                            {preflightResult.warnings.length > 0 ? (
+                              <div>Предупреждения: {preflightResult.warnings.join(', ')}</div>
+                            ) : null}
+                            <div>Execution status: {preflightResult.execution_status}; списаний и внешних вызовов нет.</div>
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
                   );
                 })}
@@ -548,6 +675,24 @@ const buildConsentDrafts = (offers: PaidActionOffer[]) => {
   const drafts: Record<string, ConsentDraft> = {};
   offers.forEach((offer) => {
     drafts[offer.action_key] = makeConsentDraft(offer);
+  });
+  return drafts;
+};
+
+const emptyPreflightDraft = (): PreflightDraft => ({
+  estimated_credits: '',
+  explicit_consent: false,
+});
+
+const makePreflightDraft = (offer: PaidActionOffer): PreflightDraft => ({
+  estimated_credits: formatLimit(offer.estimated_credits),
+  explicit_consent: false,
+});
+
+const buildPreflightDrafts = (offers: PaidActionOffer[]) => {
+  const drafts: Record<string, PreflightDraft> = {};
+  offers.forEach((offer) => {
+    drafts[offer.action_key] = makePreflightDraft(offer);
   });
   return drafts;
 };
