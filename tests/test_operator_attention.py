@@ -62,6 +62,7 @@ def test_attention_brief_uses_cached_data_and_reports_no_execution():
             "reviewreplydrafts",
             "action_requests",
             "prospectingleads",
+            "operatorconsentpolicies",
         },
         columns={
             "cards": {"business_id", "id", "created_at", "rating", "reviews_count", "overview", "photos", "news", "reviews"},
@@ -79,6 +80,7 @@ def test_attention_brief_uses_cached_data_and_reports_no_execution():
     assert brief["paid_action_offers"][0]["action_key"] == "map_reviews_refresh"
     assert brief["paid_action_offers"][0]["status"] == "proposal_only"
     assert brief["paid_action_offers"][0]["credit_multiplier"] == 10
+    assert brief["paid_action_offers"][0]["current_consent_policy"]["mode"] == "ask_each_time"
     assert brief["limits"]["external_writes_performed"] is False
     assert brief["metrics"]["reviews_without_response"] == 3
     assert brief["metrics"]["pending_approvals"] == 1

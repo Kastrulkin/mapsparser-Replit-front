@@ -127,11 +127,24 @@ Sprint 3 code source of truth:
 - attention brief field: `paid_action_offers`;
 - proposal status: `proposal_only`.
 
+Sprint 4 code source of truth:
+
+- consent policy table: `operatorconsentpolicies`;
+- migration: `alembic_migrations/versions/20260520_add_operator_consent_policies.py`;
+- backend service: `services.operator_consent_policy`;
+- API read endpoint: `GET /api/operator/consent-policy?business_id=<id>`;
+- API update endpoint: `PUT /api/operator/consent-policy/<action_key>`;
+- web controls: `/dashboard/operator` paid action cards.
+
+Sprint 4 persists consent policy only. It still does not execute paid actions, call Apify, generate content, charge credits, write to providers, or publish externally.
+
 Policy modes:
 
 - `ask_each_time`: explain the cost and ask before every paid action.
 - `auto_with_limits`: allow paid actions without repeated prompts while configured limits and balance rules hold.
 - `disabled`: block this paid action class until the user changes settings.
+
+`auto_with_limits` must not be accepted without explicit positive `max_credits_per_action` and `max_credits_per_day`. A stored policy is permission to skip repeat prompts only when future runtime checks also confirm balance, estimated cost, action limits, and the external/manual approval boundary.
 
 Recommended limits:
 

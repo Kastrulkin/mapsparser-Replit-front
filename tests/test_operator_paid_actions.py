@@ -15,7 +15,13 @@ def test_paid_action_registry_covers_operator_paid_actions() -> None:
 
 
 def test_map_refresh_offer_is_proposal_only_and_uses_apify_multiplier() -> None:
-    offer = build_map_reviews_refresh_offer(business_id="biz-1", balance_credits=1000, estimated_credits=10)
+    consent_policy = {"mode": "ask_each_time", "execution_allowed_without_prompt": False}
+    offer = build_map_reviews_refresh_offer(
+        business_id="biz-1",
+        balance_credits=1000,
+        estimated_credits=10,
+        consent_policy=consent_policy,
+    )
 
     assert offer["action_key"] == "map_reviews_refresh"
     assert offer["action_class"] == "paid_external"
@@ -27,6 +33,7 @@ def test_map_refresh_offer_is_proposal_only_and_uses_apify_multiplier() -> None:
     assert offer["affordable_runs_estimate"] == 100
     assert offer["paid_actions_performed"] is False
     assert offer["external_write"] is False
+    assert offer["current_consent_policy"] == consent_policy
 
 
 def test_offer_without_estimate_does_not_invent_price() -> None:

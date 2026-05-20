@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
+from services.operator_consent_policy import get_consent_policy
 from services.operator_paid_actions import build_map_reviews_refresh_offer
 
 
@@ -435,7 +436,14 @@ def build_attention_brief(cursor: Any, business_id: str, user_id: str) -> dict[s
     data_is_stale = card_age_days is None or int(card_age_days or 0) > STALE_DAYS
     if data_is_stale or reviews["without_response"] > 0:
         reason = "reviews_without_response" if reviews["without_response"] > 0 else "map_data_stale"
-        paid_action_offers.append(build_map_reviews_refresh_offer(business_id=business_id, reason=reason))
+        consent_policy = get_consent_policy(cursor, business_id, "map_reviews_refresh")
+        paid_action_offers.append(
+            build_map_reviews_refresh_offer(
+                business_id=business_id,
+                reason=reason,
+                consent_policy=consent_policy,
+            )
+        )
     if data_is_stale:
         items.append(
             _attention_item(

@@ -79,6 +79,7 @@ def build_paid_action_offer(
     balance_credits: Any = None,
     estimated_credits: Any = None,
     reason: str = "",
+    consent_policy: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     config = dict(PAID_ACTIONS.get(action_key) or {})
     if not config:
@@ -125,6 +126,7 @@ def build_paid_action_offer(
         "manual_approval_required": bool(config["manual_approval_required"]),
         "external_write": bool(config["external_write"]),
         "paid_actions_performed": False,
+        "current_consent_policy": consent_policy,
         "reason": reason,
         "copy": {
             "primary": primary_copy,
@@ -141,6 +143,7 @@ def build_map_reviews_refresh_offer(
     balance_credits: Any = None,
     estimated_credits: Any = None,
     reason: str = "",
+    consent_policy: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return build_paid_action_offer(
         "map_reviews_refresh",
@@ -148,4 +151,5 @@ def build_map_reviews_refresh_offer(
         balance_credits=balance_credits,
         estimated_credits=estimated_credits,
         reason=reason,
+        consent_policy=consent_policy,
     )

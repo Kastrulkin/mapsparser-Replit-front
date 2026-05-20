@@ -71,12 +71,30 @@ type PaidActionOffer = {
   balance_credits: number | null;
   affordable_runs_estimate: number | null;
   paid_actions_performed: boolean;
+  current_consent_policy?: {
+    action_key: string;
+    mode: string;
+    max_credits_per_action: number | null;
+    max_credits_per_day: number | null;
+    max_credits_per_month: number | null;
+    low_balance_warning_threshold: number | null;
+    execution_allowed_without_prompt: boolean;
+    is_persisted: boolean;
+  } | null;
   copy: {
     primary: string;
     disclosure: string;
     auto_consent_question: string;
     manual_publication_note: string;
   };
+};
+
+type ConsentDraft = {
+  mode: string;
+  max_credits_per_action: string;
+  max_credits_per_day: string;
+  max_credits_per_month: string;
+  low_balance_warning_threshold: string;
 };
 
 type AttentionBrief = {
@@ -159,6 +177,9 @@ export const OperatorPage = () => {
   const [brief, setBrief] = useState<AttentionBrief | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savingConsentKey, setSavingConsentKey] = useState<string | null>(null);
+  const [consentDrafts, setConsentDrafts] = useState<Record<string, ConsentDraft>>({});
+  const [consentMessage, setConsentMessage] = useState<string | null>(null);
 
   const loadBrief = async () => {
     if (!currentBusinessId) {
@@ -171,7 +192,11 @@ export const OperatorPage = () => {
       const response = await api.get('/operator/attention-brief', {
         params: { business_id: currentBusinessId },
       });
-      setBrief(response.data.brief || null);
+      const nextBrief = response.data.brief || null;
+      setBrief(nextBrief);
+      if (nextBrief?.paid_action_offers) {
+        setConsentDrafts(buildConsentDrafts(nextBrief.paid_action_offers));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить сводку');
     } finally {
@@ -182,6 +207,45 @@ export const OperatorPage = () => {
   useEffect(() => {
     void loadBrief();
   }, [currentBusinessId]);
+
+  const updateConsentDraft = (actionKey: string, patch: Partial<ConsentDraft>) => {
+    setConsentDrafts((current) => {
+      const currentDraft = current[actionKey] || emptyConsentDraft();
+      return {
+        ...current,
+        [actionKey]: {
+          ...currentDraft,
+          ...patch,
+        },
+      };
+    });
+  };
+
+  const saveConsentPolicy = async (offer: PaidActionOffer) => {
+    if (!currentBusinessId) return;
+    const draft = consentDrafts[offer.action_key] || makeConsentDraft(offer);
+    setSavingConsentKey(offer.action_key);
+    setConsentMessage(null);
+    try {
+      const response = await api.put(`/operator/consent-policy/${offer.action_key}`, {
+        business_id: currentBusinessId,
+        mode: draft.mode,
+        max_credits_per_action: draft.max_credits_per_action,
+        max_credits_per_day: draft.max_credits_per_day,
+        max_credits_per_month: draft.max_credits_per_month,
+        low_balance_warning_threshold: draft.low_balance_warning_threshold,
+      });
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Не удалось сохранить policy');
+      }
+      setConsentMessage('Consent policy сохранена. Платные действия всё ещё не запускаются автоматически в Sprint 4.');
+      await loadBrief();
+    } catch (err) {
+      setConsentMessage(err instanceof Error ? err.message : 'Не удалось сохранить consent policy');
+    } finally {
+      setSavingConsentKey(null);
+    }
+  };
 
   const metrics = useMemo(() => {
     if (!brief) return [];
@@ -348,36 +412,105 @@ export const OperatorPage = () => {
           {brief.paid_action_offers && brief.paid_action_offers.length > 0 ? (
             <DashboardSection
               title="Платные действия"
-              description="Operator может предложить платный шаг, но Sprint 3 ничего не запускает и не списывает без отдельного consent."
+              description="Operator может предложить платный шаг и сохранить consent policy. Sprint 4 всё ещё ничего не запускает и не списывает."
             >
+              {consentMessage ? (
+                <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-700">
+                  {consentMessage}
+                </div>
+              ) : null}
               <div className="space-y-3">
-                {brief.paid_action_offers.map((offer) => (
-                  <div key={offer.action_key} className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-sm font-semibold text-slate-950">{offer.label}</h3>
-                          <span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800 ring-1 ring-amber-200">
-                            {actionClassLabels[offer.action_class]}
-                          </span>
-                          <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
-                            proposal only
-                          </span>
+                {brief.paid_action_offers.map((offer) => {
+                  const draft = consentDrafts[offer.action_key] || makeConsentDraft(offer);
+                  const autoMode = draft.mode === 'auto_with_limits';
+                  return (
+                    <div key={offer.action_key} className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-sm font-semibold text-slate-950">{offer.label}</h3>
+                            <span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800 ring-1 ring-amber-200">
+                              {actionClassLabels[offer.action_class]}
+                            </span>
+                            <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
+                              proposal only
+                            </span>
+                            {offer.current_consent_policy?.execution_allowed_without_prompt ? (
+                              <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-800 ring-1 ring-emerald-200">
+                                auto with limits
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{offer.copy.primary}</p>
+                          <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">{offer.copy.disclosure}</p>
                         </div>
-                        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{offer.copy.primary}</p>
-                        <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">{offer.copy.disclosure}</p>
+                        <div className="rounded-xl bg-slate-50 px-3 py-2 text-xs font-medium leading-5 text-slate-600">
+                          <div>Источник стоимости: {offer.cost_source}</div>
+                          <div>Провайдер: {offer.provider}</div>
+                          <div>Множитель: x{offer.credit_multiplier}</div>
+                        </div>
                       </div>
-                      <div className="rounded-xl bg-slate-50 px-3 py-2 text-xs font-medium leading-5 text-slate-600">
-                        <div>Источник стоимости: {offer.cost_source}</div>
-                        <div>Провайдер: {offer.provider}</div>
-                        <div>Множитель: x{offer.credit_multiplier}</div>
+                      <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                        <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
+                          <label className="space-y-1 text-sm font-medium text-slate-700">
+                            <span>Режим consent</span>
+                            <select
+                              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none ring-sky-200 focus:ring-2"
+                              value={draft.mode}
+                              onChange={(event) => updateConsentDraft(offer.action_key, { mode: event.target.value })}
+                            >
+                              <option value="ask_each_time">Спрашивать каждый раз</option>
+                              <option value="auto_with_limits">Разрешить в пределах лимитов</option>
+                              <option value="disabled">Запретить платное действие</option>
+                            </select>
+                          </label>
+                          <div className="text-sm leading-6 text-slate-600">
+                            {autoMode
+                              ? 'Для автозапуска нужны лимиты на действие и день. Без них API не сохранит режим auto_with_limits.'
+                              : 'Этот режим не разрешает платный запуск без отдельного подтверждения.'}
+                          </div>
+                        </div>
+                        {autoMode ? (
+                          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                            <ConsentLimitInput
+                              label="На действие"
+                              value={draft.max_credits_per_action}
+                              onChange={(value) => updateConsentDraft(offer.action_key, { max_credits_per_action: value })}
+                            />
+                            <ConsentLimitInput
+                              label="В день"
+                              value={draft.max_credits_per_day}
+                              onChange={(value) => updateConsentDraft(offer.action_key, { max_credits_per_day: value })}
+                            />
+                            <ConsentLimitInput
+                              label="В месяц"
+                              value={draft.max_credits_per_month}
+                              onChange={(value) => updateConsentDraft(offer.action_key, { max_credits_per_month: value })}
+                            />
+                            <ConsentLimitInput
+                              label="Предупредить при"
+                              value={draft.low_balance_warning_threshold}
+                              onChange={(value) => updateConsentDraft(offer.action_key, { low_balance_warning_threshold: value })}
+                            />
+                          </div>
+                        ) : null}
+                        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="text-sm leading-6 text-slate-700">{offer.copy.auto_consent_question}</div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void saveConsentPolicy(offer)}
+                            disabled={savingConsentKey === offer.action_key}
+                          >
+                            {savingConsentKey === offer.action_key ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            Сохранить policy
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                    <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-700">
-                      {offer.copy.auto_consent_question}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </DashboardSection>
           ) : null}
@@ -386,3 +519,55 @@ export const OperatorPage = () => {
     </div>
   );
 };
+
+const emptyConsentDraft = (): ConsentDraft => ({
+  mode: 'ask_each_time',
+  max_credits_per_action: '',
+  max_credits_per_day: '',
+  max_credits_per_month: '',
+  low_balance_warning_threshold: '',
+});
+
+const formatLimit = (value: number | null | undefined) => {
+  if (value === null || value === undefined) return '';
+  return String(value);
+};
+
+const makeConsentDraft = (offer: PaidActionOffer): ConsentDraft => {
+  const policy = offer.current_consent_policy;
+  return {
+    mode: policy?.mode || offer.default_consent_mode || 'ask_each_time',
+    max_credits_per_action: formatLimit(policy?.max_credits_per_action),
+    max_credits_per_day: formatLimit(policy?.max_credits_per_day),
+    max_credits_per_month: formatLimit(policy?.max_credits_per_month),
+    low_balance_warning_threshold: formatLimit(policy?.low_balance_warning_threshold),
+  };
+};
+
+const buildConsentDrafts = (offers: PaidActionOffer[]) => {
+  const drafts: Record<string, ConsentDraft> = {};
+  offers.forEach((offer) => {
+    drafts[offer.action_key] = makeConsentDraft(offer);
+  });
+  return drafts;
+};
+
+type ConsentLimitInputProps = {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+};
+
+const ConsentLimitInput = ({ label, value, onChange }: ConsentLimitInputProps) => (
+  <label className="space-y-1 text-sm font-medium text-slate-700">
+    <span>{label}</span>
+    <input
+      type="number"
+      min="0"
+      inputMode="numeric"
+      className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none ring-sky-200 focus:ring-2"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  </label>
+);

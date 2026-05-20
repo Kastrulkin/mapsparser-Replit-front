@@ -1,0 +1,50 @@
+{
+  "task_id": "operator-sprint4-consent-policy-20260520",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Alembic migration adds the business-scoped consent policy table without adding execution or ledger behavior."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Consent service validates action keys, modes, and required positive auto-with-limits fields."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Operator API exposes authenticated read/update endpoints after business access checks."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Attention brief offers include current_consent_policy."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Operator web UI renders and saves consent mode and limits."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "Verification passed and no paid execution paths were added."
+    }
+  ],
+  "commands_run": [
+    "python3 -m pytest -q tests/test_operator_consent_policy.py tests/test_operator_paid_actions.py tests/test_operator_attention.py tests/test_telegram_dashboard_copy.py",
+    "python3 -m py_compile src/services/operator_consent_policy.py src/services/operator_paid_actions.py src/services/operator_attention.py src/api/operator_api.py src/services/telegram_dashboard.py alembic_migrations/versions/20260520_add_operator_consent_policies.py",
+    "python3 -m alembic -c alembic.ini heads",
+    "npm run build",
+    "git diff --check"
+  ],
+  "artifacts_used": [
+    "alembic_migrations/versions/20260520_add_operator_consent_policies.py",
+    "src/services/operator_consent_policy.py",
+    "src/api/operator_api.py",
+    "frontend/src/pages/dashboard/OperatorPage.tsx",
+    "tests/test_operator_consent_policy.py"
+  ]
+}
