@@ -1,0 +1,80 @@
+{
+  "task_id": "operator-sprint6-operator-audit-20260520",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Operator records audit/ledger events for attention brief, consent policy updates, and paid action preflight.",
+      "status": "PASS",
+      "proof": [
+        "src/services/operator_audit.py adds record_operator_event.",
+        "src/api/operator_api.py records operator_context_built, operator_consent_decision, and operator_paid_action_estimated."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Audit events use the existing agent_action_ledger foundation with capability localos.operator; no new schema migration is introduced.",
+      "status": "PASS",
+      "proof": [
+        "operator_audit.py writes through core.agent_api_security.log_agent_action.",
+        "No Alembic migration was added."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Web/API exposes a read-only recent Operator event list scoped by authenticated business access.",
+      "status": "PASS",
+      "proof": [
+        "GET /api/operator/events is implemented in src/api/operator_api.py.",
+        "The endpoint uses require_auth_from_request and verify_business_access.",
+        "list_operator_events filters by business, capability, and Operator event types."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "The /dashboard/operator surface shows a compact Operator journal.",
+      "status": "PASS",
+      "proof": [
+        "frontend/src/pages/dashboard/OperatorPage.tsx loads /operator/events.",
+        "The page renders a Журнал Operator section with status, action key, timestamp, risk, and summary."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Sprint 6 does not execute paid actions, call Apify, reserve or charge credits, generate AI content, or publish externally.",
+      "status": "PASS",
+      "proof": [
+        "Audit metadata records credit_charged, paid_actions_performed, external_calls_performed, and external_writes_performed as false.",
+        "operator_paid_preflight.EXECUTION_ENABLED remains false.",
+        "No parser, Apify, AI generation, credit charging, parsequeue, or provider publication path was added."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/services/operator_audit.py",
+    "src/api/operator_api.py",
+    "frontend/src/pages/dashboard/OperatorPage.tsx",
+    "tests/test_operator_audit.py",
+    "docs/agents/localos-operator.md",
+    ".agent/tasks/operator-sprint6-operator-audit-20260520/spec.md",
+    ".agent/tasks/operator-sprint6-operator-audit-20260520/evidence.md",
+    ".agent/tasks/operator-sprint6-operator-audit-20260520/evidence.json",
+    ".agent/tasks/operator-sprint6-operator-audit-20260520/verdict.json",
+    ".agent/tasks/operator-sprint6-operator-audit-20260520/problems.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/services/operator_audit.py src/api/operator_api.py src/services/operator_paid_preflight.py",
+    "python3 -m pytest -q tests/test_operator_audit.py tests/test_operator_paid_preflight.py tests/test_operator_consent_policy.py tests/test_operator_paid_actions.py tests/test_operator_attention.py tests/test_telegram_dashboard_copy.py",
+    "cd frontend && npm run build",
+    "git diff --check",
+    "scripts/proof_loop.sh validate operator-sprint6-operator-audit-20260520"
+  ],
+  "known_gaps": [
+    "Sprint 6 does not execute paid actions, call Apify, charge credits, generate content, or publish externally by design."
+  ]
+}

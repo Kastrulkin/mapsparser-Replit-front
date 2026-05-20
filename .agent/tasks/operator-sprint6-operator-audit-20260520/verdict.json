@@ -1,0 +1,46 @@
+{
+  "task_id": "operator-sprint6-operator-audit-20260520",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Operator records ledger events for the attention brief, consent policy update, and paid action preflight API paths."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Events reuse agent_action_ledger through log_agent_action with capability localos.operator; no migration was added."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "GET /api/operator/events is authenticated, business-scoped, and read-only."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "The Operator dashboard renders a compact recent event journal."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Sprint 6 adds observability only; paid execution, Apify, charging, generation, parsequeue, and provider writes remain absent."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/services/operator_audit.py src/api/operator_api.py src/services/operator_paid_preflight.py",
+    "python3 -m pytest -q tests/test_operator_audit.py tests/test_operator_paid_preflight.py tests/test_operator_consent_policy.py tests/test_operator_paid_actions.py tests/test_operator_attention.py tests/test_telegram_dashboard_copy.py",
+    "npm run build",
+    "git diff --check"
+  ],
+  "artifacts_used": [
+    "src/services/operator_audit.py",
+    "src/api/operator_api.py",
+    "frontend/src/pages/dashboard/OperatorPage.tsx",
+    "tests/test_operator_audit.py",
+    "docs/agents/localos-operator.md",
+    ".agent/tasks/operator-sprint6-operator-audit-20260520/evidence.md",
+    ".agent/tasks/operator-sprint6-operator-audit-20260520/evidence.json"
+  ]
+}

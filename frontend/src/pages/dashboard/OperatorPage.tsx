@@ -124,6 +124,25 @@ type PreflightResult = {
   };
 };
 
+type OperatorEvent = {
+  id: string;
+  event_type: string;
+  risk_level: string;
+  input_summary: string;
+  output_summary: string;
+  status: string;
+  reason_code: string;
+  metadata: {
+    action_key?: string;
+    operator_channel?: string;
+    execution_status?: string;
+    credit_charged?: boolean;
+    external_calls_performed?: boolean;
+    external_writes_performed?: boolean;
+  };
+  created_at: string;
+};
+
 type AttentionBrief = {
   business: {
     id: string;
@@ -178,6 +197,12 @@ const actionClassLabels: Record<OperatorActionClass, string> = {
   planned_gap: 'Планируемая возможность',
 };
 
+const eventLabels: Record<string, string> = {
+  operator_context_built: 'Контекст Operator собран',
+  operator_consent_decision: 'Consent policy изменена',
+  operator_paid_action_estimated: 'Preflight платного действия',
+};
+
 const formatDateTime = (value: string | null) => {
   if (!value) return 'нет данных';
   const parsed = new Date(value);
@@ -210,10 +235,27 @@ export const OperatorPage = () => {
   const [preflightDrafts, setPreflightDrafts] = useState<Record<string, PreflightDraft>>({});
   const [preflightResults, setPreflightResults] = useState<Record<string, PreflightResult>>({});
   const [preflightingKey, setPreflightingKey] = useState<string | null>(null);
+  const [operatorEvents, setOperatorEvents] = useState<OperatorEvent[]>([]);
+
+  const loadOperatorEvents = async () => {
+    if (!currentBusinessId) {
+      setOperatorEvents([]);
+      return;
+    }
+    try {
+      const response = await api.get('/operator/events', {
+        params: { business_id: currentBusinessId, limit: 8 },
+      });
+      setOperatorEvents(response.data.events || []);
+    } catch (err) {
+      setOperatorEvents([]);
+    }
+  };
 
   const loadBrief = async () => {
     if (!currentBusinessId) {
       setBrief(null);
+      setOperatorEvents([]);
       return;
     }
     setLoading(true);
@@ -228,6 +270,7 @@ export const OperatorPage = () => {
         setConsentDrafts(buildConsentDrafts(nextBrief.paid_action_offers));
         setPreflightDrafts(buildPreflightDrafts(nextBrief.paid_action_offers));
       }
+      await loadOperatorEvents();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить сводку');
     } finally {
@@ -271,6 +314,7 @@ export const OperatorPage = () => {
       }
       setConsentMessage('Consent policy сохранена. Платные действия всё ещё не запускаются автоматически в Sprint 4.');
       await loadBrief();
+      await loadOperatorEvents();
     } catch (err) {
       setConsentMessage(err instanceof Error ? err.message : 'Не удалось сохранить consent policy');
     } finally {
@@ -309,6 +353,7 @@ export const OperatorPage = () => {
         ...current,
         [offer.action_key]: response.data.preflight,
       }));
+      await loadOperatorEvents();
     } catch (err) {
       setConsentMessage(err instanceof Error ? err.message : 'Не удалось выполнить preflight');
     } finally {
@@ -481,7 +526,7 @@ export const OperatorPage = () => {
           {brief.paid_action_offers && brief.paid_action_offers.length > 0 ? (
             <DashboardSection
               title="Платные действия"
-              description="Operator может предложить платный шаг и сохранить consent policy. Sprint 4 всё ещё ничего не запускает и не списывает."
+              description="Operator может предложить платный шаг, сохранить consent policy и выполнить preflight. Платные действия всё ещё не запускаются и не списываются."
             >
               {consentMessage ? (
                 <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-700">
@@ -641,6 +686,45 @@ export const OperatorPage = () => {
               </div>
             </DashboardSection>
           ) : null}
+
+          <DashboardSection
+            title="Журнал Operator"
+            description="События пишутся в общий ledger наблюдаемости: brief, consent и preflight. Это не кредитный ledger и не запуск внешних инструментов."
+          >
+            {operatorEvents.length > 0 ? (
+              <div className="space-y-3">
+                {operatorEvents.map((event) => (
+                  <div key={event.id} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-sm font-semibold text-slate-950">{eventLabels[event.event_type] || event.event_type}</h3>
+                          <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
+                            {event.status || 'recorded'}
+                          </span>
+                          {event.metadata?.action_key ? (
+                            <span className="rounded-full bg-sky-50 px-2 py-1 text-xs font-medium text-sky-800 ring-1 ring-sky-200">
+                              {event.metadata.action_key}
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">{event.output_summary || event.input_summary || 'Событие записано.'}</p>
+                      </div>
+                      <div className="shrink-0 text-xs font-medium leading-5 text-slate-500">
+                        <div>{formatDateTime(event.created_at)}</div>
+                        <div>risk: {event.risk_level || 'low'}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <DashboardEmptyState
+                title="Пока нет событий"
+                description="После загрузки brief, сохранения consent или preflight здесь появится короткий audit trail."
+              />
+            )}
+          </DashboardSection>
         </>
       ) : null}
     </div>

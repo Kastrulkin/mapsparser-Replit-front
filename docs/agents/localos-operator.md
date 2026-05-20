@@ -148,6 +148,16 @@ Sprint 5 adds a paid action preflight gate:
 
 Sprint 5 is still read-only. It does not create parsequeue jobs, call Apify, reserve or charge credits, generate AI content, write to providers, or publish externally.
 
+Sprint 6 adds Operator observability over the existing agent action ledger:
+
+- backend service: `services.operator_audit`;
+- ledger capability: `localos.operator`;
+- API endpoint: `GET /api/operator/events?business_id=<id>`;
+- recorded events: `operator_context_built`, `operator_consent_decision`, `operator_paid_action_estimated`;
+- web surface: `/dashboard/operator` shows the recent Operator journal.
+
+Sprint 6 still does not execute paid actions, call Apify, reserve or charge credits, generate AI content, write to providers, or publish externally. The Operator journal is an audit trail, not the credit ledger.
+
 Policy modes:
 
 - `ask_each_time`: explain the cost and ask before every paid action.
