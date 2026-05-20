@@ -4,6 +4,8 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
+from services.operator_paid_actions import build_map_reviews_refresh_offer
+
 
 STALE_DAYS = 2
 
@@ -360,6 +362,7 @@ def build_attention_brief(cursor: Any, business_id: str, user_id: str) -> dict[s
     partnerships = _count_partnership_leads(cursor, business_id)
 
     items: list[dict[str, Any]] = []
+    paid_action_offers: list[dict[str, Any]] = []
     if reviews["without_response"] > 0:
         items.append(
             _attention_item(
@@ -430,6 +433,9 @@ def build_attention_brief(cursor: Any, business_id: str, user_id: str) -> dict[s
 
     card_age_days = latest_card.get("age_days")
     data_is_stale = card_age_days is None or int(card_age_days or 0) > STALE_DAYS
+    if data_is_stale or reviews["without_response"] > 0:
+        reason = "reviews_without_response" if reviews["without_response"] > 0 else "map_data_stale"
+        paid_action_offers.append(build_map_reviews_refresh_offer(business_id=business_id, reason=reason))
     if data_is_stale:
         items.append(
             _attention_item(
@@ -494,6 +500,7 @@ def build_attention_brief(cursor: Any, business_id: str, user_id: str) -> dict[s
             "paid_refresh_required_for_fresh_data": True,
             "message": "Показываю последние известные данные бесплатно. Обновление карт сейчас будет платным действием и потребует consent-политики.",
         },
+        "paid_action_offers": paid_action_offers,
         "items": items,
         "limits": {
             "external_writes_performed": False,

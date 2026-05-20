@@ -154,11 +154,20 @@ def test_operator_attention_text_keeps_paid_actions_manual_and_cached() -> None:
                     "action_class": "paid_external",
                 },
             ],
+            "paid_action_offers": [
+                {
+                    "copy": {
+                        "primary": "Могу показать последние известные данные бесплатно. Или обновить карты сейчас — платно.",
+                        "disclosure": "Точная стоимость появится после оценки. До согласия платные действия не выполняются.",
+                    }
+                }
+            ],
         }
     )
 
     assert "LocalOS Operator" in text
     assert "последним сохранённым данным" in text
+    assert "Могу показать последние известные данные бесплатно" in text
     assert "Платные действия не выполнялись" in text
     assert "Публикация ответов в карты сейчас ручная" in text
     assert "платное обновление данных" in text

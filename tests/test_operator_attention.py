@@ -76,6 +76,9 @@ def test_attention_brief_uses_cached_data_and_reports_no_execution():
     assert brief["action_class"] == "free_cached"
     assert brief["data_mode"] == "cached"
     assert brief["limits"]["paid_actions_performed"] is False
+    assert brief["paid_action_offers"][0]["action_key"] == "map_reviews_refresh"
+    assert brief["paid_action_offers"][0]["status"] == "proposal_only"
+    assert brief["paid_action_offers"][0]["credit_multiplier"] == 10
     assert brief["limits"]["external_writes_performed"] is False
     assert brief["metrics"]["reviews_without_response"] == 3
     assert brief["metrics"]["pending_approvals"] == 1
@@ -96,5 +99,6 @@ def test_attention_brief_handles_missing_optional_tables():
     assert brief["metrics"]["reviews_without_response"] == 0
     assert brief["metrics"]["pending_news"] == 0
     assert brief["freshness"]["paid_refresh_required_for_fresh_data"] is True
+    assert brief["paid_action_offers"][0]["estimate_available"] is False
     assert brief["limits"]["manual_publication_only"] is True
     assert brief["items"]

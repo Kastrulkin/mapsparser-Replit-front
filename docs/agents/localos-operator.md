@@ -101,6 +101,8 @@ If the answer needs fresh external data, Operator must ask for paid refresh cons
 
 Sprint 2 connects the same cached brief to the existing Telegram owner-bot control surface. The Telegram response is a compact transport-specific formatter over the same Operator core, not a separate data path.
 
+Sprint 3 adds the first code-level paid action offer contract. The attention brief may now include `paid_action_offers` with proposal-only metadata for map refresh and future paid generation actions. This is not execution: Sprint 3 still does not call Apify, generate content, charge credits, persist consent, write to providers, or publish externally.
+
 ## Action Taxonomy
 
 Operator actions use these product-level classes. Tool-level risk classes still apply and are documented in [Tool registry](tool-registry.md).
@@ -117,6 +119,13 @@ Operator actions use these product-level classes. Tool-level risk classes still 
 ## Paid Action Consent Policy
 
 Paid actions require a business-level consent policy. The policy is scoped by business because credits are charged to the business balance.
+
+Sprint 3 code source of truth:
+
+- paid action registry: `services.operator_paid_actions.PAID_ACTIONS`;
+- Apify planning multiplier: `services.operator_paid_actions.APIFY_CREDIT_MULTIPLIER`;
+- attention brief field: `paid_action_offers`;
+- proposal status: `proposal_only`.
 
 Policy modes:
 

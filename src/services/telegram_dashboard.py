@@ -197,6 +197,7 @@ def _format_operator_attention_text(brief: dict[str, Any]) -> str:
     metrics = brief.get("metrics") if isinstance(brief.get("metrics"), dict) else {}
     freshness = brief.get("freshness") if isinstance(brief.get("freshness"), dict) else {}
     items = brief.get("items") if isinstance(brief.get("items"), list) else []
+    paid_action_offers = brief.get("paid_action_offers") if isinstance(brief.get("paid_action_offers"), list) else []
 
     lines = [
         "LocalOS Operator",
@@ -233,6 +234,18 @@ def _format_operator_attention_text(brief: dict[str, Any]) -> str:
     latest_card_at = _format_date(freshness.get("latest_card_at"))
     card_age_days = freshness.get("card_age_days")
     age_text = f"{int(card_age_days)} дн." if card_age_days is not None else "нет данных"
+    if paid_action_offers:
+        first_offer = paid_action_offers[0] if isinstance(paid_action_offers[0], dict) else {}
+        copy = first_offer.get("copy") if isinstance(first_offer.get("copy"), dict) else {}
+        lines.extend(
+            [
+                "",
+                "Платное обновление:",
+                str(copy.get("primary") or "Могу предложить платное действие после вашего согласия."),
+                str(copy.get("disclosure") or "До согласия платные действия не выполняются."),
+            ]
+        )
+
     lines.extend(
         [
             "",

@@ -54,6 +54,31 @@ type AttentionItem = {
   };
 };
 
+type PaidActionOffer = {
+  action_key: string;
+  label: string;
+  description: string;
+  action_class: OperatorActionClass;
+  status: 'proposal_only';
+  consent_required: boolean;
+  consent_modes: string[];
+  default_consent_mode: string;
+  cost_source: string;
+  provider: string;
+  credit_multiplier: number;
+  estimate_available: boolean;
+  estimated_credits: number | null;
+  balance_credits: number | null;
+  affordable_runs_estimate: number | null;
+  paid_actions_performed: boolean;
+  copy: {
+    primary: string;
+    disclosure: string;
+    auto_consent_question: string;
+    manual_publication_note: string;
+  };
+};
+
 type AttentionBrief = {
   business: {
     id: string;
@@ -84,6 +109,7 @@ type AttentionBrief = {
     paid_refresh_required_for_fresh_data: boolean;
     message: string;
   };
+  paid_action_offers?: PaidActionOffer[];
   items: AttentionItem[];
   limits: {
     external_writes_performed: boolean;
@@ -318,6 +344,43 @@ export const OperatorPage = () => {
               </div>
             </div>
           </DashboardSection>
+
+          {brief.paid_action_offers && brief.paid_action_offers.length > 0 ? (
+            <DashboardSection
+              title="Платные действия"
+              description="Operator может предложить платный шаг, но Sprint 3 ничего не запускает и не списывает без отдельного consent."
+            >
+              <div className="space-y-3">
+                {brief.paid_action_offers.map((offer) => (
+                  <div key={offer.action_key} className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-sm font-semibold text-slate-950">{offer.label}</h3>
+                          <span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800 ring-1 ring-amber-200">
+                            {actionClassLabels[offer.action_class]}
+                          </span>
+                          <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
+                            proposal only
+                          </span>
+                        </div>
+                        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{offer.copy.primary}</p>
+                        <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">{offer.copy.disclosure}</p>
+                      </div>
+                      <div className="rounded-xl bg-slate-50 px-3 py-2 text-xs font-medium leading-5 text-slate-600">
+                        <div>Источник стоимости: {offer.cost_source}</div>
+                        <div>Провайдер: {offer.provider}</div>
+                        <div>Множитель: x{offer.credit_multiplier}</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-700">
+                      {offer.copy.auto_consent_question}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </DashboardSection>
+          ) : null}
         </>
       ) : null}
     </div>

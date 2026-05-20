@@ -1,0 +1,47 @@
+{
+  "task_id": "operator-sprint3-paid-consent-20260520",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Paid action registry covers the requested Operator paid actions."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Attention brief returns proposal-only paid action offers with consent and cost metadata."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Web and Telegram surfaces render the paid refresh offer without execution."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Implementation does not invent prices or add external writes, charges, or publication."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Docs and proof evidence were updated."
+    }
+  ],
+  "commands_run": [
+    "python3 -m pytest -q tests/test_operator_paid_actions.py tests/test_operator_attention.py tests/test_telegram_dashboard_copy.py",
+    "python3 -m py_compile src/services/operator_paid_actions.py src/services/operator_attention.py src/services/telegram_dashboard.py",
+    "npm run build"
+  ],
+  "artifacts_used": [
+    "src/services/operator_paid_actions.py",
+    "src/services/operator_attention.py",
+    "src/services/telegram_dashboard.py",
+    "frontend/src/pages/dashboard/OperatorPage.tsx",
+    "tests/test_operator_paid_actions.py",
+    "tests/test_operator_attention.py",
+    "tests/test_telegram_dashboard_copy.py",
+    "docs/agents/localos-operator.md",
+    "docs/agents/index.md"
+  ]
+}
