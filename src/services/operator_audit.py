@@ -11,6 +11,7 @@ OPERATOR_CAPABILITY = "localos.operator"
 OPERATOR_EVENT_TYPES = {
     "operator_context_built",
     "operator_consent_decision",
+    "operator_execution_blocked",
     "operator_paid_action_estimated",
 }
 
@@ -96,7 +97,7 @@ def record_operator_event(
         }
     )
 
-    risk_level = "medium" if normalized_event in {"operator_consent_decision", "operator_paid_action_estimated"} else "low"
+    risk_level = "medium" if normalized_event in {"operator_consent_decision", "operator_execution_blocked", "operator_paid_action_estimated"} else "low"
     return log_agent_action(
         cursor,
         agent_client_id=None,

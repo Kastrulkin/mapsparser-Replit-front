@@ -158,6 +158,15 @@ Sprint 6 adds Operator observability over the existing agent action ledger:
 
 Sprint 6 still does not execute paid actions, call Apify, reserve or charge credits, generate AI content, write to providers, or publish externally. The Operator journal is an audit trail, not the credit ledger.
 
+Sprint 7 adds a disabled execution boundary:
+
+- backend service: `services.operator_paid_executor`;
+- API endpoint: `POST /api/operator/paid-actions/<action_key>/execute`;
+- recorded event: `operator_execution_blocked`;
+- web surface: `/dashboard/operator` can call execute and show why runtime is blocked.
+
+Sprint 7 still always blocks execution while the runtime flag is disabled. It reuses preflight, returns structured refusal data, and records observability only. It does not create parsequeue jobs, call Apify, reserve or charge credits, generate AI content, write to providers, or publish externally.
+
 Policy modes:
 
 - `ask_each_time`: explain the cost and ask before every paid action.

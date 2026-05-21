@@ -9,6 +9,7 @@ from database_manager import DatabaseManager
 from services.operator_audit import list_operator_events, record_operator_event
 from services.operator_consent_policy import list_consent_policies, upsert_consent_policy
 from services.operator_attention import build_attention_brief
+from services.operator_paid_executor import build_paid_action_execution_attempt
 from services.operator_paid_preflight import build_paid_action_preflight
 
 
@@ -196,6 +197,72 @@ def operator_paid_action_preflight(action_key: str):
         )
         db.conn.commit()
         return jsonify({"success": True, "preflight": preflight})
+    except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+    finally:
+        db.close()
+
+
+@operator_bp.route("/paid-actions/<action_key>/execute", methods=["POST"])
+def operator_paid_action_execute(action_key: str):
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    business_id = str(payload.get("business_id") or "").strip()
+    if not business_id:
+        return jsonify({"success": False, "error": "business_id обязателен"}), 400
+
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        if not has_access:
+            status_code = 403 if owner_id else 404
+            message = "Нет доступа" if owner_id else "Бизнес не найден"
+            return jsonify({"success": False, "error": message}), status_code
+
+        user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        execution = build_paid_action_execution_attempt(
+            cursor,
+            business_id=business_id,
+            user_id=user_id,
+            action_key=action_key,
+            estimated_credits=payload.get("estimated_credits"),
+            explicit_consent=bool(payload.get("explicit_consent")),
+        )
+        record_operator_event(
+            cursor,
+            business_id=business_id,
+            user_id=user_id,
+            event_type="operator_execution_blocked",
+            action_key=action_key,
+            status=str(execution.get("status") or "blocked"),
+            reason_code=",".join(execution.get("blocked_reasons") or []) or None,
+            input_summary={
+                "estimated_credits": payload.get("estimated_credits"),
+                "explicit_consent": bool(payload.get("explicit_consent")),
+            },
+            output_summary={
+                "status": execution.get("status"),
+                "execution_status": execution.get("execution_status"),
+                "next_step": execution.get("next_step"),
+            },
+            metadata={
+                "estimated_credits": execution.get("estimated_credits"),
+                "balance_credits": execution.get("balance_credits"),
+                "blocked_reasons": execution.get("blocked_reasons"),
+                "warnings": execution.get("warnings"),
+                "execution_status": execution.get("execution_status"),
+                "execution_enabled": execution.get("execution_enabled"),
+                "credit_reserved": execution.get("credit_reserved"),
+                "parsequeue_jobs_created": execution.get("parsequeue_jobs_created"),
+                "ai_generation_performed": execution.get("ai_generation_performed"),
+            },
+        )
+        db.conn.commit()
+        return jsonify({"success": True, "execution": execution})
     except Exception:
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
     finally:

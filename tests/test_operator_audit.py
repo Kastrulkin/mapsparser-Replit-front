@@ -69,6 +69,32 @@ def test_record_operator_event_rejects_unknown_event(monkeypatch) -> None:
     assert called["value"] is False
 
 
+def test_record_operator_execution_blocked_event(monkeypatch) -> None:
+    captured = {}
+
+    def fake_log_agent_action(cursor, **kwargs):
+        captured.update(kwargs)
+        return "ledger-2"
+
+    monkeypatch.setattr(operator_audit, "log_agent_action", fake_log_agent_action)
+
+    ledger_id = operator_audit.record_operator_event(
+        FakeCursor(),
+        business_id="biz-1",
+        user_id="user-1",
+        event_type="operator_execution_blocked",
+        action_key="map_reviews_refresh",
+        status="blocked",
+        reason_code="execution_runtime_disabled",
+    )
+
+    assert ledger_id == "ledger-2"
+    assert captured["risk_level"] == "medium"
+    assert captured["action_type"] == "operator_execution_blocked"
+    assert captured["metadata"]["paid_actions_performed"] is False
+    assert captured["metadata"]["external_writes_performed"] is False
+
+
 def test_list_operator_events_returns_recent_operator_events(monkeypatch) -> None:
     cursor = FakeCursor()
     cursor.rows = [

@@ -124,6 +124,29 @@ type PreflightResult = {
   };
 };
 
+type ExecutionAttempt = {
+  action_key: string;
+  status: 'blocked';
+  execution_status: string;
+  execution_enabled: boolean;
+  blocked_reasons: string[];
+  warnings: string[];
+  estimated_credits: number | null;
+  balance_credits: number | null;
+  paid_actions_performed: boolean;
+  credit_reserved: boolean;
+  credit_charged: boolean;
+  external_calls_performed: boolean;
+  external_writes_performed: boolean;
+  parsequeue_jobs_created: boolean;
+  ai_generation_performed: boolean;
+  next_step: string;
+  copy: {
+    summary: string;
+    blocked: string;
+  };
+};
+
 type OperatorEvent = {
   id: string;
   event_type: string;
@@ -200,6 +223,7 @@ const actionClassLabels: Record<OperatorActionClass, string> = {
 const eventLabels: Record<string, string> = {
   operator_context_built: 'Контекст Operator собран',
   operator_consent_decision: 'Consent policy изменена',
+  operator_execution_blocked: 'Запуск заблокирован',
   operator_paid_action_estimated: 'Preflight платного действия',
 };
 
@@ -235,6 +259,8 @@ export const OperatorPage = () => {
   const [preflightDrafts, setPreflightDrafts] = useState<Record<string, PreflightDraft>>({});
   const [preflightResults, setPreflightResults] = useState<Record<string, PreflightResult>>({});
   const [preflightingKey, setPreflightingKey] = useState<string | null>(null);
+  const [executionAttempts, setExecutionAttempts] = useState<Record<string, ExecutionAttempt>>({});
+  const [executingKey, setExecutingKey] = useState<string | null>(null);
   const [operatorEvents, setOperatorEvents] = useState<OperatorEvent[]>([]);
 
   const loadOperatorEvents = async () => {
@@ -358,6 +384,32 @@ export const OperatorPage = () => {
       setConsentMessage(err instanceof Error ? err.message : 'Не удалось выполнить preflight');
     } finally {
       setPreflightingKey(null);
+    }
+  };
+
+  const runExecutionAttempt = async (offer: PaidActionOffer) => {
+    if (!currentBusinessId) return;
+    const draft = preflightDrafts[offer.action_key] || makePreflightDraft(offer);
+    setExecutingKey(offer.action_key);
+    setConsentMessage(null);
+    try {
+      const response = await api.post(`/operator/paid-actions/${offer.action_key}/execute`, {
+        business_id: currentBusinessId,
+        estimated_credits: draft.estimated_credits,
+        explicit_consent: draft.explicit_consent,
+      });
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Не удалось проверить запуск');
+      }
+      setExecutionAttempts((current) => ({
+        ...current,
+        [offer.action_key]: response.data.execution,
+      }));
+      await loadOperatorEvents();
+    } catch (err) {
+      setConsentMessage(err instanceof Error ? err.message : 'Не удалось проверить запуск');
+    } finally {
+      setExecutingKey(null);
     }
   };
 
@@ -538,6 +590,7 @@ export const OperatorPage = () => {
                   const draft = consentDrafts[offer.action_key] || makeConsentDraft(offer);
                   const preflightDraft = preflightDrafts[offer.action_key] || makePreflightDraft(offer);
                   const preflightResult = preflightResults[offer.action_key];
+                  const executionAttempt = executionAttempts[offer.action_key];
                   const autoMode = draft.mode === 'auto_with_limits';
                   return (
                     <div key={offer.action_key} className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
@@ -645,15 +698,27 @@ export const OperatorPage = () => {
                           <div className="text-sm leading-6 text-slate-700">
                             Preflight проверит баланс, лимиты и consent. Запуск, Apify и списание кредитов отключены.
                           </div>
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={() => void runPreflight(offer)}
-                            disabled={preflightingKey === offer.action_key}
-                          >
-                            {preflightingKey === offer.action_key ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                            Проверить запуск
-                          </Button>
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void runPreflight(offer)}
+                              disabled={preflightingKey === offer.action_key}
+                            >
+                              {preflightingKey === offer.action_key ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                              Preflight
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => void runExecutionAttempt(offer)}
+                              disabled={executingKey === offer.action_key}
+                            >
+                              {executingKey === offer.action_key ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                              Проверить execute
+                            </Button>
+                          </div>
                         </div>
                         {preflightResult ? (
                           <div className={cn(
@@ -677,6 +742,19 @@ export const OperatorPage = () => {
                               <div>Предупреждения: {preflightResult.warnings.join(', ')}</div>
                             ) : null}
                             <div>Execution status: {preflightResult.execution_status}; списаний и внешних вызовов нет.</div>
+                          </div>
+                        ) : null}
+                        {executionAttempt ? (
+                          <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm leading-6 text-rose-950">
+                            <div className="font-semibold">{executionAttempt.copy.summary}</div>
+                            <div>{executionAttempt.copy.blocked}</div>
+                            <div>
+                              Execution status: {executionAttempt.execution_status}; next step: {executionAttempt.next_step}.
+                            </div>
+                            <div>Причины: {executionAttempt.blocked_reasons.join(', ')}</div>
+                            <div>
+                              Списаний: нет; внешних вызовов: нет; parsequeue: нет; AI генерации: нет.
+                            </div>
                           </div>
                         ) : null}
                       </div>
