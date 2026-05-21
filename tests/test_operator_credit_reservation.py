@@ -1,20 +1,35 @@
-from services.operator_credit_reservation import build_credit_reservation_plan, reserve_paid_action_credits
+from services.operator_credit_reservation import (
+    build_credit_finalization_plan,
+    build_credit_reservation_plan,
+    finalize_reserved_action_credits,
+    reserve_paid_action_credits,
+)
 
 
 class FakeCursor:
-    def __init__(self, *, table_available=True, balance=100, active_reserved=0):
+    def __init__(self, *, table_available=True, balance=100, active_reserved=0, reservation=None):
         self.table_available = table_available
         self.balance = balance
         self.active_reserved = active_reserved
+        self.reservation = reservation
         self.last_query = ""
         self.last_params = ()
         self.inserted = []
+        self.user_updates = []
+        self.ledger_entries = []
+        self.reservation_updates = []
 
     def execute(self, query, params=None):
         self.last_query = " ".join(str(query or "").lower().split())
         self.last_params = params or ()
         if "insert into operatorcreditreservations" in self.last_query:
             self.inserted.append(params or ())
+        if "update users" in self.last_query:
+            self.user_updates.append(params or ())
+        if "insert into credit_ledger" in self.last_query:
+            self.ledger_entries.append(params or ())
+        if "update operatorcreditreservations" in self.last_query:
+            self.reservation_updates.append(params or ())
 
     def fetchone(self):
         query = self.last_query
@@ -28,6 +43,8 @@ class FakeCursor:
             return {"credits_balance": self.balance}
         if "from operatorcreditreservations" in query and "sum" in query:
             return {"reserved_credits": self.active_reserved}
+        if "from operatorcreditreservations" in query:
+            return self.reservation
         if "returning id" in query:
             params = self.inserted[-1]
             return {"id": params[0], "status": "reserved", "reserved_credits": params[6]}
@@ -103,3 +120,202 @@ def test_reserve_paid_action_credits_records_reservation_when_ready() -> None:
     assert result["side_effects"]["reservation_created"] is True
     assert result["side_effects"]["credit_reserved"] is True
     assert len(cursor.inserted) == 1
+
+
+def test_finalization_plan_charges_actual_and_releases_unused() -> None:
+    cursor = FakeCursor(
+        reservation={
+            "id": "res-1",
+            "business_id": "biz-1",
+            "user_id": "user-1",
+            "action_key": "map_reviews_refresh",
+            "status": "reserved",
+            "reserved_credits": 10,
+            "charged_credits": 0,
+            "released_credits": 0,
+        }
+    )
+
+    plan = build_credit_finalization_plan(
+        cursor,
+        reservation_id="res-1",
+        business_id="biz-1",
+        user_id="user-1",
+        actual_credits=7,
+    )
+
+    assert plan["status"] == "ready"
+    assert plan["charge_credits"] == 7
+    assert plan["release_credits"] == 3
+    assert plan["side_effects"]["credit_charged"] is False
+
+
+def test_finalization_plan_can_release_full_reservation() -> None:
+    cursor = FakeCursor(
+        reservation={
+            "id": "res-1",
+            "business_id": "biz-1",
+            "user_id": "user-1",
+            "action_key": "map_reviews_refresh",
+            "status": "reserved",
+            "reserved_credits": 10,
+            "charged_credits": 0,
+            "released_credits": 0,
+        }
+    )
+
+    plan = build_credit_finalization_plan(
+        cursor,
+        reservation_id="res-1",
+        business_id="biz-1",
+        user_id="user-1",
+        finalization_mode="release",
+    )
+
+    assert plan["status"] == "ready"
+    assert plan["charge_credits"] == 0
+    assert plan["release_credits"] == 10
+
+
+def test_finalization_plan_blocks_actual_over_reserved() -> None:
+    cursor = FakeCursor(
+        reservation={
+            "id": "res-1",
+            "business_id": "biz-1",
+            "user_id": "user-1",
+            "action_key": "map_reviews_refresh",
+            "status": "reserved",
+            "reserved_credits": 10,
+            "charged_credits": 0,
+            "released_credits": 0,
+        }
+    )
+
+    plan = build_credit_finalization_plan(
+        cursor,
+        reservation_id="res-1",
+        business_id="biz-1",
+        user_id="user-1",
+        actual_credits=12,
+    )
+
+    assert plan["status"] == "blocked"
+    assert "actual_exceeds_reserved" in plan["blocked_reasons"]
+
+
+def test_finalization_plan_blocks_when_current_balance_is_low() -> None:
+    cursor = FakeCursor(
+        balance=5,
+        reservation={
+            "id": "res-1",
+            "business_id": "biz-1",
+            "user_id": "user-1",
+            "action_key": "map_reviews_refresh",
+            "status": "reserved",
+            "reserved_credits": 10,
+            "charged_credits": 0,
+            "released_credits": 0,
+        },
+    )
+
+    plan = build_credit_finalization_plan(
+        cursor,
+        reservation_id="res-1",
+        business_id="biz-1",
+        user_id="user-1",
+        actual_credits=7,
+    )
+
+    assert plan["status"] == "blocked"
+    assert "insufficient_balance_at_finalization" in plan["blocked_reasons"]
+
+
+def test_finalization_plan_blocks_non_reserved_status() -> None:
+    cursor = FakeCursor(
+        reservation={
+            "id": "res-1",
+            "business_id": "biz-1",
+            "user_id": "user-1",
+            "action_key": "map_reviews_refresh",
+            "status": "pending",
+            "reserved_credits": 10,
+            "charged_credits": 0,
+            "released_credits": 0,
+        }
+    )
+
+    plan = build_credit_finalization_plan(
+        cursor,
+        reservation_id="res-1",
+        business_id="biz-1",
+        user_id="user-1",
+        actual_credits=7,
+    )
+
+    assert plan["status"] == "blocked"
+    assert "reservation_not_reserved" in plan["blocked_reasons"]
+
+
+def test_finalize_reserved_action_credits_creates_credit_ledger_and_updates_reservation() -> None:
+    cursor = FakeCursor(
+        reservation={
+            "id": "res-1",
+            "business_id": "biz-1",
+            "user_id": "user-1",
+            "action_key": "map_reviews_refresh",
+            "status": "reserved",
+            "reserved_credits": 10,
+            "charged_credits": 0,
+            "released_credits": 0,
+        }
+    )
+
+    result = finalize_reserved_action_credits(
+        cursor,
+        reservation_id="res-1",
+        business_id="biz-1",
+        user_id="user-1",
+        actual_credits=7,
+    )
+
+    assert result["status"] == "charged"
+    assert result["side_effects"]["credit_charged"] is True
+    assert result["side_effects"]["credit_released"] is True
+    assert len(cursor.user_updates) == 1
+    assert len(cursor.ledger_entries) == 1
+    assert len(cursor.reservation_updates) == 1
+    assert cursor.user_updates[0][0] == 7
+    assert cursor.ledger_entries[0][2] == -7
+    assert cursor.reservation_updates[0][0] == "charged"
+    assert cursor.reservation_updates[0][1] == 7
+    assert cursor.reservation_updates[0][2] == 3
+
+
+def test_finalize_release_does_not_create_credit_ledger() -> None:
+    cursor = FakeCursor(
+        reservation={
+            "id": "res-1",
+            "business_id": "biz-1",
+            "user_id": "user-1",
+            "action_key": "map_reviews_refresh",
+            "status": "reserved",
+            "reserved_credits": 10,
+            "charged_credits": 0,
+            "released_credits": 0,
+        }
+    )
+
+    result = finalize_reserved_action_credits(
+        cursor,
+        reservation_id="res-1",
+        business_id="biz-1",
+        user_id="user-1",
+        finalization_mode="release",
+    )
+
+    assert result["status"] == "released"
+    assert result["side_effects"]["credit_charged"] is False
+    assert result["side_effects"]["credit_released"] is True
+    assert len(cursor.user_updates) == 0
+    assert len(cursor.ledger_entries) == 0
+    assert len(cursor.reservation_updates) == 1

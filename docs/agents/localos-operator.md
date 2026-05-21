@@ -186,6 +186,16 @@ Sprint 9 adds the credit reservation ledger contract:
 
 Sprint 9 still does not execute paid actions, call Apify, generate content, write to providers, publish externally, or charge credits. The current execute runtime only calculates whether a reservation could be created after existing active reservations are considered. Actual reserve creation exists as a service boundary for the next controlled runtime step and must not be called by the disabled Operator runtime.
 
+Sprint 10 adds the credit reservation finalization contract:
+
+- finalization service: `services.operator_credit_reservation.finalize_reserved_action_credits`;
+- dry-run plan: `services.operator_credit_reservation.build_credit_finalization_plan`;
+- charge path: subtract actual credits from `users.credits_balance`, write a negative `credit_ledger` entry with reason `operator_paid_action`, mark charged credits, and release unused reserve;
+- release path: release the outstanding reservation without writing `credit_ledger`;
+- safety checks: reservation exists, is not already final, actual charge does not exceed outstanding reserve, and current balance is still sufficient at finalization.
+
+Sprint 10 still does not connect finalization to the disabled Operator runtime. It does not call Apify, generate content, write to providers, publish externally, or charge credits from user-facing execution. The finalization service is a narrow internal boundary for later controlled runtime rollout.
+
 Policy modes:
 
 - `ask_each_time`: explain the cost and ask before every paid action.
@@ -256,6 +266,7 @@ Credit reservation rules:
 - active reservations reduce the available unreserved balance before a new paid action can start;
 - reservation creation must be idempotent for the same business/action/idempotency key;
 - finalization must either charge actual usage through `credit_ledger` or release the unused reserve;
+- finalization must re-check current balance before charging because balance can change after reservation;
 - every user-facing execution response must keep the distinction between `reserved`, `charged`, and `released`.
 
 ## Cached Vs Fresh Data

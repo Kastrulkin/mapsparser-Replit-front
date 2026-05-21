@@ -1,0 +1,1 @@
+No frontend integration build required: Sprint 10 changes backend service contract, tests, and docs only. Previous Operator UI contract unchanged.
