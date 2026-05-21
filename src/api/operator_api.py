@@ -189,6 +189,7 @@ def operator_paid_action_preflight(action_key: str):
             metadata={
                 "estimated_credits": preflight.get("estimated_credits"),
                 "balance_credits": preflight.get("balance_credits"),
+                "usage_window": preflight.get("usage_window"),
                 "blocked_reasons": preflight.get("blocked_reasons"),
                 "warnings": preflight.get("warnings"),
                 "execution_status": preflight.get("execution_status"),
@@ -260,6 +261,7 @@ def operator_paid_action_execute(action_key: str):
                 "reservation_requested_credits": (execution.get("reservation_plan") or {}).get("requested_credits"),
                 "reservation_blocked_reasons": (execution.get("reservation_plan") or {}).get("blocked_reasons"),
                 "reservation_result_status": (execution.get("reservation_result") or {}).get("status"),
+                "usage_window": (execution.get("preflight") or {}).get("usage_window"),
                 "finalization_result_status": (execution.get("finalization_result") or {}).get("status"),
                 "rollback_result_status": (execution.get("rollback_result") or {}).get("status"),
                 "credit_charged": execution.get("credit_charged"),

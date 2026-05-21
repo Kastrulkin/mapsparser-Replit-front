@@ -37,17 +37,17 @@ Usually do not require approval:
 
 ## Paid Action Consent
 
-Paid actions are separate from approval. A user may consent to spend credits for an action, but that does not approve external publication, sending, payment, destructive changes, or third-party writes.
+Paid actions are separate from approval. Credits are the primary access gate: if the user has enough credits, paid generation, parsing, or optimization may run and charge credits without a separate confirmation prompt. This does not approve external publication, sending, payment, destructive changes, or third-party writes.
 
 Paid action classes are defined in [LocalOS Operator](localos-operator.md) and [Tool registry](tool-registry.md):
 
 - `paid_compute`: AI/model work such as review reply drafts, news generation, social post drafts, service optimization, and content plans.
 - `paid_external`: external provider or parser work such as Apify map refresh, competitor parsing, or enrichment.
 
-Business-level consent modes:
+Business-level paid action modes:
 
-- `ask_each_time`: explain cost and ask before each paid action.
-- `auto_with_limits`: allow repeated paid actions only within configured limits.
+- `ask_each_time`: legacy/default mode; payment consent is covered by available credits.
+- `auto_with_limits`: optional caps for paid actions in addition to credit balance checks.
 - `disabled`: block this paid action class.
 
 Recommended limits:
@@ -58,6 +58,8 @@ Recommended limits:
 - low balance warning threshold.
 
 After each paid execution, LocalOS should show the actual charge and write a ledger/audit event.
+
+If credits are insufficient, LocalOS should stop and link to billing or plan selection.
 
 ## Manual External Publication
 

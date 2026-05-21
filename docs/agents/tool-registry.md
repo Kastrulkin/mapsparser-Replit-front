@@ -73,11 +73,11 @@ Tools with `operator_action_class` of `paid_compute` or `paid_external` must def
 - `cost_source`: model tokens, provider actual cost, fixed credit price, or estimate-only.
 - `estimate_policy`: whether the tool can estimate before execution.
 - `charge_policy`: when credits are charged and how actual usage is recorded.
-- `consent_policy`: `ask_each_time`, `auto_with_limits`, or `disabled`.
+- `paid_action_mode`: default credit-balance gate, optional `auto_with_limits`, or `disabled`.
 - `budget_fields`: max credits per action, day, and month where applicable.
 - `ledger_event`: usage/credit ledger record expected after execution.
 
-Paid actions should never be hidden inside a generic chat response. The user must see first-use cost disclosure or have an existing business-level consent policy that allows the action within limits.
+Paid actions should never be hidden inside a generic chat response. The user must be able to see charges and balance in LocalOS. If credits are insufficient, the tool must stop and link to billing or plan selection.
 
 ## Permission Decisions
 

@@ -113,7 +113,7 @@ def build_paid_action_offer(
         "description": config["description"],
         "action_class": config["action_class"],
         "status": "proposal_only",
-        "consent_required": True,
+        "consent_required": False,
         "consent_modes": list(CONSENT_MODES),
         "default_consent_mode": "ask_each_time",
         "cost_source": config["cost_source"],
@@ -131,7 +131,9 @@ def build_paid_action_offer(
         "copy": {
             "primary": primary_copy,
             "disclosure": disclosure,
-            "auto_consent_question": "Разрешить дальше выполнять такие обновления без спроса в пределах лимитов?",
+            "auto_consent_question": "Можно настроить лимиты, если хотите ограничить автоматические платные действия.",
+            "insufficient_balance": "Недостаточно кредитов для этой функции. Пополните счёт или выберите тариф.",
+            "billing_url": "/dashboard/billing",
             "manual_publication_note": "Публикация ответов в карты сейчас ручная: LocalOS готовит текст, пользователь копирует и вставляет его сам.",
         },
     }

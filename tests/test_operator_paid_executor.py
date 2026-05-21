@@ -105,8 +105,8 @@ def test_execution_attempt_blocks_when_runtime_disabled_after_ready_preflight() 
     assert execution["ai_generation_performed"] is False
 
 
-def test_execution_attempt_keeps_preflight_blockers() -> None:
-    cursor = FakeCursor(policy={"mode": "ask_each_time"}, balance=100)
+def test_execution_attempt_blocks_on_insufficient_credits_before_disabled_runtime() -> None:
+    cursor = FakeCursor(policy={"mode": "ask_each_time"}, balance=5)
 
     execution = build_paid_action_execution_attempt(
         cursor,
@@ -118,9 +118,11 @@ def test_execution_attempt_keeps_preflight_blockers() -> None:
 
     assert execution["status"] == "blocked"
     assert execution["execution_status"] == "preflight_blocked"
-    assert "explicit_consent_required" in execution["blocked_reasons"]
+    assert "insufficient_balance" in execution["blocked_reasons"]
     assert "execution_runtime_disabled" not in execution["blocked_reasons"]
     assert execution["adapter_result"]["adapter_status"] == "planned"
+    assert execution["preflight"]["next_step"] == "top_up_credits"
+    assert execution["preflight"]["billing_url"] == "/dashboard/billing"
     assert execution["paid_actions_performed"] is False
 
 

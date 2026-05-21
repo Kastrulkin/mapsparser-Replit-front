@@ -118,7 +118,9 @@ Operator actions use these product-level classes. Tool-level risk classes still 
 
 ## Paid Action Consent Policy
 
-Paid actions require a business-level consent policy. The policy is scoped by business because credits are charged to the business balance.
+Paid actions use the credit balance as the primary permission boundary. If the user has enough credits for a paid function, LocalOS may run it and charge credits without asking for a separate payment confirmation each time.
+
+If credits are insufficient, LocalOS must stop, explain that the balance is not enough, and show a link to billing or plan selection. Human approval is still mandatory for external state changes made on behalf of the business, such as publishing, sending, payments, destructive changes, or bulk changes.
 
 Sprint 3 code source of truth:
 
@@ -143,7 +145,7 @@ Sprint 5 adds a paid action preflight gate:
 - backend service: `services.operator_paid_preflight`;
 - API endpoint: `POST /api/operator/paid-actions/<action_key>/preflight`;
 - first supported action: `map_reviews_refresh`;
-- checks: action key, estimated credits, user balance, consent mode, per-action/day/month limits, and disabled policy;
+- checks: action key, estimated credits, user balance, optional per-action/day/month limits, and disabled policy;
 - status: `preflight_only`.
 
 Sprint 5 is still read-only. It does not create parsequeue jobs, call Apify, reserve or charge credits, generate AI content, write to providers, or publish externally.
@@ -227,13 +229,25 @@ Sprint 13 adds an internal fake execution path behind the same disabled runtime 
 
 Sprint 13 is still not a real paid external execution rollout. It is an accounting and idempotency proof for the future adapter boundary, with no Apify calls, parsequeue jobs, AI generation, external writes, map publication, or third-party execution.
 
+Sprint 14 adds usage-window enforcement to paid action preflight:
+
+- backend service: `services.operator_paid_preflight.build_paid_action_usage_window`;
+- preflight now reads `operatorcreditreservations` to count already charged credits plus active outstanding reservations for the same business, user, and action key;
+- default paid execution no longer requires a separate `ask_each_time` confirmation when credits are available;
+- optional `auto_with_limits` checks `max_credits_per_day` and `max_credits_per_month` against `used + estimated`, not only against the single estimated action;
+- if the optional usage window cannot be read while those limits are active, `auto_with_limits` blocks with `usage_window_unavailable` instead of silently allowing execution;
+- if credits are insufficient, preflight returns `insufficient_balance`, `next_step: top_up_credits`, and `billing_url: /dashboard/billing`;
+- preflight response includes `usage_window` with today and month usage.
+
+Sprint 14 still does not call Apify, create parsequeue jobs, generate AI content, write to external providers, publish to maps, or enable production execution. It only tightens the safety gate before future paid runtime rollout.
+
 Policy modes:
 
-- `ask_each_time`: explain the cost and ask before every paid action.
-- `auto_with_limits`: allow paid actions without repeated prompts while configured limits and balance rules hold.
+- `ask_each_time`: legacy/default mode; payment consent is covered by available credits, so no extra prompt is required before generation or refresh.
+- `auto_with_limits`: optional tighter limits for users who want per-action/day/month caps in addition to balance checks.
 - `disabled`: block this paid action class until the user changes settings.
 
-`auto_with_limits` must not be accepted without explicit positive `max_credits_per_action` and `max_credits_per_day`. A stored policy is permission to skip repeat prompts only when future runtime checks also confirm balance, estimated cost, action limits, and the external/manual approval boundary.
+Credits are the access gate. A stored policy is not a separate billing approval ceremony; it is only an optional way to disable or cap a class of paid actions. Runtime checks must always confirm balance, estimated cost, optional action limits, and the external/manual approval boundary.
 
 Recommended limits:
 
@@ -243,19 +257,14 @@ Recommended limits:
 - `low_balance_warning_threshold`;
 - optional intent-specific limits, such as review replies, map refresh, news generation, social posts, service optimization, competitor parse.
 
-First-use copy:
+Insufficient balance copy:
 
 ```text
-Чтобы получить актуальные данные или сгенерировать материалы, LocalOS использует платные операции и списывает кредиты.
-Сейчас у вас N кредитов; этого хватит примерно на M таких операций.
-Разрешить LocalOS выполнять такие действия без повторного вопроса в пределах лимитов?
+Недостаточно кредитов для этой функции.
+Пополните счёт или выберите тариф: /dashboard/billing
 ```
 
-Buttons:
-
-- `Разрешить`;
-- `Настроить лимиты`;
-- `Спрашивать каждый раз`.
+Optional settings can still show `Настроить лимиты` and `Отключить действие`, but the normal product path should not ask the user to confirm every paid generation while credits are available.
 
 After every paid execution, Operator must show the actual charge:
 
@@ -299,7 +308,9 @@ Credit reservation rules:
 - finalization must either charge actual usage through `credit_ledger` or release the unused reserve;
 - finalization must re-check current balance before charging because balance can change after reservation;
 - stale reserved rows must have a recovery path that releases outstanding credits without creating a charge;
-- runtime-flagged dry execution may create a reservation only if it immediately releases it while the adapter is still stub-only;
+- runtime-flagged internal fake execution may create a reservation only behind the disabled execution flag in controlled tests;
+- optional `auto_with_limits` must account for already charged credits and active reservations in the current day/month window before allowing a new execution;
+- insufficient balance should return a top-up path instead of a consent prompt;
 - every user-facing execution response must keep the distinction between `reserved`, `charged`, and `released`.
 
 ## Cached Vs Fresh Data
@@ -319,7 +330,7 @@ Fresh answer:
 Могу показать последние известные данные бесплатно или обновить карты сейчас за кредиты.
 ```
 
-If the user previously allowed auto-refresh within limits, Operator may refresh without asking again, then report the charge.
+If the user has enough credits, Operator may refresh without asking again, then report the charge. If the balance is insufficient, Operator stops and links to billing.
 
 ## Review Replies And Manual Publication
 
@@ -382,8 +393,7 @@ User:
 Operator:
 
 ```text
-Это платная AI-операция. Баланса хватит примерно на 120 таких задач.
-Разрешить генерацию ответов без повторного вопроса в пределах лимитов?
+Генерирую черновики ответов. После выполнения покажу, сколько кредитов списано.
 ```
 
 After execution:
@@ -406,7 +416,6 @@ Operator:
 ```text
 Для актуальной проверки нужно обновить данные из карт. Это платный внешний парсинг.
 Ваших кредитов хватит примерно на 100 обновлений такого типа.
-Запустить обновление?
 ```
 
 After Apify result:

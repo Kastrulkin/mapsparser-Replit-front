@@ -26,7 +26,7 @@ def test_map_refresh_offer_is_proposal_only_and_uses_apify_multiplier() -> None:
     assert offer["action_key"] == "map_reviews_refresh"
     assert offer["action_class"] == "paid_external"
     assert offer["status"] == "proposal_only"
-    assert offer["consent_required"] is True
+    assert offer["consent_required"] is False
     assert offer["default_consent_mode"] == "ask_each_time"
     assert offer["provider"] == "apify"
     assert offer["credit_multiplier"] == APIFY_CREDIT_MULTIPLIER
@@ -34,6 +34,7 @@ def test_map_refresh_offer_is_proposal_only_and_uses_apify_multiplier() -> None:
     assert offer["paid_actions_performed"] is False
     assert offer["external_write"] is False
     assert offer["current_consent_policy"] == consent_policy
+    assert offer["copy"]["billing_url"] == "/dashboard/billing"
 
 
 def test_offer_without_estimate_does_not_invent_price() -> None:
