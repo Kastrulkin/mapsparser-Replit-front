@@ -217,6 +217,16 @@ Sprint 12 connects real reservation to the paid-action execute flow only behind 
 
 Sprint 12 is still not a real paid external execution rollout. It proves the reserve and rollback boundary under the runtime flag while keeping production behavior unchanged by default.
 
+Sprint 13 adds an internal fake execution path behind the same disabled runtime flag:
+
+- default runtime flag remains `services.operator_paid_preflight.EXECUTION_ENABLED = False`;
+- when disabled, execute still performs dry-run only and does not create reservations, charges, jobs, provider calls, AI generations, or external writes;
+- when enabled in a controlled test/runtime, execute reserves credits, runs `services.operator_paid_action_adapter.run_paid_action_internal_fake`, and finalizes the reservation through `finalize_reserved_action_credits`;
+- the fake adapter charges a tiny internal actual credit amount and releases unused reserved credits, so ledger accounting can be tested end to end without Apify or other providers;
+- execute response includes `finalization_result`, `credit_charged`, `credit_released`, and `internal_fake_execution_performed`.
+
+Sprint 13 is still not a real paid external execution rollout. It is an accounting and idempotency proof for the future adapter boundary, with no Apify calls, parsequeue jobs, AI generation, external writes, map publication, or third-party execution.
+
 Policy modes:
 
 - `ask_each_time`: explain the cost and ask before every paid action.

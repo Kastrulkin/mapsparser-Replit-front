@@ -8,6 +8,7 @@ from services.operator_paid_actions import PAID_ACTIONS
 
 ADAPTER_STAGES = ("estimate", "reserve", "execute", "finalize")
 ADAPTER_RUNTIME_MODE = "internal_stub"
+INTERNAL_FAKE_RUNTIME_MODE = "internal_fake"
 
 
 def _stable_id(*parts: Any) -> str:
@@ -148,6 +149,63 @@ def run_paid_action_adapter_stub(plan: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def run_paid_action_internal_fake(plan: dict[str, Any], *, actual_credits: Any = None) -> dict[str, Any]:
+    clean_actual = _positive_int(actual_credits) or 0
+    stages = []
+    for item in list(plan.get("stages") or []):
+        stage = dict(item or {})
+        stage_name = str(stage.get("stage") or "")
+        stage["dry_run"] = False
+        if stage_name == "estimate":
+            stage["status"] = "internal_fake_estimate_confirmed"
+            details = dict(stage.get("details") or {})
+            details["actual_credits"] = clean_actual
+            stage["details"] = details
+        elif stage_name == "reserve":
+            stage["status"] = "reserved_before_internal_fake"
+        elif stage_name == "execute":
+            stage["status"] = "internal_fake_completed"
+            details = dict(stage.get("details") or {})
+            details.update(
+                {
+                    "adapter": "internal_fake",
+                    "provider_call_allowed": False,
+                    "external_call_performed": False,
+                    "internal_fake_execution_performed": True,
+                }
+            )
+            stage["details"] = details
+        elif stage_name == "finalize":
+            stage["status"] = "ready_for_credit_finalization"
+            details = dict(stage.get("details") or {})
+            details.update(
+                {
+                    "actual_credits_charged": clean_actual,
+                    "credit_released": False,
+                    "final_status": "pending_credit_finalization",
+                }
+            )
+            stage["details"] = details
+        else:
+            stage["status"] = "internal_fake_completed"
+        stages.append(stage)
+
+    side_effects = _empty_side_effects()
+    side_effects["internal_fake_execution_performed"] = True
+
+    return {
+        "action_key": plan.get("action_key"),
+        "business_id": plan.get("business_id"),
+        "adapter_status": "internal_fake_completed" if plan.get("adapter_status") == "planned" else plan.get("adapter_status"),
+        "runtime_mode": INTERNAL_FAKE_RUNTIME_MODE,
+        "dry_run": False,
+        "idempotency_key": plan.get("idempotency_key"),
+        "actual_credits": clean_actual,
+        "stages": stages,
+        "side_effects": side_effects,
+    }
+
+
 def _empty_side_effects() -> dict[str, bool]:
     return {
         "paid_actions_performed": False,
@@ -157,4 +215,5 @@ def _empty_side_effects() -> dict[str, bool]:
         "external_writes_performed": False,
         "parsequeue_jobs_created": False,
         "ai_generation_performed": False,
+        "internal_fake_execution_performed": False,
     }

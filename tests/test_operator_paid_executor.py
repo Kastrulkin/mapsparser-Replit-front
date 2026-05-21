@@ -11,6 +11,7 @@ class FakeCursor:
         self.reservation = None
         self.inserted_reservations = []
         self.released_reservations = []
+        self.user_updates = []
         self.ledger_entries = []
         self.last_query = ""
         self.last_params = ()
@@ -34,6 +35,8 @@ class FakeCursor:
             }
         if "update operatorcreditreservations" in self.last_query and "status = %s" in self.last_query:
             self.released_reservations.append(params or ())
+        if "update users" in self.last_query:
+            self.user_updates.append(params or ())
         if "insert into credit_ledger" in self.last_query:
             self.ledger_entries.append(params or ())
 
@@ -140,7 +143,7 @@ def test_execution_attempt_rejects_unknown_action_without_side_effects() -> None
     assert execution["external_calls_performed"] is False
 
 
-def test_execution_attempt_reserves_and_rolls_back_when_runtime_flag_enabled(monkeypatch) -> None:
+def test_execution_attempt_reserves_and_runs_internal_fake_when_runtime_flag_enabled(monkeypatch) -> None:
     monkeypatch.setattr(services.operator_paid_executor, "EXECUTION_ENABLED", True)
     cursor = FakeCursor(
         policy={
@@ -160,19 +163,28 @@ def test_execution_attempt_reserves_and_rolls_back_when_runtime_flag_enabled(mon
     )
 
     assert execution["status"] == "blocked"
-    assert execution["execution_status"] == "adapter_stub_only"
-    assert "adapter_runtime_stub_only" in execution["blocked_reasons"]
+    assert execution["execution_status"] == "internal_fake_completed"
+    assert "internal_fake_execution_only" in execution["blocked_reasons"]
     assert execution["reservation_result"]["status"] == "reserved"
     assert execution["reservation_result"]["idempotency_key"] == execution["reservation_plan"]["idempotency_key"]
-    assert execution["rollback_result"]["status"] == "released"
+    assert execution["adapter_result"]["adapter_status"] == "internal_fake_completed"
+    assert execution["adapter_result"]["runtime_mode"] == "internal_fake"
+    assert execution["adapter_result"]["actual_credits"] == 1
+    assert execution["finalization_result"]["status"] == "charged"
+    assert execution["finalization_result"]["charge_credits"] == 1
+    assert execution["finalization_result"]["release_credits"] == 9
+    assert execution["rollback_result"]["status"] == "charged"
     assert execution["credit_reserved"] is True
+    assert execution["credit_charged"] is True
     assert execution["credit_released"] is True
-    assert execution["credit_charged"] is False
+    assert execution["internal_fake_execution_performed"] is True
     assert execution["external_calls_performed"] is False
     assert execution["parsequeue_jobs_created"] is False
     assert len(cursor.inserted_reservations) == 1
     assert len(cursor.released_reservations) == 1
-    assert len(cursor.ledger_entries) == 0
+    assert len(cursor.user_updates) == 1
+    assert len(cursor.ledger_entries) == 1
+    assert cursor.ledger_entries[0][2] == -1
 
 
 def test_execution_attempt_does_not_reserve_when_runtime_flag_disabled() -> None:
@@ -195,6 +207,7 @@ def test_execution_attempt_does_not_reserve_when_runtime_flag_disabled() -> None
 
     assert execution["execution_status"] == "execution_disabled"
     assert execution["reservation_result"] is None
+    assert execution["finalization_result"] is None
     assert execution["rollback_result"] is None
     assert len(cursor.inserted_reservations) == 0
     assert execution["credit_reserved"] is False
@@ -223,5 +236,6 @@ def test_execution_attempt_keeps_reservation_blockers_when_runtime_flag_enabled(
     assert execution["execution_status"] == "reservation_blocked"
     assert "insufficient_unreserved_balance" in execution["blocked_reasons"]
     assert execution["reservation_result"]["status"] == "blocked"
+    assert execution["finalization_result"] is None
     assert execution["rollback_result"] is None
     assert len(cursor.inserted_reservations) == 0
