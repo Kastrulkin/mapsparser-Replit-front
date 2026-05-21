@@ -148,6 +148,26 @@ def _int_field(row: dict[str, Any], key: str) -> int:
         return 0
 
 
+def _reservation_summary(row: dict[str, Any]) -> dict[str, Any]:
+    reserved = _int_field(row, "reserved_credits")
+    charged = _int_field(row, "charged_credits")
+    released = _int_field(row, "released_credits")
+    outstanding = max(reserved - charged - released, 0)
+    return {
+        "reservation_id": row.get("id"),
+        "business_id": row.get("business_id"),
+        "user_id": row.get("user_id"),
+        "action_key": row.get("action_key"),
+        "status": row.get("status"),
+        "reserved_credits": reserved,
+        "charged_credits": charged,
+        "released_credits": released,
+        "outstanding_credits": outstanding,
+        "created_at": row.get("created_at"),
+        "updated_at": row.get("updated_at"),
+    }
+
+
 def build_credit_reservation_plan(
     cursor: Any,
     *,
@@ -273,6 +293,169 @@ def reserve_paid_action_credits(
                 "credit_reserved": True,
                 "credit_charged": False,
                 "credit_released": False,
+            },
+        }
+    )
+    return result
+
+
+def _load_stale_reserved_candidates(
+    cursor: Any,
+    *,
+    older_than_minutes: int,
+    limit: int,
+    business_id: str | None = None,
+    user_id: str | None = None,
+) -> list[dict[str, Any]]:
+    clauses = [
+        "status = 'reserved'",
+        "(reserved_credits - charged_credits - released_credits) > 0",
+        "created_at <= CURRENT_TIMESTAMP - (%s * INTERVAL '1 minute')",
+    ]
+    params: list[Any] = [older_than_minutes]
+    if business_id:
+        clauses.append("business_id = %s")
+        params.append(business_id)
+    if user_id:
+        clauses.append("user_id = %s")
+        params.append(user_id)
+    params.append(limit)
+    where_sql = " AND ".join(clauses)
+    cursor.execute(
+        f"""
+        SELECT
+            id,
+            business_id,
+            user_id,
+            action_key,
+            status,
+            reserved_credits,
+            charged_credits,
+            released_credits,
+            created_at,
+            updated_at
+        FROM operatorcreditreservations
+        WHERE {where_sql}
+        ORDER BY created_at ASC
+        LIMIT %s
+        """,
+        tuple(params),
+    )
+    if hasattr(cursor, "fetchall"):
+        rows = cursor.fetchall() or []
+    else:
+        first = cursor.fetchone()
+        rows = [first] if first else []
+    candidates: list[dict[str, Any]] = []
+    for row in rows:
+        item = _row_to_dict(cursor, row)
+        if item:
+            candidates.append(_reservation_summary(item))
+    return candidates
+
+
+def build_stale_reservation_recovery_plan(
+    cursor: Any,
+    *,
+    older_than_minutes: Any = 60,
+    limit: Any = 50,
+    business_id: str | None = None,
+    user_id: str | None = None,
+) -> dict[str, Any]:
+    clean_minutes = _positive_int(older_than_minutes)
+    clean_limit = _positive_int(limit)
+    blocked: list[str] = []
+
+    if clean_minutes is None:
+        blocked.append("invalid_stale_window")
+    if clean_limit is None:
+        blocked.append("invalid_limit")
+
+    table_available = _table_exists(cursor, "operatorcreditreservations")
+    if not table_available:
+        blocked.append("reservation_ledger_unavailable")
+
+    candidates: list[dict[str, Any]] = []
+    if not blocked and clean_minutes is not None and clean_limit is not None:
+        candidates = _load_stale_reserved_candidates(
+            cursor,
+            older_than_minutes=clean_minutes,
+            limit=clean_limit,
+            business_id=business_id,
+            user_id=user_id,
+        )
+
+    release_credits = sum(int(item.get("outstanding_credits") or 0) for item in candidates)
+    return {
+        "status": "ready" if not blocked else "blocked",
+        "older_than_minutes": clean_minutes,
+        "limit": clean_limit,
+        "business_id": business_id,
+        "user_id": user_id,
+        "candidate_count": len(candidates),
+        "release_credits": release_credits,
+        "candidates": candidates,
+        "blocked_reasons": blocked,
+        "side_effects": {
+            "reservations_released": False,
+            "credit_charged": False,
+            "credit_ledger_entries_created": False,
+        },
+    }
+
+
+def release_stale_reserved_credits(
+    cursor: Any,
+    *,
+    older_than_minutes: Any = 60,
+    limit: Any = 50,
+    business_id: str | None = None,
+    user_id: str | None = None,
+) -> dict[str, Any]:
+    plan = build_stale_reservation_recovery_plan(
+        cursor,
+        older_than_minutes=older_than_minutes,
+        limit=limit,
+        business_id=business_id,
+        user_id=user_id,
+    )
+    if plan["status"] != "ready":
+        return plan
+
+    released_ids: list[str] = []
+    released_credits = 0
+    for item in list(plan.get("candidates") or []):
+        reservation_id = str(item.get("reservation_id") or "")
+        outstanding = int(item.get("outstanding_credits") or 0)
+        if not reservation_id or outstanding <= 0:
+            continue
+        cursor.execute(
+            """
+            UPDATE operatorcreditreservations
+            SET status = 'released',
+                released_credits = released_credits + %s,
+                finalized_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+              AND status = 'reserved'
+              AND (reserved_credits - charged_credits - released_credits) > 0
+            """,
+            (outstanding, reservation_id),
+        )
+        released_ids.append(reservation_id)
+        released_credits += outstanding
+
+    result = dict(plan)
+    result.update(
+        {
+            "status": "released" if released_ids else "nothing_to_release",
+            "released_count": len(released_ids),
+            "released_credits": released_credits,
+            "released_reservation_ids": released_ids,
+            "side_effects": {
+                "reservations_released": bool(released_ids),
+                "credit_charged": False,
+                "credit_ledger_entries_created": False,
             },
         }
     )

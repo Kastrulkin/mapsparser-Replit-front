@@ -1,23 +1,27 @@
 from services.operator_credit_reservation import (
     build_credit_finalization_plan,
     build_credit_reservation_plan,
+    build_stale_reservation_recovery_plan,
     finalize_reserved_action_credits,
+    release_stale_reserved_credits,
     reserve_paid_action_credits,
 )
 
 
 class FakeCursor:
-    def __init__(self, *, table_available=True, balance=100, active_reserved=0, reservation=None):
+    def __init__(self, *, table_available=True, balance=100, active_reserved=0, reservation=None, stale_candidates=None):
         self.table_available = table_available
         self.balance = balance
         self.active_reserved = active_reserved
         self.reservation = reservation
+        self.stale_candidates = list(stale_candidates or [])
         self.last_query = ""
         self.last_params = ()
         self.inserted = []
         self.user_updates = []
         self.ledger_entries = []
         self.reservation_updates = []
+        self.stale_release_updates = []
 
     def execute(self, query, params=None):
         self.last_query = " ".join(str(query or "").lower().split())
@@ -30,6 +34,8 @@ class FakeCursor:
             self.ledger_entries.append(params or ())
         if "update operatorcreditreservations" in self.last_query:
             self.reservation_updates.append(params or ())
+            if "status = 'released'" in self.last_query:
+                self.stale_release_updates.append(params or ())
 
     def fetchone(self):
         query = self.last_query
@@ -49,6 +55,12 @@ class FakeCursor:
             params = self.inserted[-1]
             return {"id": params[0], "status": "reserved", "reserved_credits": params[6]}
         return None
+
+    def fetchall(self):
+        query = self.last_query
+        if "from operatorcreditreservations" in query and "order by created_at" in query:
+            return self.stale_candidates
+        return []
 
 
 def test_credit_reservation_plan_accounts_for_active_reservations() -> None:
@@ -319,3 +331,106 @@ def test_finalize_release_does_not_create_credit_ledger() -> None:
     assert len(cursor.user_updates) == 0
     assert len(cursor.ledger_entries) == 0
     assert len(cursor.reservation_updates) == 1
+
+
+def test_stale_reservation_recovery_plan_lists_release_candidates() -> None:
+    cursor = FakeCursor(
+        stale_candidates=[
+            {
+                "id": "res-1",
+                "business_id": "biz-1",
+                "user_id": "user-1",
+                "action_key": "map_reviews_refresh",
+                "status": "reserved",
+                "reserved_credits": 10,
+                "charged_credits": 0,
+                "released_credits": 3,
+                "created_at": "2026-05-21 06:00:00",
+                "updated_at": "2026-05-21 06:00:00",
+            },
+            {
+                "id": "res-2",
+                "business_id": "biz-1",
+                "user_id": "user-1",
+                "action_key": "review_replies_generate",
+                "status": "reserved",
+                "reserved_credits": 4,
+                "charged_credits": 0,
+                "released_credits": 0,
+                "created_at": "2026-05-21 06:05:00",
+                "updated_at": "2026-05-21 06:05:00",
+            },
+        ]
+    )
+
+    plan = build_stale_reservation_recovery_plan(
+        cursor,
+        older_than_minutes=60,
+        limit=10,
+        business_id="biz-1",
+    )
+
+    assert plan["status"] == "ready"
+    assert plan["candidate_count"] == 2
+    assert plan["release_credits"] == 11
+    assert plan["side_effects"]["reservations_released"] is False
+    assert cursor.last_params == (60, "biz-1", 10)
+
+
+def test_stale_reservation_recovery_plan_blocks_invalid_inputs() -> None:
+    cursor = FakeCursor()
+
+    plan = build_stale_reservation_recovery_plan(
+        cursor,
+        older_than_minutes=0,
+        limit="bad",
+    )
+
+    assert plan["status"] == "blocked"
+    assert "invalid_stale_window" in plan["blocked_reasons"]
+    assert "invalid_limit" in plan["blocked_reasons"]
+
+
+def test_release_stale_reserved_credits_updates_candidates_without_ledger() -> None:
+    cursor = FakeCursor(
+        stale_candidates=[
+            {
+                "id": "res-1",
+                "business_id": "biz-1",
+                "user_id": "user-1",
+                "action_key": "map_reviews_refresh",
+                "status": "reserved",
+                "reserved_credits": 10,
+                "charged_credits": 0,
+                "released_credits": 3,
+            },
+            {
+                "id": "res-2",
+                "business_id": "biz-1",
+                "user_id": "user-1",
+                "action_key": "review_replies_generate",
+                "status": "reserved",
+                "reserved_credits": 4,
+                "charged_credits": 0,
+                "released_credits": 0,
+            },
+        ]
+    )
+
+    result = release_stale_reserved_credits(
+        cursor,
+        older_than_minutes=60,
+        limit=10,
+        business_id="biz-1",
+    )
+
+    assert result["status"] == "released"
+    assert result["released_count"] == 2
+    assert result["released_credits"] == 11
+    assert result["released_reservation_ids"] == ["res-1", "res-2"]
+    assert result["side_effects"]["reservations_released"] is True
+    assert result["side_effects"]["credit_charged"] is False
+    assert result["side_effects"]["credit_ledger_entries_created"] is False
+    assert len(cursor.stale_release_updates) == 2
+    assert cursor.stale_release_updates[0] == (7, "res-1")
+    assert cursor.stale_release_updates[1] == (4, "res-2")

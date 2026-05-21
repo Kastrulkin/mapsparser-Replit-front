@@ -196,6 +196,16 @@ Sprint 10 adds the credit reservation finalization contract:
 
 Sprint 10 still does not connect finalization to the disabled Operator runtime. It does not call Apify, generate content, write to providers, publish externally, or charge credits from user-facing execution. The finalization service is a narrow internal boundary for later controlled runtime rollout.
 
+Sprint 11 adds the stale reservation recovery contract:
+
+- recovery plan: `services.operator_credit_reservation.build_stale_reservation_recovery_plan`;
+- recovery mutation boundary: `services.operator_credit_reservation.release_stale_reserved_credits`;
+- stale candidates are active `reserved` rows with outstanding credits older than the configured window;
+- release marks those reservations as `released` and adds the outstanding amount to `released_credits`;
+- recovery never writes `credit_ledger` and never charges credits.
+
+Sprint 11 still does not connect recovery to a cron job, endpoint, or user-facing Operator execution. It is a recovery boundary for later supervised runtime rollout and should be run only by controlled backend jobs or maintenance tooling when that job is explicitly implemented.
+
 Policy modes:
 
 - `ask_each_time`: explain the cost and ask before every paid action.
@@ -267,6 +277,7 @@ Credit reservation rules:
 - reservation creation must be idempotent for the same business/action/idempotency key;
 - finalization must either charge actual usage through `credit_ledger` or release the unused reserve;
 - finalization must re-check current balance before charging because balance can change after reservation;
+- stale reserved rows must have a recovery path that releases outstanding credits without creating a charge;
 - every user-facing execution response must keep the distinction between `reserved`, `charged`, and `released`.
 
 ## Cached Vs Fresh Data
