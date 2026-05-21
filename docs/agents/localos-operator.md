@@ -206,6 +206,17 @@ Sprint 11 adds the stale reservation recovery contract:
 
 Sprint 11 still does not connect recovery to a cron job, endpoint, or user-facing Operator execution. It is a recovery boundary for later supervised runtime rollout and should be run only by controlled backend jobs or maintenance tooling when that job is explicitly implemented.
 
+Sprint 12 connects real reservation to the paid-action execute flow only behind the existing disabled runtime flag:
+
+- default runtime flag: `services.operator_paid_preflight.EXECUTION_ENABLED = False`;
+- when the flag is disabled, execute remains dry-run only and does not create reservations;
+- when the flag is enabled in a controlled test/runtime, execute calls `reserve_paid_action_credits`;
+- because the adapter is still `internal_stub`, execute immediately rolls the reservation back through `finalize_reserved_action_credits(..., finalization_mode="release")`;
+- idempotency uses the adapter/reservation idempotency key and the database unique key `(business_id, action_key, idempotency_key)`;
+- no Apify calls, parsequeue jobs, AI generation, external writes, or credit charges are performed in Sprint 12.
+
+Sprint 12 is still not a real paid external execution rollout. It proves the reserve and rollback boundary under the runtime flag while keeping production behavior unchanged by default.
+
 Policy modes:
 
 - `ask_each_time`: explain the cost and ask before every paid action.
@@ -278,6 +289,7 @@ Credit reservation rules:
 - finalization must either charge actual usage through `credit_ledger` or release the unused reserve;
 - finalization must re-check current balance before charging because balance can change after reservation;
 - stale reserved rows must have a recovery path that releases outstanding credits without creating a charge;
+- runtime-flagged dry execution may create a reservation only if it immediately releases it while the adapter is still stub-only;
 - every user-facing execution response must keep the distinction between `reserved`, `charged`, and `released`.
 
 ## Cached Vs Fresh Data

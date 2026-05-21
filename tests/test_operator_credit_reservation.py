@@ -134,6 +134,22 @@ def test_reserve_paid_action_credits_records_reservation_when_ready() -> None:
     assert len(cursor.inserted) == 1
 
 
+def test_reserve_paid_action_credits_uses_idempotency_conflict_clause() -> None:
+    cursor = FakeCursor(balance=100, active_reserved=0)
+
+    reserve_paid_action_credits(
+        cursor,
+        business_id="biz-1",
+        user_id="user-1",
+        action_key="map_reviews_refresh",
+        estimated_credits=10,
+        idempotency_key="idem-1",
+    )
+
+    assert "on conflict (business_id, action_key, idempotency_key)" in cursor.last_query
+    assert cursor.inserted[0][4] == "idem-1"
+
+
 def test_finalization_plan_charges_actual_and_releases_unused() -> None:
     cursor = FakeCursor(
         reservation={
