@@ -176,6 +176,16 @@ Sprint 8 adds the execution adapter contract behind the disabled runtime:
 
 Sprint 8 still runs dry-run adapter stages only. It does not create parsequeue jobs, call Apify, reserve or charge credits, generate AI content, write to providers, or publish externally. The adapter exists so later sprints can replace the internal stub stage by stage without changing the Operator API contract.
 
+Sprint 9 adds the credit reservation ledger contract:
+
+- reservation table: `operatorcreditreservations`;
+- migration: `alembic_migrations/versions/20260521_add_operator_credit_reservations.py`;
+- backend service: `services.operator_credit_reservation`;
+- execute response field: `reservation_plan`;
+- adapter `reserve` stage includes the same reservation plan.
+
+Sprint 9 still does not execute paid actions, call Apify, generate content, write to providers, publish externally, or charge credits. The current execute runtime only calculates whether a reservation could be created after existing active reservations are considered. Actual reserve creation exists as a service boundary for the next controlled runtime step and must not be called by the disabled Operator runtime.
+
 Policy modes:
 
 - `ask_each_time`: explain the cost and ask before every paid action.
@@ -239,6 +249,14 @@ Paid compute uses the same ledger principle as current AI token accounting:
 - charge actual usage after execution;
 - record usage in credit/token ledger;
 - show final charged credits to the user.
+
+Credit reservation rules:
+
+- reservations are scoped by `business_id`, `user_id`, `action_key`, and `idempotency_key`;
+- active reservations reduce the available unreserved balance before a new paid action can start;
+- reservation creation must be idempotent for the same business/action/idempotency key;
+- finalization must either charge actual usage through `credit_ledger` or release the unused reserve;
+- every user-facing execution response must keep the distinction between `reserved`, `charged`, and `released`.
 
 ## Cached Vs Fresh Data
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from services.operator_paid_action_adapter import build_paid_action_adapter_plan, run_paid_action_adapter_stub
+from services.operator_credit_reservation import build_credit_reservation_plan
 from services.operator_paid_preflight import EXECUTION_ENABLED, build_paid_action_preflight
 
 
@@ -15,11 +16,20 @@ def build_paid_action_execution_attempt(
     estimated_credits: Any = None,
     explicit_consent: bool = False,
 ) -> dict[str, Any]:
+    reservation_plan = build_credit_reservation_plan(
+        cursor,
+        business_id=business_id,
+        user_id=user_id,
+        action_key=action_key,
+        estimated_credits=estimated_credits,
+    )
     adapter_plan = build_paid_action_adapter_plan(
         action_key=action_key,
         business_id=business_id,
         user_id=user_id,
         estimated_credits=estimated_credits,
+        idempotency_key=reservation_plan.get("idempotency_key"),
+        reservation_plan=reservation_plan,
     )
     preflight = build_paid_action_preflight(
         cursor,
@@ -55,6 +65,7 @@ def build_paid_action_execution_attempt(
         "execution_enabled": EXECUTION_ENABLED,
         "adapter_plan": adapter_plan,
         "adapter_result": adapter_result,
+        "reservation_plan": reservation_plan,
         "preflight": preflight,
         "blocked_reasons": blocked_reasons,
         "warnings": list(preflight.get("warnings") or []),

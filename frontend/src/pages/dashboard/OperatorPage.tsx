@@ -140,6 +140,13 @@ type ExecutionAttempt = {
   external_writes_performed: boolean;
   parsequeue_jobs_created: boolean;
   ai_generation_performed: boolean;
+  reservation_plan?: {
+    status: string;
+    requested_credits: number | null;
+    active_reserved_credits: number | null;
+    available_after_reservations: number | null;
+    blocked_reasons: string[];
+  };
   adapter_result?: {
     adapter_status: string;
     runtime_mode: string;
@@ -766,6 +773,19 @@ export const OperatorPage = () => {
                             <div>
                               Списаний: нет; внешних вызовов: нет; parsequeue: нет; AI генерации: нет.
                             </div>
+                            {executionAttempt.reservation_plan ? (
+                              <div className="mt-2 rounded-lg border border-rose-200 bg-white/60 px-3 py-2">
+                                <div className="font-semibold">Credit reservation: {executionAttempt.reservation_plan.status}</div>
+                                <div>
+                                  Запрос: {executionAttempt.reservation_plan.requested_credits ?? 'нет оценки'}; уже зарезервировано:{' '}
+                                  {executionAttempt.reservation_plan.active_reserved_credits ?? 'н/д'}; доступно после резервов:{' '}
+                                  {executionAttempt.reservation_plan.available_after_reservations ?? 'н/д'}.
+                                </div>
+                                {executionAttempt.reservation_plan.blocked_reasons.length > 0 ? (
+                                  <div>Причины: {executionAttempt.reservation_plan.blocked_reasons.join(', ')}</div>
+                                ) : null}
+                              </div>
+                            ) : null}
                             {executionAttempt.adapter_result ? (
                               <div className="mt-2 rounded-lg border border-rose-200 bg-white/60 px-3 py-2">
                                 <div className="font-semibold">

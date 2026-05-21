@@ -18,6 +18,7 @@ def test_adapter_plan_has_all_execution_stages_without_side_effects() -> None:
     assert plan["dry_run"] is True
     assert [stage["stage"] for stage in plan["stages"]] == list(ADAPTER_STAGES)
     assert plan["stages"][0]["details"]["estimated_credits"] == 10
+    assert plan["stages"][1]["details"]["credit_reservation_required"] is True
     assert plan["stages"][2]["details"]["provider_call_allowed"] is False
     assert plan["side_effects"]["credit_reserved"] is False
     assert plan["side_effects"]["credit_charged"] is False

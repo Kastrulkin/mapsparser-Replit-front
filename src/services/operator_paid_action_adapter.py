@@ -44,6 +44,7 @@ def build_paid_action_adapter_plan(
     user_id: str,
     estimated_credits: Any = None,
     idempotency_key: str | None = None,
+    reservation_plan: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     config = PAID_ACTIONS.get(action_key)
     clean_estimate = _positive_int(estimated_credits)
@@ -90,6 +91,7 @@ def build_paid_action_adapter_plan(
             details={
                 "credit_reservation_required": True,
                 "credit_reserved": False,
+                "reservation_plan": dict(reservation_plan or {}),
             },
         ),
         _stage_result(

@@ -1,0 +1,41 @@
+{
+  "task_id": "operator-sprint9-credit-reservation-ledger-20260521",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Migration and reservation ledger schema are present and idempotent."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Reservation planning service accounts for balance and active reservations."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Disabled execution includes reservation_plan and keeps paid side effects false."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Operator UI renders reservation status and does not claim a charge."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Docs and verification artifacts are present."
+    }
+  ],
+  "commands_run": [
+    "python3 -m pytest -q tests/test_operator_credit_reservation.py tests/test_operator_paid_action_adapter.py tests/test_operator_paid_executor.py tests/test_operator_paid_preflight.py tests/test_operator_consent_policy.py tests/test_operator_paid_actions.py tests/test_operator_attention.py tests/test_operator_audit.py tests/test_telegram_dashboard_copy.py",
+    "python3 -m py_compile src/api/operator_api.py src/services/operator_credit_reservation.py src/services/operator_paid_action_adapter.py src/services/operator_paid_executor.py alembic_migrations/versions/20260521_add_operator_credit_reservations.py",
+    "npm run build",
+    "git diff --check"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/operator-sprint9-credit-reservation-ledger-20260521/evidence.md",
+    ".agent/tasks/operator-sprint9-credit-reservation-ledger-20260521/evidence.json"
+  ]
+}
