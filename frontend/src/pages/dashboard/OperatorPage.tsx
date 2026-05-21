@@ -241,8 +241,36 @@ const actionClassLabels: Record<OperatorActionClass, string> = {
 const eventLabels: Record<string, string> = {
   operator_context_built: 'Контекст Operator собран',
   operator_consent_decision: 'Consent policy изменена',
+  operator_draft_created: 'Черновик создан',
   operator_execution_blocked: 'Запуск заблокирован',
+  operator_manual_action_presented: 'Ручное действие показано',
+  operator_message_received: 'Сообщение получено',
   operator_paid_action_estimated: 'Preflight платного действия',
+  operator_review_added: 'Отзыв добавлен',
+  operator_tool_executed: 'Инструмент выполнен',
+  operator_usage_charged: 'Кредиты списаны',
+};
+
+type OperatorChatResult = {
+  status: 'completed' | 'blocked' | 'unsupported';
+  intent: string;
+  chat_response: string;
+  reply_text?: string;
+  billing_url?: string;
+  charged_credits?: number;
+  blocked_reasons?: string[];
+  review?: {
+    id?: string;
+    source?: string;
+    author_name?: string;
+    text?: string;
+  };
+  draft?: {
+    id?: string;
+    review_id?: string;
+    status?: string;
+    generated_text?: string;
+  };
 };
 
 const formatDateTime = (value: string | null) => {
@@ -280,6 +308,11 @@ export const OperatorPage = () => {
   const [executionAttempts, setExecutionAttempts] = useState<Record<string, ExecutionAttempt>>({});
   const [executingKey, setExecutingKey] = useState<string | null>(null);
   const [operatorEvents, setOperatorEvents] = useState<OperatorEvent[]>([]);
+  const [chatMessage, setChatMessage] = useState(
+    'Добавь новый отзыв в список и сгенерируй ответ:\n\nПопала в салон случайно - получила сертификат на массаж лица. Массаж лица очень понравился - ушла расслабленная и с рекомендациями по уходу за кожей.',
+  );
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatResult, setChatResult] = useState<OperatorChatResult | null>(null);
 
   const loadOperatorEvents = async () => {
     if (!currentBusinessId) {
@@ -431,6 +464,32 @@ export const OperatorPage = () => {
     }
   };
 
+  const sendOperatorChatMessage = async () => {
+    if (!currentBusinessId || !chatMessage.trim()) return;
+    setChatLoading(true);
+    setConsentMessage(null);
+    setChatResult(null);
+    try {
+      const response = await api.post('/operator/chat', {
+        business_id: currentBusinessId,
+        message: chatMessage,
+      });
+      const result = response.data.operator_result || null;
+      setChatResult(result);
+      await loadBrief();
+      await loadOperatorEvents();
+    } catch (err) {
+      setChatResult({
+        status: 'blocked',
+        intent: 'error',
+        chat_response: err instanceof Error ? err.message : 'Не удалось выполнить команду Operator',
+        blocked_reasons: ['operator_chat_request_failed'],
+      });
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
   const metrics = useMemo(() => {
     if (!brief) return [];
     return [
@@ -510,6 +569,73 @@ export const OperatorPage = () => {
         }
         tone="sky"
       />
+
+      <DashboardSection
+        title="Чат-команда"
+        description="Можно вставить новый отзыв и попросить LocalOS добавить его в список и подготовить черновик ответа. Публикация в карты остаётся ручной."
+      >
+        <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+            <textarea
+              className="min-h-[180px] w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-950 outline-none ring-sky-200 placeholder:text-slate-400 focus:ring-2"
+              value={chatMessage}
+              onChange={(event) => setChatMessage(event.target.value)}
+              placeholder="Добавь новый отзыв в список и сгенерируй ответ: ..."
+            />
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm leading-6 text-slate-600">
+                Если кредитов достаточно, генерация запускается без отдельного подтверждения. Если нет, LocalOS покажет ссылку на пополнение.
+              </p>
+              <Button type="button" onClick={() => void sendOperatorChatMessage()} disabled={chatLoading || !currentBusinessId || !chatMessage.trim()}>
+                {chatLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                Отправить
+              </Button>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+            <div className="text-sm font-semibold text-slate-950">Ответ Operator</div>
+            {chatResult ? (
+              <div className="mt-3 space-y-3 text-sm leading-6 text-slate-700">
+                <div
+                  className={cn(
+                    'rounded-xl border px-3 py-2',
+                    chatResult.status === 'completed'
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
+                      : 'border-amber-200 bg-amber-50 text-amber-950',
+                  )}
+                >
+                  <div className="font-semibold">
+                    {chatResult.status === 'completed' ? 'Выполнено' : chatResult.status === 'unsupported' ? 'Пока не умею' : 'Заблокировано'}
+                  </div>
+                  <div className="mt-2 whitespace-pre-wrap">{chatResult.chat_response}</div>
+                </div>
+                {chatResult.billing_url ? (
+                  <Button type="button" variant="outline" size="sm" asChild>
+                    <Link to={chatResult.billing_url}>Пополнить счёт</Link>
+                  </Button>
+                ) : null}
+                {chatResult.review?.id ? (
+                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                    <div className="font-semibold">Отзыв добавлен</div>
+                    <div className="line-clamp-4">{chatResult.review.text}</div>
+                  </div>
+                ) : null}
+                {chatResult.draft?.id ? (
+                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                    <div className="font-semibold">Черновик ответа</div>
+                    <div>Статус: {chatResult.draft.status || 'draft'}</div>
+                    {chatResult.charged_credits ? <div>Списано кредитов: {chatResult.charged_credits}</div> : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                Здесь появится ответ, готовый черновик и сведения о списании кредитов.
+              </p>
+            )}
+          </div>
+        </div>
+      </DashboardSection>
 
       {error ? (
         <DashboardEmptyState

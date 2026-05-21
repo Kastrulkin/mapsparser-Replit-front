@@ -2510,8 +2510,10 @@ def get_external_reviews(business_id):
         review_query = """
             SELECT r.id, r.source, r.external_review_id, r.rating, r.author_name, r.text,
                    r.response_text, r.response_at, r.published_at, r.created_at,
+                   d.id AS reply_draft_id, d.generated_text AS reply_draft_text, d.status AS reply_draft_status,
                    b.id AS location_business_id, b.name AS location_name, b.address AS location_address
             FROM externalbusinessreviews r
+            LEFT JOIN reviewreplydrafts d ON d.review_id = r.id
             LEFT JOIN businesses b ON b.id = r.business_id
         """
         review_params = []
@@ -2545,6 +2547,9 @@ def get_external_reviews(business_id):
                 "text": rd.get("text") or "",
                 "response_text": resp_text,
                 "response_at": rd.get("response_at"),
+                "reply_draft_id": rd.get("reply_draft_id"),
+                "reply_draft_text": rd.get("reply_draft_text"),
+                "reply_draft_status": rd.get("reply_draft_status"),
                 "published_at": rd.get("published_at"),
                 "created_at": rd.get("created_at"),
                 "has_response": bool(resp_text),

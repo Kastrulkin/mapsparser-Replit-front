@@ -43,6 +43,9 @@ interface ExternalReview {
   response_text: string | null;
   published_at: string | null;
   has_response: boolean;
+  reply_draft_id?: string | null;
+  reply_draft_text?: string | null;
+  reply_draft_status?: string | null;
   location_business_id?: string | null;
   location_name?: string | null;
   location_address?: string | null;
@@ -116,7 +119,17 @@ export default function ReviewReplyAssistant({
       const query = aggregateScope === 'network' ? '?scope=network' : '';
       const data = await newAuth.makeRequest(`/business/${currentBusinessId}/external/reviews${query}`);
       if (data.success) {
-        setExternalReviews(data.reviews || []);
+        const nextReviews = data.reviews || [];
+        setExternalReviews(nextReviews);
+        setGeneratedReplies(prev => {
+          const next = { ...prev };
+          nextReviews.forEach((item: ExternalReview) => {
+            if (item.reply_draft_text && !next[item.id]) {
+              next[item.id] = item.reply_draft_text;
+            }
+          });
+          return next;
+        });
       }
     } catch (e: any) {
       console.error('Ошибка загрузки отзывов:', e);
@@ -673,6 +686,11 @@ export default function ReviewReplyAssistant({
                         </div>
                       ) : (
                         <div className="flex flex-col h-full gap-2">
+                          {reviewItem.reply_draft_id ? (
+                            <div className="rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs font-medium text-indigo-800">
+                              Черновик LocalOS: {reviewItem.reply_draft_status || 'draft'}
+                            </div>
+                          ) : null}
                           <Textarea
                             rows={4}
                             value={generatedReplies[reviewItem.id] || ''}

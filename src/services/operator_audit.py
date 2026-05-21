@@ -11,8 +11,14 @@ OPERATOR_CAPABILITY = "localos.operator"
 OPERATOR_EVENT_TYPES = {
     "operator_context_built",
     "operator_consent_decision",
+    "operator_draft_created",
     "operator_execution_blocked",
+    "operator_manual_action_presented",
+    "operator_message_received",
     "operator_paid_action_estimated",
+    "operator_review_added",
+    "operator_tool_executed",
+    "operator_usage_charged",
 }
 
 
@@ -84,20 +90,16 @@ def record_operator_event(
         return None
 
     clean_metadata = dict(metadata or {})
-    clean_metadata.update(
-        {
-            "operator_event_type": normalized_event,
-            "operator_channel": str(channel or "web").strip() or "web",
-            "operator_user_id": str(user_id or "").strip(),
-            "action_key": str(action_key or "").strip(),
-            "credit_charged": False,
-            "paid_actions_performed": False,
-            "external_calls_performed": False,
-            "external_writes_performed": False,
-        }
-    )
+    clean_metadata["operator_event_type"] = normalized_event
+    clean_metadata["operator_channel"] = str(channel or "web").strip() or "web"
+    clean_metadata["operator_user_id"] = str(user_id or "").strip()
+    clean_metadata["action_key"] = str(action_key or "").strip()
+    clean_metadata.setdefault("credit_charged", False)
+    clean_metadata.setdefault("paid_actions_performed", False)
+    clean_metadata.setdefault("external_calls_performed", False)
+    clean_metadata.setdefault("external_writes_performed", False)
 
-    risk_level = "medium" if normalized_event in {"operator_consent_decision", "operator_execution_blocked", "operator_paid_action_estimated"} else "low"
+    risk_level = "medium" if normalized_event in {"operator_consent_decision", "operator_execution_blocked", "operator_paid_action_estimated", "operator_usage_charged"} else "low"
     return log_agent_action(
         cursor,
         agent_client_id=None,

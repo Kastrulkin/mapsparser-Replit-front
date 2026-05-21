@@ -1,0 +1,105 @@
+{
+  "task_id": "operator-sprints-15-19-20260521",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Operator chat accepts a pasted manual review, stores it in LocalOS, generates a reply draft, and returns the draft in the chat response.",
+      "status": "PASS",
+      "proof": [
+        "src/services/operator_manual_review.py",
+        "tests/test_operator_manual_review.py"
+      ],
+      "gaps": [
+        "Direct provider publication remains intentionally unavailable."
+      ]
+    },
+    {
+      "id": "AC2",
+      "text": "The manual review reply flow is billed as paid compute through credit preflight, reservation, charge finalization, and insufficient-balance blocking.",
+      "status": "PASS",
+      "proof": [
+        "src/services/operator_manual_review.py",
+        "tests/test_operator_manual_review.py"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "The dashboard exposes the chat-command flow and the reviews UI can display stored LocalOS reply drafts for manual copy/publish.",
+      "status": "PASS",
+      "proof": [
+        "frontend/src/pages/dashboard/OperatorPage.tsx",
+        "src/main.py",
+        "frontend/src/components/ReviewReplyAssistant.tsx",
+        ".agent/tasks/operator-sprints-15-19-20260521/raw/browser.txt"
+      ],
+      "gaps": [
+        "Authenticated visual QA of the Operator card was not run in this local task; production build passed."
+      ]
+    },
+    {
+      "id": "AC4",
+      "text": "Telegram owner chat routes the same manual review intent through the same backend service without bypassing credit or manual-publication policy.",
+      "status": "PASS",
+      "proof": [
+        "src/telegram_bot.py",
+        "src/services/operator_manual_review.py"
+      ],
+      "gaps": [
+        "No live Telegram message was sent during local verification."
+      ]
+    },
+    {
+      "id": "AC5",
+      "text": "Map refresh execution remains gated: no direct Apify call by default; only a disabled internal enqueue boundary exists for future controlled rollout.",
+      "status": "PASS",
+      "proof": [
+        "src/services/operator_map_refresh.py",
+        "tests/test_operator_map_refresh.py"
+      ],
+      "gaps": [
+        "Real Apify execution and actual-cost credit settlement remain future work."
+      ]
+    },
+    {
+      "id": "AC6",
+      "text": "Documentation reflects the implemented Sprint 15-19 capabilities and remaining gaps.",
+      "status": "PASS",
+      "proof": [
+        "docs/agents/localos-operator.md",
+        "docs/agents/index.md",
+        "docs/agents/tool-registry.md"
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/services/operator_manual_review.py",
+    "src/services/operator_map_refresh.py",
+    "src/api/operator_api.py",
+    "src/main.py",
+    "src/services/operator_audit.py",
+    "src/telegram_bot.py",
+    "frontend/src/pages/dashboard/OperatorPage.tsx",
+    "frontend/src/components/ReviewReplyAssistant.tsx",
+    "tests/test_operator_manual_review.py",
+    "tests/test_operator_map_refresh.py",
+    "tests/test_operator_audit.py",
+    "docs/agents/localos-operator.md",
+    "docs/agents/index.md",
+    "docs/agents/tool-registry.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/services/operator_manual_review.py src/services/operator_map_refresh.py src/services/operator_audit.py src/api/operator_api.py src/main.py src/telegram_bot.py tests/test_operator_manual_review.py tests/test_operator_map_refresh.py tests/test_operator_audit.py",
+    "python3 -m pytest -q tests/test_operator_manual_review.py tests/test_operator_map_refresh.py tests/test_operator_paid_action_adapter.py tests/test_operator_paid_executor.py tests/test_operator_credit_reservation.py tests/test_operator_paid_preflight.py tests/test_operator_consent_policy.py tests/test_operator_paid_actions.py tests/test_operator_attention.py tests/test_operator_audit.py tests/test_telegram_dashboard_copy.py",
+    "npm run build",
+    "Browser sanity check: http://127.0.0.1:5173/dashboard/operator",
+    "git diff --check"
+  ],
+  "known_gaps": [
+    "No commit, push, deploy, or production migration was performed.",
+    "Direct map reply publication remains manual.",
+    "Apify refresh remains behind a disabled internal boundary."
+  ]
+}

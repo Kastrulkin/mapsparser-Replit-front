@@ -1,0 +1,46 @@
+{
+  "task_id": "operator-sprints-15-19-20260521",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Manual review intake and draft generation are covered by implementation and tests."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Paid compute preflight, reservation, charge, insufficient balance, and rollback paths are tested."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Dashboard chat flow and review draft display build successfully."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Telegram routes the same intent through the shared backend service."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Apify refresh remains disabled by default and only exposes a tested enqueue boundary."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "Operator docs and tool registry describe the implemented capabilities and gaps."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile ...",
+    "python3 -m pytest -q tests/test_operator_manual_review.py ... tests/test_telegram_dashboard_copy.py",
+    "npm run build",
+    "git diff --check"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/operator-sprints-15-19-20260521/evidence.md",
+    ".agent/tasks/operator-sprints-15-19-20260521/evidence.json"
+  ]
+}

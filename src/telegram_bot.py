@@ -64,6 +64,8 @@ from services.telegram_dashboard import (
     build_subscription_text,
     build_today_text,
 )
+from services.operator_audit import record_operator_event
+from services.operator_manual_review import classify_operator_chat_intent, process_operator_chat_message
 from services.telegram_compare_flow import build_guest_compare_result
 from services.telegram_lead_intake import parse_map_links_from_text
 from services.telegram_response_router import classify_client_intent, classify_guest_intent
@@ -5013,6 +5015,60 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Для аккаунта пока не найден активный бизнес. Добавьте бизнес в кабинете LocalOS.",
                 reply_markup=_build_client_more_menu(),
             )
+            return
+        operator_intent = classify_operator_chat_intent(text)
+        if operator_intent == "manual_review_add_and_reply_generate":
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            try:
+                business_id = str(business_ctx.get("business_id") or "")
+                owner_id = str(business_ctx.get("user_id") or "")
+                record_operator_event(
+                    cursor,
+                    business_id=business_id,
+                    user_id=owner_id,
+                    event_type="operator_message_received",
+                    channel="telegram",
+                    status="received",
+                    input_summary={"message": text[:500]},
+                )
+                result = process_operator_chat_message(
+                    cursor,
+                    business_id=business_id,
+                    user_id=owner_id,
+                    message=text,
+                    channel="telegram",
+                )
+                record_operator_event(
+                    cursor,
+                    business_id=business_id,
+                    user_id=owner_id,
+                    event_type="operator_tool_executed",
+                    channel="telegram",
+                    action_key="review_replies_generate",
+                    status=str(result.get("status") or "blocked"),
+                    reason_code=",".join(result.get("blocked_reasons") or []) or None,
+                    input_summary={"intent": operator_intent},
+                    output_summary={"status": result.get("status"), "charged_credits": result.get("charged_credits")},
+                    metadata={
+                        "credit_charged": bool(result.get("credit_charged")),
+                        "paid_actions_performed": bool(result.get("credit_charged")),
+                        "external_writes_performed": False,
+                    },
+                )
+                conn.commit()
+                await update.message.reply_text(
+                    str(result.get("chat_response") or "Команда обработана."),
+                    reply_markup=_build_reviews_menu(),
+                )
+            except Exception:
+                conn.rollback()
+                await update.message.reply_text(
+                    "Не удалось обработать отзыв в LocalOS. Попробуйте ещё раз или откройте кабинет.",
+                    reply_markup=_build_reviews_menu(),
+                )
+            finally:
+                conn.close()
             return
         client_intent = classify_client_intent(text)
         if client_intent == "today":

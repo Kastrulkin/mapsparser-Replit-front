@@ -241,6 +241,45 @@ Sprint 14 adds usage-window enforcement to paid action preflight:
 
 Sprint 14 still does not call Apify, create parsequeue jobs, generate AI content, write to external providers, publish to maps, or enable production execution. It only tightens the safety gate before future paid runtime rollout.
 
+Sprint 15 adds manual review intake through Operator chat:
+
+- API endpoint: `POST /api/operator/chat`;
+- backend service: `services.operator_manual_review.process_operator_chat_message`;
+- supported intent: `manual_review_add_and_reply_generate`;
+- the review is saved into `externalbusinessreviews` with `source = manual_chat`;
+- a reply draft is saved into `reviewreplydrafts`;
+- the chat response returns the generated reply and reminds the user that map publication is manual.
+
+Sprint 16 exposes the same flow in the dashboard:
+
+- `/dashboard/operator` includes a chat-command textarea;
+- successful intake refreshes the Operator brief and event journal;
+- external review list responses include `reply_draft_id`, `reply_draft_text`, and `reply_draft_status`, so the review and draft can appear in the reviews UI.
+
+Sprint 17 charges credits for paid compute in the manual review flow:
+
+- action key: `review_replies_generate`;
+- fixed initial estimate: `1` credit;
+- flow: preflight balance check -> reserve -> generate reply -> finalize charge;
+- if generation fails, the reservation is released and no credit ledger charge is created;
+- if balance is insufficient, Operator returns `insufficient_balance` and `/dashboard/billing`.
+
+Sprint 18 connects the same manual review intent to Telegram:
+
+- the existing owner bot classifies review-add/reply messages;
+- Telegram uses the same `process_operator_chat_message` backend service;
+- no Telegram-specific bypass exists for credit checks or manual publication boundaries.
+
+Sprint 19 adds a gated map refresh enqueue boundary:
+
+- backend service: `services.operator_map_refresh`;
+- default flag: `OPERATOR_APIFY_REFRESH_ENABLED = False`;
+- when explicitly enabled in a controlled runtime, LocalOS can enqueue a `parsequeue` job with `source = apify_yandex`;
+- this boundary does not call Apify directly from chat and does not publish or write to maps;
+- provider actual cost settlement is still a later worker-result step and must not be claimed until implemented.
+
+Sprints 15-19 make the first practical chat-control workflow available while keeping external map writes manual. Real Apify refresh remains behind a disabled flag and actual provider-cost charging still requires a result-settlement step.
+
 Policy modes:
 
 - `ask_each_time`: legacy/default mode; payment consent is covered by available credits, so no extra prompt is required before generation or refresh.
@@ -401,6 +440,27 @@ After execution:
 ```text
 Готово. Списано 7 кредитов.
 Подготовил 4 ответа как черновики. Публикация в карты выполняется вручную.
+```
+
+### Add Manual Review And Reply
+
+User:
+
+```text
+Добавь новый отзыв в список и сгенерируй ответ:
+Попала в салон случайно - получила сертификат на массаж лица...
+```
+
+Operator:
+
+```text
+Добавил отзыв в список и подготовил черновик ответа.
+
+Ответ:
+Спасибо за такой подробный и тёплый отзыв...
+
+Списано кредитов: 1.
+Публикация в карты пока вручную: скопируйте ответ и вставьте его в кабинете карты.
 ```
 
 ### Refresh Reviews

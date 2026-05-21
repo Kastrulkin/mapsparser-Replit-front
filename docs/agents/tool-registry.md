@@ -120,6 +120,17 @@ Permission to draft never implies permission to publish, send, pay, delete, or c
 
 Current LocalOS review-reply flow is draft/manual for map providers. `reviews.publish_external` is a `planned_gap` unless a provider write integration is explicitly implemented, tested, approved, and documented. Operator should present copy/manual-publication actions instead of claiming it published replies to maps.
 
+Current Operator review intake uses these tool boundaries:
+
+| Tool/capability | Operator action class | Risk class | Side effect | Billing |
+| --- | --- | --- | --- | --- |
+| `operator.manual_review_intake` | `write_internal` plus `paid_compute` when reply generation is requested | `write_internal` | saves a manually provided review with `source = manual_chat` | no charge by itself |
+| `reviews.reply_draft.generate` | `paid_compute` | `draft_only` | saves a LocalOS reply draft; no external publication | charges credits through reservation and finalization |
+| `reviews.reply_draft.copy` | `manual_external` | `read_only` | user copies text manually | no extra charge after draft generation |
+| `maps.refresh.enqueue_apify_yandex` | `paid_external` | `write_internal` | may enqueue a `parsequeue` job only when the disabled runtime flag is explicitly enabled | actual provider-cost settlement is pending worker-result integration |
+
+The manual review flow is available from web Operator chat and Telegram, but both surfaces must route through the same backend service and credit checks. Publication to Yandex, Google, 2GIS, or other maps remains manual unless a provider write flow is later implemented and approved.
+
 ## Schema Rules
 
 Schemas should:

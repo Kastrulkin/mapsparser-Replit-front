@@ -62,7 +62,7 @@ def test_record_operator_event_rejects_unknown_event(monkeypatch) -> None:
         FakeCursor(),
         business_id="biz-1",
         user_id="user-1",
-        event_type="operator_tool_executed",
+        event_type="operator_unknown_event",
     )
 
     assert ledger_id is None
