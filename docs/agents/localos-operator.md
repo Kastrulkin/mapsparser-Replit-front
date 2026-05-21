@@ -167,6 +167,15 @@ Sprint 7 adds a disabled execution boundary:
 
 Sprint 7 still always blocks execution while the runtime flag is disabled. It reuses preflight, returns structured refusal data, and records observability only. It does not create parsequeue jobs, call Apify, reserve or charge credits, generate AI content, write to providers, or publish externally.
 
+Sprint 8 adds the execution adapter contract behind the disabled runtime:
+
+- backend service: `services.operator_paid_action_adapter`;
+- adapter stages: `estimate`, `reserve`, `execute`, `finalize`;
+- runtime mode: `internal_stub`;
+- the execute response includes `adapter_plan` and `adapter_result`.
+
+Sprint 8 still runs dry-run adapter stages only. It does not create parsequeue jobs, call Apify, reserve or charge credits, generate AI content, write to providers, or publish externally. The adapter exists so later sprints can replace the internal stub stage by stage without changing the Operator API contract.
+
 Policy modes:
 
 - `ask_each_time`: explain the cost and ask before every paid action.

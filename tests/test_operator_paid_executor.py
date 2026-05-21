@@ -45,6 +45,9 @@ def test_execution_attempt_blocks_when_runtime_disabled_after_ready_preflight() 
     assert execution["execution_status"] == "execution_disabled"
     assert "execution_runtime_disabled" in execution["blocked_reasons"]
     assert execution["preflight"]["status"] == "ready"
+    assert execution["adapter_plan"]["adapter_status"] == "planned"
+    assert execution["adapter_result"]["adapter_status"] == "dry_run_completed"
+    assert [stage["stage"] for stage in execution["adapter_result"]["stages"]] == ["estimate", "reserve", "execute", "finalize"]
     assert execution["paid_actions_performed"] is False
     assert execution["credit_reserved"] is False
     assert execution["credit_charged"] is False
@@ -69,6 +72,7 @@ def test_execution_attempt_keeps_preflight_blockers() -> None:
     assert execution["execution_status"] == "preflight_blocked"
     assert "explicit_consent_required" in execution["blocked_reasons"]
     assert "execution_runtime_disabled" not in execution["blocked_reasons"]
+    assert execution["adapter_result"]["adapter_status"] == "planned"
     assert execution["paid_actions_performed"] is False
 
 
@@ -87,4 +91,5 @@ def test_execution_attempt_rejects_unknown_action_without_side_effects() -> None
     assert execution["status"] == "blocked"
     assert execution["execution_status"] == "preflight_blocked"
     assert "unknown_action_key" in execution["blocked_reasons"]
+    assert execution["adapter_result"]["adapter_status"] == "unsupported_action"
     assert execution["external_calls_performed"] is False

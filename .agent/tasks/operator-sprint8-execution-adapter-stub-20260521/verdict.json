@@ -1,0 +1,47 @@
+{
+  "task_id": "operator-sprint8-execution-adapter-stub-20260521",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "The adapter contract defines estimate, reserve, execute, and finalize stages."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "The internal stub returns deterministic dry-run stage results for map_reviews_refresh."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "The disabled executor now returns adapter_plan and adapter_result."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "The Operator dashboard displays adapter runtime mode, status, and stage statuses."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "No paid, external, AI, parsequeue, credit, provider write, or publication path was added."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/services/operator_paid_action_adapter.py src/services/operator_paid_executor.py src/services/operator_paid_preflight.py src/services/operator_audit.py src/api/operator_api.py",
+    "python3 -m pytest -q tests/test_operator_paid_action_adapter.py tests/test_operator_paid_executor.py tests/test_operator_audit.py tests/test_operator_paid_preflight.py tests/test_operator_consent_policy.py tests/test_operator_paid_actions.py tests/test_operator_attention.py tests/test_telegram_dashboard_copy.py",
+    "npm run build",
+    "git diff --check"
+  ],
+  "artifacts_used": [
+    "src/services/operator_paid_action_adapter.py",
+    "src/services/operator_paid_executor.py",
+    "frontend/src/pages/dashboard/OperatorPage.tsx",
+    "tests/test_operator_paid_action_adapter.py",
+    "tests/test_operator_paid_executor.py",
+    "docs/agents/localos-operator.md",
+    ".agent/tasks/operator-sprint8-execution-adapter-stub-20260521/evidence.md",
+    ".agent/tasks/operator-sprint8-execution-adapter-stub-20260521/evidence.json"
+  ]
+}

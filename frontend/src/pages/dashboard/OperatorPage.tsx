@@ -140,6 +140,17 @@ type ExecutionAttempt = {
   external_writes_performed: boolean;
   parsequeue_jobs_created: boolean;
   ai_generation_performed: boolean;
+  adapter_result?: {
+    adapter_status: string;
+    runtime_mode: string;
+    dry_run: boolean;
+    idempotency_key: string;
+    stages: Array<{
+      stage: string;
+      status: string;
+      dry_run: boolean;
+    }>;
+  };
   next_step: string;
   copy: {
     summary: string;
@@ -755,6 +766,20 @@ export const OperatorPage = () => {
                             <div>
                               Списаний: нет; внешних вызовов: нет; parsequeue: нет; AI генерации: нет.
                             </div>
+                            {executionAttempt.adapter_result ? (
+                              <div className="mt-2 rounded-lg border border-rose-200 bg-white/60 px-3 py-2">
+                                <div className="font-semibold">
+                                  Adapter: {executionAttempt.adapter_result.runtime_mode}; {executionAttempt.adapter_result.adapter_status}
+                                </div>
+                                <div className="mt-1 flex flex-wrap gap-1.5">
+                                  {executionAttempt.adapter_result.stages.map((stage) => (
+                                    <span key={stage.stage} className="rounded-full bg-white px-2 py-1 text-xs font-medium text-rose-900 ring-1 ring-rose-200">
+                                      {stage.stage}: {stage.status}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null}
                           </div>
                         ) : null}
                       </div>

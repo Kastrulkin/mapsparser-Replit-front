@@ -252,6 +252,10 @@ def operator_paid_action_execute(action_key: str):
             metadata={
                 "estimated_credits": execution.get("estimated_credits"),
                 "balance_credits": execution.get("balance_credits"),
+                "adapter_status": (execution.get("adapter_result") or {}).get("adapter_status"),
+                "adapter_runtime_mode": (execution.get("adapter_result") or {}).get("runtime_mode"),
+                "adapter_dry_run": (execution.get("adapter_result") or {}).get("dry_run"),
+                "adapter_idempotency_key": (execution.get("adapter_result") or {}).get("idempotency_key"),
                 "blocked_reasons": execution.get("blocked_reasons"),
                 "warnings": execution.get("warnings"),
                 "execution_status": execution.get("execution_status"),

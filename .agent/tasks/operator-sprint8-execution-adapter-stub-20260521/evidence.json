@@ -1,0 +1,79 @@
+{
+  "task_id": "operator-sprint8-execution-adapter-stub-20260521",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Backend defines a shared paid-action execution adapter contract with stages estimate, reserve, execute, and finalize.",
+      "status": "PASS",
+      "proof": [
+        "src/services/operator_paid_action_adapter.py defines ADAPTER_STAGES.",
+        "build_paid_action_adapter_plan returns a structured adapter plan with stage details and idempotency key."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Backend includes an internal stub adapter for map_reviews_refresh that returns deterministic dry-run stage results.",
+      "status": "PASS",
+      "proof": [
+        "run_paid_action_adapter_stub converts planned stages to dry_run_completed.",
+        "tests/test_operator_paid_action_adapter.py covers the deterministic internal stub."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "The disabled Operator executor is wired through the adapter contract and exposes adapter plan/results in the existing execute response.",
+      "status": "PASS",
+      "proof": [
+        "src/services/operator_paid_executor.py returns adapter_plan and adapter_result.",
+        "Ready preflight attempts run the internal dry-run stub while real runtime remains disabled."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Web Operator displays adapter stage status in the blocked execute result.",
+      "status": "PASS",
+      "proof": [
+        "frontend/src/pages/dashboard/OperatorPage.tsx renders adapter runtime mode, adapter status, and stage chips."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Sprint 8 does not call Apify, create parsequeue jobs, reserve or charge credits, generate AI content, write to providers, or publish externally.",
+      "status": "PASS",
+      "proof": [
+        "Adapter side effects report all paid/external/AI/parsequeue flags false.",
+        "No Apify, parsequeue, credit ledger, AI generation, provider write, or publication path was added."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/services/operator_paid_action_adapter.py",
+    "src/services/operator_paid_executor.py",
+    "src/api/operator_api.py",
+    "frontend/src/pages/dashboard/OperatorPage.tsx",
+    "tests/test_operator_paid_action_adapter.py",
+    "tests/test_operator_paid_executor.py",
+    "docs/agents/localos-operator.md",
+    ".agent/tasks/operator-sprint8-execution-adapter-stub-20260521/spec.md",
+    ".agent/tasks/operator-sprint8-execution-adapter-stub-20260521/evidence.md",
+    ".agent/tasks/operator-sprint8-execution-adapter-stub-20260521/evidence.json",
+    ".agent/tasks/operator-sprint8-execution-adapter-stub-20260521/verdict.json",
+    ".agent/tasks/operator-sprint8-execution-adapter-stub-20260521/problems.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/services/operator_paid_action_adapter.py src/services/operator_paid_executor.py src/services/operator_paid_preflight.py src/services/operator_audit.py src/api/operator_api.py",
+    "python3 -m pytest -q tests/test_operator_paid_action_adapter.py tests/test_operator_paid_executor.py tests/test_operator_audit.py tests/test_operator_paid_preflight.py tests/test_operator_consent_policy.py tests/test_operator_paid_actions.py tests/test_operator_attention.py tests/test_telegram_dashboard_copy.py",
+    "cd frontend && npm run build",
+    "git diff --check",
+    "scripts/proof_loop.sh validate operator-sprint8-execution-adapter-stub-20260521"
+  ],
+  "known_gaps": [
+    "Sprint 8 intentionally uses only the internal dry-run adapter and does not execute paid actions, call Apify, create parsequeue jobs, reserve or charge credits, generate content, or publish externally."
+  ]
+}
