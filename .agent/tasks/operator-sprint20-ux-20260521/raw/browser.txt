@@ -1,0 +1,1 @@
+Browser sanity check: opened http://127.0.0.1:5173/dashboard/operator in Codex Browser. Local app rendered and redirected to login because no auth session was present; no blank screen after route load.

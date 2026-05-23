@@ -5,11 +5,13 @@ import {
   Bot,
   CheckCircle2,
   Clock3,
+  Copy,
   CreditCard,
   ExternalLink,
   Loader2,
   MessageSquareText,
   RefreshCw,
+  Send,
   ShieldCheck,
 } from 'lucide-react';
 
@@ -258,7 +260,17 @@ type OperatorChatResult = {
   reply_text?: string;
   billing_url?: string;
   charged_credits?: number;
+  credit_charged?: boolean;
+  manual_publication_only?: boolean;
   blocked_reasons?: string[];
+  ui_actions?: Array<{
+    action: string;
+    label: string;
+    href?: string;
+    payload?: {
+      text?: string;
+    };
+  }>;
   review?: {
     id?: string;
     source?: string;
@@ -313,6 +325,7 @@ export const OperatorPage = () => {
   );
   const [chatLoading, setChatLoading] = useState(false);
   const [chatResult, setChatResult] = useState<OperatorChatResult | null>(null);
+  const [copiedChatReply, setCopiedChatReply] = useState(false);
 
   const loadOperatorEvents = async () => {
     if (!currentBusinessId) {
@@ -469,6 +482,7 @@ export const OperatorPage = () => {
     setChatLoading(true);
     setConsentMessage(null);
     setChatResult(null);
+    setCopiedChatReply(false);
     try {
       const response = await api.post('/operator/chat', {
         business_id: currentBusinessId,
@@ -489,6 +503,18 @@ export const OperatorPage = () => {
       setChatLoading(false);
     }
   };
+
+  const copyChatReply = async () => {
+    const text = chatResult?.reply_text || chatResult?.draft?.generated_text || '';
+    if (!text.trim()) return;
+    await navigator.clipboard.writeText(text);
+    setCopiedChatReply(true);
+    window.setTimeout(() => setCopiedChatReply(false), 2000);
+  };
+
+  const chatReviewHref =
+    chatResult?.ui_actions?.find((item) => item.action === 'open_reviews')?.href ||
+    '/dashboard/card?tab=reviews&review_filter=needs_reply';
 
   const metrics = useMemo(() => {
     if (!brief) return [];
@@ -609,6 +635,38 @@ export const OperatorPage = () => {
                   </div>
                   <div className="mt-2 whitespace-pre-wrap">{chatResult.chat_response}</div>
                 </div>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                    <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Кредиты</div>
+                    <div className="mt-1 font-semibold text-slate-950">
+                      {chatResult.credit_charged ? `Списано ${chatResult.charged_credits || 0}` : 'Не списаны'}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                    <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Публикация</div>
+                    <div className="mt-1 font-semibold text-slate-950">
+                      {chatResult.manual_publication_only ? 'Вручную' : 'Нет внешнего действия'}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                    <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Статус</div>
+                    <div className="mt-1 font-semibold text-slate-950">{chatResult.status}</div>
+                  </div>
+                </div>
+                {chatResult.reply_text || chatResult.draft?.generated_text ? (
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button type="button" size="sm" onClick={() => void copyChatReply()}>
+                      <Copy className="mr-2 h-4 w-4" />
+                      {copiedChatReply ? 'Скопировано' : 'Скопировать ответ'}
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" asChild>
+                      <Link to={chatReviewHref}>
+                        Открыть отзывы
+                        <ExternalLink className="ml-2 h-3.5 w-3.5" />
+                      </Link>
+                    </Button>
+                  </div>
+                ) : null}
                 {chatResult.billing_url ? (
                   <Button type="button" variant="outline" size="sm" asChild>
                     <Link to={chatResult.billing_url}>Пополнить счёт</Link>
@@ -625,6 +683,9 @@ export const OperatorPage = () => {
                     <div className="font-semibold">Черновик ответа</div>
                     <div>Статус: {chatResult.draft.status || 'draft'}</div>
                     {chatResult.charged_credits ? <div>Списано кредитов: {chatResult.charged_credits}</div> : null}
+                    <div className="mt-1 text-slate-600">
+                      LocalOS сохранил черновик. Чтобы ответ появился на карте, скопируйте его и вставьте в кабинете площадки.
+                    </div>
                   </div>
                 ) : null}
               </div>

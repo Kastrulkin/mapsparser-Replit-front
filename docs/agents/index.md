@@ -29,6 +29,8 @@ Sprint 1 includes the first cached-data web intent at `/dashboard/operator`: `Ч
 
 Sprints 15-19 add the first practical chat-control workflow: a user can paste a new review into Operator, LocalOS saves it, generates a paid reply draft when credits are available, shows the draft in chat and in the reviews UI, and exposes the same intent through Telegram. The flow charges `review_replies_generate` as paid compute and keeps map publication manual. Sprint 19 adds only a disabled Apify map-refresh enqueue boundary; real provider execution and actual-cost settlement are still later work.
 
+Sprint 20 improves the web/manual UX for that flow: chat results now expose copy/open/billing actions, credit and publication status are shown separately, and saved LocalOS drafts in the reviews UI make the manual copy-to-map boundary explicit.
+
 The Operator model keeps one context, one permission system, one credit/usage ledger, one approval policy, and one audit trail across web and Telegram. Sprint 0 defines the product contract only; it does not imply that the web-chat runtime or Telegram Operator runtime is fully implemented.
 
 ## What Agents Must Not Assume

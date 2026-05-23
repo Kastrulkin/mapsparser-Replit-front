@@ -86,6 +86,7 @@ export default function ReviewReplyAssistant({
   const [loadingReviews, setLoadingReviews] = useState(false);
   const [generatingForReviewId, setGeneratingForReviewId] = useState<string | null>(null);
   const [generatedReplies, setGeneratedReplies] = useState<Record<string, string>>({});
+  const [copiedReplyId, setCopiedReplyId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [reviewFilter, setReviewFilter] = useState<ReviewFilterPreset>(initialFilter);
   const [reviewSort, setReviewSort] = useState<ReviewSortPreset>('newest');
@@ -293,6 +294,14 @@ export default function ReviewReplyAssistant({
   const handleCancelEdit = () => {
     setIsEditing(false);
     setEditableReply(reply);
+  };
+
+  const copyGeneratedReply = async (reviewId: string) => {
+    const text = generatedReplies[reviewId] || '';
+    if (!text.trim()) return;
+    await navigator.clipboard.writeText(text);
+    setCopiedReplyId(reviewId);
+    window.setTimeout(() => setCopiedReplyId(null), 2000);
   };
 
 
@@ -687,8 +696,11 @@ export default function ReviewReplyAssistant({
                       ) : (
                         <div className="flex flex-col h-full gap-2">
                           {reviewItem.reply_draft_id ? (
-                            <div className="rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs font-medium text-indigo-800">
-                              Черновик LocalOS: {reviewItem.reply_draft_status || 'draft'}
+                            <div className="rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs font-medium leading-5 text-indigo-800">
+                              <div>Черновик LocalOS: {reviewItem.reply_draft_status || 'draft'}</div>
+                              <div className="font-normal text-indigo-700">
+                                Публикация в карты вручную: скопируйте ответ и вставьте его в кабинете площадки.
+                              </div>
                             </div>
                           ) : null}
                           <Textarea
@@ -716,13 +728,16 @@ export default function ReviewReplyAssistant({
                             </Button>
                             {generatedReplies[reviewItem.id] && (
                               <Button
-                                onClick={() => navigator.clipboard.writeText(generatedReplies[reviewItem.id])}
+                                onClick={() => void copyGeneratedReply(reviewItem.id)}
                                 size="sm"
                                 variant="outline"
                                 className="bg-white border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg px-3"
-                                title="Copy"
+                                title="Скопировать ответ"
                               >
                                 <Copy className="w-4 h-4" />
+                                <span className="ml-2 hidden sm:inline">
+                                  {copiedReplyId === reviewItem.id ? 'Скопировано' : 'Скопировать'}
+                                </span>
                               </Button>
                             )}
                           </div>

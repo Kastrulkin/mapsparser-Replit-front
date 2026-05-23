@@ -127,6 +127,9 @@ def test_process_operator_chat_message_adds_review_draft_and_charges_credit() ->
     assert result["charged_credits"] == 1
     assert result["external_writes_performed"] is False
     assert "Публикация в карты пока вручную" in result["chat_response"]
+    assert result["ui_actions"][0]["action"] == "copy_reply"
+    assert result["ui_actions"][0]["payload"]["text"] == result["reply_text"]
+    assert result["ui_actions"][1]["href"] == "/dashboard/card?tab=reviews&review_filter=needs_reply"
     assert len(cursor.ledger_entries) == 1
     assert cursor.ledger_entries[0][2] == -1
 
@@ -145,6 +148,7 @@ def test_process_operator_chat_message_blocks_when_credits_are_missing() -> None
     assert result["status"] == "blocked"
     assert "insufficient_balance" in result["blocked_reasons"]
     assert result["billing_url"] == "/dashboard/billing"
+    assert result["ui_actions"][0]["action"] == "open_billing"
     assert "Пополните счёт" in result["chat_response"]
     assert cursor.review is None
     assert cursor.draft is None

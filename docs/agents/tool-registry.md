@@ -131,6 +131,12 @@ Current Operator review intake uses these tool boundaries:
 
 The manual review flow is available from web Operator chat and Telegram, but both surfaces must route through the same backend service and credit checks. Publication to Yandex, Google, 2GIS, or other maps remains manual unless a provider write flow is later implemented and approved.
 
+Web UI actions for this flow are presentation helpers, not new execution tools:
+
+- `copy_reply`: copies the saved/generated draft text for manual external publication;
+- `open_reviews`: opens the LocalOS reviews tab where the saved review and draft can be inspected;
+- `open_billing`: opens billing when the paid compute preflight blocks on insufficient credits.
+
 ## Schema Rules
 
 Schemas should:

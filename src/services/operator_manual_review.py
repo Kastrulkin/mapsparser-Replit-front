@@ -14,6 +14,7 @@ MANUAL_REVIEW_ACTION_KEY = "review_replies_generate"
 MANUAL_REVIEW_ESTIMATED_CREDITS = 1
 MANUAL_REVIEW_ACTUAL_CREDITS = 1
 BILLING_URL = "/dashboard/billing"
+REVIEWS_URL = "/dashboard/card?tab=reviews&review_filter=needs_reply"
 
 
 def _stable_id(*parts: Any) -> str:
@@ -101,6 +102,15 @@ def _default_reply_generator(prompt: str, *, business_id: str, user_id: str) -> 
         business_id=business_id,
         user_id=user_id,
     )
+
+
+def _build_ui_action(action: str, label: str, *, href: str = "", payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    return {
+        "action": action,
+        "label": label,
+        "href": href,
+        "payload": payload or {},
+    }
 
 
 def _insert_manual_review(
@@ -264,6 +274,9 @@ def process_operator_chat_message(
                 "blocked_reasons": blocked,
                 "chat_response": "Недостаточно кредитов для генерации ответа. Пополните счёт или выберите тариф: /dashboard/billing",
                 "billing_url": BILLING_URL,
+                "ui_actions": [
+                    _build_ui_action("open_billing", "Пополнить счёт", href=BILLING_URL),
+                ],
             }
         return {
             "status": "blocked",
@@ -394,6 +407,10 @@ def process_operator_chat_message(
         "external_calls_performed": False,
         "external_writes_performed": False,
         "manual_publication_only": True,
+        "ui_actions": [
+            _build_ui_action("copy_reply", "Скопировать ответ", payload={"text": reply_text}),
+            _build_ui_action("open_reviews", "Открыть отзывы", href=REVIEWS_URL),
+        ],
         "chat_response": "\n".join(response_lines),
         "blocked_reasons": [],
     }

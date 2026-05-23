@@ -1,0 +1,41 @@
+{
+  "task_id": "operator-sprint20-ux-20260521",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Completed manual review results include copy/open structured UI actions and tests verify them."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Insufficient balance still blocks and exposes billing action."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Operator web result panel shows status, credit, publication and action controls."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Reviews UI labels LocalOS drafts as manual-publication-only and copy feedback is present."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Docs describe Sprint 20 as UX/safety work only."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/services/operator_manual_review.py tests/test_operator_manual_review.py",
+    "python3 -m pytest -q tests/test_operator_manual_review.py tests/test_operator_paid_preflight.py tests/test_operator_credit_reservation.py tests/test_operator_audit.py",
+    "npm run build",
+    "git diff --check"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/operator-sprint20-ux-20260521/evidence.md",
+    ".agent/tasks/operator-sprint20-ux-20260521/evidence.json"
+  ]
+}

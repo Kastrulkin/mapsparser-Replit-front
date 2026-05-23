@@ -280,6 +280,16 @@ Sprint 19 adds a gated map refresh enqueue boundary:
 
 Sprints 15-19 make the first practical chat-control workflow available while keeping external map writes manual. Real Apify refresh remains behind a disabled flag and actual provider-cost charging still requires a result-settlement step.
 
+Sprint 20 improves the manual review workflow UX:
+
+- completed chat results include structured `ui_actions` for `copy_reply` and `open_reviews`;
+- insufficient-credit results include an `open_billing` action;
+- the web Operator result panel shows execution status, credit charge status, and manual-publication status separately;
+- the result panel exposes buttons to copy the generated reply and open the reviews tab;
+- the reviews UI labels LocalOS drafts with a manual-publication note and copy feedback.
+
+Sprint 20 still does not publish replies to external map providers, call Apify, or enable provider write support. It only makes the existing manual-copy workflow clearer and safer for users.
+
 Policy modes:
 
 - `ask_each_time`: legacy/default mode; payment consent is covered by available credits, so no extra prompt is required before generation or refresh.
