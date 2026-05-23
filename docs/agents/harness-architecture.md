@@ -133,11 +133,27 @@ The final response should include the stop reason when the task did not fully co
 
 ## Relationship To Current LocalOS Components
 
+- `AIAgents` are persona/chat configuration: name, prompt, tone, channel behavior, and conversation style. They are not the workflow runtime.
+- `AgentBlueprints` are the workflow runtime layer: versioned goals, inputs, ordered steps, artifacts, approvals, run history, and allowed capabilities.
 - `ActionOrchestrator` is the current execution and approval boundary for LocalOS/OpenClaw actions.
+- `AgentBlueprints` may reference an `AIAgent` as persona voice, but side effects still go only through `ActionOrchestrator`.
 - `agent_clients` and `agent_action_ledger` are the current Agent API security foundation.
 - `billing_ledger` records token/cost accounting for orchestrated actions.
 - `/localos-agent-policy.json` exposes a machine-readable policy summary.
 - [LocalOS Operator](localos-operator.md) is the planned web/Telegram control layer that will reuse the same harness boundary, consent policy, billing ledger, and audit model.
+
+```mermaid
+flowchart LR
+  User["Business user or Operator"] --> Blueprint["AgentBlueprint workflow runtime"]
+  Persona["AIAgent persona/chat voice"] --> Blueprint
+  Blueprint --> Run["agent_runs / steps / artifacts"]
+  Blueprint --> Approval["agent_approvals"]
+  Approval --> Orchestrator["ActionOrchestrator"]
+  Run --> Orchestrator
+  Orchestrator --> External["External send / publish / payment / destructive action"]
+```
+
+Approval boundary: external sends, publishing, payments, destructive changes, bulk mutations, and third-party writes require a human approval record before the orchestrator executes the action. A completed blueprint step can queue work, but it must not silently dispatch external side effects.
 
 ## Launch Gate
 

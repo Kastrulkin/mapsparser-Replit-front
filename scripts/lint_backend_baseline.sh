@@ -18,6 +18,7 @@ python3 -m py_compile \
   src/services/outreach_send_capability.py \
   src/api/operator_api.py \
   src/services/operator_review_reply_bulk.py \
+  scripts/smoke_operator_bulk_review_replies.py \
   src/api/growth_workflow_api.py \
   src/auth_encryption.py \
   tests/test_reports_api_routes.py \
