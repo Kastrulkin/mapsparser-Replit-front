@@ -10,9 +10,12 @@ python3 -m py_compile \
   src/api/admin_growth_api.py \
   src/api/business_types_api.py \
   src/api/reports_api.py \
+  src/api/agent_blueprints_api.py \
+  src/services/agent_blueprint_runner.py \
   src/api/growth_workflow_api.py \
   src/auth_encryption.py \
   tests/test_reports_api_routes.py \
+  tests/test_agent_blueprint_layer.py \
   tests/test_growth_workflow_routes.py \
   tests/test_security_runtime_config.py
 
@@ -23,6 +26,7 @@ import api.admin_growth_api
 import api.business_types_api
 import api.growth_workflow_api
 import api.reports_api
+import api.agent_blueprints_api
 
 rules = {
     "/api/download-report/<card_id>": "reports_api.download_report",
@@ -32,6 +36,10 @@ rules = {
     "/api/business/<business_id>/optimization-wizard": "growth_workflow_api.business_optimization_wizard",
     "/api/business/<business_id>/sprint": "growth_workflow_api.business_sprint",
     "/api/business-types": "business_types_api.get_business_types_public",
+    "/api/agent-blueprints/<blueprint_id>": "agent_blueprints_api.get_agent_blueprint",
+    "/api/agent-blueprints/<blueprint_id>/runs": "agent_blueprints_api.start_agent_blueprint_run",
+    "/api/agent-runs/<run_id>": "agent_blueprints_api.get_agent_run",
+    "/api/agent-runs/<run_id>/approvals/<approval_id>/approve": "agent_blueprints_api.approve_agent_run",
     "/api/business/<string:business_id>/stages": "growth_api.get_business_stages",
     "/api/admin/business-types": "admin_growth_api.get_business_types",
     "/api/admin/business-types/<type_id>": "admin_growth_api.delete_business_type",
@@ -45,6 +53,23 @@ for rule, endpoint in rules.items():
         raise SystemExit(f"{rule}: expected {endpoint}, got {actual}")
 
 print("OK: extracted routes are registered through their API blueprints")
+PY
+
+echo "[backend-lint] agent blueprint routes stay out of main.py"
+python3 - <<'PY'
+from pathlib import Path
+
+main_text = Path("src/main.py").read_text(encoding="utf-8")
+for marker in (
+    '@app.route("/api/agent-blueprints',
+    "@app.route('/api/agent-blueprints",
+    '@app.route("/api/agent-runs',
+    "@app.route('/api/agent-runs",
+):
+    if marker in main_text:
+        raise SystemExit(f"agent blueprint route still declared in main.py: {marker}")
+
+print("OK: agent blueprint routes are not declared in main.py")
 PY
 
 echo "[backend-lint] extracted growth routes stay out of main.py"

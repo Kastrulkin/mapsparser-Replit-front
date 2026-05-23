@@ -108,6 +108,7 @@ from api.admin_prospecting import (
 )
 from api.admin_industry_patterns_api import admin_industry_patterns_bp
 from api.agent_security_api import agent_security_bp
+from api.agent_blueprints_api import agent_blueprints_bp
 from api.average_ticket_api import average_ticket_bp
 from api.reports_api import reports_bp
 from api.operator_api import operator_bp
@@ -267,6 +268,7 @@ app.register_blueprint(content_plans_bp)
 app.register_blueprint(admin_prospecting_bp)
 app.register_blueprint(admin_industry_patterns_bp)
 app.register_blueprint(agent_security_bp)
+app.register_blueprint(agent_blueprints_bp)
 app.register_blueprint(average_ticket_bp)
 app.register_blueprint(reports_bp)
 app.register_blueprint(operator_bp)

@@ -98,6 +98,11 @@ const OperatorPage = lazy(() =>
     default: module.OperatorPage,
   })),
 );
+const AgentBlueprintsPage = lazy(() =>
+  import("./pages/dashboard/AgentBlueprintsPage").then((module) => ({
+    default: module.AgentBlueprintsPage,
+  })),
+);
 const Header = lazy(() => import("./components/Header"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const PublicPartnershipOfferPage = lazy(() => import("./pages/PublicPartnershipOfferPage"));
@@ -167,6 +172,7 @@ const AppShell = () => {
             <Route path="settings" element={<SettingsPage />} />
             <Route path="partnerships" element={<PartnershipSearchPage />} />
             <Route path="operator" element={<OperatorPage />} />
+            <Route path="agents" element={<AgentBlueprintsPage />} />
             <Route path="bookings" element={<BookingsPage />} />
             <Route path="chats" element={<ChatsPage />} />
             <Route path="network" element={<NetworkDashboardPage />} />

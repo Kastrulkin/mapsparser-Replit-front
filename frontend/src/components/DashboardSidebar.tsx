@@ -52,6 +52,15 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
         : 'Control LocalOS through one chat layer: briefs, actions, and safe next steps.',
     },
     {
+      id: 'agents',
+      label: language === 'ru' ? 'Агенты' : 'Agents',
+      icon: Sparkles,
+      path: '/dashboard/agents',
+      tooltip: language === 'ru'
+        ? 'Запускайте workflow agents с шагами, артефактами и ручными подтверждениями.'
+        : 'Run workflow agents with steps, artifacts, and manual approvals.',
+    },
+    {
       id: 'profile',
       label: t.dashboard.sidebar.profile,
       icon: User,
