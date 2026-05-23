@@ -1,0 +1,39 @@
+{
+  "task_id": "p2-superadmin-business-routes-decomposition-20260523",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Superadmin business routes are extracted into superadmin_business_api and route ownership tests pass."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "The extraction preserves route methods, auth checks, response payloads, and email delivery dependency."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "lint_backend_baseline.sh includes compile/import, ownership, and stale-main route guardrails."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "py_compile, focused pytest, security pytest, lint baseline, and git diff check passed locally."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/main.py src/api/superadmin_business_api.py tests/test_superadmin_business_routes.py",
+    "PYTHONPATH=src python3 -m pytest -q tests/test_superadmin_business_routes.py tests/test_auth_user_routes.py",
+    "PYTHONPATH=src python3 -m pytest -q tests/test_security_runtime_config.py tests/test_superadmin_business_routes.py",
+    "scripts/lint_backend_baseline.sh",
+    "git diff --check"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/p2-superadmin-business-routes-decomposition-20260523/raw/build.txt",
+    ".agent/tasks/p2-superadmin-business-routes-decomposition-20260523/raw/test-unit.txt",
+    ".agent/tasks/p2-superadmin-business-routes-decomposition-20260523/raw/test-integration.txt",
+    ".agent/tasks/p2-superadmin-business-routes-decomposition-20260523/raw/lint.txt"
+  ]
+}
