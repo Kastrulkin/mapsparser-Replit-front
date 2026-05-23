@@ -1,0 +1,67 @@
+{
+  "task_id": "p2-auth-routes-decomposition-20260523",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Auth/user routes are owned by auth_user_api blueprint and removed from main.py.",
+      "status": "PASS",
+      "proof": [
+        "src/api/auth_user_api.py defines /api/auth/me, /api/auth/logout, /api/users/profile",
+        "tests/test_auth_user_routes.py verifies route ownership",
+        "scripts/lint_backend_baseline.sh fails if these route markers return to src/main.py"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Existing behavior is preserved for extracted routes.",
+      "status": "PASS",
+      "proof": [
+        "Extracted handlers preserve URL paths, methods, auth checks, and response shapes from src/main.py"
+      ],
+      "gaps": [
+        "Live unauthenticated smoke is planned immediately after deploy"
+      ]
+    },
+    {
+      "id": "AC3",
+      "text": "Backend lint baseline includes auth/user route ownership guardrail.",
+      "status": "PASS",
+      "proof": [
+        "scripts/lint_backend_baseline.sh imports api.auth_user_api and checks endpoint ownership",
+        "scripts/lint_backend_baseline.sh scans src/main.py for extracted auth/user route markers"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Focused backend checks pass before commit/deploy.",
+      "status": "PASS",
+      "proof": [
+        "raw/build.txt",
+        "raw/test-unit.txt",
+        "raw/test-integration.txt",
+        "raw/lint.txt"
+      ],
+      "gaps": [
+        "No frontend changes in this step"
+      ]
+    }
+  ],
+  "changed_files": [
+    "src/api/auth_user_api.py",
+    "src/main.py",
+    "tests/test_auth_user_routes.py",
+    "scripts/lint_backend_baseline.sh"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/main.py src/api/auth_user_api.py tests/test_auth_user_routes.py",
+    "PYTHONPATH=src python3 -m pytest -q tests/test_auth_user_routes.py",
+    "PYTHONPATH=src python3 -m pytest -q tests/test_security_runtime_config.py tests/test_auth_user_routes.py",
+    "scripts/lint_backend_baseline.sh"
+  ],
+  "known_gaps": [
+    "/api/users/change-password is still not implemented; no backend route existed to decompose"
+  ]
+}

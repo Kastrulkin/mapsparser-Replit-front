@@ -112,6 +112,7 @@ from api.agent_blueprints_api import agent_blueprints_bp
 from api.average_ticket_api import average_ticket_bp
 from api.reports_api import reports_bp
 from api.operator_api import operator_bp
+from api.auth_user_api import auth_user_bp
 from core.agent_api_security import log_agent_discovery_event, should_track_discovery_path
 from services.prospecting_service import ProspectingService
 from core.card_audit import build_card_audit_snapshot, build_lead_card_preview_snapshot
@@ -272,6 +273,7 @@ app.register_blueprint(agent_blueprints_bp)
 app.register_blueprint(average_ticket_bp)
 app.register_blueprint(reports_bp)
 app.register_blueprint(operator_bp)
+app.register_blueprint(auth_user_bp)
 
 # Dev-safeguard: не допускаем дублирования /api/services/list
 try:
@@ -12803,171 +12805,6 @@ def login():
         if app.debug:
             payload["details"] = str(e)
         return jsonify(payload), 500
-
-@app.route('/api/auth/me', methods=['GET'])
-def get_user_info():
-    """Получить информацию о текущем пользователе"""
-    try:
-        # Проверяем авторизацию
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-
-        token = auth_header.split(' ')[1]
-        user_data = verify_session(token)
-        if not user_data:
-            return jsonify({"error": "Недействительный токен"}), 401
-
-        # Заблокированный пользователь — 403 (не 401)
-        if user_data.get('is_active') is False:
-            return jsonify({"error": "account_blocked", "message": "user is blocked"}), 403
-
-        # Получаем дополнительную информацию о пользователе
-        db = DatabaseManager()
-        # Безопасное получение user_id
-        user_id = None
-        if isinstance(user_data, dict):
-            user_id = user_data.get('user_id') or user_data.get('id')
-        elif hasattr(user_data, 'keys'):
-            # Это sqlite3.Row
-            if 'user_id' in user_data.keys():
-                user_id = user_data['user_id']
-            elif 'id' in user_data.keys():
-                user_id = user_data['id']
-
-        if not user_id:
-            db.close()
-            print(f"❌ Ошибка: не удалось определить user_id из user_data: {user_data}")
-            return jsonify({"error": "Не удалось определить ID пользователя"}), 500
-
-        print(f"🔍 DEBUG get_user_info: user_id = {user_id}")
-
-        is_superadmin = db.is_superadmin(user_id)
-
-        # Определяем, какие бизнесы показывать пользователю
-        businesses = []
-        if is_superadmin:
-            # Суперадмин видит все бизнесы
-            businesses = db.get_all_businesses()
-        elif db.is_network_owner(user_id):
-            # Владелец сети видит ТОЛЬКО бизнесы из своих сетей
-            businesses = db.get_businesses_by_network_owner(user_id)
-        else:
-            # Обычный пользователь видит только свои бизнесы
-            businesses = db.get_businesses_by_owner(user_id)
-
-        # Проверяем, есть ли у пользователя хотя бы один активный бизнес
-        # Если все бизнесы заблокированы, пользователь не может войти
-        if not is_superadmin and len(businesses) == 0:
-            db.close()
-            return jsonify({"error": "Все ваши бизнесы заблокированы. Обратитесь к администратору."}), 403
-
-        db.close()
-
-        # Безопасное получение данных пользователя
-        def safe_get(data, key, default=None):
-            if isinstance(data, dict):
-                return data.get(key, default)
-            elif hasattr(data, 'keys') and key in data.keys():
-                return data[key]
-            return default
-
-        return jsonify({
-            "success": True,
-            "user": {
-                "id": user_id,
-                "email": safe_get(user_data, 'email'),
-                "name": safe_get(user_data, 'name'),
-                "phone": safe_get(user_data, 'phone'),
-                "is_superadmin": is_superadmin
-            },
-            "businesses": businesses
-        })
-
-    except Exception as e:
-        logger.warning("User info endpoint failed: %s", type(e).__name__)
-        payload = {"error": "Ошибка получения информации о пользователе"}
-        if app.debug:
-            payload["details"] = str(e)
-        return jsonify(payload), 500
-
-@app.route('/api/auth/logout', methods=['POST'])
-def logout():
-    """Выход пользователя"""
-    try:
-        # Проверяем авторизацию
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-
-        token = auth_header.split(' ')[1]
-
-        # Удаляем сессию
-        from auth_system import logout_session
-        success = logout_session(token)
-
-        if success:
-            return jsonify({"success": True, "message": "Выход выполнен успешно"})
-        else:
-            return jsonify({"error": "Ошибка выхода"}), 500
-
-    except Exception as e:
-        print(f"❌ Ошибка выхода: {e}")
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/users/profile', methods=['PUT'])
-def update_user_profile():
-    """Обновить профиль пользователя"""
-    try:
-        # Проверяем авторизацию
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"error": "Требуется авторизация"}), 401
-
-        token = auth_header.split(' ')[1]
-
-        # Получаем пользователя по токену
-        from auth_system import verify_session
-        user = verify_session(token)
-        if not user:
-            return jsonify({"error": "Неверный токен"}), 401
-
-        # Получаем данные для обновления
-        data = request.get_json(silent=True) or {}
-        if not isinstance(data, dict):
-            return jsonify({"error": "Invalid JSON"}), 400
-
-        # Обновляем только разрешенные поля
-        updates = {}
-        if 'name' in data:
-            updates['name'] = data['name']
-        if 'phone' in data:
-            updates['phone'] = data['phone']
-
-        if not updates:
-            return jsonify({"error": "Нет данных для обновления"}), 400
-
-        # Обновляем в базе данных
-        db = DatabaseManager()
-        cursor = db.conn.cursor()
-
-        set_clause = ', '.join([f"{key} = %s" for key in updates.keys()])
-        values = list(updates.values()) + [user['user_id']]
-
-        cursor.execute(f"UPDATE Users SET {set_clause} WHERE id = %s", values)
-        db.conn.commit()
-        db.close()
-
-        # Возвращаем обновленные данные пользователя
-        updated_user = {**user, **updates}
-        return jsonify({
-            "success": True,
-            "user": updated_user
-        })
-
-    except Exception as e:
-        print(f"❌ Ошибка обновления профиля: {e}")
-        return jsonify({"error": str(e)}), 500
 
 # ===== SUPERADMIN API =====
 

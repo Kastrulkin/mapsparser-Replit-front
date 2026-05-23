@@ -11,6 +11,7 @@ python3 -m py_compile \
   src/api/business_types_api.py \
   src/api/reports_api.py \
   src/api/agent_blueprints_api.py \
+  src/api/auth_user_api.py \
   src/services/agent_blueprint_orchestrator.py \
   src/services/agent_blueprint_runner.py \
   src/services/outreach_send_capability.py \
@@ -20,6 +21,7 @@ python3 -m py_compile \
   src/auth_encryption.py \
   tests/test_reports_api_routes.py \
   tests/test_agent_blueprint_layer.py \
+  tests/test_auth_user_routes.py \
   tests/test_growth_workflow_routes.py \
   tests/test_security_runtime_config.py \
   tests/test_operator_review_reply_bulk.py
@@ -32,6 +34,7 @@ import api.business_types_api
 import api.growth_workflow_api
 import api.reports_api
 import api.agent_blueprints_api
+import api.auth_user_api
 
 rules = {
     "/api/download-report/<card_id>": "reports_api.download_report",
@@ -45,6 +48,9 @@ rules = {
     "/api/agent-blueprints/<blueprint_id>/runs": "agent_blueprints_api.start_agent_blueprint_run",
     "/api/agent-runs/<run_id>": "agent_blueprints_api.get_agent_run",
     "/api/agent-runs/<run_id>/approvals/<approval_id>/approve": "agent_blueprints_api.approve_agent_run",
+    "/api/auth/me": "auth_user_api.get_user_info",
+    "/api/auth/logout": "auth_user_api.logout",
+    "/api/users/profile": "auth_user_api.update_user_profile",
     "/api/business/<string:business_id>/stages": "growth_api.get_business_stages",
     "/api/admin/business-types": "admin_growth_api.get_business_types",
     "/api/admin/business-types/<type_id>": "admin_growth_api.delete_business_type",
@@ -75,6 +81,22 @@ for marker in (
         raise SystemExit(f"agent blueprint route still declared in main.py: {marker}")
 
 print("OK: agent blueprint routes are not declared in main.py")
+PY
+
+echo "[backend-lint] auth/user routes stay out of main.py"
+python3 - <<'PY'
+from pathlib import Path
+
+main_text = Path("src/main.py").read_text(encoding="utf-8")
+for marker in (
+    "/api/auth/me",
+    "/api/auth/logout",
+    "/api/users/profile",
+):
+    if marker in main_text:
+        raise SystemExit(f"auth/user route still owned by main.py: {marker}")
+
+print("OK: auth/user routes are not declared in main.py")
 PY
 
 echo "[backend-lint] agent blueprint capability guardrails"
