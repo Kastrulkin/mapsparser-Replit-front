@@ -340,6 +340,17 @@ Sprint 30 adds Telegram parity for bulk review reply generation:
 
 Sprint 30 does not bypass credits or publish replies to maps. Telegram is only another transport surface over the same guarded workflow.
 
+Sprint 31 adds Apify actual-cost settlement:
+
+- backend service: `services.operator_apify_settlement`;
+- provider actual cost is converted to credits with the configured Apify multiplier x10 and rounded up;
+- normal path finalizes the existing Operator reservation with the actual credit amount;
+- if actual cost exceeds the reserved amount, the reserved amount is charged through reservation finalization and the overage is written as a separate `credit_ledger` debit;
+- zero actual cost releases the reservation;
+- invalid cost, missing reservation, action mismatch, or insufficient overage balance blocks settlement.
+
+Sprint 31 does not call Apify or enqueue parsing jobs. It only defines the accounting boundary that a future parser/result handler can call after Apify returns actual cost.
+
 Sprint 14 still does not call Apify, create parsequeue jobs, generate AI content, write to external providers, publish to maps, or enable production execution. It only tightens the safety gate before future paid runtime rollout.
 
 Sprint 15 adds manual review intake through Operator chat:

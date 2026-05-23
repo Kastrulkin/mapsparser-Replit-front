@@ -1,0 +1,1 @@
+Not run: settlement is a narrow service boundary; future worker integration will provide integration coverage.

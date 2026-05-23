@@ -43,6 +43,8 @@ Sprint 29 connects `services_optimize` as a paid suggestion workflow. Operator r
 
 Sprint 30 adds Telegram parity for bulk review reply generation. The owner bot can accept `Подготовь ответы на отзывы`, call the same web Operator service, charge credits through the same path, and return draft answers for manual copy/paste publication.
 
+Sprint 31 adds the Apify actual-cost settlement boundary. When a future parser result includes provider cost, LocalOS can convert it to credits at x10, settle the reservation, and charge any overage through `credit_ledger` without running Apify from Operator itself.
+
 The Operator model keeps one context, one permission system, one credit/usage ledger, one approval policy, and one audit trail across web and Telegram. Sprint 0 defines the product contract only; it does not imply that the web-chat runtime or Telegram Operator runtime is fully implemented.
 
 ## What Agents Must Not Assume

@@ -1,0 +1,29 @@
+{
+  "task_id": "operator-sprint31-apify-actual-cost-settlement-20260523",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Apify actual cost settlement boundary",
+      "status": "PASS",
+      "proof": [
+        "tests/test_operator_apify_settlement.py"
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/services/operator_apify_settlement.py",
+    "tests/test_operator_apify_settlement.py",
+    "docs/agents/localos-operator.md",
+    "docs/agents/index.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/services/operator_apify_settlement.py",
+    "python3 -m pytest -q tests/test_operator_apify_settlement.py tests/test_operator_credit_reservation.py tests/test_operator_map_refresh.py",
+    "git diff --check"
+  ],
+  "known_gaps": [
+    "Not connected to Apify worker/result handler yet."
+  ]
+}
