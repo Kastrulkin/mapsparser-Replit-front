@@ -1,5 +1,6 @@
 from services.operator_review_reply_bulk import (
     classify_bulk_review_reply_intent,
+    format_bulk_review_reply_result_for_telegram,
     generate_review_reply_drafts_for_unanswered_reviews,
 )
 
@@ -188,3 +189,20 @@ def test_generate_review_reply_drafts_releases_when_all_generations_fail() -> No
     assert result["finalization_result"]["status"] == "released"
     assert len(result["drafts"]) == 0
     assert len(cursor.ledger_entries) == 0
+
+
+def test_formats_bulk_review_reply_result_for_telegram_with_manual_boundary() -> None:
+    text = format_bulk_review_reply_result_for_telegram(
+        {
+            "chat_response": "Подготовил черновики ответов: 2.",
+            "drafts": [
+                {"generated_text": "Спасибо за отзыв."},
+                {"generated_text": "Будем рады видеть вас снова."},
+            ],
+        }
+    )
+
+    assert "Ответ 1:" in text
+    assert "Спасибо за отзыв." in text
+    assert "Публикация в карты остаётся ручной" in text
+    assert "не публиковал" in text

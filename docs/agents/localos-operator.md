@@ -331,6 +331,15 @@ Sprint 29 turns `services_optimize` into a paid suggestion workflow:
 
 Sprint 29 does not update `userservices`, publish to providers, or mutate external accounts. It only saves LocalOS suggestions for later review.
 
+Sprint 30 adds Telegram parity for bulk review reply generation:
+
+- Telegram owner-bot detects `Подготовь ответы на отзывы` and similar commands;
+- it calls the same `services.operator_review_reply_bulk.generate_review_reply_drafts_for_unanswered_reviews` service used by web Operator;
+- the flow keeps the same preflight, reserve, charge/release, audit, and manual-publication behavior;
+- Telegram response includes generated drafts and repeats that map publication is manual copy/paste.
+
+Sprint 30 does not bypass credits or publish replies to maps. Telegram is only another transport surface over the same guarded workflow.
+
 Sprint 14 still does not call Apify, create parsequeue jobs, generate AI content, write to external providers, publish to maps, or enable production execution. It only tightens the safety gate before future paid runtime rollout.
 
 Sprint 15 adds manual review intake through Operator chat:

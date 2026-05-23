@@ -256,3 +256,25 @@ def generate_review_reply_drafts_for_unanswered_reviews(
         ],
         "blocked_reasons": [],
     }
+
+
+def format_bulk_review_reply_result_for_telegram(result: dict[str, Any]) -> str:
+    response = _clean_text(result.get("chat_response")) or "Команда обработана."
+    drafts = result.get("drafts") if isinstance(result.get("drafts"), list) else []
+    if not drafts:
+        return response
+    lines = [response]
+    for index, draft in enumerate(drafts[:5], start=1):
+        if not isinstance(draft, dict):
+            continue
+        text = _clean_text(draft.get("generated_text"))
+        if text:
+            lines.extend(["", f"Ответ {index}:", text])
+    lines.extend(
+        [
+            "",
+            "Публикация в карты остаётся ручной: скопируйте ответы и вставьте их в кабинете площадки.",
+            "LocalOS не публиковал ответы во внешние системы.",
+        ]
+    )
+    return "\n".join(lines)

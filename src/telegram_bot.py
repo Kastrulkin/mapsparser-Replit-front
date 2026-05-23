@@ -66,6 +66,11 @@ from services.telegram_dashboard import (
 )
 from services.operator_audit import record_operator_event
 from services.operator_manual_review import classify_operator_chat_intent, process_operator_chat_message
+from services.operator_review_reply_bulk import (
+    classify_bulk_review_reply_intent,
+    format_bulk_review_reply_result_for_telegram,
+    generate_review_reply_drafts_for_unanswered_reviews,
+)
 from services.telegram_compare_flow import build_guest_compare_result
 from services.telegram_lead_intake import parse_map_links_from_text
 from services.telegram_response_router import classify_client_intent, classify_guest_intent
@@ -5017,6 +5022,64 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
         operator_intent = classify_operator_chat_intent(text)
+        if classify_bulk_review_reply_intent(text):
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            try:
+                business_id = str(business_ctx.get("business_id") or "")
+                owner_id = str(business_ctx.get("user_id") or "")
+                record_operator_event(
+                    cursor,
+                    business_id=business_id,
+                    user_id=owner_id,
+                    event_type="operator_message_received",
+                    channel="telegram",
+                    status="received",
+                    input_summary={"message": text[:500]},
+                )
+                result = generate_review_reply_drafts_for_unanswered_reviews(
+                    cursor,
+                    business_id=business_id,
+                    user_id=owner_id,
+                    limit=5,
+                    channel="telegram",
+                )
+                record_operator_event(
+                    cursor,
+                    business_id=business_id,
+                    user_id=owner_id,
+                    event_type="operator_tool_executed",
+                    channel="telegram",
+                    action_key="review_replies_generate",
+                    status=str(result.get("status") or "blocked"),
+                    reason_code=",".join(result.get("blocked_reasons") or []) or None,
+                    input_summary={"intent": "bulk_review_replies_generate"},
+                    output_summary={
+                        "status": result.get("status"),
+                        "charged_credits": result.get("charged_credits"),
+                        "drafts_count": len(result.get("drafts") or []),
+                    },
+                    metadata={
+                        "credit_charged": bool(result.get("credit_charged")),
+                        "paid_actions_performed": bool(result.get("credit_charged")),
+                        "external_writes_performed": False,
+                        "manual_publication_only": True,
+                    },
+                )
+                conn.commit()
+                await update.message.reply_text(
+                    format_bulk_review_reply_result_for_telegram(result),
+                    reply_markup=_build_reviews_menu(),
+                )
+            except Exception:
+                conn.rollback()
+                await update.message.reply_text(
+                    "Не удалось подготовить ответы на отзывы. Попробуйте ещё раз или откройте кабинет.",
+                    reply_markup=_build_reviews_menu(),
+                )
+            finally:
+                conn.close()
+            return
         if operator_intent == "manual_review_add_and_reply_generate":
             conn = get_db_connection()
             cursor = conn.cursor()

@@ -1,0 +1,20 @@
+{
+  "task_id": "operator-sprint30-telegram-bulk-replies-20260523",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Telegram uses shared bulk review reply service and formatter."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/telegram_bot.py src/services/operator_review_reply_bulk.py",
+    "python3 -m pytest -q tests/test_operator_review_reply_bulk.py tests/test_operator_manual_review.py tests/test_telegram_dashboard_copy.py tests/test_telegram_response_router.py",
+    "git diff --check"
+  ],
+  "artifacts_used": [
+    "raw/build.txt",
+    "raw/test-unit.txt"
+  ]
+}
