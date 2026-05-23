@@ -126,6 +126,7 @@ Current Operator review intake uses these tool boundaries:
 | --- | --- | --- | --- | --- |
 | `operator.manual_review_intake` | `write_internal` plus `paid_compute` when reply generation is requested | `write_internal` | saves a manually provided review with `source = manual_chat` | no charge by itself |
 | `reviews.reply_draft.generate` | `paid_compute` | `draft_only` | saves a LocalOS reply draft; no external publication | charges credits through reservation and finalization |
+| `reviews.reply_draft.generate_bulk` | `paid_compute` | `draft_only` plus `write_internal` | saves LocalOS reply drafts for stored unanswered reviews; no external publication | charges credits per successfully created draft |
 | `reviews.reply_draft.copy` | `manual_external` | `read_only` | user copies text manually | no extra charge after draft generation |
 | `reviews.reply_draft.mark_manual_published` | `manual_external` | `write_internal` | marks the LocalOS draft as published manually after the user copied and pasted it outside LocalOS | no extra charge after draft generation |
 | `operator.inbox.read` | `free_cached` | `read_only` | returns a scoped queue of review/content/partnership actions and UI helpers | no charge |

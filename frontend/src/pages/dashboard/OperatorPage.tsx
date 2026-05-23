@@ -284,6 +284,17 @@ type OperatorChatResult = {
     status?: string;
     generated_text?: string;
   };
+  drafts?: Array<{
+    id?: string;
+    review_id?: string;
+    status?: string;
+    generated_text?: string;
+  }>;
+  reviews_found?: number;
+  failures?: Array<{
+    review_id?: string;
+    reason?: string;
+  }>;
 };
 
 type OperatorInboxItem = {
@@ -365,6 +376,7 @@ export const OperatorPage = () => {
   const [chatResult, setChatResult] = useState<OperatorChatResult | null>(null);
   const [copiedChatReply, setCopiedChatReply] = useState(false);
   const [copiedInboxItemId, setCopiedInboxItemId] = useState<string | null>(null);
+  const [bulkGeneratingKey, setBulkGeneratingKey] = useState<string | null>(null);
   const [manualPublishDraftId, setManualPublishDraftId] = useState<string | null>(null);
   const [manualPublishMessage, setManualPublishMessage] = useState<string | null>(null);
 
@@ -578,6 +590,41 @@ export const OperatorPage = () => {
     window.setTimeout(() => setCopiedInboxItemId(null), 2000);
   };
 
+  const copyDraftText = async (draft: { id?: string; generated_text?: string }) => {
+    const text = draft.generated_text || '';
+    if (!text.trim() || !draft.id) return;
+    await navigator.clipboard.writeText(text);
+    setCopiedInboxItemId(draft.id);
+    window.setTimeout(() => setCopiedInboxItemId(null), 2000);
+  };
+
+  const generateReviewReplies = async () => {
+    if (!currentBusinessId) return;
+    setBulkGeneratingKey('review_replies_generate');
+    setConsentMessage(null);
+    setChatResult(null);
+    try {
+      const response = await api.post('/operator/review-replies/generate', {
+        business_id: currentBusinessId,
+        limit: 5,
+      });
+      const result = response.data.operator_result || null;
+      setChatResult(result);
+      await loadBrief();
+      await loadInbox();
+      await loadOperatorEvents();
+    } catch (err) {
+      setChatResult({
+        status: 'blocked',
+        intent: 'bulk_review_replies_generate',
+        chat_response: err instanceof Error ? err.message : 'Не удалось сгенерировать ответы',
+        blocked_reasons: ['operator_bulk_generation_failed'],
+      });
+    } finally {
+      setBulkGeneratingKey(null);
+    }
+  };
+
   const markManualPublished = async (draftId: string | undefined) => {
     if (!currentBusinessId || !draftId) return;
     setManualPublishDraftId(draftId);
@@ -787,6 +834,37 @@ export const OperatorPage = () => {
                     </Button>
                   </div>
                 ) : null}
+                {chatResult.drafts?.length ? (
+                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                    <div className="font-semibold">Черновики ответов</div>
+                    <div className="mt-1 text-slate-600">
+                      Создано: {chatResult.drafts.length}. Публикация в карты выполняется вручную.
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {chatResult.drafts.map((draft) => (
+                        <div key={draft.id || draft.review_id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                          <div className="whitespace-pre-wrap text-slate-700">{draft.generated_text}</div>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <Button type="button" size="sm" onClick={() => void copyDraftText(draft)}>
+                              <Copy className="mr-2 h-4 w-4" />
+                              {copiedInboxItemId === draft.id ? 'Скопировано' : 'Скопировать'}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void markManualPublished(draft.id)}
+                              disabled={!draft.id || manualPublishDraftId === draft.id}
+                            >
+                              {manualPublishDraftId === draft.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                              Отметить вручную
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : (
               <p className="mt-3 text-sm leading-6 text-slate-600">
@@ -914,6 +992,18 @@ export const OperatorPage = () => {
                           <div className="mt-1 text-xs leading-5 text-slate-600">
                             {offer.description} Оценка: {offer.estimated_credits ?? 'по факту'} кредит.
                           </div>
+                          {offer.action_key === 'review_replies_generate' ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="mt-2"
+                              onClick={() => void generateReviewReplies()}
+                              disabled={bulkGeneratingKey === offer.action_key || !currentBusinessId}
+                            >
+                              {bulkGeneratingKey === offer.action_key ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquareText className="mr-2 h-4 w-4" />}
+                              Подготовить ответы
+                            </Button>
+                          ) : null}
                         </div>
                       ))}
                     </div>

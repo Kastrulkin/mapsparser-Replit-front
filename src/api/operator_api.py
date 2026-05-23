@@ -14,6 +14,7 @@ from services.operator_manual_review import process_operator_chat_message
 from services.operator_manual_publish import mark_review_reply_draft_manual_published
 from services.operator_paid_executor import build_paid_action_execution_attempt
 from services.operator_paid_preflight import build_paid_action_preflight
+from services.operator_review_reply_bulk import classify_bulk_review_reply_intent, generate_review_reply_drafts_for_unanswered_reviews
 
 
 operator_bp = Blueprint("operator_api", __name__, url_prefix="/api/operator")
@@ -366,16 +367,26 @@ def operator_chat():
             input_summary={"message": message[:500]},
             output_summary={"channel": "web"},
         )
-        result = process_operator_chat_message(
-            cursor,
-            business_id=business_id,
-            user_id=user_id,
-            message=message,
-            channel="web",
-        )
+        if classify_bulk_review_reply_intent(message):
+            result = generate_review_reply_drafts_for_unanswered_reviews(
+                cursor,
+                business_id=business_id,
+                user_id=user_id,
+                limit=payload.get("limit") or 5,
+                channel="web",
+            )
+        else:
+            result = process_operator_chat_message(
+                cursor,
+                business_id=business_id,
+                user_id=user_id,
+                message=message,
+                channel="web",
+            )
         status = str(result.get("status") or "blocked")
         review = result.get("review") if isinstance(result.get("review"), dict) else {}
         draft = result.get("draft") if isinstance(result.get("draft"), dict) else {}
+        drafts = result.get("drafts") if isinstance(result.get("drafts"), list) else []
         finalization = result.get("finalization_result") if isinstance(result.get("finalization_result"), dict) else {}
         if review:
             record_operator_event(
@@ -400,6 +411,93 @@ def operator_chat():
                 output_summary={"draft_id": draft.get("id")},
                 metadata={"draft_id": draft.get("id"), "external_writes_performed": False},
             )
+        for bulk_draft in drafts:
+            if not isinstance(bulk_draft, dict):
+                continue
+            record_operator_event(
+                cursor,
+                business_id=business_id,
+                user_id=user_id,
+                event_type="operator_draft_created",
+                action_key="review_replies_generate",
+                status="completed",
+                input_summary={"review_id": bulk_draft.get("review_id")},
+                output_summary={"draft_id": bulk_draft.get("id")},
+                metadata={"draft_id": bulk_draft.get("id"), "external_writes_performed": False},
+            )
+        if finalization:
+            record_operator_event(
+                cursor,
+                business_id=business_id,
+                user_id=user_id,
+                event_type="operator_usage_charged",
+                action_key="review_replies_generate",
+                status=str(finalization.get("status") or status),
+                input_summary={"action_key": "review_replies_generate"},
+                output_summary={
+                    "charge_credits": finalization.get("charge_credits"),
+                    "release_credits": finalization.get("release_credits"),
+                },
+                metadata={
+                    "credit_charged": bool(finalization.get("side_effects", {}).get("credit_charged")),
+                    "paid_actions_performed": bool(finalization.get("side_effects", {}).get("credit_charged")),
+                    "external_writes_performed": False,
+                },
+            )
+        db.conn.commit()
+        return jsonify({"success": status == "completed", "operator_result": result})
+    except Exception:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+    finally:
+        db.close()
+
+
+@operator_bp.route("/review-replies/generate", methods=["POST"])
+def operator_review_replies_generate():
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    business_id = str(payload.get("business_id") or "").strip()
+    if not business_id:
+        return jsonify({"success": False, "error": "business_id обязателен"}), 400
+
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        if not has_access:
+            status_code = 403 if owner_id else 404
+            message = "Нет доступа" if owner_id else "Бизнес не найден"
+            return jsonify({"success": False, "error": message}), status_code
+
+        user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        result = generate_review_reply_drafts_for_unanswered_reviews(
+            cursor,
+            business_id=business_id,
+            user_id=user_id,
+            limit=payload.get("limit") or 5,
+            channel="web",
+        )
+        status = str(result.get("status") or "blocked")
+        drafts = result.get("drafts") if isinstance(result.get("drafts"), list) else []
+        for draft in drafts:
+            if not isinstance(draft, dict):
+                continue
+            record_operator_event(
+                cursor,
+                business_id=business_id,
+                user_id=user_id,
+                event_type="operator_draft_created",
+                action_key="review_replies_generate",
+                status="completed",
+                input_summary={"review_id": draft.get("review_id")},
+                output_summary={"draft_id": draft.get("id")},
+                metadata={"draft_id": draft.get("id"), "external_writes_performed": False},
+            )
+        finalization = result.get("finalization_result") if isinstance(result.get("finalization_result"), dict) else {}
         if finalization:
             record_operator_event(
                 cursor,

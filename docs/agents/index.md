@@ -33,6 +33,8 @@ Sprint 20 improves the web/manual UX for that flow: chat results now expose copy
 
 Sprints 21-25 add the Operator Inbox and manual completion workflow: the dashboard now has a unified queue for review/content/partnership actions, paid generation offers are shown through one registry, Telegram uses the same manual review intake core, and users can mark a copied review reply as manually published without LocalOS writing to external maps.
 
+Sprint 26 turns the `review_replies_generate` offer into a real paid draft action for already saved unanswered reviews. Operator can prepare up to five LocalOS reply drafts, charge one credit per successfully created draft, show the result in chat, and keep publication to maps as manual copy/paste.
+
 The Operator model keeps one context, one permission system, one credit/usage ledger, one approval policy, and one audit trail across web and Telegram. Sprint 0 defines the product contract only; it does not imply that the web-chat runtime or Telegram Operator runtime is fully implemented.
 
 ## What Agents Must Not Assume

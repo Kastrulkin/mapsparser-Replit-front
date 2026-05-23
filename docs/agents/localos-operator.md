@@ -281,6 +281,20 @@ Sprint 25 adds the manual publish tracking workflow:
 
 This endpoint updates LocalOS state only. It does not publish to Yandex, Google, 2GIS, or any other third-party system.
 
+Sprint 26 adds paid bulk generation for stored unanswered reviews:
+
+- backend service: `services.operator_review_reply_bulk`;
+- API endpoint: `POST /api/operator/review-replies/generate`;
+- chat intent: `Подготовь ответы на отзывы`;
+- the flow reads already saved `externalbusinessreviews` only;
+- it skips reviews that already have an active LocalOS reply draft;
+- it reserves and charges credits through the Operator paid-compute path;
+- initial pricing is `1` credit per successfully created draft;
+- generated drafts are saved in `reviewreplydrafts`;
+- the response shows charged credits and keeps map publication manual.
+
+Sprint 26 still does not refresh maps, call Apify, publish to Yandex/Google/2GIS, or send any response on behalf of the business. It only creates LocalOS drafts for manual copy/paste publication.
+
 Sprint 14 still does not call Apify, create parsequeue jobs, generate AI content, write to external providers, publish to maps, or enable production execution. It only tightens the safety gate before future paid runtime rollout.
 
 Sprint 15 adds manual review intake through Operator chat:

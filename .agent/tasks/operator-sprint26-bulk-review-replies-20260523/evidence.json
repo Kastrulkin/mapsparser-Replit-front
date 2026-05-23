@@ -1,0 +1,72 @@
+{
+  "task_id": "operator-sprint26-bulk-review-replies-20260523",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Operator can generate reply drafts for already stored unanswered reviews without refreshing maps or writing to external providers.",
+      "status": "PASS",
+      "proof": [
+        "Added src/services/operator_review_reply_bulk.py",
+        "Bulk flow reads externalbusinessreviews, saves reviewreplydrafts, and reports no external calls or writes."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "The bulk generation path uses paid compute preflight, reserve, generate, finalize charge, and release on total failure.",
+      "status": "PASS",
+      "proof": [
+        "Service calls existing Operator paid compute credit services.",
+        "tests/test_operator_review_reply_bulk.py covers charge and release paths."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Insufficient credits block the action and return billing path.",
+      "status": "PASS",
+      "proof": [
+        "Insufficient balance test returns /dashboard/billing and creates no drafts."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Web Operator exposes bulk review reply generation and shows created drafts.",
+      "status": "PASS",
+      "proof": [
+        "OperatorPage adds review_replies_generate launch button and multiple-draft rendering.",
+        "POST /api/operator/review-replies/generate endpoint added."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Docs describe Sprint 26 without unsupported provider-write claims.",
+      "status": "PASS",
+      "proof": [
+        "Updated LocalOS Operator docs, tool registry, and agent index."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/services/operator_review_reply_bulk.py",
+    "src/api/operator_api.py",
+    "frontend/src/pages/dashboard/OperatorPage.tsx",
+    "tests/test_operator_review_reply_bulk.py",
+    "docs/agents/localos-operator.md",
+    "docs/agents/index.md",
+    "docs/agents/tool-registry.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/services/operator_review_reply_bulk.py src/services/operator_manual_review.py src/api/operator_api.py",
+    "python3 -m pytest -q tests/test_operator_review_reply_bulk.py tests/test_operator_manual_review.py tests/test_operator_inbox.py tests/test_operator_paid_preflight.py tests/test_operator_credit_reservation.py tests/test_operator_paid_actions.py tests/test_operator_paid_executor.py tests/test_operator_map_refresh.py tests/test_operator_audit.py tests/test_telegram_dashboard_copy.py tests/test_telegram_response_router.py",
+    "cd frontend && npm run build",
+    "git diff --check"
+  ],
+  "known_gaps": [
+    "News generation, social post generation, service optimization execution, Apify cost settlement, and external map publication remain future work."
+  ]
+}

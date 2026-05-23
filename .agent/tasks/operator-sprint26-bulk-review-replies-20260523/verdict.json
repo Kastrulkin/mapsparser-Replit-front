@@ -1,0 +1,43 @@
+{
+  "task_id": "operator-sprint26-bulk-review-replies-20260523",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Bulk generation uses stored LocalOS reviews and creates local drafts only."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Credit preflight, reservation, charge, and release paths are implemented and tested."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Insufficient balance blocks with billing path."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Web Operator can trigger the action and render multiple draft results."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Docs record the manual-publication boundary and future gaps."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/services/operator_review_reply_bulk.py src/services/operator_manual_review.py src/api/operator_api.py",
+    "python3 -m pytest -q tests/test_operator_review_reply_bulk.py tests/test_operator_manual_review.py tests/test_operator_inbox.py tests/test_operator_paid_preflight.py tests/test_operator_credit_reservation.py tests/test_operator_paid_actions.py tests/test_operator_paid_executor.py tests/test_operator_map_refresh.py tests/test_operator_audit.py tests/test_telegram_dashboard_copy.py tests/test_telegram_response_router.py",
+    "cd frontend && npm run build",
+    "git diff --check"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/operator-sprint26-bulk-review-replies-20260523/evidence.md",
+    ".agent/tasks/operator-sprint26-bulk-review-replies-20260523/evidence.json",
+    ".agent/tasks/operator-sprint26-bulk-review-replies-20260523/raw/test-unit.txt",
+    ".agent/tasks/operator-sprint26-bulk-review-replies-20260523/raw/test-integration.txt"
+  ]
+}
