@@ -45,6 +45,8 @@ Sprint 30 adds Telegram parity for bulk review reply generation. The owner bot c
 
 Sprint 31 adds the Apify actual-cost settlement boundary. When a future parser result includes provider cost, LocalOS can convert it to credits at x10, settle the reservation, and charge any overage through `credit_ledger` without running Apify from Operator itself.
 
+Sprint 32 adds the `Проверь новые отзывы` command. Operator now routes it into the existing read-only map-refresh boundary, reports the latest saved review snapshot when refresh is disabled, and points the user to bulk reply generation after refresh.
+
 The Operator model keeps one context, one permission system, one credit/usage ledger, one approval policy, and one audit trail across web and Telegram. Sprint 0 defines the product contract only; it does not imply that the web-chat runtime or Telegram Operator runtime is fully implemented.
 
 ## What Agents Must Not Assume

@@ -351,6 +351,16 @@ Sprint 31 adds Apify actual-cost settlement:
 
 Sprint 31 does not call Apify or enqueue parsing jobs. It only defines the accounting boundary that a future parser/result handler can call after Apify returns actual cost.
 
+Sprint 32 adds the fresh-review refresh command:
+
+- backend service: `services.operator_fresh_reviews`;
+- web chat intent examples: `Проверь новые отзывы`, `Обнови отзывы`;
+- the flow captures the latest saved review snapshot, calls the read-only map-refresh enqueue boundary, and returns either queued status or a blocked explanation;
+- when the refresh runtime flag is disabled, Operator shows the latest saved review counts instead of pretending fresh data was checked;
+- after a queued refresh, Operator suggests the next manual command: `подготовь ответы на отзывы`.
+
+Sprint 32 does not call Apify directly, settle actual provider cost, publish replies, or write to external map providers. It only routes the user command into the existing read-only refresh boundary.
+
 Sprint 14 still does not call Apify, create parsequeue jobs, generate AI content, write to external providers, publish to maps, or enable production execution. It only tightens the safety gate before future paid runtime rollout.
 
 Sprint 15 adds manual review intake through Operator chat:

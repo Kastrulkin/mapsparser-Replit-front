@@ -1,0 +1,30 @@
+{
+  "task_id": "operator-sprint32-fresh-reviews-refresh-20260523",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Fresh reviews command routes to read-only refresh boundary",
+      "status": "PASS",
+      "proof": [
+        "tests/test_operator_fresh_reviews.py"
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/services/operator_fresh_reviews.py",
+    "src/api/operator_api.py",
+    "tests/test_operator_fresh_reviews.py",
+    "docs/agents/localos-operator.md",
+    "docs/agents/index.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/services/operator_fresh_reviews.py src/api/operator_api.py",
+    "python3 -m pytest -q tests/test_operator_fresh_reviews.py tests/test_operator_map_refresh.py tests/test_operator_review_reply_bulk.py tests/test_operator_inbox.py",
+    "git diff --check"
+  ],
+  "known_gaps": [
+    "Apify runtime remains behind existing disabled flag; actual-cost settlement is separate Sprint 31 boundary."
+  ]
+}

@@ -9,6 +9,7 @@ from database_manager import DatabaseManager
 from services.operator_audit import list_operator_events, record_operator_event
 from services.operator_consent_policy import list_consent_policies, upsert_consent_policy
 from services.operator_attention import build_attention_brief
+from services.operator_fresh_reviews import classify_fresh_reviews_intent, refresh_reviews_from_operator
 from services.operator_inbox import build_operator_inbox
 from services.operator_manual_review import process_operator_chat_message
 from services.operator_manual_publish import mark_review_reply_draft_manual_published
@@ -378,6 +379,14 @@ def operator_chat():
                 limit=payload.get("limit") or 5,
                 channel="web",
             )
+        elif classify_fresh_reviews_intent(message):
+            result = refresh_reviews_from_operator(
+                cursor,
+                business_id=business_id,
+                user_id=user_id,
+                explicit_url=payload.get("url"),
+                channel="web",
+            )
         elif classify_services_optimize_intent(message):
             result = optimize_services_from_operator(
                 cursor,
@@ -523,7 +532,7 @@ def operator_chat():
                 },
             )
         db.conn.commit()
-        return jsonify({"success": status == "completed", "operator_result": result})
+        return jsonify({"success": status in {"completed", "queued"}, "operator_result": result})
     except Exception:
         db.conn.rollback()
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
