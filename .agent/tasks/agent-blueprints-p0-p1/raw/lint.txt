@@ -1,0 +1,13 @@
+No lint output captured yet.
+scripts/lint_backend_baseline.sh
+
+Result:
+- py_compile focused backend modules: passed
+- import and route ownership smoke: passed
+- agent blueprint routes stay out of main.py: passed
+- agent blueprint capability guardrails: passed
+- extracted growth routes stay out of main.py: passed
+- growth stage duplicate route smoke: passed
+- admin business-type duplicate route smoke: passed
+- runtime SQL placeholder scan: passed
+- growth workflow SQL placeholder scan: passed

@@ -80,6 +80,49 @@ def test_default_supervised_outreach_template_has_approval_gates():
     assert steps[5]["requires_approval"] is True
 
 
+def test_agent_blueprint_api_guards_version_blueprint_mismatch():
+    api_source = Path("src/api/agent_blueprints_api.py").read_text(encoding="utf-8")
+
+    assert "VERSION_BLUEPRINT_MISMATCH" in api_source
+    assert "_load_blueprint_version_for_blueprint" in api_source
+    assert "build_agent_blueprint_orchestrator" in api_source
+
+
+def test_outreach_send_batch_handler_queues_approved_drafts_without_external_dispatch(monkeypatch):
+    from services import outreach_send_capability
+
+    connection = FakeOutreachConnection(
+        [
+            {
+                "id": "draft1",
+                "lead_id": "lead1",
+                "channel": "email",
+                "email": "owner@example.com",
+            }
+        ]
+    )
+    monkeypatch.setattr(outreach_send_capability, "get_db_connection", lambda: connection)
+
+    result = outreach_send_capability.handle_outreach_send_batch(
+        {
+            "tenant_id": "biz1",
+            "actor": {"user_id": "user1"},
+            "payload": {"draft_ids": ["draft1"], "daily_limit": 99},
+        },
+        {"user_id": "user1"},
+    )
+
+    output = result["result"]
+    assert output["status"] == "queued_for_dispatch"
+    assert output["queue_count"] == 1
+    assert output["draft_ids"] == ["draft1"]
+    assert output["daily_limit"] == 10
+    assert output["external_dispatch_performed"] is False
+    assert connection.committed is True
+    assert any(item["kind"] == "batch" and item["status"] == "approved" for item in connection.inserted)
+    assert any(item["kind"] == "queue" and item["draft_id"] == "draft1" for item in connection.inserted)
+
+
 def test_runner_stops_on_first_approval_step():
     from services.agent_blueprint_runner import AgentBlueprintRunner, default_supervised_outreach_version_payload
 
@@ -205,6 +248,88 @@ class FakeCursor:
             self.last_results = [item for item in self.tables["agent_approvals"].values() if item["run_id"] == run_id]
             return None
         raise AssertionError(f"Unhandled SQL in fake cursor: {query}")
+
+    def fetchone(self):
+        return self.last_result
+
+    def fetchall(self):
+        return self.last_results
+
+
+class FakeOutreachConnection:
+    def __init__(self, draft_rows):
+        self.cursor_instance = FakeOutreachCursor(draft_rows)
+        self.inserted = self.cursor_instance.inserted
+        self.committed = False
+        self.rolled_back = False
+        self.closed = False
+
+    def cursor(self):
+        return self.cursor_instance
+
+    def commit(self):
+        self.committed = True
+
+    def rollback(self):
+        self.rolled_back = True
+
+    def close(self):
+        self.closed = True
+
+
+class FakeOutreachCursor:
+    def __init__(self, draft_rows):
+        self.draft_rows = draft_rows
+        self.last_result = None
+        self.last_results = []
+        self.inserted = []
+
+    def execute(self, query, params=None):
+        normalized_query = " ".join(query.split()).lower()
+        params = params or ()
+        if normalized_query.startswith("select count(*) as cnt"):
+            self.last_result = {"cnt": 0}
+            return None
+        if normalized_query.startswith("select d.id"):
+            self.last_results = self.draft_rows
+            return None
+        if normalized_query.startswith("insert into outreachsendbatches"):
+            self.inserted.append(
+                {
+                    "kind": "batch",
+                    "id": params[0],
+                    "daily_limit": params[1],
+                    "status": params[2],
+                    "created_by": params[3],
+                    "approved_by": params[4],
+                }
+            )
+            return None
+        if normalized_query.startswith("insert into outreachsendqueue"):
+            self.inserted.append(
+                {
+                    "kind": "queue",
+                    "id": params[0],
+                    "batch_id": params[1],
+                    "lead_id": params[2],
+                    "draft_id": params[3],
+                    "channel": params[4],
+                    "delivery_status": params[5],
+                }
+            )
+            return None
+        if normalized_query.startswith("update prospectingleads"):
+            self.inserted.append(
+                {
+                    "kind": "lead_update",
+                    "status": params[0],
+                    "pipeline_status": params[1],
+                    "lead_id": params[2],
+                    "business_id": params[3],
+                }
+            )
+            return None
+        raise AssertionError(f"Unhandled SQL in fake outreach cursor: {query}")
 
     def fetchone(self):
         return self.last_result

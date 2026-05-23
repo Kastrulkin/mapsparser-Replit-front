@@ -11,7 +11,9 @@ python3 -m py_compile \
   src/api/business_types_api.py \
   src/api/reports_api.py \
   src/api/agent_blueprints_api.py \
+  src/services/agent_blueprint_orchestrator.py \
   src/services/agent_blueprint_runner.py \
+  src/services/outreach_send_capability.py \
   src/api/growth_workflow_api.py \
   src/auth_encryption.py \
   tests/test_reports_api_routes.py \
@@ -70,6 +72,50 @@ for marker in (
         raise SystemExit(f"agent blueprint route still declared in main.py: {marker}")
 
 print("OK: agent blueprint routes are not declared in main.py")
+PY
+
+echo "[backend-lint] agent blueprint capability guardrails"
+python3 - <<'PY'
+from pathlib import Path
+
+api_text = Path("src/api/agent_blueprints_api.py").read_text(encoding="utf-8")
+runner_text = Path("src/services/agent_blueprint_runner.py").read_text(encoding="utf-8")
+orchestrator_text = Path("src/services/agent_blueprint_orchestrator.py").read_text(encoding="utf-8")
+capability_text = Path("src/services/outreach_send_capability.py").read_text(encoding="utf-8")
+
+required = {
+    "src/api/agent_blueprints_api.py": [
+        "VERSION_BLUEPRINT_MISMATCH",
+        "build_agent_blueprint_orchestrator()",
+    ],
+    "src/services/agent_blueprint_runner.py": [
+        "allow_execute_when_approved=True",
+        "CAPABILITY_BLOCKED",
+    ],
+    "src/services/agent_blueprint_orchestrator.py": [
+        "OUTREACH_SEND_BATCH_CAPABILITY",
+        "handle_outreach_send_batch",
+    ],
+    "src/services/outreach_send_capability.py": [
+        "external_dispatch_performed",
+        "dispatch_due_outreach_queue",
+        "l.business_id = %s",
+    ],
+}
+
+texts = {
+    "src/api/agent_blueprints_api.py": api_text,
+    "src/services/agent_blueprint_runner.py": runner_text,
+    "src/services/agent_blueprint_orchestrator.py": orchestrator_text,
+    "src/services/outreach_send_capability.py": capability_text,
+}
+
+for path, markers in required.items():
+    for marker in markers:
+        if marker not in texts[path]:
+            raise SystemExit(f"{path}: missing guardrail marker {marker}")
+
+print("OK: agent blueprint runtime uses registered safe outreach capability")
 PY
 
 echo "[backend-lint] extracted growth routes stay out of main.py"

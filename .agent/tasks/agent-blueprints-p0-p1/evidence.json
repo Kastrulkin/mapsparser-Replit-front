@@ -1,0 +1,68 @@
+{
+  "task_id": "agent-blueprints-p0-p1",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "outreach.send_batch is registered as a real Agent Blueprint capability through ActionOrchestrator.",
+      "status": "PASS",
+      "proof": [
+        "src/services/agent_blueprint_orchestrator.py registers OUTREACH_SEND_BATCH_CAPABILITY.",
+        "src/api/agent_blueprints_api.py constructs AgentBlueprintRunner with build_agent_blueprint_orchestrator().",
+        "Import smoke confirmed orchestrator handler registration."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "The capability queues only approved drafts for the run business, respects the hard daily cap, and does not directly dispatch external messages.",
+      "status": "PASS",
+      "proof": [
+        "src/services/outreach_send_capability.py filters by approved draft status, l.business_id, unqueued drafts, and daily cap.",
+        "The handler creates approved queue batches and reports external_dispatch_performed=false.",
+        "tests/test_agent_blueprint_layer.py covers the no-direct-dispatch queue behavior."
+      ],
+      "gaps": [
+        "Live authenticated smoke needs a real user session/token and real approved drafts."
+      ]
+    },
+    {
+      "id": "AC3",
+      "text": "Starting a run cannot use a blueprint_version_id from a different blueprint.",
+      "status": "PASS",
+      "proof": [
+        "src/api/agent_blueprints_api.py validates version ownership and returns VERSION_BLUEPRINT_MISMATCH.",
+        "tests/test_agent_blueprint_layer.py includes a regression marker test."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Backend guardrails cover imports, route ownership, PostgreSQL placeholder checks, and Agent Blueprint capability safety.",
+      "status": "PASS",
+      "proof": [
+        "scripts/lint_backend_baseline.sh compiles the new modules.",
+        "scripts/lint_backend_baseline.sh checks Agent Blueprint runtime markers.",
+        "scripts/lint_backend_baseline.sh passed."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "scripts/lint_backend_baseline.sh",
+    "src/api/agent_blueprints_api.py",
+    "src/services/agent_blueprint_orchestrator.py",
+    "src/services/agent_blueprint_runner.py",
+    "src/services/outreach_send_capability.py",
+    "tests/test_agent_blueprint_layer.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/api/agent_blueprints_api.py src/services/agent_blueprint_orchestrator.py src/services/agent_blueprint_runner.py src/services/outreach_send_capability.py tests/test_agent_blueprint_layer.py",
+    "PYTHONPATH=src python3 - <<'PY'\nfrom services.agent_blueprint_orchestrator import build_agent_blueprint_orchestrator\nfrom services.outreach_send_capability import OUTREACH_SEND_BATCH_CAPABILITY\norch = build_agent_blueprint_orchestrator()\nif OUTREACH_SEND_BATCH_CAPABILITY not in orch.handlers:\n    raise SystemExit('missing outreach handler')\nprint('OK orchestrator handler registered')\nPY",
+    "scripts/lint_backend_baseline.sh",
+    "python3 -m pytest tests/test_agent_blueprint_layer.py"
+  ],
+  "known_gaps": [
+    "Live authenticated API smoke was not run because no browser/session token was available inside this autonomous cycle."
+  ]
+}

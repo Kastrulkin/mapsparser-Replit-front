@@ -11,6 +11,7 @@ from services.agent_blueprint_runner import (
     parse_json_field,
     normalize_steps,
 )
+from services.agent_blueprint_orchestrator import build_agent_blueprint_orchestrator
 
 
 agent_blueprints_bp = Blueprint("agent_blueprints_api", __name__)
@@ -51,6 +52,20 @@ def _require_business_access(cursor, business_id: str, user_data: dict):
 
 def _load_blueprint(cursor, blueprint_id: str):
     cursor.execute("SELECT * FROM agent_blueprints WHERE id = %s", (blueprint_id,))
+    row = cursor.fetchone()
+    return dict(row) if row else None
+
+
+def _load_blueprint_version_for_blueprint(cursor, blueprint_id: str, version_id: str):
+    cursor.execute(
+        """
+        SELECT id
+        FROM agent_blueprint_versions
+        WHERE id = %s
+          AND blueprint_id = %s
+        """,
+        (version_id, blueprint_id),
+    )
     row = cursor.fetchone()
     return dict(row) if row else None
 
@@ -298,9 +313,11 @@ def start_agent_blueprint_run(blueprint_id: str):
             )
             version_row = cursor.fetchone()
             version_id = str((version_row or {}).get("id") or "")
+        elif not _load_blueprint_version_for_blueprint(cursor, str(blueprint.get("id") or ""), version_id):
+            return _json_error("Blueprint version does not belong to this blueprint", 400, "VERSION_BLUEPRINT_MISMATCH")
         if not version_id:
             return _json_error("Blueprint has no version", 400, "NO_VERSION")
-        runner = AgentBlueprintRunner(cursor)
+        runner = AgentBlueprintRunner(cursor, build_agent_blueprint_orchestrator())
         result = runner.start_run(version_id, payload.get("input") if isinstance(payload.get("input"), dict) else {}, user_data)
         db.conn.commit()
         if not result.get("success"):
@@ -328,7 +345,7 @@ def get_agent_run(run_id: str):
         blueprint, access_error = _require_blueprint_access(cursor, str(row.get("blueprint_id") or ""), user_data)
         if access_error:
             return access_error
-        runner = AgentBlueprintRunner(cursor)
+        runner = AgentBlueprintRunner(cursor, build_agent_blueprint_orchestrator())
         return jsonify({"success": True, "run": runner.load_run(run_id)})
     finally:
         db.close()
@@ -363,7 +380,7 @@ def _decide_agent_run_approval(run_id: str, approval_id: str, user_data: dict, d
         blueprint, access_error = _require_blueprint_access(cursor, str(row.get("blueprint_id") or ""), user_data)
         if access_error:
             return access_error
-        runner = AgentBlueprintRunner(cursor)
+        runner = AgentBlueprintRunner(cursor, build_agent_blueprint_orchestrator())
         if decision == "approve":
             result = runner.approve(run_id, approval_id, user_data, reason)
         else:

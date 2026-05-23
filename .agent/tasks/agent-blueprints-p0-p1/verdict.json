@@ -1,0 +1,36 @@
+{
+  "task_id": "agent-blueprints-p0-p1",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "outreach.send_batch is registered through the Agent Blueprint orchestrator factory and covered by import smoke."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Handler queues approved business-scoped drafts under the daily cap and records that no external dispatch occurred."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "API rejects blueprint_version_id values that do not belong to the requested blueprint."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Focused backend lint baseline passed with the new Agent Blueprint guardrails."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/api/agent_blueprints_api.py src/services/agent_blueprint_orchestrator.py src/services/agent_blueprint_runner.py src/services/outreach_send_capability.py tests/test_agent_blueprint_layer.py",
+    "PYTHONPATH=src python3 - <<'PY' ... build_agent_blueprint_orchestrator smoke ... PY",
+    "scripts/lint_backend_baseline.sh",
+    "python3 -m pytest tests/test_agent_blueprint_layer.py"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/agent-blueprints-p0-p1/evidence.md",
+    ".agent/tasks/agent-blueprints-p0-p1/evidence.json"
+  ]
+}

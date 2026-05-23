@@ -344,7 +344,11 @@ class AgentBlueprintRunner:
             return False
 
         step_id = self._insert_step(run, step, step_index, "running", {}, {})
-        payload = step.get("payload") if isinstance(step.get("payload"), dict) else {}
+        step_payload = step.get("payload") if isinstance(step.get("payload"), dict) else {}
+        run_input = parse_json_field(run.get("input_json"), {})
+        if not isinstance(run_input, dict):
+            run_input = {}
+        payload = {**run_input, **step_payload}
         envelope = {
             "tenant_id": str(run.get("business_id") or ""),
             "actor": {
@@ -385,6 +389,26 @@ class AgentBlueprintRunner:
                 ),
             )
             self._fail_run(str(run.get("id")), validation_error, step_id)
+            return False
+        capability_result = orchestrator_result.get("result") if isinstance(orchestrator_result.get("result"), dict) else {}
+        if capability_result.get("status") == "blocked":
+            reason_code = str(capability_result.get("reason_code") or "CAPABILITY_BLOCKED")
+            self.cursor.execute(
+                """
+                UPDATE agent_run_steps
+                SET status = 'blocked',
+                    output_json = %s::jsonb,
+                    error_text = %s,
+                    completed_at = NOW()
+                WHERE id = %s
+                """,
+                (
+                    json.dumps({"capability": capability, "orchestrator": orchestrator_result}, ensure_ascii=False),
+                    reason_code,
+                    step_id,
+                ),
+            )
+            self._fail_run(str(run.get("id")), reason_code, step_id)
             return False
         self.cursor.execute(
             """

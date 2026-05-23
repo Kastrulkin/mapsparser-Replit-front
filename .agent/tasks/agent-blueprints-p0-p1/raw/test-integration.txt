@@ -1,0 +1,7 @@
+No integration test output captured yet.
+PYTHONPATH=src python3 import smoke:
+- build_agent_blueprint_orchestrator()
+- assert OUTREACH_SEND_BATCH_CAPABILITY in orchestrator handlers
+
+Result:
+OK orchestrator handler registered
