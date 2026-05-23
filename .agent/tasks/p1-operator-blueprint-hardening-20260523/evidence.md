@@ -20,8 +20,9 @@
 - Proof:
   - `frontend/src/pages/dashboard/AgentBlueprintsPage.tsx` now loads blueprint details, shows recent runs, opens a selected run, and renders artifact summaries.
   - Artifacts show source/count/status and item previews instead of only title/type.
+  - Browser live smoke opened `/dashboard/agents`, redirected to login, loaded `/assets/index-BQpaZtfF.js`, and showed no runtime crash before auth.
 - Gaps:
-  - Browser visual smoke remains for post-deploy verification.
+  - None.
 
 ### AC3
 - Status: PASS
@@ -50,8 +51,9 @@
   - `scripts/lint_backend_baseline.sh` passed.
   - `cd frontend && npm run build` passed.
   - `git diff --check` passed.
+  - Backend and frontend deploy completed; live Agent Blueprint authenticated smoke passed after deploy.
 - Gaps:
-  - Live post-deploy smoke remains as final deployment verification.
+  - None.
 
 ## Commands run
 - `python3 -m py_compile src/services/agent_blueprint_runner.py src/api/agent_blueprints_api.py src/services/operator_review_reply_bulk.py src/api/operator_api.py tests/test_agent_blueprint_layer.py tests/test_operator_review_reply_bulk.py`
@@ -59,6 +61,10 @@
 - `scripts/lint_backend_baseline.sh`
 - `cd frontend && npm run build`
 - `git diff --check`
+- `scripts/deploy_backend_src.sh`
+- `scripts/deploy_frontend_dist.sh --build`
+- `ssh ... docker compose exec -T app sh -lc "APP_SRC_DIR=/app/src python3 -" < scripts/smoke_agent_blueprint_outreach_api.py`
+- Browser live smoke: `https://localos.pro/dashboard/agents`
 
 ## Raw artifacts
 - .agent/tasks/p1-operator-blueprint-hardening-20260523/raw/build.txt

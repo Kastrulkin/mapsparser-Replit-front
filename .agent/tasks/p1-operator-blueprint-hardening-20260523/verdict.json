@@ -10,7 +10,7 @@
     {
       "id": "AC2",
       "status": "PASS",
-      "reason": "Agent Blueprint UI now exposes run history and richer artifact summaries."
+      "reason": "Agent Blueprint UI now exposes run history and richer artifact summaries; live auth-redirect smoke loaded the deployed bundle."
     },
     {
       "id": "AC3",
@@ -25,7 +25,7 @@
     {
       "id": "AC5",
       "status": "PASS",
-      "reason": "Focused backend tests, backend lint baseline, frontend build, and diff whitespace check passed."
+      "reason": "Focused backend tests, backend lint baseline, frontend build, diff whitespace check, deploy, and live smoke passed."
     }
   ],
   "commands_run": [
@@ -33,7 +33,10 @@
     "python3 -m pytest -q tests/test_agent_blueprint_layer.py tests/test_operator_review_reply_bulk.py tests/test_operator_manual_review.py tests/test_operator_inbox.py tests/test_operator_paid_preflight.py tests/test_operator_credit_reservation.py tests/test_operator_manual_publish.py",
     "scripts/lint_backend_baseline.sh",
     "cd frontend && npm run build",
-    "git diff --check"
+    "git diff --check",
+    "scripts/deploy_backend_src.sh",
+    "scripts/deploy_frontend_dist.sh --build",
+    "live Agent Blueprint authenticated smoke"
   ],
   "artifacts_used": [
     ".agent/tasks/p1-operator-blueprint-hardening-20260523/evidence.md",

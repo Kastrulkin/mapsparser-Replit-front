@@ -20,11 +20,10 @@
       "proof": [
         "AgentBlueprintsPage loads blueprint details and recent runs.",
         "A selected run can be opened through GET /api/agent-runs/<id>.",
-        "Artifact summaries now show source/count/status and item previews."
+        "Artifact summaries now show source/count/status and item previews.",
+        "Browser live smoke loaded /dashboard/agents through the auth redirect without a bundle crash."
       ],
-      "gaps": [
-        "Browser visual smoke remains for post-deploy verification."
-      ]
+      "gaps": []
     },
     {
       "id": "AC3",
@@ -58,11 +57,11 @@
         "focused pytest passed with 42 tests.",
         "backend lint baseline passed.",
         "frontend npm build passed.",
-        "git diff --check passed."
+        "git diff --check passed.",
+        "backend and frontend deploy completed.",
+        "live Agent Blueprint authenticated smoke passed after deploy."
       ],
-      "gaps": [
-        "Live smoke remains as post-deploy verification."
-      ]
+      "gaps": []
     }
   ],
   "changed_files": [
@@ -75,7 +74,10 @@
     "python3 -m pytest -q tests/test_agent_blueprint_layer.py tests/test_operator_review_reply_bulk.py tests/test_operator_manual_review.py tests/test_operator_inbox.py tests/test_operator_paid_preflight.py tests/test_operator_credit_reservation.py tests/test_operator_manual_publish.py",
     "scripts/lint_backend_baseline.sh",
     "cd frontend && npm run build",
-    "git diff --check"
+    "git diff --check",
+    "scripts/deploy_backend_src.sh",
+    "scripts/deploy_frontend_dist.sh --build",
+    "ssh ... docker compose exec -T app sh -lc \"APP_SRC_DIR=/app/src python3 -\" < scripts/smoke_agent_blueprint_outreach_api.py"
   ],
   "known_gaps": [
     "Auth/user route decomposition remains the next P2 slice."
