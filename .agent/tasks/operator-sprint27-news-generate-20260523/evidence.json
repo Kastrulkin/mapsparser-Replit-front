@@ -1,0 +1,83 @@
+{
+  "task_id": "operator-sprint27-news-generate-20260523",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "news_generate is a real Operator paid-compute workflow from web chat and Inbox/API.",
+      "status": "PASS",
+      "proof": [
+        "Added services.operator_news_generation.generate_news_draft_from_operator.",
+        "Added web chat routing and POST /api/operator/news/generate."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Workflow performs preflight, reserve, generate, usernews save, and charge only after success.",
+      "status": "PASS",
+      "proof": [
+        "tests/test_operator_news_generation.py::test_generate_news_draft_charges_and_saves_usernews"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Failure and empty generation release the reservation without ledger charge.",
+      "status": "PASS",
+      "proof": [
+        "tests/test_operator_news_generation.py::test_generate_news_draft_releases_when_generation_fails",
+        "tests/test_operator_news_generation.py::test_generate_news_draft_releases_when_model_returns_empty_text"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "No external publication is performed.",
+      "status": "PASS",
+      "proof": [
+        "Result contract sets external_writes_performed=false and manual_publication_only=true."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Web UI can trigger and copy the saved news draft.",
+      "status": "PASS",
+      "proof": [
+        "OperatorPage.tsx supports news_draft/news_text and Inbox button for news_generate.",
+        "raw/frontend-build.txt"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC6",
+      "text": "Docs and proof evidence describe the new boundary.",
+      "status": "PASS",
+      "proof": [
+        "docs/agents/localos-operator.md",
+        "docs/agents/index.md",
+        "docs/agents/tool-registry.md"
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/services/operator_news_generation.py",
+    "src/api/operator_api.py",
+    "frontend/src/pages/dashboard/OperatorPage.tsx",
+    "tests/test_operator_news_generation.py",
+    "docs/agents/localos-operator.md",
+    "docs/agents/index.md",
+    "docs/agents/tool-registry.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/services/operator_news_generation.py src/api/operator_api.py",
+    "python3 -m pytest -q tests/test_operator_news_generation.py tests/test_operator_review_reply_bulk.py tests/test_operator_manual_review.py tests/test_operator_inbox.py tests/test_operator_paid_preflight.py tests/test_operator_credit_reservation.py tests/test_operator_paid_actions.py tests/test_operator_paid_executor.py tests/test_operator_map_refresh.py tests/test_operator_audit.py tests/test_telegram_dashboard_copy.py tests/test_telegram_response_router.py",
+    "cd frontend && npm run build",
+    "git diff --check"
+  ],
+  "known_gaps": [
+    "Telegram parity, social post generation, services optimization, Apify actual-cost settlement, and fresh-review refresh remain later sprints."
+  ]
+}

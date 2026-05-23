@@ -1,0 +1,32 @@
+{
+  "task_id": "operator-sprint27-news-generate-20260523",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "news_generate is wired through web chat/API, saves a draft, charges credits on success, and keeps publication manual."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Focused tests cover charge/save and release-on-failure paths."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Frontend build and docs updates are complete."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/services/operator_news_generation.py src/api/operator_api.py",
+    "python3 -m pytest -q tests/test_operator_news_generation.py tests/test_operator_review_reply_bulk.py tests/test_operator_manual_review.py tests/test_operator_inbox.py tests/test_operator_paid_preflight.py tests/test_operator_credit_reservation.py tests/test_operator_paid_actions.py tests/test_operator_paid_executor.py tests/test_operator_map_refresh.py tests/test_operator_audit.py tests/test_telegram_dashboard_copy.py tests/test_telegram_response_router.py",
+    "cd frontend && npm run build",
+    "git diff --check"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/operator-sprint27-news-generate-20260523/raw/build.txt",
+    ".agent/tasks/operator-sprint27-news-generate-20260523/raw/test-unit.txt",
+    ".agent/tasks/operator-sprint27-news-generate-20260523/raw/frontend-build.txt"
+  ]
+}

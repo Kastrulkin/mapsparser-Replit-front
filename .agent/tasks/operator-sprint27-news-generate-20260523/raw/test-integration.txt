@@ -1,0 +1,1 @@
+Not run: no integration test harness needed for Sprint 27; covered by service/API route unit-level tests and production import smoke after deploy.

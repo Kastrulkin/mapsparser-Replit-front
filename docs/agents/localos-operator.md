@@ -295,6 +295,18 @@ Sprint 26 adds paid bulk generation for stored unanswered reviews:
 
 Sprint 26 still does not refresh maps, call Apify, publish to Yandex/Google/2GIS, or send any response on behalf of the business. It only creates LocalOS drafts for manual copy/paste publication.
 
+Sprint 27 turns `news_generate` into a real paid draft action:
+
+- backend service: `services.operator_news_generation`;
+- API endpoint: `POST /api/operator/news/generate`;
+- chat intent examples: `Подготовь новость: ...`, `Сгенерируй новость про ...`;
+- the flow uses preflight -> reserve -> AI generation -> `usernews` draft save -> final credit charge;
+- initial pricing is `1` credit per saved news draft;
+- if generation fails or returns empty text, the reservation is released and no credit ledger charge is created;
+- the response shows charged credits and exposes copy/manual publication UI actions.
+
+Sprint 27 does not publish news to maps, social networks, or other external providers. It only saves a LocalOS `usernews` draft for manual review and copy/paste publication.
+
 Sprint 14 still does not call Apify, create parsequeue jobs, generate AI content, write to external providers, publish to maps, or enable production execution. It only tightens the safety gate before future paid runtime rollout.
 
 Sprint 15 adds manual review intake through Operator chat:

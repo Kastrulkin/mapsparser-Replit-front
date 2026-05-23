@@ -35,6 +35,8 @@ Sprints 21-25 add the Operator Inbox and manual completion workflow: the dashboa
 
 Sprint 26 turns the `review_replies_generate` offer into a real paid draft action for already saved unanswered reviews. Operator can prepare up to five LocalOS reply drafts, charge one credit per successfully created draft, show the result in chat, and keep publication to maps as manual copy/paste.
 
+Sprint 27 turns `news_generate` into a real paid compute action. Operator can prepare a news draft from web chat or Inbox, save it into `usernews`, charge one credit after successful generation, and keep publication manual.
+
 The Operator model keeps one context, one permission system, one credit/usage ledger, one approval policy, and one audit trail across web and Telegram. Sprint 0 defines the product contract only; it does not imply that the web-chat runtime or Telegram Operator runtime is fully implemented.
 
 ## What Agents Must Not Assume
