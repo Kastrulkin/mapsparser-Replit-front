@@ -319,6 +319,18 @@ Sprint 28 turns `social_post_generate` into a real paid draft action:
 
 Sprint 28 does not publish to Telegram, Instagram, VK, maps, or other external channels. It only prepares and saves a LocalOS draft for manual copy/paste publication.
 
+Sprint 29 turns `services_optimize` into a paid suggestion workflow:
+
+- backend service: `services.operator_services_optimization`;
+- API endpoint: `POST /api/operator/services/optimize`;
+- chat intent examples: `Оптимизируй услуги`, `Улучши SEO описания услуг`;
+- the flow reads saved `userservices`, runs preflight -> reserve -> AI suggestion generation -> saved suggestion job -> final credit charge;
+- suggestions are saved in `serviceregenerationjobs` and `serviceregenerationjobitems` with status `suggested`;
+- initial pricing is `1` credit per saved service suggestion, up to five services per run;
+- applying the suggested names/descriptions is not part of this sprint and must be a separate confirmed action.
+
+Sprint 29 does not update `userservices`, publish to providers, or mutate external accounts. It only saves LocalOS suggestions for later review.
+
 Sprint 14 still does not call Apify, create parsequeue jobs, generate AI content, write to external providers, publish to maps, or enable production execution. It only tightens the safety gate before future paid runtime rollout.
 
 Sprint 15 adds manual review intake through Operator chat:

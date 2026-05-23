@@ -39,6 +39,8 @@ Sprint 27 turns `news_generate` into a real paid compute action. Operator can pr
 
 Sprint 28 turns `social_post_generate` into the same paid compute/manual-publish pattern for social posts. Operator can prepare a post draft, save it as a LocalOS draft, charge one credit on success, and expose copy/manual publication actions.
 
+Sprint 29 connects `services_optimize` as a paid suggestion workflow. Operator reads saved services, prepares improved names/descriptions, saves suggestions into the existing service-regeneration job tables, charges per saved suggestion, and leaves applying changes to a later confirmed action.
+
 The Operator model keeps one context, one permission system, one credit/usage ledger, one approval policy, and one audit trail across web and Telegram. Sprint 0 defines the product contract only; it does not imply that the web-chat runtime or Telegram Operator runtime is fully implemented.
 
 ## What Agents Must Not Assume

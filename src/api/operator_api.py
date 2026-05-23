@@ -16,6 +16,7 @@ from services.operator_news_generation import classify_news_generate_intent, gen
 from services.operator_paid_executor import build_paid_action_execution_attempt
 from services.operator_paid_preflight import build_paid_action_preflight
 from services.operator_review_reply_bulk import classify_bulk_review_reply_intent, generate_review_reply_drafts_for_unanswered_reviews
+from services.operator_services_optimization import classify_services_optimize_intent, optimize_services_from_operator
 from services.operator_social_post_generation import classify_social_post_generate_intent, generate_social_post_draft_from_operator
 
 
@@ -377,6 +378,14 @@ def operator_chat():
                 limit=payload.get("limit") or 5,
                 channel="web",
             )
+        elif classify_services_optimize_intent(message):
+            result = optimize_services_from_operator(
+                cursor,
+                business_id=business_id,
+                user_id=user_id,
+                limit=payload.get("limit") or 5,
+                channel="web",
+            )
         elif classify_social_post_generate_intent(message):
             result = generate_social_post_draft_from_operator(
                 cursor,
@@ -406,6 +415,7 @@ def operator_chat():
         draft = result.get("draft") if isinstance(result.get("draft"), dict) else {}
         news_draft = result.get("news_draft") if isinstance(result.get("news_draft"), dict) else {}
         social_post_draft = result.get("social_post_draft") if isinstance(result.get("social_post_draft"), dict) else {}
+        optimization_job = result.get("optimization_job") if isinstance(result.get("optimization_job"), dict) else {}
         drafts = result.get("drafts") if isinstance(result.get("drafts"), list) else []
         finalization = result.get("finalization_result") if isinstance(result.get("finalization_result"), dict) else {}
         if review:
@@ -445,6 +455,22 @@ def operator_chat():
                     "news_id": news_draft.get("id"),
                     "external_writes_performed": False,
                     "manual_publication_only": True,
+                },
+            )
+        if optimization_job:
+            record_operator_event(
+                cursor,
+                business_id=business_id,
+                user_id=user_id,
+                event_type="operator_draft_created",
+                action_key="services_optimize",
+                status="completed",
+                input_summary={"source": "operator_chat"},
+                output_summary={"job_id": optimization_job.get("id")},
+                metadata={
+                    "job_id": optimization_job.get("id"),
+                    "external_writes_performed": False,
+                    "manual_apply_required": True,
                 },
             )
         if social_post_draft:
@@ -567,6 +593,82 @@ def operator_review_replies_generate():
                     "credit_charged": bool(finalization.get("side_effects", {}).get("credit_charged")),
                     "paid_actions_performed": bool(finalization.get("side_effects", {}).get("credit_charged")),
                     "external_writes_performed": False,
+                },
+            )
+        db.conn.commit()
+        return jsonify({"success": status == "completed", "operator_result": result})
+    except Exception:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+    finally:
+        db.close()
+
+
+@operator_bp.route("/services/optimize", methods=["POST"])
+def operator_services_optimize():
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    business_id = str(payload.get("business_id") or "").strip()
+    if not business_id:
+        return jsonify({"success": False, "error": "business_id обязателен"}), 400
+
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        if not has_access:
+            status_code = 403 if owner_id else 404
+            message = "Нет доступа" if owner_id else "Бизнес не найден"
+            return jsonify({"success": False, "error": message}), status_code
+
+        user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        result = optimize_services_from_operator(
+            cursor,
+            business_id=business_id,
+            user_id=user_id,
+            limit=payload.get("limit") or 5,
+            channel="web",
+        )
+        status = str(result.get("status") or "blocked")
+        optimization_job = result.get("optimization_job") if isinstance(result.get("optimization_job"), dict) else {}
+        if optimization_job:
+            record_operator_event(
+                cursor,
+                business_id=business_id,
+                user_id=user_id,
+                event_type="operator_draft_created",
+                action_key="services_optimize",
+                status="completed",
+                input_summary={"source": "operator_inbox"},
+                output_summary={"job_id": optimization_job.get("id")},
+                metadata={
+                    "job_id": optimization_job.get("id"),
+                    "external_writes_performed": False,
+                    "manual_apply_required": True,
+                },
+            )
+        finalization = result.get("finalization_result") if isinstance(result.get("finalization_result"), dict) else {}
+        if finalization:
+            record_operator_event(
+                cursor,
+                business_id=business_id,
+                user_id=user_id,
+                event_type="operator_usage_charged",
+                action_key="services_optimize",
+                status=str(finalization.get("status") or status),
+                input_summary={"action_key": "services_optimize"},
+                output_summary={
+                    "charge_credits": finalization.get("charge_credits"),
+                    "release_credits": finalization.get("release_credits"),
+                },
+                metadata={
+                    "credit_charged": bool(finalization.get("side_effects", {}).get("credit_charged")),
+                    "paid_actions_performed": bool(finalization.get("side_effects", {}).get("credit_charged")),
+                    "external_writes_performed": False,
+                    "manual_apply_required": True,
                 },
             )
         db.conn.commit()

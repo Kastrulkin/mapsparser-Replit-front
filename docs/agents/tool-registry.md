@@ -129,6 +129,7 @@ Current Operator review intake uses these tool boundaries:
 | `reviews.reply_draft.generate_bulk` | `paid_compute` | `draft_only` plus `write_internal` | saves LocalOS reply drafts for stored unanswered reviews; no external publication | charges credits per successfully created draft |
 | `news.draft.generate` | `paid_compute` | `draft_only` plus `write_internal` | saves a LocalOS news draft in `usernews`; no external publication | charges credits after successful draft generation |
 | `social_post.draft.generate` | `paid_compute` | `draft_only` plus `write_internal` | saves a LocalOS post draft; no external publication | charges credits after successful draft generation |
+| `services.optimization_suggest` | `paid_compute` | `draft_only` plus `write_internal` | saves proposed names/descriptions in service-regeneration job tables; does not update active services | charges credits per saved suggestion |
 | `reviews.reply_draft.copy` | `manual_external` | `read_only` | user copies text manually | no extra charge after draft generation |
 | `reviews.reply_draft.mark_manual_published` | `manual_external` | `write_internal` | marks the LocalOS draft as published manually after the user copied and pasted it outside LocalOS | no extra charge after draft generation |
 | `operator.inbox.read` | `free_cached` | `read_only` | returns a scoped queue of review/content/partnership actions and UI helpers | no charge |

@@ -1,0 +1,1 @@
+Not run: no separate integration harness needed for Sprint 29; service/API route behavior is covered by focused tests and production import smoke after deploy.

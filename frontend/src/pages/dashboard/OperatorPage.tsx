@@ -298,6 +298,19 @@ type OperatorChatResult = {
     generated_text?: string;
     source_text?: string;
   };
+  optimization_job?: {
+    id?: string;
+    status?: string;
+    selected_count?: number;
+  };
+  service_suggestions?: Array<{
+    id?: string;
+    service_id?: string;
+    status?: string;
+    before_name?: string;
+    optimized_name?: string;
+    seo_description?: string;
+  }>;
   drafts?: Array<{
     id?: string;
     review_id?: string;
@@ -702,6 +715,33 @@ export const OperatorPage = () => {
     }
   };
 
+  const optimizeServices = async () => {
+    if (!currentBusinessId) return;
+    setBulkGeneratingKey('services_optimize');
+    setConsentMessage(null);
+    setChatResult(null);
+    try {
+      const response = await api.post('/operator/services/optimize', {
+        business_id: currentBusinessId,
+        limit: 5,
+      });
+      const result = response.data.operator_result || null;
+      setChatResult(result);
+      await loadBrief();
+      await loadInbox();
+      await loadOperatorEvents();
+    } catch (err) {
+      setChatResult({
+        status: 'blocked',
+        intent: 'services_optimize',
+        chat_response: err instanceof Error ? err.message : 'Не удалось оптимизировать услуги',
+        blocked_reasons: ['operator_services_optimization_failed'],
+      });
+    } finally {
+      setBulkGeneratingKey(null);
+    }
+  };
+
   const markManualPublished = async (draftId: string | undefined) => {
     if (!currentBusinessId || !draftId) return;
     setManualPublishDraftId(draftId);
@@ -947,6 +987,23 @@ export const OperatorPage = () => {
                     </div>
                   </div>
                 ) : null}
+                {chatResult.service_suggestions?.length ? (
+                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                    <div className="font-semibold">Предложения по услугам</div>
+                    <div className="mt-1 text-slate-600">
+                      Создано: {chatResult.service_suggestions.length}. Изменения не применялись и требуют отдельного подтверждения.
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {chatResult.service_suggestions.map((item) => (
+                        <div key={item.id || item.service_id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{item.before_name}</div>
+                          <div className="mt-1 font-semibold text-slate-950">{item.optimized_name}</div>
+                          {item.seo_description ? <div className="mt-1 text-slate-700">{item.seo_description}</div> : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 {chatResult.drafts?.length ? (
                   <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
                     <div className="font-semibold">Черновики ответов</div>
@@ -1139,6 +1196,18 @@ export const OperatorPage = () => {
                             >
                               {bulkGeneratingKey === offer.action_key ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquareText className="mr-2 h-4 w-4" />}
                               Подготовить пост
+                            </Button>
+                          ) : null}
+                          {offer.action_key === 'services_optimize' ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="mt-2"
+                              onClick={() => void optimizeServices()}
+                              disabled={bulkGeneratingKey === offer.action_key || !currentBusinessId}
+                            >
+                              {bulkGeneratingKey === offer.action_key ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                              Оптимизировать услуги
                             </Button>
                           ) : null}
                         </div>
