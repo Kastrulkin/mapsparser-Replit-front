@@ -279,7 +279,7 @@ class AgentBlueprintRunner:
     def _create_artifact_step(self, run: Dict[str, Any], step: Dict[str, Any], step_index: int) -> None:
         step_id = self._insert_step(run, step, step_index, "completed", {}, {"artifact": True})
         artifact_id = str(uuid.uuid4())
-        payload = step.get("payload") if isinstance(step.get("payload"), dict) else {}
+        payload = self._build_artifact_payload(run, step)
         self.cursor.execute(
             """
             INSERT INTO agent_artifacts (id, run_id, step_id, artifact_type, title, payload_json)
@@ -294,6 +294,124 @@ class AgentBlueprintRunner:
                 json.dumps(payload, ensure_ascii=False),
             ),
         )
+
+    def _build_artifact_payload(self, run: Dict[str, Any], step: Dict[str, Any]) -> Dict[str, Any]:
+        base_payload = step.get("payload") if isinstance(step.get("payload"), dict) else {}
+        artifact_type = str(step.get("artifact_type") or "").strip()
+        if artifact_type == "lead_shortlist":
+            return self._build_lead_shortlist_payload(run, base_payload)
+        if artifact_type == "message_drafts":
+            return self._build_message_drafts_payload(run, base_payload)
+        if artifact_type == "outreach_outcomes":
+            return self._build_outreach_outcomes_payload(run, base_payload)
+        return dict(base_payload)
+
+    def _run_input(self, run: Dict[str, Any]) -> Dict[str, Any]:
+        parsed = parse_json_field(run.get("input_json"), {})
+        return parsed if isinstance(parsed, dict) else {}
+
+    def _build_lead_shortlist_payload(self, run: Dict[str, Any], base_payload: Dict[str, Any]) -> Dict[str, Any]:
+        run_input = self._run_input(run)
+        lead_ids = [str(item).strip() for item in run_input.get("lead_ids", []) if str(item).strip()] if isinstance(run_input.get("lead_ids"), list) else []
+        limit = self._safe_limit(run_input.get("limit"), 30)
+        query = """
+            SELECT id, name, city, email, telegram_url, whatsapp_url, status, selected_channel, pipeline_status
+            FROM prospectingleads
+            WHERE business_id = %s
+        """
+        params: List[Any] = [str(run.get("business_id") or "")]
+        if lead_ids:
+            query += " AND id = ANY(%s)"
+            params.append(lead_ids)
+        else:
+            query += """
+              AND (
+                status IN ('selected_for_outreach', 'channel_selected', 'qualified', 'queued_for_send')
+                OR pipeline_status IN ('in_progress', 'qualified')
+              )
+            """
+        query += " ORDER BY updated_at DESC, created_at DESC LIMIT %s"
+        params.append(limit)
+        try:
+            self.cursor.execute(query, tuple(params))
+            rows = [dict(row) for row in (self.cursor.fetchall() or [])]
+        except Exception:
+            rows = []
+        return {
+            **base_payload,
+            "status": "hydrated" if rows else base_payload.get("status", "draft"),
+            "source": "prospectingleads",
+            "count": len(rows),
+            "items": rows,
+        }
+
+    def _build_message_drafts_payload(self, run: Dict[str, Any], base_payload: Dict[str, Any]) -> Dict[str, Any]:
+        run_input = self._run_input(run)
+        draft_ids = [str(item).strip() for item in run_input.get("draft_ids", []) if str(item).strip()] if isinstance(run_input.get("draft_ids"), list) else []
+        limit = self._safe_limit(run_input.get("limit"), 30)
+        query = """
+            SELECT d.id, d.lead_id, d.channel, d.status, d.generated_text, d.approved_text, l.name AS lead_name
+            FROM outreachmessagedrafts d
+            JOIN prospectingleads l ON l.id = d.lead_id
+            WHERE l.business_id = %s
+        """
+        params: List[Any] = [str(run.get("business_id") or "")]
+        if draft_ids:
+            query += " AND d.id = ANY(%s)"
+            params.append(draft_ids)
+        else:
+            query += " AND d.status IN ('generated', 'edited', 'approved')"
+        query += " ORDER BY d.updated_at DESC, d.created_at DESC LIMIT %s"
+        params.append(limit)
+        try:
+            self.cursor.execute(query, tuple(params))
+            rows = [dict(row) for row in (self.cursor.fetchall() or [])]
+        except Exception:
+            rows = []
+        return {
+            **base_payload,
+            "status": "hydrated" if rows else base_payload.get("status", "draft"),
+            "source": "outreachmessagedrafts",
+            "count": len(rows),
+            "items": rows,
+        }
+
+    def _build_outreach_outcomes_payload(self, run: Dict[str, Any], base_payload: Dict[str, Any]) -> Dict[str, Any]:
+        run_input = self._run_input(run)
+        draft_ids = [str(item).strip() for item in run_input.get("draft_ids", []) if str(item).strip()] if isinstance(run_input.get("draft_ids"), list) else []
+        if not draft_ids:
+            return {**base_payload, "source": "outreachsendqueue", "count": 0, "items": []}
+        try:
+            self.cursor.execute(
+                """
+                SELECT q.id, q.batch_id, q.lead_id, q.draft_id, q.channel, q.delivery_status, q.sent_at,
+                       q.provider_message_id, q.error_text, l.name AS lead_name
+                FROM outreachsendqueue q
+                JOIN prospectingleads l ON l.id = q.lead_id
+                WHERE q.draft_id = ANY(%s)
+                  AND l.business_id = %s
+                ORDER BY q.created_at DESC
+                LIMIT 50
+                """,
+                (draft_ids, str(run.get("business_id") or "")),
+            )
+            rows = [dict(row) for row in (self.cursor.fetchall() or [])]
+        except Exception:
+            rows = []
+        return {
+            **base_payload,
+            "status": "hydrated" if rows else base_payload.get("status", "pending"),
+            "source": "outreachsendqueue",
+            "count": len(rows),
+            "items": rows,
+        }
+
+    def _safe_limit(self, value: Any, default: int) -> int:
+        try:
+            parsed = int(value or default)
+        except Exception:
+            parsed = default
+        return max(1, min(parsed, 100))
 
     def _create_approval_step(self, run: Dict[str, Any], step: Dict[str, Any], step_index: int, user_data: Dict[str, Any]) -> None:
         step_id = self._insert_step(run, step, step_index, "waiting_approval", {}, {"approval": "pending"})

@@ -1,0 +1,14 @@
+No lint output captured yet.
+scripts/lint_backend_baseline.sh
+
+Result:
+- focused py_compile: passed
+- route ownership smoke: passed
+- Agent Blueprint capability guardrails: passed
+- Operator route and paid draft guardrails: passed
+- growth/admin route duplicate checks: passed
+- runtime SQL placeholder scan: passed
+
+git diff --check
+
+Result: passed

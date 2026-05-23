@@ -10,6 +10,7 @@ import {
   Play,
   RefreshCw,
   ShieldCheck,
+  Workflow,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -48,12 +49,20 @@ type AgentApproval = {
   status: string;
   approval_type: string;
   title: string;
+  payload_json?: Record<string, unknown>;
+  decision_reason?: string | null;
 };
 
 type AgentArtifact = {
   id: string;
   artifact_type: string;
   title: string;
+  payload_json?: {
+    status?: string;
+    source?: string;
+    count?: number;
+    items?: Array<Record<string, unknown>>;
+  };
 };
 
 type AgentRunStep = {
@@ -61,6 +70,8 @@ type AgentRunStep = {
   step_key: string;
   step_type: string;
   status: string;
+  output_json?: Record<string, unknown>;
+  error_text?: string | null;
 };
 
 type AgentRun = {
@@ -71,6 +82,13 @@ type AgentRun = {
   artifacts?: AgentArtifact[];
   approvals?: AgentApproval[];
   error_text?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+};
+
+type AgentBlueprintDetails = {
+  versions: Array<Record<string, unknown>>;
+  runs: AgentRun[];
 };
 
 const statusTone: Record<string, string> = {
@@ -91,6 +109,7 @@ export const AgentBlueprintsPage = () => {
   const { currentBusinessId, currentBusiness } = useOutletContext<DashboardContext>();
   const [blueprints, setBlueprints] = useState<AgentBlueprint[]>([]);
   const [selectedBlueprintId, setSelectedBlueprintId] = useState<string | null>(null);
+  const [blueprintDetails, setBlueprintDetails] = useState<AgentBlueprintDetails | null>(null);
   const [activeRun, setActiveRun] = useState<AgentRun | null>(null);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
@@ -159,6 +178,44 @@ export const AgentBlueprintsPage = () => {
     void loadBlueprints();
   }, [loadBlueprints]);
 
+  const loadBlueprintDetails = useCallback(async (blueprintId: string) => {
+    setError(null);
+    try {
+      const response = await api.get(`/api/agent-blueprints/${blueprintId}`);
+      const details = {
+        versions: Array.isArray(response.data?.versions) ? response.data.versions : [],
+        runs: Array.isArray(response.data?.runs) ? response.data.runs : [],
+      };
+      setBlueprintDetails(details);
+    } catch (requestError) {
+      console.error(requestError);
+      setError('Не удалось загрузить историю blueprint.');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedBlueprint?.id) {
+      void loadBlueprintDetails(selectedBlueprint.id);
+    } else {
+      setBlueprintDetails(null);
+      setActiveRun(null);
+    }
+  }, [loadBlueprintDetails, selectedBlueprint?.id]);
+
+  const loadRun = async (runId: string) => {
+    setActionLoading(true);
+    setError(null);
+    try {
+      const response = await api.get(`/api/agent-runs/${runId}`);
+      setActiveRun(response.data?.run || null);
+    } catch (requestError) {
+      console.error(requestError);
+      setError('Не удалось загрузить запуск.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const createDefaultBlueprint = async () => {
     if (!currentBusinessId) {
       return;
@@ -178,6 +235,7 @@ export const AgentBlueprintsPage = () => {
       await loadBlueprints();
       if (blueprint?.id) {
         setSelectedBlueprintId(blueprint.id);
+        await loadBlueprintDetails(blueprint.id);
       }
     } catch (requestError) {
       console.error(requestError);
@@ -202,6 +260,7 @@ export const AgentBlueprintsPage = () => {
         },
       });
       setActiveRun(response.data?.run || null);
+      await loadBlueprintDetails(selectedBlueprint.id);
     } catch (requestError) {
       console.error(requestError);
       setError('Не удалось запустить blueprint.');
@@ -293,7 +352,10 @@ export const AgentBlueprintsPage = () => {
                         ? 'border-slate-900 bg-slate-950 text-white shadow-sm'
                         : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50',
                     )}
-                    onClick={() => setSelectedBlueprintId(blueprint.id)}
+                    onClick={() => {
+                      setSelectedBlueprintId(blueprint.id);
+                      setActiveRun(null);
+                    }}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -318,7 +380,7 @@ export const AgentBlueprintsPage = () => {
 
         <DashboardSection
           title="Run timeline"
-          description="Запуск идет последовательно и останавливается на ручном подтверждении."
+          description="Запуск идет последовательно, показывает артефакты из outreach pipeline и останавливается на ручном подтверждении."
           actions={(
             <Button type="button" onClick={startRun} disabled={!selectedBlueprint || actionLoading}>
               {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
@@ -329,7 +391,7 @@ export const AgentBlueprintsPage = () => {
           {!activeRun ? (
             <DashboardEmptyState
               title="Запусков в этой сессии нет"
-              description="Выберите blueprint и запустите его. Первый outreach run дойдет до approval shortlist и остановится."
+              description="Выберите blueprint и запустите его или откройте один из последних запусков."
             />
           ) : (
             <div className="space-y-5">
@@ -353,17 +415,27 @@ export const AgentBlueprintsPage = () => {
               <div className="grid gap-4 lg:grid-cols-3">
                 <RunColumn title="Steps" icon={Clock3}>
                   {(activeRun.steps || []).map((step) => (
-                    <TimelineItem key={step.id} title={step.step_key} meta={step.step_type} status={step.status} />
+                    <TimelineItem
+                      key={step.id}
+                      title={step.step_key}
+                      meta={step.error_text || step.step_type}
+                      status={step.status}
+                    />
                   ))}
                 </RunColumn>
                 <RunColumn title="Artifacts" icon={FileText}>
                   {(activeRun.artifacts || []).map((artifact) => (
-                    <TimelineItem key={artifact.id} title={artifact.title} meta={artifact.artifact_type} status="completed" />
+                    <ArtifactItem key={artifact.id} artifact={artifact} />
                   ))}
                 </RunColumn>
                 <RunColumn title="Approvals" icon={CheckCircle2}>
                   {(activeRun.approvals || []).map((approval) => (
-                    <TimelineItem key={approval.id} title={approval.title} meta={approval.approval_type} status={approval.status} />
+                    <TimelineItem
+                      key={approval.id}
+                      title={approval.title}
+                      meta={approval.decision_reason || approval.approval_type}
+                      status={approval.status}
+                    />
                   ))}
                 </RunColumn>
               </div>
@@ -371,6 +443,45 @@ export const AgentBlueprintsPage = () => {
           )}
         </DashboardSection>
       </div>
+
+      {selectedBlueprint ? (
+        <DashboardSection
+          title="Run history"
+          description="Последние запуски выбранного workflow agent. Откройте run, чтобы увидеть steps, artifacts и approvals."
+        >
+          {blueprintDetails?.runs?.length ? (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {blueprintDetails.runs.map((run) => (
+                <button
+                  key={run.id}
+                  type="button"
+                  className={cn(
+                    'rounded-xl border px-4 py-3 text-left transition',
+                    activeRun?.id === run.id ? 'border-slate-900 bg-slate-950 text-white' : 'border-slate-200 bg-white hover:border-slate-300',
+                  )}
+                  onClick={() => void loadRun(run.id)}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Workflow className="h-4 w-4 shrink-0" />
+                      <span className="truncate text-sm font-semibold">Run {run.id.slice(0, 8)}</span>
+                    </div>
+                    <StatusBadge status={run.status} />
+                  </div>
+                  <div className={cn('mt-2 text-xs', activeRun?.id === run.id ? 'text-slate-300' : 'text-slate-500')}>
+                    {run.started_at || 'started_at unavailable'}
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <DashboardEmptyState
+              title="История пуста"
+              description="Запустите blueprint, чтобы здесь появились последние runs."
+            />
+          )}
+        </DashboardSection>
+      ) : null}
     </div>
   );
 };
@@ -406,3 +517,31 @@ const TimelineItem = ({ title, meta, status }: { title: string; meta: string; st
     </div>
   </div>
 );
+
+const ArtifactItem = ({ artifact }: { artifact: AgentArtifact }) => {
+  const payload = artifact.payload_json || {};
+  const items = Array.isArray(payload.items) ? payload.items : [];
+  const preview = items.slice(0, 3);
+  return (
+    <div className="rounded-xl bg-white px-3 py-3 shadow-sm ring-1 ring-slate-200">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-medium text-slate-900">{artifact.title}</div>
+          <div className="mt-1 text-xs text-slate-500">
+            {payload.source || artifact.artifact_type} · {payload.count ?? items.length} items
+          </div>
+        </div>
+        <StatusBadge status={typeof payload.status === 'string' ? payload.status : 'completed'} />
+      </div>
+      {preview.length ? (
+        <div className="mt-3 space-y-2">
+          {preview.map((item, index) => (
+            <div key={`${artifact.id}-${index}`} className="rounded-lg bg-slate-50 px-2 py-2 text-xs leading-5 text-slate-600">
+              {String(item.name || item.lead_name || item.status || item.delivery_status || item.id || 'item')}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+};

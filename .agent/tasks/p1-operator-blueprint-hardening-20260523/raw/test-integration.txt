@@ -1,0 +1,4 @@
+No integration test output captured yet.
+Integration-level evidence:
+- Operator Sprint 26 proof bundle exists and records PASS for paid bulk review reply generation.
+- Agent Blueprint authenticated smoke remains available in scripts/smoke_agent_blueprint_outreach_api.py and should be rerun after deploy.

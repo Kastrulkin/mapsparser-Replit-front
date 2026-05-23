@@ -1,0 +1,8 @@
+No build output captured yet.
+python3 -m py_compile src/services/agent_blueprint_runner.py src/api/agent_blueprints_api.py src/services/operator_review_reply_bulk.py src/api/operator_api.py tests/test_agent_blueprint_layer.py tests/test_operator_review_reply_bulk.py
+
+Exit code: 0
+
+cd frontend && npm run build
+
+Result: Vite production build passed.

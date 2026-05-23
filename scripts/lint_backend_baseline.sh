@@ -14,12 +14,15 @@ python3 -m py_compile \
   src/services/agent_blueprint_orchestrator.py \
   src/services/agent_blueprint_runner.py \
   src/services/outreach_send_capability.py \
+  src/api/operator_api.py \
+  src/services/operator_review_reply_bulk.py \
   src/api/growth_workflow_api.py \
   src/auth_encryption.py \
   tests/test_reports_api_routes.py \
   tests/test_agent_blueprint_layer.py \
   tests/test_growth_workflow_routes.py \
-  tests/test_security_runtime_config.py
+  tests/test_security_runtime_config.py \
+  tests/test_operator_review_reply_bulk.py
 
 echo "[backend-lint] import and route ownership smoke"
 PYTHONPATH=src python3 - <<'PY'
@@ -116,6 +119,49 @@ for path, markers in required.items():
             raise SystemExit(f"{path}: missing guardrail marker {marker}")
 
 print("OK: agent blueprint runtime uses registered safe outreach capability")
+PY
+
+echo "[backend-lint] operator route and paid draft guardrails"
+PYTHONPATH=src python3 - <<'PY'
+import main
+
+expected = {
+    "/api/operator/review-replies/generate": "operator_api.operator_review_replies_generate",
+    "/api/operator/chat": "operator_api.operator_chat",
+    "/api/operator/review-reply-drafts/<draft_id>/mark-manual-published": "operator_api.operator_review_reply_draft_mark_manual_published",
+}
+
+actual = {rule.rule: rule.endpoint for rule in main.app.url_map.iter_rules()}
+for route, endpoint in expected.items():
+    if actual.get(route) != endpoint:
+        raise SystemExit(f"{route}: expected {endpoint}, got {actual.get(route)}")
+
+print("OK: Operator bulk/manual review routes are registered through operator_api")
+PY
+
+python3 - <<'PY'
+from pathlib import Path
+
+operator_text = Path("src/services/operator_review_reply_bulk.py").read_text(encoding="utf-8")
+api_text = Path("src/api/operator_api.py").read_text(encoding="utf-8")
+blueprint_handler_text = Path("src/services/outreach_send_capability.py").read_text(encoding="utf-8")
+
+for marker in (
+    "reserve_paid_action_credits",
+    "finalize_reserved_action_credits",
+    "external_writes_performed",
+    "manual_publication_only",
+):
+    if marker not in operator_text:
+        raise SystemExit(f"operator_review_reply_bulk missing guardrail marker: {marker}")
+
+if "dispatch_due_outreach_queue(" in blueprint_handler_text:
+    raise SystemExit("Agent Blueprint outreach capability must not call dispatch_due_outreach_queue directly")
+
+if "generate_review_reply_drafts_for_unanswered_reviews" not in api_text:
+    raise SystemExit("operator_api does not expose bulk review reply service")
+
+print("OK: paid Operator drafts and Agent Blueprint dispatch boundaries are guarded")
 PY
 
 echo "[backend-lint] extracted growth routes stay out of main.py"
