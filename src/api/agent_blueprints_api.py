@@ -247,18 +247,47 @@ def get_agent_blueprint(blueprint_id: str):
             (blueprint_id,),
         )
         versions = [_normalize_json_row(dict(row)) for row in (cursor.fetchall() or [])]
+        run_status = str(request.args.get("run_status") or "").strip().lower()
+        run_params = [blueprint_id]
+        run_where = "WHERE blueprint_id = %s"
+        if run_status:
+            run_where = f"{run_where} AND status = %s"
+            run_params.append(run_status)
         cursor.execute(
-            """
+            f"""
             SELECT *
             FROM agent_runs
-            WHERE blueprint_id = %s
+            {run_where}
             ORDER BY started_at DESC
+            LIMIT 50
+            """,
+            tuple(run_params),
+        )
+        runs = [_normalize_json_row(dict(row)) for row in (cursor.fetchall() or [])]
+        cursor.execute(
+            """
+            SELECT a.*,
+                   r.status run_status,
+                   r.started_at run_started_at
+            FROM agent_approvals a
+            JOIN agent_runs r ON r.id = a.run_id
+            WHERE r.blueprint_id = %s
+              AND a.status = 'pending'
+            ORDER BY a.requested_at ASC
             LIMIT 50
             """,
             (blueprint_id,),
         )
-        runs = [_normalize_json_row(dict(row)) for row in (cursor.fetchall() or [])]
-        return jsonify({"success": True, "blueprint": _normalize_json_row(blueprint), "versions": versions, "runs": runs})
+        approval_queue = [_normalize_json_row(dict(row)) for row in (cursor.fetchall() or [])]
+        return jsonify(
+            {
+                "success": True,
+                "blueprint": _normalize_json_row(blueprint),
+                "versions": versions,
+                "runs": runs,
+                "approval_queue": approval_queue,
+            }
+        )
     finally:
         db.close()
 

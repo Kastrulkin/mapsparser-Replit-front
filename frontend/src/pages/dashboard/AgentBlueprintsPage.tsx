@@ -9,6 +9,7 @@ import {
   Loader2,
   Play,
   RefreshCw,
+  Send,
   ShieldCheck,
   Workflow,
 } from 'lucide-react';
@@ -46,11 +47,14 @@ type AgentBlueprint = {
 
 type AgentApproval = {
   id: string;
+  run_id?: string;
   status: string;
   approval_type: string;
   title: string;
   payload_json?: Record<string, unknown>;
   decision_reason?: string | null;
+  requested_at?: string | null;
+  run_status?: string | null;
 };
 
 type AgentArtifact = {
@@ -62,6 +66,11 @@ type AgentArtifact = {
     source?: string;
     count?: number;
     items?: Array<Record<string, unknown>>;
+    external_dispatch_performed?: boolean;
+    next_step?: string;
+    queue_count?: number;
+    draft_ids?: string[];
+    [key: string]: unknown;
   };
 };
 
@@ -89,7 +98,16 @@ type AgentRun = {
 type AgentBlueprintDetails = {
   versions: Array<Record<string, unknown>>;
   runs: AgentRun[];
+  approval_queue?: AgentApproval[];
 };
+
+const runStatusFilters = [
+  { value: 'all', label: 'Все' },
+  { value: 'running', label: 'Running' },
+  { value: 'waiting_approval', label: 'Approval' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'failed', label: 'Failed' },
+];
 
 const statusTone: Record<string, string> = {
   completed: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
@@ -114,6 +132,7 @@ export const AgentBlueprintsPage = () => {
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [runStatusFilter, setRunStatusFilter] = useState('all');
 
   const selectedBlueprint = useMemo(
     () => blueprints.find((item) => item.id === selectedBlueprintId) || blueprints[0] || null,
@@ -123,6 +142,19 @@ export const AgentBlueprintsPage = () => {
   const pendingApproval = useMemo(
     () => activeRun?.approvals?.find((item) => item.status === 'pending') || null,
     [activeRun],
+  );
+
+  const pendingApprovals = useMemo(
+    () => blueprintDetails?.approval_queue || [],
+    [blueprintDetails?.approval_queue],
+  );
+
+  const queuedButNotDispatched = useMemo(
+    () => (activeRun?.artifacts || []).find((artifact) => {
+      const payload = artifact.payload_json || {};
+      return payload.status === 'queued_for_dispatch' && payload.external_dispatch_performed === false;
+    }) || null,
+    [activeRun?.artifacts],
   );
 
   const metrics = useMemo(
@@ -145,12 +177,12 @@ export const AgentBlueprintsPage = () => {
       },
       {
         label: 'Approvals',
-        value: activeRun?.approvals?.length || 0,
-        hint: pendingApproval ? 'Есть ожидающее подтверждение' : 'Нет ожидающих решений',
-        tone: pendingApproval ? 'warning' as const : 'default' as const,
+        value: pendingApprovals.length || activeRun?.approvals?.length || 0,
+        hint: pendingApprovals.length ? 'Есть ожидающие решения' : 'Нет ожидающих решений',
+        tone: pendingApprovals.length || pendingApproval ? 'warning' as const : 'default' as const,
       },
     ],
-    [activeRun, blueprints.length, currentBusiness?.name, pendingApproval],
+    [activeRun, blueprints.length, currentBusiness?.name, pendingApproval, pendingApprovals.length],
   );
 
   const loadBlueprints = useCallback(async () => {
@@ -181,17 +213,19 @@ export const AgentBlueprintsPage = () => {
   const loadBlueprintDetails = useCallback(async (blueprintId: string) => {
     setError(null);
     try {
-      const response = await api.get(`/api/agent-blueprints/${blueprintId}`);
+      const params = runStatusFilter === 'all' ? {} : { run_status: runStatusFilter };
+      const response = await api.get(`/api/agent-blueprints/${blueprintId}`, { params });
       const details = {
         versions: Array.isArray(response.data?.versions) ? response.data.versions : [],
         runs: Array.isArray(response.data?.runs) ? response.data.runs : [],
+        approval_queue: Array.isArray(response.data?.approval_queue) ? response.data.approval_queue : [],
       };
       setBlueprintDetails(details);
     } catch (requestError) {
       console.error(requestError);
       setError('Не удалось загрузить историю blueprint.');
     }
-  }, []);
+  }, [runStatusFilter]);
 
   useEffect(() => {
     if (selectedBlueprint?.id) {
@@ -412,6 +446,16 @@ export const AgentBlueprintsPage = () => {
                 ) : null}
               />
 
+              {queuedButNotDispatched ? (
+                <DashboardActionPanel
+                  title="Queued but not dispatched"
+                  description={`Send step поставил batch в очередь: ${Number(queuedButNotDispatched.payload_json?.queue_count || 0)} items. Внешняя отправка не запускалась внутри blueprint runtime.`}
+                  status={<StatusBadge status="queued_for_dispatch" />}
+                  tone="amber"
+                  actions={<Send className="h-4 w-4 text-amber-600" />}
+                />
+              ) : null}
+
               <div className="grid gap-4 lg:grid-cols-3">
                 <RunColumn title="Steps" icon={Clock3}>
                   {(activeRun.steps || []).map((step) => (
@@ -448,6 +492,21 @@ export const AgentBlueprintsPage = () => {
         <DashboardSection
           title="Run history"
           description="Последние запуски выбранного workflow agent. Откройте run, чтобы увидеть steps, artifacts и approvals."
+          actions={(
+            <div className="flex flex-wrap gap-2">
+              {runStatusFilters.map((filter) => (
+                <Button
+                  key={filter.value}
+                  type="button"
+                  size="sm"
+                  variant={runStatusFilter === filter.value ? 'default' : 'outline'}
+                  onClick={() => setRunStatusFilter(filter.value)}
+                >
+                  {filter.label}
+                </Button>
+              ))}
+            </div>
+          )}
         >
           {blueprintDetails?.runs?.length ? (
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -478,6 +537,42 @@ export const AgentBlueprintsPage = () => {
             <DashboardEmptyState
               title="История пуста"
               description="Запустите blueprint, чтобы здесь появились последние runs."
+            />
+          )}
+        </DashboardSection>
+      ) : null}
+
+      {selectedBlueprint ? (
+        <DashboardSection
+          title="Approval queue"
+          description="Все pending approvals по выбранному workflow agent, отдельно от истории запусков."
+        >
+          {pendingApprovals.length ? (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {pendingApprovals.map((approval) => (
+                <button
+                  key={approval.id}
+                  type="button"
+                  className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left transition hover:border-amber-300"
+                  onClick={() => approval.run_id ? void loadRun(approval.run_id) : undefined}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-slate-950">{approval.title}</div>
+                      <div className="mt-1 text-xs text-amber-700">
+                        Run {approval.run_id ? approval.run_id.slice(0, 8) : 'unknown'} · {approval.approval_type}
+                      </div>
+                    </div>
+                    <StatusBadge status={approval.status} />
+                  </div>
+                  <div className="mt-2 text-xs text-slate-500">{approval.requested_at || approval.run_status || 'pending'}</div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <DashboardEmptyState
+              title="Очередь approval пуста"
+              description="Когда workflow agent остановится на ручном подтверждении, решение появится здесь."
             />
           )}
         </DashboardSection>
@@ -542,6 +637,14 @@ const ArtifactItem = ({ artifact }: { artifact: AgentArtifact }) => {
           ))}
         </div>
       ) : null}
+      <details className="mt-3">
+        <summary className="cursor-pointer text-xs font-medium text-slate-500 hover:text-slate-900">
+          Full payload
+        </summary>
+        <pre className="mt-2 max-h-72 overflow-auto rounded-lg bg-slate-950 p-3 text-[11px] leading-5 text-slate-100">
+          {JSON.stringify(payload, null, 2)}
+        </pre>
+      </details>
     </div>
   );
 };

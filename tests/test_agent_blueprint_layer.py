@@ -86,6 +86,8 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "VERSION_BLUEPRINT_MISMATCH" in api_source
     assert "_load_blueprint_version_for_blueprint" in api_source
     assert "build_agent_blueprint_orchestrator" in api_source
+    assert "run_status" in api_source
+    assert "approval_queue" in api_source
 
 
 def test_outreach_send_batch_handler_queues_approved_drafts_without_external_dispatch(monkeypatch):
