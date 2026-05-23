@@ -10,7 +10,7 @@
     {
       "id": "AC2",
       "status": "PASS",
-      "reason": "Handler queues approved business-scoped drafts under the daily cap and records that no external dispatch occurred."
+      "reason": "Handler queues approved business-scoped drafts under the daily cap and live authenticated smoke confirmed no external dispatch occurred."
     },
     {
       "id": "AC3",
@@ -27,10 +27,12 @@
     "python3 -m py_compile src/api/agent_blueprints_api.py src/services/agent_blueprint_orchestrator.py src/services/agent_blueprint_runner.py src/services/outreach_send_capability.py tests/test_agent_blueprint_layer.py",
     "PYTHONPATH=src python3 - <<'PY' ... build_agent_blueprint_orchestrator smoke ... PY",
     "scripts/lint_backend_baseline.sh",
-    "python3 -m pytest tests/test_agent_blueprint_layer.py"
+    "python3 -m pytest tests/test_agent_blueprint_layer.py",
+    "ssh ... 'cd /opt/seo-app && docker compose exec -T app sh -lc \"APP_SRC_DIR=/app/src python3 -\"' < scripts/smoke_agent_blueprint_outreach_api.py"
   ],
   "artifacts_used": [
     ".agent/tasks/agent-blueprints-p0-p1/evidence.md",
-    ".agent/tasks/agent-blueprints-p0-p1/evidence.json"
+    ".agent/tasks/agent-blueprints-p0-p1/evidence.json",
+    "scripts/smoke_agent_blueprint_outreach_api.py"
   ]
 }

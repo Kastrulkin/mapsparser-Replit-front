@@ -23,7 +23,7 @@
   - Handler creates approved queue batches but does not call the dispatcher; result includes `external_dispatch_performed: false`.
   - Unit test: `test_outreach_send_batch_handler_queues_approved_drafts_without_external_dispatch`.
 - Gaps:
-  - Live authenticated run smoke still requires a real user session/token and real approved drafts.
+  - None.
 
 ### AC3
 - Status: PASS
@@ -47,6 +47,8 @@
 - `PYTHONPATH=src python3 - <<'PY' ... build_agent_blueprint_orchestrator smoke ... PY`
 - `scripts/lint_backend_baseline.sh`
 - `python3 -m pytest tests/test_agent_blueprint_layer.py`
+- `ssh ... 'cd /opt/seo-app && docker compose exec -T app sh -lc "APP_SRC_DIR=/app/src python3 -"' < scripts/smoke_agent_blueprint_outreach_api.py`
+- server cleanup verification queries for smoke user/business/lead/draft rows
 
 ## Raw artifacts
 - .agent/tasks/agent-blueprints-p0-p1/raw/build.txt
@@ -56,4 +58,11 @@
 - .agent/tasks/agent-blueprints-p0-p1/raw/screenshot-1.png
 
 ## Known gaps
-- Live authenticated API smoke was not run because no browser/session token was available inside this autonomous cycle.
+- No known P0/P1 gaps for the Agent Blueprint authenticated supervised outreach smoke.
+
+## Live authenticated smoke
+- Status: PASS
+- Environment: production container, `http://localhost:8000` inside `/opt/seo-app`.
+- Fixture: temporary smoke user, business, prospecting lead, approved message draft.
+- Flow: login -> auth/me -> create supervised outreach blueprint -> start run -> approve shortlist -> approve drafts -> queue send batch.
+- Result: run completed, `approval_count=2`, send queue stayed `queued`, `dispatcher_started=false`, fixture cleanup verified with zero remaining smoke rows.

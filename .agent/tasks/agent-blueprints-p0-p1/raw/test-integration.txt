@@ -5,3 +5,16 @@ PYTHONPATH=src python3 import smoke:
 
 Result:
 OK orchestrator handler registered
+
+Live authenticated supervised outreach smoke:
+- temporary verified user/business/lead/approved draft were created
+- `/api/auth/login` returned a real session token
+- `/api/auth/me` passed
+- `/api/agent-blueprints` created a supervised outreach blueprint
+- `/api/agent-blueprints/<id>/runs` started a run
+- two approval gates were approved through `/api/agent-runs/<id>/approvals/<approval_id>/approve`
+- run completed
+- send batch was created and approved
+- outreach queue stayed `queued`
+- `sent_at` and `provider_message_id` stayed empty
+- fixture cleanup left zero smoke users/businesses/leads/drafts

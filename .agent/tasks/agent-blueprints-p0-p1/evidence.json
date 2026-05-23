@@ -20,11 +20,10 @@
       "proof": [
         "src/services/outreach_send_capability.py filters by approved draft status, l.business_id, unqueued drafts, and daily cap.",
         "The handler creates approved queue batches and reports external_dispatch_performed=false.",
-        "tests/test_agent_blueprint_layer.py covers the no-direct-dispatch queue behavior."
+        "tests/test_agent_blueprint_layer.py covers the no-direct-dispatch queue behavior.",
+        "scripts/smoke_agent_blueprint_outreach_api.py passed against live app container with a real session token."
       ],
-      "gaps": [
-        "Live authenticated smoke needs a real user session/token and real approved drafts."
-      ]
+      "gaps": []
     },
     {
       "id": "AC3",
@@ -60,9 +59,10 @@
     "python3 -m py_compile src/api/agent_blueprints_api.py src/services/agent_blueprint_orchestrator.py src/services/agent_blueprint_runner.py src/services/outreach_send_capability.py tests/test_agent_blueprint_layer.py",
     "PYTHONPATH=src python3 - <<'PY'\nfrom services.agent_blueprint_orchestrator import build_agent_blueprint_orchestrator\nfrom services.outreach_send_capability import OUTREACH_SEND_BATCH_CAPABILITY\norch = build_agent_blueprint_orchestrator()\nif OUTREACH_SEND_BATCH_CAPABILITY not in orch.handlers:\n    raise SystemExit('missing outreach handler')\nprint('OK orchestrator handler registered')\nPY",
     "scripts/lint_backend_baseline.sh",
-    "python3 -m pytest tests/test_agent_blueprint_layer.py"
+    "python3 -m pytest tests/test_agent_blueprint_layer.py",
+    "ssh ... 'cd /opt/seo-app && docker compose exec -T app sh -lc \"APP_SRC_DIR=/app/src python3 -\"' < scripts/smoke_agent_blueprint_outreach_api.py"
   ],
   "known_gaps": [
-    "Live authenticated API smoke was not run because no browser/session token was available inside this autonomous cycle."
+    "No known P0/P1 gaps for the Agent Blueprint authenticated supervised outreach smoke."
   ]
 }
