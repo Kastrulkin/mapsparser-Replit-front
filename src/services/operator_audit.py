@@ -14,6 +14,7 @@ OPERATOR_EVENT_TYPES = {
     "operator_draft_created",
     "operator_execution_blocked",
     "operator_manual_action_presented",
+    "operator_manual_publish_marked",
     "operator_message_received",
     "operator_paid_action_estimated",
     "operator_review_added",

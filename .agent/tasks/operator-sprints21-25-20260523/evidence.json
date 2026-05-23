@@ -1,0 +1,44 @@
+{
+  "task_id": "operator-sprints21-25-20260523",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Implement Sprint 21-25 Operator Inbox, paid generation registry exposure, Telegram parity and manual publish tracking without external writes.",
+      "status": "PASS",
+      "proof": [
+        "Operator Inbox API and service added.",
+        "Manual publish tracking endpoint added.",
+        "Web Operator UI exposes inbox copy/open/mark actions.",
+        "Telegram manual review path uses same backend service and states manual publication boundary.",
+        "71 targeted Operator/Telegram tests pass.",
+        "Frontend production build passes."
+      ],
+      "gaps": [
+        "Real Apify execution and actual-cost settlement remain disabled/planned."
+      ]
+    }
+  ],
+  "changed_files": [
+    "src/services/operator_inbox.py",
+    "src/services/operator_manual_publish.py",
+    "src/api/operator_api.py",
+    "src/services/operator_audit.py",
+    "src/telegram_bot.py",
+    "frontend/src/pages/dashboard/OperatorPage.tsx",
+    "tests/test_operator_inbox.py",
+    "tests/test_operator_manual_publish.py",
+    "docs/agents/index.md",
+    "docs/agents/localos-operator.md",
+    "docs/agents/tool-registry.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m pytest -q tests/test_operator_inbox.py tests/test_operator_manual_publish.py tests/test_operator_manual_review.py tests/test_operator_paid_preflight.py tests/test_operator_credit_reservation.py tests/test_operator_paid_actions.py tests/test_operator_paid_executor.py tests/test_operator_map_refresh.py tests/test_operator_audit.py tests/test_telegram_dashboard_copy.py tests/test_telegram_response_router.py",
+    "cd frontend && npm run build",
+    "git diff --check"
+  ],
+  "known_gaps": [
+    "Real external map refresh through Apify is not enabled by default.",
+    "Direct publishing to maps is still manual copy/paste."
+  ]
+}

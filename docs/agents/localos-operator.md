@@ -239,6 +239,48 @@ Sprint 14 adds usage-window enforcement to paid action preflight:
 - if credits are insufficient, preflight returns `insufficient_balance`, `next_step: top_up_credits`, and `billing_url: /dashboard/billing`;
 - preflight response includes `usage_window` with today and month usage.
 
+Sprint 21 adds the first Operator Inbox:
+
+- backend service: `services.operator_inbox`;
+- API endpoint: `GET /api/operator/inbox?business_id=<id>`;
+- web surface: `/dashboard/operator` shows a single queue of review actions, ready reply drafts, content work, and partnership work;
+- inbox items expose presentation actions such as `open_section`, `copy_reply`, and `mark_manual_published`.
+
+The inbox is still a governed dashboard layer, not a free-form autonomous agent. It reads LocalOS state, points to the next local workflow, and keeps external publication manual.
+
+Sprint 22 keeps map refresh as a read-only paid-external boundary:
+
+- backend service: `services.operator_map_refresh`;
+- default flag: `OPERATOR_APIFY_REFRESH_ENABLED = False`;
+- when disabled, map refresh returns a structured blocked plan and creates no jobs;
+- when explicitly enabled in a controlled environment, it can enqueue a `parsequeue` job for read-only card parsing;
+- it still does not publish, send messages, or write to third-party map providers.
+
+Sprint 23 aligns Telegram with the same Operator core for manual review intake:
+
+- Telegram owner-bot detects the same `manual_review_add_and_reply_generate` intent;
+- it calls `services.operator_manual_review.process_operator_chat_message`;
+- it records Operator audit events with `channel = telegram`;
+- response text repeats that map publication is manual copy/paste.
+
+Sprint 24 exposes paid generation actions through the unified paid-action layer:
+
+- `review_replies_generate`;
+- `news_generate`;
+- `social_post_generate`;
+- `services_optimize`.
+
+These actions are visible as paid generation offers in the Operator Inbox. Generation may charge credits through the configured paid-action path, but external publication remains a separate manual or approval-required action.
+
+Sprint 25 adds the manual publish tracking workflow:
+
+- backend service: `services.operator_manual_publish`;
+- API endpoint: `POST /api/operator/review-reply-drafts/<draft_id>/mark-manual-published`;
+- web surface: copy the reply, paste it into the provider cabinet manually, then mark the LocalOS draft as `manual_published`;
+- audit event: `operator_manual_publish_marked`.
+
+This endpoint updates LocalOS state only. It does not publish to Yandex, Google, 2GIS, or any other third-party system.
+
 Sprint 14 still does not call Apify, create parsequeue jobs, generate AI content, write to external providers, publish to maps, or enable production execution. It only tightens the safety gate before future paid runtime rollout.
 
 Sprint 15 adds manual review intake through Operator chat:

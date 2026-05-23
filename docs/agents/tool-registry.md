@@ -127,6 +127,8 @@ Current Operator review intake uses these tool boundaries:
 | `operator.manual_review_intake` | `write_internal` plus `paid_compute` when reply generation is requested | `write_internal` | saves a manually provided review with `source = manual_chat` | no charge by itself |
 | `reviews.reply_draft.generate` | `paid_compute` | `draft_only` | saves a LocalOS reply draft; no external publication | charges credits through reservation and finalization |
 | `reviews.reply_draft.copy` | `manual_external` | `read_only` | user copies text manually | no extra charge after draft generation |
+| `reviews.reply_draft.mark_manual_published` | `manual_external` | `write_internal` | marks the LocalOS draft as published manually after the user copied and pasted it outside LocalOS | no extra charge after draft generation |
+| `operator.inbox.read` | `free_cached` | `read_only` | returns a scoped queue of review/content/partnership actions and UI helpers | no charge |
 | `maps.refresh.enqueue_apify_yandex` | `paid_external` | `write_internal` | may enqueue a `parsequeue` job only when the disabled runtime flag is explicitly enabled | actual provider-cost settlement is pending worker-result integration |
 
 The manual review flow is available from web Operator chat and Telegram, but both surfaces must route through the same backend service and credit checks. Publication to Yandex, Google, 2GIS, or other maps remains manual unless a provider write flow is later implemented and approved.

@@ -9,7 +9,9 @@ from database_manager import DatabaseManager
 from services.operator_audit import list_operator_events, record_operator_event
 from services.operator_consent_policy import list_consent_policies, upsert_consent_policy
 from services.operator_attention import build_attention_brief
+from services.operator_inbox import build_operator_inbox
 from services.operator_manual_review import process_operator_chat_message
+from services.operator_manual_publish import mark_review_reply_draft_manual_published
 from services.operator_paid_executor import build_paid_action_execution_attempt
 from services.operator_paid_preflight import build_paid_action_preflight
 
@@ -56,6 +58,52 @@ def operator_attention_brief():
         db.conn.commit()
         return jsonify({"success": True, "brief": brief})
     except Exception:
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+    finally:
+        db.close()
+
+
+@operator_bp.route("/inbox", methods=["GET"])
+def operator_inbox():
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+
+    business_id = str(request.args.get("business_id") or "").strip()
+    if not business_id:
+        return jsonify({"success": False, "error": "business_id обязателен"}), 400
+
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        if not has_access:
+            status_code = 403 if owner_id else 404
+            message = "Нет доступа" if owner_id else "Бизнес не найден"
+            return jsonify({"success": False, "error": message}), status_code
+
+        user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        inbox = build_operator_inbox(cursor, business_id=business_id, user_id=user_id)
+        record_operator_event(
+            cursor,
+            business_id=business_id,
+            user_id=user_id,
+            event_type="operator_context_built",
+            status="completed",
+            input_summary={"query": "operator_inbox"},
+            output_summary={
+                "items_count": (inbox.get("summary") or {}).get("items_count"),
+                "paid_generation_offers": len(inbox.get("paid_generation_offers") or []),
+            },
+            metadata={
+                "external_writes_performed": False,
+                "manual_publication_only": True,
+            },
+        )
+        db.conn.commit()
+        return jsonify({"success": True, "inbox": inbox})
+    except Exception:
+        db.conn.rollback()
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
     finally:
         db.close()
@@ -373,6 +421,60 @@ def operator_chat():
             )
         db.conn.commit()
         return jsonify({"success": status == "completed", "operator_result": result})
+    except Exception:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+    finally:
+        db.close()
+
+
+@operator_bp.route("/review-reply-drafts/<draft_id>/mark-manual-published", methods=["POST"])
+def operator_review_reply_draft_mark_manual_published(draft_id: str):
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    business_id = str(payload.get("business_id") or "").strip()
+    if not business_id:
+        return jsonify({"success": False, "error": "business_id обязателен"}), 400
+
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        if not has_access:
+            status_code = 403 if owner_id else 404
+            message = "Нет доступа" if owner_id else "Бизнес не найден"
+            return jsonify({"success": False, "error": message}), status_code
+
+        user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        result = mark_review_reply_draft_manual_published(
+            cursor,
+            business_id=business_id,
+            user_id=user_id,
+            draft_id=draft_id,
+        )
+        status = str(result.get("status") or "blocked")
+        record_operator_event(
+            cursor,
+            business_id=business_id,
+            user_id=user_id,
+            event_type="operator_manual_publish_marked",
+            channel="web",
+            action_key="review_replies_generate",
+            status=status,
+            reason_code=",".join(result.get("blocked_reasons") or []) or None,
+            input_summary={"draft_id": draft_id},
+            output_summary={"status": status},
+            metadata={
+                "draft_id": draft_id,
+                "manual_publication_only": True,
+                "external_writes_performed": False,
+            },
+        )
+        db.conn.commit()
+        return jsonify({"success": status == "completed", "manual_publish": result})
     except Exception:
         db.conn.rollback()
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500

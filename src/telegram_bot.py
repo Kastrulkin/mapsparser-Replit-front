@@ -5057,8 +5057,16 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     },
                 )
                 conn.commit()
+                response_text = str(result.get("chat_response") or "Команда обработана.")
+                if result.get("status") == "completed" and result.get("reply_text"):
+                    response_text = (
+                        response_text
+                        + "\n\n"
+                        + "Чтобы опубликовать ответ, скопируйте текст из сообщения и вставьте его в кабинете карты. "
+                        + "LocalOS не публиковал ответ во внешнюю систему."
+                    )
                 await update.message.reply_text(
-                    str(result.get("chat_response") or "Команда обработана."),
+                    response_text,
                     reply_markup=_build_reviews_menu(),
                 )
             except Exception:

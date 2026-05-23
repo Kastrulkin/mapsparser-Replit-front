@@ -246,6 +246,7 @@ const eventLabels: Record<string, string> = {
   operator_draft_created: 'Черновик создан',
   operator_execution_blocked: 'Запуск заблокирован',
   operator_manual_action_presented: 'Ручное действие показано',
+  operator_manual_publish_marked: 'Отмечено ручное размещение',
   operator_message_received: 'Сообщение получено',
   operator_paid_action_estimated: 'Preflight платного действия',
   operator_review_added: 'Отзыв добавлен',
@@ -285,6 +286,42 @@ type OperatorChatResult = {
   };
 };
 
+type OperatorInboxItem = {
+  id: string;
+  kind: string;
+  title: string;
+  description: string;
+  status: string;
+  priority: 'high' | 'medium' | 'low';
+  count?: number;
+  primary_action: string;
+  secondary_action?: string;
+  href?: string;
+  copy_text?: string;
+  metadata?: {
+    review_id?: string;
+    author_name?: string;
+    manual_publication_only?: boolean;
+    external_writes_performed?: boolean;
+  };
+};
+
+type OperatorInbox = {
+  status: string;
+  summary: {
+    title: string;
+    text: string;
+    items_count: number;
+  };
+  items: OperatorInboxItem[];
+  paid_generation_offers: PaidActionOffer[];
+  limits: {
+    external_calls_performed: boolean;
+    external_writes_performed: boolean;
+    manual_publication_only: boolean;
+  };
+};
+
 const formatDateTime = (value: string | null) => {
   if (!value) return 'нет данных';
   const parsed = new Date(value);
@@ -309,6 +346,7 @@ const getItemIcon = (item: AttentionItem) => {
 export const OperatorPage = () => {
   const { currentBusinessId, currentBusiness } = useOutletContext<DashboardContext>();
   const [brief, setBrief] = useState<AttentionBrief | null>(null);
+  const [inbox, setInbox] = useState<OperatorInbox | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savingConsentKey, setSavingConsentKey] = useState<string | null>(null);
@@ -326,6 +364,9 @@ export const OperatorPage = () => {
   const [chatLoading, setChatLoading] = useState(false);
   const [chatResult, setChatResult] = useState<OperatorChatResult | null>(null);
   const [copiedChatReply, setCopiedChatReply] = useState(false);
+  const [copiedInboxItemId, setCopiedInboxItemId] = useState<string | null>(null);
+  const [manualPublishDraftId, setManualPublishDraftId] = useState<string | null>(null);
+  const [manualPublishMessage, setManualPublishMessage] = useState<string | null>(null);
 
   const loadOperatorEvents = async () => {
     if (!currentBusinessId) {
@@ -345,6 +386,7 @@ export const OperatorPage = () => {
   const loadBrief = async () => {
     if (!currentBusinessId) {
       setBrief(null);
+      setInbox(null);
       setOperatorEvents([]);
       return;
     }
@@ -361,10 +403,26 @@ export const OperatorPage = () => {
         setPreflightDrafts(buildPreflightDrafts(nextBrief.paid_action_offers));
       }
       await loadOperatorEvents();
+      await loadInbox();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить сводку');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadInbox = async () => {
+    if (!currentBusinessId) {
+      setInbox(null);
+      return;
+    }
+    try {
+      const response = await api.get('/operator/inbox', {
+        params: { business_id: currentBusinessId },
+      });
+      setInbox(response.data.inbox || null);
+    } catch (err) {
+      setInbox(null);
     }
   };
 
@@ -510,6 +568,36 @@ export const OperatorPage = () => {
     await navigator.clipboard.writeText(text);
     setCopiedChatReply(true);
     window.setTimeout(() => setCopiedChatReply(false), 2000);
+  };
+
+  const copyInboxText = async (item: OperatorInboxItem) => {
+    const text = item.copy_text || '';
+    if (!text.trim()) return;
+    await navigator.clipboard.writeText(text);
+    setCopiedInboxItemId(item.id);
+    window.setTimeout(() => setCopiedInboxItemId(null), 2000);
+  };
+
+  const markManualPublished = async (draftId: string | undefined) => {
+    if (!currentBusinessId || !draftId) return;
+    setManualPublishDraftId(draftId);
+    setManualPublishMessage(null);
+    try {
+      const response = await api.post(`/operator/review-reply-drafts/${draftId}/mark-manual-published`, {
+        business_id: currentBusinessId,
+      });
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Не удалось отметить публикацию');
+      }
+      setManualPublishMessage('Отметил как опубликовано вручную. Внешней публикации LocalOS не выполнял.');
+      await loadBrief();
+      await loadInbox();
+      await loadOperatorEvents();
+    } catch (err) {
+      setManualPublishMessage(err instanceof Error ? err.message : 'Не удалось отметить публикацию');
+    } finally {
+      setManualPublishDraftId(null);
+    }
   };
 
   const chatReviewHref =
@@ -686,6 +774,17 @@ export const OperatorPage = () => {
                     <div className="mt-1 text-slate-600">
                       LocalOS сохранил черновик. Чтобы ответ появился на карте, скопируйте его и вставьте в кабинете площадки.
                     </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="mt-2"
+                      onClick={() => void markManualPublished(chatResult.draft?.id)}
+                      disabled={manualPublishDraftId === chatResult.draft.id}
+                    >
+                      {manualPublishDraftId === chatResult.draft.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                      Отметить как опубликовано вручную
+                    </Button>
                   </div>
                 ) : null}
               </div>
@@ -713,6 +812,121 @@ export const OperatorPage = () => {
       {brief ? (
         <>
           <DashboardCompactMetricsRow items={metrics} />
+
+          <DashboardSection
+            title="Operator Inbox"
+            description="Единая очередь действий: что открыть, что скопировать и что можно отметить как выполненное вручную."
+          >
+            {manualPublishMessage ? (
+              <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-700">
+                {manualPublishMessage}
+              </div>
+            ) : null}
+            {inbox ? (
+              <div className="space-y-3">
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-950">{inbox.summary.title}</div>
+                      <p className="mt-1 text-sm leading-6 text-slate-600">{inbox.summary.text}</p>
+                    </div>
+                    <div className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700">
+                      {inbox.summary.items_count} пунктов
+                    </div>
+                  </div>
+                </div>
+                {inbox.items.length > 0 ? (
+                  inbox.items.map((item) => (
+                    <div key={item.id} className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-sm font-semibold text-slate-950">{item.title}</h3>
+                            <span
+                              className={cn(
+                                'rounded-full px-2 py-1 text-xs font-medium ring-1',
+                                item.priority === 'high'
+                                  ? 'bg-rose-50 text-rose-800 ring-rose-200'
+                                  : item.priority === 'medium'
+                                    ? 'bg-amber-50 text-amber-800 ring-amber-200'
+                                    : 'bg-slate-100 text-slate-700 ring-slate-200',
+                              )}
+                            >
+                              {item.status}
+                            </span>
+                            {item.metadata?.manual_publication_only ? (
+                              <span className="rounded-full bg-sky-50 px-2 py-1 text-xs font-medium text-sky-800 ring-1 ring-sky-200">
+                                ручная публикация
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{item.description}</p>
+                          {item.copy_text ? (
+                            <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-700">
+                              {item.copy_text}
+                            </div>
+                          ) : null}
+                        </div>
+                        <div className="flex shrink-0 flex-col gap-2 sm:flex-row lg:justify-end">
+                          {item.copy_text ? (
+                            <Button type="button" size="sm" onClick={() => void copyInboxText(item)}>
+                              <Copy className="mr-2 h-4 w-4" />
+                              {copiedInboxItemId === item.id ? 'Скопировано' : 'Скопировать'}
+                            </Button>
+                          ) : null}
+                          {item.secondary_action === 'mark_manual_published' ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void markManualPublished(item.id)}
+                              disabled={manualPublishDraftId === item.id}
+                            >
+                              {manualPublishDraftId === item.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                              Отмечено вручную
+                            </Button>
+                          ) : null}
+                          {item.href ? (
+                            <Button type="button" size="sm" variant="outline" asChild>
+                              <Link to={item.href}>
+                                Открыть
+                                <ExternalLink className="ml-2 h-3.5 w-3.5" />
+                              </Link>
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <DashboardEmptyState
+                    title="Очередь пуста"
+                    description="По сохранённым данным нет срочных действий для Operator."
+                  />
+                )}
+                {inbox.paid_generation_offers.length > 0 ? (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                    <div className="text-sm font-semibold text-slate-950">Платные генерации доступны через единый слой</div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {inbox.paid_generation_offers.map((offer) => (
+                        <div key={offer.action_key} className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                          <div className="text-sm font-semibold text-slate-950">{offer.label}</div>
+                          <div className="mt-1 text-xs leading-5 text-slate-600">
+                            {offer.description} Оценка: {offer.estimated_credits ?? 'по факту'} кредит.
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <DashboardEmptyState
+                title="Inbox не загрузился"
+                description="Можно продолжать работать через сводку и чат-команду."
+              />
+            )}
+          </DashboardSection>
 
           <DashboardSection
             title="Сигналы"
