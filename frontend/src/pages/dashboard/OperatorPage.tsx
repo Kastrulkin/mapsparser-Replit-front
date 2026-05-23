@@ -260,6 +260,7 @@ type OperatorChatResult = {
   chat_response: string;
   reply_text?: string;
   news_text?: string;
+  social_post_text?: string;
   billing_url?: string;
   charged_credits?: number;
   credit_charged?: boolean;
@@ -286,6 +287,12 @@ type OperatorChatResult = {
     generated_text?: string;
   };
   news_draft?: {
+    id?: string;
+    status?: string;
+    generated_text?: string;
+    source_text?: string;
+  };
+  social_post_draft?: {
     id?: string;
     status?: string;
     generated_text?: string;
@@ -582,7 +589,14 @@ export const OperatorPage = () => {
   };
 
   const copyChatReply = async () => {
-    const text = chatResult?.reply_text || chatResult?.draft?.generated_text || chatResult?.news_text || chatResult?.news_draft?.generated_text || '';
+    const text =
+      chatResult?.reply_text ||
+      chatResult?.draft?.generated_text ||
+      chatResult?.news_text ||
+      chatResult?.news_draft?.generated_text ||
+      chatResult?.social_post_text ||
+      chatResult?.social_post_draft?.generated_text ||
+      '';
     if (!text.trim()) return;
     await navigator.clipboard.writeText(text);
     setCopiedChatReply(true);
@@ -660,6 +674,34 @@ export const OperatorPage = () => {
     }
   };
 
+  const generateSocialPostDraft = async () => {
+    if (!currentBusinessId) return;
+    const sourceText = chatMessage.trim() || 'Подготовь пост для соцсетей по последним изменениям бизнеса.';
+    setBulkGeneratingKey('social_post_generate');
+    setConsentMessage(null);
+    setChatResult(null);
+    try {
+      const response = await api.post('/operator/social-posts/generate', {
+        business_id: currentBusinessId,
+        message: sourceText,
+      });
+      const result = response.data.operator_result || null;
+      setChatResult(result);
+      await loadBrief();
+      await loadInbox();
+      await loadOperatorEvents();
+    } catch (err) {
+      setChatResult({
+        status: 'blocked',
+        intent: 'social_post_generate',
+        chat_response: err instanceof Error ? err.message : 'Не удалось сгенерировать пост',
+        blocked_reasons: ['operator_social_post_generation_failed'],
+      });
+    } finally {
+      setBulkGeneratingKey(null);
+    }
+  };
+
   const markManualPublished = async (draftId: string | undefined) => {
     if (!currentBusinessId || !draftId) return;
     setManualPublishDraftId(draftId);
@@ -686,8 +728,10 @@ export const OperatorPage = () => {
     chatResult?.ui_actions?.find((item) => item.action === 'open_reviews')?.href ||
     '/dashboard/card?tab=reviews&review_filter=needs_reply';
   const chatNewsHref = chatResult?.ui_actions?.find((item) => item.action === 'open_news_drafts')?.href || '/dashboard/content-plan';
-  const chatSecondaryHref = chatResult?.news_text || chatResult?.news_draft?.generated_text ? chatNewsHref : chatReviewHref;
-  const chatSecondaryLabel = chatResult?.news_text || chatResult?.news_draft?.generated_text ? 'Открыть черновики' : 'Открыть отзывы';
+  const isContentDraftResult =
+    Boolean(chatResult?.news_text || chatResult?.news_draft?.generated_text || chatResult?.social_post_text || chatResult?.social_post_draft?.generated_text);
+  const chatSecondaryHref = isContentDraftResult ? chatNewsHref : chatReviewHref;
+  const chatSecondaryLabel = isContentDraftResult ? 'Открыть черновики' : 'Открыть отзывы';
 
   const metrics = useMemo(() => {
     if (!brief) return [];
@@ -826,11 +870,22 @@ export const OperatorPage = () => {
                     <div className="mt-1 font-semibold text-slate-950">{chatResult.status}</div>
                   </div>
                 </div>
-                {chatResult.reply_text || chatResult.draft?.generated_text || chatResult.news_text || chatResult.news_draft?.generated_text ? (
+                {chatResult.reply_text ||
+                chatResult.draft?.generated_text ||
+                chatResult.news_text ||
+                chatResult.news_draft?.generated_text ||
+                chatResult.social_post_text ||
+                chatResult.social_post_draft?.generated_text ? (
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <Button type="button" size="sm" onClick={() => void copyChatReply()}>
                       <Copy className="mr-2 h-4 w-4" />
-                      {copiedChatReply ? 'Скопировано' : chatResult.news_text || chatResult.news_draft?.generated_text ? 'Скопировать новость' : 'Скопировать ответ'}
+                      {copiedChatReply
+                        ? 'Скопировано'
+                        : chatResult.social_post_text || chatResult.social_post_draft?.generated_text
+                          ? 'Скопировать пост'
+                          : chatResult.news_text || chatResult.news_draft?.generated_text
+                            ? 'Скопировать новость'
+                            : 'Скопировать ответ'}
                     </Button>
                     <Button type="button" variant="outline" size="sm" asChild>
                       <Link to={chatSecondaryHref}>
@@ -876,6 +931,16 @@ export const OperatorPage = () => {
                   <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
                     <div className="font-semibold">Черновик новости</div>
                     <div>Статус: {chatResult.news_draft.status || 'draft'}</div>
+                    {chatResult.charged_credits ? <div>Списано кредитов: {chatResult.charged_credits}</div> : null}
+                    <div className="mt-1 text-slate-600">
+                      LocalOS сохранил черновик. Публикация не выполнялась: текст нужно скопировать и разместить вручную.
+                    </div>
+                  </div>
+                ) : null}
+                {chatResult.social_post_draft?.id ? (
+                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                    <div className="font-semibold">Черновик поста</div>
+                    <div>Статус: {chatResult.social_post_draft.status || 'draft'}</div>
                     {chatResult.charged_credits ? <div>Списано кредитов: {chatResult.charged_credits}</div> : null}
                     <div className="mt-1 text-slate-600">
                       LocalOS сохранил черновик. Публикация не выполнялась: текст нужно скопировать и разместить вручную.
@@ -1062,6 +1127,18 @@ export const OperatorPage = () => {
                             >
                               {bulkGeneratingKey === offer.action_key ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquareText className="mr-2 h-4 w-4" />}
                               Подготовить новость
+                            </Button>
+                          ) : null}
+                          {offer.action_key === 'social_post_generate' ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="mt-2"
+                              onClick={() => void generateSocialPostDraft()}
+                              disabled={bulkGeneratingKey === offer.action_key || !currentBusinessId}
+                            >
+                              {bulkGeneratingKey === offer.action_key ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquareText className="mr-2 h-4 w-4" />}
+                              Подготовить пост
                             </Button>
                           ) : null}
                         </div>

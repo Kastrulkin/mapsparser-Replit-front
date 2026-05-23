@@ -37,6 +37,8 @@ Sprint 26 turns the `review_replies_generate` offer into a real paid draft actio
 
 Sprint 27 turns `news_generate` into a real paid compute action. Operator can prepare a news draft from web chat or Inbox, save it into `usernews`, charge one credit after successful generation, and keep publication manual.
 
+Sprint 28 turns `social_post_generate` into the same paid compute/manual-publish pattern for social posts. Operator can prepare a post draft, save it as a LocalOS draft, charge one credit on success, and expose copy/manual publication actions.
+
 The Operator model keeps one context, one permission system, one credit/usage ledger, one approval policy, and one audit trail across web and Telegram. Sprint 0 defines the product contract only; it does not imply that the web-chat runtime or Telegram Operator runtime is fully implemented.
 
 ## What Agents Must Not Assume

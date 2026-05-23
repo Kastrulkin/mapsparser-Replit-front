@@ -1,0 +1,27 @@
+{
+  "task_id": "operator-sprint28-social-post-generate-20260523",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "social_post_generate is implemented as paid draft/manual publish flow."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Focused tests and frontend build passed."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/services/operator_social_post_generation.py src/services/operator_news_generation.py src/api/operator_api.py",
+    "python3 -m pytest -q tests/test_operator_social_post_generation.py tests/test_operator_news_generation.py tests/test_operator_review_reply_bulk.py tests/test_operator_manual_review.py tests/test_operator_inbox.py tests/test_operator_paid_preflight.py tests/test_operator_credit_reservation.py tests/test_operator_paid_actions.py tests/test_operator_paid_executor.py tests/test_operator_map_refresh.py tests/test_operator_audit.py tests/test_telegram_dashboard_copy.py tests/test_telegram_response_router.py",
+    "cd frontend && npm run build",
+    "git diff --check"
+  ],
+  "artifacts_used": [
+    "raw/build.txt",
+    "raw/test-unit.txt",
+    "raw/frontend-build.txt"
+  ]
+}

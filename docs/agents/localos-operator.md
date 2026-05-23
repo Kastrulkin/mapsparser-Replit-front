@@ -307,6 +307,18 @@ Sprint 27 turns `news_generate` into a real paid draft action:
 
 Sprint 27 does not publish news to maps, social networks, or other external providers. It only saves a LocalOS `usernews` draft for manual review and copy/paste publication.
 
+Sprint 28 turns `social_post_generate` into a real paid draft action:
+
+- backend service: `services.operator_social_post_generation`;
+- API endpoint: `POST /api/operator/social-posts/generate`;
+- chat intent examples: `Подготовь пост для соцсетей: ...`, `Сгенерируй пост про ...`;
+- the flow uses the same preflight -> reserve -> AI generation -> draft save -> final credit charge boundary;
+- initial pricing is `1` credit per saved social post draft;
+- if generation fails or returns empty text, the reservation is released and no credit ledger charge is created;
+- the web Operator UI can trigger the action from Inbox and copy the generated post.
+
+Sprint 28 does not publish to Telegram, Instagram, VK, maps, or other external channels. It only prepares and saves a LocalOS draft for manual copy/paste publication.
+
 Sprint 14 still does not call Apify, create parsequeue jobs, generate AI content, write to external providers, publish to maps, or enable production execution. It only tightens the safety gate before future paid runtime rollout.
 
 Sprint 15 adds manual review intake through Operator chat:
