@@ -12,6 +12,7 @@ from services.agent_blueprint_runner import (
     normalize_steps,
 )
 from services.agent_blueprint_orchestrator import build_agent_blueprint_orchestrator
+from services.agent_blueprint_draft_builder import build_agent_blueprint_draft
 
 
 agent_blueprints_bp = Blueprint("agent_blueprints_api", __name__)
@@ -217,6 +218,65 @@ def create_agent_blueprint():
                 "success": True,
                 "blueprint": _normalize_json_row(blueprint),
                 "version": version,
+            }
+        ), 201
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-blueprints/draft", methods=["POST"])
+def create_agent_blueprint_draft():
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    payload = request.get_json(silent=True) or {}
+    business_id = str(payload.get("business_id") or "").strip()
+    description = str(payload.get("description") or "").strip()
+    if not business_id or not description:
+        return _json_error("business_id and description are required", 400, "VALIDATION_ERROR")
+
+    draft = build_agent_blueprint_draft(description)
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        allowed, access_error = _require_business_access(cursor, business_id, user_data)
+        if not allowed:
+            return access_error
+        blueprint_id = str(uuid.uuid4())
+        cursor.execute(
+            """
+            INSERT INTO agent_blueprints (
+                id, business_id, name, category, description, status, created_by_user_id, metadata_json
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+            """,
+            (
+                blueprint_id,
+                business_id,
+                str(draft.get("name") or "").strip() or "Кастомный агент",
+                str(draft.get("category") or "custom").strip().lower(),
+                str(draft.get("description") or "").strip() or None,
+                "draft",
+                _user_id(user_data),
+                json.dumps(draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}, ensure_ascii=False),
+            ),
+        )
+        version_payload = draft.get("version_payload") if isinstance(draft.get("version_payload"), dict) else {}
+        version = _insert_version(cursor, blueprint_id, version_payload, user_data)
+        db.conn.commit()
+        blueprint = _load_blueprint(cursor, blueprint_id)
+        return jsonify(
+            {
+                "success": True,
+                "blueprint": _normalize_json_row(blueprint),
+                "version": version,
+                "draft": {
+                    "category": draft.get("category"),
+                    "summary": draft.get("summary") if isinstance(draft.get("summary"), dict) else {},
+                },
             }
         ), 201
     except Exception:

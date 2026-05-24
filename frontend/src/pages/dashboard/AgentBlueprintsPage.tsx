@@ -132,6 +132,18 @@ type AgentBlueprintDetails = {
   approval_queue?: AgentApproval[];
 };
 
+type AgentDraftSummary = {
+  category?: string;
+  sources?: string[];
+  outputs?: string[];
+  approval_boundaries?: string[];
+  steps?: Array<{
+    key?: string;
+    title?: string;
+    type?: string;
+  }>;
+};
+
 const runStatusFilters = [
   { value: 'all', label: 'Все' },
   { value: 'running', label: 'В работе' },
@@ -228,12 +240,38 @@ const metaLabels: Record<string, string> = {
 const humanizeStatus = (status: string) => statusLabels[status] || status;
 const humanizeStep = (step: string) => stepLabels[step] || step;
 const humanizeMeta = (meta: string) => metaLabels[meta] || meta;
+const humanizeCategory = (category?: string) => ({
+  outreach: 'Поиск клиентов',
+  documents: 'Документы',
+  email: 'Письма',
+  tables: 'Таблицы',
+  reviews: 'Отзывы',
+  partnerships: 'Партнёрства',
+  custom: 'Кастомная задача',
+}[category || 'custom'] || category || 'Кастомная задача');
 
 const StatusBadge = ({ status }: { status: string }) => (
   <span className={cn('inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1', statusTone[status] || 'bg-slate-50 text-slate-600 ring-slate-200')}>
     {humanizeStatus(status)}
   </span>
 );
+
+const normalizeStringList = (value: unknown) => (
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+);
+
+const normalizeDraftSteps = (value: unknown): AgentDraftSummary['steps'] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((item): item is Record<string, unknown> => item !== null && typeof item === 'object')
+    .map((item) => ({
+      key: typeof item.key === 'string' ? item.key : undefined,
+      title: typeof item.title === 'string' ? item.title : undefined,
+      type: typeof item.type === 'string' ? item.type : undefined,
+    }));
+};
 
 export const AgentBlueprintsPage = () => {
   const { currentBusinessId, currentBusiness } = useOutletContext<DashboardContext>();
@@ -250,6 +288,7 @@ export const AgentBlueprintsPage = () => {
   const [runCategory, setRunCategory] = useState('');
   const [runLimit, setRunLimit] = useState('30');
   const [agentPrompt, setAgentPrompt] = useState('');
+  const [lastDraft, setLastDraft] = useState<AgentDraftSummary | null>(null);
 
   const selectedBlueprint = useMemo(
     () => blueprints.find((item) => item.id === selectedBlueprintId) || blueprints[0] || null,
@@ -408,8 +447,41 @@ export const AgentBlueprintsPage = () => {
   };
 
   const createAgentFromPrompt = async () => {
-    await createDefaultBlueprint(agentPrompt);
-    setAgentPrompt('');
+    if (!currentBusinessId || !agentPrompt.trim()) {
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    try {
+      const response = await api.post('/agent-blueprints/draft', {
+        business_id: currentBusinessId,
+        description: agentPrompt.trim(),
+      });
+      const blueprint = response.data?.blueprint;
+      const summary = response.data?.draft?.summary;
+      if (summary && typeof summary === 'object') {
+        setLastDraft({
+          category: typeof summary.category === 'string' ? summary.category : undefined,
+          sources: normalizeStringList(summary.sources),
+          outputs: normalizeStringList(summary.outputs),
+          approval_boundaries: normalizeStringList(summary.approval_boundaries),
+          steps: normalizeDraftSteps(summary.steps),
+        });
+      } else {
+        setLastDraft(null);
+      }
+      await loadBlueprints();
+      if (blueprint?.id) {
+        setSelectedBlueprintId(blueprint.id);
+        await loadBlueprintDetails(blueprint.id);
+      }
+      setAgentPrompt('');
+    } catch (requestError) {
+      console.error(requestError);
+      setError('Не удалось собрать черновик агента.');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const startRun = async () => {
@@ -512,6 +584,8 @@ export const AgentBlueprintsPage = () => {
           </Button>
         )}
       />
+
+      {lastDraft ? <AgentDraftPreview draft={lastDraft} /> : null}
 
       <DashboardCompactMetricsRow items={metrics} />
 
@@ -828,6 +902,46 @@ export const AgentBlueprintsPage = () => {
     </div>
   );
 };
+
+const AgentDraftPreview = ({ draft }: { draft: AgentDraftSummary }) => (
+  <DashboardSection
+    title="Черновик агента создан"
+    description={`Тип: ${humanizeCategory(draft.category)}. Проверьте шаги и запустите агента, когда будете готовы.`}
+    actions={<StatusBadge status="draft" />}
+    className="border-emerald-200/80 bg-emerald-50/70"
+  >
+    <div className="grid gap-3 md:grid-cols-3">
+      <DraftPreviewBlock title="Данные" items={draft.sources || []} empty="Нужно будет добавить контекст" />
+      <DraftPreviewBlock title="Результат" items={draft.outputs || []} empty="Результат задаётся в настройках" />
+      <DraftPreviewBlock title="Ручной контроль" items={draft.approval_boundaries || []} empty="Безопасные действия без отправки" />
+    </div>
+    {draft.steps?.length ? (
+      <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+        {draft.steps.map((step, index) => (
+          <div key={`${step.key || step.title || 'step'}-${index}`} className="rounded-xl bg-white px-3 py-3 text-sm ring-1 ring-emerald-100">
+            <div className="font-medium text-slate-950">{step.title || humanizeStep(step.key || 'step')}</div>
+            <div className="mt-1 text-xs text-slate-500">{humanizeMeta(step.type || 'artifact')}</div>
+          </div>
+        ))}
+      </div>
+    ) : null}
+  </DashboardSection>
+);
+
+const DraftPreviewBlock = ({ title, items, empty }: { title: string; items: string[]; empty: string }) => (
+  <div className="rounded-xl bg-white px-3 py-3 ring-1 ring-emerald-100">
+    <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">{title}</div>
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {items.length ? items.map((item) => (
+        <span key={item} className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 ring-1 ring-emerald-100">
+          {humanizeMeta(item)}
+        </span>
+      )) : (
+        <span className="text-sm text-slate-500">{empty}</span>
+      )}
+    </div>
+  </div>
+);
 
 const RunColumn = ({
   title,

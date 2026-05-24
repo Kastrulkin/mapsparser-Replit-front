@@ -15,6 +15,7 @@ python3 -m py_compile \
   src/api/auth_user_api.py \
   src/api/superadmin_business_api.py \
   src/services/agent_blueprint_orchestrator.py \
+  src/services/agent_blueprint_draft_builder.py \
   src/services/agent_blueprint_runner.py \
   src/services/outreach_send_capability.py \
   src/api/operator_api.py \
@@ -55,6 +56,7 @@ rules = {
     "/api/business/<business_id>/optimization-wizard": "growth_workflow_api.business_optimization_wizard",
     "/api/business/<business_id>/sprint": "growth_workflow_api.business_sprint",
     "/api/business-types": "business_types_api.get_business_types_public",
+    "/api/agent-blueprints/draft": "agent_blueprints_api.create_agent_blueprint_draft",
     "/api/agent-blueprints/<blueprint_id>": "agent_blueprints_api.get_agent_blueprint",
     "/api/agent-blueprints/<blueprint_id>/runs": "agent_blueprints_api.start_agent_blueprint_run",
     "/api/agent-runs/<run_id>": "agent_blueprints_api.get_agent_run",
@@ -161,6 +163,7 @@ from pathlib import Path
 api_text = Path("src/api/agent_blueprints_api.py").read_text(encoding="utf-8")
 runner_text = Path("src/services/agent_blueprint_runner.py").read_text(encoding="utf-8")
 orchestrator_text = Path("src/services/agent_blueprint_orchestrator.py").read_text(encoding="utf-8")
+draft_builder_text = Path("src/services/agent_blueprint_draft_builder.py").read_text(encoding="utf-8")
 capability_text = Path("src/services/outreach_send_capability.py").read_text(encoding="utf-8")
 ui_text = Path("frontend/src/pages/dashboard/AgentBlueprintsPage.tsx").read_text(encoding="utf-8")
 
@@ -168,6 +171,14 @@ required = {
     "src/api/agent_blueprints_api.py": [
         "VERSION_BLUEPRINT_MISMATCH",
         "build_agent_blueprint_orchestrator()",
+        "build_agent_blueprint_draft",
+        "/api/agent-blueprints/draft",
+    ],
+    "src/services/agent_blueprint_draft_builder.py": [
+        "description_builder_v1",
+        "capability_allowlist\": []",
+        "external_delivery",
+        "none_in_draft_builder",
     ],
     "src/services/agent_blueprint_runner.py": [
         "allow_execute_when_approved=True",
@@ -195,6 +206,8 @@ required = {
         "runSource",
         "runCity",
         "runCategory",
+        "Черновик агента создан",
+        "Не удалось собрать черновик агента",
         "Источник лидов: prospectingleads",
         "source_artifact",
         "Поставлено в очередь, но не отправлено",
@@ -206,6 +219,7 @@ texts = {
     "src/api/agent_blueprints_api.py": api_text,
     "src/services/agent_blueprint_runner.py": runner_text,
     "src/services/agent_blueprint_orchestrator.py": orchestrator_text,
+    "src/services/agent_blueprint_draft_builder.py": draft_builder_text,
     "src/services/outreach_send_capability.py": capability_text,
     "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx": ui_text,
 }

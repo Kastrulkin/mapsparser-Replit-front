@@ -10,6 +10,9 @@ def test_agent_blueprint_routes_are_owned_by_blueprint():
             "GET": "agent_blueprints_api.list_agent_blueprints",
             "POST": "agent_blueprints_api.create_agent_blueprint",
         },
+        "/api/agent-blueprints/draft": {
+            "POST": "agent_blueprints_api.create_agent_blueprint_draft",
+        },
         "/api/agent-blueprints/<blueprint_id>": {
             "GET": "agent_blueprints_api.get_agent_blueprint",
         },
@@ -81,6 +84,21 @@ def test_default_supervised_outreach_template_has_approval_gates():
     assert steps[5]["required_approval_type"] == "drafts"
 
 
+def test_agent_blueprint_draft_builder_creates_safe_document_agent():
+    from services.agent_blueprint_draft_builder import build_agent_blueprint_draft
+
+    draft = build_agent_blueprint_draft("Обработай договор, найди риски и подготовь письмо клиенту")
+    version_payload = draft["version_payload"]
+    steps = version_payload["steps"]
+
+    assert draft["category"] == "documents"
+    assert draft["metadata"]["builder"] == "description_builder_v1"
+    assert "uploaded_documents" in draft["summary"]["sources"]
+    assert version_payload["capability_allowlist"] == []
+    assert any(step["type"] == "approval" for step in steps)
+    assert "external_delivery" in draft["summary"]["approval_boundaries"]
+
+
 def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     api_source = Path("src/api/agent_blueprints_api.py").read_text(encoding="utf-8")
 
@@ -89,6 +107,9 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "build_agent_blueprint_orchestrator" in api_source
     assert "run_status" in api_source
     assert "approval_queue" in api_source
+    assert "/api/agent-blueprints/draft" in api_source
+    assert "build_agent_blueprint_draft" in api_source
+    assert "_insert_version(cursor, blueprint_id, version_payload, user_data)" in api_source
 
 
 def test_outreach_send_batch_handler_queues_approved_drafts_without_external_dispatch(monkeypatch):
