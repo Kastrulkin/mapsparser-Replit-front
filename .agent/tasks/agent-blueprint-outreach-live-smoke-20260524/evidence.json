@@ -1,0 +1,32 @@
+{
+  "task_id": "agent-blueprint-outreach-live-smoke-20260524",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Production-runtime Agent Blueprint outreach smoke completes sourcing from new/unprocessed prospectingleads through approvals and queued_not_dispatched batch, then cleans fixtures.",
+      "status": "PASS",
+      "proof": [
+        "Smoke output success=true with source_artifact_status=hydrated and source_artifact_count=1",
+        "approval_count=2, queue_status=queued, dispatch_state=queued_not_dispatched, dispatcher_started=false",
+        "fixture_cleaned=true and follow-up DB cleanup query returned zero rows for smoke user/business/lead/blueprint/run"
+      ],
+      "gaps": [
+        "Smoke script was copied to /tmp inside the app container because /app/scripts is baked and stale."
+      ]
+    }
+  ],
+  "changed_files": [
+    ".agent/tasks/agent-blueprint-outreach-live-smoke-20260524/evidence.md",
+    ".agent/tasks/agent-blueprint-outreach-live-smoke-20260524/evidence.json",
+    ".agent/tasks/agent-blueprint-outreach-live-smoke-20260524/verdict.json",
+    ".agent/tasks/agent-blueprint-outreach-live-smoke-20260524/raw/test-integration.txt"
+  ],
+  "commands_for_fresh_verifier": [
+    "cd /opt/seo-app && docker compose cp scripts/smoke_agent_blueprint_outreach_api.py app:/tmp/smoke_agent_blueprint_outreach_api.py",
+    "cd /opt/seo-app && docker compose exec -T app sh -lc 'SMOKE_BASE_URL=http://localhost:8000 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/app/src python3 -B /tmp/smoke_agent_blueprint_outreach_api.py'"
+  ],
+  "known_gaps": [
+    "Production image /app/scripts does not include the updated smoke script."
+  ]
+}

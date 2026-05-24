@@ -1,0 +1,22 @@
+{
+  "task_id": "agent-blueprint-outreach-live-smoke-20260524",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Controlled production-runtime smoke completed sourcing, approvals, queued_not_dispatched handoff, and fixture cleanup."
+    }
+  ],
+  "commands_run": [
+    "cd /opt/seo-app && docker compose ps",
+    "cd /opt/seo-app && docker compose cp scripts/smoke_agent_blueprint_outreach_api.py app:/tmp/smoke_agent_blueprint_outreach_api.py",
+    "cd /opt/seo-app && docker compose exec -T app sh -lc 'SMOKE_BASE_URL=http://localhost:8000 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/app/src python3 -B /tmp/smoke_agent_blueprint_outreach_api.py'",
+    "cd /opt/seo-app && docker compose exec -T app sh -lc '<cleanup verification query>'",
+    "cd /opt/seo-app && docker compose logs --since 5m app | tail -120",
+    "cd /opt/seo-app && curl -I http://localhost:8000"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/agent-blueprint-outreach-live-smoke-20260524/raw/test-integration.txt"
+  ]
+}

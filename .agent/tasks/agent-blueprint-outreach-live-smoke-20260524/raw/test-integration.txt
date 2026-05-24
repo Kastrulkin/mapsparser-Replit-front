@@ -1,0 +1,18 @@
+ seo-app-app-1 Copying scripts/smoke_agent_blueprint_outreach_api.py to seo-app-app-1:/tmp/smoke_agent_blueprint_outreach_api.py
+ seo-app-app-1 Copied scripts/smoke_agent_blueprint_outreach_api.py to seo-app-app-1:/tmp/smoke_agent_blueprint_outreach_api.py
+{
+  "success": true,
+  "base_url": "http://localhost:8000",
+  "user_id": "smoke-agent-user-b49f0f7f26",
+  "business_id": "smoke-agent-business-b49f0f7f26",
+  "blueprint_id": "c0825986-ae48-4474-83c2-49ccbd476d78",
+  "run_id": "4a6633f7-cda4-4422-9e92-f64366edb071",
+  "batch_id": "0456c471-6eb2-4786-b35c-2db98e42559c",
+  "source_artifact_status": "hydrated",
+  "source_artifact_count": 1,
+  "approval_count": 2,
+  "queue_status": "queued",
+  "dispatch_state": "queued_not_dispatched",
+  "dispatcher_started": false,
+  "fixture_cleaned": true
+}
