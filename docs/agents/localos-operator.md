@@ -393,6 +393,16 @@ Sprint 35 connects the full paid map-refresh chain:
 
 Sprint 35 still does not publish replies, send messages, or write to Yandex, Google, 2GIS, or other external map providers. It performs read-only refresh and billing settlement only.
 
+Sprint 36 adds the Operator UI for refresh jobs:
+
+- API endpoint: `GET /api/operator/reviews/refresh-jobs`;
+- backend service: `services.operator_refresh_result.list_refresh_jobs`;
+- web surface: `/dashboard/operator` shows recent map-review refresh jobs, statuses `processing`/`completed`/`failed`, new review counts, unanswered counts, and snippets;
+- each job exposes `Проверить результат`, `Открыть отзывы`, and, when there are unanswered new reviews, `Подготовить ответы`;
+- the UI reuses the Sprint 33 single-result endpoint for explicit checks and the Sprint 26 bulk reply workflow for answer drafts.
+
+Sprint 36 does not add new parser execution, billing behavior, direct Apify calls from Operator, external reply publication, or provider writes. It is a visibility and control surface over the Sprint 35 refresh lifecycle.
+
 Sprint 14 still does not call Apify, create parsequeue jobs, generate AI content, write to external providers, publish to maps, or enable production execution. It only tightens the safety gate before future paid runtime rollout.
 
 Sprint 15 adds manual review intake through Operator chat:

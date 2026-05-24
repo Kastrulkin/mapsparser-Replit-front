@@ -254,6 +254,18 @@ const eventLabels: Record<string, string> = {
   operator_usage_charged: 'Кредиты списаны',
 };
 
+const refreshJobStatusLabels: Record<'processing' | 'completed' | 'failed', string> = {
+  processing: 'В работе',
+  completed: 'Завершено',
+  failed: 'Ошибка',
+};
+
+const refreshJobStatusStyles: Record<'processing' | 'completed' | 'failed', string> = {
+  processing: 'bg-sky-50 text-sky-800 ring-sky-200',
+  completed: 'bg-emerald-50 text-emerald-800 ring-emerald-200',
+  failed: 'bg-rose-50 text-rose-800 ring-rose-200',
+};
+
 type OperatorChatResult = {
   status: 'completed' | 'blocked' | 'unsupported';
   intent: string;
@@ -349,6 +361,35 @@ type RefreshResult = {
   blocked_reasons?: string[];
 };
 
+type RefreshJob = {
+  queue_id: string;
+  status: 'completed' | 'processing' | 'failed';
+  queue_status?: string;
+  created_at?: string;
+  updated_at?: string;
+  error_message?: string;
+  new_reviews_count?: number;
+  new_unanswered_reviews_count?: number;
+  new_reviews?: RefreshReview[];
+  chat_response?: string;
+  blocked_reasons?: string[];
+};
+
+type RefreshJobs = {
+  status: string;
+  summary: {
+    title: string;
+    text: string;
+    jobs_count: number;
+    processing_count: number;
+    completed_count: number;
+    failed_count: number;
+    new_reviews_count: number;
+    new_unanswered_reviews_count: number;
+  };
+  jobs: RefreshJob[];
+};
+
 type OperatorInboxItem = {
   id: string;
   kind: string;
@@ -410,6 +451,7 @@ export const OperatorPage = () => {
   const { currentBusinessId, currentBusiness } = useOutletContext<DashboardContext>();
   const [brief, setBrief] = useState<AttentionBrief | null>(null);
   const [inbox, setInbox] = useState<OperatorInbox | null>(null);
+  const [refreshJobs, setRefreshJobs] = useState<RefreshJobs | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savingConsentKey, setSavingConsentKey] = useState<string | null>(null);
@@ -453,6 +495,7 @@ export const OperatorPage = () => {
     if (!currentBusinessId) {
       setBrief(null);
       setInbox(null);
+      setRefreshJobs(null);
       setOperatorEvents([]);
       return;
     }
@@ -470,6 +513,7 @@ export const OperatorPage = () => {
       }
       await loadOperatorEvents();
       await loadInbox();
+      await loadRefreshJobs();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить сводку');
     } finally {
@@ -489,6 +533,21 @@ export const OperatorPage = () => {
       setInbox(response.data.inbox || null);
     } catch (err) {
       setInbox(null);
+    }
+  };
+
+  const loadRefreshJobs = async () => {
+    if (!currentBusinessId) {
+      setRefreshJobs(null);
+      return;
+    }
+    try {
+      const response = await api.get('/operator/reviews/refresh-jobs', {
+        params: { business_id: currentBusinessId, limit: 8 },
+      });
+      setRefreshJobs(response.data.refresh_jobs || null);
+    } catch (err) {
+      setRefreshJobs(null);
     }
   };
 
@@ -616,6 +675,7 @@ export const OperatorPage = () => {
       const result = response.data.operator_result || null;
       setChatResult(result);
       await loadBrief();
+      await loadRefreshJobs();
       await loadOperatorEvents();
     } catch (err) {
       setChatResult({
@@ -641,6 +701,7 @@ export const OperatorPage = () => {
       setRefreshResult(result);
       await loadBrief();
       await loadInbox();
+      await loadRefreshJobs();
       await loadOperatorEvents();
     } catch (err) {
       setRefreshResult({
@@ -1172,6 +1233,119 @@ export const OperatorPage = () => {
             )}
           </div>
         </div>
+      </DashboardSection>
+
+      <DashboardSection
+        title="Обновления отзывов"
+        description="Последние read-only обновления карт: статус, результат и быстрый переход к подготовке ответов."
+      >
+        {refreshJobs ? (
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-4">
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Всего</div>
+                <div className="mt-1 text-xl font-semibold text-slate-950">{refreshJobs.summary.jobs_count}</div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">В работе</div>
+                <div className="mt-1 text-xl font-semibold text-slate-950">{refreshJobs.summary.processing_count}</div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Новые</div>
+                <div className="mt-1 text-xl font-semibold text-slate-950">{refreshJobs.summary.new_reviews_count}</div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Без ответа</div>
+                <div className="mt-1 text-xl font-semibold text-slate-950">{refreshJobs.summary.new_unanswered_reviews_count}</div>
+              </div>
+            </div>
+            {refreshJobs.jobs.length > 0 ? (
+              <div className="space-y-3">
+                {refreshJobs.jobs.map((job) => (
+                  <div key={job.queue_id} className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-sm font-semibold text-slate-950">Обновление отзывов</h3>
+                          <span className={cn('rounded-full px-2 py-1 text-xs font-medium ring-1', refreshJobStatusStyles[job.status])}>
+                            {refreshJobStatusLabels[job.status]}
+                          </span>
+                          {job.queue_status ? (
+                            <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
+                              {job.queue_status}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="mt-2 text-sm leading-6 text-slate-600">
+                          Запуск: {formatDateTime(job.created_at || null)}. Последнее изменение: {formatDateTime(job.updated_at || null)}.
+                        </div>
+                        {job.chat_response ? <p className="mt-2 text-sm leading-6 text-slate-700">{job.chat_response}</p> : null}
+                        {job.error_message ? <p className="mt-2 text-sm leading-6 text-rose-700">{job.error_message}</p> : null}
+                        {job.new_reviews?.length ? (
+                          <div className="mt-3 space-y-2">
+                            {job.new_reviews.map((review) => (
+                              <div key={review.id || review.external_review_id || review.text} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                                <div className="flex flex-wrap items-center gap-2 text-sm">
+                                  <span className="font-semibold text-slate-950">{review.author_name || 'Новый отзыв'}</span>
+                                  {review.rating ? <span className="text-xs font-semibold text-slate-500">{review.rating}/5</span> : null}
+                                  {!review.has_response ? (
+                                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-amber-200">
+                                      без ответа
+                                    </span>
+                                  ) : null}
+                                </div>
+                                {review.text ? <div className="mt-1 line-clamp-3 text-sm leading-6 text-slate-700">{review.text}</div> : null}
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="flex shrink-0 flex-col gap-2 sm:flex-row lg:justify-end">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void checkRefreshResult(job.queue_id)}
+                          disabled={refreshChecking}
+                        >
+                          {refreshChecking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                          Проверить результат
+                        </Button>
+                        <Button type="button" size="sm" variant="outline" asChild>
+                          <Link to="/dashboard/card?tab=reviews&review_filter=needs_reply">
+                            Открыть отзывы
+                            <ExternalLink className="ml-2 h-3.5 w-3.5" />
+                          </Link>
+                        </Button>
+                        {(job.new_unanswered_reviews_count || 0) > 0 ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => void generateReviewReplies()}
+                            disabled={bulkGeneratingKey === 'review_replies_generate'}
+                          >
+                            {bulkGeneratingKey === 'review_replies_generate' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquareText className="mr-2 h-4 w-4" />}
+                            Подготовить ответы
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <DashboardEmptyState
+                title="Обновлений пока нет"
+                description="Когда Operator запустит проверку новых отзывов, здесь появится история задач и их результаты."
+              />
+            )}
+          </div>
+        ) : (
+          <DashboardEmptyState
+            title="История обновлений не загружена"
+            description="Выберите бизнес или обновите сводку, чтобы увидеть последние refresh jobs."
+          />
+        )}
       </DashboardSection>
 
       {error ? (

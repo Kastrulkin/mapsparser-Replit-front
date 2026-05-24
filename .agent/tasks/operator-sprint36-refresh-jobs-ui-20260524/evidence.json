@@ -1,0 +1,77 @@
+{
+  "task_id": "operator-sprint36-refresh-jobs-ui-20260524",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Backend exposes scoped recent Operator refresh jobs for a business/user.",
+      "status": "PASS",
+      "proof": [
+        "Added `services.operator_refresh_result.list_refresh_jobs`.",
+        "Added `GET /api/operator/reviews/refresh-jobs`."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Refresh jobs include statuses `processing`, `completed`, and `failed`, plus new review and unanswered counts.",
+      "status": "PASS",
+      "proof": [
+        "`list_refresh_jobs` normalizes job status and aggregates counts.",
+        "`test_list_refresh_jobs_summarizes_recent_jobs` covers processing/completed/failed and counts."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Operator dashboard shows refresh history with status, check-result action, new review snippets, and transition to reply generation.",
+      "status": "PASS",
+      "proof": [
+        "`OperatorPage.tsx` loads `/operator/reviews/refresh-jobs`.",
+        "The new `Обновления отзывов` section renders status, snippets, `Проверить результат`, `Открыть отзывы`, and `Подготовить ответы`."
+      ],
+      "gaps": [
+        "Authenticated browser inspection was not possible locally; unauthenticated route redirected to login."
+      ]
+    },
+    {
+      "id": "AC4",
+      "text": "The feature reuses the existing refresh result and reply generation flows without adding external map writes or publication.",
+      "status": "PASS",
+      "proof": [
+        "UI calls existing `checkRefreshResult` and `generateReviewReplies` handlers.",
+        "Backend reads only `parsequeue` and saved reviews."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Documentation and proof artifacts describe the Sprint 36 boundary.",
+      "status": "PASS",
+      "proof": [
+        "Updated Operator docs, agent index, and tool registry.",
+        "Proof-loop artifacts are populated."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "docs/agents/index.md",
+    "docs/agents/localos-operator.md",
+    "docs/agents/tool-registry.md",
+    "frontend/src/pages/dashboard/OperatorPage.tsx",
+    "src/api/operator_api.py",
+    "src/services/operator_refresh_result.py",
+    "tests/test_operator_refresh_result.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/services/operator_refresh_result.py src/api/operator_api.py",
+    "python3 -m pytest -q tests/test_operator_refresh_result.py tests/test_operator_map_refresh.py tests/test_operator_fresh_reviews.py tests/test_operator_apify_settlement.py tests/test_worker_apify_settlement.py",
+    "npm run build",
+    "git diff --check",
+    "scripts/proof_loop.sh validate operator-sprint36-refresh-jobs-ui-20260524"
+  ],
+  "known_gaps": [
+    "Authenticated browser inspection was not available locally; unauthenticated `/dashboard/operator` redirected to login."
+  ]
+}

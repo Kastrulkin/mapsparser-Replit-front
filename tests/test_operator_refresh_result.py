@@ -1,11 +1,12 @@
 from datetime import datetime, timezone
 
-from services.operator_refresh_result import build_refresh_result_status
+from services.operator_refresh_result import build_refresh_result_status, list_refresh_jobs
 
 
 class FakeCursor:
-    def __init__(self, *, queue=None, reviews=None):
+    def __init__(self, *, queue=None, queues=None, reviews=None):
         self.queue = queue
+        self.queues = queues or []
         self.reviews = reviews or []
         self.last_query = ""
         self.last_params = ()
@@ -16,10 +17,17 @@ class FakeCursor:
 
     def fetchone(self):
         if "from parsequeue" in self.last_query:
+            if self.queues and self.last_params:
+                queue_id = self.last_params[0]
+                for queue in self.queues:
+                    if queue.get("id") == queue_id:
+                        return queue
             return self.queue
         return None
 
     def fetchall(self):
+        if "from parsequeue" in self.last_query:
+            return self.queues
         if "from externalbusinessreviews" in self.last_query:
             return self.reviews
         return []
@@ -117,3 +125,67 @@ def test_refresh_result_requires_known_queue() -> None:
 
     assert missing_queue["blocked_reasons"] == ["queue_id_required"]
     assert unknown_queue["blocked_reasons"] == ["refresh_job_not_found"]
+
+
+def test_list_refresh_jobs_summarizes_recent_jobs() -> None:
+    started_at = datetime(2026, 5, 24, 10, 0, tzinfo=timezone.utc)
+    cursor = FakeCursor(
+        queues=[
+            {
+                "id": "queue-completed",
+                "business_id": "biz-1",
+                "user_id": "user-1",
+                "status": "completed",
+                "source": "apify_yandex",
+                "task_type": "parse_card",
+                "created_at": started_at,
+                "updated_at": started_at,
+            },
+            {
+                "id": "queue-processing",
+                "business_id": "biz-1",
+                "user_id": "user-1",
+                "status": "processing",
+                "source": "apify_yandex",
+                "task_type": "parse_card",
+                "created_at": started_at,
+                "updated_at": started_at,
+            },
+            {
+                "id": "queue-failed",
+                "business_id": "biz-1",
+                "user_id": "user-1",
+                "status": "failed",
+                "source": "apify_yandex",
+                "task_type": "parse_card",
+                "error_message": "apify timeout",
+                "created_at": started_at,
+                "updated_at": started_at,
+            },
+        ],
+        reviews=[
+            {
+                "id": "review-1",
+                "source": "yandex",
+                "external_review_id": "ext-1",
+                "rating": 5,
+                "author_name": "Анна",
+                "text": "Очень понравился сервис.",
+                "response_text": "",
+                "published_at": started_at,
+                "created_at": started_at,
+            },
+        ],
+    )
+
+    result = list_refresh_jobs(cursor, business_id="biz-1", user_id="user-1", limit=10)
+
+    assert result["status"] == "completed"
+    assert result["summary"]["jobs_count"] == 3
+    assert result["summary"]["processing_count"] == 1
+    assert result["summary"]["completed_count"] == 1
+    assert result["summary"]["failed_count"] == 1
+    assert result["summary"]["new_unanswered_reviews_count"] == 1
+    assert result["jobs"][0]["queue_id"] == "queue-completed"
+    assert result["jobs"][0]["ui_actions"][0]["action"] == "check_refresh_result"
+    assert result["limits"]["external_writes_performed"] is False
