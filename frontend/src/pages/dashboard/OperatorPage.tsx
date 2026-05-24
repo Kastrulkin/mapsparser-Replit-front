@@ -258,6 +258,7 @@ type OperatorChatResult = {
   status: 'completed' | 'blocked' | 'unsupported';
   intent: string;
   chat_response: string;
+  queue_id?: string;
   reply_text?: string;
   news_text?: string;
   social_post_text?: string;
@@ -272,6 +273,7 @@ type OperatorChatResult = {
     href?: string;
     payload?: {
       text?: string;
+      action_key?: string;
     };
   }>;
   review?: {
@@ -322,6 +324,29 @@ type OperatorChatResult = {
     review_id?: string;
     reason?: string;
   }>;
+};
+
+type RefreshReview = {
+  id?: string;
+  source?: string;
+  external_review_id?: string;
+  rating?: number;
+  author_name?: string;
+  text?: string;
+  has_response?: boolean;
+  published_at?: string;
+  created_at?: string;
+};
+
+type RefreshResult = {
+  status: 'completed' | 'processing' | 'failed' | 'blocked';
+  queue_id?: string;
+  queue_status?: string;
+  new_reviews_count?: number;
+  new_unanswered_reviews_count?: number;
+  new_reviews?: RefreshReview[];
+  chat_response?: string;
+  blocked_reasons?: string[];
 };
 
 type OperatorInboxItem = {
@@ -401,6 +426,8 @@ export const OperatorPage = () => {
   );
   const [chatLoading, setChatLoading] = useState(false);
   const [chatResult, setChatResult] = useState<OperatorChatResult | null>(null);
+  const [refreshResult, setRefreshResult] = useState<RefreshResult | null>(null);
+  const [refreshChecking, setRefreshChecking] = useState(false);
   const [copiedChatReply, setCopiedChatReply] = useState(false);
   const [copiedInboxItemId, setCopiedInboxItemId] = useState<string | null>(null);
   const [bulkGeneratingKey, setBulkGeneratingKey] = useState<string | null>(null);
@@ -579,6 +606,7 @@ export const OperatorPage = () => {
     setChatLoading(true);
     setConsentMessage(null);
     setChatResult(null);
+    setRefreshResult(null);
     setCopiedChatReply(false);
     try {
       const response = await api.post('/operator/chat', {
@@ -598,6 +626,31 @@ export const OperatorPage = () => {
       });
     } finally {
       setChatLoading(false);
+    }
+  };
+
+  const checkRefreshResult = async (queueId: string | undefined) => {
+    if (!currentBusinessId || !queueId) return;
+    setRefreshChecking(true);
+    setConsentMessage(null);
+    try {
+      const response = await api.get(`/operator/reviews/refresh-results/${queueId}`, {
+        params: { business_id: currentBusinessId },
+      });
+      const result = response.data.refresh_result || null;
+      setRefreshResult(result);
+      await loadBrief();
+      await loadInbox();
+      await loadOperatorEvents();
+    } catch (err) {
+      setRefreshResult({
+        status: 'blocked',
+        queue_id: queueId,
+        chat_response: err instanceof Error ? err.message : 'Не удалось проверить результат обновления',
+        blocked_reasons: ['operator_refresh_result_failed'],
+      });
+    } finally {
+      setRefreshChecking(false);
     }
   };
 
@@ -637,6 +690,7 @@ export const OperatorPage = () => {
     setBulkGeneratingKey('review_replies_generate');
     setConsentMessage(null);
     setChatResult(null);
+    setRefreshResult(null);
     try {
       const response = await api.post('/operator/review-replies/generate', {
         business_id: currentBusinessId,
@@ -665,6 +719,7 @@ export const OperatorPage = () => {
     setBulkGeneratingKey('news_generate');
     setConsentMessage(null);
     setChatResult(null);
+    setRefreshResult(null);
     try {
       const response = await api.post('/operator/news/generate', {
         business_id: currentBusinessId,
@@ -693,6 +748,7 @@ export const OperatorPage = () => {
     setBulkGeneratingKey('social_post_generate');
     setConsentMessage(null);
     setChatResult(null);
+    setRefreshResult(null);
     try {
       const response = await api.post('/operator/social-posts/generate', {
         business_id: currentBusinessId,
@@ -720,6 +776,7 @@ export const OperatorPage = () => {
     setBulkGeneratingKey('services_optimize');
     setConsentMessage(null);
     setChatResult(null);
+    setRefreshResult(null);
     try {
       const response = await api.post('/operator/services/optimize', {
         business_id: currentBusinessId,
@@ -939,6 +996,78 @@ export const OperatorPage = () => {
                   <Button type="button" variant="outline" size="sm" asChild>
                     <Link to={chatResult.billing_url}>Пополнить счёт</Link>
                   </Button>
+                ) : null}
+                {chatResult.queue_id ? (
+                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                    <div className="font-semibold">Задача обновления карты</div>
+                    <div className="mt-1 text-slate-600">ID: {chatResult.queue_id}</div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="mt-2"
+                      onClick={() => void checkRefreshResult(chatResult.queue_id)}
+                      disabled={refreshChecking}
+                    >
+                      {refreshChecking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                      Проверить результат обновления
+                    </Button>
+                  </div>
+                ) : null}
+                {refreshResult ? (
+                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div className="font-semibold">Результат обновления</div>
+                        <div className="mt-1 whitespace-pre-wrap text-slate-600">
+                          {refreshResult.chat_response || 'Результат получен.'}
+                        </div>
+                      </div>
+                      <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
+                        {refreshResult.status}
+                      </span>
+                    </div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                        <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Новые</div>
+                        <div className="mt-1 font-semibold text-slate-950">{refreshResult.new_reviews_count || 0}</div>
+                      </div>
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                        <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Без ответа</div>
+                        <div className="mt-1 font-semibold text-slate-950">{refreshResult.new_unanswered_reviews_count || 0}</div>
+                      </div>
+                    </div>
+                    {refreshResult.new_reviews?.length ? (
+                      <div className="mt-3 space-y-2">
+                        {refreshResult.new_reviews.map((review) => (
+                          <div key={review.id || review.external_review_id || review.text} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-semibold text-slate-950">{review.author_name || 'Новый отзыв'}</span>
+                              {review.rating ? <span className="text-xs font-semibold text-slate-500">{review.rating}/5</span> : null}
+                              {!review.has_response ? (
+                                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-amber-200">
+                                  без ответа
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="mt-1 line-clamp-4 text-slate-700">{review.text}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                    {(refreshResult.new_unanswered_reviews_count || 0) > 0 ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="mt-3"
+                        onClick={() => void generateReviewReplies()}
+                        disabled={bulkGeneratingKey === 'review_replies_generate'}
+                      >
+                        {bulkGeneratingKey === 'review_replies_generate' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquareText className="mr-2 h-4 w-4" />}
+                        Подготовить ответы
+                      </Button>
+                    ) : null}
+                  </div>
                 ) : null}
                 {chatResult.review?.id ? (
                   <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">

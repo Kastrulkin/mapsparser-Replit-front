@@ -47,6 +47,8 @@ Sprint 31 adds the Apify actual-cost settlement boundary. When a future parser r
 
 Sprint 32 adds the `Проверь новые отзывы` command. Operator now routes it into the existing read-only map-refresh boundary, reports the latest saved review snapshot when refresh is disabled, and points the user to bulk reply generation after refresh.
 
+Sprint 33 adds the refresh-result lifecycle. After a queued refresh completes and parser output is saved, Operator can check the `parsequeue` job, count newly saved reviews, show `найдено N новых отзывов`, and offer bulk reply generation for unanswered new reviews.
+
 The Operator model keeps one context, one permission system, one credit/usage ledger, one approval policy, and one audit trail across web and Telegram. Sprint 0 defines the product contract only; it does not imply that the web-chat runtime or Telegram Operator runtime is fully implemented.
 
 ## What Agents Must Not Assume

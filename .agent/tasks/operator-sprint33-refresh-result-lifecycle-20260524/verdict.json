@@ -1,0 +1,43 @@
+{
+  "task_id": "operator-sprint33-refresh-result-lifecycle-20260524",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Refresh result API and service were added and targeted tests pass."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Completed jobs count newly saved reviews and unanswered reviews from existing tables."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Processing, failed, missing, and empty queue cases return structured statuses."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Operator UI exposes result checking, counts, review snippets, and bulk reply generation entrypoint."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "No Apify execution, credit charge, external write, or publication path was introduced."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/services/operator_refresh_result.py src/api/operator_api.py",
+    "python3 -m pytest -q tests/test_operator_refresh_result.py tests/test_operator_fresh_reviews.py tests/test_operator_map_refresh.py",
+    "cd frontend && npm run build",
+    "git diff --check"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/operator-sprint33-refresh-result-lifecycle-20260524/raw/build.txt",
+    ".agent/tasks/operator-sprint33-refresh-result-lifecycle-20260524/raw/test-unit.txt",
+    ".agent/tasks/operator-sprint33-refresh-result-lifecycle-20260524/raw/frontend-build.txt",
+    ".agent/tasks/operator-sprint33-refresh-result-lifecycle-20260524/raw/lint.txt"
+  ]
+}

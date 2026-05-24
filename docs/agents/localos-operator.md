@@ -361,6 +361,17 @@ Sprint 32 adds the fresh-review refresh command:
 
 Sprint 32 does not call Apify directly, settle actual provider cost, publish replies, or write to external map providers. It only routes the user command into the existing read-only refresh boundary.
 
+Sprint 33 connects the queued refresh to a result lifecycle:
+
+- backend service: `services.operator_refresh_result`;
+- API endpoint: `GET /api/operator/reviews/refresh-results/<queue_id>`;
+- web Operator can check a queued refresh result from the chat response;
+- while `parsequeue` is pending/processing, Operator tells the user to wait;
+- after completion, Operator compares the refresh start time with saved `externalbusinessreviews.created_at`, counts newly saved reviews, and highlights how many still need replies;
+- the web UI shows a compact result card, the new review snippets, and a `Подготовить ответы` action when there are unanswered reviews.
+
+Sprint 33 does not call Apify directly, settle actual provider cost, charge credits, publish replies, or write to external map providers. It only makes completed refresh results visible to the user from already saved parser output.
+
 Sprint 14 still does not call Apify, create parsequeue jobs, generate AI content, write to external providers, publish to maps, or enable production execution. It only tightens the safety gate before future paid runtime rollout.
 
 Sprint 15 adds manual review intake through Operator chat:

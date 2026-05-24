@@ -1,0 +1,71 @@
+{
+  "task_id": "operator-sprint33-refresh-result-lifecycle-20260524",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Operator exposes a guarded API to check a queued map refresh result by parsequeue id.",
+      "status": "PASS",
+      "proof": [
+        "Added services.operator_refresh_result.build_refresh_result_status.",
+        "Added GET /api/operator/reviews/refresh-results/<queue_id>."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Completed refresh jobs count reviews saved after the job started and report unanswered count.",
+      "status": "PASS",
+      "proof": [
+        "Completed jobs query externalbusinessreviews.created_at >= parsequeue.created_at.",
+        "tests/test_operator_refresh_result.py covers counts and unanswered status."
+      ],
+      "gaps": [
+        "Uses existing saved review rows; no parser-output schema added."
+      ]
+    },
+    {
+      "id": "AC3",
+      "text": "Pending, failed, and missing jobs return structured statuses.",
+      "status": "PASS",
+      "proof": [
+        "Processing, failed, missing, and empty queue ids covered in tests."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Web Operator UI displays refresh result and next action.",
+      "status": "PASS",
+      "proof": [
+        "OperatorPage shows queue id, result checker, counts, review snippets, and bulk reply action.",
+        "Frontend production build passed."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "No Apify call, charge, external write, or map publication is introduced.",
+      "status": "PASS",
+      "proof": [
+        "Result service is read-only over saved parsequeue and externalbusinessreviews.",
+        "Responses set external_writes_performed false and manual_publication_only true."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/services/operator_refresh_result.py",
+    "src/api/operator_api.py",
+    "frontend/src/pages/dashboard/OperatorPage.tsx",
+    "tests/test_operator_refresh_result.py",
+    "docs/agents/localos-operator.md",
+    "docs/agents/index.md"
+  ],
+  "commands_for_fresh_verifier": [],
+  "known_gaps": [
+    "Apify actual-cost worker settlement is still a later sprint.",
+    "Paid map refresh reserve/enqueue/settle lifecycle is still a later sprint.",
+    "Telegram follow-up after refresh completion is still a later sprint."
+  ]
+}
