@@ -251,6 +251,8 @@ def test_refresh_result_includes_billing_state_from_reservation_metadata() -> No
     assert result["billing_state"]["charged_credits"] == 3
     assert result["billing_state"]["released_credits"] == 2
     assert result["billing_state"]["provider_actual_cost"] == "0.24"
+    assert "provider cost" in result["billing_state"]["explanation"]
+    assert result["billing_state"]["user_facing_summary"]["charged"] == 3
 
 
 def test_refresh_result_exposes_retry_lineage_from_reservation_metadata() -> None:

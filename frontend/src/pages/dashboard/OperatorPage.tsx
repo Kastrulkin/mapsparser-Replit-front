@@ -429,6 +429,7 @@ type RefreshJob = {
 type RefreshBillingState = {
   status: 'reserved' | 'charged' | 'released' | 'overage_charged' | 'not_found' | 'unavailable' | 'unknown' | string;
   label?: string;
+  explanation?: string;
   reservation_id?: string;
   reservation_status?: string;
   estimated_credits?: number;
@@ -600,6 +601,12 @@ const renderBillingDetails = (billing: RefreshBillingState | undefined) => {
         <div>Возврат: {billing.released_credits || 0}</div>
         <div>Overage: {billing.overage_credits || 0}</div>
       </div>
+      {billing.explanation ? <div className="mt-2 text-xs leading-5 text-slate-600">{billing.explanation}</div> : null}
+      {billing.actual_credits !== null && billing.actual_credits !== undefined ? (
+        <div className="mt-1 text-xs font-semibold text-slate-500">
+          Факт: {billing.actual_credits} кредитов{billing.credit_multiplier ? `, множитель x${billing.credit_multiplier}` : ''}.
+        </div>
+      ) : null}
     </div>
   );
 };

@@ -332,21 +332,36 @@ def _load_refresh_billing_state(cursor: Any, *, business_id: str, user_id: str, 
     if overage > 0:
         status = "overage_charged"
         label = f"Списано по факту: {charged} + overage {overage}"
+        explanation = "Фактическая стоимость Apify оказалась выше резерва, поэтому LocalOS списал резерв и отдельно записал overage."
     elif reservation_status == "reserved" and outstanding > 0:
         status = "reserved"
         label = f"Зарезервировано: {outstanding}"
+        explanation = "Кредиты пока только зарезервированы. Фактическое списание будет после результата парсинга и settlement."
     elif charged > 0:
         status = "charged"
         label = f"Списано по факту: {charged}"
+        explanation = "Refresh завершён, provider cost пересчитан в кредиты, неиспользованный резерв возвращён или уже учтён."
     elif released > 0 or reservation_status == "released":
         status = "released"
         label = f"Резерв возвращён: {released}"
+        explanation = "Резерв был освобождён без списания за этот refresh."
     else:
         status = reservation_status or "unknown"
         label = "Статус оплаты уточняется"
+        explanation = "LocalOS пока не видит финальное состояние резерва для этого refresh."
     return {
         "status": status,
         "label": label,
+        "explanation": explanation,
+        "user_facing_summary": {
+            "reserved": reserved,
+            "charged": charged,
+            "released": released,
+            "outstanding": outstanding,
+            "overage": overage,
+            "provider_actual_cost": provider_actual_cost,
+            "actual_credits": actual_credits,
+        },
         "reservation_id": row.get("id"),
         "reservation_status": reservation_status,
         "estimated_credits": _int_value(row.get("estimated_credits")),

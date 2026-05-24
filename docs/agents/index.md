@@ -77,6 +77,8 @@ Sprint 46 adds the worker retry/recovery boundary as backend service code. It do
 
 Sprint 47 adds Telegram retry parity. Owner-bot text commands such as `повтори refresh` route into the same `request_refresh_retry` backend service, reserve credits through the same boundary, and keep publication/manual copy rules unchanged.
 
+Sprint 48 improves user-facing refresh billing clarity. Refresh billing state now includes a plain explanation and a summary of reserved, charged, released, outstanding, overage, provider cost, actual credits, and multiplier; the web Operator renders the explanation near the numbers.
+
 The Operator model keeps one context, one permission system, one credit/usage ledger, one approval policy, and one audit trail across web and Telegram. Sprint 0 defines the product contract only; it does not imply that the web-chat runtime or Telegram Operator runtime is fully implemented.
 
 ## What Agents Must Not Assume
