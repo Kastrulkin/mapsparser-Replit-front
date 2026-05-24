@@ -79,6 +79,8 @@ Sprint 47 adds Telegram retry parity. Owner-bot text commands such as `повт�
 
 Sprint 48 improves user-facing refresh billing clarity. Refresh billing state now includes a plain explanation and a summary of reserved, charged, released, outstanding, overage, provider cost, actual credits, and multiplier; the web Operator renders the explanation near the numbers.
 
+Sprint 49 normalizes the “new reviews found” flow. Completed refresh results now include `result_summary` with the count of new reviews, unanswered reviews, and the primary next action; both web Operator and Telegram render this result before offering reply generation.
+
 The Operator model keeps one context, one permission system, one credit/usage ledger, one approval policy, and one audit trail across web and Telegram. Sprint 0 defines the product contract only; it does not imply that the web-chat runtime or Telegram Operator runtime is fully implemented.
 
 ## What Agents Must Not Assume

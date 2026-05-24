@@ -404,6 +404,7 @@ type RefreshResult = {
   reliability_state?: RefreshReliabilityState;
   new_reviews_count?: number;
   new_unanswered_reviews_count?: number;
+  result_summary?: RefreshResultSummary;
   new_reviews?: RefreshReview[];
   chat_response?: string;
   blocked_reasons?: string[];
@@ -419,11 +420,21 @@ type RefreshJob = {
   error_message?: string;
   new_reviews_count?: number;
   new_unanswered_reviews_count?: number;
+  result_summary?: RefreshResultSummary;
   billing_state?: RefreshBillingState;
   reliability_state?: RefreshReliabilityState;
   new_reviews?: RefreshReview[];
   chat_response?: string;
   blocked_reasons?: string[];
+};
+
+type RefreshResultSummary = {
+  status?: string;
+  title?: string;
+  text?: string;
+  primary_action?: string;
+  new_reviews_count?: number;
+  new_unanswered_reviews_count?: number;
 };
 
 type RefreshBillingState = {
@@ -1416,6 +1427,12 @@ export const OperatorPage = () => {
                     </div>
                     {renderBillingDetails(refreshResult.billing_state)}
                     {renderReliabilityDetails(refreshResult.reliability_state)}
+                    {refreshResult.result_summary ? (
+                      <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm leading-6 text-emerald-950">
+                        <div className="font-semibold">{refreshResult.result_summary.title}</div>
+                        <div>{refreshResult.result_summary.text}</div>
+                      </div>
+                    ) : null}
                     {refreshResult.new_reviews?.length ? (
                       <div className="mt-3 space-y-2">
                         {refreshResult.new_reviews.map((review) => (
@@ -1745,6 +1762,12 @@ export const OperatorPage = () => {
                         {job.error_message ? <p className="mt-2 text-sm leading-6 text-rose-700">{job.error_message}</p> : null}
                         {renderBillingDetails(job.billing_state)}
                         {renderReliabilityDetails(job.reliability_state)}
+                        {job.result_summary ? (
+                          <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm leading-6 text-emerald-950">
+                            <div className="font-semibold">{job.result_summary.title}</div>
+                            <div>{job.result_summary.text}</div>
+                          </div>
+                        ) : null}
                         {job.new_reviews?.length ? (
                           <div className="mt-3 space-y-2">
                             {job.new_reviews.map((review) => (

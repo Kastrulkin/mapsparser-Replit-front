@@ -86,6 +86,8 @@ def test_refresh_result_counts_new_unanswered_reviews() -> None:
     assert result["status"] == "completed"
     assert result["new_reviews_count"] == 2
     assert result["new_unanswered_reviews_count"] == 1
+    assert result["result_summary"]["status"] == "new_reviews_found"
+    assert result["result_summary"]["primary_action"] == "generate_review_replies"
     assert result["new_reviews"][0]["author_name"] == "Анна"
     assert result["ui_actions"][1]["action"] == "generate_review_replies"
     assert result["external_writes_performed"] is False
@@ -203,6 +205,7 @@ def test_list_refresh_jobs_summarizes_recent_jobs() -> None:
     assert result["summary"]["reliability_failed_count"] == 1
     assert result["summary"]["new_unanswered_reviews_count"] == 1
     assert result["jobs"][0]["queue_id"] == "queue-completed"
+    assert result["jobs"][0]["result_summary"]["title"] == "Найдено новых отзывов: 1"
     assert result["jobs"][0]["ui_actions"][0]["action"] == "check_refresh_result"
     assert result["jobs"][1]["reliability_state"]["status"] == "retrying"
     assert result["limits"]["external_writes_performed"] is False

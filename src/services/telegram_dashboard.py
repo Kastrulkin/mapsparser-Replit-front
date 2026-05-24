@@ -290,6 +290,9 @@ def _format_operator_refresh_jobs_text(refresh_jobs: dict[str, Any]) -> str:
             unanswered = int(job.get("new_unanswered_reviews_count") or 0)
             lines.append(f"{index}. {created_at} — {status} ({queue_status})")
             lines.append(f"   Новых: {new_reviews}; без ответа: {unanswered}.")
+            result_summary = job.get("result_summary") if isinstance(job.get("result_summary"), dict) else {}
+            if result_summary.get("title"):
+                lines.append(f"   Результат: {result_summary.get('title')}. {result_summary.get('text') or ''}".strip())
             error_message = str(job.get("error_message") or "").strip()
             if error_message:
                 lines.append(f"   Ошибка: {error_message}")

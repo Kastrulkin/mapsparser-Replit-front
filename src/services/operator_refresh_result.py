@@ -478,6 +478,14 @@ def build_refresh_result_status(
     new_unanswered = [item for item in new_reviews if not item.get("has_response")]
     count = len(new_reviews)
     unanswered_count = len(new_unanswered)
+    result_summary = {
+        "status": "new_reviews_found" if count > 0 else "no_new_reviews",
+        "title": f"Найдено новых отзывов: {count}" if count > 0 else "Новых отзывов не найдено",
+        "text": f"Без ответа: {unanswered_count}. Можно подготовить ответы." if unanswered_count > 0 else "Нет новых отзывов без ответа.",
+        "primary_action": "generate_review_replies" if unanswered_count > 0 else "open_reviews",
+        "new_reviews_count": count,
+        "new_unanswered_reviews_count": unanswered_count,
+    }
     if count > 0:
         chat_response = "\n".join(
             [
@@ -499,6 +507,7 @@ def build_refresh_result_status(
         "new_reviews_count": count,
         "new_unanswered_reviews_count": unanswered_count,
         "new_reviews": new_reviews,
+        "result_summary": result_summary,
         "chat_response": chat_response,
         "external_calls_performed": False,
         "external_writes_performed": False,
@@ -610,6 +619,7 @@ def list_refresh_jobs(
                 "error_message": queue.get("error_message"),
                 "new_reviews_count": new_reviews_count,
                 "new_unanswered_reviews_count": new_unanswered_count,
+                "result_summary": result.get("result_summary"),
                 "billing_state": billing_state,
                 "reliability_state": reliability_state,
                 "new_reviews": list(result.get("new_reviews") or [])[:5],

@@ -206,6 +206,10 @@ def test_operator_refresh_jobs_text_keeps_publication_manual() -> None:
                     "created_at": "2026-05-24T10:00:00+00:00",
                     "new_reviews_count": 2,
                     "new_unanswered_reviews_count": 1,
+                    "result_summary": {
+                        "title": "Найдено новых отзывов: 2",
+                        "text": "Без ответа: 1. Можно подготовить ответы.",
+                    },
                     "reliability_state": {
                         "status": "failed",
                         "title": "Таймаут парсинга",
@@ -227,6 +231,7 @@ def test_operator_refresh_jobs_text_keeps_publication_manual() -> None:
     assert "Обновления отзывов" in text
     assert "В работе: 1" in text
     assert "Новых отзывов: 2" in text
+    assert "Результат: Найдено новых отзывов: 2" in text
     assert "Анна" in text
     assert "Надёжность: Таймаут парсинга (timeout)" in text
     assert "подготовь ответы на отзывы" in text
