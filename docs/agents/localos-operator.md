@@ -733,6 +733,17 @@ Sprint 43 source of truth:
 
 Clicking `Повторить refresh` is the explicit retry confirmation. If credits are insufficient or the source job is still processing/not retryable, Operator must block and show billing or the reason code.
 
+### Recover Failed Refresh Reservation
+
+If a read-only refresh fails after credits were reserved, Operator can inspect the recovery plan and release outstanding reserved credits only through an explicit recovery action.
+
+Runtime boundary:
+
+- plan/release endpoint: `GET|POST /api/operator/reviews/refresh-jobs/<queue_id>/recovery`;
+- service: `services.operator_refresh_recovery`;
+- release path: existing `finalize_reserved_action_credits(..., finalization_mode="release")`;
+- side-effect rule: no silent retry, no provider writes, no external map publication.
+
 ## Audit And Ledger Events
 
 Every Operator action should be traceable:

@@ -81,6 +81,8 @@ Sprint 48 improves user-facing refresh billing clarity. Refresh billing state no
 
 Sprint 49 normalizes the “new reviews found” flow. Completed refresh results now include `result_summary` with the count of new reviews, unanswered reviews, and the primary next action; both web Operator and Telegram render this result before offering reply generation.
 
+The next Operator hardening layer connects the GigaChat fallback router to Telegram and exposes the refresh recovery boundary through runtime API. Telegram still runs explicit rules first; only unsupported Operator-like phrases can spend `operator_intent_classify` credits. Refresh recovery can inspect a failed job and, with explicit confirmation, release outstanding reserved credits without retrying silently or writing to map providers.
+
 The Operator model keeps one context, one permission system, one credit/usage ledger, one approval policy, and one audit trail across web and Telegram. Sprint 0 defines the product contract only; it does not imply that the web-chat runtime or Telegram Operator runtime is fully implemented.
 
 ## What Agents Must Not Assume

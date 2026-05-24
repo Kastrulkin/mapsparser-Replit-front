@@ -60,6 +60,7 @@ from services.telegram_dashboard import (
     build_automation_text,
     build_card_text,
     build_growth_text,
+    build_operator_chat_text,
     build_refresh_retry_text,
     build_refresh_jobs_text,
     build_reviews_text,
@@ -5197,7 +5198,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
         if client_intent == "":
-            await update.message.reply_text(client_fallback_text(), reply_markup=_build_ask_localos_menu())
+            await update.message.reply_text(build_operator_chat_text(business_ctx, text), reply_markup=_build_ask_localos_menu())
             return
 
     if state == 'waiting_transaction':

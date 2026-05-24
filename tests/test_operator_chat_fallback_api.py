@@ -190,3 +190,82 @@ def test_operator_chat_ai_manual_review_guard_does_not_add_review(monkeypatch) -
     assert result["external_writes_performed"] is False
     assert result["ai_router"]["intent"] == "manual_review_add_and_reply"
     assert calls == {"process": 1, "ai": 1}
+
+
+def test_operator_refresh_recovery_plan_endpoint(monkeypatch) -> None:
+    client = _client(monkeypatch)
+
+    def recovery_plan(cursor, *, business_id, user_id, queue_id):
+        assert business_id == "biz-1"
+        assert user_id == "user-1"
+        assert queue_id == "queue-1"
+        return {
+            "status": "ready",
+            "queue_id": queue_id,
+            "retry_allowed": True,
+            "release_allowed": True,
+            "reservation_id": "reservation-1",
+            "outstanding_credits": 10,
+            "blocked_reasons": [],
+            "side_effects": {"reservation_released": False},
+        }
+
+    monkeypatch.setattr(operator_api, "build_refresh_recovery_plan", recovery_plan)
+
+    response = client.get("/api/operator/reviews/refresh-jobs/queue-1/recovery?business_id=biz-1")
+    body = response.get_json()
+
+    assert response.status_code == 200
+    assert body["success"] is True
+    assert body["recovery_result"]["reservation_id"] == "reservation-1"
+    assert body["recovery_result"]["release_allowed"] is True
+
+
+def test_operator_refresh_recovery_release_endpoint_requires_confirmation(monkeypatch) -> None:
+    client = _client(monkeypatch)
+    calls = {"plan": 0, "release": 0}
+
+    def recovery_plan(cursor, *, business_id, user_id, queue_id):
+        calls["plan"] += 1
+        return {
+            "status": "ready",
+            "queue_id": queue_id,
+            "retry_allowed": True,
+            "release_allowed": True,
+            "reservation_id": "reservation-1",
+            "outstanding_credits": 10,
+            "blocked_reasons": [],
+            "side_effects": {"reservation_released": False},
+        }
+
+    def release(cursor, *, business_id, user_id, queue_id, confirm_release=False):
+        calls["release"] += 1
+        assert confirm_release is True
+        return {
+            "status": "released",
+            "queue_id": queue_id,
+            "retry_allowed": True,
+            "release_allowed": True,
+            "reservation_id": "reservation-1",
+            "outstanding_credits": 10,
+            "blocked_reasons": [],
+            "side_effects": {"reservation_released": True},
+        }
+
+    monkeypatch.setattr(operator_api, "build_refresh_recovery_plan", recovery_plan)
+    monkeypatch.setattr(operator_api, "release_failed_refresh_reservation", release)
+
+    plan_response = client.post(
+        "/api/operator/reviews/refresh-jobs/queue-1/recovery",
+        json={"business_id": "biz-1"},
+    )
+    release_response = client.post(
+        "/api/operator/reviews/refresh-jobs/queue-1/recovery",
+        json={"business_id": "biz-1", "confirm_release": True},
+    )
+
+    assert plan_response.status_code == 200
+    assert plan_response.get_json()["recovery_result"]["status"] == "ready"
+    assert release_response.status_code == 200
+    assert release_response.get_json()["recovery_result"]["status"] == "released"
+    assert calls == {"plan": 1, "release": 1}

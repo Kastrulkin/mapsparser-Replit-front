@@ -187,6 +187,63 @@ def test_client_intent_recognizes_refresh_retry() -> None:
     assert classify_client_intent("Запусти повтор обновления") == "refresh_retry"
 
 
+def test_client_intent_leaves_free_operator_command_for_ai_fallback() -> None:
+    assert classify_client_intent("надо ответить людям") == ""
+
+
+def test_telegram_operator_ai_fallback_routes_card_refresh(monkeypatch) -> None:
+    calls = {"process": 0, "ai": 0, "refresh": 0}
+
+    def process(cursor, *, business_id, user_id, message, channel="telegram"):
+        calls["process"] += 1
+        return {"status": "unsupported", "blocked_reasons": ["unsupported_operator_chat_intent"]}
+
+    def ai_router(cursor, *, business_id, user_id, message, channel="telegram"):
+        calls["ai"] += 1
+        assert channel == "telegram"
+        return {
+            "status": "completed",
+            "intent": "operator_intent_ai_router",
+            "normalized_intent": "card_refresh",
+            "charged_credits": 1,
+            "credit_charged": True,
+            "finalization_result": {
+                "status": "charged",
+                "charge_credits": 1,
+                "release_credits": 0,
+                "side_effects": {"credit_charged": True},
+            },
+        }
+
+    def refresh(cursor, *, business_id, user_id, explicit_url=None, channel="telegram"):
+        calls["refresh"] += 1
+        assert channel == "telegram"
+        return {
+            "status": "queued",
+            "intent": "fresh_reviews_refresh",
+            "chat_response": "Запустил платное read-only обновление карточки.",
+            "queue_id": "queue-1",
+            "blocked_reasons": [],
+        }
+
+    monkeypatch.setattr(telegram_dashboard, "process_operator_chat_message", process)
+    monkeypatch.setattr(telegram_dashboard, "classify_operator_intent_with_ai", ai_router)
+    monkeypatch.setattr(telegram_dashboard, "refresh_reviews_from_operator", refresh)
+
+    result = telegram_dashboard.route_operator_chat_for_telegram(
+        object(),
+        business_id="biz-1",
+        user_id="user-1",
+        message="надо посмотреть что там с салоном",
+    )
+
+    assert result["status"] == "queued"
+    assert result["queue_id"] == "queue-1"
+    assert result["ai_router"]["intent"] == "card_refresh"
+    assert result["ai_router"]["charged_credits"] == 1
+    assert calls == {"process": 1, "ai": 1, "refresh": 1}
+
+
 def test_operator_refresh_jobs_text_keeps_publication_manual() -> None:
     text = telegram_dashboard._format_operator_refresh_jobs_text(
         {
