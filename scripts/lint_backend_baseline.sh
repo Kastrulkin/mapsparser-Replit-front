@@ -246,8 +246,8 @@ compose_text = Path("docker-compose.yml").read_text(encoding="utf-8")
 if '_env_bool("OUTREACH_DISPATCH_ENABLED", False)' not in worker_text:
     raise SystemExit("OUTREACH_DISPATCH_ENABLED must default to false in worker")
 
-if "OUTREACH_DISPATCH_ENABLED: ${OUTREACH_DISPATCH_ENABLED:-false}" not in compose_text:
-    raise SystemExit("docker-compose.yml must expose OUTREACH_DISPATCH_ENABLED as explicit opt-in")
+if compose_text.count("OUTREACH_DISPATCH_ENABLED: ${OUTREACH_DISPATCH_ENABLED:-false}") < 2:
+    raise SystemExit("docker-compose.yml must expose OUTREACH_DISPATCH_ENABLED as explicit opt-in for app and worker")
 
 print("OK: outreach dispatcher is disabled unless explicitly enabled")
 PY
