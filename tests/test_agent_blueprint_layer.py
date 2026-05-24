@@ -19,11 +19,23 @@ def test_agent_blueprint_routes_are_owned_by_blueprint():
         "/api/agent-blueprints/<blueprint_id>/versions": {
             "POST": "agent_blueprints_api.create_agent_blueprint_version",
         },
+        "/api/agent-blueprints/<blueprint_id>/setup": {
+            "POST": "agent_blueprints_api.setup_agent_blueprint",
+        },
+        "/api/agent-blueprints/<blueprint_id>/sources": {
+            "POST": "agent_blueprints_api.add_agent_blueprint_source",
+        },
+        "/api/agent-blueprints/<blueprint_id>/review": {
+            "GET": "agent_blueprints_api.review_agent_blueprint",
+        },
         "/api/agent-blueprints/<blueprint_id>/runs": {
             "POST": "agent_blueprints_api.start_agent_blueprint_run",
         },
         "/api/agent-runs/<run_id>": {
             "GET": "agent_blueprints_api.get_agent_run",
+        },
+        "/api/agent-runs/<run_id>/feedback": {
+            "POST": "agent_blueprints_api.create_agent_run_feedback",
         },
         "/api/agent-runs/<run_id>/approvals/<approval_id>/approve": {
             "POST": "agent_blueprints_api.approve_agent_run",
@@ -110,6 +122,65 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "/api/agent-blueprints/draft" in api_source
     assert "build_agent_blueprint_draft" in api_source
     assert "_insert_version(cursor, blueprint_id, version_payload, user_data)" in api_source
+    assert "/api/agent-blueprints/<blueprint_id>/setup" in api_source
+    assert "/api/agent-blueprints/<blueprint_id>/sources" in api_source
+    assert "/api/agent-runs/<run_id>/feedback" in api_source
+
+
+def test_generic_document_runner_uses_sources_and_stops_for_final_approval():
+    from services.agent_blueprint_draft_builder import build_agent_blueprint_draft
+    from services.agent_blueprint_runner import AgentBlueprintRunner
+
+    cursor = FakeCursor()
+    draft = build_agent_blueprint_draft("Обработай договор и найди риски")
+    cursor.tables["agent_blueprints"]["bp1"] = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "name": "Document agent",
+        "category": "documents",
+        "metadata_json": {
+            **draft["metadata"],
+            "agent_setup": {
+                "workflow_description": "Проверить договор",
+                "extraction_rules": "Найти сроки, оплату и ответственность",
+                "processing_rules": "Не придумывать факты",
+                "output_format": "Список рисков",
+                "approval_boundaries": ["final_output", "external_delivery"],
+            },
+            "agent_sources": [
+                {
+                    "id": "src1",
+                    "source_type": "text",
+                    "name": "Договор",
+                    "content_text": "Оплата 10000 рублей. Ответственность за просрочку: штраф 10%.",
+                    "content_length": 68,
+                    "extraction_state": "ready",
+                }
+            ],
+        },
+    }
+    cursor.tables["agent_blueprint_versions"]["ver1"] = {
+        "id": "ver1",
+        "blueprint_id": "bp1",
+        "steps_json": draft["version_payload"]["steps"],
+        "capability_allowlist_json": [],
+    }
+
+    result = AgentBlueprintRunner(cursor).start_run("ver1", {}, {"user_id": "user1"})
+
+    assert result["success"] is True
+    run = result["run"]
+    assert run["status"] == "waiting_approval"
+    assert [step["step_key"] for step in run["steps"]] == [
+        "collect_inputs",
+        "extract_context",
+        "prepare_output",
+        "approve_output",
+    ]
+    output = [item for item in run["artifacts"] if item["artifact_type"] == "agent_output_draft"][0]
+    assert output["payload_json"]["external_dispatch_performed"] is False
+    assert output["payload_json"]["result"]["title"] == "Разбор документа"
+    assert run["approvals"][0]["approval_type"] == "final_output"
 
 
 def test_outreach_send_batch_handler_queues_approved_drafts_without_external_dispatch(monkeypatch):

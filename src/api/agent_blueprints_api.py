@@ -13,6 +13,14 @@ from services.agent_blueprint_runner import (
 )
 from services.agent_blueprint_orchestrator import build_agent_blueprint_orchestrator
 from services.agent_blueprint_draft_builder import build_agent_blueprint_draft
+from services.agent_blueprint_workspace import (
+    build_blueprint_review,
+    build_feedback_version_payload,
+    build_version_payload_from_row,
+    normalize_agent_setup,
+    normalize_agent_source,
+    workspace_parse_json_field,
+)
 
 
 agent_blueprints_bp = Blueprint("agent_blueprints_api", __name__)
@@ -69,6 +77,38 @@ def _load_blueprint_version_for_blueprint(cursor, blueprint_id: str, version_id:
     )
     row = cursor.fetchone()
     return dict(row) if row else None
+
+
+def _load_latest_blueprint_version(cursor, blueprint_id: str):
+    cursor.execute(
+        """
+        SELECT *
+        FROM agent_blueprint_versions
+        WHERE blueprint_id = %s
+        ORDER BY version_number DESC
+        LIMIT 1
+        """,
+        (blueprint_id,),
+    )
+    row = cursor.fetchone()
+    return dict(row) if row else None
+
+
+def _blueprint_metadata(blueprint: dict) -> dict:
+    metadata = workspace_parse_json_field(blueprint.get("metadata_json"), {})
+    return metadata if isinstance(metadata, dict) else {}
+
+
+def _save_blueprint_metadata(cursor, blueprint_id: str, metadata: dict) -> None:
+    cursor.execute(
+        """
+        UPDATE agent_blueprints
+        SET metadata_json = %s::jsonb,
+            updated_at = NOW()
+        WHERE id = %s
+        """,
+        (json.dumps(metadata, ensure_ascii=False), blueprint_id),
+    )
 
 
 def _require_blueprint_access(cursor, blueprint_id: str, user_data: dict):
@@ -376,6 +416,87 @@ def create_agent_blueprint_version(blueprint_id: str):
         db.close()
 
 
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/setup", methods=["POST"])
+def setup_agent_blueprint(blueprint_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    payload = request.get_json(silent=True) or {}
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        metadata = _blueprint_metadata(blueprint)
+        setup = normalize_agent_setup(payload)
+        metadata["agent_setup"] = setup
+        metadata["setup_completed"] = True
+        _save_blueprint_metadata(cursor, blueprint_id, metadata)
+        version = None
+        latest_version = _load_latest_blueprint_version(cursor, blueprint_id)
+        if latest_version:
+            version_payload = build_version_payload_from_row(latest_version)
+            input_schema = version_payload.get("inputs_schema") if isinstance(version_payload.get("inputs_schema"), dict) else {}
+            input_schema["agent_setup"] = setup
+            version_payload["inputs_schema"] = input_schema
+            output_schema = version_payload.get("output_schema") if isinstance(version_payload.get("output_schema"), dict) else {}
+            output_schema["human_review"] = True
+            version_payload["output_schema"] = output_schema
+            version = _insert_version(cursor, blueprint_id, version_payload, user_data)
+        db.conn.commit()
+        refreshed = _load_blueprint(cursor, blueprint_id)
+        return jsonify({"success": True, "blueprint": _normalize_json_row(refreshed), "setup": setup, "version": version})
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/sources", methods=["POST"])
+def add_agent_blueprint_source(blueprint_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    payload = request.get_json(silent=True) or {}
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        metadata = _blueprint_metadata(blueprint)
+        sources = metadata.get("agent_sources") if isinstance(metadata.get("agent_sources"), list) else []
+        source = normalize_agent_source(payload)
+        sources.append(source)
+        metadata["agent_sources"] = sources[-50:]
+        _save_blueprint_metadata(cursor, blueprint_id, metadata)
+        db.conn.commit()
+        return jsonify({"success": True, "source": source, "sources": metadata["agent_sources"]}), 201
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/review", methods=["GET"])
+def review_agent_blueprint(blueprint_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        return jsonify({"success": True, "review": build_blueprint_review(cursor, str(blueprint.get("id") or ""))})
+    finally:
+        db.close()
+
+
 @agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/runs", methods=["POST"])
 def start_agent_blueprint_run(blueprint_id: str):
     user_data, error_response = _require_auth()
@@ -436,6 +557,51 @@ def get_agent_run(run_id: str):
             return access_error
         runner = AgentBlueprintRunner(cursor, build_agent_blueprint_orchestrator())
         return jsonify({"success": True, "run": runner.load_run(run_id)})
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-runs/<run_id>/feedback", methods=["POST"])
+def create_agent_run_feedback(run_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    payload = request.get_json(silent=True) or {}
+    feedback_text = str(payload.get("feedback") or "").strip()
+    if not feedback_text:
+        return _json_error("feedback is required", 400, "VALIDATION_ERROR")
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute("SELECT * FROM agent_runs WHERE id = %s", (run_id,))
+        run = cursor.fetchone()
+        if not run:
+            return _json_error("Run not found", 404, "NOT_FOUND")
+        run = dict(run)
+        blueprint, access_error = _require_blueprint_access(cursor, str(run.get("blueprint_id") or ""), user_data)
+        if access_error:
+            return access_error
+        version = _load_blueprint_version_for_blueprint(cursor, str(blueprint.get("id") or ""), str(run.get("blueprint_version_id") or ""))
+        if not version:
+            return _json_error("Blueprint version not found", 404, "VERSION_NOT_FOUND")
+        feedback = {
+            "run_id": run_id,
+            "feedback": feedback_text,
+            "created_by_user_id": _user_id(user_data),
+            "source": "run_review",
+        }
+        metadata = _blueprint_metadata(blueprint)
+        history = metadata.get("feedback_history") if isinstance(metadata.get("feedback_history"), list) else []
+        history.append(feedback)
+        metadata["feedback_history"] = history[-20:]
+        _save_blueprint_metadata(cursor, str(blueprint.get("id") or ""), metadata)
+        version_payload = build_feedback_version_payload(version, feedback)
+        new_version = _insert_version(cursor, str(blueprint.get("id") or ""), version_payload, user_data)
+        db.conn.commit()
+        return jsonify({"success": True, "feedback": feedback, "version": new_version}), 201
+    except Exception:
+        db.conn.rollback()
+        raise
     finally:
         db.close()
 

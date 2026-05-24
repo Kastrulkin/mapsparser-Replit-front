@@ -3,6 +3,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from core.action_orchestrator import ActionOrchestrator
+from services.agent_blueprint_workspace import build_generic_artifact_payload
 
 
 RUNNING_STATUSES = {"running", "waiting_approval"}
@@ -321,6 +322,9 @@ class AgentBlueprintRunner:
             return self._build_message_drafts_payload(run, base_payload)
         if artifact_type == "outreach_outcomes":
             return self._build_outreach_outcomes_payload(run, base_payload)
+        generic_payload = build_generic_artifact_payload(self.cursor, run, step, base_payload)
+        if generic_payload is not None:
+            return generic_payload
         return dict(base_payload)
 
     def _run_input(self, run: Dict[str, Any]) -> Dict[str, Any]:
@@ -925,6 +929,8 @@ class AgentBlueprintRunner:
             artifact_type = "lead_shortlist"
         if approval_type == "drafts":
             artifact_type = "message_drafts"
+        if approval_type == "final_output":
+            artifact_type = "agent_output_draft"
         if not artifact_type:
             return dict(payload)
         artifact_payload = self._latest_artifact_payload(str(run.get("id") or ""), artifact_type)

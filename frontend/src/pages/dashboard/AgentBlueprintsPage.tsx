@@ -5,6 +5,7 @@ import {
   Bot,
   CheckCircle2,
   Clock3,
+  Database,
   FileCheck2,
   FileText,
   Loader2,
@@ -15,6 +16,7 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
+  Upload,
   Users,
   Workflow,
 } from 'lucide-react';
@@ -132,6 +134,34 @@ type AgentBlueprintDetails = {
   approval_queue?: AgentApproval[];
 };
 
+type AgentSource = {
+  id?: string;
+  source_type?: string;
+  name?: string;
+  file_name?: string;
+  internal_source?: string;
+  extraction_state?: string;
+  content_length?: number;
+};
+
+type AgentReviewSection = {
+  title?: string;
+  artifact_type?: string;
+  status?: string;
+  summary?: string;
+  payload?: Record<string, unknown>;
+};
+
+type AgentReview = {
+  has_run?: boolean;
+  run_id?: string;
+  run_status?: string;
+  setup?: Record<string, unknown>;
+  sources?: AgentSource[];
+  sections?: AgentReviewSection[];
+  approvals?: AgentApproval[];
+};
+
 type AgentDraftSummary = {
   category?: string;
   sources?: string[];
@@ -235,6 +265,17 @@ const metaLabels: Record<string, string> = {
   capability: 'действие через безопасный контур',
   shortlist: 'список клиентов',
   drafts: 'черновики сообщений',
+  business_profile: 'профиль бизнеса',
+  services: 'услуги',
+  reviews: 'отзывы',
+  external_reviews: 'отзывы',
+  prospectingleads: 'лиды',
+  outreach_drafts: 'черновики outreach',
+  uploaded_documents: 'документы',
+  uploaded_tables: 'таблицы',
+  manual_context: 'ручной контекст',
+  final_output: 'финальный результат',
+  external_delivery: 'внешняя отправка',
 };
 
 const humanizeStatus = (status: string) => statusLabels[status] || status;
@@ -289,6 +330,16 @@ export const AgentBlueprintsPage = () => {
   const [runLimit, setRunLimit] = useState('30');
   const [agentPrompt, setAgentPrompt] = useState('');
   const [lastDraft, setLastDraft] = useState<AgentDraftSummary | null>(null);
+  const [agentReview, setAgentReview] = useState<AgentReview | null>(null);
+  const [setupDataSources, setSetupDataSources] = useState('профиль бизнеса, ручной контекст');
+  const [setupExtractionRules, setSetupExtractionRules] = useState('');
+  const [setupProcessingRules, setSetupProcessingRules] = useState('');
+  const [setupOutputFormat, setSetupOutputFormat] = useState('');
+  const [setupManualControl, setSetupManualControl] = useState('Показывать результат перед любым внешним действием');
+  const [sourceName, setSourceName] = useState('');
+  const [sourceText, setSourceText] = useState('');
+  const [internalSource, setInternalSource] = useState('business_profile');
+  const [feedbackText, setFeedbackText] = useState('');
 
   const selectedBlueprint = useMemo(
     () => blueprints.find((item) => item.id === selectedBlueprintId) || blueprints[0] || null,
@@ -409,6 +460,9 @@ export const AgentBlueprintsPage = () => {
     try {
       const response = await api.get(`/agent-runs/${runId}`);
       setActiveRun(response.data?.run || null);
+      if (selectedBlueprint?.id) {
+        await loadBlueprintReview(selectedBlueprint.id);
+      }
     } catch (requestError) {
       console.error(requestError);
       setError('Не удалось загрузить запуск.');
@@ -416,6 +470,23 @@ export const AgentBlueprintsPage = () => {
       setActionLoading(false);
     }
   };
+
+  const loadBlueprintReview = useCallback(async (blueprintId: string) => {
+    try {
+      const response = await api.get(`/agent-blueprints/${blueprintId}/review`);
+      setAgentReview(response.data?.review || null);
+    } catch (requestError) {
+      console.error(requestError);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedBlueprint?.id) {
+      void loadBlueprintReview(selectedBlueprint.id);
+    } else {
+      setAgentReview(null);
+    }
+  }, [loadBlueprintReview, selectedBlueprint?.id]);
 
   const createDefaultBlueprint = async (requestText = '') => {
     if (!currentBusinessId) {
@@ -437,6 +508,7 @@ export const AgentBlueprintsPage = () => {
       if (blueprint?.id) {
         setSelectedBlueprintId(blueprint.id);
         await loadBlueprintDetails(blueprint.id);
+        await loadBlueprintReview(blueprint.id);
       }
     } catch (requestError) {
       console.error(requestError);
@@ -474,6 +546,7 @@ export const AgentBlueprintsPage = () => {
       if (blueprint?.id) {
         setSelectedBlueprintId(blueprint.id);
         await loadBlueprintDetails(blueprint.id);
+        await loadBlueprintReview(blueprint.id);
       }
       setAgentPrompt('');
     } catch (requestError) {
@@ -503,6 +576,7 @@ export const AgentBlueprintsPage = () => {
       });
       setActiveRun(response.data?.run || null);
       await loadBlueprintDetails(selectedBlueprint.id);
+      await loadBlueprintReview(selectedBlueprint.id);
     } catch (requestError) {
       console.error(requestError);
       setError('Не удалось запустить blueprint.');
@@ -522,9 +596,131 @@ export const AgentBlueprintsPage = () => {
         reason: decision === 'approve' ? 'Approved from dashboard' : 'Rejected from dashboard',
       });
       setActiveRun(response.data?.run || null);
+      if (selectedBlueprint?.id) {
+        await loadBlueprintReview(selectedBlueprint.id);
+      }
     } catch (requestError) {
       console.error(requestError);
       setError('Не удалось применить решение approval.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const saveAgentSetup = async () => {
+    if (!selectedBlueprint) {
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    try {
+      await api.post(`/agent-blueprints/${selectedBlueprint.id}/setup`, {
+        workflow_description: selectedBlueprint.latest_goal || selectedBlueprint.description || selectedBlueprint.name,
+        data_sources: setupDataSources.split(',').map((item) => item.trim()).filter(Boolean),
+        extraction_rules: setupExtractionRules,
+        processing_rules: setupProcessingRules,
+        output_format: setupOutputFormat,
+        approval_boundaries: ['final_output', 'external_delivery'],
+        manual_control: setupManualControl,
+      });
+      await loadBlueprintDetails(selectedBlueprint.id);
+      await loadBlueprintReview(selectedBlueprint.id);
+    } catch (requestError) {
+      console.error(requestError);
+      setError('Не удалось сохранить настройку агента.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const addTextSource = async () => {
+    if (!selectedBlueprint || !sourceText.trim()) {
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    try {
+      await api.post(`/agent-blueprints/${selectedBlueprint.id}/sources`, {
+        source_type: 'text',
+        name: sourceName.trim() || 'Ручной контекст',
+        content_text: sourceText,
+      });
+      setSourceName('');
+      setSourceText('');
+      await loadBlueprintReview(selectedBlueprint.id);
+    } catch (requestError) {
+      console.error(requestError);
+      setError('Не удалось добавить источник данных.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const addInternalSource = async () => {
+    if (!selectedBlueprint) {
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    try {
+      await api.post(`/agent-blueprints/${selectedBlueprint.id}/sources`, {
+        source_type: 'internal',
+        name: humanizeMeta(internalSource),
+        internal_source: internalSource,
+      });
+      await loadBlueprintReview(selectedBlueprint.id);
+    } catch (requestError) {
+      console.error(requestError);
+      setError('Не удалось подключить источник LocalOS.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const addFileSource = async (file?: File | null) => {
+    if (!selectedBlueprint || !file) {
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    try {
+      let contentText = '';
+      try {
+        contentText = await file.text();
+      } catch (readError) {
+        console.error(readError);
+      }
+      await api.post(`/agent-blueprints/${selectedBlueprint.id}/sources`, {
+        source_type: 'file',
+        name: file.name,
+        file_name: file.name,
+        content_text: contentText,
+      });
+      await loadBlueprintReview(selectedBlueprint.id);
+    } catch (requestError) {
+      console.error(requestError);
+      setError('Не удалось добавить файл.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const sendRunFeedback = async () => {
+    if (!activeRun || !feedbackText.trim()) {
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    try {
+      await api.post(`/agent-runs/${activeRun.id}/feedback`, { feedback: feedbackText });
+      setFeedbackText('');
+      if (selectedBlueprint?.id) {
+        await loadBlueprintDetails(selectedBlueprint.id);
+        await loadBlueprintReview(selectedBlueprint.id);
+      }
+    } catch (requestError) {
+      console.error(requestError);
+      setError('Не удалось сохранить правку агента.');
     } finally {
       setActionLoading(false);
     }
@@ -642,6 +838,33 @@ export const AgentBlueprintsPage = () => {
           })}
         </div>
       </DashboardSection>
+
+      {selectedBlueprint ? (
+        <AgentWorkspacePanel
+          setupDataSources={setupDataSources}
+          setupExtractionRules={setupExtractionRules}
+          setupProcessingRules={setupProcessingRules}
+          setupOutputFormat={setupOutputFormat}
+          setupManualControl={setupManualControl}
+          sourceName={sourceName}
+          sourceText={sourceText}
+          internalSource={internalSource}
+          review={agentReview}
+          actionLoading={actionLoading}
+          onSetupDataSourcesChange={setSetupDataSources}
+          onSetupExtractionRulesChange={setSetupExtractionRules}
+          onSetupProcessingRulesChange={setSetupProcessingRules}
+          onSetupOutputFormatChange={setSetupOutputFormat}
+          onSetupManualControlChange={setSetupManualControl}
+          onSourceNameChange={setSourceName}
+          onSourceTextChange={setSourceText}
+          onInternalSourceChange={setInternalSource}
+          onSaveSetup={saveAgentSetup}
+          onAddTextSource={addTextSource}
+          onAddInternalSource={addInternalSource}
+          onAddFileSource={addFileSource}
+        />
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(20rem,0.9fr)_minmax(0,1.4fr)]">
         <DashboardSection title="Мои кастомные агенты" description="Сохранённые процессы, которые можно запускать повторно и контролировать через подтверждения.">
@@ -804,6 +1027,13 @@ export const AgentBlueprintsPage = () => {
                   ))}
                 </RunColumn>
               </div>
+              <AgentRunReviewPanel
+                review={agentReview}
+                feedbackText={feedbackText}
+                actionLoading={actionLoading}
+                onFeedbackTextChange={setFeedbackText}
+                onSubmitFeedback={sendRunFeedback}
+              />
             </div>
           )}
         </DashboardSection>
@@ -926,6 +1156,210 @@ const AgentDraftPreview = ({ draft }: { draft: AgentDraftSummary }) => (
       </div>
     ) : null}
   </DashboardSection>
+);
+
+const AgentWorkspacePanel = ({
+  setupDataSources,
+  setupExtractionRules,
+  setupProcessingRules,
+  setupOutputFormat,
+  setupManualControl,
+  sourceName,
+  sourceText,
+  internalSource,
+  review,
+  actionLoading,
+  onSetupDataSourcesChange,
+  onSetupExtractionRulesChange,
+  onSetupProcessingRulesChange,
+  onSetupOutputFormatChange,
+  onSetupManualControlChange,
+  onSourceNameChange,
+  onSourceTextChange,
+  onInternalSourceChange,
+  onSaveSetup,
+  onAddTextSource,
+  onAddInternalSource,
+  onAddFileSource,
+}: {
+  setupDataSources: string;
+  setupExtractionRules: string;
+  setupProcessingRules: string;
+  setupOutputFormat: string;
+  setupManualControl: string;
+  sourceName: string;
+  sourceText: string;
+  internalSource: string;
+  review: AgentReview | null;
+  actionLoading: boolean;
+  onSetupDataSourcesChange: (value: string) => void;
+  onSetupExtractionRulesChange: (value: string) => void;
+  onSetupProcessingRulesChange: (value: string) => void;
+  onSetupOutputFormatChange: (value: string) => void;
+  onSetupManualControlChange: (value: string) => void;
+  onSourceNameChange: (value: string) => void;
+  onSourceTextChange: (value: string) => void;
+  onInternalSourceChange: (value: string) => void;
+  onSaveSetup: () => void;
+  onAddTextSource: () => void;
+  onAddInternalSource: () => void;
+  onAddFileSource: (file?: File | null) => void;
+}) => (
+  <DashboardSection
+    title="Настройка агента"
+    description="Короткий builder: данные, правила, результат и ручной контроль. Это рабочая версия без технического JSON на первом экране."
+  >
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
+      <div className="grid gap-3">
+        <WizardTextArea label="Какие данные использовать" value={setupDataSources} onChange={onSetupDataSourcesChange} placeholder="Например: профиль бизнеса, отзывы, файл с договором" />
+        <WizardTextArea label="Что извлечь или понять" value={setupExtractionRules} onChange={onSetupExtractionRulesChange} placeholder="Например: риски, сроки, суммы, обязательства сторон" />
+        <WizardTextArea label="Какие правила применить" value={setupProcessingRules} onChange={onSetupProcessingRulesChange} placeholder="Например: выделять спорные условия и не придумывать факты" />
+        <WizardTextArea label="Какой результат подготовить" value={setupOutputFormat} onChange={onSetupOutputFormatChange} placeholder="Например: краткий отчёт, письмо клиенту, таблица исключений" />
+        <WizardTextArea label="Где нужен ручной контроль" value={setupManualControl} onChange={onSetupManualControlChange} placeholder="Например: перед отправкой письма или публикацией ответа" />
+        <div>
+          <Button type="button" onClick={onSaveSetup} disabled={actionLoading}>
+            {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+            Сохранить настройку
+          </Button>
+        </div>
+      </div>
+      <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+        <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <Database className="h-4 w-4" />
+          Данные агента
+        </div>
+        <div className="space-y-3">
+          <input
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+            value={sourceName}
+            onChange={(event) => onSourceNameChange(event.target.value)}
+            placeholder="Название источника"
+          />
+          <textarea
+            className="min-h-24 w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+            value={sourceText}
+            onChange={(event) => onSourceTextChange(event.target.value)}
+            placeholder="Вставьте текст, шаблон письма, выдержку из документа или CSV"
+          />
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" onClick={onAddTextSource} disabled={actionLoading || !sourceText.trim()}>
+              Добавить текст
+            </Button>
+            <label className="inline-flex cursor-pointer items-center rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
+              <Upload className="mr-2 h-4 w-4" />
+              Файл
+              <input
+                type="file"
+                className="hidden"
+                accept=".txt,.csv,.tsv,.md,.pdf,.docx,.xlsx"
+                onChange={(event) => {
+                  void onAddFileSource(event.target.files?.[0] || null);
+                  event.target.value = '';
+                }}
+              />
+            </label>
+          </div>
+          <div className="flex gap-2">
+            <select
+              className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+              value={internalSource}
+              onChange={(event) => onInternalSourceChange(event.target.value)}
+            >
+              <option value="business_profile">Профиль бизнеса</option>
+              <option value="services">Услуги</option>
+              <option value="reviews">Отзывы</option>
+              <option value="prospectingleads">Лиды</option>
+              <option value="outreach_drafts">Черновики outreach</option>
+            </select>
+            <Button type="button" size="sm" variant="outline" onClick={onAddInternalSource} disabled={actionLoading}>
+              Подключить
+            </Button>
+          </div>
+          <AgentSourcesList sources={review?.sources || []} />
+        </div>
+      </div>
+    </div>
+  </DashboardSection>
+);
+
+const WizardTextArea = ({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (value: string) => void; placeholder: string }) => (
+  <label className="text-xs font-medium text-slate-600">
+    {label}
+    <textarea
+      className="mt-1 min-h-16 w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      placeholder={placeholder}
+    />
+  </label>
+);
+
+const AgentSourcesList = ({ sources }: { sources: AgentSource[] }) => (
+  <div className="space-y-2">
+    {sources.length ? sources.map((source) => (
+      <div key={source.id || source.name || source.file_name} className="rounded-lg bg-white px-3 py-2 text-xs leading-5 text-slate-600 ring-1 ring-slate-200">
+        <div className="font-medium text-slate-900">{source.name || source.file_name || source.internal_source || 'Источник'}</div>
+        <div>{humanizeMeta(source.internal_source || source.source_type || 'manual_context')} · {source.extraction_state || 'ready'} · {Number(source.content_length || 0)} chars</div>
+      </div>
+    )) : (
+      <div className="rounded-lg border border-dashed border-slate-200 bg-white px-3 py-3 text-sm text-slate-500">
+        Добавьте текст, файл или источник LocalOS.
+      </div>
+    )}
+  </div>
+);
+
+const AgentRunReviewPanel = ({
+  review,
+  feedbackText,
+  actionLoading,
+  onFeedbackTextChange,
+  onSubmitFeedback,
+}: {
+  review: AgentReview | null;
+  feedbackText: string;
+  actionLoading: boolean;
+  onFeedbackTextChange: (value: string) => void;
+  onSubmitFeedback: () => void;
+}) => (
+  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+    <div className="mb-3 flex items-center justify-between gap-3">
+      <div>
+        <div className="text-sm font-semibold text-slate-950">Review результата</div>
+        <div className="mt-1 text-xs text-slate-500">Входные данные, что агент понял, результат и подтверждения без JSON по умолчанию.</div>
+      </div>
+      {review?.run_status ? <StatusBadge status={review.run_status} /> : null}
+    </div>
+    {review?.sections?.length ? (
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {review.sections.map((section) => (
+          <div key={`${section.artifact_type || section.title}`} className="rounded-xl bg-slate-50 px-3 py-3 ring-1 ring-slate-200">
+            <div className="text-sm font-medium text-slate-950">{section.title || 'Результат'}</div>
+            <div className="mt-1 text-xs leading-5 text-slate-600">{section.summary || section.status || 'Готово'}</div>
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs font-medium text-slate-500 hover:text-slate-900">Технический журнал</summary>
+              <pre className="mt-2 max-h-56 overflow-auto rounded-lg bg-slate-950 p-3 text-[11px] leading-5 text-slate-100">
+                {JSON.stringify(section.payload || {}, null, 2)}
+              </pre>
+            </details>
+          </div>
+        ))}
+      </div>
+    ) : (
+      <DashboardEmptyState title="Review появится после запуска" description="Запустите агента, чтобы увидеть extraction, processing и output." />
+    )}
+    <div className="mt-4 grid gap-2 md:grid-cols-[1fr_auto]">
+      <textarea
+        className="min-h-20 resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+        value={feedbackText}
+        onChange={(event) => onFeedbackTextChange(event.target.value)}
+        placeholder="Что исправить в логике агента для следующей версии?"
+      />
+      <Button type="button" onClick={onSubmitFeedback} disabled={actionLoading || !feedbackText.trim()}>
+        Создать новую версию
+      </Button>
+    </div>
+  </div>
 );
 
 const DraftPreviewBlock = ({ title, items, empty }: { title: string; items: string[]; empty: string }) => (
