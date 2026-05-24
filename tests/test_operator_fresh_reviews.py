@@ -58,7 +58,11 @@ class FakeCursor:
 def test_classifies_fresh_reviews_intent() -> None:
     assert classify_fresh_reviews_intent("Проверь новые отзывы")
     assert classify_fresh_reviews_intent("Обнови отзывы")
+    assert classify_fresh_reviews_intent("Спарси данные по карточке Весёлая Расчёска на Энгельса")
+    assert classify_fresh_reviews_intent("Обнови данные по этому аккаунту. Отзывы, новости, услуги")
+    assert classify_fresh_reviews_intent("Собери данные карточки с карт")
     assert not classify_fresh_reviews_intent("Подготовь ответы на отзывы")
+    assert not classify_fresh_reviews_intent("Подготовь новость для карточки")
 
 
 def test_refresh_reviews_blocks_when_balance_is_insufficient() -> None:

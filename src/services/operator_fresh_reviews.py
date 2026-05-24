@@ -16,8 +16,27 @@ def classify_fresh_reviews_intent(message: Any) -> bool:
     if not text:
         return False
     has_reviews = "отзыв" in text
-    has_refresh = "проверь" in text or "проверить" in text or "обнов" in text or "свеж" in text or "новые" in text
-    return has_reviews and has_refresh
+    has_card_scope = (
+        "карточ" in text
+        or "аккаунт" in text
+        or "данные" in text
+        or "карт" in text
+        or "услуг" in text
+        or "новост" in text
+    )
+    has_refresh = (
+        "проверь" in text
+        or "проверить" in text
+        or "обнов" in text
+        or "свеж" in text
+        or "новые" in text
+        or "парс" in text
+        or "спарс" in text
+        or "собер" in text
+        or "актуализ" in text
+    )
+    asks_generation = "подготов" in text or "сгенер" in text or "напиши ответ" in text
+    return has_refresh and (has_reviews or has_card_scope) and not asks_generation
 
 
 def _load_review_snapshot(cursor: Any, *, business_id: str) -> dict[str, Any]:
