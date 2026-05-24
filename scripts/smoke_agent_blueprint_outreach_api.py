@@ -286,6 +286,18 @@ def main():
 
         if run.get("status") != "completed":
             raise RuntimeError(f"run did not complete: {run.get('status')} {run.get('error_text')}")
+        source_artifacts = [
+            item
+            for item in run.get("artifacts", [])
+            if item.get("artifact_type") == "lead_source_plan"
+        ]
+        if not source_artifacts:
+            raise RuntimeError(f"run completed without lead_source_plan artifact: {run}")
+        source_payload = source_artifacts[-1].get("payload_json") or {}
+        if source_payload.get("source") != "prospectingleads":
+            raise RuntimeError(f"lead sourcing did not use prospectingleads: {source_payload}")
+        if source_payload.get("status") != "hydrated" or source_payload.get("count") != 1:
+            raise RuntimeError(f"lead sourcing artifact was not hydrated from real leads: {source_payload}")
         draft_artifacts = [
             item
             for item in run.get("artifacts", [])
@@ -327,6 +339,8 @@ def main():
                     "blueprint_id": ids["blueprint_id"],
                     "run_id": ids["run_id"],
                     "batch_id": ids["batch_id"],
+                    "source_artifact_status": source_payload.get("status"),
+                    "source_artifact_count": source_payload.get("count"),
                     "approval_count": approval_count,
                     "queue_status": queue_row.get("delivery_status"),
                     "dispatch_state": send_result.get("dispatch_state"),

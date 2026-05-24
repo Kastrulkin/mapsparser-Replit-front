@@ -55,16 +55,26 @@
 ### AC6
 - Status: PASS
 - Proof:
-  - `18 passed` for targeted tests.
+  - `26 passed` for targeted tests.
   - `scripts/lint_backend_baseline.sh` passed.
   - Production deploy via `git archive HEAD` succeeded and root health returned `HTTP/1.1 200 OK`.
   - Live authenticated smoke passed: create blueprint -> run -> approve shortlist -> approve drafts -> queue batch -> fixture cleanup.
 - Gaps:
   - Full test suite was not run; scope was targeted backend/runtime checks.
 
+### AC7
+- Status: PASS
+- Proof:
+  - `_build_lead_source_payload` hydrates the first `source_leads` artifact from `prospectingleads`.
+  - Source artifact records filters, count, status counts, and selected lead rows.
+  - Smoke now fails unless `lead_source_plan` has `source=prospectingleads`, `status=hydrated`, and `count=1`.
+  - Backend lint guardrail requires `_build_lead_source_payload`, `source=prospectingleads`, and `status_counts`.
+- Gaps:
+  - Default smoke still creates a disposable fixture lead for safe production verification; using existing production leads would mutate real outreach state and needs explicit operator choice.
+
 ## Commands run
 - `python3 -m py_compile src/services/agent_blueprint_runner.py scripts/smoke_agent_blueprint_outreach_api.py`
-- `PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py tests/test_operator_paid_action_adapter.py tests/test_operator_review_reply_bulk.py`
+- `PYTHONPATH=src:. python3 -m pytest -q tests/test_agent_blueprint_layer.py tests/test_operator_paid_action_adapter.py tests/test_operator_review_reply_bulk.py tests/test_operator_refresh_result.py`
 - `scripts/lint_backend_baseline.sh`
 - `git push origin main`
 - `git push gitverse main`
@@ -82,4 +92,4 @@
 ## Known gaps
 - Per-lead partial approval is not implemented yet.
 - AI/prompt-backed blueprint drafting is still future work; current integration uses deterministic local draft text.
-- Unrelated Operator Sprint 36 files were present in the working tree and were intentionally not modified by this task.
+- Default production smoke still uses a disposable fixture lead to avoid mutating real prospecting leads.

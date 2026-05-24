@@ -53,7 +53,7 @@ def default_supervised_outreach_steps() -> List[Dict[str, Any]]:
             "type": "artifact",
             "title": "Найти потенциальных клиентов",
             "artifact_type": "lead_source_plan",
-            "payload": {"status": "planned", "scope": "supervised_outreach"},
+            "payload": {"status": "pending", "scope": "supervised_outreach"},
         },
         {
             "key": "shortlist",
@@ -313,6 +313,8 @@ class AgentBlueprintRunner:
     def _build_artifact_payload(self, run: Dict[str, Any], step: Dict[str, Any]) -> Dict[str, Any]:
         base_payload = step.get("payload") if isinstance(step.get("payload"), dict) else {}
         artifact_type = str(step.get("artifact_type") or "").strip()
+        if artifact_type == "lead_source_plan":
+            return self._build_lead_source_payload(run, base_payload)
         if artifact_type == "lead_shortlist":
             return self._build_lead_shortlist_payload(run, base_payload)
         if artifact_type == "message_drafts":
@@ -325,9 +327,80 @@ class AgentBlueprintRunner:
         parsed = parse_json_field(run.get("input_json"), {})
         return parsed if isinstance(parsed, dict) else {}
 
+    def _build_lead_source_payload(self, run: Dict[str, Any], base_payload: Dict[str, Any]) -> Dict[str, Any]:
+        run_input = self._run_input(run)
+        lead_ids = self._normalized_string_list(run_input.get("lead_ids"))
+        statuses = self._normalized_string_list(run_input.get("statuses"))
+        intent = str(run_input.get("intent") or "client_outreach").strip()
+        source = str(run_input.get("source") or "").strip()
+        city = str(run_input.get("city") or run_input.get("geo") or "").strip()
+        category = str(run_input.get("category") or run_input.get("industry") or "").strip()
+        limit = self._safe_limit(run_input.get("limit"), 30)
+        query = """
+            SELECT id, name, city, category, source, status,
+                   selected_channel, intent, pipeline_status, updated_at, created_at
+            FROM prospectingleads
+            WHERE business_id = %s
+        """
+        params: List[Any] = [str(run.get("business_id") or "")]
+        if lead_ids:
+            query += " AND id = ANY(%s)"
+            params.append(lead_ids)
+        else:
+            if intent:
+                query += " AND COALESCE(intent, 'client_outreach') = %s"
+                params.append(intent)
+            if source:
+                query += " AND source = %s"
+                params.append(source)
+            if city:
+                query += " AND city ILIKE %s"
+                params.append(f"%{city}%")
+            if category:
+                query += " AND category ILIKE %s"
+                params.append(f"%{category}%")
+            if statuses:
+                query += " AND status = ANY(%s)"
+                params.append(statuses)
+            else:
+                query += """
+                  AND (
+                    status IN ('new', 'qualified', 'shortlist_approved', 'selected_for_outreach', 'channel_selected')
+                    OR pipeline_status IN ('unprocessed', 'in_progress', 'qualified')
+                  )
+                """
+        query += " ORDER BY updated_at DESC NULLS LAST, created_at DESC LIMIT %s"
+        params.append(limit)
+        try:
+            self.cursor.execute(query, tuple(params))
+            rows = [dict(row) for row in (self.cursor.fetchall() or [])]
+        except Exception:
+            rows = []
+        status_counts: Dict[str, int] = {}
+        for row in rows:
+            status_key = str(row.get("status") or "unknown").strip() or "unknown"
+            status_counts[status_key] = status_counts.get(status_key, 0) + 1
+        return {
+            **base_payload,
+            "status": "hydrated" if rows else "empty",
+            "source": "prospectingleads",
+            "count": len(rows),
+            "status_counts": status_counts,
+            "filters": {
+                "lead_ids": lead_ids,
+                "statuses": statuses,
+                "intent": intent,
+                "source": source,
+                "city": city,
+                "category": category,
+                "limit": limit,
+            },
+            "items": rows,
+        }
+
     def _build_lead_shortlist_payload(self, run: Dict[str, Any], base_payload: Dict[str, Any]) -> Dict[str, Any]:
         run_input = self._run_input(run)
-        lead_ids = [str(item).strip() for item in run_input.get("lead_ids", []) if str(item).strip()] if isinstance(run_input.get("lead_ids"), list) else []
+        lead_ids = self._normalized_string_list(run_input.get("lead_ids"))
         limit = self._safe_limit(run_input.get("limit"), 30)
         query = """
             SELECT id, name, city, email, telegram_url, whatsapp_url, status, selected_channel, pipeline_status
@@ -362,7 +435,7 @@ class AgentBlueprintRunner:
 
     def _build_message_drafts_payload(self, run: Dict[str, Any], base_payload: Dict[str, Any]) -> Dict[str, Any]:
         run_input = self._run_input(run)
-        draft_ids = [str(item).strip() for item in run_input.get("draft_ids", []) if str(item).strip()] if isinstance(run_input.get("draft_ids"), list) else []
+        draft_ids = self._normalized_string_list(run_input.get("draft_ids"))
         limit = self._safe_limit(run_input.get("limit"), 30)
         rows = self._load_message_draft_rows(run, draft_ids, limit)
         if not rows and not draft_ids and self._has_required_approval(str(run.get("id") or ""), {"required_approval_type": "shortlist"}):
@@ -511,7 +584,7 @@ class AgentBlueprintRunner:
 
     def _build_outreach_outcomes_payload(self, run: Dict[str, Any], base_payload: Dict[str, Any]) -> Dict[str, Any]:
         run_input = self._run_input(run)
-        draft_ids = [str(item).strip() for item in run_input.get("draft_ids", []) if str(item).strip()] if isinstance(run_input.get("draft_ids"), list) else []
+        draft_ids = self._normalized_string_list(run_input.get("draft_ids"))
         if not draft_ids:
             return {**base_payload, "source": "outreachsendqueue", "count": 0, "items": []}
         try:
@@ -549,6 +622,16 @@ class AgentBlueprintRunner:
         except Exception:
             parsed = default
         return max(1, min(parsed, 100))
+
+    def _normalized_string_list(self, value: Any) -> List[str]:
+        if not isinstance(value, list):
+            return []
+        result = []
+        for item in value:
+            candidate = str(item or "").strip()
+            if candidate:
+                result.append(candidate)
+        return list(dict.fromkeys(result))
 
     def _create_approval_step(self, run: Dict[str, Any], step: Dict[str, Any], step_index: int, user_data: Dict[str, Any]) -> None:
         step_id = self._insert_step(run, step, step_index, "waiting_approval", {}, {"approval": "pending"})

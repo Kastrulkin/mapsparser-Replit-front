@@ -31,11 +31,16 @@
       "id": "AC6",
       "status": "PASS",
       "reason": "Targeted tests, lint, deploy, live smoke, and server health checks passed."
+    },
+    {
+      "id": "AC7",
+      "status": "PASS",
+      "reason": "source_leads now hydrates a lead_source_plan artifact from prospectingleads and smoke/lint guardrails verify it."
     }
   ],
   "commands_run": [
     "python3 -m py_compile src/services/agent_blueprint_runner.py scripts/smoke_agent_blueprint_outreach_api.py",
-    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py tests/test_operator_paid_action_adapter.py tests/test_operator_review_reply_bulk.py",
+    "PYTHONPATH=src:. python3 -m pytest -q tests/test_agent_blueprint_layer.py tests/test_operator_paid_action_adapter.py tests/test_operator_review_reply_bulk.py tests/test_operator_refresh_result.py",
     "scripts/lint_backend_baseline.sh",
     "git push origin main",
     "git push gitverse main",

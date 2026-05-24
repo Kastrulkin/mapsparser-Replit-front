@@ -244,6 +244,11 @@ def test_runner_creates_drafts_after_shortlist_approval_and_queues_after_drafts_
 
     result = runner.start_run("ver1", {"lead_ids": ["lead1"], "limit": 5}, {"user_id": "user1"})
     run = result["run"]
+    source_artifact = [item for item in run["artifacts"] if item["artifact_type"] == "lead_source_plan"][-1]
+    assert source_artifact["payload_json"]["source"] == "prospectingleads"
+    assert source_artifact["payload_json"]["status"] == "hydrated"
+    assert source_artifact["payload_json"]["count"] == 1
+    assert source_artifact["payload_json"]["filters"]["lead_ids"] == ["lead1"]
     shortlist_approval = run["approvals"][0]
     assert shortlist_approval["payload_json"]["artifact_type"] == "lead_shortlist"
     assert shortlist_approval["payload_json"]["count"] == 1
@@ -417,6 +422,18 @@ class FakeCursor:
                 and (approval_type is None or item["approval_type"] == approval_type)
             ]
             self.last_result = {"?column?": 1} if matches else None
+            return None
+        if normalized_query.startswith("select id, name, city, category, source"):
+            business_id = params[0]
+            lead_ids = params[1] if len(params) > 2 and isinstance(params[1], list) else []
+            rows = []
+            for lead in self.tables["prospectingleads"].values():
+                if lead.get("business_id") != business_id:
+                    continue
+                if lead_ids and lead.get("id") not in lead_ids:
+                    continue
+                rows.append(lead)
+            self.last_results = rows
             return None
         if normalized_query.startswith("select id, name, city, email"):
             business_id = params[0]

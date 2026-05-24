@@ -20,6 +20,7 @@ P1/P2 supervised outreach integration: sourcing leads -> shortlist -> drafts -> 
 - AC4: Draft approval approves those generated drafts and passes their `draft_ids` to `outreach.send_batch`.
 - AC5: Send batch creates queue rows only; dispatcher remains disabled and no external dispatch side effect occurs.
 - AC6: Targeted tests, backend lint, deploy, and live API smoke pass.
+- AC7: `source_leads` is a real `prospectingleads` sourcing snapshot, not a static placeholder.
 
 ## Constraints
 - Reuse existing transitional outreach tables: `prospectingleads`, `outreachmessagedrafts`, `outreachsendbatches`, `outreachsendqueue`.
