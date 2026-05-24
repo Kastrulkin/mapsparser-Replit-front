@@ -1,0 +1,55 @@
+{
+  "task_id": "operator-sprint29-services-optimize-20260524",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Operator Sprint 29 services_optimize is valid current work.",
+      "status": "PASS",
+      "proof": [
+        "Sprint 29 code is already committed in 4293756",
+        "services_optimize keeps apply manual and external_writes_performed false"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Focused Operator tests pass.",
+      "status": "PASS",
+      "proof": ["raw/test-unit.txt"],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Operator bulk review smoke is self-contained.",
+      "status": "PASS",
+      "proof": [
+        "scripts/smoke_operator_bulk_review_replies.py embeds fake cursor and generator",
+        "raw/test-integration.txt"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Baseline guardrails pass and preserve manual/no-provider-write boundaries.",
+      "status": "PASS",
+      "proof": ["raw/build.txt", "raw/lint.txt"],
+      "gaps": [
+        "No live provider writes were performed"
+      ]
+    }
+  ],
+  "changed_files": [
+    "scripts/smoke_operator_bulk_review_replies.py",
+    ".agent/tasks/operator-sprint29-services-optimize-20260524"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/api/operator_api.py src/services/operator_services_optimization.py scripts/smoke_operator_bulk_review_replies.py",
+    "PYTHONPATH=src python3 -m pytest -q tests/test_operator_services_optimization.py tests/test_operator_review_reply_bulk.py tests/test_operator_paid_action_adapter.py",
+    "scripts/smoke_operator_bulk_review_replies.py",
+    "scripts/lint_backend_baseline.sh"
+  ],
+  "known_gaps": [
+    "Authenticated Agent Blueprint browser smoke remains a separate task"
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "success": true,
+  "scenario": "operator_bulk_review_replies_paid_draft_path",
+  "drafts": 2,
+  "charged_credits": 2,
+  "manual_publication_only": true,
+  "external_writes_performed": false,
+  "failures": []
+}
