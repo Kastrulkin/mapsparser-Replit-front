@@ -1,0 +1,35 @@
+Backend deploy:
+- Synced HEAD src/scripts/docker-compose.yml to /opt/seo-app.
+- Restarted app and worker.
+- docker compose ps: app, worker, postgres running.
+- curl -I http://localhost:8000: HTTP/1.1 200 OK.
+
+Frontend deploy:
+- scripts/deploy_frontend_dist.sh --build exited 0.
+- Deployed root bundle: /assets/index-B7kTYWvV.js.
+- Deployed public-audit bundle: /public-audit/assets/index-CWbAce9V.js.
+- Non-fatal tar warnings occurred while static assets changed during packaging; post-deploy verification passed.
+
+Live smoke:
+{
+  "success": true,
+  "base_url": "http://localhost:8000",
+  "user_id": "smoke-agent-user-87c7aaf3bc",
+  "business_id": "smoke-agent-business-87c7aaf3bc",
+  "blueprint_id": "a73f264c-44da-4631-b26c-54cacb9bc19e",
+  "run_id": "1b73e72d-5804-4d25-aabc-272ed6b0da25",
+  "batch_id": "513015ee-4b97-4d0b-9900-65dba8472c5f",
+  "approval_count": 2,
+  "queue_status": "queued",
+  "dispatch_state": "queued_not_dispatched",
+  "dispatcher_started": false,
+  "fixture_cleaned": true
+}
+
+Server verification:
+- docker compose ps: app, worker, postgres running.
+- app logs show login, create blueprint, run, approve shortlist, approve drafts.
+- worker logs show migration/start only.
+- OUTREACH_DISPATCH_ENABLED=false.
+- no OUTREACH_DISPATCH logs in worker.
+- frontend index references /assets/index-B7kTYWvV.js.

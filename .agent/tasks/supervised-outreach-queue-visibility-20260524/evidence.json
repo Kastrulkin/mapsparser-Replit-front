@@ -1,0 +1,66 @@
+{
+  "task_id": "supervised-outreach-queue-visibility-20260524",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "outreach.send_batch capability result exposes explicit dispatch_state=queued_not_dispatched.",
+      "status": "PASS",
+      "proof": [
+        "src/services/outreach_send_capability.py returns dispatch_state, dispatcher_required, and operator_note.",
+        "tests/test_agent_blueprint_layer.py asserts the dispatch state."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Agent Blueprint outcomes artifact exposes queued_count and no external dispatch.",
+      "status": "PASS",
+      "proof": [
+        "src/services/agent_blueprint_runner.py writes queued_count, dispatch_state, external_dispatch_performed=false, and operator_note."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Dashboard UI displays queued-but-not-dispatched state.",
+      "status": "PASS",
+      "proof": [
+        "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx detects dispatch_state=queued_not_dispatched.",
+        "npm run build passed."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Live supervised outreach smoke verifies queue state and dispatcher boundary.",
+      "status": "PASS",
+      "proof": [
+        "Live smoke returned approval_count=2, queue_status=queued, dispatch_state=queued_not_dispatched, dispatcher_started=false, fixture_cleaned=true."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Checks and deploy pass.",
+      "status": "PASS",
+      "proof": [
+        "Targeted pytest: 18 passed.",
+        "py_compile passed.",
+        "scripts/lint_backend_baseline.sh passed.",
+        "Backend and frontend deployed; root health returned HTTP 200."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/services/outreach_send_capability.py",
+    "src/services/agent_blueprint_runner.py",
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
+    "tests/test_agent_blueprint_layer.py",
+    "scripts/smoke_agent_blueprint_outreach_api.py",
+    "scripts/lint_backend_baseline.sh"
+  ],
+  "commands_for_fresh_verifier": [],
+  "known_gaps": []
+}

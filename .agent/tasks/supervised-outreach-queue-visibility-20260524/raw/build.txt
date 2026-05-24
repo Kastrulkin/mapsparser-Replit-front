@@ -1,0 +1,10 @@
+python3 -m py_compile src/services/agent_blueprint_runner.py src/services/outreach_send_capability.py scripts/smoke_agent_blueprint_outreach_api.py
+PASS
+
+cd frontend && npm run build
+PASS
+
+Relevant bundle output:
+- dist/assets/AgentBlueprintsPage-C34AIHvL.js
+- dist/assets/index-B7kTYWvV.js
+- public-dist/assets/index-CWbAce9V.js

@@ -1,0 +1,9 @@
+scripts/lint_backend_baseline.sh
+
+PASS
+
+Guardrails include:
+- Agent Blueprint route/module ownership.
+- PostgreSQL-only SQL placeholder check.
+- Agent Blueprint capability boundaries.
+- queued_not_dispatched marker required in outreach send capability.
