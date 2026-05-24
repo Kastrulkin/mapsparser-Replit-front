@@ -1,0 +1,26 @@
+git diff --check: PASS
+
+Production deploy and live authenticated smoke: PASS
+
+Deploy/import/health:
+- cd /opt/seo-app && docker compose restart app worker
+- docker compose ps: app, worker, postgres Up
+- app container import check: AgentBlueprintRunner import OK, default first artifact_type=lead_source_plan
+- curl -I http://localhost:8000: HTTP/1.1 200 OK
+
+Live smoke:
+{
+  "success": true,
+  "base_url": "http://localhost:8000",
+  "source_artifact_status": "hydrated",
+  "source_artifact_count": 1,
+  "approval_count": 2,
+  "queue_status": "queued",
+  "dispatch_state": "queued_not_dispatched",
+  "dispatcher_started": false,
+  "fixture_cleaned": true
+}
+
+Boundary:
+- OUTREACH_DISPATCH_ENABLED=false in worker container.
+- Smoke created queue rows only and verified no provider dispatch fields were set.
