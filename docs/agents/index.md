@@ -75,6 +75,8 @@ Sprint 45 deepens the parse reliability panel. Refresh jobs now expose technical
 
 Sprint 46 adds the worker retry/recovery boundary as backend service code. It does not auto-retry failed jobs; it builds a recovery plan that can ask the user to retry manually, and it can release a failed refresh reservation only through an explicit confirmation and the existing credit finalization boundary.
 
+Sprint 47 adds Telegram retry parity. Owner-bot text commands such as `повтори refresh` route into the same `request_refresh_retry` backend service, reserve credits through the same boundary, and keep publication/manual copy rules unchanged.
+
 The Operator model keeps one context, one permission system, one credit/usage ledger, one approval policy, and one audit trail across web and Telegram. Sprint 0 defines the product contract only; it does not imply that the web-chat runtime or Telegram Operator runtime is fully implemented.
 
 ## What Agents Must Not Assume

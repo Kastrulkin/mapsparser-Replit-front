@@ -60,6 +60,7 @@ from services.telegram_dashboard import (
     build_automation_text,
     build_card_text,
     build_growth_text,
+    build_refresh_retry_text,
     build_refresh_jobs_text,
     build_reviews_text,
     build_subscription_text,
@@ -5157,6 +5158,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         if client_intent == "refresh_jobs":
             await update.message.reply_text(build_refresh_jobs_text(business_ctx), reply_markup=_build_reviews_menu())
+            return
+        if client_intent == "refresh_retry":
+            await update.message.reply_text(build_refresh_retry_text(business_ctx, text), reply_markup=_build_reviews_menu())
             return
         if client_intent == "growth":
             await update.message.reply_text(build_growth_text(business_ctx), reply_markup=_build_growth_menu())

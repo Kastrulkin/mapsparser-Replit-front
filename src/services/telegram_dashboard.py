@@ -10,6 +10,7 @@ from core.action_orchestrator import ActionOrchestrator
 from database_manager import get_db_connection
 from services.operator_attention import build_attention_brief
 from services.operator_refresh_result import list_refresh_jobs
+from services.operator_refresh_retry import request_refresh_retry
 from subscription_manager import get_subscription_access, get_subscription_info
 
 
@@ -301,6 +302,10 @@ def _format_operator_refresh_jobs_text(refresh_jobs: dict[str, Any]) -> str:
                 lines.append(f"   Надёжность: {reliability_title}{reason_suffix}.")
                 if reliability_next:
                     lines.append(f"   Что делать: {reliability_next}")
+                if str(reliability.get("status") or "") in {"failed", "captcha_required", "paused", "warning"}:
+                    queue_id = str(job.get("queue_id") or "").strip()
+                    suffix = f" {queue_id}" if queue_id else ""
+                    lines.append(f"   Можно написать: «повтори refresh{suffix}».")
             reviews = job.get("new_reviews") if isinstance(job.get("new_reviews"), list) else []
             for review in reviews[:2]:
                 if not isinstance(review, dict):
@@ -329,6 +334,88 @@ def _format_operator_refresh_jobs_text(refresh_jobs: dict[str, Any]) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def _extract_refresh_queue_id(text: Any) -> str:
+    raw = str(text or "").strip()
+    for token in raw.replace("\n", " ").split():
+        clean = token.strip(".,;:()[]{}<>")
+        if len(clean) >= 8 and any(char.isdigit() for char in clean) and "-" in clean:
+            return clean
+    return ""
+
+
+def _latest_retryable_refresh_queue_id(refresh_jobs: dict[str, Any]) -> str:
+    jobs = refresh_jobs.get("jobs") if isinstance(refresh_jobs.get("jobs"), list) else []
+    for job in jobs:
+        if not isinstance(job, dict):
+            continue
+        reliability = job.get("reliability_state") if isinstance(job.get("reliability_state"), dict) else {}
+        if str(reliability.get("status") or "") in {"failed", "captcha_required", "paused", "warning"}:
+            queue_id = str(job.get("queue_id") or "").strip()
+            if queue_id:
+                return queue_id
+    return ""
+
+
+def _format_refresh_retry_result_text(result: dict[str, Any]) -> str:
+    status = str(result.get("status") or "blocked")
+    lines = [
+        "LocalOS Operator",
+        "Повтор refresh",
+        "",
+        str(result.get("chat_response") or ("Повтор запущен." if status == "queued" else "Повтор refresh сейчас недоступен.")),
+    ]
+    if result.get("new_queue_id"):
+        lines.append(f"Новая задача: {result.get('new_queue_id')}")
+    if result.get("reservation_id"):
+        lines.append(f"Резерв: {result.get('reservation_id')}")
+    if result.get("estimated_credits"):
+        lines.append(f"Оценка: до {result.get('estimated_credits')} кредитов.")
+    if result.get("billing_url"):
+        lines.append("Пополнить счёт: " + _base_web_url() + str(result.get("billing_url")))
+    blocked = result.get("blocked_reasons") if isinstance(result.get("blocked_reasons"), list) else []
+    if blocked:
+        lines.append("Причины: " + ", ".join(str(item) for item in blocked))
+    lines.append("Внешних публикаций нет. Ответы в карты остаются ручными.")
+    return "\n".join(lines)
+
+
+def build_refresh_retry_text(business_ctx: dict, message_text: Any = "") -> str:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        business_id = str(business_ctx.get("business_id") or "")
+        user_id = str(business_ctx.get("user_id") or "")
+        refresh_jobs = list_refresh_jobs(cursor, business_id=business_id, user_id=user_id, limit=5)
+        queue_id = _extract_refresh_queue_id(message_text) or _latest_retryable_refresh_queue_id(refresh_jobs)
+        if not queue_id:
+            return "\n".join(
+                [
+                    "LocalOS Operator",
+                    "Повтор refresh",
+                    "",
+                    "Не нашёл failed/captcha refresh job, который можно повторить.",
+                    "Напишите «статус обновлений отзывов», чтобы увидеть последние задачи.",
+                ]
+            )
+        result = request_refresh_retry(
+            cursor,
+            business_id=business_id,
+            user_id=user_id,
+            queue_id=queue_id,
+            confirm_retry=True,
+        )
+        if result.get("status") == "queued":
+            conn.commit()
+        else:
+            conn.rollback()
+        return _format_refresh_retry_result_text(result)
+    except Exception as exc:
+        conn.rollback()
+        return "Не удалось запустить повтор refresh: " + str(exc)
+    finally:
+        conn.close()
 
 
 def build_today_text(business_ctx: dict) -> str:

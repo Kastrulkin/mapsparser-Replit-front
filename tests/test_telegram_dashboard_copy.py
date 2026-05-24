@@ -182,6 +182,11 @@ def test_client_intent_recognizes_refresh_jobs_followup() -> None:
     assert classify_client_intent("Проверить результат обновления") == "refresh_jobs"
 
 
+def test_client_intent_recognizes_refresh_retry() -> None:
+    assert classify_client_intent("Повтори refresh queue-123") == "refresh_retry"
+    assert classify_client_intent("Запусти повтор обновления") == "refresh_retry"
+
+
 def test_operator_refresh_jobs_text_keeps_publication_manual() -> None:
     text = telegram_dashboard._format_operator_refresh_jobs_text(
         {
@@ -226,3 +231,21 @@ def test_operator_refresh_jobs_text_keeps_publication_manual() -> None:
     assert "Надёжность: Таймаут парсинга (timeout)" in text
     assert "подготовь ответы на отзывы" in text
     assert "публикация в карты остаётся ручной" in text.lower()
+    assert "повтори refresh" in text
+
+
+def test_refresh_retry_result_text_keeps_manual_publication_boundary() -> None:
+    text = telegram_dashboard._format_refresh_retry_result_text(
+        {
+            "status": "queued",
+            "chat_response": "Запустил повторное платное read-only обновление карты.",
+            "new_queue_id": "queue-2",
+            "reservation_id": "reservation-1",
+            "estimated_credits": 10,
+        }
+    )
+
+    assert "Повтор refresh" in text
+    assert "queue-2" in text
+    assert "до 10 кредитов" in text
+    assert "Внешних публикаций нет" in text
