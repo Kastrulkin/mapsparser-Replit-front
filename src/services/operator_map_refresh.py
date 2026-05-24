@@ -146,6 +146,7 @@ def enqueue_paid_operator_map_refresh(
     explicit_url: Any = None,
     estimated_credits: Any = None,
     explicit_consent: bool = False,
+    metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     clean_estimate = estimated_credits if estimated_credits not in (None, "") else DEFAULT_MAP_REFRESH_ESTIMATED_CREDITS
     queue_id = str(uuid.uuid4())
@@ -177,6 +178,15 @@ def enqueue_paid_operator_map_refresh(
             },
         }
 
+    reservation_metadata = {
+        "source": "operator_paid_map_refresh",
+        "parsequeue_id": queue_id,
+        "provider": "apify",
+        "manual_publication_only": True,
+    }
+    if metadata:
+        reservation_metadata.update(metadata)
+
     reservation = reserve_paid_action_credits(
         cursor,
         business_id=business_id,
@@ -184,12 +194,7 @@ def enqueue_paid_operator_map_refresh(
         action_key=MAP_REVIEWS_REFRESH_ACTION_KEY,
         estimated_credits=clean_estimate,
         idempotency_key=f"map_refresh:{business_id}:{queue_id}",
-        metadata={
-            "source": "operator_paid_map_refresh",
-            "parsequeue_id": queue_id,
-            "provider": "apify",
-            "manual_publication_only": True,
-        },
+        metadata=reservation_metadata,
     )
     if reservation.get("status") != "reserved":
         return {

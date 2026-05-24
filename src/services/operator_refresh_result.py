@@ -321,6 +321,10 @@ def _load_refresh_billing_state(cursor: Any, *, business_id: str, user_id: str, 
         "credit_multiplier": metadata.get("credit_multiplier"),
         "actual_credits": actual_credits,
         "settlement_status": metadata.get("settlement_status"),
+        "retry_source_queue_id": metadata.get("retry_source_queue_id"),
+        "retry_source_status": metadata.get("retry_source_status"),
+        "retry_requested_by_operator": _bool_value(metadata.get("retry_requested_by_operator")),
+        "retry_reason_code": metadata.get("retry_reason_code"),
         "created_at": row.get("created_at"),
         "updated_at": row.get("updated_at"),
         "finalized_at": row.get("finalized_at"),
@@ -544,6 +548,7 @@ def list_refresh_jobs(
         jobs.append(
             {
                 "queue_id": queue_id,
+                "retry_source_queue_id": billing_state.get("retry_source_queue_id"),
                 "status": status,
                 "queue_status": result.get("queue_status") or queue.get("status"),
                 "created_at": queue.get("created_at"),

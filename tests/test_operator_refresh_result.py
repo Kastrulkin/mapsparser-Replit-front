@@ -253,6 +253,46 @@ def test_refresh_result_includes_billing_state_from_reservation_metadata() -> No
     assert result["billing_state"]["provider_actual_cost"] == "0.24"
 
 
+def test_refresh_result_exposes_retry_lineage_from_reservation_metadata() -> None:
+    started_at = datetime(2026, 5, 24, 10, 0, tzinfo=timezone.utc)
+    cursor = FakeCursor(
+        queue={
+            "id": "queue-2",
+            "business_id": "biz-1",
+            "user_id": "user-1",
+            "status": "processing",
+            "created_at": started_at,
+            "updated_at": started_at,
+        },
+        reservations=[
+            {
+                "id": "reservation-2",
+                "status": "reserved",
+                "estimated_credits": 10,
+                "reserved_credits": 10,
+                "charged_credits": 0,
+                "released_credits": 0,
+                "metadata": {
+                    "parsequeue_id": "queue-2",
+                    "retry_source_queue_id": "queue-1",
+                    "retry_source_status": "failed",
+                    "retry_requested_by_operator": True,
+                    "retry_reason_code": "timeout",
+                },
+                "created_at": started_at,
+                "updated_at": started_at,
+                "finalized_at": None,
+            }
+        ],
+    )
+
+    result = build_refresh_result_status(cursor, business_id="biz-1", user_id="user-1", queue_id="queue-2")
+
+    assert result["billing_state"]["retry_source_queue_id"] == "queue-1"
+    assert result["billing_state"]["retry_requested_by_operator"] is True
+    assert result["billing_state"]["retry_reason_code"] == "timeout"
+
+
 def test_parse_reliability_state_explains_captcha_without_external_writes() -> None:
     result = build_parse_reliability_state(
         {

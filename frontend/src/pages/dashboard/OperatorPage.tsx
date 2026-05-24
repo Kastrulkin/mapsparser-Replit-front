@@ -411,6 +411,7 @@ type RefreshResult = {
 
 type RefreshJob = {
   queue_id: string;
+  retry_source_queue_id?: string;
   status: 'completed' | 'processing' | 'failed';
   queue_status?: string;
   created_at?: string;
@@ -440,6 +441,10 @@ type RefreshBillingState = {
   provider_actual_cost?: string | number | null;
   credit_multiplier?: number;
   actual_credits?: number | string | null;
+  retry_source_queue_id?: string;
+  retry_source_status?: string;
+  retry_requested_by_operator?: boolean;
+  retry_reason_code?: string;
 };
 
 type RefreshReliabilityState = {
@@ -937,6 +942,9 @@ export const OperatorPage = () => {
       });
       const result = response.data.retry_result || null;
       setRefreshRetryResult(result);
+      if (result?.new_queue_id) {
+        await checkRefreshResult(result.new_queue_id);
+      }
       await loadBrief();
       await loadInbox();
       await loadRefreshJobs();
@@ -1686,6 +1694,11 @@ export const OperatorPage = () => {
                           {job.queue_status ? (
                             <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
                               {job.queue_status}
+                            </span>
+                          ) : null}
+                          {job.retry_source_queue_id || job.billing_state?.retry_source_queue_id ? (
+                            <span className="rounded-full bg-violet-50 px-2 py-1 text-xs font-medium text-violet-800 ring-1 ring-violet-200">
+                              Повтор от job {(job.retry_source_queue_id || job.billing_state?.retry_source_queue_id || '').slice(0, 8)}
                             </span>
                           ) : null}
                         </div>

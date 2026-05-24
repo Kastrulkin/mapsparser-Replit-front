@@ -81,12 +81,14 @@ def test_refresh_retry_requires_explicit_confirmation() -> None:
 def test_refresh_retry_queues_new_paid_refresh_without_mutating_source(monkeypatch) -> None:
     cursor = FakeCursor()
 
-    def fake_enqueue(cursor_arg, *, business_id, user_id, explicit_url=None, estimated_credits=None):
+    def fake_enqueue(cursor_arg, *, business_id, user_id, explicit_url=None, estimated_credits=None, metadata=None):
         assert cursor_arg is cursor
         assert business_id == "biz-1"
         assert user_id == "user-1"
         assert explicit_url == "https://yandex.ru/maps/org/oliver"
         assert estimated_credits == 10
+        assert metadata["retry_source_queue_id"] == "queue-1"
+        assert metadata["retry_requested_by_operator"] is True
         return {
             "status": "queued",
             "queue_id": "queue-2",
@@ -116,6 +118,7 @@ def test_refresh_retry_queues_new_paid_refresh_without_mutating_source(monkeypat
 
     assert result["status"] == "queued"
     assert result["new_queue_id"] == "queue-2"
+    assert result["retry_source_queue_id"] == "queue-1"
     assert result["reservation_id"] == "reservation-1"
     assert result["side_effects"]["parsequeue_jobs_created"] is True
     assert result["side_effects"]["credit_reserved"] is True

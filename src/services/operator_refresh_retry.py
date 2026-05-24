@@ -142,6 +142,12 @@ def request_refresh_retry(
         user_id=user_id,
         explicit_url=source_queue.get("url"),
         estimated_credits=estimated_credits,
+        metadata={
+            "retry_source_queue_id": plan.get("queue_id"),
+            "retry_source_status": source_queue.get("status"),
+            "retry_requested_by_operator": True,
+            "retry_reason_code": (plan.get("reliability_state") or {}).get("reason_code"),
+        },
     )
     if retry.get("status") != "queued":
         return {
@@ -167,6 +173,7 @@ def request_refresh_retry(
         "retry_allowed": True,
         "retry_result": retry,
         "new_queue_id": retry.get("queue_id"),
+        "retry_source_queue_id": plan.get("queue_id"),
         "reservation_id": retry.get("reservation_id"),
         "estimated_credits": retry.get("estimated_credits"),
         "balance_credits": retry.get("balance_credits"),

@@ -69,6 +69,8 @@ Sprint 42 adds parse reliability visibility for refresh jobs. Operator now shows
 
 Sprint 43 adds a controlled retry request for failed/captcha/warning refresh jobs. The web Operator can create a new paid read-only refresh job from the previous job URL through the same preflight/reserve/enqueue boundary, while leaving the old failed job unchanged and keeping all map publication manual.
 
+Sprint 44 polishes the retry lifecycle. Retry-created refresh jobs carry `retry_source_queue_id` in reservation metadata, refresh history shows them as a linked attempt, and the web Operator immediately checks the new job after the retry request.
+
 The Operator model keeps one context, one permission system, one credit/usage ledger, one approval policy, and one audit trail across web and Telegram. Sprint 0 defines the product contract only; it does not imply that the web-chat runtime or Telegram Operator runtime is fully implemented.
 
 ## What Agents Must Not Assume
