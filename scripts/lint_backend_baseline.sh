@@ -19,6 +19,7 @@ python3 -m py_compile \
   src/services/outreach_send_capability.py \
   src/api/operator_api.py \
   src/services/operator_review_reply_bulk.py \
+  scripts/audit_approval_boundaries.py \
   scripts/smoke_operator_bulk_review_replies.py \
   src/api/growth_workflow_api.py \
   src/auth_encryption.py \
@@ -255,6 +256,9 @@ if compose_text.count("OUTREACH_DISPATCH_ENABLED: ${OUTREACH_DISPATCH_ENABLED:-f
 
 print("OK: outreach dispatcher is disabled unless explicitly enabled")
 PY
+
+echo "[backend-lint] approval boundary audit"
+python3 scripts/audit_approval_boundaries.py
 
 echo "[backend-lint] extracted growth routes stay out of main.py"
 python3 - <<'PY'
