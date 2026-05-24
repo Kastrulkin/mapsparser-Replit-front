@@ -1,0 +1,13 @@
+No lint output captured yet.
+Command:
+scripts/lint_backend_baseline.sh
+
+Result:
+[lint-backend-baseline] Checking backend import syntax
+[lint-backend-baseline] Checking route ownership guardrails
+[lint-backend-baseline] Checking PostgreSQL-only runtime SQL guardrail
+[lint-backend-baseline] Checking Agent Blueprint guardrails
+[lint-backend-baseline] Checking Operator guardrails
+[lint-backend-baseline] Checking self-contained smoke scripts
+[lint-backend-baseline] Checking outreach dispatcher stays explicit opt-in
+[lint-backend-baseline] PASS

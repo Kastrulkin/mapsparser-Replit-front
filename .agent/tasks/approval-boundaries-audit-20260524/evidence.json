@@ -1,0 +1,103 @@
+{
+  "task_id": "approval-boundaries-audit-20260524",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Supervised outreach send capability must require a drafts approval, not any earlier approval gate.",
+      "status": "PASS",
+      "proof": [
+        "Default blueprint send step includes required_approval_type=drafts.",
+        "Runner uses _has_required_approval(run_id, step) before executing dangerous capability steps.",
+        "test_runner_blocks_send_capability_without_required_drafts_approval proves shortlist approval alone does not invoke the orchestrator."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Dangerous capabilities must require human review through ActionOrchestrator policy by default.",
+      "status": "PASS",
+      "proof": [
+        "src/core/action_policy.py has generic dangerous capability fallback policy.",
+        "test_risk_policy_requires_human_for_dangerous_capabilities covers send, publish, payment, and delete capabilities.",
+        "Live policy check for outreach.send_batch returned requires_human=True."
+      ],
+      "gaps": [
+        "Generic fallback is name-based; explicit per-capability policies can be added later."
+      ]
+    },
+    {
+      "id": "AC3",
+      "text": "Outreach dispatcher must be explicit opt-in in worker runtime and compose, with default disabled.",
+      "status": "PASS",
+      "proof": [
+        "src/worker.py defaults OUTREACH_DISPATCH_ENABLED to false.",
+        "docker-compose.yml exposes OUTREACH_DISPATCH_ENABLED=false for app and worker unless explicitly overridden.",
+        "lint_backend_baseline checks worker default and compose markers.",
+        "Production worker env returned false."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Agent Blueprint runtime may queue approved outreach batches but must not dispatch externally by itself.",
+      "status": "PASS",
+      "proof": [
+        "Blueprint capability execution remains routed through ActionOrchestrator.",
+        "outreach.send_batch remains a queueing capability.",
+        "Production worker dispatcher is disabled and logs contained no OUTREACH_DISPATCH activity."
+      ],
+      "gaps": [
+        "Full sourcing-to-send supervised outreach integration remains a separate P1/P2 task."
+      ]
+    },
+    {
+      "id": "AC5",
+      "text": "Backend lint guardrails and targeted tests must pass.",
+      "status": "PASS",
+      "proof": [
+        "Targeted pytest command passed with 17 tests.",
+        "Local py_compile passed for modified backend modules.",
+        "scripts/lint_backend_baseline.sh passed."
+      ],
+      "gaps": [
+        "Full test suite not run for this narrow task."
+      ]
+    },
+    {
+      "id": "AC6",
+      "text": "Production deploy must be verified with app/worker health, dispatcher disabled in worker env, and no dispatch activity after restart.",
+      "status": "PASS",
+      "proof": [
+        "Production docker compose ps showed app, worker, and postgres up.",
+        "curl -I http://localhost:8000 returned HTTP/1.1 200 OK.",
+        "Worker printenv OUTREACH_DISPATCH_ENABLED returned false.",
+        "Worker logs had no OUTREACH_DISPATCH entries.",
+        "Live import check returned imports ok."
+      ],
+      "gaps": [
+        "Live py_compile was replaced by import verification because runtime filesystem is read-only."
+      ]
+    }
+  ],
+  "changed_files": [
+    "src/services/agent_blueprint_runner.py",
+    "src/core/action_policy.py",
+    "src/worker.py",
+    "docker-compose.yml",
+    "scripts/lint_backend_baseline.sh",
+    "tests/test_agent_blueprint_layer.py",
+    "docs/AGENT_REGISTRY_V1.md",
+    ".agent/tasks/approval-boundaries-audit-20260524/*"
+  ],
+  "commands_for_fresh_verifier": [
+    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py tests/test_operator_paid_action_adapter.py tests/test_operator_review_reply_bulk.py",
+    "python3 -m py_compile src/services/agent_blueprint_runner.py src/core/action_policy.py src/worker.py",
+    "scripts/lint_backend_baseline.sh",
+    "ssh -i ~/.ssh/localos_prod -o ConnectTimeout=15 root@80.78.242.105 'cd /opt/seo-app && docker compose ps && curl -I http://localhost:8000 && docker compose exec -T worker sh -lc \"printenv OUTREACH_DISPATCH_ENABLED\"'"
+  ],
+  "known_gaps": [
+    "Unrelated Operator Sprint 35 changes remain outside this task.",
+    "Full supervised outreach sourcing/drafting integration is still pending."
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "task_id": "approval-boundaries-audit-20260524",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Blueprint send now requires drafts approval, and targeted test proves unrelated approval does not unlock send."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Dangerous capability fallback policy requires human review and is covered by tests plus live policy check."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Dispatcher default is disabled in worker code and compose; production worker env is false."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Blueprint still queues through ActionOrchestrator and production dispatcher remains disabled with no dispatch logs."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Targeted tests, local py_compile, and backend lint baseline passed."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "Production app/worker health, root HTTP 200, worker env false, no dispatch logs, and live imports were verified."
+    }
+  ],
+  "commands_run": [
+    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py tests/test_operator_paid_action_adapter.py tests/test_operator_review_reply_bulk.py",
+    "python3 -m py_compile src/services/agent_blueprint_runner.py src/core/action_policy.py src/worker.py",
+    "scripts/lint_backend_baseline.sh",
+    "git push origin main",
+    "git push gitverse main",
+    "ssh -i ~/.ssh/localos_prod -o ConnectTimeout=15 root@80.78.242.105 'cd /opt/seo-app && docker compose ps && docker compose logs --since 5m app | tail -n 80 && docker compose logs --since 5m worker | tail -n 80 && curl -I http://localhost:8000 && docker compose exec -T worker sh -lc \"printenv OUTREACH_DISPATCH_ENABLED\"'",
+    "ssh -i ~/.ssh/localos_prod -o ConnectTimeout=15 root@80.78.242.105 'cd /opt/seo-app && docker compose exec -T app sh -lc \"PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/app/src python3 -c ...\"'"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/approval-boundaries-audit-20260524/raw/build.txt",
+    ".agent/tasks/approval-boundaries-audit-20260524/raw/test-unit.txt",
+    ".agent/tasks/approval-boundaries-audit-20260524/raw/test-integration.txt",
+    ".agent/tasks/approval-boundaries-audit-20260524/raw/lint.txt"
+  ]
+}
