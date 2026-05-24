@@ -20,6 +20,7 @@ python3 -m py_compile \
   src/api/operator_api.py \
   src/services/operator_review_reply_bulk.py \
   scripts/audit_approval_boundaries.py \
+  scripts/smoke_operator_services_apply_api.py \
   scripts/smoke_operator_bulk_review_replies.py \
   src/api/growth_workflow_api.py \
   src/auth_encryption.py \
@@ -240,6 +241,32 @@ if "generate_review_reply_drafts_for_unanswered_reviews" not in api_text:
     raise SystemExit("operator_api does not expose bulk review reply service")
 
 print("OK: paid Operator drafts and Agent Blueprint dispatch boundaries are guarded")
+PY
+
+echo "[backend-lint] Operator services apply smoke is self-contained"
+python3 - <<'PY'
+from pathlib import Path
+
+smoke_text = Path("scripts/smoke_operator_services_apply_api.py").read_text(encoding="utf-8")
+required = [
+    "setup_fixture",
+    "cleanup_fixture",
+    "fake_services_generator",
+    "request_json",
+    "/api/operator/services/optimize/apply",
+    '"confirm_apply": True',
+    "explicit_confirmation_required",
+    "ledger_after_apply == ledger_after_generate",
+    "external_writes_performed",
+    "fixture_cleaned",
+]
+for marker in required:
+    if marker not in smoke_text:
+        raise SystemExit(f"operator services apply smoke missing marker: {marker}")
+if "from tests" in smoke_text or "import tests" in smoke_text:
+    raise SystemExit("operator services apply smoke must not import tests")
+
+print("OK: Operator services apply smoke is self-contained")
 PY
 
 echo "[backend-lint] outreach dispatcher stays explicit opt-in"

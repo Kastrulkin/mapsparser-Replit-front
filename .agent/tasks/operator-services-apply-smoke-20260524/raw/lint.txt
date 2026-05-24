@@ -1,0 +1,8 @@
+scripts/lint_backend_baseline.sh
+
+PASS
+
+Relevant output:
+- OK: Operator services apply smoke is self-contained
+- OK: Blueprint/Operator approval, billing, manual-publication, and dispatcher boundaries are guarded
+- OK: no direct runtime SQLite ? placeholders outside allowed legacy reports blueprint

@@ -1,0 +1,28 @@
+Live smoke through production app container:
+{
+  "success": true,
+  "base_url": "http://localhost:8000",
+  "scenario": "operator_services_apply_authenticated_boundary",
+  "user_id": "smoke-operator-user-484f010b69",
+  "business_id": "smoke-operator-business-484f010b69",
+  "job_id": "d0cd2fa5-5f26-4d03-bb05-dd9b18bd112e",
+  "generated_suggestions": 2,
+  "ledger_after_generate": 1,
+  "ledger_after_apply": 1,
+  "blocked_without_confirm": true,
+  "confirmed_apply_status": "completed",
+  "applied_count": 2,
+  "external_writes_performed": false,
+  "credit_charged": false,
+  "blocked_audit_event": true,
+  "completed_audit_event": true,
+  "fixture_cleaned": true,
+  "failures": []
+}
+
+Server verification:
+- docker compose ps: app, worker, postgres up.
+- app logs show auth login plus two Operator services apply API calls.
+- worker logs show migrations/start only.
+- curl -I http://localhost:8000: HTTP/1.1 200 OK.
+- frontend index references /assets/index-CX8Hv5g3.js.

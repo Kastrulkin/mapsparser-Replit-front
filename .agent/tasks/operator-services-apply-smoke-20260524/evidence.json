@@ -1,0 +1,96 @@
+{
+  "task_id": "operator-services-apply-smoke-20260524",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Add a self-contained authenticated API smoke for Operator services apply.",
+      "status": "PASS",
+      "proof": [
+        "scripts/smoke_operator_services_apply_api.py added.",
+        "lint baseline checks smoke markers and rejects tests imports."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Smoke creates and cleans its own fixture data.",
+      "status": "PASS",
+      "proof": [
+        "Live smoke returned fixture_cleaned=true."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Smoke generates saved service suggestions without external AI/provider calls.",
+      "status": "PASS",
+      "proof": [
+        "Smoke injects fake_services_generator into optimize_services_from_operator."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Apply without confirm_apply is blocked and does not mutate userservices.",
+      "status": "PASS",
+      "proof": [
+        "Live smoke returned blocked_without_confirm=true.",
+        "Smoke asserts userservices are unchanged after blocked call."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Apply with confirm_apply=true updates only LocalOS service fields.",
+      "status": "PASS",
+      "proof": [
+        "Live smoke returned confirmed_apply_status=completed and applied_count=2.",
+        "Smoke asserts optimized service fields were updated."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC6",
+      "text": "Audit events record no external writes, no credit charge, and confirmation metadata.",
+      "status": "PASS",
+      "proof": [
+        "Live smoke returned blocked_audit_event=true and completed_audit_event=true.",
+        "Smoke asserts completed metadata has external_writes_performed=false, credit_charged=false, explicit_confirmation=true."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC7",
+      "text": "Apply does not create an extra credit ledger charge.",
+      "status": "PASS",
+      "proof": [
+        "Live smoke returned ledger_after_generate=1 and ledger_after_apply=1."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC8",
+      "text": "Lint baseline includes a self-contained smoke guardrail.",
+      "status": "PASS",
+      "proof": [
+        "scripts/lint_backend_baseline.sh passed with Operator services apply smoke guardrail."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "scripts/smoke_operator_services_apply_api.py",
+    "scripts/lint_backend_baseline.sh",
+    ".agent/tasks/operator-services-apply-smoke-20260524/*"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile scripts/smoke_operator_services_apply_api.py",
+    "PYTHONPATH=src:. python3 -m pytest -q tests/test_operator_services_optimization.py tests/test_approval_boundaries_audit.py tests/test_operator_paid_action_adapter.py tests/test_operator_review_reply_bulk.py tests/test_operator_paid_executor.py tests/test_operator_manual_publish.py",
+    "scripts/lint_backend_baseline.sh",
+    "cat scripts/smoke_operator_services_apply_api.py | ssh -i ~/.ssh/localos_prod -o ConnectTimeout=15 root@80.78.242.105 'cd /opt/seo-app && docker compose exec -T app sh -lc \"cat > /tmp/smoke_operator_services_apply_api.py && PYTHONPATH=/app/src SMOKE_BASE_URL=http://localhost:8000 python3 /tmp/smoke_operator_services_apply_api.py\"'"
+  ],
+  "known_gaps": [
+    "Authenticated browser click automation remains future UI smoke."
+  ]
+}
