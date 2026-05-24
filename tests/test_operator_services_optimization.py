@@ -1,5 +1,6 @@
 from services.operator_services_optimization import (
     apply_service_optimization_suggestions,
+    classify_services_apply_intent,
     classify_services_optimize_intent,
     optimize_services_from_operator,
 )
@@ -173,6 +174,8 @@ def failing_services_generator(prompt, *, business_id, user_id):
 def test_classifies_services_optimize_intent() -> None:
     assert classify_services_optimize_intent("Оптимизируй услуги")
     assert classify_services_optimize_intent("Улучши SEO описания услуг")
+    assert classify_services_apply_intent("Примени предложения по услугам")
+    assert not classify_services_optimize_intent("Примени предложения по услугам")
     assert not classify_services_optimize_intent("Подготовь пост для соцсетей")
 
 

@@ -7,6 +7,12 @@ from flask import Blueprint, jsonify, request
 from core.auth_helpers import require_auth_from_request, verify_business_access
 from database_manager import DatabaseManager
 from services.operator_audit import list_operator_events, record_operator_event
+from services.operator_capabilities import (
+    build_operator_help_response,
+    classify_operator_help_intent,
+    classify_unanswered_reviews_status_intent,
+    get_unanswered_reviews_status,
+)
 from services.operator_consent_policy import list_consent_policies, upsert_consent_policy
 from services.operator_content_history import list_operator_content_history
 from services.operator_attention import build_attention_brief
@@ -22,6 +28,7 @@ from services.operator_refresh_retry import request_refresh_retry
 from services.operator_review_reply_bulk import classify_bulk_review_reply_intent, generate_review_reply_drafts_for_unanswered_reviews
 from services.operator_services_optimization import (
     apply_service_optimization_suggestions,
+    classify_services_apply_intent,
     classify_services_optimize_intent,
     optimize_services_from_operator,
 )
@@ -378,7 +385,15 @@ def operator_chat():
             input_summary={"message": message[:500]},
             output_summary={"channel": "web"},
         )
-        if classify_bulk_review_reply_intent(message):
+        if classify_operator_help_intent(message):
+            result = build_operator_help_response()
+        elif classify_unanswered_reviews_status_intent(message):
+            result = get_unanswered_reviews_status(
+                cursor,
+                business_id=business_id,
+                limit=payload.get("limit") or 5,
+            )
+        elif classify_bulk_review_reply_intent(message):
             result = generate_review_reply_drafts_for_unanswered_reviews(
                 cursor,
                 business_id=business_id,
@@ -393,6 +408,17 @@ def operator_chat():
                 user_id=user_id,
                 explicit_url=payload.get("url"),
                 channel="web",
+            )
+        elif classify_services_apply_intent(message):
+            result = apply_service_optimization_suggestions(
+                cursor,
+                business_id=business_id,
+                user_id=user_id,
+                job_id=payload.get("job_id"),
+                item_ids=payload.get("item_ids"),
+                limit=payload.get("limit") or 5,
+                channel="web",
+                explicit_confirmation=True,
             )
         elif classify_services_optimize_intent(message):
             result = optimize_services_from_operator(

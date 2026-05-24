@@ -64,7 +64,7 @@ def _extract_review_text(message: Any) -> str:
 
 def classify_operator_chat_intent(message: Any) -> str:
     text = _clean_text(message).lower()
-    if "отзыв" in text and ("сгенер" in text or "ответ" in text or "добав" in text):
+    if "отзыв" in text and "добав" in text and ("сгенер" in text or "ответ" in text):
         return "manual_review_add_and_reply_generate"
     return "unsupported"
 

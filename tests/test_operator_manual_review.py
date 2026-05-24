@@ -105,6 +105,7 @@ def failing_reply_generator(prompt, *, business_id, user_id):
 
 def test_classifies_manual_review_add_and_reply_intent() -> None:
     assert classify_operator_chat_intent("Добавь новый отзыв в список и сгенерируй ответ: Отличный салон") == "manual_review_add_and_reply_generate"
+    assert classify_operator_chat_intent("У нас есть неотвеченные отзывы сейчас в базе?") == "unsupported"
 
 
 def test_process_operator_chat_message_adds_review_draft_and_charges_credit() -> None:

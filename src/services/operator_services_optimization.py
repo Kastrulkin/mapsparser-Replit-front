@@ -21,9 +21,21 @@ def classify_services_optimize_intent(message: Any) -> bool:
     text = _clean_text(message).lower()
     if not text:
         return False
+    if classify_services_apply_intent(message):
+        return False
     has_service_word = "услуг" in text or "прайс" in text or "позици" in text
     has_action = "оптимиз" in text or "улучш" in text or "перепиш" in text or "seo" in text or "сео" in text
     return has_service_word and has_action
+
+
+def classify_services_apply_intent(message: Any) -> bool:
+    text = _clean_text(message).lower()
+    if not text:
+        return False
+    has_service_word = "услуг" in text or "прайс" in text or "позици" in text
+    has_apply = "примен" in text or "подтверж" in text or "внеси" in text
+    has_suggestions = "предлож" in text or "изменен" in text or "улучшен" in text
+    return has_service_word and has_apply and has_suggestions
 
 
 def _positive_limit(value: Any) -> int:
@@ -440,6 +452,28 @@ def _load_service_suggestion_job(
     return _row_to_dict(cursor, cursor.fetchone())
 
 
+def _load_latest_service_suggestion_job(
+    cursor: Any,
+    *,
+    business_id: str,
+    user_id: str,
+) -> dict[str, Any] | None:
+    _ensure_service_regeneration_tables(cursor)
+    cursor.execute(
+        """
+        SELECT id, status, selected_count, fixed_count, failed_count, manual_review_count, message, created_at
+        FROM serviceregenerationjobs
+        WHERE business_id = %s
+          AND user_id = %s
+          AND status IN ('suggested', 'partially_applied')
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        (business_id, user_id),
+    )
+    return _row_to_dict(cursor, cursor.fetchone())
+
+
 def _load_suggested_service_items(
     cursor: Any,
     *,
@@ -487,10 +521,13 @@ def apply_service_optimization_suggestions(
 ) -> dict[str, Any]:
     clean_job_id = _clean_text(job_id)
     if not clean_job_id:
+        latest_job = _load_latest_service_suggestion_job(cursor, business_id=business_id, user_id=user_id)
+        clean_job_id = _clean_text((latest_job or {}).get("id"))
+    if not clean_job_id:
         return {
             "status": "blocked",
             "intent": "services_optimize_apply",
-            "chat_response": "Нужен job_id предложений по услугам.",
+            "chat_response": "Не нашёл активные предложения по услугам. Сначала напишите «оптимизируй услуги».",
             "applied_count": 0,
             "applied_items": [],
             "blocked_reasons": ["job_id_required"],
