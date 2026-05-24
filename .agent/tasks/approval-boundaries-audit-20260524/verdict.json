@@ -25,22 +25,27 @@
     {
       "id": "AC5",
       "status": "PASS",
-      "reason": "Targeted tests, local py_compile, and backend lint baseline passed."
+      "reason": "New static audit, targeted tests, local py_compile, and backend lint baseline passed."
     },
     {
       "id": "AC6",
       "status": "PASS",
-      "reason": "Production app/worker health, root HTTP 200, worker env false, no dispatch logs, and live imports were verified."
+      "reason": "Production scripts/tests sync completed, server audit passed, app/worker health is green, root HTTP 200, and worker env false was verified."
+    },
+    {
+      "id": "AC7",
+      "status": "PASS",
+      "reason": "scripts/audit_approval_boundaries.py and pytest now guard direct Blueprint/Operator dispatch/provider-send bypasses plus billing/manual-publication markers."
     }
   ],
   "commands_run": [
-    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py tests/test_operator_paid_action_adapter.py tests/test_operator_review_reply_bulk.py",
-    "python3 -m py_compile src/services/agent_blueprint_runner.py src/core/action_policy.py src/worker.py",
+    "python3 scripts/audit_approval_boundaries.py",
+    "python3 -m py_compile scripts/audit_approval_boundaries.py",
+    "PYTHONPATH=src:. python3 -m pytest -q tests/test_approval_boundaries_audit.py tests/test_agent_blueprint_layer.py tests/test_operator_paid_action_adapter.py tests/test_operator_review_reply_bulk.py tests/test_operator_paid_executor.py tests/test_operator_manual_publish.py",
     "scripts/lint_backend_baseline.sh",
     "git push origin main",
     "git push gitverse main",
-    "ssh -i ~/.ssh/localos_prod -o ConnectTimeout=15 root@80.78.242.105 'cd /opt/seo-app && docker compose ps && docker compose logs --since 5m app | tail -n 80 && docker compose logs --since 5m worker | tail -n 80 && curl -I http://localhost:8000 && docker compose exec -T worker sh -lc \"printenv OUTREACH_DISPATCH_ENABLED\"'",
-    "ssh -i ~/.ssh/localos_prod -o ConnectTimeout=15 root@80.78.242.105 'cd /opt/seo-app && docker compose exec -T app sh -lc \"PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/app/src python3 -c ...\"'"
+    "git archive --format=tar HEAD scripts/audit_approval_boundaries.py scripts/lint_backend_baseline.sh tests/test_approval_boundaries_audit.py | ssh ... 'cd /opt/seo-app && tar -xf - && python3 scripts/audit_approval_boundaries.py && docker compose ps && curl -I http://localhost:8000 && docker compose exec -T worker sh -lc \"printenv OUTREACH_DISPATCH_ENABLED || true\"'"
   ],
   "artifacts_used": [
     ".agent/tasks/approval-boundaries-audit-20260524/raw/build.txt",

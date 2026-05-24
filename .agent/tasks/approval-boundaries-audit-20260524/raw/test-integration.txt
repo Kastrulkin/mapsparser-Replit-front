@@ -1,46 +1,21 @@
-No integration test output captured yet.
 Production deploy and runtime smoke
 ===================================
 
 Deployment:
-- Commit f0d55ce was deployed through scripts/deploy_backend_src.sh.
-- Commit 741d6d9 was deployed as a compose-only worker/app recreate.
+- Commit 6cd7947 scripts/tests were synced to /opt/seo-app.
+- Runtime source code did not change, so app/worker were not restarted.
 - All server command blocks started with: cd /opt/seo-app
 
 Command:
-ssh -i ~/.ssh/localos_prod -o ConnectTimeout=15 root@80.78.242.105 '
-cd /opt/seo-app &&
-echo "COMPOSE_PS" && docker compose ps &&
-echo "APP_LOGS" && docker compose logs --since 5m app | tail -n 80 &&
-echo "WORKER_LOGS" && docker compose logs --since 5m worker | tail -n 80 &&
-echo "HEALTH" && curl -I http://localhost:8000 &&
-echo "DISPATCHER_ENV" && docker compose exec -T worker sh -lc "printenv OUTREACH_DISPATCH_ENABLED" &&
-echo "NO_DISPATCH_LOG" && docker compose logs --since 5m worker | grep OUTREACH_DISPATCH || true &&
-echo "POLICY_CHECK" && docker compose exec -T app sh -lc "PYTHONPATH=/app/src python3 -c '\''from core.action_policy import evaluate_risk_policy; print(evaluate_risk_policy(\"outreach.send_batch\", {}, {}))'\''"
-'
+git archive --format=tar HEAD scripts/audit_approval_boundaries.py scripts/lint_backend_baseline.sh tests/test_approval_boundaries_audit.py | ssh -i ~/.ssh/localos_prod -o ConnectTimeout=15 root@80.78.242.105 'cd /opt/seo-app && tar -xf - && python3 scripts/audit_approval_boundaries.py && docker compose ps && curl -I http://localhost:8000 && docker compose exec -T worker sh -lc "printenv OUTREACH_DISPATCH_ENABLED || true"'
 
 Relevant output:
-COMPOSE_PS
+OK: Blueprint/Operator approval, billing, manual-publication, and dispatcher boundaries are guarded
 NAME                 IMAGE            COMMAND                  SERVICE    CREATED              STATUS                 PORTS
-seo-app-app-1        seo-app-app      "/app/entrypoint.sh …"   app        About a minute ago   Up About a minute      0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp
+seo-app-app-1        seo-app-app      "/app/entrypoint.sh …"   app        4 hours ago          Up 4 hours             0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp
 seo-app-postgres-1   postgres:16      "docker-entrypoint.s…"   postgres   5 weeks ago          Up 2 weeks (healthy)   5432/tcp
-seo-app-worker-1     seo-app-worker   "/app/entrypoint.sh …"   worker     About a minute ago   Up About a minute
+seo-app-worker-1     seo-app-worker   "/app/entrypoint.sh …"   worker     4 hours ago          Up 4 hours
 
-APP_LOGS
-app-1  | Migrations done.
-app-1  | SEO анализатор запущен на порту 8000
-app-1  |  * Running on http://127.0.0.1:8000
-
-WORKER_LOGS
-worker-1  | Migrations done.
-
-HEALTH
 HTTP/1.1 200 OK
 
-DISPATCHER_ENV
 false
-
-NO_DISPATCH_LOG
-
-POLICY_CHECK
-{'ok': True, 'requires_human': True, 'reason': 'dangerous capability requires review'}

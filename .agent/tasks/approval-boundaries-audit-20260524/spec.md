@@ -19,6 +19,7 @@ P1/P2 approval boundaries audit for Agent Blueprint, Operator, supervised outrea
 - AC4: Agent Blueprint runtime may queue approved outreach batches but must not dispatch externally by itself.
 - AC5: Backend lint guardrails and targeted tests must pass.
 - AC6: Production deploy must be verified with app/worker health, dispatcher disabled in worker env, and no dispatch activity after restart.
+- AC7: Static approval-boundary audit must fail on direct Blueprint/Operator external dispatch/provider-send bypasses and on missing Operator billing/manual-publication markers.
 
 ## Constraints
 - Do not change existing AIAgent persona/chat endpoints.
@@ -36,5 +37,5 @@ P1/P2 approval boundaries audit for Agent Blueprint, Operator, supervised outrea
 - Build/import: local py_compile plus live import check in app container.
 - Unit tests: targeted Agent Blueprint and Operator boundary tests.
 - Integration tests: production docker compose health, worker env, policy check.
-- Lint: `scripts/lint_backend_baseline.sh`.
+- Lint: `scripts/lint_backend_baseline.sh` plus `scripts/audit_approval_boundaries.py`.
 - Manual checks: inspect worker logs for absence of `OUTREACH_DISPATCH` activity.

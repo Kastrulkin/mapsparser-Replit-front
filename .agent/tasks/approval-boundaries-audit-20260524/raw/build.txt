@@ -1,19 +1,8 @@
-No build output captured yet.
 Build/import verification
 =========================
 
 Local:
-PYTHONPATH=src python3 -m py_compile src/services/agent_blueprint_runner.py src/core/action_policy.py src/worker.py
+python3 -m py_compile scripts/audit_approval_boundaries.py
 
 Result:
 PASS
-
-Live:
-ssh -i ~/.ssh/localos_prod -o ConnectTimeout=15 root@80.78.242.105 'cd /opt/seo-app && docker compose exec -T app sh -lc "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/app/src python3 -c '\''import services.agent_blueprint_runner; import core.action_policy; import worker; print(\"imports ok\")'\''"'
-
-Result:
-✅ Используется Network Interception парсер (быстрый)
-imports ok
-
-Note:
-Live py_compile was intentionally replaced by import verification because the app container filesystem is read-only and py_compile tries to write __pycache__.

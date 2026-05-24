@@ -2,7 +2,7 @@
 
 ## Summary
 - Overall status: PASS
-- Last updated: 2026-05-24T12:08:00+03:00
+- Last updated: 2026-05-24T18:00:00+03:00
 
 ## Acceptance criteria evidence
 
@@ -46,8 +46,8 @@
 ### AC5
 - Status: PASS
 - Proof:
-  - `PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py tests/test_operator_paid_action_adapter.py tests/test_operator_review_reply_bulk.py` passed with `17 passed`.
-  - `python3 -m py_compile src/services/agent_blueprint_runner.py src/core/action_policy.py src/worker.py` passed locally.
+  - `PYTHONPATH=src:. python3 -m pytest -q tests/test_approval_boundaries_audit.py tests/test_agent_blueprint_layer.py tests/test_operator_paid_action_adapter.py tests/test_operator_review_reply_bulk.py tests/test_operator_paid_executor.py tests/test_operator_manual_publish.py` passed with `27 passed`.
+  - `python3 -m py_compile scripts/audit_approval_boundaries.py` passed locally.
   - `scripts/lint_backend_baseline.sh` passed.
 - Gaps:
   - Full test suite not run for this narrow boundary hardening task.
@@ -55,23 +55,33 @@
 ### AC6
 - Status: PASS
 - Proof:
-  - Production deploy/recreate completed for `app` and `worker`.
+  - Production scripts/tests sync completed from commit `6cd7947` without runtime restart because app code did not change.
   - `docker compose ps` showed app, worker, and postgres up.
   - `curl -I http://localhost:8000` returned `HTTP/1.1 200 OK`.
-  - Live import check in app container returned `imports ok`.
+  - Server-side `python3 scripts/audit_approval_boundaries.py` returned PASS.
+  - Worker env returned `OUTREACH_DISPATCH_ENABLED=false`.
 - Gaps:
-  - Live `py_compile` attempted in read-only container failed only because Python tried to create `__pycache__`; import check was used instead with `PYTHONDONTWRITEBYTECODE=1`.
+  - No runtime restart was needed for script/test-only changes.
+
+### AC7
+- Status: PASS
+- Proof:
+  - `scripts/audit_approval_boundaries.py` rejects direct Blueprint calls to `dispatch_due_outreach_queue`, channel sends, `requests.post`, `requests.get`, and `urllib.request.urlopen`.
+  - The same audit rejects direct Operator external send/dispatch calls.
+  - The audit requires Blueprint markers for `ActionOrchestrator`, approval source, billing source, dangerous capability approval, and explicit queue-not-dispatched result markers.
+  - The audit requires Operator paid-generation markers for preflight, reserve, finalize, and `external_writes_performed=false`.
+  - `tests/test_approval_boundaries_audit.py` imports the audit and asserts no findings.
+- Gaps:
+  - Static marker checks are intentionally conservative; deeper semantic proof remains in targeted behavior tests.
 
 ## Commands run
-- `PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py tests/test_operator_paid_action_adapter.py tests/test_operator_review_reply_bulk.py`
-- `python3 -m py_compile src/services/agent_blueprint_runner.py src/core/action_policy.py src/worker.py`
+- `python3 scripts/audit_approval_boundaries.py`
+- `python3 -m py_compile scripts/audit_approval_boundaries.py`
+- `PYTHONPATH=src:. python3 -m pytest -q tests/test_approval_boundaries_audit.py tests/test_agent_blueprint_layer.py tests/test_operator_paid_action_adapter.py tests/test_operator_review_reply_bulk.py tests/test_operator_paid_executor.py tests/test_operator_manual_publish.py`
 - `scripts/lint_backend_baseline.sh`
 - `git push origin main`
 - `git push gitverse main`
-- `scp -i ~/.ssh/localos_prod -o ConnectTimeout=15 docker-compose.yml root@80.78.242.105:/tmp/docker-compose.yml`
-- `ssh -i ~/.ssh/localos_prod -o ConnectTimeout=15 root@80.78.242.105 'cd /opt/seo-app && install -m 644 /tmp/docker-compose.yml docker-compose.yml && docker compose up -d --force-recreate app worker ...'`
-- `ssh -i ~/.ssh/localos_prod -o ConnectTimeout=15 root@80.78.242.105 'cd /opt/seo-app && docker compose ps && docker compose logs --since 5m app ...'`
-- `ssh -i ~/.ssh/localos_prod -o ConnectTimeout=15 root@80.78.242.105 'cd /opt/seo-app && docker compose exec -T app sh -lc "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/app/src python3 -c ..."'`
+- `git archive --format=tar HEAD scripts/audit_approval_boundaries.py scripts/lint_backend_baseline.sh tests/test_approval_boundaries_audit.py | ssh ... 'cd /opt/seo-app && tar -xf - && python3 scripts/audit_approval_boundaries.py && docker compose ps && curl -I http://localhost:8000 && docker compose exec -T worker sh -lc "printenv OUTREACH_DISPATCH_ENABLED || true"'`
 
 ## Raw artifacts
 - .agent/tasks/approval-boundaries-audit-20260524/raw/build.txt
@@ -81,5 +91,5 @@
 - .agent/tasks/approval-boundaries-audit-20260524/raw/screenshot-1.png
 
 ## Known gaps
-- Unrelated Operator Sprint 35 tracked/untracked changes remain in the working tree and were intentionally left out of this proof.
+- Unrelated `.agent/tasks/operator-sprint38-services-apply-20260524/` remains in the working tree and was intentionally left out of this proof.
 - Full supervised outreach sourcing -> shortlist -> drafts -> approvals -> queue integration is still a separate P1/P2 product task.
