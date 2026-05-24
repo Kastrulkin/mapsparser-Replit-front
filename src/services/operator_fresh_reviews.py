@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.operator_map_refresh import enqueue_operator_map_refresh
+from services.operator_map_refresh import enqueue_paid_operator_map_refresh
 from services.operator_manual_review import _build_ui_action
 from services.operator_news_generation import _clean_text, _row_to_dict
 
@@ -55,26 +55,36 @@ def refresh_reviews_from_operator(
     user_id: str,
     explicit_url: Any = None,
     channel: str = "web",
+    estimated_credits: Any = None,
 ) -> dict[str, Any]:
     before = _load_review_snapshot(cursor, business_id=business_id)
-    refresh = enqueue_operator_map_refresh(
+    refresh = enqueue_paid_operator_map_refresh(
         cursor,
         business_id=business_id,
         user_id=user_id,
         explicit_url=explicit_url,
+        estimated_credits=estimated_credits,
     )
     status = "queued" if refresh.get("status") == "queued" else "blocked"
     if status == "queued":
         chat_response = "\n".join(
             [
-                "Запустил read-only обновление карты для проверки новых отзывов.",
+                "Запустил платное read-only обновление карты для проверки новых отзывов.",
                 f"Сейчас в сохранённых данных отзывов без ответа: {before.get('without_response')}.",
-                "Когда обновление завершится, можно написать: «подготовь ответы на отзывы».",
+                f"Зарезервировано до {refresh.get('estimated_credits') or 'N'} кредитов; фактическое списание будет после результата Apify.",
+                "Когда обновление завершится, нажмите «Проверить результат обновления» или напишите: «подготовь ответы на отзывы».",
             ]
         )
     else:
         blocked = list(refresh.get("blocked_reasons") or [])
-        if "operator_apify_refresh_disabled" in blocked:
+        if "insufficient_balance" in blocked or "insufficient_unreserved_balance" in blocked:
+            chat_response = "\n".join(
+                [
+                    "Для обновления карт не хватает кредитов.",
+                    "Пополните счёт или выберите тариф, после этого можно снова запустить проверку новых отзывов.",
+                ]
+            )
+        elif "operator_apify_refresh_disabled" in blocked:
             chat_response = "\n".join(
                 [
                     "Проверка новых отзывов требует read-only обновления карт.",
@@ -92,11 +102,17 @@ def refresh_reviews_from_operator(
         "review_snapshot_before": before,
         "refresh_result": refresh,
         "queue_id": refresh.get("queue_id"),
+        "reservation_id": refresh.get("reservation_id"),
+        "estimated_credits": refresh.get("estimated_credits"),
+        "balance_credits": refresh.get("balance_credits"),
+        "billing_url": refresh.get("billing_url"),
         "blocked_reasons": list(refresh.get("blocked_reasons") or []),
         "external_calls_performed": False,
         "external_writes_performed": False,
         "manual_publication_only": True,
-        "paid_actions_performed": False,
+        "paid_actions_performed": bool(refresh.get("paid_actions_performed")),
+        "credit_reserved": bool((refresh.get("side_effects") or {}).get("credit_reserved")),
+        "credit_charged": False,
         "channel": channel,
         "ui_actions": [
             _build_ui_action("open_reviews", "Открыть отзывы", href=REVIEWS_URL),

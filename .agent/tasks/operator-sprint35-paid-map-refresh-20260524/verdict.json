@@ -1,0 +1,42 @@
+{
+  "task_id": "operator-sprint35-paid-map-refresh-20260524",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Fresh-review command reaches paid preflight before reservation or queue creation."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Reservation metadata includes the generated parsequeue id for worker settlement."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "The enqueue path is parsequeue-only and releases the reservation on enqueue failure."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Queued and blocked Operator responses include the required billing/result metadata."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "No external write, publication, or direct Operator Apify call was added."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/services/operator_map_refresh.py src/services/operator_fresh_reviews.py src/api/operator_api.py",
+    "python3 -m pytest -q tests/test_operator_map_refresh.py tests/test_operator_fresh_reviews.py tests/test_operator_refresh_result.py tests/test_operator_apify_settlement.py",
+    "git diff --check"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/operator-sprint35-paid-map-refresh-20260524/raw/build.txt",
+    ".agent/tasks/operator-sprint35-paid-map-refresh-20260524/raw/test-unit.txt",
+    ".agent/tasks/operator-sprint35-paid-map-refresh-20260524/raw/test-integration.txt",
+    ".agent/tasks/operator-sprint35-paid-map-refresh-20260524/raw/lint.txt"
+  ]
+}

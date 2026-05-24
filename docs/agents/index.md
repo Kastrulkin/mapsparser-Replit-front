@@ -51,6 +51,8 @@ Sprint 33 adds the refresh-result lifecycle. After a queued refresh completes an
 
 Sprint 34 connects worker-side Apify actual-cost settlement for future paid refresh jobs. When an Apify parse has provider cost and a matching `map_reviews_refresh` reservation tagged with `parsequeue_id`, worker can settle the reservation through the existing accounting service; otherwise it skips settlement and completes parsing normally.
 
+Sprint 35 connects the full paid map-refresh chain. The `Проверь новые отзывы` command now runs preflight, reserves estimated credits, enqueues a read-only `parsequeue` job with the queue id stored in reservation metadata, lets the worker/Apify path settle actual cost, and shows the completed refresh result through Operator. External map publication remains manual and unsupported.
+
 The Operator model keeps one context, one permission system, one credit/usage ledger, one approval policy, and one audit trail across web and Telegram. Sprint 0 defines the product contract only; it does not imply that the web-chat runtime or Telegram Operator runtime is fully implemented.
 
 ## What Agents Must Not Assume

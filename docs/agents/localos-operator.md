@@ -382,6 +382,17 @@ Sprint 34 connects the worker to the Apify actual-cost settlement boundary:
 
 Sprint 34 does not create the paid map refresh reservation, enqueue paid refresh from the UI, run Apify from Operator directly, publish replies, or write to external map providers. It only lets future paid refresh jobs be settled when the worker has enough metadata.
 
+Sprint 35 connects the full paid map-refresh chain:
+
+- backend services: `services.operator_fresh_reviews` and `services.operator_map_refresh`;
+- chat intent examples: `Проверь новые отзывы`, `Обнови отзывы`;
+- the flow uses preflight -> reserve -> enqueue `parsequeue` -> worker Apify parse -> actual-cost settlement -> Operator refresh result;
+- the reservation metadata includes `parsequeue_id`, so the worker can match a completed Apify job to the original `map_reviews_refresh` reservation;
+- the initial queue response shows reserved estimated credits and explains that final charge is based on the Apify result;
+- the result UI uses the Sprint 33 lifecycle to show completed refresh results, new review counts, unanswered counts, and the next `Подготовить ответы` action.
+
+Sprint 35 still does not publish replies, send messages, or write to Yandex, Google, 2GIS, or other external map providers. It performs read-only refresh and billing settlement only.
+
 Sprint 14 still does not call Apify, create parsequeue jobs, generate AI content, write to external providers, publish to maps, or enable production execution. It only tightens the safety gate before future paid runtime rollout.
 
 Sprint 15 adds manual review intake through Operator chat:
