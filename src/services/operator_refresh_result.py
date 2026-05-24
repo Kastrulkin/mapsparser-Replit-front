@@ -116,6 +116,37 @@ def _split_notes(value: Any) -> list[str]:
     return chunks[:6]
 
 
+def _extract_attempt_markers(error_message: Any) -> dict[str, Any]:
+    text = _clean_text(error_message)
+    details: dict[str, Any] = {}
+    for marker, key in (
+        ("transient_retry_attempt=", "transient_retry_attempt"),
+        ("captcha_auto_retry_attempt=", "captcha_auto_retry_attempt"),
+        ("attempt=", "attempt"),
+        ("max_attempts=", "max_attempts"),
+    ):
+        if marker in text:
+            tail = text.split(marker, 1)[1]
+            value = tail.split(";", 1)[0].split(" ", 1)[0].strip()
+            if value:
+                details[key] = value
+    return details
+
+
+def _build_reliability_technical_details(queue: dict[str, Any], reason_code: str, warnings: list[str]) -> dict[str, Any]:
+    attempts = _extract_attempt_markers(queue.get("error_message"))
+    return {
+        "queue_status": _clean_text(queue.get("status")).lower(),
+        "reason_code": reason_code,
+        "retry_after": queue.get("retry_after"),
+        "captcha_required": _bool_value(queue.get("captcha_required")),
+        "captcha_status": queue.get("captcha_status"),
+        "resume_requested": _bool_value(queue.get("resume_requested")),
+        "attempts": attempts,
+        "warnings_count": len(warnings),
+    }
+
+
 def build_parse_reliability_state(queue: dict[str, Any] | None) -> dict[str, Any]:
     if not queue:
         return {
@@ -129,6 +160,7 @@ def build_parse_reliability_state(queue: dict[str, Any] | None) -> dict[str, Any
             "captcha_required": False,
             "resume_requested": False,
             "warnings": [],
+            "technical_details": {},
         }
 
     queue_status = _clean_text(queue.get("status")).lower()
@@ -152,6 +184,7 @@ def build_parse_reliability_state(queue: dict[str, Any] | None) -> dict[str, Any
             "resume_requested": resume_requested,
             "warnings": warnings,
             "error_message": error_message,
+            "technical_details": _build_reliability_technical_details(queue, reason_code, warnings),
         }
 
     if captcha_required:
@@ -168,6 +201,7 @@ def build_parse_reliability_state(queue: dict[str, Any] | None) -> dict[str, Any
             "resume_requested": resume_requested,
             "warnings": warnings,
             "error_message": error_message,
+            "technical_details": _build_reliability_technical_details(queue, "captcha", warnings),
         }
 
     if queue_status in {"pending", "processing"}:
@@ -182,6 +216,7 @@ def build_parse_reliability_state(queue: dict[str, Any] | None) -> dict[str, Any
             "captcha_required": False,
             "resume_requested": resume_requested,
             "warnings": warnings,
+            "technical_details": _build_reliability_technical_details(queue, "", warnings),
         }
 
     if queue_status in {"completed", "done", "success"}:
@@ -197,6 +232,7 @@ def build_parse_reliability_state(queue: dict[str, Any] | None) -> dict[str, Any
                 "captcha_required": False,
                 "resume_requested": resume_requested,
                 "warnings": warnings,
+                "technical_details": _build_reliability_technical_details(queue, "completed_with_warnings", warnings),
             }
         return {
             "status": "ok",
@@ -209,6 +245,7 @@ def build_parse_reliability_state(queue: dict[str, Any] | None) -> dict[str, Any
             "captcha_required": False,
             "resume_requested": resume_requested,
             "warnings": [],
+            "technical_details": _build_reliability_technical_details(queue, "", []),
         }
 
     if queue_status == "paused":
@@ -224,6 +261,7 @@ def build_parse_reliability_state(queue: dict[str, Any] | None) -> dict[str, Any
             "resume_requested": resume_requested,
             "warnings": warnings,
             "error_message": error_message,
+            "technical_details": _build_reliability_technical_details(queue, reason_code, warnings),
         }
 
     return {
@@ -238,6 +276,7 @@ def build_parse_reliability_state(queue: dict[str, Any] | None) -> dict[str, Any
         "resume_requested": resume_requested,
         "warnings": warnings,
         "error_message": error_message,
+        "technical_details": _build_reliability_technical_details(queue, reason_code, warnings),
     }
 
 

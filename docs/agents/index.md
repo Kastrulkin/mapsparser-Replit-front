@@ -71,6 +71,8 @@ Sprint 43 adds a controlled retry request for failed/captcha/warning refresh job
 
 Sprint 44 polishes the retry lifecycle. Retry-created refresh jobs carry `retry_source_queue_id` in reservation metadata, refresh history shows them as a linked attempt, and the web Operator immediately checks the new job after the retry request.
 
+Sprint 45 deepens the parse reliability panel. Refresh jobs now expose technical details such as queue status, retry_after, captcha status, resume flag, warning count, and parsed retry attempt markers, so failed Apify/parse jobs are easier to diagnose before scaling paid refresh.
+
 The Operator model keeps one context, one permission system, one credit/usage ledger, one approval policy, and one audit trail across web and Telegram. Sprint 0 defines the product contract only; it does not imply that the web-chat runtime or Telegram Operator runtime is fully implemented.
 
 ## What Agents Must Not Assume

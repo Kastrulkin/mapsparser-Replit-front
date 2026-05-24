@@ -460,6 +460,16 @@ type RefreshReliabilityState = {
   resume_requested?: boolean;
   warnings?: string[];
   error_message?: string;
+  technical_details?: {
+    queue_status?: string;
+    reason_code?: string;
+    retry_after?: string | null;
+    captcha_required?: boolean;
+    captcha_status?: string;
+    resume_requested?: boolean;
+    warnings_count?: number;
+    attempts?: Record<string, string | number>;
+  };
 };
 
 type RefreshJobs = {
@@ -599,6 +609,16 @@ const renderReliabilityDetails = (reliability: RefreshReliabilityState | undefin
   const severity = reliability.severity || 'unknown';
   const style = refreshReliabilityStyles[severity] || refreshReliabilityStyles.unknown;
   const warnings = reliability.warnings || [];
+  const details = reliability.technical_details;
+  const attempts = details?.attempts || {};
+  const detailRows = [
+    ['Статус', details?.queue_status],
+    ['Retry after', details?.retry_after ? formatDateTime(details.retry_after) : ''],
+    ['Captcha', details?.captcha_required ? (details.captcha_status || 'required') : ''],
+    ['Resume', details?.resume_requested ? 'requested' : ''],
+    ['Warnings', details?.warnings_count ? String(details.warnings_count) : ''],
+    ['Попытки', Object.entries(attempts).map(([key, value]) => `${key}: ${value}`).join(', ')],
+  ].filter((row) => row[1]);
   return (
     <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-700">
       <div className="flex flex-wrap items-center gap-2">
@@ -614,6 +634,15 @@ const renderReliabilityDetails = (reliability: RefreshReliabilityState | undefin
       </div>
       {reliability.explanation ? <p className="mt-2">{reliability.explanation}</p> : null}
       {reliability.next_step ? <p className="mt-1 font-medium text-slate-800">{reliability.next_step}</p> : null}
+      {detailRows.length > 0 ? (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {detailRows.map(([label, value]) => (
+            <div key={label} className="rounded-lg bg-slate-50 px-2 py-1 text-xs text-slate-600">
+              <span className="font-semibold text-slate-700">{label}:</span> {value}
+            </div>
+          ))}
+        </div>
+      ) : null}
       {warnings.length > 0 ? (
         <div className="mt-2 space-y-1">
           {warnings.slice(0, 3).map((warning) => (

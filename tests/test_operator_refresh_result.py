@@ -321,3 +321,21 @@ def test_parse_reliability_state_reports_completed_warnings() -> None:
     assert result["status"] == "warning"
     assert result["reason_code"] == "completed_with_warnings"
     assert len(result["warnings"]) == 2
+
+
+def test_parse_reliability_state_includes_technical_attempt_details() -> None:
+    result = build_parse_reliability_state(
+        {
+            "status": "failed",
+            "error_message": "reason_code=timeout; transient_retry_attempt=3; attempt=3; max_attempts=8",
+            "retry_after": "2026-05-24T10:10:00+00:00",
+            "captcha_required": False,
+            "warnings": "provider timeout",
+        }
+    )
+
+    assert result["technical_details"]["queue_status"] == "failed"
+    assert result["technical_details"]["retry_after"] == "2026-05-24T10:10:00+00:00"
+    assert result["technical_details"]["attempts"]["transient_retry_attempt"] == "3"
+    assert result["technical_details"]["attempts"]["max_attempts"] == "8"
+    assert result["technical_details"]["warnings_count"] == 1
