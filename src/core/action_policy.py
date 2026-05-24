@@ -4,6 +4,7 @@ from typing import Any, Dict
 
 
 DEFAULT_MONTHLY_TOKEN_LIMIT = int(os.getenv("ORCHESTRATOR_MONTHLY_TOKEN_LIMIT", "500000"))
+DANGEROUS_CAPABILITY_WORDS = ("send", "publish", "payment", "delete", "destructive", "mass")
 
 
 def utcnow() -> datetime:
@@ -59,6 +60,10 @@ def evaluate_risk_policy(capability: str, payload: Dict[str, Any], approval: Dic
     mode = str((approval or {}).get("mode") or "auto").strip().lower()
     if mode == "required":
         return {"ok": True, "requires_human": True, "reason": "approval.mode=required"}
+
+    lowered_capability = str(capability or "").strip().lower()
+    if any(word in lowered_capability for word in DANGEROUS_CAPABILITY_WORDS):
+        return {"ok": True, "requires_human": True, "reason": "dangerous capability requires review"}
 
     # Minimum Phase 1 risk policy.
     if capability == "services.optimize":

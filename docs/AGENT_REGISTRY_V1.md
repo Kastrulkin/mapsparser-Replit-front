@@ -27,10 +27,12 @@
 2. Оркестратор не заменяется агентом: это слой исполнения и безопасности.
 3. Источник промптов для production-agent'ов: Административная панель (template store), не hardcode.
 4. Любые исходящие касания клиенту/партнёру идут через human approval.
-5. Ralph loop общий для аутрича и партнёрств, но с жёсткой сегментацией по `intent`.
-6. Модель не исполняет side effects напрямую: она предлагает tool/capability call, а harness валидирует, авторизует, исполняет или возвращает `pending_human`/denial.
-7. Любой tool/capability call обязан получить структурированный result: success, validation error, permission denial, timeout, `pending_human` или failure.
-8. Для долгих задач goal-loop управляет исполнением; Ralph loop собирает learning signals после human edits/outcomes.
+5. Outreach dispatcher is opt-in: Agent Blueprint may only queue approved drafts; real delivery starts only from the separate dispatcher contour when `OUTREACH_DISPATCH_ENABLED=true` or a privileged admin dispatch endpoint is used.
+6. Blueprint capabilities with risky words such as `send`, `publish`, `payment`, `delete`, `destructive`, or `mass` require an approved human gate. For supervised outreach send, the required gate is `approval_type=drafts`, not just any earlier approval.
+7. Ralph loop общий для аутрича и партнёрств, но с жёсткой сегментацией по `intent`.
+8. Модель не исполняет side effects напрямую: она предлагает tool/capability call, а harness валидирует, авторизует, исполняет или возвращает `pending_human`/denial.
+9. Любой tool/capability call обязан получить структурированный result: success, validation error, permission denial, timeout, `pending_human` или failure.
+10. Для долгих задач goal-loop управляет исполнением; Ralph loop собирает learning signals после human edits/outcomes.
 
 ## Harness Boundary
 

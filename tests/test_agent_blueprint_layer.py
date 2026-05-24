@@ -78,6 +78,7 @@ def test_default_supervised_outreach_template_has_approval_gates():
     assert steps[4]["type"] == "approval"
     assert steps[5]["type"] == "capability"
     assert steps[5]["requires_approval"] is True
+    assert steps[5]["required_approval_type"] == "drafts"
 
 
 def test_agent_blueprint_api_guards_version_blueprint_mismatch():
@@ -150,6 +151,71 @@ def test_runner_stops_on_first_approval_step():
     assert [step["step_key"] for step in run["steps"]] == ["source_leads", "shortlist", "approve_shortlist"]
     assert run["approvals"][0]["approval_type"] == "shortlist"
     assert run["approvals"][0]["status"] == "pending"
+
+
+def test_runner_blocks_send_capability_without_required_drafts_approval():
+    from services.agent_blueprint_runner import AgentBlueprintRunner
+
+    cursor = FakeCursor()
+    cursor.tables["agent_runs"]["run1"] = {
+        "id": "run1",
+        "blueprint_id": "bp1",
+        "blueprint_version_id": "ver1",
+        "business_id": "biz1",
+        "status": "running",
+        "input_json": {"draft_ids": ["draft1"]},
+        "output_json": {},
+        "created_by_user_id": "user1",
+    }
+    cursor.tables["agent_blueprint_versions"]["ver1"] = {
+        "id": "ver1",
+        "blueprint_id": "bp1",
+        "steps_json": [],
+        "capability_allowlist_json": ["outreach.send_batch"],
+    }
+    cursor.tables["agent_approvals"]["approval1"] = {
+        "id": "approval1",
+        "run_id": "run1",
+        "step_id": "step1",
+        "status": "approved",
+        "approval_type": "shortlist",
+        "title": "Shortlist approved",
+        "payload_json": {},
+        "requested_by_user_id": "user1",
+    }
+    orchestrator = CountingOrchestrator()
+    step = {
+        "key": "send_limited_batch",
+        "type": "capability",
+        "capability": "outreach.send_batch",
+        "requires_approval": True,
+        "required_approval_type": "drafts",
+        "payload": {"daily_limit": 10},
+    }
+
+    completed = AgentBlueprintRunner(cursor, orchestrator=orchestrator)._execute_capability_step(
+        cursor.tables["agent_runs"]["run1"],
+        cursor.tables["agent_blueprint_versions"]["ver1"],
+        step,
+        5,
+        {"user_id": "user1"},
+    )
+
+    assert completed is False
+    assert orchestrator.calls == 0
+    assert cursor.tables["agent_runs"]["run1"]["status"] == "failed"
+    blocked_steps = [item for item in cursor.tables["agent_run_steps"].values() if item["status"] == "blocked"]
+    assert blocked_steps
+    assert blocked_steps[0]["output_json"]["required_approval_type"] == "drafts"
+
+
+def test_risk_policy_requires_human_for_dangerous_capabilities():
+    from core.action_policy import evaluate_risk_policy
+
+    for capability in ("outreach.send_batch", "content.publish", "billing.payment", "records.delete"):
+        risk = evaluate_risk_policy(capability, {}, {})
+        assert risk["requires_human"] is True
+        assert risk["reason"] == "dangerous capability requires review"
 
 
 class FakeCursor:
@@ -234,6 +300,20 @@ class FakeCursor:
         if normalized_query.startswith("update agent_runs set status = 'waiting_approval'"):
             self.tables["agent_runs"][params[0]]["status"] = "waiting_approval"
             return None
+        if normalized_query.startswith("update agent_runs set status = 'failed'"):
+            self.tables["agent_runs"][params[1]]["status"] = "failed"
+            self.tables["agent_runs"][params[1]]["error_text"] = params[0]
+            return None
+        if normalized_query.startswith("update agent_run_steps set status = 'failed'"):
+            self.tables["agent_run_steps"][params[2]]["status"] = "failed"
+            self.tables["agent_run_steps"][params[2]]["output_json"] = json.loads(params[0])
+            self.tables["agent_run_steps"][params[2]]["error_text"] = params[1]
+            return None
+        if normalized_query.startswith("update agent_run_steps set status = 'blocked'"):
+            self.tables["agent_run_steps"][params[2]]["status"] = "blocked"
+            self.tables["agent_run_steps"][params[2]]["output_json"] = json.loads(params[0])
+            self.tables["agent_run_steps"][params[2]]["error_text"] = params[1]
+            return None
         if normalized_query.startswith("select * from agent_run_steps"):
             run_id = params[0]
             self.last_results = sorted(
@@ -249,6 +329,18 @@ class FakeCursor:
             run_id = params[0]
             self.last_results = [item for item in self.tables["agent_approvals"].values() if item["run_id"] == run_id]
             return None
+        if normalized_query.startswith("select 1 from agent_approvals"):
+            run_id = params[0]
+            approval_type = params[1] if len(params) > 1 else None
+            matches = [
+                item
+                for item in self.tables["agent_approvals"].values()
+                if item["run_id"] == run_id
+                and item["status"] == "approved"
+                and (approval_type is None or item["approval_type"] == approval_type)
+            ]
+            self.last_result = {"?column?": 1} if matches else None
+            return None
         raise AssertionError(f"Unhandled SQL in fake cursor: {query}")
 
     def fetchone(self):
@@ -256,6 +348,15 @@ class FakeCursor:
 
     def fetchall(self):
         return self.last_results
+
+
+class CountingOrchestrator:
+    def __init__(self):
+        self.calls = 0
+
+    def execute(self, envelope, user_data, *, allow_execute_when_approved=False):
+        self.calls += 1
+        return {"success": True, "status": "completed", "result": {"status": "queued_for_dispatch"}}
 
 
 class FakeOutreachConnection:

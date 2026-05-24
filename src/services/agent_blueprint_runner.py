@@ -79,6 +79,7 @@ def default_supervised_outreach_steps() -> List[Dict[str, Any]]:
             "title": "Отправить лимитированную пачку",
             "capability": "outreach.send_batch",
             "requires_approval": True,
+            "required_approval_type": "drafts",
             "payload": {"daily_limit": 10},
         },
         {
@@ -456,9 +457,13 @@ class AgentBlueprintRunner:
             step_id = self._insert_step(run, step, step_index, "failed", {}, {"error": "capability_not_allowlisted"})
             self._fail_run(str(run.get("id")), f"capability not allowlisted: {capability}", step_id)
             return False
-        if self._capability_requires_approval(capability, step) and not self._has_prior_approval(str(run.get("id"))):
-            step_id = self._insert_step(run, step, step_index, "blocked", {}, {"error": "approval_required"})
-            self._fail_run(str(run.get("id")), f"approval required before capability: {capability}", step_id)
+        if self._capability_requires_approval(capability, step) and not self._has_required_approval(str(run.get("id")), step):
+            required_type = str(step.get("required_approval_type") or "").strip()
+            error_text = f"approval required before capability: {capability}"
+            if required_type:
+                error_text = f"approval required before capability: {capability} ({required_type})"
+            step_id = self._insert_step(run, step, step_index, "blocked", {}, {"error": "approval_required", "required_approval_type": required_type})
+            self._fail_run(str(run.get("id")), error_text, step_id)
             return False
 
         step_id = self._insert_step(run, step, step_index, "running", {}, {})
@@ -658,6 +663,23 @@ class AgentBlueprintRunner:
         self.cursor.execute(
             "SELECT 1 FROM agent_approvals WHERE run_id = %s AND status = 'approved' LIMIT 1",
             (run_id,),
+        )
+        return bool(self.cursor.fetchone())
+
+    def _has_required_approval(self, run_id: str, step: Dict[str, Any]) -> bool:
+        required_type = str(step.get("required_approval_type") or "").strip()
+        if not required_type:
+            return self._has_prior_approval(run_id)
+        self.cursor.execute(
+            """
+            SELECT 1
+            FROM agent_approvals
+            WHERE run_id = %s
+              AND status = 'approved'
+              AND approval_type = %s
+            LIMIT 1
+            """,
+            (run_id, required_type),
         )
         return bool(self.cursor.fetchone())
 

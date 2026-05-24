@@ -1350,7 +1350,7 @@ def _run_yookassa_renewals_if_due() -> None:
 
 def _dispatch_outreach_queue_if_due() -> None:
     global _LAST_OUTREACH_DISPATCH_AT
-    if not _env_bool("OUTREACH_DISPATCH_ENABLED", True):
+    if not _env_bool("OUTREACH_DISPATCH_ENABLED", False):
         return
 
     now = time.time()

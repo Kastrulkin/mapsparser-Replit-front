@@ -7,6 +7,7 @@ cd "$ROOT_DIR"
 echo "[backend-lint] py_compile focused backend modules"
 python3 -m py_compile \
   src/main.py \
+  src/core/action_policy.py \
   src/api/admin_growth_api.py \
   src/api/business_types_api.py \
   src/api/reports_api.py \
@@ -164,6 +165,7 @@ required = {
     "src/services/agent_blueprint_runner.py": [
         "allow_execute_when_approved=True",
         "CAPABILITY_BLOCKED",
+        "required_approval_type",
     ],
     "src/services/agent_blueprint_orchestrator.py": [
         "OUTREACH_SEND_BATCH_CAPABILITY",
@@ -232,6 +234,22 @@ if "generate_review_reply_drafts_for_unanswered_reviews" not in api_text:
     raise SystemExit("operator_api does not expose bulk review reply service")
 
 print("OK: paid Operator drafts and Agent Blueprint dispatch boundaries are guarded")
+PY
+
+echo "[backend-lint] outreach dispatcher stays explicit opt-in"
+python3 - <<'PY'
+from pathlib import Path
+
+worker_text = Path("src/worker.py").read_text(encoding="utf-8")
+compose_text = Path("docker-compose.yml").read_text(encoding="utf-8")
+
+if '_env_bool("OUTREACH_DISPATCH_ENABLED", False)' not in worker_text:
+    raise SystemExit("OUTREACH_DISPATCH_ENABLED must default to false in worker")
+
+if "OUTREACH_DISPATCH_ENABLED: ${OUTREACH_DISPATCH_ENABLED:-false}" not in compose_text:
+    raise SystemExit("docker-compose.yml must expose OUTREACH_DISPATCH_ENABLED as explicit opt-in")
+
+print("OK: outreach dispatcher is disabled unless explicitly enabled")
 PY
 
 echo "[backend-lint] extracted growth routes stay out of main.py"
