@@ -1,1 +1,3 @@
-OK
+python3 -m py_compile src/api/operator_api.py src/services/operator_services_optimization.py scripts/audit_approval_boundaries.py
+
+PASS

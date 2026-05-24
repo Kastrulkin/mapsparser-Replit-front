@@ -1,1 +1,9 @@
-OK
+scripts/lint_backend_baseline.sh
+
+PASS
+
+Included guardrails:
+- Operator `/api/operator/services/optimize/apply` route ownership.
+- Approval boundary audit requires `confirm_apply` / explicit confirmation.
+- No direct Operator external send/dispatch bypass.
+- Runtime PostgreSQL placeholder scan.

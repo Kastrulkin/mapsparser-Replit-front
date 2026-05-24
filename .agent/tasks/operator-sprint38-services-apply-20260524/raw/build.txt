@@ -137,3 +137,8 @@ dist/assets/AdminPage-RY4vms9l.js                    195.22 kB │ gzip:  49.10 
 dist/assets/charts-CwHkbclU.js                       298.46 kB │ gzip:  67.21 kB
 dist/assets/vendor-Bd6D5Py9.js                       482.82 kB │ gzip: 155.13 kB
 ✓ built in 11.77s
+
+Latest focused build rerun after explicit confirmation hardening:
+- `cd frontend && npm run build`
+- PASS
+- relevant bundle: `dist/assets/OperatorPage-Dx6N_A8W.js`

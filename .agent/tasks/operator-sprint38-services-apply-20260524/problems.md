@@ -1,17 +1,5 @@
 # Problems: operator-sprint38-services-apply-20260524
 
-_No verifier findings yet._
+No open verifier findings.
 
-Use this file only when `verdict.json` is not `PASS`.
-
-## Template for each non-PASS acceptance criterion
-
-### ACX: <criterion text>
-- Status: FAIL or UNKNOWN
-- Why it is not proven:
-- Minimal reproduction steps:
-- Expected:
-- Actual:
-- Affected files:
-- Smallest safe fix:
-- Corrective hint:
+Residual gap: no authenticated browser apply click was run. The service/API boundary, focused tests, frontend build, and unauthenticated render path are covered.

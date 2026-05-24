@@ -206,6 +206,7 @@ expected = {
     "/api/operator/review-replies/generate": "operator_api.operator_review_replies_generate",
     "/api/operator/chat": "operator_api.operator_chat",
     "/api/operator/review-reply-drafts/<draft_id>/mark-manual-published": "operator_api.operator_review_reply_draft_mark_manual_published",
+    "/api/operator/services/optimize/apply": "operator_api.operator_services_optimize_apply",
 }
 
 actual = {rule.rule: rule.endpoint for rule in main.app.url_map.iter_rules()}

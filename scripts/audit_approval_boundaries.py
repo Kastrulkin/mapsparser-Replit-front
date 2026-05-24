@@ -174,6 +174,28 @@ def audit_operator_boundaries(findings):
         ],
         findings,
     )
+    require_markers(
+        "src/services/operator_services_optimization.py",
+        [
+            "apply_service_optimization_suggestions",
+            "explicit_confirmation: bool = False",
+            "explicit_confirmation_required",
+            '"manual_approval_received": True',
+            '"credit_charged": False',
+            '"charged_credits": 0',
+            "UPDATE userservices",
+        ],
+        findings,
+    )
+    require_markers(
+        "src/api/operator_api.py",
+        [
+            '"/services/optimize/apply"',
+            "explicit_confirmation=bool(payload.get(\"confirm_apply\"))",
+            '"explicit_confirmation": bool(payload.get("confirm_apply"))',
+        ],
+        findings,
+    )
 
 
 def audit_dispatcher_opt_in(findings):

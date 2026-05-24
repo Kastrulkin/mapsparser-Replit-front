@@ -5,7 +5,7 @@
     {
       "id": "AC1",
       "status": "PASS",
-      "reason": "Separate apply endpoint and web confirmation action are implemented."
+      "reason": "Separate apply endpoint is implemented and blocks mutation unless confirm_apply/explicit_confirmation is true."
     },
     {
       "id": "AC2",
@@ -15,23 +15,30 @@
     {
       "id": "AC3",
       "status": "PASS",
-      "reason": "Apply result and audit metadata keep external writes and extra billing disabled."
+      "reason": "Apply result, audit metadata, and boundary audit keep external writes and extra billing disabled."
     },
     {
       "id": "AC4",
       "status": "PASS",
-      "reason": "Operator UI exposes apply confirmation and production build passes."
+      "reason": "Operator UI exposes apply confirmation, sends confirm_apply=true, and production build passes."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "py_compile, focused pytest, backend lint baseline, frontend build, and local UI smoke passed."
     }
   ],
   "commands_run": [
-    "python3 -m py_compile src/services/operator_services_optimization.py src/api/operator_api.py",
-    "python3 -m pytest -q tests/test_operator_inbox.py tests/test_operator_paid_actions.py tests/test_operator_services_optimization.py",
+    "python3 -m py_compile src/api/operator_api.py src/services/operator_services_optimization.py scripts/audit_approval_boundaries.py",
+    "PYTHONPATH=src:. python3 -m pytest -q tests/test_operator_services_optimization.py tests/test_approval_boundaries_audit.py tests/test_operator_paid_action_adapter.py tests/test_operator_review_reply_bulk.py tests/test_operator_paid_executor.py tests/test_operator_manual_publish.py",
+    "scripts/lint_backend_baseline.sh",
     "cd frontend && npm run build",
-    "git diff --check"
+    "browser smoke http://127.0.0.1:5174/dashboard/operator"
   ],
   "artifacts_used": [
     ".agent/tasks/operator-sprint38-services-apply-20260524/raw/py-compile.txt",
     ".agent/tasks/operator-sprint38-services-apply-20260524/raw/test-unit.txt",
+    ".agent/tasks/operator-sprint38-services-apply-20260524/raw/test-integration.txt",
     ".agent/tasks/operator-sprint38-services-apply-20260524/raw/build.txt",
     ".agent/tasks/operator-sprint38-services-apply-20260524/raw/lint.txt"
   ]

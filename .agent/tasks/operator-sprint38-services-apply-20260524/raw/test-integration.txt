@@ -1,1 +1,10 @@
-No integration test output captured yet.
+Local browser smoke:
+- Started Vite dev server on http://127.0.0.1:5174/.
+- Opened http://127.0.0.1:5174/dashboard/operator in the in-app browser.
+- The app rendered the login state instead of crashing:
+  - heading: "Вход в систему"
+  - login/register/recovery controls visible.
+
+Note:
+- No authenticated browser apply click was run in this pass.
+- Service/API behavior is covered by focused unit tests and lint guardrails.

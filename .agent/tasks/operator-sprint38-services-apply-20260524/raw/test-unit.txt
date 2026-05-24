@@ -1,2 +1,4 @@
-..........                                                               [100%]
-10 passed in 0.06s
+PYTHONPATH=src:. python3 -m pytest -q tests/test_operator_services_optimization.py tests/test_approval_boundaries_audit.py tests/test_operator_paid_action_adapter.py tests/test_operator_review_reply_bulk.py tests/test_operator_paid_executor.py tests/test_operator_manual_publish.py
+
+.........................                                                [100%]
+25 passed in 0.13s

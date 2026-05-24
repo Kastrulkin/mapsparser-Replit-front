@@ -4,31 +4,61 @@
   "acceptance_criteria": [
     {
       "id": "AC1",
-      "text": "Saved services_optimize suggestions can be applied only through a separate confirmed Operator action.",
+      "text": "Saved services_optimize suggestions can be applied only through a separate confirmed Operator action with explicit confirm_apply.",
       "status": "PASS",
-      "proof": [],
+      "proof": [
+        "Service blocks without explicit_confirmation.",
+        "API passes confirm_apply into service.",
+        "Focused test proves no mutation without confirmation."
+      ],
       "gaps": []
     },
     {
       "id": "AC2",
       "text": "Applying suggestions updates internal userservices fields and marks suggestion items fixed.",
       "status": "PASS",
-      "proof": [],
+      "proof": [
+        "Service updates userservices optimized fields.",
+        "Service marks suggestion items fixed and refreshes parent job counts.",
+        "Focused happy-path test covers mutations."
+      ],
       "gaps": []
     },
     {
       "id": "AC3",
       "text": "The apply action performs no external provider writes and charges no additional credits.",
       "status": "PASS",
-      "proof": [],
+      "proof": [
+        "Apply result and Operator event metadata set external_writes_performed=false and credit_charged=false.",
+        "Audit guardrail requires apply confirmation and no-extra-billing markers."
+      ],
       "gaps": []
     },
     {
       "id": "AC4",
       "text": "Web Operator exposes the confirmation action and shows the applied result.",
       "status": "PASS",
-      "proof": [],
+      "proof": [
+        "OperatorPage renders Применить предложения button.",
+        "UI posts confirm_apply=true.",
+        "Applied items are rendered with no external maps changed copy."
+      ],
       "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Route ownership, approval-boundary audit, focused tests, frontend build, and UI smoke pass.",
+      "status": "PASS",
+      "proof": [
+        "py_compile passed.",
+        "Focused pytest passed with 25 tests.",
+        "Backend lint baseline passed.",
+        "npm run build passed.",
+        "Local browser render smoke passed."
+      ],
+      "gaps": [
+        "No authenticated end-to-end browser apply click in this pass."
+      ]
     }
   ],
   "changed_files": [
@@ -36,17 +66,21 @@
     "src/api/operator_api.py",
     "frontend/src/pages/dashboard/OperatorPage.tsx",
     "tests/test_operator_services_optimization.py",
+    "scripts/audit_approval_boundaries.py",
+    "scripts/lint_backend_baseline.sh",
     "docs/agents/localos-operator.md",
     "docs/agents/index.md",
     "docs/agents/tool-registry.md"
   ],
   "commands_for_fresh_verifier": [
-    "python3 -m py_compile src/services/operator_services_optimization.py src/api/operator_api.py",
-    "python3 -m pytest -q tests/test_operator_inbox.py tests/test_operator_paid_actions.py tests/test_operator_services_optimization.py",
+    "python3 -m py_compile src/api/operator_api.py src/services/operator_services_optimization.py scripts/audit_approval_boundaries.py",
+    "PYTHONPATH=src:. python3 -m pytest -q tests/test_operator_services_optimization.py tests/test_approval_boundaries_audit.py tests/test_operator_paid_action_adapter.py tests/test_operator_review_reply_bulk.py tests/test_operator_paid_executor.py tests/test_operator_manual_publish.py",
+    "scripts/lint_backend_baseline.sh",
     "cd frontend && npm run build",
-    "git diff --check"
+    "browser smoke http://127.0.0.1:5174/dashboard/operator"
   ],
   "known_gaps": [
-    "Telegram apply command is not included in Sprint 38."
+    "Telegram apply command is not included in Sprint 38.",
+    "No authenticated end-to-end browser apply click in this pass."
   ]
 }
