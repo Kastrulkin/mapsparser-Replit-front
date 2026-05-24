@@ -204,6 +204,7 @@ class AgentBlueprintRunner:
             "UPDATE agent_runs SET status = 'running', updated_at = NOW() WHERE id = %s",
             (run_id,),
         )
+        self._commit_cursor_connection()
         self._advance_run(run_id, user_data)
         return {"success": True, "run": self.load_run(run_id)}
 
@@ -954,3 +955,9 @@ class AgentBlueprintRunner:
             if key.endswith("_json"):
                 result[key] = parse_json_field(result.get(key), {} if key != "steps_json" else [])
         return result
+
+    def _commit_cursor_connection(self) -> None:
+        connection = getattr(self.cursor, "connection", None)
+        commit = getattr(connection, "commit", None)
+        if callable(commit):
+            commit()
