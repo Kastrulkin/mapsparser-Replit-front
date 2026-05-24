@@ -192,7 +192,7 @@ export const AgentBlueprintsPage = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await api.get('/api/agent-blueprints', { params: { business_id: currentBusinessId } });
+      const response = await api.get('/agent-blueprints', { params: { business_id: currentBusinessId } });
       const items = Array.isArray(response.data?.blueprints) ? response.data.blueprints : [];
       setBlueprints(items);
       if (!selectedBlueprintId && items.length > 0) {
@@ -214,7 +214,7 @@ export const AgentBlueprintsPage = () => {
     setError(null);
     try {
       const params = runStatusFilter === 'all' ? {} : { run_status: runStatusFilter };
-      const response = await api.get(`/api/agent-blueprints/${blueprintId}`, { params });
+      const response = await api.get(`/agent-blueprints/${blueprintId}`, { params });
       const details = {
         versions: Array.isArray(response.data?.versions) ? response.data.versions : [],
         runs: Array.isArray(response.data?.runs) ? response.data.runs : [],
@@ -240,7 +240,7 @@ export const AgentBlueprintsPage = () => {
     setActionLoading(true);
     setError(null);
     try {
-      const response = await api.get(`/api/agent-runs/${runId}`);
+      const response = await api.get(`/agent-runs/${runId}`);
       setActiveRun(response.data?.run || null);
     } catch (requestError) {
       console.error(requestError);
@@ -257,7 +257,7 @@ export const AgentBlueprintsPage = () => {
     setActionLoading(true);
     setError(null);
     try {
-      const response = await api.post('/api/agent-blueprints', {
+      const response = await api.post('/agent-blueprints', {
         business_id: currentBusinessId,
         name: 'Supervised Outreach Agent',
         category: 'outreach',
@@ -286,7 +286,7 @@ export const AgentBlueprintsPage = () => {
     setActionLoading(true);
     setError(null);
     try {
-      const response = await api.post(`/api/agent-blueprints/${selectedBlueprint.id}/runs`, {
+      const response = await api.post(`/agent-blueprints/${selectedBlueprint.id}/runs`, {
         input: {
           source: 'dashboard',
           business_id: currentBusinessId,
@@ -310,7 +310,7 @@ export const AgentBlueprintsPage = () => {
     setActionLoading(true);
     setError(null);
     try {
-      const response = await api.post(`/api/agent-runs/${activeRun.id}/approvals/${pendingApproval.id}/${decision}`, {
+      const response = await api.post(`/agent-runs/${activeRun.id}/approvals/${pendingApproval.id}/${decision}`, {
         reason: decision === 'approve' ? 'Approved from dashboard' : 'Rejected from dashboard',
       });
       setActiveRun(response.data?.run || null);
