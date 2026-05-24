@@ -239,6 +239,7 @@ def generate_social_post_draft_from_operator(
         user_id=user_id,
         source_text=source_text,
         generated_text=post_text,
+        prompt_key="operator_social_post_generate",
     )
     finalization = finalize_reserved_action_credits(
         cursor,

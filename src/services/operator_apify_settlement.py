@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+import json
 from decimal import Decimal, InvalidOperation, ROUND_CEILING
 from typing import Any
 
@@ -99,6 +100,36 @@ def _charge_extra_credits(
     return {"status": "charged", "charge_credits": credits, "credit_ledger_id": ledger_id}
 
 
+def _store_settlement_metadata(
+    cursor: Any,
+    *,
+    reservation_id: str,
+    provider_actual_cost: Any,
+    actual_credits: int,
+    overage_credits: int,
+    provider_run_id: str,
+    settlement_status: str,
+) -> None:
+    metadata = {
+        "provider": "apify",
+        "provider_actual_cost": str(provider_actual_cost),
+        "credit_multiplier": APIFY_CREDIT_MULTIPLIER,
+        "actual_credits": actual_credits,
+        "overage_credits": overage_credits,
+        "provider_run_id": _clean_text(provider_run_id),
+        "settlement_status": settlement_status,
+    }
+    cursor.execute(
+        """
+        UPDATE operatorcreditreservations
+        SET metadata = COALESCE(metadata, '{}'::jsonb) || %s::jsonb,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = %s
+        """,
+        (json.dumps(metadata, ensure_ascii=False), reservation_id),
+    )
+
+
 def settle_apify_actual_cost(
     cursor: Any,
     *,
@@ -157,6 +188,15 @@ def settle_apify_actual_cost(
             finalization_mode="release",
             external_id=f"apify:{external_base}",
         )
+        _store_settlement_metadata(
+            cursor,
+            reservation_id=reservation_id,
+            provider_actual_cost=provider_actual_cost,
+            actual_credits=actual_credits,
+            overage_credits=0,
+            provider_run_id=provider_run_id or external_base,
+            settlement_status="released",
+        )
         return {
             "status": "released",
             "action_key": action_key,
@@ -211,6 +251,15 @@ def settle_apify_actual_cost(
         }
 
     charged_total = int(finalization.get("charge_credits") or 0) + int(overage.get("charge_credits") or 0)
+    _store_settlement_metadata(
+        cursor,
+        reservation_id=reservation_id,
+        provider_actual_cost=provider_actual_cost,
+        actual_credits=actual_credits,
+        overage_credits=overage_credits,
+        provider_run_id=provider_run_id or external_base,
+        settlement_status="charged",
+    )
     return {
         "status": "charged",
         "action_key": action_key,

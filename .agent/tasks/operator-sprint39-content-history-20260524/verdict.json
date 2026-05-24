@@ -1,0 +1,39 @@
+{
+  "task_id": "operator-sprint39-content-history-20260524",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Typed content history service and endpoint are implemented."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Unit test covers all requested content history buckets."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "New social post drafts use a social-specific prompt key."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Operator UI renders typed history and build passes."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile ...",
+    "PYTHONPATH=src:. python3 -m pytest -q tests/test_operator_content_history.py tests/test_operator_news_generation.py tests/test_operator_social_post_generation.py",
+    "cd frontend && npm run build",
+    "scripts/lint_backend_baseline.sh",
+    "git diff --check"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/operator-sprint39-content-history-20260524/raw/build.txt",
+    ".agent/tasks/operator-sprint39-content-history-20260524/raw/test-unit.txt",
+    ".agent/tasks/operator-sprint39-content-history-20260524/raw/lint.txt",
+    ".agent/tasks/operator-sprint39-content-history-20260524/raw/test-integration.txt"
+  ]
+}

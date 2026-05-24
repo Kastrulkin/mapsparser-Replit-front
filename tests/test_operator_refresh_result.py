@@ -4,10 +4,11 @@ from services.operator_refresh_result import build_refresh_result_status, list_r
 
 
 class FakeCursor:
-    def __init__(self, *, queue=None, queues=None, reviews=None):
+    def __init__(self, *, queue=None, queues=None, reviews=None, reservations=None):
         self.queue = queue
         self.queues = queues or []
         self.reviews = reviews or []
+        self.reservations = reservations or []
         self.last_query = ""
         self.last_params = ()
 
@@ -16,6 +17,8 @@ class FakeCursor:
         self.last_params = params or ()
 
     def fetchone(self):
+        if "to_regclass" in self.last_query:
+            return {"to_regclass": "operatorcreditreservations"}
         if "from parsequeue" in self.last_query:
             if self.queues and self.last_params:
                 queue_id = self.last_params[0]
@@ -23,6 +26,12 @@ class FakeCursor:
                     if queue.get("id") == queue_id:
                         return queue
             return self.queue
+        if "from operatorcreditreservations" in self.last_query:
+            queue_id = self.last_params[2]
+            for reservation in self.reservations:
+                metadata = reservation.get("metadata") or {}
+                if metadata.get("parsequeue_id") == queue_id:
+                    return reservation
         return None
 
     def fetchall(self):
@@ -80,6 +89,7 @@ def test_refresh_result_counts_new_unanswered_reviews() -> None:
     assert result["new_reviews"][0]["author_name"] == "Анна"
     assert result["ui_actions"][1]["action"] == "generate_review_replies"
     assert result["external_writes_performed"] is False
+    assert result["billing_state"]["status"] == "not_found"
 
 
 def test_refresh_result_processing_waits_for_worker() -> None:
@@ -189,3 +199,48 @@ def test_list_refresh_jobs_summarizes_recent_jobs() -> None:
     assert result["jobs"][0]["queue_id"] == "queue-completed"
     assert result["jobs"][0]["ui_actions"][0]["action"] == "check_refresh_result"
     assert result["limits"]["external_writes_performed"] is False
+
+
+def test_refresh_result_includes_billing_state_from_reservation_metadata() -> None:
+    started_at = datetime(2026, 5, 24, 10, 0, tzinfo=timezone.utc)
+    cursor = FakeCursor(
+        queue={
+            "id": "queue-1",
+            "business_id": "biz-1",
+            "user_id": "user-1",
+            "status": "completed",
+            "created_at": started_at,
+            "updated_at": started_at,
+        },
+        reservations=[
+            {
+                "id": "reservation-1",
+                "status": "charged",
+                "estimated_credits": 5,
+                "reserved_credits": 5,
+                "charged_credits": 3,
+                "released_credits": 2,
+                "metadata": {
+                    "parsequeue_id": "queue-1",
+                    "provider": "apify",
+                    "provider_actual_cost": "0.24",
+                    "credit_multiplier": 10,
+                    "actual_credits": 3,
+                    "overage_credits": 0,
+                    "settlement_status": "charged",
+                },
+                "created_at": started_at,
+                "updated_at": started_at,
+                "finalized_at": started_at,
+            }
+        ],
+        reviews=[],
+    )
+
+    result = build_refresh_result_status(cursor, business_id="biz-1", user_id="user-1", queue_id="queue-1")
+
+    assert result["status"] == "completed"
+    assert result["billing_state"]["status"] == "charged"
+    assert result["billing_state"]["charged_credits"] == 3
+    assert result["billing_state"]["released_credits"] == 2
+    assert result["billing_state"]["provider_actual_cost"] == "0.24"

@@ -423,6 +423,25 @@ Sprint 38 adds confirmed application for saved service optimization suggestions:
 
 Sprint 38 does not generate new suggestions, charge additional credits, publish service changes to Yandex, Google, 2GIS, or write to any external provider. It is an internal LocalOS mutation after explicit user approval.
 
+Sprint 39 adds normalized content history for Operator:
+
+- backend service: `services.operator_content_history.list_operator_content_history`;
+- API endpoint: `GET /api/operator/content-history`;
+- web Operator shows a separate `Черновики и предложения` section;
+- content items are separated by kind: `review_reply_draft`, `news_draft`, `social_post_draft`, `service_suggestion`, `service_apply`;
+- new social post drafts are saved with `prompt_key = operator_social_post_generate`, so they no longer look identical to news drafts in history.
+
+Sprint 39 does not publish drafts, send social posts, or apply service suggestions automatically. It is a read/history surface over existing LocalOS draft and suggestion tables.
+
+Sprint 40 adds user-facing refresh billing polish:
+
+- refresh result and refresh-job history include `billing_state`;
+- `billing_state` shows reservation id/status, estimated credits, outstanding reserved credits, charged credits, released credits, overage credits, provider, provider actual cost, multiplier, and actual credits when available;
+- Apify settlement stores provider actual cost and calculated credit metadata back onto the matching reservation for later UI display;
+- web Operator shows billing details on the refresh result card and on each recent refresh job.
+
+Sprint 40 does not change pricing, call Apify directly from Operator, publish review replies, or write to external map providers. It makes the already implemented paid refresh lifecycle understandable to the user.
+
 Sprint 14 still does not call Apify, create parsequeue jobs, generate AI content, write to external providers, publish to maps, or enable production execution. It only tightens the safety gate before future paid runtime rollout.
 
 Sprint 15 adds manual review intake through Operator chat:

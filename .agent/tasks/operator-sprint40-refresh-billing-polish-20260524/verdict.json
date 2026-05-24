@@ -1,0 +1,39 @@
+{
+  "task_id": "operator-sprint40-refresh-billing-polish-20260524",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Refresh result and job history include billing_state."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Billing state exposes reservation, provider cost, actual charge, release, and overage fields."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Apify settlement persists settlement metadata to reservations."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Operator UI renders billing details and frontend build passes."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile ...",
+    "PYTHONPATH=src:. python3 -m pytest -q tests/test_operator_refresh_result.py tests/test_operator_apify_settlement.py",
+    "cd frontend && npm run build",
+    "scripts/lint_backend_baseline.sh",
+    "git diff --check"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/operator-sprint40-refresh-billing-polish-20260524/raw/build.txt",
+    ".agent/tasks/operator-sprint40-refresh-billing-polish-20260524/raw/test-unit.txt",
+    ".agent/tasks/operator-sprint40-refresh-billing-polish-20260524/raw/lint.txt",
+    ".agent/tasks/operator-sprint40-refresh-billing-polish-20260524/raw/test-integration.txt"
+  ]
+}

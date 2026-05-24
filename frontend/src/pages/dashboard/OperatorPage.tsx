@@ -266,6 +266,32 @@ const refreshJobStatusStyles: Record<'processing' | 'completed' | 'failed', stri
   failed: 'bg-rose-50 text-rose-800 ring-rose-200',
 };
 
+const contentKindLabels: Record<string, string> = {
+  review_reply_draft: 'Ответы',
+  news_draft: 'Новости',
+  social_post_draft: 'Соцпосты',
+  service_suggestion: 'Услуги',
+  service_apply: 'Применено',
+};
+
+const contentKindStyles: Record<string, string> = {
+  review_reply_draft: 'bg-sky-50 text-sky-800 ring-sky-200',
+  news_draft: 'bg-emerald-50 text-emerald-800 ring-emerald-200',
+  social_post_draft: 'bg-violet-50 text-violet-800 ring-violet-200',
+  service_suggestion: 'bg-amber-50 text-amber-800 ring-amber-200',
+  service_apply: 'bg-teal-50 text-teal-800 ring-teal-200',
+};
+
+const refreshBillingStyles: Record<string, string> = {
+  reserved: 'bg-amber-50 text-amber-800 ring-amber-200',
+  charged: 'bg-emerald-50 text-emerald-800 ring-emerald-200',
+  released: 'bg-slate-100 text-slate-700 ring-slate-200',
+  overage_charged: 'bg-orange-50 text-orange-800 ring-orange-200',
+  not_found: 'bg-slate-100 text-slate-700 ring-slate-200',
+  unavailable: 'bg-slate-100 text-slate-700 ring-slate-200',
+  unknown: 'bg-slate-100 text-slate-700 ring-slate-200',
+};
+
 type OperatorChatResult = {
   status: 'completed' | 'blocked' | 'unsupported';
   intent: string;
@@ -366,6 +392,7 @@ type RefreshResult = {
   status: 'completed' | 'processing' | 'failed' | 'blocked';
   queue_id?: string;
   queue_status?: string;
+  billing_state?: RefreshBillingState;
   new_reviews_count?: number;
   new_unanswered_reviews_count?: number;
   new_reviews?: RefreshReview[];
@@ -382,9 +409,27 @@ type RefreshJob = {
   error_message?: string;
   new_reviews_count?: number;
   new_unanswered_reviews_count?: number;
+  billing_state?: RefreshBillingState;
   new_reviews?: RefreshReview[];
   chat_response?: string;
   blocked_reasons?: string[];
+};
+
+type RefreshBillingState = {
+  status: 'reserved' | 'charged' | 'released' | 'overage_charged' | 'not_found' | 'unavailable' | 'unknown' | string;
+  label?: string;
+  reservation_id?: string;
+  reservation_status?: string;
+  estimated_credits?: number;
+  reserved_credits?: number;
+  charged_credits?: number;
+  released_credits?: number;
+  outstanding_credits?: number;
+  overage_credits?: number;
+  provider?: string;
+  provider_actual_cost?: string | number | null;
+  credit_multiplier?: number;
+  actual_credits?: number | string | null;
 };
 
 type RefreshJobs = {
@@ -398,8 +443,39 @@ type RefreshJobs = {
     failed_count: number;
     new_reviews_count: number;
     new_unanswered_reviews_count: number;
+    reserved_credits?: number;
+    charged_credits?: number;
+    released_credits?: number;
+    overage_credits?: number;
   };
   jobs: RefreshJob[];
+};
+
+type ContentHistoryItem = {
+  id: string;
+  kind: 'review_reply_draft' | 'news_draft' | 'social_post_draft' | 'service_suggestion' | 'service_apply' | string;
+  status: string;
+  title: string;
+  text?: string;
+  created_at?: string;
+  updated_at?: string;
+  href?: string;
+  source?: string;
+  manual_publication_only?: boolean;
+  external_writes_performed?: boolean;
+  metadata?: Record<string, unknown>;
+};
+
+type ContentHistory = {
+  status: string;
+  summary: {
+    title: string;
+    text: string;
+    items_count: number;
+    type_counts: Record<string, number>;
+    status_counts: Record<string, number>;
+  };
+  items: ContentHistoryItem[];
 };
 
 type OperatorInboxItem = {
@@ -451,6 +527,29 @@ const formatDateTime = (value: string | null) => {
   }).format(parsed);
 };
 
+const renderBillingDetails = (billing: RefreshBillingState | undefined) => {
+  if (!billing) return null;
+  const style = refreshBillingStyles[billing.status] || refreshBillingStyles.unknown;
+  return (
+    <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-700">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={cn('rounded-full px-2 py-1 text-xs font-medium ring-1', style)}>
+          {billing.label || billing.status}
+        </span>
+        {billing.provider_actual_cost !== null && billing.provider_actual_cost !== undefined ? (
+          <span className="text-xs font-semibold text-slate-500">Apify: ${billing.provider_actual_cost}</span>
+        ) : null}
+      </div>
+      <div className="mt-2 grid gap-2 sm:grid-cols-4">
+        <div>Резерв: {billing.outstanding_credits || 0}</div>
+        <div>Списано: {billing.charged_credits || 0}</div>
+        <div>Возврат: {billing.released_credits || 0}</div>
+        <div>Overage: {billing.overage_credits || 0}</div>
+      </div>
+    </div>
+  );
+};
+
 const getItemIcon = (item: AttentionItem) => {
   if (item.action_class === 'approval_required') return ShieldCheck;
   if (item.action_class === 'paid_external') return CreditCard;
@@ -464,6 +563,7 @@ export const OperatorPage = () => {
   const [brief, setBrief] = useState<AttentionBrief | null>(null);
   const [inbox, setInbox] = useState<OperatorInbox | null>(null);
   const [refreshJobs, setRefreshJobs] = useState<RefreshJobs | null>(null);
+  const [contentHistory, setContentHistory] = useState<ContentHistory | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savingConsentKey, setSavingConsentKey] = useState<string | null>(null);
@@ -509,6 +609,7 @@ export const OperatorPage = () => {
       setBrief(null);
       setInbox(null);
       setRefreshJobs(null);
+      setContentHistory(null);
       setOperatorEvents([]);
       return;
     }
@@ -527,6 +628,7 @@ export const OperatorPage = () => {
       await loadOperatorEvents();
       await loadInbox();
       await loadRefreshJobs();
+      await loadContentHistory();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить сводку');
     } finally {
@@ -561,6 +663,21 @@ export const OperatorPage = () => {
       setRefreshJobs(response.data.refresh_jobs || null);
     } catch (err) {
       setRefreshJobs(null);
+    }
+  };
+
+  const loadContentHistory = async () => {
+    if (!currentBusinessId) {
+      setContentHistory(null);
+      return;
+    }
+    try {
+      const response = await api.get('/operator/content-history', {
+        params: { business_id: currentBusinessId, limit: 20 },
+      });
+      setContentHistory(response.data.content_history || null);
+    } catch (err) {
+      setContentHistory(null);
     }
   };
 
@@ -689,6 +806,7 @@ export const OperatorPage = () => {
       setChatResult(result);
       await loadBrief();
       await loadRefreshJobs();
+      await loadContentHistory();
       await loadOperatorEvents();
     } catch (err) {
       setChatResult({
@@ -715,6 +833,7 @@ export const OperatorPage = () => {
       await loadBrief();
       await loadInbox();
       await loadRefreshJobs();
+      await loadContentHistory();
       await loadOperatorEvents();
     } catch (err) {
       setRefreshResult({
@@ -774,6 +893,7 @@ export const OperatorPage = () => {
       setChatResult(result);
       await loadBrief();
       await loadInbox();
+      await loadContentHistory();
       await loadOperatorEvents();
     } catch (err) {
       setChatResult({
@@ -803,6 +923,7 @@ export const OperatorPage = () => {
       setChatResult(result);
       await loadBrief();
       await loadInbox();
+      await loadContentHistory();
       await loadOperatorEvents();
     } catch (err) {
       setChatResult({
@@ -832,6 +953,7 @@ export const OperatorPage = () => {
       setChatResult(result);
       await loadBrief();
       await loadInbox();
+      await loadContentHistory();
       await loadOperatorEvents();
     } catch (err) {
       setChatResult({
@@ -860,6 +982,7 @@ export const OperatorPage = () => {
       setChatResult(result);
       await loadBrief();
       await loadInbox();
+      await loadContentHistory();
       await loadOperatorEvents();
     } catch (err) {
       setChatResult({
@@ -889,6 +1012,7 @@ export const OperatorPage = () => {
       setChatResult(result);
       await loadBrief();
       await loadInbox();
+      await loadContentHistory();
       await loadOperatorEvents();
     } catch (err) {
       setChatResult({
@@ -916,6 +1040,7 @@ export const OperatorPage = () => {
       setManualPublishMessage('Отметил как опубликовано вручную. Внешней публикации LocalOS не выполнял.');
       await loadBrief();
       await loadInbox();
+      await loadContentHistory();
       await loadOperatorEvents();
     } catch (err) {
       setManualPublishMessage(err instanceof Error ? err.message : 'Не удалось отметить публикацию');
@@ -1140,6 +1265,7 @@ export const OperatorPage = () => {
                         <div className="mt-1 font-semibold text-slate-950">{refreshResult.new_unanswered_reviews_count || 0}</div>
                       </div>
                     </div>
+                    {renderBillingDetails(refreshResult.billing_state)}
                     {refreshResult.new_reviews?.length ? (
                       <div className="mt-3 space-y-2">
                         {refreshResult.new_reviews.map((review) => (
@@ -1309,12 +1435,78 @@ export const OperatorPage = () => {
       </DashboardSection>
 
       <DashboardSection
+        title="Черновики и предложения"
+        description="Единая история созданного контента: ответы, новости, соцпосты и изменения услуг."
+      >
+        {contentHistory ? (
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-5">
+              {['review_reply_draft', 'news_draft', 'social_post_draft', 'service_suggestion', 'service_apply'].map((kind) => (
+                <div key={kind} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{contentKindLabels[kind]}</div>
+                  <div className="mt-1 text-xl font-semibold text-slate-950">{contentHistory.summary.type_counts[kind] || 0}</div>
+                </div>
+              ))}
+            </div>
+            {contentHistory.items.length > 0 ? (
+              <div className="space-y-3">
+                {contentHistory.items.map((item) => (
+                  <div key={`${item.kind}-${item.id}`} className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-sm font-semibold text-slate-950">{item.title}</h3>
+                          <span className={cn('rounded-full px-2 py-1 text-xs font-medium ring-1', contentKindStyles[item.kind] || 'bg-slate-100 text-slate-700 ring-slate-200')}>
+                            {contentKindLabels[item.kind] || item.kind}
+                          </span>
+                          <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
+                            {item.status}
+                          </span>
+                          {item.manual_publication_only ? (
+                            <span className="rounded-full bg-sky-50 px-2 py-1 text-xs font-medium text-sky-800 ring-1 ring-sky-200">
+                              ручная публикация
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="mt-2 text-sm leading-6 text-slate-600">
+                          Создано: {formatDateTime(item.created_at || null)}. Обновлено: {formatDateTime(item.updated_at || null)}.
+                        </div>
+                        {item.text ? <p className="mt-2 line-clamp-4 text-sm leading-6 text-slate-700">{item.text}</p> : null}
+                      </div>
+                      {item.href ? (
+                        <Button type="button" size="sm" variant="outline" className="shrink-0" asChild>
+                          <Link to={item.href}>
+                            Открыть
+                            <ExternalLink className="ml-2 h-3.5 w-3.5" />
+                          </Link>
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <DashboardEmptyState
+                title="Черновиков пока нет"
+                description="Когда Operator подготовит ответ, новость, пост или предложения по услугам, они появятся здесь отдельными типами."
+              />
+            )}
+          </div>
+        ) : (
+          <DashboardEmptyState
+            title="История не загружена"
+            description="Выберите бизнес или обновите Operator, чтобы увидеть последние черновики."
+          />
+        )}
+      </DashboardSection>
+
+      <DashboardSection
         title="Обновления отзывов"
         description="Последние read-only обновления карт: статус, результат и быстрый переход к подготовке ответов."
       >
         {refreshJobs ? (
           <div className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-4 lg:grid-cols-6">
               <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
                 <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Всего</div>
                 <div className="mt-1 text-xl font-semibold text-slate-950">{refreshJobs.summary.jobs_count}</div>
@@ -1330,6 +1522,14 @@ export const OperatorPage = () => {
               <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
                 <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Без ответа</div>
                 <div className="mt-1 text-xl font-semibold text-slate-950">{refreshJobs.summary.new_unanswered_reviews_count}</div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Резерв</div>
+                <div className="mt-1 text-xl font-semibold text-slate-950">{refreshJobs.summary.reserved_credits || 0}</div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Списано</div>
+                <div className="mt-1 text-xl font-semibold text-slate-950">{refreshJobs.summary.charged_credits || 0}</div>
               </div>
             </div>
             {refreshJobs.jobs.length > 0 ? (
@@ -1354,6 +1554,7 @@ export const OperatorPage = () => {
                         </div>
                         {job.chat_response ? <p className="mt-2 text-sm leading-6 text-slate-700">{job.chat_response}</p> : null}
                         {job.error_message ? <p className="mt-2 text-sm leading-6 text-rose-700">{job.error_message}</p> : null}
+                        {renderBillingDetails(job.billing_state)}
                         {job.new_reviews?.length ? (
                           <div className="mt-3 space-y-2">
                             {job.new_reviews.map((review) => (

@@ -20,6 +20,7 @@ class FakeCursor:
         self.ledger_entries = []
         self.user_updates = []
         self.reservation_updates = []
+        self.settlement_metadata_updates = []
         self.existing_external_ids = set()
 
     def execute(self, query, params=None):
@@ -30,7 +31,9 @@ class FakeCursor:
             self.balance -= int((params or (0,))[0] or 0)
         if "insert into credit_ledger" in self.last_query:
             self.ledger_entries.append(params or ())
-        if "update operatorcreditreservations" in self.last_query:
+        if "set metadata =" in self.last_query:
+            self.settlement_metadata_updates.append(params or ())
+        elif "update operatorcreditreservations" in self.last_query:
             self.reservation_updates.append(params or ())
             self.reservation["status"] = params[0]
             self.reservation["charged_credits"] += int(params[1] or 0)
@@ -78,6 +81,7 @@ def test_settle_apify_actual_cost_charges_inside_reservation() -> None:
     assert result["charged_credits"] == 3
     assert result["overage_credits"] == 0
     assert cursor.ledger_entries[0][2] == -3
+    assert cursor.settlement_metadata_updates
 
 
 def test_settle_apify_actual_cost_charges_overage_when_actual_exceeds_reserved() -> None:

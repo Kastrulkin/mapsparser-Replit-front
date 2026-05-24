@@ -131,11 +131,12 @@ Current Operator review intake uses these tool boundaries:
 | `social_post.draft.generate` | `paid_compute` | `draft_only` plus `write_internal` | saves a LocalOS post draft; no external publication | charges credits after successful draft generation |
 | `services.optimization_suggest` | `paid_compute` | `draft_only` plus `write_internal` | saves proposed names/descriptions in service-regeneration job tables; does not update active services | charges credits per saved suggestion |
 | `services.optimization_apply` | `approval_required` | `write_internal` | applies saved service suggestions to `userservices` after explicit confirmation; no external publication | no extra charge after suggestion generation |
+| `operator.content_history.read` | `free_cached` | `read_only` | lists LocalOS review reply drafts, news drafts, social post drafts, service suggestions, and applied service changes by type | no charge |
 | `reviews.reply_draft.copy` | `manual_external` | `read_only` | user copies text manually | no extra charge after draft generation |
 | `reviews.reply_draft.mark_manual_published` | `manual_external` | `write_internal` | marks the LocalOS draft as published manually after the user copied and pasted it outside LocalOS | no extra charge after draft generation |
 | `operator.inbox.read` | `free_cached` | `read_only` | returns a scoped queue of review/content/partnership actions and UI helpers | no charge |
 | `maps.refresh.enqueue_apify_yandex` | `paid_external` | `write_internal` | reserves credits and enqueues a read-only `parsequeue` job; no external provider writes | actual Apify provider cost is settled by the worker when available |
-| `maps.refresh.jobs.read` | `free_cached` | `read_only` | lists recent scoped refresh jobs, statuses, and saved new-review snippets in web Operator or Telegram | no extra charge |
+| `maps.refresh.jobs.read` | `free_cached` | `read_only` | lists recent scoped refresh jobs, statuses, saved new-review snippets, and billing state in web Operator or Telegram | no extra charge |
 
 The manual review flow is available from web Operator chat and Telegram, but both surfaces must route through the same backend service and credit checks. Publication to Yandex, Google, 2GIS, or other maps remains manual unless a provider write flow is later implemented and approved.
 

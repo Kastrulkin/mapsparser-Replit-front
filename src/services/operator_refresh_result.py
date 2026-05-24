@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from services.operator_manual_review import _build_ui_action
@@ -24,6 +25,117 @@ def _load_queue(cursor: Any, *, business_id: str, user_id: str, queue_id: str) -
         (queue_id, business_id, user_id),
     )
     return _row_to_dict(cursor, cursor.fetchone())
+
+
+def _table_exists(cursor: Any, table_name: str) -> bool:
+    cursor.execute("SELECT to_regclass(%s)", (f"public.{table_name}",))
+    row = _row_to_dict(cursor, cursor.fetchone()) or {}
+    return bool(row.get("to_regclass") or row.get("table_ref") or row.get("?column?"))
+
+
+def _json_dict(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    if isinstance(value, str) and value.strip():
+        try:
+            parsed = json.loads(value)
+            return parsed if isinstance(parsed, dict) else {}
+        except Exception:
+            return {}
+    return {}
+
+
+def _int_value(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except Exception:
+        return 0
+
+
+def _load_refresh_billing_state(cursor: Any, *, business_id: str, user_id: str, queue_id: str) -> dict[str, Any]:
+    if not _table_exists(cursor, "operatorcreditreservations"):
+        return {
+            "status": "unavailable",
+            "label": "Биллинг недоступен",
+            "reserved_credits": 0,
+            "charged_credits": 0,
+            "released_credits": 0,
+            "outstanding_credits": 0,
+            "overage_credits": 0,
+            "provider_actual_cost": None,
+            "actual_credits": None,
+        }
+    cursor.execute(
+        """
+        SELECT id, status, estimated_credits, reserved_credits, charged_credits,
+               released_credits, metadata, created_at, updated_at, finalized_at
+        FROM operatorcreditreservations
+        WHERE business_id = %s
+          AND user_id = %s
+          AND action_key = 'map_reviews_refresh'
+          AND metadata ->> 'parsequeue_id' = %s
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        (business_id, user_id, queue_id),
+    )
+    row = _row_to_dict(cursor, cursor.fetchone()) or {}
+    if not row:
+        return {
+            "status": "not_found",
+            "label": "Резерв не найден",
+            "reserved_credits": 0,
+            "charged_credits": 0,
+            "released_credits": 0,
+            "outstanding_credits": 0,
+            "overage_credits": 0,
+            "provider_actual_cost": None,
+            "actual_credits": None,
+        }
+    metadata = _json_dict(row.get("metadata"))
+    reserved = _int_value(row.get("reserved_credits"))
+    charged = _int_value(row.get("charged_credits"))
+    released = _int_value(row.get("released_credits"))
+    outstanding = max(reserved - charged - released, 0)
+    overage = _int_value(metadata.get("overage_credits"))
+    provider_actual_cost = metadata.get("provider_actual_cost")
+    actual_credits = metadata.get("actual_credits")
+    reservation_status = _clean_text(row.get("status"))
+    if overage > 0:
+        status = "overage_charged"
+        label = f"Списано по факту: {charged} + overage {overage}"
+    elif reservation_status == "reserved" and outstanding > 0:
+        status = "reserved"
+        label = f"Зарезервировано: {outstanding}"
+    elif charged > 0:
+        status = "charged"
+        label = f"Списано по факту: {charged}"
+    elif released > 0 or reservation_status == "released":
+        status = "released"
+        label = f"Резерв возвращён: {released}"
+    else:
+        status = reservation_status or "unknown"
+        label = "Статус оплаты уточняется"
+    return {
+        "status": status,
+        "label": label,
+        "reservation_id": row.get("id"),
+        "reservation_status": reservation_status,
+        "estimated_credits": _int_value(row.get("estimated_credits")),
+        "reserved_credits": reserved,
+        "charged_credits": charged,
+        "released_credits": released,
+        "outstanding_credits": outstanding,
+        "overage_credits": overage,
+        "provider": metadata.get("provider") or "apify",
+        "provider_actual_cost": provider_actual_cost,
+        "credit_multiplier": metadata.get("credit_multiplier"),
+        "actual_credits": actual_credits,
+        "settlement_status": metadata.get("settlement_status"),
+        "created_at": row.get("created_at"),
+        "updated_at": row.get("updated_at"),
+        "finalized_at": row.get("finalized_at"),
+    }
 
 
 def _load_reviews_since(cursor: Any, *, business_id: str, since_value: Any, limit: int = 10) -> list[dict[str, Any]]:
@@ -84,12 +196,14 @@ def build_refresh_result_status(
         }
 
     queue_status = _clean_text(queue.get("status")).lower()
+    billing_state = _load_refresh_billing_state(cursor, business_id=business_id, user_id=user_id, queue_id=clean_queue_id)
     if queue_status in {"pending", "processing", "captcha"}:
         return {
             "status": "processing",
             "queue": queue,
             "queue_id": clean_queue_id,
             "queue_status": queue_status,
+            "billing_state": billing_state,
             "new_reviews_count": 0,
             "new_unanswered_reviews_count": 0,
             "new_reviews": [],
@@ -102,6 +216,7 @@ def build_refresh_result_status(
             "queue": queue,
             "queue_id": clean_queue_id,
             "queue_status": queue_status,
+            "billing_state": billing_state,
             "new_reviews_count": 0,
             "new_unanswered_reviews_count": 0,
             "new_reviews": [],
@@ -129,6 +244,7 @@ def build_refresh_result_status(
         "queue": queue,
         "queue_id": clean_queue_id,
         "queue_status": queue_status,
+        "billing_state": billing_state,
         "new_reviews_count": count,
         "new_unanswered_reviews_count": unanswered_count,
         "new_reviews": new_reviews,
@@ -201,6 +317,10 @@ def list_refresh_jobs(
     status_counts = {"processing": 0, "completed": 0, "failed": 0}
     total_new_reviews = 0
     total_new_unanswered = 0
+    total_reserved_credits = 0
+    total_charged_credits = 0
+    total_released_credits = 0
+    total_overage_credits = 0
 
     for queue in queues:
         queue_id = _clean_text(queue.get("id"))
@@ -216,6 +336,11 @@ def list_refresh_jobs(
         new_unanswered_count = int(result.get("new_unanswered_reviews_count") or 0)
         total_new_reviews += new_reviews_count
         total_new_unanswered += new_unanswered_count
+        billing_state = result.get("billing_state") if isinstance(result.get("billing_state"), dict) else {}
+        total_reserved_credits += int(billing_state.get("outstanding_credits") or 0)
+        total_charged_credits += int(billing_state.get("charged_credits") or 0)
+        total_released_credits += int(billing_state.get("released_credits") or 0)
+        total_overage_credits += int(billing_state.get("overage_credits") or 0)
         jobs.append(
             {
                 "queue_id": queue_id,
@@ -226,6 +351,7 @@ def list_refresh_jobs(
                 "error_message": queue.get("error_message"),
                 "new_reviews_count": new_reviews_count,
                 "new_unanswered_reviews_count": new_unanswered_count,
+                "billing_state": billing_state,
                 "new_reviews": list(result.get("new_reviews") or [])[:5],
                 "chat_response": result.get("chat_response"),
                 "blocked_reasons": list(result.get("blocked_reasons") or []),
@@ -253,6 +379,10 @@ def list_refresh_jobs(
             "failed_count": status_counts.get("failed", 0),
             "new_reviews_count": total_new_reviews,
             "new_unanswered_reviews_count": total_new_unanswered,
+            "reserved_credits": total_reserved_credits,
+            "charged_credits": total_charged_credits,
+            "released_credits": total_released_credits,
+            "overage_credits": total_overage_credits,
         },
         "limits": {
             "external_calls_performed": False,

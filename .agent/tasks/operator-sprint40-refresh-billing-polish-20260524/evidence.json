@@ -1,0 +1,52 @@
+{
+  "task_id": "operator-sprint40-refresh-billing-polish-20260524",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Refresh result and refresh job list include billing state.",
+      "status": "PASS",
+      "proof": ["operator_refresh_result billing_state"],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Billing state includes reserved, charged, released, overage, provider actual cost, multiplier, and actual credits when available.",
+      "status": "PASS",
+      "proof": ["tests/test_operator_refresh_result.py"],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Apify settlement stores actual-cost metadata on the reservation for UI display.",
+      "status": "PASS",
+      "proof": ["tests/test_operator_apify_settlement.py"],
+      "gaps": ["Old settlements without metadata show only reservation credit fields."]
+    },
+    {
+      "id": "AC4",
+      "text": "Web Operator renders refresh billing details clearly.",
+      "status": "PASS",
+      "proof": ["OperatorPage refresh billing UI", "frontend build passed"],
+      "gaps": ["No authenticated browser inspection of a real paid refresh job."]
+    }
+  ],
+  "changed_files": [
+    "src/services/operator_refresh_result.py",
+    "src/services/operator_apify_settlement.py",
+    "frontend/src/pages/dashboard/OperatorPage.tsx",
+    "tests/test_operator_refresh_result.py",
+    "tests/test_operator_apify_settlement.py",
+    "docs/agents/localos-operator.md",
+    "docs/agents/index.md",
+    "docs/agents/tool-registry.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/services/operator_refresh_result.py src/services/operator_apify_settlement.py src/api/operator_api.py",
+    "PYTHONPATH=src:. python3 -m pytest -q tests/test_operator_refresh_result.py tests/test_operator_apify_settlement.py",
+    "cd frontend && npm run build",
+    "scripts/lint_backend_baseline.sh",
+    "git diff --check"
+  ],
+  "known_gaps": ["Old settlements without metadata show only reservation credit fields.", "No authenticated browser inspection of a real paid refresh job."]
+}

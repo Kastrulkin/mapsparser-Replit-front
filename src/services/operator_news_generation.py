@@ -193,6 +193,7 @@ def _insert_news_draft(
     user_id: str,
     source_text: str,
     generated_text: str,
+    prompt_key: str = "operator_news_generate",
 ) -> dict[str, Any]:
     _ensure_usernews_table(cursor)
     news_id = str(uuid.uuid4())
@@ -203,7 +204,7 @@ def _insert_news_draft(
             original_generated_text, edited_before_approve, prompt_key, prompt_version,
             approved, created_at, updated_at
         )
-        VALUES (%s, %s, %s, NULL, %s, %s, %s, FALSE, 'operator_news_generate', 'v1', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        VALUES (%s, %s, %s, NULL, %s, %s, %s, FALSE, %s, 'v1', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         RETURNING id, user_id, business_id, source_text, generated_text, approved, created_at, updated_at
         """,
         (
@@ -213,6 +214,7 @@ def _insert_news_draft(
             source_text,
             generated_text,
             generated_text,
+            prompt_key,
         ),
     )
     row = _row_to_dict(cursor, cursor.fetchone()) or {}

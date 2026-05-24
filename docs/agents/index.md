@@ -59,6 +59,10 @@ Sprint 37 adds Telegram follow-up for the same refresh jobs. The owner bot can s
 
 Sprint 38 adds the confirmed apply step for service optimization suggestions. Operator can now show saved `services_optimize` suggestions, accept an explicit `Применить предложения` approval, update only LocalOS `userservices`, and mark suggestion items as fixed without extra billing or external provider writes.
 
+Sprint 39 adds normalized Operator content history. The dashboard now separates review reply drafts, news drafts, social post drafts, service suggestions, and applied service changes instead of showing all generated artifacts as the same kind of output.
+
+Sprint 40 polishes paid refresh billing visibility. Refresh results and refresh-job history now show reserved credits, actual charged credits, released credits, overage, provider actual cost, and Apify multiplier when settlement data is available.
+
 The Operator model keeps one context, one permission system, one credit/usage ledger, one approval policy, and one audit trail across web and Telegram. Sprint 0 defines the product contract only; it does not imply that the web-chat runtime or Telegram Operator runtime is fully implemented.
 
 ## What Agents Must Not Assume
