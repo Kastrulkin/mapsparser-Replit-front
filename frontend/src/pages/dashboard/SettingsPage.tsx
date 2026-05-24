@@ -1,14 +1,14 @@
-import { useOutletContext } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 import { useLanguage } from '@/i18n/LanguageContext';
 import TelegramConnection from '@/components/TelegramConnection';
 import WhatsAppConnection from '@/components/WhatsAppConnection';
 import { WABACredentials } from '@/components/WABACredentials';
 import { TelegramBotCredentials } from '@/components/TelegramBotCredentials';
-import { AIAgentSettings } from '@/components/AIAgentSettings';
 import { NetworkManagement } from '@/components/NetworkManagement';
 import { ExternalIntegrations } from '@/components/ExternalIntegrations';
 import FinanceCrmPanel from '@/components/FinanceCrmPanel';
-import { Settings } from 'lucide-react';
+import { Bot, Settings } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   DashboardActionPanel,
   DashboardCompactMetricsRow,
@@ -73,8 +73,8 @@ export const SettingsPage = () => {
           },
           {
             label: 'ИИ-агент',
-            value: 'Настройки поведения',
-            hint: 'Тон, ограничения и сценарии работы собраны в одном блоке.',
+            value: 'Раздел Агенты',
+            hint: 'Тон, ограничения, сценарии и подтверждения собраны на странице агентов.',
           },
           {
             label: 'Сеть',
@@ -111,10 +111,24 @@ export const SettingsPage = () => {
 
       <DashboardSection
         title="ИИ-агент"
-        description="Определите, как агент отвечает, какие задачи берёт на себя и где должен оставаться ручной контроль."
-        contentClassName="p-0"
+        description="Готовые и кастомные агенты теперь управляются из одного продуктового раздела."
       >
-        <AIAgentSettings businessId={currentBusinessId} business={currentBusiness} />
+        <DashboardActionPanel
+          title="ИИ-агенты теперь на странице “Агенты”"
+          description="Там собраны агент для записи, маркетинговый агент, persona-настройки, кастомные workflow agents, подтверждения и история запусков."
+          tone="sky"
+          status={(
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+              <Bot className="h-4 w-4" />
+              Единый центр управления
+            </div>
+          )}
+          actions={(
+            <Button type="button" asChild>
+              <Link to="/dashboard/agents">Открыть агентов</Link>
+            </Button>
+          )}
+        />
       </DashboardSection>
 
       <DashboardSection

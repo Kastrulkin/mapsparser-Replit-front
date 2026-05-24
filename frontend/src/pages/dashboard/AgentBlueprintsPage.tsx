@@ -5,12 +5,17 @@ import {
   Bot,
   CheckCircle2,
   Clock3,
+  FileCheck2,
   FileText,
   Loader2,
+  Mail,
   Play,
   RefreshCw,
   Send,
   ShieldCheck,
+  Sparkles,
+  Star,
+  Users,
   Workflow,
 } from 'lucide-react';
 
@@ -22,15 +27,20 @@ import {
   DashboardPageHeader,
   DashboardSection,
 } from '@/components/dashboard/DashboardPrimitives';
+import { AIAgentSettings } from '@/components/AIAgentSettings';
 import { api } from '@/services/api';
 import { cn } from '@/lib/utils';
 
 type DashboardContext = {
   currentBusinessId: string | null;
-  currentBusiness?: {
-    id: string;
-    name?: string;
-  } | null;
+  currentBusiness?: ({ id?: string; name?: string } & Record<string, unknown>) | null;
+};
+
+type DashboardMetricItem = {
+  label: string;
+  value: React.ReactNode;
+  hint?: string;
+  tone?: 'default' | 'positive' | 'warning';
 };
 
 type AgentBlueprint = {
@@ -124,23 +134,104 @@ type AgentBlueprintDetails = {
 
 const runStatusFilters = [
   { value: 'all', label: 'Все' },
-  { value: 'running', label: 'Running' },
-  { value: 'waiting_approval', label: 'Approval' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'failed', label: 'Failed' },
+  { value: 'running', label: 'В работе' },
+  { value: 'waiting_approval', label: 'Ждёт решения' },
+  { value: 'completed', label: 'Готово' },
+  { value: 'failed', label: 'Ошибка' },
+];
+
+const agentPromptExamples = [
+  'Подготовь письмо клиентам по шаблону',
+  'Обработай документ и найди риски',
+  'Найди клиентов и покажи черновики сообщений',
+  'Отвечай на отзывы в моём стиле',
+];
+
+const agentTemplates = [
+  {
+    title: 'Документы',
+    description: 'Извлечь поля, проверить правила и собрать результат по образцу.',
+    icon: FileText,
+  },
+  {
+    title: 'Письма',
+    description: 'Подготовить черновик, показать на подтверждение и сохранить результат.',
+    icon: Mail,
+  },
+  {
+    title: 'Таблицы',
+    description: 'Разобрать строки, найти исключения и подготовить отчёт.',
+    icon: FileCheck2,
+  },
+  {
+    title: 'Поиск клиентов',
+    description: 'Найти лидов, собрать shortlist и подготовить сообщения.',
+    icon: Users,
+  },
+  {
+    title: 'Отзывы',
+    description: 'Подготовить ответы в стиле бизнеса и ждать ручного подтверждения.',
+    icon: Star,
+  },
+  {
+    title: 'Партнёрства',
+    description: 'Найти подходящие компании и подготовить предложение.',
+    icon: Sparkles,
+  },
 ];
 
 const statusTone: Record<string, string> = {
+  active: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   completed: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   running: 'bg-sky-50 text-sky-700 ring-sky-200',
   waiting_approval: 'bg-amber-50 text-amber-700 ring-amber-200',
   failed: 'bg-rose-50 text-rose-700 ring-rose-200',
   rejected: 'bg-slate-100 text-slate-700 ring-slate-200',
+  draft: 'bg-slate-100 text-slate-700 ring-slate-200',
+  queued_for_dispatch: 'bg-amber-50 text-amber-700 ring-amber-200',
+  pending: 'bg-amber-50 text-amber-700 ring-amber-200',
 };
+
+const statusLabels: Record<string, string> = {
+  active: 'Включён',
+  completed: 'Готово',
+  running: 'В работе',
+  waiting_approval: 'Ждёт решения',
+  failed: 'Ошибка',
+  rejected: 'Отклонён',
+  draft: 'Черновик',
+  queued_for_dispatch: 'В очереди',
+  queued_not_dispatched: 'В очереди',
+  generated: 'Подготовлено',
+  approved: 'Подтверждено',
+  pending: 'Ожидает',
+};
+
+const stepLabels: Record<string, string> = {
+  source_leads: 'Найти потенциальных клиентов',
+  shortlist: 'Сформировать список',
+  approve_shortlist: 'Подтвердить список',
+  draft_messages: 'Подготовить сообщения',
+  approve_drafts: 'Подтвердить тексты',
+  send_limited_batch: 'Поставить в очередь',
+  record_outcomes: 'Сохранить ответы',
+};
+
+const metaLabels: Record<string, string> = {
+  artifact: 'результат',
+  approval: 'требуется подтверждение',
+  capability: 'действие через безопасный контур',
+  shortlist: 'список клиентов',
+  drafts: 'черновики сообщений',
+};
+
+const humanizeStatus = (status: string) => statusLabels[status] || status;
+const humanizeStep = (step: string) => stepLabels[step] || step;
+const humanizeMeta = (meta: string) => metaLabels[meta] || meta;
 
 const StatusBadge = ({ status }: { status: string }) => (
   <span className={cn('inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1', statusTone[status] || 'bg-slate-50 text-slate-600 ring-slate-200')}>
-    {status}
+    {humanizeStatus(status)}
   </span>
 );
 
@@ -158,6 +249,7 @@ export const AgentBlueprintsPage = () => {
   const [runCity, setRunCity] = useState('');
   const [runCategory, setRunCategory] = useState('');
   const [runLimit, setRunLimit] = useState('30');
+  const [agentPrompt, setAgentPrompt] = useState('');
 
   const selectedBlueprint = useMemo(
     () => blueprints.find((item) => item.id === selectedBlueprintId) || blueprints[0] || null,
@@ -193,29 +285,29 @@ export const AgentBlueprintsPage = () => {
     return step?.output_json?.orchestrator?.result || step?.output_json || null;
   }, [activeRun?.artifacts, activeRun?.steps]);
 
-  const metrics = useMemo(
+  const metrics = useMemo<DashboardMetricItem[]>(
     () => [
       {
-        label: 'Workflow agents',
+        label: 'Мои агенты',
         value: blueprints.length,
         hint: currentBusiness?.name || 'Текущий бизнес',
       },
       {
-        label: 'Текущий запуск',
+        label: 'Активный запуск',
         value: activeRun ? <StatusBadge status={activeRun.status} /> : 'нет',
-        hint: activeRun ? activeRun.id.slice(0, 8) : 'Запустите blueprint',
-        tone: activeRun?.status === 'waiting_approval' ? 'warning' as const : 'default' as const,
+        hint: activeRun ? `Журнал ${activeRun.id.slice(0, 8)}` : 'Запустите агента',
+        tone: activeRun?.status === 'waiting_approval' ? 'warning' : 'default',
       },
       {
-        label: 'Artifacts',
+        label: 'Результаты',
         value: activeRun?.artifacts?.length || 0,
-        hint: 'Сохраненные результаты шагов',
+        hint: 'Сохранённые находки, списки и черновики',
       },
       {
-        label: 'Approvals',
+        label: 'Подтверждения',
         value: pendingApprovals.length || activeRun?.approvals?.length || 0,
         hint: pendingApprovals.length ? 'Есть ожидающие решения' : 'Нет ожидающих решений',
-        tone: pendingApprovals.length || pendingApproval ? 'warning' as const : 'default' as const,
+        tone: pendingApprovals.length || pendingApproval ? 'warning' : 'default',
       },
     ],
     [activeRun, blueprints.length, currentBusiness?.name, pendingApproval, pendingApprovals.length],
@@ -286,7 +378,7 @@ export const AgentBlueprintsPage = () => {
     }
   };
 
-  const createDefaultBlueprint = async () => {
+  const createDefaultBlueprint = async (requestText = '') => {
     if (!currentBusinessId) {
       return;
     }
@@ -295,9 +387,9 @@ export const AgentBlueprintsPage = () => {
     try {
       const response = await api.post('/agent-blueprints', {
         business_id: currentBusinessId,
-        name: 'Supervised Outreach Agent',
+        name: requestText.trim() ? requestText.trim().slice(0, 80) : 'Агент поиска клиентов',
         category: 'outreach',
-        description: 'Ищет лиды, готовит shortlist и черновики, внешние отправки только через approval.',
+        description: requestText.trim() || 'Ищет лиды, готовит shortlist и черновики, внешние отправки только через approval.',
         status: 'active',
         template: 'supervised_outreach',
       });
@@ -313,6 +405,11 @@ export const AgentBlueprintsPage = () => {
     } finally {
       setActionLoading(false);
     }
+  };
+
+  const createAgentFromPrompt = async () => {
+    await createDefaultBlueprint(agentPrompt);
+    setAgentPrompt('');
   };
 
   const startRun = async () => {
@@ -364,9 +461,9 @@ export const AgentBlueprintsPage = () => {
   return (
     <div className="space-y-6">
       <DashboardPageHeader
-        eyebrow="Agent Blueprint Layer"
-        title="Workflow agents"
-        description="Исполняемые агенты с шагами, артефактами и ручными подтверждениями. Chat persona agents остаются отдельной настройкой голоса."
+        eyebrow="LocalOS"
+        title="Агенты"
+        description="Готовые помощники, пользовательские агенты, запуски и ручные подтверждения в одном разделе."
         icon={Bot}
         actions={(
           <>
@@ -374,11 +471,45 @@ export const AgentBlueprintsPage = () => {
               <RefreshCw className={cn('mr-2 h-4 w-4', loading && 'animate-spin')} />
               Обновить
             </Button>
-            <Button type="button" onClick={createDefaultBlueprint} disabled={actionLoading || !currentBusinessId}>
+            <Button type="button" onClick={() => createDefaultBlueprint()} disabled={actionLoading || !currentBusinessId}>
               {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-              Создать Outreach Agent
+              Добавить агента поиска клиентов
             </Button>
           </>
+        )}
+      />
+
+      <DashboardActionPanel
+        title="Опишите, какого агента хотите создать"
+        description="LocalOS сохранит задачу как повторяемый агент: входные данные, шаги, результаты и места, где нужен ручной контроль."
+        tone="sky"
+        status={(
+          <div className="grid gap-3">
+            <textarea
+              className="min-h-28 w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-slate-400"
+              value={agentPrompt}
+              onChange={(event) => setAgentPrompt(event.target.value)}
+              placeholder="Например: найди клиентов в моём городе, подготовь короткие сообщения и покажи мне перед отправкой"
+            />
+            <div className="flex flex-wrap gap-2">
+              {agentPromptExamples.map((example) => (
+                <button
+                  key={example}
+                  type="button"
+                  className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-950"
+                  onClick={() => setAgentPrompt(example)}
+                >
+                  {example}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        actions={(
+          <Button type="button" onClick={createAgentFromPrompt} disabled={actionLoading || !currentBusinessId || !agentPrompt.trim()}>
+            {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+            Создать агента
+          </Button>
         )}
       />
 
@@ -395,21 +526,60 @@ export const AgentBlueprintsPage = () => {
       {!currentBusinessId ? (
         <DashboardEmptyState
           title="Сначала выберите бизнес"
-          description="Workflow agents всегда привязаны к конкретному бизнесу и его правам доступа."
+          description="Агенты всегда привязаны к конкретному бизнесу и его правам доступа."
         />
       ) : null}
 
+      {currentBusinessId ? (
+        <DashboardSection
+          title="Готовые агенты и поведение"
+          description="Агент для записи, маркетинговый агент и persona-настройки теперь находятся здесь, рядом с кастомными агентами."
+          contentClassName="p-0"
+        >
+          <AIAgentSettings businessId={currentBusinessId} business={currentBusiness} />
+        </DashboardSection>
+      ) : null}
+
+      <DashboardSection
+        title="Шаблоны"
+        description="Быстрые стартовые точки для агентов по документам, письмам, таблицам и поиску клиентов."
+      >
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {agentTemplates.map((template) => {
+            const Icon = template.icon;
+            return (
+              <button
+                key={template.title}
+                type="button"
+                className="rounded-xl border border-slate-200 bg-white px-4 py-4 text-left transition hover:border-slate-300 hover:bg-slate-50"
+                onClick={() => setAgentPrompt(`${template.title}: ${template.description}`)}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="rounded-lg bg-slate-100 p-2 text-slate-700">
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-slate-950">{template.title}</div>
+                    <div className="mt-1 text-sm leading-6 text-slate-600">{template.description}</div>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </DashboardSection>
+
       <div className="grid gap-6 xl:grid-cols-[minmax(20rem,0.9fr)_minmax(0,1.4fr)]">
-        <DashboardSection title="Blueprints" description="Это рабочие процессы. Они могут использовать chat persona как голос, но сами отвечают за шаги и approvals.">
+        <DashboardSection title="Мои кастомные агенты" description="Сохранённые процессы, которые можно запускать повторно и контролировать через подтверждения.">
           {loading ? (
             <div className="flex items-center gap-2 text-sm text-slate-500">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Загружаем agents...
+              Загружаем агентов...
             </div>
           ) : blueprints.length === 0 ? (
             <DashboardEmptyState
-              title="Workflow agents пока нет"
-              description="Создайте первый Supervised Outreach Agent, чтобы увидеть run timeline, artifacts и approval queue."
+              title="Кастомных агентов пока нет"
+              description="Опишите задачу сверху или добавьте агента поиска клиентов."
             />
           ) : (
             <div className="space-y-3">
@@ -434,7 +604,7 @@ export const AgentBlueprintsPage = () => {
                       <div className="min-w-0">
                         <div className="truncate text-sm font-semibold">{blueprint.name}</div>
                         <div className={cn('mt-1 text-xs', selected ? 'text-slate-300' : 'text-slate-500')}>
-                          {blueprint.category} · v{blueprint.latest_version_number || '—'}
+                          {blueprint.category || 'custom'} · версия {blueprint.latest_version_number || '—'}
                         </div>
                       </div>
                       <StatusBadge status={blueprint.status || 'draft'} />
@@ -452,8 +622,8 @@ export const AgentBlueprintsPage = () => {
         </DashboardSection>
 
         <DashboardSection
-          title="Run timeline"
-          description="Запуск идет последовательно, показывает артефакты из outreach pipeline и останавливается на ручном подтверждении."
+          title="Запуск агента"
+          description="Агент идёт по шагам, показывает результаты и останавливается там, где нужно ваше решение."
           actions={(
             <Button type="button" onClick={startRun} disabled={!selectedBlueprint || actionLoading}>
               {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
@@ -463,7 +633,7 @@ export const AgentBlueprintsPage = () => {
         >
           <div className="mb-4 grid gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4 md:grid-cols-[1fr_1fr_1fr_8rem]">
             <label className="text-xs font-medium text-slate-600">
-              Source
+              Источник
               <input
                 className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
                 value={runSource}
@@ -472,7 +642,7 @@ export const AgentBlueprintsPage = () => {
               />
             </label>
             <label className="text-xs font-medium text-slate-600">
-              City
+              Город
               <input
                 className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
                 value={runCity}
@@ -481,7 +651,7 @@ export const AgentBlueprintsPage = () => {
               />
             </label>
             <label className="text-xs font-medium text-slate-600">
-              Category
+              Категория
               <input
                 className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
                 value={runCategory}
@@ -490,7 +660,7 @@ export const AgentBlueprintsPage = () => {
               />
             </label>
             <label className="text-xs font-medium text-slate-600">
-              Limit
+              Лимит
               <input
                 className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
                 inputMode="numeric"
@@ -500,15 +670,15 @@ export const AgentBlueprintsPage = () => {
             </label>
           </div>
           {!activeRun ? (
-            <DashboardEmptyState
-              title="Запусков в этой сессии нет"
-              description="Выберите blueprint и запустите его или откройте один из последних запусков."
-            />
+              <DashboardEmptyState
+                title="Запусков в этой сессии нет"
+                description="Выберите агента и запустите его или откройте один из последних запусков."
+              />
           ) : (
             <div className="space-y-5">
               <DashboardActionPanel
-                title={`Run ${activeRun.id.slice(0, 8)}`}
-                description={activeRun.error_text || 'История шагов, артефактов и approvals для текущего запуска.'}
+                title="Текущий запуск"
+                description={activeRun.error_text || 'Что агент уже сделал, какие результаты подготовил и где ждёт подтверждение.'}
                 status={<StatusBadge status={activeRun.status} />}
                 tone={activeRun.status === 'waiting_approval' ? 'amber' : 'default'}
                 actions={pendingApproval ? (
@@ -525,8 +695,8 @@ export const AgentBlueprintsPage = () => {
 
               {queuedButNotDispatched ? (
                 <DashboardActionPanel
-                  title="Queued but not dispatched"
-                  description={`${queuedButNotDispatched.operator_note || 'Send step поставил batch в очередь, но внешняя отправка не запускалась внутри blueprint runtime.'} Queue: ${Number(queuedButNotDispatched.queue_count || queuedButNotDispatched.queued_count || 0)} items.`}
+                  title="Поставлено в очередь, но не отправлено"
+                  description={`${queuedButNotDispatched.operator_note || 'Агент подготовил очередь, но внешняя отправка запускается отдельным контуром.'} В очереди: ${Number(queuedButNotDispatched.queue_count || queuedButNotDispatched.queued_count || 0)}.`}
                   status={<StatusBadge status="queued_for_dispatch" />}
                   tone="amber"
                   actions={<Send className="h-4 w-4 text-amber-600" />}
@@ -534,27 +704,27 @@ export const AgentBlueprintsPage = () => {
               ) : null}
 
               <div className="grid gap-4 lg:grid-cols-3">
-                <RunColumn title="Steps" icon={Clock3}>
+                <RunColumn title="Шаги" icon={Clock3}>
                   {(activeRun.steps || []).map((step) => (
                     <TimelineItem
                       key={step.id}
-                      title={step.step_key}
-                      meta={step.error_text || step.step_type}
+                      title={humanizeStep(step.step_key)}
+                      meta={humanizeMeta(step.error_text || step.step_type)}
                       status={step.status}
                     />
                   ))}
                 </RunColumn>
-                <RunColumn title="Artifacts" icon={FileText}>
+                <RunColumn title="Результаты" icon={FileText}>
                   {(activeRun.artifacts || []).map((artifact) => (
                     <ArtifactItem key={artifact.id} artifact={artifact} />
                   ))}
                 </RunColumn>
-                <RunColumn title="Approvals" icon={CheckCircle2}>
+                <RunColumn title="Подтверждения" icon={CheckCircle2}>
                   {(activeRun.approvals || []).map((approval) => (
                     <TimelineItem
                       key={approval.id}
                       title={approval.title}
-                      meta={approval.decision_reason || approval.approval_type}
+                      meta={approval.decision_reason || humanizeMeta(approval.approval_type)}
                       status={approval.status}
                     />
                   ))}
@@ -567,8 +737,8 @@ export const AgentBlueprintsPage = () => {
 
       {selectedBlueprint ? (
         <DashboardSection
-          title="Run history"
-          description="Последние запуски выбранного workflow agent. Откройте run, чтобы увидеть steps, artifacts и approvals."
+          title="История запусков"
+          description="Последние запуски выбранного агента. Откройте запуск, чтобы увидеть шаги, результаты и подтверждения."
           actions={(
             <div className="flex flex-wrap gap-2">
               {runStatusFilters.map((filter) => (
@@ -600,12 +770,12 @@ export const AgentBlueprintsPage = () => {
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-2">
                       <Workflow className="h-4 w-4 shrink-0" />
-                      <span className="truncate text-sm font-semibold">Run {run.id.slice(0, 8)}</span>
+                      <span className="truncate text-sm font-semibold">Запуск {run.id.slice(0, 8)}</span>
                     </div>
                     <StatusBadge status={run.status} />
                   </div>
                   <div className={cn('mt-2 text-xs', activeRun?.id === run.id ? 'text-slate-300' : 'text-slate-500')}>
-                    {run.started_at || 'started_at unavailable'}
+                    {run.started_at || 'Дата запуска недоступна'}
                   </div>
                 </button>
               ))}
@@ -613,7 +783,7 @@ export const AgentBlueprintsPage = () => {
           ) : (
             <DashboardEmptyState
               title="История пуста"
-              description="Запустите blueprint, чтобы здесь появились последние runs."
+              description="Запустите агента, чтобы здесь появилась история."
             />
           )}
         </DashboardSection>
@@ -621,8 +791,8 @@ export const AgentBlueprintsPage = () => {
 
       {selectedBlueprint ? (
         <DashboardSection
-          title="Approval queue"
-          description="Все pending approvals по выбранному workflow agent, отдельно от истории запусков."
+          title="Ожидают подтверждения"
+          description="Решения, без которых агент не продолжит рискованное действие."
         >
           {pendingApprovals.length ? (
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -637,12 +807,12 @@ export const AgentBlueprintsPage = () => {
                     <div className="min-w-0">
                       <div className="truncate text-sm font-semibold text-slate-950">{approval.title}</div>
                       <div className="mt-1 text-xs text-amber-700">
-                        Run {approval.run_id ? approval.run_id.slice(0, 8) : 'unknown'} · {approval.approval_type}
+                        Запуск {approval.run_id ? approval.run_id.slice(0, 8) : 'неизвестен'} · {humanizeMeta(approval.approval_type)}
                       </div>
                     </div>
                     <StatusBadge status={approval.status} />
                   </div>
-                  <div className="mt-2 text-xs text-slate-500">{approval.requested_at || approval.run_status || 'pending'}</div>
+                  <div className="mt-2 text-xs text-slate-500">{approval.requested_at || humanizeStatus(approval.run_status || 'pending')}</div>
                   <ApprovalPayloadSummary approval={approval} />
                 </button>
               ))}
@@ -650,7 +820,7 @@ export const AgentBlueprintsPage = () => {
           ) : (
             <DashboardEmptyState
               title="Очередь approval пуста"
-              description="Когда workflow agent остановится на ручном подтверждении, решение появится здесь."
+              description="Когда агент остановится на ручном подтверждении, решение появится здесь."
             />
           )}
         </DashboardSection>
@@ -718,10 +888,10 @@ const ArtifactSourceSummary = ({ payload }: { payload: AgentArtifact['payload_js
   return (
     <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
       {payload?.source === 'prospectingleads' ? (
-        <div className="font-medium text-slate-800">Leads source: prospectingleads</div>
+        <div className="font-medium text-slate-800">Источник лидов: prospectingleads</div>
       ) : null}
       {payload?.source_artifact ? (
-        <div>Derived from: {payload.source_artifact}</div>
+        <div>Сформировано из: {payload.source_artifact}</div>
       ) : null}
       {filterEntries.length ? (
         <div className="mt-1 flex flex-wrap gap-1.5">
@@ -745,8 +915,8 @@ const ApprovalPayloadSummary = ({ approval }: { approval: AgentApproval }) => {
   }
   return (
     <div className="mt-3 rounded-lg bg-white/80 px-3 py-2 text-xs leading-5 text-slate-600 ring-1 ring-amber-100">
-      {artifactType ? <div>Artifact: {artifactType}</div> : null}
-      {count !== null ? <div>Items waiting for decision: {count}</div> : null}
+      {artifactType ? <div>Результат: {artifactType}</div> : null}
+      {count !== null ? <div>Ожидают решения: {count}</div> : null}
     </div>
   );
 };
@@ -778,7 +948,7 @@ const ArtifactItem = ({ artifact }: { artifact: AgentArtifact }) => {
       ) : null}
       <details className="mt-3">
         <summary className="cursor-pointer text-xs font-medium text-slate-500 hover:text-slate-900">
-          Full payload
+          Технический журнал
         </summary>
         <pre className="mt-2 max-h-72 overflow-auto rounded-lg bg-slate-950 p-3 text-[11px] leading-5 text-slate-100">
           {JSON.stringify(payload, null, 2)}

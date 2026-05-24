@@ -195,9 +195,9 @@ required = {
         "runSource",
         "runCity",
         "runCategory",
-        "Leads source: prospectingleads",
+        "Источник лидов: prospectingleads",
         "source_artifact",
-        "Queued but not dispatched",
+        "Поставлено в очередь, но не отправлено",
         "ApprovalPayloadSummary",
     ],
 }
@@ -374,7 +374,7 @@ for forbidden in (
     if forbidden.lower() in service_text.lower():
         raise SystemExit(f"operator refresh reliability must stay read-only: {forbidden}")
 
-for marker in ("renderReliabilityDetails", "retrying_count", "captcha_required_count", "reliability_failed_count"):
+for marker in ("reliability_state", "result.reliability_state.title", "result.reliability_state.explanation", "result.reliability_state.next_step"):
     if marker not in frontend_text:
         raise SystemExit(f"operator UI missing refresh reliability marker: {marker}")
 
