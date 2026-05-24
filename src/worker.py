@@ -53,6 +53,7 @@ from core.card_automation import (
 )
 from core.telegram_network import telegram_urlopen
 from services.operator_apify_settlement import settle_apify_actual_cost
+from services.operator_refresh_recovery import release_failed_refresh_reservation
 from services.operator_refresh_telegram_followup import dispatch_operator_refresh_telegram_followup
 
 # Реестр активных Playwright-сессий для human-in-the-loop
@@ -2112,6 +2113,73 @@ def get_db_connection():
 
     return _get_pg_connection()
 
+
+def _finalize_failed_operator_refresh(cursor: Any, queue_id: str, commit_func: Any = None) -> Dict[str, Any]:
+    """Release a failed paid refresh reservation and notify the owner when possible."""
+    clean_queue_id = str(queue_id or "").strip()
+    if not clean_queue_id:
+        return {"status": "skipped", "reason": "queue_id_missing"}
+
+    cursor.execute(
+        """
+        SELECT id, business_id, user_id, source, task_type
+        FROM parsequeue
+        WHERE id = %s
+        LIMIT 1
+        """,
+        (clean_queue_id,),
+    )
+    row = cursor.fetchone()
+    if not row:
+        return {"status": "skipped", "reason": "queue_not_found"}
+    if hasattr(row, "get"):
+        queue_dict = dict(row)
+    else:
+        description = getattr(cursor, "description", None) or []
+        columns = [column[0] for column in description]
+        queue_dict = {columns[index]: row[index] for index in range(min(len(columns), len(row)))} if columns else {}
+
+    source_value = str(queue_dict.get("source") or "").strip().lower()
+    task_type = str(queue_dict.get("task_type") or "").strip()
+    if source_value != "apify_yandex" or task_type != "parse_card":
+        return {"status": "skipped", "reason": "not_operator_map_refresh"}
+
+    business_id = str(queue_dict.get("business_id") or "").strip()
+    user_id = str(queue_dict.get("user_id") or "").strip()
+    if not business_id or not user_id:
+        return {"status": "skipped", "reason": "queue_identity_missing"}
+
+    release_result = release_failed_refresh_reservation(
+        cursor,
+        business_id=business_id,
+        user_id=user_id,
+        queue_id=clean_queue_id,
+        confirm_release=True,
+    )
+    if release_result.get("status") == "blocked" and not release_result.get("reservation_id"):
+        return {
+            "status": "skipped",
+            "reason": "operator_reservation_not_found_or_not_releasable",
+            "release_result": release_result,
+        }
+    if commit_func:
+        commit_func()
+
+    followup_result = dispatch_operator_refresh_telegram_followup(
+        cursor,
+        business_id=business_id,
+        user_id=user_id,
+        queue_id=clean_queue_id,
+        send_func=_send_telegram_plain_message,
+        commit_func=commit_func,
+    )
+    return {
+        "status": "completed",
+        "release_result": release_result,
+        "followup_result": followup_result,
+    }
+
+
 def _handle_worker_error(queue_id: str, error_msg: str):
     """Обновить статус задачи на error с сообщением"""
     try:
@@ -2170,6 +2238,18 @@ def _handle_worker_error(queue_id: str, error_msg: str):
                         )
             except Exception as pause_ex:
                 print(f"⚠️ Не удалось применить pause-on-error для batch задачи {queue_id}: {pause_ex}")
+        try:
+            refresh_failure_result = _finalize_failed_operator_refresh(cursor, queue_id, conn.commit)
+            refresh_failure_status = str(refresh_failure_result.get("status") or "").strip()
+            refresh_failure_reason = str(refresh_failure_result.get("reason") or "").strip()
+            if refresh_failure_status != "skipped":
+                print(
+                    f"[OPERATOR_REFRESH_FAILURE] queue_id={queue_id} "
+                    f"status={refresh_failure_status} reason={refresh_failure_reason}",
+                    flush=True,
+                )
+        except Exception:
+            print(f"[OPERATOR_REFRESH_FAILURE] queue_id={queue_id} failed", flush=True)
         conn.commit()
         cursor.close()
         conn.close()
