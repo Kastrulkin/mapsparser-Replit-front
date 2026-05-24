@@ -70,6 +70,8 @@ type AgentArtifact = {
     dispatch_state?: string;
     operator_note?: string;
     next_step?: string;
+    source_artifact?: string;
+    filters?: Record<string, unknown>;
     queue_count?: number;
     queued_count?: number;
     draft_ids?: string[];
@@ -152,6 +154,10 @@ export const AgentBlueprintsPage = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [runStatusFilter, setRunStatusFilter] = useState('all');
+  const [runSource, setRunSource] = useState('dashboard');
+  const [runCity, setRunCity] = useState('');
+  const [runCategory, setRunCategory] = useState('');
+  const [runLimit, setRunLimit] = useState('30');
 
   const selectedBlueprint = useMemo(
     () => blueprints.find((item) => item.id === selectedBlueprintId) || blueprints[0] || null,
@@ -318,9 +324,12 @@ export const AgentBlueprintsPage = () => {
     try {
       const response = await api.post(`/agent-blueprints/${selectedBlueprint.id}/runs`, {
         input: {
-          source: 'dashboard',
+          source: runSource.trim() || 'dashboard',
+          city: runCity.trim(),
+          category: runCategory.trim(),
+          intent: 'client_outreach',
           business_id: currentBusinessId,
-          limit: 30,
+          limit: Number(runLimit) > 0 ? Math.min(Number(runLimit), 100) : 30,
         },
       });
       setActiveRun(response.data?.run || null);
@@ -452,6 +461,44 @@ export const AgentBlueprintsPage = () => {
             </Button>
           )}
         >
+          <div className="mb-4 grid gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4 md:grid-cols-[1fr_1fr_1fr_8rem]">
+            <label className="text-xs font-medium text-slate-600">
+              Source
+              <input
+                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                value={runSource}
+                onChange={(event) => setRunSource(event.target.value)}
+                placeholder="dashboard"
+              />
+            </label>
+            <label className="text-xs font-medium text-slate-600">
+              City
+              <input
+                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                value={runCity}
+                onChange={(event) => setRunCity(event.target.value)}
+                placeholder="Москва"
+              />
+            </label>
+            <label className="text-xs font-medium text-slate-600">
+              Category
+              <input
+                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                value={runCategory}
+                onChange={(event) => setRunCategory(event.target.value)}
+                placeholder="beauty"
+              />
+            </label>
+            <label className="text-xs font-medium text-slate-600">
+              Limit
+              <input
+                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                inputMode="numeric"
+                value={runLimit}
+                onChange={(event) => setRunLimit(event.target.value)}
+              />
+            </label>
+          </div>
           {!activeRun ? (
             <DashboardEmptyState
               title="Запусков в этой сессии нет"
@@ -596,6 +643,7 @@ export const AgentBlueprintsPage = () => {
                     <StatusBadge status={approval.status} />
                   </div>
                   <div className="mt-2 text-xs text-slate-500">{approval.requested_at || approval.run_status || 'pending'}</div>
+                  <ApprovalPayloadSummary approval={approval} />
                 </button>
               ))}
             </div>
@@ -643,6 +691,66 @@ const TimelineItem = ({ title, meta, status }: { title: string; meta: string; st
   </div>
 );
 
+const compactValue = (value: unknown) => {
+  if (Array.isArray(value)) {
+    return value.length ? value.join(', ') : 'any';
+  }
+  if (typeof value === 'number') {
+    return String(value);
+  }
+  if (typeof value === 'string' && value.trim()) {
+    return value.trim();
+  }
+  return 'any';
+};
+
+const ArtifactSourceSummary = ({ payload }: { payload: AgentArtifact['payload_json'] }) => {
+  const filters = payload?.filters || {};
+  const filterEntries = Object.entries(filters).filter(([, value]) => {
+    if (Array.isArray(value)) {
+      return value.length > 0;
+    }
+    return value !== '' && value !== null && value !== undefined;
+  });
+  if (payload?.source !== 'prospectingleads' && !payload?.source_artifact && filterEntries.length === 0) {
+    return null;
+  }
+  return (
+    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+      {payload?.source === 'prospectingleads' ? (
+        <div className="font-medium text-slate-800">Leads source: prospectingleads</div>
+      ) : null}
+      {payload?.source_artifact ? (
+        <div>Derived from: {payload.source_artifact}</div>
+      ) : null}
+      {filterEntries.length ? (
+        <div className="mt-1 flex flex-wrap gap-1.5">
+          {filterEntries.map(([key, value]) => (
+            <span key={key} className="rounded-md bg-white px-2 py-1 ring-1 ring-slate-200">
+              {key}: {compactValue(value)}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+const ApprovalPayloadSummary = ({ approval }: { approval: AgentApproval }) => {
+  const payload = approval.payload_json || {};
+  const count = typeof payload.count === 'number' ? payload.count : null;
+  const artifactType = typeof payload.artifact_type === 'string' ? payload.artifact_type : '';
+  if (!artifactType && count === null) {
+    return null;
+  }
+  return (
+    <div className="mt-3 rounded-lg bg-white/80 px-3 py-2 text-xs leading-5 text-slate-600 ring-1 ring-amber-100">
+      {artifactType ? <div>Artifact: {artifactType}</div> : null}
+      {count !== null ? <div>Items waiting for decision: {count}</div> : null}
+    </div>
+  );
+};
+
 const ArtifactItem = ({ artifact }: { artifact: AgentArtifact }) => {
   const payload = artifact.payload_json || {};
   const items = Array.isArray(payload.items) ? payload.items : [];
@@ -658,6 +766,7 @@ const ArtifactItem = ({ artifact }: { artifact: AgentArtifact }) => {
         </div>
         <StatusBadge status={typeof payload.status === 'string' ? payload.status : 'completed'} />
       </div>
+      <ArtifactSourceSummary payload={payload} />
       {preview.length ? (
         <div className="mt-3 space-y-2">
           {preview.map((item, index) => (

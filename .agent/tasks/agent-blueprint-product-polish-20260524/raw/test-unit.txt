@@ -1,0 +1,2 @@
+$ python3 scripts/audit_approval_boundaries.py
+OK: Blueprint/Operator approval, billing, manual-publication, and dispatcher boundaries are guarded

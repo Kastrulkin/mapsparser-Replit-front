@@ -1,0 +1,34 @@
+{
+  "task_id": "agent-blueprint-product-polish-20260524",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Agent Blueprint UI exposes sourcing filters, prospectingleads provenance, queued_not_dispatched state, and approval queue context with guardrails.",
+      "status": "PASS",
+      "proof": [
+        "AgentBlueprintsPage has source/city/category/limit run inputs.",
+        "Artifact cards render prospectingleads source, source_artifact lineage, and filters.",
+        "Approval queue cards render artifact type and item count.",
+        "lint_backend_baseline checks UI markers; audit_approval_boundaries checks smoke cleanup/no-dispatch contract."
+      ],
+      "gaps": [
+        "Authenticated browser UI smoke was not completed because local /dashboard/agents redirected to login."
+      ]
+    }
+  ],
+  "changed_files": [
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
+    "scripts/audit_approval_boundaries.py",
+    "scripts/lint_backend_baseline.sh"
+  ],
+  "commands_for_fresh_verifier": [
+    "npm --prefix frontend run build",
+    "scripts/lint_backend_baseline.sh",
+    "python3 scripts/audit_approval_boundaries.py",
+    "git diff --check"
+  ],
+  "known_gaps": [
+    "Authenticated visual UI smoke remains a follow-up."
+  ]
+}

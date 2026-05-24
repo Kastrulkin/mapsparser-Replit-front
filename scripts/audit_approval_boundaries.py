@@ -215,11 +215,29 @@ def audit_dispatcher_opt_in(findings):
     )
 
 
+def audit_blueprint_smoke_contract(findings):
+    require_markers(
+        "scripts/smoke_agent_blueprint_outreach_api.py",
+        [
+            '"new"',
+            '"unprocessed"',
+            "source_artifact",
+            "queued_not_dispatched",
+            "dispatcher_started",
+            "fixture_cleaned",
+            "assert_no_dispatch",
+            "cleanup_fixture",
+        ],
+        findings,
+    )
+
+
 def main():
     findings = []
     audit_blueprint_boundaries(findings)
     audit_operator_boundaries(findings)
     audit_dispatcher_opt_in(findings)
+    audit_blueprint_smoke_contract(findings)
     if findings:
         for finding in findings:
             print(finding)

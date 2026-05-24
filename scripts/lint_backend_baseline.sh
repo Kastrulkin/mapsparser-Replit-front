@@ -162,6 +162,7 @@ api_text = Path("src/api/agent_blueprints_api.py").read_text(encoding="utf-8")
 runner_text = Path("src/services/agent_blueprint_runner.py").read_text(encoding="utf-8")
 orchestrator_text = Path("src/services/agent_blueprint_orchestrator.py").read_text(encoding="utf-8")
 capability_text = Path("src/services/outreach_send_capability.py").read_text(encoding="utf-8")
+ui_text = Path("frontend/src/pages/dashboard/AgentBlueprintsPage.tsx").read_text(encoding="utf-8")
 
 required = {
     "src/api/agent_blueprints_api.py": [
@@ -190,6 +191,15 @@ required = {
         "dispatch_due_outreach_queue",
         "l.business_id = %s",
     ],
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx": [
+        "runSource",
+        "runCity",
+        "runCategory",
+        "Leads source: prospectingleads",
+        "source_artifact",
+        "Queued but not dispatched",
+        "ApprovalPayloadSummary",
+    ],
 }
 
 texts = {
@@ -197,6 +207,7 @@ texts = {
     "src/services/agent_blueprint_runner.py": runner_text,
     "src/services/agent_blueprint_orchestrator.py": orchestrator_text,
     "src/services/outreach_send_capability.py": capability_text,
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx": ui_text,
 }
 
 for path, markers in required.items():
