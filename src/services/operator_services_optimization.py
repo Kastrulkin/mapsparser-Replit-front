@@ -417,3 +417,263 @@ def optimize_services_from_operator(
         ),
         "blocked_reasons": [],
     }
+
+
+def _load_service_suggestion_job(
+    cursor: Any,
+    *,
+    business_id: str,
+    user_id: str,
+    job_id: str,
+) -> dict[str, Any] | None:
+    cursor.execute(
+        """
+        SELECT id, status, selected_count, fixed_count, failed_count, manual_review_count, message, created_at
+        FROM serviceregenerationjobs
+        WHERE id = %s
+          AND business_id = %s
+          AND user_id = %s
+        LIMIT 1
+        """,
+        (job_id, business_id, user_id),
+    )
+    return _row_to_dict(cursor, cursor.fetchone())
+
+
+def _load_suggested_service_items(
+    cursor: Any,
+    *,
+    business_id: str,
+    job_id: str,
+    item_ids: list[str],
+    limit: int,
+) -> list[dict[str, Any]]:
+    params: list[Any] = [job_id, business_id]
+    item_filter = ""
+    if item_ids:
+        item_filter = "AND i.id = ANY(%s)"
+        params.append(item_ids)
+    params.append(limit)
+    cursor.execute(
+        f"""
+        SELECT i.id, i.job_id, i.service_id, i.status,
+               i.before_optimized_name, i.before_optimized_description,
+               i.after_optimized_name, i.after_optimized_description,
+               s.name, s.description, s.optimized_name, s.optimized_description
+        FROM serviceregenerationjobitems i
+        JOIN userservices s ON s.id = i.service_id
+        WHERE i.job_id = %s
+          AND s.business_id = %s
+          AND i.status = 'suggested'
+          {item_filter}
+        ORDER BY i.created_at ASC
+        LIMIT %s
+        """,
+        tuple(params),
+    )
+    return [_row_to_dict(cursor, row) or {} for row in cursor.fetchall() or []]
+
+
+def apply_service_optimization_suggestions(
+    cursor: Any,
+    *,
+    business_id: str,
+    user_id: str,
+    job_id: Any,
+    item_ids: Any = None,
+    limit: Any = SERVICES_OPTIMIZE_MAX_LIMIT,
+    channel: str = "web",
+    explicit_confirmation: bool = False,
+) -> dict[str, Any]:
+    clean_job_id = _clean_text(job_id)
+    if not clean_job_id:
+        return {
+            "status": "blocked",
+            "intent": "services_optimize_apply",
+            "chat_response": "Нужен job_id предложений по услугам.",
+            "applied_count": 0,
+            "applied_items": [],
+            "blocked_reasons": ["job_id_required"],
+        }
+    if not explicit_confirmation:
+        return {
+            "status": "blocked",
+            "intent": "services_optimize_apply",
+            "chat_response": "Перед применением предложений нужно явное подтверждение.",
+            "applied_count": 0,
+            "applied_items": [],
+            "external_calls_performed": False,
+            "external_writes_performed": False,
+            "manual_approval_received": False,
+            "credit_charged": False,
+            "charged_credits": 0,
+            "blocked_reasons": ["explicit_confirmation_required"],
+        }
+
+    _ensure_service_regeneration_tables(cursor)
+    job = _load_service_suggestion_job(cursor, business_id=business_id, user_id=user_id, job_id=clean_job_id)
+    if not job:
+        return {
+            "status": "blocked",
+            "intent": "services_optimize_apply",
+            "chat_response": "Не нашёл предложения по услугам для этого бизнеса.",
+            "applied_count": 0,
+            "applied_items": [],
+            "external_calls_performed": False,
+            "external_writes_performed": False,
+            "manual_approval_received": True,
+            "credit_charged": False,
+            "charged_credits": 0,
+            "blocked_reasons": ["service_suggestion_job_not_found"],
+        }
+
+    raw_item_ids = item_ids if isinstance(item_ids, list) else []
+    clean_item_ids = [_clean_text(item_id) for item_id in raw_item_ids if _clean_text(item_id)]
+    clean_limit = _positive_limit(limit)
+    items = _load_suggested_service_items(
+        cursor,
+        business_id=business_id,
+        job_id=clean_job_id,
+        item_ids=clean_item_ids,
+        limit=clean_limit,
+    )
+    if not items:
+        return {
+            "status": "blocked",
+            "intent": "services_optimize_apply",
+            "optimization_job": job,
+            "chat_response": "Нет предложений в статусе suggested для применения.",
+            "applied_count": 0,
+            "applied_items": [],
+            "external_calls_performed": False,
+            "external_writes_performed": False,
+            "manual_approval_received": True,
+            "credit_charged": False,
+            "charged_credits": 0,
+            "blocked_reasons": ["service_suggestions_not_found"],
+        }
+
+    applied_items: list[dict[str, Any]] = []
+    for item in items:
+        item_id = _clean_text(item.get("id"))
+        service_id = _clean_text(item.get("service_id"))
+        optimized_name = _clean_text(item.get("after_optimized_name"))
+        optimized_description = _clean_text(item.get("after_optimized_description"))
+        if not item_id or not service_id or not optimized_name:
+            continue
+        cursor.execute(
+            """
+            UPDATE userservices
+            SET optimized_name = %s,
+                optimized_description = %s,
+                updated_at = NOW()
+            WHERE id = %s
+              AND business_id = %s
+            """,
+            (optimized_name, optimized_description, service_id, business_id),
+        )
+        cursor.execute(
+            """
+            UPDATE serviceregenerationjobitems
+            SET status = 'fixed',
+                updated_at = NOW()
+            WHERE id = %s
+              AND job_id = %s
+            """,
+            (item_id, clean_job_id),
+        )
+        applied_items.append(
+            {
+                "id": item_id,
+                "service_id": service_id,
+                "before_name": _clean_text(item.get("optimized_name") or item.get("name") or item.get("before_optimized_name")),
+                "before_description": _clean_text(item.get("optimized_description") or item.get("description") or item.get("before_optimized_description")),
+                "optimized_name": optimized_name,
+                "seo_description": optimized_description,
+                "status": "fixed",
+            }
+        )
+
+    if not applied_items:
+        return {
+            "status": "blocked",
+            "intent": "services_optimize_apply",
+            "optimization_job": job,
+            "chat_response": "Не удалось применить предложения: в них нет подходящих названий услуг.",
+            "applied_count": 0,
+            "applied_items": [],
+            "external_calls_performed": False,
+            "external_writes_performed": False,
+            "manual_approval_received": True,
+            "credit_charged": False,
+            "charged_credits": 0,
+            "blocked_reasons": ["service_suggestions_invalid"],
+        }
+
+    cursor.execute(
+        """
+        SELECT
+            COUNT(*) FILTER (WHERE status = 'fixed') AS fixed_count,
+            COUNT(*) FILTER (WHERE status = 'suggested') AS suggested_count,
+            COUNT(*) FILTER (WHERE status = 'failed') AS failed_count,
+            COUNT(*) FILTER (WHERE status IN ('manual_review', 'manual_review_skipped')) AS manual_review_count,
+            COUNT(*) AS selected_count
+        FROM serviceregenerationjobitems
+        WHERE job_id = %s
+        """,
+        (clean_job_id,),
+    )
+    counts = _row_to_dict(cursor, cursor.fetchone()) or {}
+    suggested_count = int(counts.get("suggested_count") or 0)
+    fixed_count = int(counts.get("fixed_count") or 0)
+    failed_count = int(counts.get("failed_count") or 0)
+    manual_review_count = int(counts.get("manual_review_count") or 0)
+    selected_count = int(counts.get("selected_count") or 0)
+    next_status = "completed" if suggested_count == 0 else "partially_applied"
+    cursor.execute(
+        """
+        UPDATE serviceregenerationjobs
+        SET status = %s,
+            selected_count = %s,
+            fixed_count = %s,
+            failed_count = %s,
+            manual_review_count = %s,
+            message = %s,
+            updated_at = NOW(),
+            finished_at = CASE WHEN %s = 'completed' THEN NOW() ELSE finished_at END
+        WHERE id = %s
+        RETURNING id, status, selected_count, fixed_count, failed_count, manual_review_count, message
+        """,
+        (
+            next_status,
+            selected_count,
+            fixed_count,
+            failed_count,
+            manual_review_count,
+            f"Применено предложений: {len(applied_items)}. Осталось: {suggested_count}.",
+            next_status,
+            clean_job_id,
+        ),
+    )
+    updated_job = _row_to_dict(cursor, cursor.fetchone()) or {**job, "status": next_status}
+    return {
+        "status": "completed",
+        "intent": "services_optimize_apply",
+        "optimization_job": updated_job,
+        "applied_count": len(applied_items),
+        "applied_items": applied_items,
+        "external_calls_performed": False,
+        "external_writes_performed": False,
+        "manual_approval_received": True,
+        "credit_charged": False,
+        "charged_credits": 0,
+        "channel": channel,
+        "ui_actions": [_build_ui_action("open_services", "Открыть услуги", href=SERVICES_URL)],
+        "chat_response": "\n".join(
+            [
+                f"Применил предложений по услугам: {len(applied_items)}.",
+                "Изменения сохранены только в LocalOS. Во внешние карты ничего не публиковалось.",
+            ]
+        ),
+        "blocked_reasons": [],
+    }

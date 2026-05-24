@@ -316,6 +316,8 @@ type OperatorChatResult = {
     id?: string;
     status?: string;
     selected_count?: number;
+    fixed_count?: number;
+    message?: string;
   };
   service_suggestions?: Array<{
     id?: string;
@@ -325,6 +327,16 @@ type OperatorChatResult = {
     optimized_name?: string;
     seo_description?: string;
   }>;
+  applied_count?: number;
+  applied_items?: Array<{
+    id?: string;
+    service_id?: string;
+    status?: string;
+    before_name?: string;
+    optimized_name?: string;
+    seo_description?: string;
+  }>;
+  manual_approval_received?: boolean;
   drafts?: Array<{
     id?: string;
     review_id?: string;
@@ -473,6 +485,7 @@ export const OperatorPage = () => {
   const [copiedChatReply, setCopiedChatReply] = useState(false);
   const [copiedInboxItemId, setCopiedInboxItemId] = useState<string | null>(null);
   const [bulkGeneratingKey, setBulkGeneratingKey] = useState<string | null>(null);
+  const [applyingServiceJobId, setApplyingServiceJobId] = useState<string | null>(null);
   const [manualPublishDraftId, setManualPublishDraftId] = useState<string | null>(null);
   const [manualPublishMessage, setManualPublishMessage] = useState<string | null>(null);
 
@@ -860,6 +873,35 @@ export const OperatorPage = () => {
     }
   };
 
+  const applyServiceSuggestions = async (jobId: string | undefined) => {
+    if (!currentBusinessId || !jobId) return;
+    setApplyingServiceJobId(jobId);
+    setConsentMessage(null);
+    setRefreshResult(null);
+    try {
+      const response = await api.post('/operator/services/optimize/apply', {
+        business_id: currentBusinessId,
+        job_id: jobId,
+        limit: 5,
+        confirm_apply: true,
+      });
+      const result = response.data.operator_result || null;
+      setChatResult(result);
+      await loadBrief();
+      await loadInbox();
+      await loadOperatorEvents();
+    } catch (err) {
+      setChatResult({
+        status: 'blocked',
+        intent: 'services_optimize_apply',
+        chat_response: err instanceof Error ? err.message : 'Не удалось применить предложения по услугам',
+        blocked_reasons: ['operator_services_apply_failed'],
+      });
+    } finally {
+      setApplyingServiceJobId(null);
+    }
+  };
+
   const markManualPublished = async (draftId: string | undefined) => {
     if (!currentBusinessId || !draftId) return;
     setManualPublishDraftId(draftId);
@@ -1187,6 +1229,37 @@ export const OperatorPage = () => {
                       {chatResult.service_suggestions.map((item) => (
                         <div key={item.id || item.service_id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{item.before_name}</div>
+                          <div className="mt-1 font-semibold text-slate-950">{item.optimized_name}</div>
+                          {item.seo_description ? <div className="mt-1 text-slate-700">{item.seo_description}</div> : null}
+                        </div>
+                      ))}
+                    </div>
+                    {chatResult.optimization_job?.id ? (
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => void applyServiceSuggestions(chatResult.optimization_job?.id)}
+                          disabled={applyingServiceJobId === chatResult.optimization_job.id}
+                        >
+                          {applyingServiceJobId === chatResult.optimization_job.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                          Применить предложения
+                        </Button>
+                        <span className="text-xs text-slate-500">Обновит только услуги в LocalOS, без публикации в карты.</span>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                {chatResult.applied_items?.length ? (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-950">
+                    <div className="font-semibold">Услуги обновлены</div>
+                    <div className="mt-1 text-emerald-800">
+                      Применено: {chatResult.applied_count || chatResult.applied_items.length}. Внешние карты не изменялись.
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {chatResult.applied_items.map((item) => (
+                        <div key={item.id || item.service_id} className="rounded-lg border border-emerald-200 bg-white px-3 py-2">
+                          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">{item.before_name}</div>
                           <div className="mt-1 font-semibold text-slate-950">{item.optimized_name}</div>
                           {item.seo_description ? <div className="mt-1 text-slate-700">{item.seo_description}</div> : null}
                         </div>

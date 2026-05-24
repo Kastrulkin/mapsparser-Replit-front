@@ -1,4 +1,8 @@
-from services.operator_services_optimization import classify_services_optimize_intent, optimize_services_from_operator
+from services.operator_services_optimization import (
+    apply_service_optimization_suggestions,
+    classify_services_optimize_intent,
+    optimize_services_from_operator,
+)
 
 
 class FakeCursor:
@@ -53,12 +57,33 @@ class FakeCursor:
             self.items.append(
                 {
                     "id": params[0],
+                    "job_id": params[1],
                     "service_id": params[2],
                     "status": "suggested",
+                    "before_optimized_name": params[4],
+                    "before_optimized_description": params[5],
                     "after_optimized_name": params[6],
                     "after_optimized_description": params[7],
                 }
             )
+        if "update userservices set optimized_name" in self.last_query:
+            for service in self.services:
+                if service["id"] == params[2]:
+                    service["optimized_name"] = params[0]
+                    service["optimized_description"] = params[1]
+        if "update serviceregenerationjobitems set status = 'fixed'" in self.last_query:
+            for item in self.items:
+                if item["id"] == params[0] and item["job_id"] == params[1]:
+                    item["status"] = "fixed"
+        if "update serviceregenerationjobs set status" in self.last_query:
+            for job in self.jobs:
+                if job["id"] == params[7]:
+                    job["status"] = params[0]
+                    job["selected_count"] = params[1]
+                    job["fixed_count"] = params[2]
+                    job["failed_count"] = params[3]
+                    job["manual_review_count"] = params[4]
+                    job["message"] = params[5]
         if "insert into credit_ledger" in self.last_query:
             self.ledger_entries.append(params or ())
         if "update operatorcreditreservations" in self.last_query and self.reservation:
@@ -87,9 +112,46 @@ class FakeCursor:
             return self.jobs[-1] if self.jobs else None
         if "returning id, service_id, status" in query:
             return self.items[-1] if self.items else None
+        if "from serviceregenerationjobs" in query and "where id =" in query:
+            for job in self.jobs:
+                if job["id"] == params[0]:
+                    return job
+            return None
+        if "count(*) filter" in query:
+            matching = [item for item in self.items if item["job_id"] == params[0]]
+            return {
+                "fixed_count": len([item for item in matching if item["status"] == "fixed"]),
+                "suggested_count": len([item for item in matching if item["status"] == "suggested"]),
+                "failed_count": len([item for item in matching if item["status"] == "failed"]),
+                "manual_review_count": len([item for item in matching if item["status"] in ("manual_review", "manual_review_skipped")]),
+                "selected_count": len(matching),
+            }
+        if "returning id, status, selected_count, fixed_count" in query:
+            for job in self.jobs:
+                if job["id"] == params[7]:
+                    return job
+            return None
         return None
 
     def fetchall(self):
+        if "from serviceregenerationjobitems" in self.last_query and "join userservices" in self.last_query:
+            job_id = self.last_params[0]
+            business_id = self.last_params[1]
+            limit = self.last_params[-1]
+            item_ids = []
+            if len(self.last_params) == 4:
+                item_ids = self.last_params[2]
+            rows = []
+            for item in self.items:
+                if item["job_id"] != job_id or item["status"] != "suggested":
+                    continue
+                if item_ids and item["id"] not in item_ids:
+                    continue
+                service = next((service for service in self.services if service["id"] == item["service_id"]), None)
+                if not service or service.get("business_id", business_id) != business_id:
+                    continue
+                rows.append({**service, **item})
+            return rows[:limit]
         if "from userservices" in self.last_query:
             return self.services
         return []
@@ -165,3 +227,71 @@ def test_optimize_services_releases_when_generation_fails() -> None:
     assert result["finalization_result"]["status"] == "released"
     assert len(cursor.items) == 0
     assert len(cursor.ledger_entries) == 0
+
+
+def test_apply_service_optimization_suggestions_updates_userservices_after_confirmation() -> None:
+    cursor = FakeCursor(balance=100)
+    optimize_result = optimize_services_from_operator(
+        cursor,
+        business_id="biz-1",
+        user_id="user-1",
+        services_generator=fake_services_generator,
+    )
+
+    result = apply_service_optimization_suggestions(
+        cursor,
+        business_id="biz-1",
+        user_id="user-1",
+        job_id=optimize_result["optimization_job"]["id"],
+        limit=5,
+        explicit_confirmation=True,
+    )
+
+    assert result["status"] == "completed"
+    assert result["intent"] == "services_optimize_apply"
+    assert result["applied_count"] == 2
+    assert result["external_writes_performed"] is False
+    assert result["credit_charged"] is False
+    assert cursor.services[0]["optimized_name"] == "Массаж лица с уходом"
+    assert cursor.services[1]["optimized_description"] == "Аккуратная коррекция формы бровей для естественного результата."
+    assert all(item["status"] == "fixed" for item in cursor.items)
+
+
+def test_apply_service_optimization_requires_explicit_confirmation() -> None:
+    cursor = FakeCursor(balance=100)
+    optimize_result = optimize_services_from_operator(
+        cursor,
+        business_id="biz-1",
+        user_id="user-1",
+        services_generator=fake_services_generator,
+    )
+
+    result = apply_service_optimization_suggestions(
+        cursor,
+        business_id="biz-1",
+        user_id="user-1",
+        job_id=optimize_result["optimization_job"]["id"],
+        limit=5,
+    )
+
+    assert result["status"] == "blocked"
+    assert "explicit_confirmation_required" in result["blocked_reasons"]
+    assert result["manual_approval_received"] is False
+    assert cursor.services[0]["optimized_name"] == ""
+    assert cursor.services[0]["optimized_description"] == ""
+    assert all(item["status"] == "suggested" for item in cursor.items)
+
+
+def test_apply_service_optimization_blocks_unknown_job() -> None:
+    cursor = FakeCursor(balance=100)
+
+    result = apply_service_optimization_suggestions(
+        cursor,
+        business_id="biz-1",
+        user_id="user-1",
+        job_id="missing-job",
+        explicit_confirmation=True,
+    )
+
+    assert result["status"] == "blocked"
+    assert "service_suggestion_job_not_found" in result["blocked_reasons"]

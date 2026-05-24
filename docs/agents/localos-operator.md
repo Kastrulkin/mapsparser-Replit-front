@@ -412,6 +412,17 @@ Sprint 37 adds Telegram follow-up for refresh jobs:
 
 Sprint 37 does not start new map refreshes, bypass credit checks, publish replies, or write to external map providers from Telegram. It is a read-only transport surface over the same Operator refresh history.
 
+Sprint 38 adds confirmed application for saved service optimization suggestions:
+
+- backend service: `services.operator_services_optimization.apply_service_optimization_suggestions`;
+- API endpoint: `POST /api/operator/services/optimize/apply`;
+- web Operator shows the saved suggestions and a separate `Применить предложения` confirmation action;
+- API apply requires explicit `confirm_apply: true`;
+- only after that confirmation LocalOS updates `userservices.optimized_name` and `userservices.optimized_description`;
+- applied suggestion items move from `suggested` to `fixed`, and the parent `serviceregenerationjobs` status/counts are refreshed.
+
+Sprint 38 does not generate new suggestions, charge additional credits, publish service changes to Yandex, Google, 2GIS, or write to any external provider. It is an internal LocalOS mutation after explicit user approval.
+
 Sprint 14 still does not call Apify, create parsequeue jobs, generate AI content, write to external providers, publish to maps, or enable production execution. It only tightens the safety gate before future paid runtime rollout.
 
 Sprint 15 adds manual review intake through Operator chat:

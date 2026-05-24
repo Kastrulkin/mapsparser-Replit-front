@@ -18,7 +18,11 @@ from services.operator_paid_executor import build_paid_action_execution_attempt
 from services.operator_paid_preflight import build_paid_action_preflight
 from services.operator_refresh_result import build_refresh_result_status, list_refresh_jobs
 from services.operator_review_reply_bulk import classify_bulk_review_reply_intent, generate_review_reply_drafts_for_unanswered_reviews
-from services.operator_services_optimization import classify_services_optimize_intent, optimize_services_from_operator
+from services.operator_services_optimization import (
+    apply_service_optimization_suggestions,
+    classify_services_optimize_intent,
+    optimize_services_from_operator,
+)
 from services.operator_social_post_generation import classify_social_post_generate_intent, generate_social_post_draft_from_operator
 
 
@@ -784,6 +788,70 @@ def operator_services_optimize():
                     "manual_apply_required": True,
                 },
             )
+        db.conn.commit()
+        return jsonify({"success": status == "completed", "operator_result": result})
+    except Exception:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+    finally:
+        db.close()
+
+
+@operator_bp.route("/services/optimize/apply", methods=["POST"])
+def operator_services_optimize_apply():
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    business_id = str(payload.get("business_id") or "").strip()
+    if not business_id:
+        return jsonify({"success": False, "error": "business_id обязателен"}), 400
+
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        if not has_access:
+            status_code = 403 if owner_id else 404
+            message = "Нет доступа" if owner_id else "Бизнес не найден"
+            return jsonify({"success": False, "error": message}), status_code
+
+        user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        result = apply_service_optimization_suggestions(
+            cursor,
+            business_id=business_id,
+            user_id=user_id,
+            job_id=payload.get("job_id"),
+            item_ids=payload.get("item_ids"),
+            limit=payload.get("limit") or 5,
+            channel="web",
+            explicit_confirmation=bool(payload.get("confirm_apply")),
+        )
+        status = str(result.get("status") or "blocked")
+        record_operator_event(
+            cursor,
+            business_id=business_id,
+            user_id=user_id,
+            event_type="operator_tool_executed",
+            action_key="services_optimize_apply",
+            status=status,
+            input_summary={
+                "job_id": payload.get("job_id"),
+                "item_ids": payload.get("item_ids") if isinstance(payload.get("item_ids"), list) else [],
+            },
+            output_summary={
+                "applied_count": result.get("applied_count"),
+                "job_status": (result.get("optimization_job") or {}).get("status") if isinstance(result.get("optimization_job"), dict) else None,
+            },
+            metadata={
+                "external_writes_performed": False,
+                "manual_approval_received": bool(result.get("manual_approval_received")),
+                "explicit_confirmation": bool(payload.get("confirm_apply")),
+                "paid_actions_performed": False,
+                "credit_charged": False,
+            },
+        )
         db.conn.commit()
         return jsonify({"success": status == "completed", "operator_result": result})
     except Exception:

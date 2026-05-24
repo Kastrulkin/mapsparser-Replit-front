@@ -1,0 +1,52 @@
+{
+  "task_id": "operator-sprint38-services-apply-20260524",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Saved services_optimize suggestions can be applied only through a separate confirmed Operator action.",
+      "status": "PASS",
+      "proof": [],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Applying suggestions updates internal userservices fields and marks suggestion items fixed.",
+      "status": "PASS",
+      "proof": [],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "The apply action performs no external provider writes and charges no additional credits.",
+      "status": "PASS",
+      "proof": [],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Web Operator exposes the confirmation action and shows the applied result.",
+      "status": "PASS",
+      "proof": [],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/services/operator_services_optimization.py",
+    "src/api/operator_api.py",
+    "frontend/src/pages/dashboard/OperatorPage.tsx",
+    "tests/test_operator_services_optimization.py",
+    "docs/agents/localos-operator.md",
+    "docs/agents/index.md",
+    "docs/agents/tool-registry.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/services/operator_services_optimization.py src/api/operator_api.py",
+    "python3 -m pytest -q tests/test_operator_inbox.py tests/test_operator_paid_actions.py tests/test_operator_services_optimization.py",
+    "cd frontend && npm run build",
+    "git diff --check"
+  ],
+  "known_gaps": [
+    "Telegram apply command is not included in Sprint 38."
+  ]
+}
