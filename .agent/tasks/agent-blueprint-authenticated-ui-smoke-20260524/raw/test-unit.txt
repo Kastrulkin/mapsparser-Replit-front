@@ -1,0 +1,16 @@
+Authenticated browser UI smoke result:
+- login: smoke-agent-2d6a720cb3@example.invalid
+- page: https://localos.pro/dashboard/agents
+- opened run: 61c2a5fe-2c15-4caa-8183-ca04e03e8a80
+- found markers:
+  - Workflow agents
+  - Source / City / Category / Limit
+  - Run timeline
+  - Artifacts
+  - Approvals
+  - Approval queue
+  - Queued but not dispatched
+  - Leads source: prospectingleads
+  - Derived from: lead_source_plan
+  - Full payload
+- visible handoff text: Queue rows are LocalOS handoff records. External dispatcher is a separate contour. Queue: 1 items.

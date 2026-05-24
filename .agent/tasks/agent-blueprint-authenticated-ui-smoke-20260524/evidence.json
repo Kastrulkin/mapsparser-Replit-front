@@ -1,0 +1,38 @@
+{
+  "task_id": "agent-blueprint-authenticated-ui-smoke-20260524",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Authenticated browser smoke verifies Agent Blueprint UI markers on production and cleans temporary fixture rows.",
+      "status": "PASS",
+      "proof": [
+        "Temporary smoke fixture was created with a completed Agent Blueprint run.",
+        "Browser login to localos.pro succeeded for the smoke user.",
+        "Dashboard agents page showed sourcing inputs, run timeline, artifacts, approvals, approval queue, queued_not_dispatched, prospectingleads source, source_artifact lineage, and full payload markers.",
+        "Cleanup removed smoke user, business, lead, blueprint, and run; follow-up DB counts were all zero."
+      ],
+      "gaps": [
+        "No screenshot artifact was captured; text-marker verification was used."
+      ]
+    }
+  ],
+  "changed_files": [
+    ".agent/tasks/agent-blueprint-authenticated-ui-smoke-20260524/evidence.md",
+    ".agent/tasks/agent-blueprint-authenticated-ui-smoke-20260524/evidence.json",
+    ".agent/tasks/agent-blueprint-authenticated-ui-smoke-20260524/verdict.json",
+    ".agent/tasks/agent-blueprint-authenticated-ui-smoke-20260524/raw/build.txt",
+    ".agent/tasks/agent-blueprint-authenticated-ui-smoke-20260524/raw/test-unit.txt",
+    ".agent/tasks/agent-blueprint-authenticated-ui-smoke-20260524/raw/test-integration.txt",
+    ".agent/tasks/agent-blueprint-authenticated-ui-smoke-20260524/raw/lint.txt"
+  ],
+  "commands_for_fresh_verifier": [
+    "Create smoke fixture with SMOKE_KEEP_FIXTURE=1 using scripts/smoke_agent_blueprint_outreach_api.py inside app container",
+    "Log into https://localos.pro/login as the smoke user",
+    "Open https://localos.pro/dashboard/agents, select the smoke run, and verify UI markers",
+    "Run cleanup_fixture and verify zero remaining smoke rows"
+  ],
+  "known_gaps": [
+    "No screenshot artifact was captured."
+  ]
+}

@@ -1,0 +1,136 @@
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0HTTP/1.1 200 OK
+Server: Werkzeug/3.1.8 Python/3.11.15
+Date: Sun, 24 May 2026 17:57:10 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 5532
+Cache-Control: no-cache, no-store, must-revalidate
+Pragma: no-cache
+Expires: 0
+Access-Control-Allow-Origin: http://127.0.0.1:3000
+Access-Control-Allow-Credentials: true
+Vary: Origin
+Connection: close
+
+  0  5532    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+app-1  | Available migration files: 54
+app-1  | Running flask db upgrade (attempt 1/3)...
+app-1  | ✅ Rate limiting включен для чувствительных endpoint'ов
+app-1  | ⚠️  Файл с популярными запросами не найден
+app-1  | Migration lock released.
+app-1  | Migrations done.
+app-1  | ✅ Rate limiting включен для чувствительных endpoint'ов
+app-1  | ⚠️  Файл с популярными запросами не найден
+app-1  | ✅ Rate limiting включен для чувствительных endpoint'ов
+app-1  | [BACKEND] PostgreSQL connected: db=local, user=beautybot, addr=172.18.0.2/32:5432
+app-1  | SEO анализатор запущен на порту 8000
+app-1  |  * Serving Flask app 'main'
+app-1  |  * Debug mode: off
+app-1  | WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+app-1  |  * Running on all addresses (0.0.0.0)
+app-1  |  * Running on http://127.0.0.1:8000
+app-1  |  * Running on http://172.18.0.3:8000
+app-1  | Press CTRL+C to quit
+app-1  | 172.18.0.1 - - [24/May/2026 17:54:20] "HEAD / HTTP/1.1" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:54:23] "GET / HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:54:35] "HEAD / HTTP/1.1" 200 -
+app-1  | 127.0.0.1 - - [24/May/2026 17:55:15] "POST /api/auth/login HTTP/1.1" 200 -
+app-1  | 127.0.0.1 - - [24/May/2026 17:55:15] "GET /api/auth/me HTTP/1.1" 200 -
+app-1  | 127.0.0.1 - - [24/May/2026 17:55:15] "POST /api/agent-blueprints HTTP/1.1" 201 -
+app-1  | 127.0.0.1 - - [24/May/2026 17:55:15] "POST /api/agent-blueprints/54427336-58ff-4e25-b1e3-38a09ee3487b/runs HTTP/1.1" 201 -
+app-1  | 127.0.0.1 - - [24/May/2026 17:55:15] "POST /api/agent-runs/61c2a5fe-2c15-4caa-8183-ca04e03e8a80/approvals/b1ffbeed-2525-47a6-8189-a4a2d7ba7ff6/approve HTTP/1.1" 200 -
+app-1  | 127.0.0.1 - - [24/May/2026 17:55:15] "POST /api/agent-runs/61c2a5fe-2c15-4caa-8183-ca04e03e8a80/approvals/5fb89708-de93-4f75-a505-51337785e256/approve HTTP/1.1" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:40] "GET /login HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:40] "GET /assets/index-QATqAfdY.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:40] "GET /assets/index-z5F0PndZ.css HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:40] "GET /assets/vendor-Bd6D5Py9.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:40] "GET /assets/icons-PHpCJhjN.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:40] "GET /assets/query-4qgXgvfz.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:40] "GET /assets/router-0HhFJHfj.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:40] "GET /assets/radix-C1pagpvZ.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:41] "GET /assets/ru-vNwBxKOM.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:41] "GET /assets/Header-C0QC31Oy.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:41] "GET /assets/api-Bhbs2s3U.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:41] "GET /assets/auth_new-C9_tYoOh.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:41] "GET /assets/Login-BurZHElN.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:41] "GET /assets/LanguageSwitcher-B6_jjhrs.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:41] "GET /assets/Footer-eVlWGmgb.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:41] "GET /assets/logo-BY03Vnee.png HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:41] "GET /api/auth/me HTTP/1.0" 401 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:52] "GET /login HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:52] "GET /assets/radix-C1pagpvZ.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:52] "GET /assets/index-QATqAfdY.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:52] "GET /assets/vendor-Bd6D5Py9.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:52] "GET /assets/index-z5F0PndZ.css HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:52] "GET /assets/icons-PHpCJhjN.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:52] "GET /assets/query-4qgXgvfz.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:52] "GET /assets/router-0HhFJHfj.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:52] "GET /assets/ru-vNwBxKOM.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:52] "GET /assets/Header-C0QC31Oy.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:52] "GET /assets/auth_new-C9_tYoOh.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:52] "GET /assets/api-Bhbs2s3U.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:52] "GET /assets/Footer-eVlWGmgb.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:52] "GET /assets/LanguageSwitcher-B6_jjhrs.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:52] "GET /assets/Login-BurZHElN.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:55:52] "GET /assets/logo-BY03Vnee.png HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:02] "GET /login HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:02] "GET /assets/index-QATqAfdY.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:02] "GET /assets/radix-C1pagpvZ.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:02] "GET /assets/vendor-Bd6D5Py9.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:02] "GET /assets/query-4qgXgvfz.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:02] "GET /assets/index-z5F0PndZ.css HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:02] "GET /assets/icons-PHpCJhjN.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:03] "GET /assets/router-0HhFJHfj.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:03] "GET /assets/ru-vNwBxKOM.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:03] "GET /assets/Header-C0QC31Oy.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:03] "GET /assets/auth_new-C9_tYoOh.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:03] "GET /assets/api-Bhbs2s3U.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:03] "GET /assets/LanguageSwitcher-B6_jjhrs.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:03] "GET /assets/Login-BurZHElN.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:03] "GET /assets/Footer-eVlWGmgb.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:03] "GET /assets/logo-BY03Vnee.png HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:05] "POST /api/auth/login HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:05] "GET /assets/DashboardLayout-GjqP4QeJ.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:05] "GET /assets/select-DMGxzIz3.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:05] "GET /assets/BusinessSwitcher-D6ZrOcKg.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:05] "GET /assets/networkRepresentative-CRdnvs4A.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:05] "GET /api/auth/me HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:05] "GET /assets/ProfilePage-DVKn0ocT.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:05] "GET /assets/badge-COBD59mp.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:05] "GET /assets/design-tokens-BHpcWfux.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:05] "GET /assets/DashboardPrimitives-CyOASKky.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:05] "GET /api/business/smoke-agent-business-2d6a720cb3/parse-status HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:05] "GET /api/business/smoke-agent-business-2d6a720cb3/network-locations HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:05] "GET /api/business-types HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:05] "GET /api/client-info?business_id=smoke-agent-business-2d6a720cb3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:05] "GET /api/token-usage?months=1&business_id=smoke-agent-business-2d6a720cb3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:06] "GET /api/billing/status?business_id=smoke-agent-business-2d6a720cb3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:08] "GET /dashboard/agents HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:08] "GET /assets/radix-C1pagpvZ.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:08] "GET /assets/vendor-Bd6D5Py9.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:08] "GET /assets/index-QATqAfdY.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:08] "GET /assets/index-z5F0PndZ.css HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:08] "GET /assets/query-4qgXgvfz.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:08] "GET /assets/icons-PHpCJhjN.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:08] "GET /assets/router-0HhFJHfj.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:08] "GET /assets/ru-vNwBxKOM.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:08] "GET /assets/LanguageSwitcher-B6_jjhrs.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:08] "GET /assets/DashboardLayout-GjqP4QeJ.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:08] "GET /assets/auth_new-C9_tYoOh.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:08] "GET /assets/api-Bhbs2s3U.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:08] "GET /assets/select-DMGxzIz3.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:08] "GET /assets/BusinessSwitcher-D6ZrOcKg.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:08] "GET /assets/networkRepresentative-CRdnvs4A.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:09] "GET /api/auth/me HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:09] "GET /api/auth/me HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:09] "GET /assets/logo-BY03Vnee.png HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:09] "GET /assets/AgentBlueprintsPage-CQyaHzhi.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:09] "GET /assets/DashboardPrimitives-CyOASKky.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:09] "GET /assets/api-Cic1JMzt.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:09] "GET /api/agent-blueprints?business_id=smoke-agent-business-2d6a720cb3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:09] "GET /api/agent-blueprints/54427336-58ff-4e25-b1e3-38a09ee3487b HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:09] "GET /api/agent-blueprints?business_id=smoke-agent-business-2d6a720cb3 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:56:25] "GET /api/agent-runs/61c2a5fe-2c15-4caa-8183-ca04e03e8a80 HTTP/1.0" 200 -
+app-1  | 151.243.11.245 - - [24/May/2026 17:56:39] "GET / HTTP/1.1" 200 -
+app-1  | 172.18.0.1 - - [24/May/2026 17:57:10] "HEAD / HTTP/1.1" 200 -

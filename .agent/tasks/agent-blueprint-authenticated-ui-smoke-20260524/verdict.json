@@ -1,0 +1,25 @@
+{
+  "task_id": "agent-blueprint-authenticated-ui-smoke-20260524",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Authenticated production browser smoke verified the Agent Blueprint UI and fixture cleanup returned zero remaining rows."
+    }
+  ],
+  "commands_run": [
+    "cd /opt/seo-app && docker compose cp scripts/smoke_agent_blueprint_outreach_api.py app:/tmp/smoke_agent_blueprint_outreach_api.py",
+    "cd /opt/seo-app && docker compose exec -T app sh -lc 'SMOKE_BASE_URL=http://localhost:8000 SMOKE_KEEP_FIXTURE=1 SMOKE_PASSWORD=... python3 -B /tmp/smoke_agent_blueprint_outreach_api.py'",
+    "Browser login and /dashboard/agents inspection via in-app browser",
+    "cd /opt/seo-app && docker compose exec -T app sh -lc '<cleanup fixture and zero-count verification>'",
+    "cd /opt/seo-app && curl -I http://localhost:8000",
+    "cd /opt/seo-app && docker compose logs --since 8m app | tail -120"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/agent-blueprint-authenticated-ui-smoke-20260524/raw/build.txt",
+    ".agent/tasks/agent-blueprint-authenticated-ui-smoke-20260524/raw/test-unit.txt",
+    ".agent/tasks/agent-blueprint-authenticated-ui-smoke-20260524/raw/test-integration.txt",
+    ".agent/tasks/agent-blueprint-authenticated-ui-smoke-20260524/raw/lint.txt"
+  ]
+}

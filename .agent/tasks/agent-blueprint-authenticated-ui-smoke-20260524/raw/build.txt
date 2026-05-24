@@ -1,0 +1,19 @@
+ seo-app-app-1 Copying scripts/smoke_agent_blueprint_outreach_api.py to seo-app-app-1:/tmp/smoke_agent_blueprint_outreach_api.py
+ seo-app-app-1 Copied scripts/smoke_agent_blueprint_outreach_api.py to seo-app-app-1:/tmp/smoke_agent_blueprint_outreach_api.py
+{
+  "success": true,
+  "base_url": "http://localhost:8000",
+  "user_id": "smoke-agent-user-2d6a720cb3",
+  "business_id": "smoke-agent-business-2d6a720cb3",
+  "blueprint_id": "54427336-58ff-4e25-b1e3-38a09ee3487b",
+  "run_id": "61c2a5fe-2c15-4caa-8183-ca04e03e8a80",
+  "batch_id": "9ae4b005-e48b-4486-a8ff-891162f3cb84",
+  "source_artifact_status": "hydrated",
+  "source_artifact_count": 1,
+  "approval_count": 2,
+  "queue_status": "queued",
+  "dispatch_state": "queued_not_dispatched",
+  "dispatcher_started": false,
+  "fixture_cleaned": false
+}
+SMOKE_KEEP_FIXTURE enabled; fixture was not removed.
