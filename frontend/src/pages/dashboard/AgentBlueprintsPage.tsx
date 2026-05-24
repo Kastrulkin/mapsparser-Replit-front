@@ -83,6 +83,15 @@ type AgentRunStep = {
     status?: string;
     external_dispatch_performed?: boolean;
     queue_count?: number;
+    orchestrator?: {
+      result?: {
+        status?: string;
+        external_dispatch_performed?: boolean;
+        queue_count?: number;
+        [key: string]: unknown;
+      };
+      [key: string]: unknown;
+    };
     [key: string]: unknown;
   };
   error_text?: string | null;
@@ -163,10 +172,10 @@ export const AgentBlueprintsPage = () => {
       return artifact.payload_json;
     }
     const step = (activeRun?.steps || []).find((item) => {
-      const output = item.output_json || {};
+      const output = item.output_json?.orchestrator?.result || item.output_json || {};
       return output.status === 'queued_for_dispatch' && output.external_dispatch_performed === false;
     });
-    return step?.output_json || null;
+    return step?.output_json?.orchestrator?.result || step?.output_json || null;
   }, [activeRun?.artifacts, activeRun?.steps]);
 
   const metrics = useMemo(
