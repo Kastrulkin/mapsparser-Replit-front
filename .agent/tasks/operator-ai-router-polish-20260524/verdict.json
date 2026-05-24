@@ -1,0 +1,47 @@
+{
+  "task_id": "operator-ai-router-polish-20260524",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Refresh UX copy now names card refresh and the focused checks passed."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Operator UI shows the AI-router credit charge."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Raw model response is not exposed in the service result."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Cheap gate and endpoint smalltalk tests prevent paid AI-router calls for non-commands."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Endpoint tests cover fallback card refresh and guard behavior."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "Manual-review fallback blocks unless explicit review text is present."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/api/operator_api.py src/services/operator_intent_ai_router.py src/services/operator_fresh_reviews.py src/services/operator_paid_actions.py",
+    "PYTHONPATH=src:. python3 -m pytest -q tests/test_operator_chat_fallback_api.py tests/test_operator_intent_ai_router.py tests/test_operator_fresh_reviews.py tests/test_operator_capabilities.py tests/test_operator_manual_review.py tests/test_operator_review_reply_bulk.py tests/test_operator_news_generation.py tests/test_operator_social_post_generation.py tests/test_operator_services_optimization.py",
+    "git diff --check",
+    "npm --prefix frontend run build",
+    "bash scripts/lint_backend_baseline.sh"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/operator-ai-router-polish-20260524/evidence.md",
+    ".agent/tasks/operator-ai-router-polish-20260524/evidence.json"
+  ]
+}

@@ -17,6 +17,7 @@ from services.operator_consent_policy import list_consent_policies, upsert_conse
 from services.operator_content_history import list_operator_content_history
 from services.operator_attention import build_attention_brief
 from services.operator_fresh_reviews import classify_fresh_reviews_intent, refresh_reviews_from_operator
+from services.operator_intent_ai_router import classify_operator_intent_with_ai, should_use_ai_intent_router
 from services.operator_inbox import build_operator_inbox
 from services.operator_manual_review import process_operator_chat_message
 from services.operator_manual_publish import mark_review_reply_draft_manual_published
@@ -36,6 +37,66 @@ from services.operator_social_post_generation import classify_social_post_genera
 
 
 operator_bp = Blueprint("operator_api", __name__, url_prefix="/api/operator")
+
+
+def _attach_ai_router(result: dict, ai_router: dict) -> dict:
+    combined = dict(result)
+    combined["ai_router"] = {
+        "status": ai_router.get("status"),
+        "intent": ai_router.get("normalized_intent"),
+        "charged_credits": ai_router.get("charged_credits"),
+        "credit_charged": ai_router.get("credit_charged"),
+        "finalization_result": ai_router.get("finalization_result"),
+    }
+    return combined
+
+
+def _unsupported_operator_result(message: str) -> dict:
+    help_response = build_operator_help_response()
+    return {
+        "status": "unsupported",
+        "intent": "unknown",
+        "message": message,
+        "chat_response": (
+            "Не понял команду. Я могу помочь с карточкой, отзывами, новостями, постами и услугами.\n\n"
+            + str(help_response.get("chat_response") or "")
+        ),
+        "blocked_reasons": ["unsupported_operator_chat_intent"],
+        "ui_actions": help_response.get("ui_actions") or [],
+        "external_calls_performed": False,
+        "external_writes_performed": False,
+        "manual_publication_only": True,
+        "paid_actions_performed": False,
+        "credit_charged": False,
+    }
+
+
+def _manual_review_guard_result(message: str) -> dict:
+    return {
+        "status": "blocked",
+        "intent": "manual_review_add_and_reply",
+        "message": message,
+        "reply_text": "",
+        "chat_response": (
+            "Похоже, вы хотите добавить новый отзыв и подготовить ответ, но я не вижу явный текст отзыва. "
+            "Пришлите команду в формате: «Добавь отзыв и сгенерируй ответ: текст отзыва»."
+        ),
+        "blocked_reasons": ["manual_review_text_not_explicit"],
+        "external_calls_performed": False,
+        "external_writes_performed": False,
+        "manual_publication_only": True,
+        "paid_actions_performed": False,
+        "credit_charged": False,
+    }
+
+
+def _has_explicit_manual_review_text(message: str) -> bool:
+    text = str(message or "").strip().lower()
+    if "отзыв:" in text:
+        return True
+    if "добав" in text and "отзыв" in text and ":" in text:
+        return True
+    return False
 
 
 @operator_bp.route("/attention-brief", methods=["GET"])
@@ -452,6 +513,88 @@ def operator_chat():
                 message=message,
                 channel="web",
             )
+            if result.get("status") == "unsupported":
+                if not should_use_ai_intent_router(message):
+                    result = _unsupported_operator_result(message)
+                else:
+                    ai_router = classify_operator_intent_with_ai(
+                        cursor,
+                        business_id=business_id,
+                        user_id=user_id,
+                        message=message,
+                        channel="web",
+                    )
+                    if ai_router.get("status") != "completed":
+                        result = ai_router
+                    else:
+                        ai_intent = str(ai_router.get("normalized_intent") or "unknown")
+                        if ai_intent == "operator_help":
+                            result = build_operator_help_response()
+                        elif ai_intent == "card_refresh":
+                            result = refresh_reviews_from_operator(
+                                cursor,
+                                business_id=business_id,
+                                user_id=user_id,
+                                explicit_url=payload.get("url"),
+                                channel="web",
+                            )
+                        elif ai_intent == "review_replies_generate":
+                            result = generate_review_reply_drafts_for_unanswered_reviews(
+                                cursor,
+                                business_id=business_id,
+                                user_id=user_id,
+                                limit=payload.get("limit") or 5,
+                                channel="web",
+                            )
+                        elif ai_intent == "manual_review_add_and_reply":
+                            if _has_explicit_manual_review_text(message):
+                                result = process_operator_chat_message(
+                                    cursor,
+                                    business_id=business_id,
+                                    user_id=user_id,
+                                    message="добавь отзыв и сгенерируй ответ: " + message,
+                                    channel="web",
+                                )
+                            else:
+                                result = _manual_review_guard_result(message)
+                        elif ai_intent == "services_apply":
+                            result = apply_service_optimization_suggestions(
+                                cursor,
+                                business_id=business_id,
+                                user_id=user_id,
+                                job_id=payload.get("job_id"),
+                                item_ids=payload.get("item_ids"),
+                                limit=payload.get("limit") or 5,
+                                channel="web",
+                                explicit_confirmation=True,
+                            )
+                        elif ai_intent == "services_optimize":
+                            result = optimize_services_from_operator(
+                                cursor,
+                                business_id=business_id,
+                                user_id=user_id,
+                                limit=payload.get("limit") or 5,
+                                channel="web",
+                            )
+                        elif ai_intent == "social_post_generate":
+                            result = generate_social_post_draft_from_operator(
+                                cursor,
+                                business_id=business_id,
+                                user_id=user_id,
+                                message=message,
+                                channel="web",
+                            )
+                        elif ai_intent == "news_generate":
+                            result = generate_news_draft_from_operator(
+                                cursor,
+                                business_id=business_id,
+                                user_id=user_id,
+                                message=message,
+                                channel="web",
+                            )
+                        else:
+                            result = _unsupported_operator_result(message)
+                        result = _attach_ai_router(result, ai_router)
         status = str(result.get("status") or "blocked")
         review = result.get("review") if isinstance(result.get("review"), dict) else {}
         draft = result.get("draft") if isinstance(result.get("draft"), dict) else {}
@@ -460,6 +603,32 @@ def operator_chat():
         optimization_job = result.get("optimization_job") if isinstance(result.get("optimization_job"), dict) else {}
         drafts = result.get("drafts") if isinstance(result.get("drafts"), list) else []
         finalization = result.get("finalization_result") if isinstance(result.get("finalization_result"), dict) else {}
+        ai_router = result.get("ai_router") if isinstance(result.get("ai_router"), dict) else {}
+        ai_router_finalization = (
+            ai_router.get("finalization_result")
+            if isinstance(ai_router.get("finalization_result"), dict)
+            else {}
+        )
+        if ai_router_finalization:
+            record_operator_event(
+                cursor,
+                business_id=business_id,
+                user_id=user_id,
+                event_type="operator_usage_charged",
+                action_key="operator_intent_classify",
+                status=str(ai_router_finalization.get("status") or "completed"),
+                input_summary={"action_key": "operator_intent_classify"},
+                output_summary={
+                    "charge_credits": ai_router_finalization.get("charge_credits"),
+                    "release_credits": ai_router_finalization.get("release_credits"),
+                    "normalized_intent": ai_router.get("intent"),
+                },
+                metadata={
+                    "credit_charged": bool(ai_router_finalization.get("side_effects", {}).get("credit_charged")),
+                    "paid_actions_performed": bool(ai_router_finalization.get("side_effects", {}).get("credit_charged")),
+                    "external_writes_performed": False,
+                },
+            )
         if review:
             record_operator_event(
                 cursor,

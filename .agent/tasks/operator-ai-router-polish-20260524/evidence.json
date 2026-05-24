@@ -1,0 +1,71 @@
+{
+  "task_id": "operator-ai-router-polish-20260524",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Operator refresh copy says card refresh, not only reviews.",
+      "status": "PASS",
+      "proof": ["Refresh chat_response now describes read-only card refresh and all available card data."],
+      "gaps": [
+        "Internal /reviews/refresh-* route names unchanged for compatibility."
+      ]
+    },
+    {
+      "id": "AC2",
+      "text": "Operator UI exposes paid AI-router classification cost.",
+      "status": "PASS",
+      "proof": ["Operator UI renders AI-разбор команды: -N кредит from result.ai_router."],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "AI-router public payload does not expose raw model response.",
+      "status": "PASS",
+      "proof": ["raw_response removed from service result; test asserts absence."],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Cheap gate prevents smalltalk from calling paid AI-router.",
+      "status": "PASS",
+      "proof": ["Unit and endpoint tests cover smalltalk without AI call or charge."],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "/api/operator/chat fallback path has endpoint-level tests.",
+      "status": "PASS",
+      "proof": ["tests/test_operator_chat_fallback_api.py covers rule-based, fallback, smalltalk, and manual guard paths."],
+      "gaps": []
+    },
+    {
+      "id": "AC6",
+      "text": "manual_review_add_and_reply fallback cannot create a review without explicit review text.",
+      "status": "PASS",
+      "proof": ["Endpoint test verifies AI manual-review fallback blocks without explicit review marker."],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "frontend/src/pages/dashboard/OperatorPage.tsx",
+    "src/api/operator_api.py",
+    "src/services/operator_capabilities.py",
+    "src/services/operator_fresh_reviews.py",
+    "src/services/operator_intent_ai_router.py",
+    "src/services/operator_paid_actions.py",
+    "tests/test_operator_chat_fallback_api.py",
+    "tests/test_operator_fresh_reviews.py",
+    "tests/test_operator_intent_ai_router.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/api/operator_api.py src/services/operator_intent_ai_router.py src/services/operator_fresh_reviews.py src/services/operator_paid_actions.py",
+    "PYTHONPATH=src:. python3 -m pytest -q tests/test_operator_chat_fallback_api.py tests/test_operator_intent_ai_router.py tests/test_operator_fresh_reviews.py tests/test_operator_capabilities.py tests/test_operator_manual_review.py tests/test_operator_review_reply_bulk.py tests/test_operator_news_generation.py tests/test_operator_social_post_generation.py tests/test_operator_services_optimization.py",
+    "git diff --check",
+    "npm --prefix frontend run build",
+    "bash scripts/lint_backend_baseline.sh"
+  ],
+  "known_gaps": [
+    "Telegram parity remains a separate task."
+  ]
+}

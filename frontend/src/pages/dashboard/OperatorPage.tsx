@@ -37,6 +37,12 @@ type OperatorChatResult = {
   credit_charged?: boolean;
   manual_publication_only?: boolean;
   blocked_reasons?: string[];
+  ai_router?: {
+    status?: string;
+    intent?: string;
+    charged_credits?: number;
+    credit_charged?: boolean;
+  };
   ui_actions?: Array<{
     action: string;
     label: string;
@@ -128,6 +134,12 @@ type RefreshResult = {
   }>;
   chat_response?: string;
   blocked_reasons?: string[];
+  ai_router?: {
+    status?: string;
+    intent?: string;
+    charged_credits?: number;
+    credit_charged?: boolean;
+  };
 };
 
 type ChatMessage = {
@@ -140,8 +152,9 @@ type ChatMessage = {
 const exampleCommands = [
   'Что ты умеешь?',
   'У нас есть неотвеченные отзывы сейчас в базе?',
-  'Проверь новые отзывы',
+  'Обнови карточку',
   'Спарси данные карточки',
+  'Проверь новые отзывы',
   'Подготовь ответы на отзывы',
   'Добавь новый отзыв в список и сгенерируй ответ: ...',
   'Подготовь новость для карточки',
@@ -360,7 +373,7 @@ export const OperatorPage = () => {
               </div>
               <h2 className="mt-4 text-lg font-semibold text-slate-950">Напишите команду</h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                Например: “есть ли отзывы без ответа”, “проверь новые отзывы”, “подготовь ответы” или “оптимизируй услуги”.
+                Например: “обнови карточку”, “есть ли отзывы без ответа”, “подготовь ответы” или “оптимизируй услуги”.
               </p>
               <div className="mt-4 flex flex-wrap justify-center gap-2">
                 {exampleCommands.map((command) => (
@@ -474,6 +487,7 @@ const OperatorResultActions = ({
   const appliedItems = 'applied_items' in result ? result.applied_items || [] : [];
   const drafts = 'drafts' in result ? result.drafts || [] : [];
   const billingUrl = 'billing_url' in result ? result.billing_url : undefined;
+  const aiRouter = result.ai_router;
   const queueId = result.queue_id;
   const status = result.status || '';
 
@@ -495,6 +509,11 @@ const OperatorResultActions = ({
         {'credit_charged' in result && result.credit_charged ? <span>Списано {result.charged_credits || 0} кредитов</span> : null}
         {'manual_publication_only' in result && result.manual_publication_only ? <span>Публикация вручную</span> : null}
         {'billing_state' in result && result.billing_state?.label ? <span>{result.billing_state.label}</span> : null}
+        {aiRouter?.credit_charged ? (
+          <span className="rounded-full bg-sky-50 px-2 py-1 text-sky-800 ring-1 ring-sky-200">
+            AI-разбор команды: -{aiRouter.charged_credits || 1} кредит
+          </span>
+        ) : null}
       </div>
 
       {textToCopy ? (

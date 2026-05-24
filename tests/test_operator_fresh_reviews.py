@@ -58,11 +58,22 @@ class FakeCursor:
 def test_classifies_fresh_reviews_intent() -> None:
     assert classify_fresh_reviews_intent("Проверь новые отзывы")
     assert classify_fresh_reviews_intent("Обнови отзывы")
+    assert classify_fresh_reviews_intent("Обнови карточку")
+    assert classify_fresh_reviews_intent("Спарси карточку")
     assert classify_fresh_reviews_intent("Спарси данные по карточке Весёлая Расчёска на Энгельса")
     assert classify_fresh_reviews_intent("Обнови данные по этому аккаунту. Отзывы, новости, услуги")
     assert classify_fresh_reviews_intent("Собери данные карточки с карт")
+    assert classify_fresh_reviews_intent("Подтяни свежие данные с Яндекс Карт")
+    assert classify_fresh_reviews_intent("Загрузи актуальную информацию по профилю")
+    assert classify_fresh_reviews_intent("Синхронизируй карточку с картами")
+    assert classify_fresh_reviews_intent("Проведи парсинг карточки")
+    assert classify_fresh_reviews_intent("Запусти парсер по аккаунту")
+    assert classify_fresh_reviews_intent("Получи новые данные из 2ГИС")
+    assert classify_fresh_reviews_intent("Актуализируй информацию по карточке")
+    assert classify_fresh_reviews_intent("Пересобери данные профиля")
     assert not classify_fresh_reviews_intent("Подготовь ответы на отзывы")
     assert not classify_fresh_reviews_intent("Подготовь новость для карточки")
+    assert not classify_fresh_reviews_intent("Сгенерируй ответ на отзыв")
 
 
 def test_refresh_reviews_blocks_when_balance_is_insufficient() -> None:

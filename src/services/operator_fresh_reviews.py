@@ -11,32 +11,66 @@ FRESH_REVIEWS_INTENT = "fresh_reviews_refresh"
 REVIEWS_URL = "/dashboard/card?tab=reviews&review_filter=needs_reply"
 
 
+REFRESH_ACTION_MARKERS = (
+    "проверь",
+    "проверить",
+    "перепроверь",
+    "обнов",
+    "свеж",
+    "новые",
+    "парс",
+    "спарс",
+    "собер",
+    "собрать",
+    "подтян",
+    "загруз",
+    "получи",
+    "получить",
+    "актуализ",
+    "синхрониз",
+    "пересобер",
+)
+
+CARD_SCOPE_MARKERS = (
+    "отзыв",
+    "карточ",
+    "аккаунт",
+    "профил",
+    "профиль",
+    "данные",
+    "информац",
+    "карт",
+    "яндекс",
+    "2гис",
+    "2gis",
+    "google maps",
+    "гугл",
+    "услуг",
+    "новост",
+)
+
+GENERATION_MARKERS = (
+    "подготов",
+    "сгенер",
+    "напиши ответ",
+    "создай ответ",
+    "ответь на отзыв",
+)
+
+
+def _has_any_marker(text: str, markers: tuple[str, ...]) -> bool:
+    return any(marker in text for marker in markers)
+
+
 def classify_fresh_reviews_intent(message: Any) -> bool:
     text = _clean_text(message).lower()
     if not text:
         return False
-    has_reviews = "отзыв" in text
-    has_card_scope = (
-        "карточ" in text
-        or "аккаунт" in text
-        or "данные" in text
-        or "карт" in text
-        or "услуг" in text
-        or "новост" in text
-    )
-    has_refresh = (
-        "проверь" in text
-        or "проверить" in text
-        or "обнов" in text
-        or "свеж" in text
-        or "новые" in text
-        or "парс" in text
-        or "спарс" in text
-        or "собер" in text
-        or "актуализ" in text
-    )
-    asks_generation = "подготов" in text or "сгенер" in text or "напиши ответ" in text
-    return has_refresh and (has_reviews or has_card_scope) and not asks_generation
+    has_card_scope = _has_any_marker(text, CARD_SCOPE_MARKERS)
+    has_refresh = _has_any_marker(text, REFRESH_ACTION_MARKERS)
+    asks_generation = _has_any_marker(text, GENERATION_MARKERS)
+    mentions_parser_job = "парсер" in text or "парсинг" in text
+    return (has_refresh or mentions_parser_job) and has_card_scope and not asks_generation
 
 
 def _load_review_snapshot(cursor: Any, *, business_id: str) -> dict[str, Any]:
@@ -88,7 +122,8 @@ def refresh_reviews_from_operator(
     if status == "queued":
         chat_response = "\n".join(
             [
-                "Запустил платное read-only обновление карты для проверки новых отзывов.",
+                "Запустил платное read-only обновление карточки.",
+                "Обновятся все доступные данные карточки: базовая информация, отзывы, услуги, новости и другие поля, которые отдаёт источник.",
                 f"Сейчас в сохранённых данных отзывов без ответа: {before.get('without_response')}.",
                 f"Зарезервировано до {refresh.get('estimated_credits') or 'N'} кредитов; фактическое списание будет после результата Apify.",
                 "Когда обновление завершится, нажмите «Проверить результат обновления» или напишите: «подготовь ответы на отзывы».",
@@ -106,13 +141,13 @@ def refresh_reviews_from_operator(
         elif "operator_apify_refresh_disabled" in blocked:
             chat_response = "\n".join(
                 [
-                    "Проверка новых отзывов требует read-only обновления карт.",
-                    "Сейчас runtime обновления выключен, поэтому я показываю последние сохранённые данные.",
+                    "Обновление карточки требует read-only парсинга карт.",
+                    "Сейчас runtime обновления выключен, поэтому я показываю последние сохранённые данные карточки.",
                     f"Отзывы без ответа в сохранённых данных: {before.get('without_response')}.",
                 ]
             )
         else:
-            chat_response = "Не удалось запустить проверку новых отзывов. Причины: " + ", ".join(blocked)
+            chat_response = "Не удалось запустить обновление карточки. Причины: " + ", ".join(blocked)
 
     return {
         "status": status,

@@ -20,6 +20,7 @@ python3 -m py_compile \
   src/services/agent_blueprint_runner.py \
   src/services/outreach_send_capability.py \
   src/api/operator_api.py \
+  src/services/operator_intent_ai_router.py \
   src/worker.py \
   src/services/operator_review_reply_bulk.py \
   src/services/operator_refresh_result.py \
@@ -36,6 +37,8 @@ python3 -m py_compile \
   tests/test_superadmin_business_routes.py \
   tests/test_growth_workflow_routes.py \
   tests/test_security_runtime_config.py \
+  tests/test_operator_chat_fallback_api.py \
+  tests/test_operator_intent_ai_router.py \
   tests/test_operator_review_reply_bulk.py
 
 echo "[backend-lint] import and route ownership smoke"
@@ -297,6 +300,57 @@ if "generate_review_reply_drafts_for_unanswered_reviews" not in api_text:
     raise SystemExit("operator_api does not expose bulk review reply service")
 
 print("OK: paid Operator drafts and Agent Blueprint dispatch boundaries are guarded")
+PY
+
+echo "[backend-lint] Operator AI fallback router stays paid and bounded"
+python3 - <<'PY'
+from pathlib import Path
+
+api_text = Path("src/api/operator_api.py").read_text(encoding="utf-8")
+router_text = Path("src/services/operator_intent_ai_router.py").read_text(encoding="utf-8")
+ui_text = Path("frontend/src/pages/dashboard/OperatorPage.tsx").read_text(encoding="utf-8")
+paid_text = Path("src/services/operator_paid_actions.py").read_text(encoding="utf-8")
+
+required = {
+    "src/api/operator_api.py": [
+        "should_use_ai_intent_router",
+        "classify_operator_intent_with_ai",
+        "manual_review_text_not_explicit",
+        "_attach_ai_router",
+    ],
+    "src/services/operator_intent_ai_router.py": [
+        "OPERATOR_INTENT_CLASSIFY_ACTION_KEY",
+        "build_paid_action_preflight",
+        "reserve_paid_action_credits",
+        "finalize_reserved_action_credits",
+        "raw_response",
+        "external_writes_performed",
+        "manual_publication_only",
+    ],
+    "frontend/src/pages/dashboard/OperatorPage.tsx": [
+        "AI-разбор команды",
+        "ai_router",
+    ],
+    "src/services/operator_paid_actions.py": [
+        "operator_intent_classify",
+        "external_write\": False",
+    ],
+}
+texts = {
+    "src/api/operator_api.py": api_text,
+    "src/services/operator_intent_ai_router.py": router_text,
+    "frontend/src/pages/dashboard/OperatorPage.tsx": ui_text,
+    "src/services/operator_paid_actions.py": paid_text,
+}
+for path, markers in required.items():
+    for marker in markers:
+        if marker not in texts[path]:
+            raise SystemExit(f"{path}: missing Operator AI router marker {marker}")
+
+if '"raw_response"' in router_text or "'raw_response'" in router_text:
+    raise SystemExit("Operator AI router must not expose raw_response in public result")
+
+print("OK: Operator AI fallback router is paid, cheap-gated, and bounded")
 PY
 
 echo "[backend-lint] Operator services apply smoke is self-contained"
