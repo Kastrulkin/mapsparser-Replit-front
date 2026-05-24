@@ -29,6 +29,8 @@ OK: Operator services apply smoke is self-contained
 OK: outreach dispatcher is disabled unless explicitly enabled
 [backend-lint] Operator refresh Telegram follow-up stays bounded
 OK: Operator refresh Telegram follow-up is once-only and manual-publication bounded
+[backend-lint] Operator refresh reliability stays read-only
+OK: Operator refresh reliability is read-only and visible
 [backend-lint] approval boundary audit
 OK: Blueprint/Operator approval, billing, manual-publication, and dispatcher boundaries are guarded
 [backend-lint] extracted growth routes stay out of main.py

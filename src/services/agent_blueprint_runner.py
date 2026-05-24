@@ -306,7 +306,7 @@ class AgentBlueprintRunner:
                 step_id,
                 str(step.get("artifact_type") or "step_output"),
                 str(step.get("title") or step.get("key") or "Artifact"),
-                json.dumps(payload, ensure_ascii=False),
+                json.dumps(payload, ensure_ascii=False, default=str),
             ),
         )
 

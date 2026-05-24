@@ -55,7 +55,7 @@
 ### AC6
 - Status: PASS
 - Proof:
-  - `26 passed` for targeted tests.
+  - `18 passed` for targeted tests.
   - `scripts/lint_backend_baseline.sh` passed.
   - Production deploy via `git archive HEAD` succeeded and root health returned `HTTP/1.1 200 OK`.
   - Live authenticated smoke passed: create blueprint -> run -> approve shortlist -> approve drafts -> queue batch -> fixture cleanup.
@@ -74,7 +74,7 @@
 
 ## Commands run
 - `python3 -m py_compile src/services/agent_blueprint_runner.py scripts/smoke_agent_blueprint_outreach_api.py`
-- `PYTHONPATH=src:. python3 -m pytest -q tests/test_agent_blueprint_layer.py tests/test_operator_paid_action_adapter.py tests/test_operator_review_reply_bulk.py tests/test_operator_refresh_result.py`
+- `PYTHONPATH=src:. python3 -m pytest -q tests/test_agent_blueprint_layer.py tests/test_operator_paid_action_adapter.py tests/test_operator_review_reply_bulk.py`
 - `scripts/lint_backend_baseline.sh`
 - `git push origin main`
 - `git push gitverse main`
