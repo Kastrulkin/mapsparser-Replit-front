@@ -403,6 +403,15 @@ Sprint 36 adds the Operator UI for refresh jobs:
 
 Sprint 36 does not add new parser execution, billing behavior, direct Apify calls from Operator, external reply publication, or provider writes. It is a visibility and control surface over the Sprint 35 refresh lifecycle.
 
+Sprint 37 adds Telegram follow-up for refresh jobs:
+
+- Telegram owner-bot recognizes status/result requests such as `статус обновлений отзывов` and `проверить результат обновления`;
+- reviews menu includes `Статус обновлений`;
+- Telegram uses `services.operator_refresh_result.list_refresh_jobs` through `services.telegram_dashboard.build_refresh_jobs_text`;
+- the response shows recent refresh statuses, new review counts, snippets, and the next command `подготовь ответы на отзывы`.
+
+Sprint 37 does not start new map refreshes, bypass credit checks, publish replies, or write to external map providers from Telegram. It is a read-only transport surface over the same Operator refresh history.
+
 Sprint 14 still does not call Apify, create parsequeue jobs, generate AI content, write to external providers, publish to maps, or enable production execution. It only tightens the safety gate before future paid runtime rollout.
 
 Sprint 15 adds manual review intake through Operator chat:

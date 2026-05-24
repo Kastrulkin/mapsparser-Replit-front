@@ -1,0 +1,43 @@
+{
+  "task_id": "operator-sprint37-refresh-jobs-telegram-20260524",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Telegram text routing recognizes refresh job follow-up requests."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Refresh jobs are formatted for Telegram with status, counts, and snippets."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "The reviews menu and callback expose the refresh status action."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "The Telegram flow is read-only and does not add parsing, charges, publication, or external writes."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Documentation and proof artifacts describe the boundary."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/services/telegram_dashboard.py src/services/telegram_response_router.py src/telegram_bot.py",
+    "python3 -m pytest -q tests/test_telegram_dashboard_copy.py tests/test_operator_refresh_result.py tests/test_operator_fresh_reviews.py",
+    "git diff --check",
+    "scripts/proof_loop.sh validate operator-sprint37-refresh-jobs-telegram-20260524"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/operator-sprint37-refresh-jobs-telegram-20260524/raw/build.txt",
+    ".agent/tasks/operator-sprint37-refresh-jobs-telegram-20260524/raw/test-unit.txt",
+    ".agent/tasks/operator-sprint37-refresh-jobs-telegram-20260524/raw/test-integration.txt",
+    ".agent/tasks/operator-sprint37-refresh-jobs-telegram-20260524/raw/lint.txt"
+  ]
+}

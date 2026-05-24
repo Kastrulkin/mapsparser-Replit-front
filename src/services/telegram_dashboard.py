@@ -9,6 +9,7 @@ from billing_constants import TARIFFS
 from core.action_orchestrator import ActionOrchestrator
 from database_manager import get_db_connection
 from services.operator_attention import build_attention_brief
+from services.operator_refresh_result import list_refresh_jobs
 from subscription_manager import get_subscription_access, get_subscription_info
 
 
@@ -258,6 +259,69 @@ def _format_operator_attention_text(brief: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _format_operator_refresh_jobs_text(refresh_jobs: dict[str, Any]) -> str:
+    summary = refresh_jobs.get("summary") if isinstance(refresh_jobs.get("summary"), dict) else {}
+    jobs = refresh_jobs.get("jobs") if isinstance(refresh_jobs.get("jobs"), list) else []
+    lines = [
+        "LocalOS Operator",
+        "Обновления отзывов",
+        "",
+        str(summary.get("text") or "Показываю последние read-only обновления карт."),
+        "",
+        "Сводка:",
+        f"• Задач: {int(summary.get('jobs_count') or 0)}",
+        f"• В работе: {int(summary.get('processing_count') or 0)}",
+        f"• Завершено: {int(summary.get('completed_count') or 0)}",
+        f"• Ошибки: {int(summary.get('failed_count') or 0)}",
+        f"• Новых отзывов: {int(summary.get('new_reviews_count') or 0)}",
+        f"• Без ответа: {int(summary.get('new_unanswered_reviews_count') or 0)}",
+    ]
+
+    if jobs:
+        lines.extend(["", "Последние обновления:"])
+        for index, job in enumerate(jobs[:5], start=1):
+            if not isinstance(job, dict):
+                continue
+            status = str(job.get("status") or "processing").strip()
+            queue_status = str(job.get("queue_status") or status).strip()
+            created_at = _format_date(job.get("created_at"))
+            new_reviews = int(job.get("new_reviews_count") or 0)
+            unanswered = int(job.get("new_unanswered_reviews_count") or 0)
+            lines.append(f"{index}. {created_at} — {status} ({queue_status})")
+            lines.append(f"   Новых: {new_reviews}; без ответа: {unanswered}.")
+            error_message = str(job.get("error_message") or "").strip()
+            if error_message:
+                lines.append(f"   Ошибка: {error_message}")
+            reviews = job.get("new_reviews") if isinstance(job.get("new_reviews"), list) else []
+            for review in reviews[:2]:
+                if not isinstance(review, dict):
+                    continue
+                author = str(review.get("author_name") or "Новый отзыв").strip()
+                text = str(review.get("text") or "").strip()
+                if text:
+                    snippet = text[:180] + ("..." if len(text) > 180 else "")
+                    lines.append(f"   • {author}: {snippet}")
+    else:
+        lines.extend(
+            [
+                "",
+                "Пока нет запусков обновления отзывов.",
+                "Можно написать: «Проверь новые отзывы». Если кредитов достаточно, LocalOS запустит read-only обновление карт.",
+            ]
+        )
+
+    lines.extend(
+        [
+            "",
+            "Следующий шаг:",
+            "• если есть отзывы без ответа — напишите «подготовь ответы на отзывы»;",
+            "• публикация в карты остаётся ручной: LocalOS готовит черновики, пользователь копирует и вставляет сам.",
+            "Открыть Operator в кабинете: " + _base_web_url() + "/dashboard/operator",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def build_today_text(business_ctx: dict) -> str:
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -266,6 +330,18 @@ def build_today_text(business_ctx: dict) -> str:
         user_id = str(business_ctx.get("user_id") or "")
         brief = build_attention_brief(cursor, business_id, user_id)
         return _format_operator_attention_text(brief)
+    finally:
+        conn.close()
+
+
+def build_refresh_jobs_text(business_ctx: dict) -> str:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        business_id = str(business_ctx.get("business_id") or "")
+        user_id = str(business_ctx.get("user_id") or "")
+        refresh_jobs = list_refresh_jobs(cursor, business_id=business_id, user_id=user_id, limit=5)
+        return _format_operator_refresh_jobs_text(refresh_jobs)
     finally:
         conn.close()
 

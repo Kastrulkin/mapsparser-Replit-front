@@ -55,6 +55,8 @@ Sprint 35 connects the full paid map-refresh chain. The `Проверь новы
 
 Sprint 36 adds the Operator refresh-jobs UI. The dashboard now shows recent read-only map refresh jobs, statuses, new review snippets, a `Проверить результат` action, and a direct transition to bulk reply draft generation for unanswered new reviews.
 
+Sprint 37 adds Telegram follow-up for the same refresh jobs. The owner bot can show recent refresh statuses/results and point the user to `подготовь ответы на отзывы` without starting new parsing, bypassing credits, or publishing to maps.
+
 The Operator model keeps one context, one permission system, one credit/usage ledger, one approval policy, and one audit trail across web and Telegram. Sprint 0 defines the product contract only; it does not imply that the web-chat runtime or Telegram Operator runtime is fully implemented.
 
 ## What Agents Must Not Assume

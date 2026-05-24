@@ -175,3 +175,47 @@ def test_operator_attention_text_keeps_paid_actions_manual_and_cached() -> None:
 
 def test_client_intent_recognizes_operator_attention_request() -> None:
     assert classify_client_intent("Что требует моего внимания сегодня?") == "today"
+
+
+def test_client_intent_recognizes_refresh_jobs_followup() -> None:
+    assert classify_client_intent("Покажи статус обновлений отзывов") == "refresh_jobs"
+    assert classify_client_intent("Проверить результат обновления") == "refresh_jobs"
+
+
+def test_operator_refresh_jobs_text_keeps_publication_manual() -> None:
+    text = telegram_dashboard._format_operator_refresh_jobs_text(
+        {
+            "summary": {
+                "text": "Последние read-only обновления карт.",
+                "jobs_count": 2,
+                "processing_count": 1,
+                "completed_count": 1,
+                "failed_count": 0,
+                "new_reviews_count": 2,
+                "new_unanswered_reviews_count": 1,
+            },
+            "jobs": [
+                {
+                    "status": "completed",
+                    "queue_status": "completed",
+                    "created_at": "2026-05-24T10:00:00+00:00",
+                    "new_reviews_count": 2,
+                    "new_unanswered_reviews_count": 1,
+                    "new_reviews": [
+                        {
+                            "author_name": "Анна",
+                            "text": "Очень понравился сервис, обязательно вернусь.",
+                            "has_response": False,
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+
+    assert "Обновления отзывов" in text
+    assert "В работе: 1" in text
+    assert "Новых отзывов: 2" in text
+    assert "Анна" in text
+    assert "подготовь ответы на отзывы" in text
+    assert "публикация в карты остаётся ручной" in text.lower()

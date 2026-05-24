@@ -60,6 +60,7 @@ from services.telegram_dashboard import (
     build_automation_text,
     build_card_text,
     build_growth_text,
+    build_refresh_jobs_text,
     build_reviews_text,
     build_subscription_text,
     build_today_text,
@@ -1723,6 +1724,7 @@ def _build_reviews_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [InlineKeyboardButton("💬 Подготовить ответ", callback_data="openclaw_review_start")],
+            [InlineKeyboardButton("🔄 Статус обновлений", callback_data="client_refresh_jobs")],
             [InlineKeyboardButton("⏳ Ждут подтверждения", callback_data="openclaw_pending_approvals")],
             [InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")],
         ]
@@ -3713,6 +3715,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "client_today":
         await _show_client_section(update, build_today_text(business_ctx), _build_client_main_menu())
+    elif data == "client_refresh_jobs":
+        await _show_client_section(update, build_refresh_jobs_text(business_ctx), _build_reviews_menu())
     elif data.startswith("crypto_pay_"):
         tier_key = data.replace("crypto_pay_", "", 1)
         try:
@@ -5150,6 +5154,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         if client_intent == "reviews":
             await update.message.reply_text(build_reviews_text(business_ctx), reply_markup=_build_reviews_menu())
+            return
+        if client_intent == "refresh_jobs":
+            await update.message.reply_text(build_refresh_jobs_text(business_ctx), reply_markup=_build_reviews_menu())
             return
         if client_intent == "growth":
             await update.message.reply_text(build_growth_text(business_ctx), reply_markup=_build_growth_menu())

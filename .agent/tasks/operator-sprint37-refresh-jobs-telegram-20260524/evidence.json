@@ -1,0 +1,74 @@
+{
+  "task_id": "operator-sprint37-refresh-jobs-telegram-20260524",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Telegram owner-bot recognizes refresh job follow-up requests.",
+      "status": "PASS",
+      "proof": [
+        "`classify_client_intent` returns `refresh_jobs` for refresh status/result requests.",
+        "`handle_text` routes that intent to `build_refresh_jobs_text`."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Telegram can show recent refresh jobs with processing/completed/failed status, new review counts, and snippets.",
+      "status": "PASS",
+      "proof": [
+        "`_format_operator_refresh_jobs_text` renders statuses, counts, errors, and snippets.",
+        "Telegram copy tests cover the output."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Telegram reviews menu exposes a status action for refresh jobs.",
+      "status": "PASS",
+      "proof": [
+        "`_build_reviews_menu` includes `Статус обновлений`.",
+        "`client_refresh_jobs` callback renders the refresh jobs text."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "The flow does not start parsing, bypass credits, publish replies, or write to external map providers.",
+      "status": "PASS",
+      "proof": [
+        "The Telegram flow only reads `list_refresh_jobs`.",
+        "No enqueue, reserve, charge, provider write, or publish call was added."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Docs and proof artifacts describe the Sprint 37 boundary.",
+      "status": "PASS",
+      "proof": [
+        "Updated Operator docs, agent index, and tool registry.",
+        "Proof-loop artifacts are populated."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "docs/agents/index.md",
+    "docs/agents/localos-operator.md",
+    "docs/agents/tool-registry.md",
+    "src/services/telegram_dashboard.py",
+    "src/services/telegram_response_router.py",
+    "src/telegram_bot.py",
+    "tests/test_telegram_dashboard_copy.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/services/telegram_dashboard.py src/services/telegram_response_router.py src/telegram_bot.py",
+    "python3 -m pytest -q tests/test_telegram_dashboard_copy.py tests/test_operator_refresh_result.py tests/test_operator_fresh_reviews.py",
+    "git diff --check",
+    "scripts/proof_loop.sh validate operator-sprint37-refresh-jobs-telegram-20260524"
+  ],
+  "known_gaps": [
+    "No live Telegram message was sent from this environment."
+  ]
+}
