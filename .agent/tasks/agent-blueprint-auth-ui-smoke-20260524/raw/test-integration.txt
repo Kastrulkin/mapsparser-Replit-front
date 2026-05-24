@@ -1,0 +1,43 @@
+Authenticated browser smoke on https://localos.pro/dashboard/agents
+Result: PASS
+
+Temporary fixture:
+- email: smoke-agent-47bf966c3e@example.invalid
+- business_id: smoke-agent-business-47bf966c3e
+- blueprint_id: d3c8f2eb-f85e-4369-b19f-ab93f63bb294
+- completed run_id: e0b59f8e-2d52-4c93-8f14-fd2fd67a8ef4
+- batch_id: ccf55831-9e99-49c9-867e-701f5610adb1
+
+Live UI assertions:
+{
+  "url": "https://localos.pro/dashboard/agents?smoke=1779611796565",
+  "hasBlueprint": true,
+  "hasRunHistory": true,
+  "hasApprovalQueue": true,
+  "hasFullPayload": true,
+  "hasQueuedBoundary": true,
+  "hasCompletedFilter": true
+}
+
+Approval/filter assertions:
+{
+  "hasWaitingStatus": true,
+  "hasPendingApprovalQueue": true,
+  "hasReject": true,
+  "hasApprove": true,
+  "approvalFilterShowsWaiting": true,
+  "completedFilterShowsCompleted": true
+}
+
+Live deploy checks:
+- https://localos.pro/ returned /assets/index-CtJtKrsN.js
+- https://localos.pro/assets/AgentBlueprintsPage-EqoIdChb.js contained "orchestrator"
+- https://localos.pro/assets/AgentBlueprintsPage-EqoIdChb.js contained "Queued but not dispatched"
+
+Cleanup:
+- cleanup script output: CLEANED
+- DB zero-count verification:
+  - users 0
+  - businesses 0
+  - blueprints 0
+  - runs 0

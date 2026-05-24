@@ -1,0 +1,80 @@
+{
+  "task_id": "agent-blueprint-auth-ui-smoke-20260524",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Authenticated /dashboard/agents loads production API without /api/api path duplication.",
+      "status": "PASS",
+      "proof": [
+        "Live browser showed Workflow agents 1 and Smoke Supervised Outreach Agent after endpoint path fix."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Business owner can see blueprint card, run timeline, run history, and approval queue.",
+      "status": "PASS",
+      "proof": [
+        "Browser DOM contained Smoke Supervised Outreach Agent, Run timeline, Run history, Approval queue."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Completed supervised outreach run exposes full artifact payload and queued but not dispatched boundary.",
+      "status": "PASS",
+      "proof": [
+        "Browser DOM contained Full payload, Smoke generated text, Queued but not dispatched, and external dispatch did not run text."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Starting a new run creates a pending approval visible in approval queue.",
+      "status": "PASS",
+      "proof": [
+        "Browser DOM contained waiting_approval, pending, reject and approve actions."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Run filters show Approval and Completed runs.",
+      "status": "PASS",
+      "proof": [
+        "Approval filter showed waiting_approval; Completed filter showed completed."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC6",
+      "text": "Temporary live smoke fixture is removed after verification.",
+      "status": "PASS",
+      "proof": [
+        "Cleanup returned CLEANED; DB counts users/businesses/blueprints/runs returned 0 for smoke IDs."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC7",
+      "text": "Build, focused tests, and lint guardrails pass.",
+      "status": "PASS",
+      "proof": [
+        "npm run build passed; tests/test_agent_blueprint_layer.py passed 6 tests; scripts/lint_backend_baseline.sh passed."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx"
+  ],
+  "commands_for_fresh_verifier": [
+    "cd frontend && npm run build",
+    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "scripts/lint_backend_baseline.sh"
+  ],
+  "known_gaps": [
+    "Full-page screenshot capture timed out in the in-app browser; DOM assertions were used."
+  ]
+}

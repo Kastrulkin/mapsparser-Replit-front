@@ -1,0 +1,54 @@
+{
+  "task_id": "agent-blueprint-auth-ui-smoke-20260524",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Authenticated production UI loads workflow agents through the shared API client without duplicated /api prefix."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Blueprint card, run timeline, run history, and approval queue were visible in browser DOM."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Completed run showed full artifact payload and queued-but-not-dispatched boundary."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "New run stopped on pending approval and exposed approve/reject controls."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Approval and Completed filters were exercised in browser."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "Smoke fixture cleanup completed and DB counters returned zero."
+    },
+    {
+      "id": "AC7",
+      "status": "PASS",
+      "reason": "Frontend build, focused backend tests, and backend lint baseline passed."
+    }
+  ],
+  "commands_run": [
+    "cd frontend && npm run build",
+    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "scripts/lint_backend_baseline.sh",
+    "scripts/deploy_frontend_dist.sh --build",
+    "scripts/deploy_frontend_dist.sh",
+    "authenticated browser smoke on https://localos.pro/dashboard/agents",
+    "production smoke fixture cleanup and DB zero-count verification"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/agent-blueprint-auth-ui-smoke-20260524/evidence.md",
+    ".agent/tasks/agent-blueprint-auth-ui-smoke-20260524/evidence.json"
+  ]
+}

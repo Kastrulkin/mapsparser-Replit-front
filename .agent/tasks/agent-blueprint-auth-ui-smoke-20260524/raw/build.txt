@@ -1,0 +1,10 @@
+Command: cd frontend && npm run build
+Result: PASS
+
+Relevant output:
+- vite v7.3.1 built production frontend successfully.
+- AgentBlueprintsPage chunk generated:
+  - dist/assets/AgentBlueprintsPage-DJn_2Zxa.js after endpoint path fix
+  - dist/assets/AgentBlueprintsPage-Ct6HOPhS.js after queued boundary fix
+  - dist/assets/AgentBlueprintsPage-EqoIdChb.js after nested orchestrator result fix
+- Warnings were pre-existing Browserslist data age and Rollup PURE annotation warnings from @pbe/react-yandex-maps.
