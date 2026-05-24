@@ -63,6 +63,8 @@ Sprint 39 adds normalized Operator content history. The dashboard now separates 
 
 Sprint 40 polishes paid refresh billing visibility. Refresh results and refresh-job history now show reserved credits, actual charged credits, released credits, overage, provider actual cost, and Apify multiplier when settlement data is available.
 
+Sprint 41 adds the first automatic Telegram follow-up for paid refresh completion. After worker marks a read-only map refresh completed, LocalOS can send the owner a one-time Telegram summary with new-review counts, billing status, and the manual next step. It does not publish replies, send customer messages, or write to map providers.
+
 The Operator model keeps one context, one permission system, one credit/usage ledger, one approval policy, and one audit trail across web and Telegram. Sprint 0 defines the product contract only; it does not imply that the web-chat runtime or Telegram Operator runtime is fully implemented.
 
 ## What Agents Must Not Assume

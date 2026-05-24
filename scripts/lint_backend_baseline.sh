@@ -18,7 +18,9 @@ python3 -m py_compile \
   src/services/agent_blueprint_runner.py \
   src/services/outreach_send_capability.py \
   src/api/operator_api.py \
+  src/worker.py \
   src/services/operator_review_reply_bulk.py \
+  src/services/operator_refresh_telegram_followup.py \
   scripts/audit_approval_boundaries.py \
   scripts/smoke_operator_services_apply_api.py \
   scripts/smoke_operator_bulk_review_replies.py \
@@ -283,6 +285,45 @@ if compose_text.count("OUTREACH_DISPATCH_ENABLED: ${OUTREACH_DISPATCH_ENABLED:-f
     raise SystemExit("docker-compose.yml must expose OUTREACH_DISPATCH_ENABLED as explicit opt-in for app and worker")
 
 print("OK: outreach dispatcher is disabled unless explicitly enabled")
+PY
+
+echo "[backend-lint] Operator refresh Telegram follow-up stays bounded"
+python3 - <<'PY'
+from pathlib import Path
+
+service_text = Path("src/services/operator_refresh_telegram_followup.py").read_text(encoding="utf-8")
+worker_text = Path("src/worker.py").read_text(encoding="utf-8")
+
+required_service_markers = [
+    "FOLLOWUP_ATTEMPTED_AT_KEY",
+    "FOLLOWUP_DELIVERED_AT_KEY",
+    "telegram_refresh_followup_already_attempted",
+    "owner_telegram_id_missing",
+    "refresh_still_processing",
+    "send_func(telegram_id, text)",
+    "публикация в карты остаётся ручной",
+    "вы копируете и вставляете сами",
+]
+for marker in required_service_markers:
+    if marker not in service_text:
+        raise SystemExit(f"operator refresh Telegram follow-up missing guard marker: {marker}")
+
+for forbidden in (
+    "yandex_business",
+    "publish",
+    "provider_write",
+    "external_write",
+    "ActionOrchestrator",
+):
+    if forbidden in service_text:
+        raise SystemExit(f"operator refresh Telegram follow-up must not perform external writes: {forbidden}")
+
+if "dispatch_operator_refresh_telegram_followup" not in worker_text:
+    raise SystemExit("worker does not dispatch operator refresh Telegram follow-up")
+if "send_func=_send_telegram_plain_message" not in worker_text:
+    raise SystemExit("operator refresh Telegram follow-up must use owner-bot plain message sender")
+
+print("OK: Operator refresh Telegram follow-up is once-only and manual-publication bounded")
 PY
 
 echo "[backend-lint] approval boundary audit"

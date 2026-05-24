@@ -53,6 +53,7 @@ from core.card_automation import (
 )
 from core.telegram_network import telegram_urlopen
 from services.operator_apify_settlement import settle_apify_actual_cost
+from services.operator_refresh_telegram_followup import dispatch_operator_refresh_telegram_followup
 
 # Реестр активных Playwright-сессий для human-in-the-loop
 ACTIVE_CAPTCHA_SESSIONS: Dict[str, BrowserSession] = {}
@@ -4798,6 +4799,34 @@ def process_queue():
                 else:
                     raise
             conn.commit()
+
+            try:
+                followup_result = dispatch_operator_refresh_telegram_followup(
+                    cursor,
+                    business_id=str(business_id or ""),
+                    user_id=str(queue_dict.get("user_id") or ""),
+                    queue_id=str(queue_dict.get("id") or ""),
+                    send_func=_send_telegram_plain_message,
+                    commit_func=conn.commit,
+                )
+                conn.commit()
+                followup_status = str(followup_result.get("status") or "").strip()
+                followup_reason = str(followup_result.get("reason") or "").strip()
+                if followup_status in {"sent", "failed"}:
+                    print(
+                        f"[OPERATOR_REFRESH_TELEGRAM_FOLLOWUP] queue_id={queue_dict.get('id')} "
+                        f"status={followup_status} reason={followup_reason}",
+                        flush=True,
+                    )
+            except Exception as followup_exc:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                print(
+                    f"[OPERATOR_REFRESH_TELEGRAM_FOLLOWUP] queue_id={queue_dict.get('id')} failed={followup_exc}",
+                    flush=True,
+                )
 
             try:
                 handle_review_sync_completion(conn, str(business_id or ""), triggered_by="parser")

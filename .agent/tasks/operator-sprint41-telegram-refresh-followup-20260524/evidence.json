@@ -1,0 +1,79 @@
+{
+  "task_id": "operator-sprint41-telegram-refresh-followup-20260524",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Worker dispatches a one-time Telegram follow-up after a completed paid map refresh.",
+      "status": "PASS",
+      "proof": [
+        "src/worker.py calls dispatch_operator_refresh_telegram_followup after parsequeue is marked completed and committed.",
+        "tests/test_operator_refresh_telegram_followup.py::test_dispatch_refresh_followup_sends_once_and_marks_metadata covers the send path."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Follow-up includes refresh result, new/unanswered review counts, billing summary, and manual next step.",
+      "status": "PASS",
+      "proof": [
+        "format_refresh_followup_text includes result status, counts, billing label, snippets, and next manual command.",
+        "tests assert refresh summary, billing copy, and manual publication boundary text."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Idempotency is stored on matching reservation metadata to avoid spam.",
+      "status": "PASS",
+      "proof": [
+        "Reservation metadata stores telegram_refresh_followup_attempted_at, telegram_refresh_followup_delivered_at, and telegram_refresh_followup_status.",
+        "Duplicate metadata returns telegram_refresh_followup_already_attempted and does not call send_func.",
+        "Worker passes commit_func=conn.commit so attempted metadata is committed before network send."
+      ],
+      "gaps": [
+        "Failed sends are intentionally not retried automatically to avoid notification spam."
+      ]
+    },
+    {
+      "id": "AC4",
+      "text": "Boundary is explicit: no map-provider writes, no customer messages, no credit/pricing changes.",
+      "status": "PASS",
+      "proof": [
+        "Follow-up service only uses the injected owner-bot send_func and reservation metadata updates.",
+        "scripts/lint_backend_baseline.sh includes guardrails for no provider-write markers and manual-publication copy.",
+        "Docs document Sprint 41 as a one-time owner notification only."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Missing owner Telegram id, missing reservation, or still-processing refresh returns structured skipped results.",
+      "status": "PASS",
+      "proof": [
+        "dispatch_operator_refresh_telegram_followup returns structured skipped reasons for missing identity, missing reservation, missing Telegram id, duplicate attempt, and processing status.",
+        "Unit tests cover missing owner Telegram id and duplicate attempt."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/services/operator_refresh_telegram_followup.py",
+    "src/worker.py",
+    "tests/test_operator_refresh_telegram_followup.py",
+    "scripts/lint_backend_baseline.sh",
+    "docs/agents/localos-operator.md",
+    "docs/agents/tool-registry.md",
+    "docs/agents/index.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/services/operator_refresh_telegram_followup.py src/worker.py src/services/operator_refresh_result.py",
+    "PYTHONPATH=src:. python3 -m pytest -q tests/test_operator_refresh_telegram_followup.py tests/test_operator_refresh_result.py tests/test_worker_apify_settlement.py tests/test_telegram_dashboard_copy.py tests/test_operator_map_refresh.py",
+    "scripts/lint_backend_baseline.sh",
+    "git diff --check",
+    "scripts/proof_loop.sh validate operator-sprint41-telegram-refresh-followup-20260524"
+  ],
+  "known_gaps": [
+    "No live Telegram message was sent during verification; tests use an injected fake sender to avoid real owner notifications."
+  ]
+}

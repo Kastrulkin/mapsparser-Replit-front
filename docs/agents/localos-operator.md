@@ -442,6 +442,17 @@ Sprint 40 adds user-facing refresh billing polish:
 
 Sprint 40 does not change pricing, call Apify directly from Operator, publish review replies, or write to external map providers. It makes the already implemented paid refresh lifecycle understandable to the user.
 
+Sprint 41 adds Telegram actual follow-up after paid refresh completion:
+
+- backend service: `services.operator_refresh_telegram_followup`;
+- worker calls `dispatch_operator_refresh_telegram_followup` after a successful read-only map parse is marked completed;
+- the follow-up is sent through the existing owner-bot transport to the business owner `users.telegram_id`;
+- the message includes refresh status, new review count, unanswered count, billing summary, short snippets, and the next manual command `подготовь ответы на отзывы`;
+- idempotency is stored on the matching `operatorcreditreservations.metadata` using `telegram_refresh_followup_attempted_at` and `telegram_refresh_followup_delivered_at`;
+- if the owner has no Telegram id, the reservation is missing, or the job is still processing, the service returns a structured skipped result.
+
+Sprint 41 does not start new parser jobs, bypass credit checks, publish replies, send customer messages, or write to external map providers. It only sends a one-time owner notification about a refresh job that has already completed in LocalOS.
+
 Sprint 14 still does not call Apify, create parsequeue jobs, generate AI content, write to external providers, publish to maps, or enable production execution. It only tightens the safety gate before future paid runtime rollout.
 
 Sprint 15 adds manual review intake through Operator chat:

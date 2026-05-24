@@ -137,6 +137,7 @@ Current Operator review intake uses these tool boundaries:
 | `operator.inbox.read` | `free_cached` | `read_only` | returns a scoped queue of review/content/partnership actions and UI helpers | no charge |
 | `maps.refresh.enqueue_apify_yandex` | `paid_external` | `write_internal` | reserves credits and enqueues a read-only `parsequeue` job; no external provider writes | actual Apify provider cost is settled by the worker when available |
 | `maps.refresh.jobs.read` | `free_cached` | `read_only` | lists recent scoped refresh jobs, statuses, saved new-review snippets, and billing state in web Operator or Telegram | no extra charge |
+| `maps.refresh.telegram_followup` | `paid_external` result notification | `communication` | sends one owner-bot Telegram summary after a completed paid refresh; idempotency is stored on reservation metadata; no customer messages or provider writes | no extra charge beyond the refresh itself |
 
 The manual review flow is available from web Operator chat and Telegram, but both surfaces must route through the same backend service and credit checks. Publication to Yandex, Google, 2GIS, or other maps remains manual unless a provider write flow is later implemented and approved.
 
