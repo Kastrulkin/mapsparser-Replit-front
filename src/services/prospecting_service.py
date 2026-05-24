@@ -1307,6 +1307,7 @@ class ProspectingService:
         started_at = datetime.datetime.utcnow()
         final_status = str(run_meta.get("status") or "").strip().upper() or "RUNNING"
         dataset_id = str(run_meta.get("dataset_id") or "").strip()
+        final_run_data: Dict[str, Any] = dict(run_meta)
 
         while final_status in {"READY", "RUNNING", "TIMING-OUT", "ABORTING"}:
             elapsed = (datetime.datetime.utcnow() - started_at).total_seconds()
@@ -1325,6 +1326,7 @@ class ProspectingService:
                 raise TimeoutError(f"Apify actor did not finish within {int(timeout_sec or 300)} seconds")
             time.sleep(4)
             run_data = self.get_run(run_id)
+            final_run_data = dict(run_data or {})
             final_status = str(run_data.get("status") or "").strip().upper() or final_status
             dataset_id = str(run_data.get("defaultDatasetId") or dataset_id or "").strip()
             self._append_debug_trace(
@@ -1433,6 +1435,7 @@ class ProspectingService:
                         )
                     time.sleep(4)
                     fallback_data = self.get_run(fallback_run_id)
+                    final_run_data = dict(fallback_data or {})
                     fallback_status = str(fallback_data.get("status") or "").strip().upper() or fallback_status
                     fallback_dataset_id = str(fallback_data.get("defaultDatasetId") or fallback_dataset_id or "").strip()
                 if fallback_status != "SUCCEEDED":
@@ -1490,6 +1493,10 @@ class ProspectingService:
             "status": final_status,
             "items": items,
             "run_input": run_input,
+            "usage_total_usd": final_run_data.get("usageTotalUsd"),
+            "usage_usd": final_run_data.get("usageUsd"),
+            "usage": final_run_data.get("usage"),
+            "run_data": final_run_data,
         }
 
     def run_search(

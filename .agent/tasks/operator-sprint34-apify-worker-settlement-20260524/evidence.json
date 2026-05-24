@@ -1,0 +1,70 @@
+{
+  "task_id": "operator-sprint34-apify-worker-settlement-20260524",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Apify business parsing propagates provider run cost metadata.",
+      "status": "PASS",
+      "proof": [
+        "ProspectingService returns usage_total_usd, usage_usd, usage, and run_data.",
+        "Worker stores those fields in _apify_debug."
+      ],
+      "gaps": [
+        "Depends on authenticated Apify run response exposing usage fields."
+      ]
+    },
+    {
+      "id": "AC2",
+      "text": "Worker can find a reserved map_reviews_refresh reservation by metadata.parsequeue_id.",
+      "status": "PASS",
+      "proof": [
+        "Worker queries operatorcreditreservations metadata ->> parsequeue_id."
+      ],
+      "gaps": [
+        "Future paid refresh enqueue must write this metadata."
+      ]
+    },
+    {
+      "id": "AC3",
+      "text": "Worker calls actual-cost settlement only when source, cost, and reservation match.",
+      "status": "PASS",
+      "proof": [
+        "tests/test_worker_apify_settlement.py verifies the settlement call payload."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Missing cost or reservation skips settlement and does not block parse completion.",
+      "status": "PASS",
+      "proof": [
+        "Skipped cases covered by tests.",
+        "Worker wraps settlement in a database savepoint."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "No paid refresh enqueue, UI trigger, external write, or map publication is introduced.",
+      "status": "PASS",
+      "proof": [
+        "Only worker/prospecting metadata and docs/tests changed."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/worker.py",
+    "src/services/prospecting_service.py",
+    "tests/test_worker_apify_settlement.py",
+    "tests/test_prospecting_service_apify_business_parse.py",
+    "docs/agents/localos-operator.md",
+    "docs/agents/index.md"
+  ],
+  "commands_for_fresh_verifier": [],
+  "known_gaps": [
+    "Paid map refresh still needs preflight/reserve/enqueue and reservation metadata writing.",
+    "Telegram follow-up after refresh completion is still later."
+  ]
+}

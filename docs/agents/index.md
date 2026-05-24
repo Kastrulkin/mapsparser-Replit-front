@@ -49,6 +49,8 @@ Sprint 32 adds the `Проверь новые отзывы` command. Operator no
 
 Sprint 33 adds the refresh-result lifecycle. After a queued refresh completes and parser output is saved, Operator can check the `parsequeue` job, count newly saved reviews, show `найдено N новых отзывов`, and offer bulk reply generation for unanswered new reviews.
 
+Sprint 34 connects worker-side Apify actual-cost settlement for future paid refresh jobs. When an Apify parse has provider cost and a matching `map_reviews_refresh` reservation tagged with `parsequeue_id`, worker can settle the reservation through the existing accounting service; otherwise it skips settlement and completes parsing normally.
+
 The Operator model keeps one context, one permission system, one credit/usage ledger, one approval policy, and one audit trail across web and Telegram. Sprint 0 defines the product contract only; it does not imply that the web-chat runtime or Telegram Operator runtime is fully implemented.
 
 ## What Agents Must Not Assume

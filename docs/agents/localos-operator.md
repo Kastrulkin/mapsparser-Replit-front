@@ -372,6 +372,16 @@ Sprint 33 connects the queued refresh to a result lifecycle:
 
 Sprint 33 does not call Apify directly, settle actual provider cost, charge credits, publish replies, or write to external map providers. It only makes completed refresh results visible to the user from already saved parser output.
 
+Sprint 34 connects the worker to the Apify actual-cost settlement boundary:
+
+- Apify business parsing now carries `usageTotalUsd`/`usageUsd` from the Actor run metadata into worker debug payload;
+- after a successful Apify parse, worker checks for a reserved `map_reviews_refresh` Operator reservation whose metadata contains `parsequeue_id`;
+- when both a matching reservation and provider cost exist, worker calls `services.operator_apify_settlement.settle_apify_actual_cost`;
+- if cost or reservation metadata is missing, worker logs a skipped settlement and completes the parse normally;
+- settlement failures are isolated behind a database savepoint so parser completion is not lost.
+
+Sprint 34 does not create the paid map refresh reservation, enqueue paid refresh from the UI, run Apify from Operator directly, publish replies, or write to external map providers. It only lets future paid refresh jobs be settled when the worker has enough metadata.
+
 Sprint 14 still does not call Apify, create parsequeue jobs, generate AI content, write to external providers, publish to maps, or enable production execution. It only tightens the safety gate before future paid runtime rollout.
 
 Sprint 15 adds manual review intake through Operator chat:

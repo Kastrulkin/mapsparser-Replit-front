@@ -60,7 +60,7 @@ def test_run_business_by_map_url_writes_apify_trace(tmp_path) -> None:
         "status": "RUNNING",
         "run_input": run_input,
     }
-    service.get_run = lambda run_id: {"status": "SUCCEEDED", "defaultDatasetId": "dataset-1"}
+    service.get_run = lambda run_id: {"status": "SUCCEEDED", "defaultDatasetId": "dataset-1", "usageTotalUsd": 0.12}
     service.fetch_dataset_items = lambda dataset_id: [
         {
             "businessId": "154973111920",
@@ -82,6 +82,7 @@ def test_run_business_by_map_url_writes_apify_trace(tmp_path) -> None:
 
     trace_path = tmp_path / "apify_trace.json"
     assert result.get("run_id") == "run-1"
+    assert result.get("usage_total_usd") == 0.12
     assert trace_path.exists()
 
     events = json.loads(trace_path.read_text(encoding="utf-8"))

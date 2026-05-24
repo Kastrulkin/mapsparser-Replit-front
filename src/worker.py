@@ -52,6 +52,7 @@ from core.card_automation import (
     run_due_card_automation,
 )
 from core.telegram_network import telegram_urlopen
+from services.operator_apify_settlement import settle_apify_actual_cost
 
 # Реестр активных Playwright-сессий для human-in-the-loop
 ACTIVE_CAPTCHA_SESSIONS: Dict[str, BrowserSession] = {}
@@ -1035,6 +1036,10 @@ def _parse_card_via_apify(
             "source": source,
             "run_id": result.get("run_id") if isinstance(result, dict) else None,
             "dataset_id": result.get("dataset_id") if isinstance(result, dict) else None,
+            "usage_total_usd": result.get("usage_total_usd") if isinstance(result, dict) else None,
+            "usage_usd": result.get("usage_usd") if isinstance(result, dict) else None,
+            "usage": result.get("usage") if isinstance(result, dict) else None,
+            "run_data": result.get("run_data") if isinstance(result, dict) else None,
             "run_input": result.get("run_input") if isinstance(result, dict) else {},
             "item_keys": sorted(list(item.keys())) if isinstance(item, dict) else [],
             "item_preview": item if isinstance(item, dict) else {},
@@ -2648,6 +2653,98 @@ def _effective_apify_business_timeout_sec(queue_dict: dict) -> int:
         default_timeout,
     )
     return slow_timeout
+
+
+def _extract_apify_actual_cost_usd(apify_debug_payload: Any) -> Any:
+    if not isinstance(apify_debug_payload, dict):
+        return None
+    candidates = [
+        apify_debug_payload.get("usage_total_usd"),
+        apify_debug_payload.get("usageTotalUsd"),
+        apify_debug_payload.get("usage_usd"),
+        apify_debug_payload.get("usageUsd"),
+        apify_debug_payload.get("cost"),
+        apify_debug_payload.get("costUsd"),
+    ]
+    run_data = apify_debug_payload.get("run_data")
+    if isinstance(run_data, dict):
+        candidates.extend(
+            [
+                run_data.get("usageTotalUsd"),
+                run_data.get("usage_total_usd"),
+                run_data.get("usageUsd"),
+                run_data.get("usage_usd"),
+                run_data.get("cost"),
+                run_data.get("costUsd"),
+            ]
+        )
+    for value in candidates:
+        if value is not None and str(value).strip() != "":
+            return value
+    return None
+
+
+def _load_operator_refresh_reservation_id(cursor: Any, *, business_id: str, user_id: str, queue_id: str) -> Optional[str]:
+    cursor.execute("SELECT to_regclass('public.operatorcreditreservations') IS NOT NULL AS exists")
+    row = cursor.fetchone()
+    table_exists = bool(row.get("exists") if hasattr(row, "get") else (row[0] if row else False))
+    if not table_exists:
+        return None
+    cursor.execute(
+        """
+        SELECT id
+        FROM operatorcreditreservations
+        WHERE business_id = %s
+          AND user_id = %s
+          AND action_key = 'map_reviews_refresh'
+          AND status = 'reserved'
+          AND metadata ->> 'parsequeue_id' = %s
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        (business_id, user_id, queue_id),
+    )
+    reservation = cursor.fetchone()
+    if not reservation:
+        return None
+    return str(reservation.get("id") if hasattr(reservation, "get") else reservation[0])
+
+
+def _settle_operator_apify_cost_if_present(cursor: Any, queue_dict: Dict[str, Any], apify_debug_payload: Any) -> Dict[str, Any]:
+    source_value = str(queue_dict.get("source") or "").strip().lower()
+    if source_value not in {"apify_yandex", "apify_2gis", "apify_google", "apify_apple"}:
+        return {"status": "skipped", "reason": "not_apify_source"}
+    provider_actual_cost = _extract_apify_actual_cost_usd(apify_debug_payload)
+    if provider_actual_cost is None:
+        return {"status": "skipped", "reason": "provider_actual_cost_missing"}
+    business_id = str(queue_dict.get("business_id") or "").strip()
+    user_id = str(queue_dict.get("user_id") or "").strip()
+    queue_id = str(queue_dict.get("id") or "").strip()
+    if not business_id or not user_id or not queue_id:
+        return {"status": "skipped", "reason": "queue_identity_missing"}
+    reservation_id = _load_operator_refresh_reservation_id(
+        cursor,
+        business_id=business_id,
+        user_id=user_id,
+        queue_id=queue_id,
+    )
+    if not reservation_id:
+        return {
+            "status": "skipped",
+            "reason": "operator_reservation_not_found",
+            "provider_actual_cost": provider_actual_cost,
+        }
+    provider_run_id = ""
+    if isinstance(apify_debug_payload, dict):
+        provider_run_id = str(apify_debug_payload.get("run_id") or "").strip()
+    return settle_apify_actual_cost(
+        cursor,
+        business_id=business_id,
+        user_id=user_id,
+        reservation_id=reservation_id,
+        provider_actual_cost=provider_actual_cost,
+        provider_run_id=provider_run_id or queue_id,
+    )
 
 
 def _queue_transient_parse_retry(queue_dict: dict, reason: str, card_data: Optional[dict]) -> bool:
@@ -4639,6 +4736,47 @@ def process_queue():
                 if critical_missing:
                     warning_parts.append(
                         "warnings_missing_in_source:" + ",".join(critical_missing)
+                    )
+
+            if use_apify_parser:
+                try:
+                    cursor.execute("SAVEPOINT operator_apify_settlement")
+                    settlement_result = _settle_operator_apify_cost_if_present(cursor, queue_dict, apify_debug_payload)
+                    cursor.execute("RELEASE SAVEPOINT operator_apify_settlement")
+                    settlement_status = str(settlement_result.get("status") or "").strip()
+                    settlement_reason = str(settlement_result.get("reason") or "").strip()
+                    if settlement_status in {"charged", "released"}:
+                        warning_parts.append(
+                            f"operator_apify_settlement:{settlement_status}:credits={settlement_result.get('charged_credits') or 0}"
+                        )
+                        print(
+                            f"[OPERATOR_APIFY_SETTLEMENT] queue_id={queue_dict.get('id')} "
+                            f"status={settlement_status} credits={settlement_result.get('charged_credits') or 0}",
+                            flush=True,
+                        )
+                    elif settlement_status == "skipped":
+                        print(
+                            f"[OPERATOR_APIFY_SETTLEMENT] queue_id={queue_dict.get('id')} skipped={settlement_reason}",
+                            flush=True,
+                        )
+                    else:
+                        blocked = ",".join(settlement_result.get("blocked_reasons") or [])
+                        warning_parts.append(f"operator_apify_settlement_blocked:{blocked or settlement_status}")
+                        print(
+                            f"[OPERATOR_APIFY_SETTLEMENT] queue_id={queue_dict.get('id')} "
+                            f"blocked={blocked or settlement_status}",
+                            flush=True,
+                        )
+                except Exception as settlement_exc:
+                    try:
+                        cursor.execute("ROLLBACK TO SAVEPOINT operator_apify_settlement")
+                        cursor.execute("RELEASE SAVEPOINT operator_apify_settlement")
+                    except Exception:
+                        pass
+                    warning_parts.append(f"operator_apify_settlement_failed:{settlement_exc.__class__.__name__}")
+                    print(
+                        f"[OPERATOR_APIFY_SETTLEMENT] queue_id={queue_dict.get('id')} failed={settlement_exc}",
+                        flush=True,
                     )
 
             warning_msg = " | ".join(warning_parts) if warning_parts else None
