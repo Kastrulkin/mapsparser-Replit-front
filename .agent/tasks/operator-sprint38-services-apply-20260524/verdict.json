@@ -25,7 +25,7 @@
     {
       "id": "AC5",
       "status": "PASS",
-      "reason": "py_compile, focused pytest, backend lint baseline, frontend build, and local UI smoke passed."
+      "reason": "py_compile, focused pytest, backend lint baseline, frontend build, local UI smoke, backend deploy smoke, and frontend deploy passed."
     }
   ],
   "commands_run": [
@@ -33,7 +33,9 @@
     "PYTHONPATH=src:. python3 -m pytest -q tests/test_operator_services_optimization.py tests/test_approval_boundaries_audit.py tests/test_operator_paid_action_adapter.py tests/test_operator_review_reply_bulk.py tests/test_operator_paid_executor.py tests/test_operator_manual_publish.py",
     "scripts/lint_backend_baseline.sh",
     "cd frontend && npm run build",
-    "browser smoke http://127.0.0.1:5174/dashboard/operator"
+    "browser smoke http://127.0.0.1:5174/dashboard/operator",
+    "backend deploy smoke with route ownership check",
+    "scripts/deploy_frontend_dist.sh --build"
   ],
   "artifacts_used": [
     ".agent/tasks/operator-sprint38-services-apply-20260524/raw/py-compile.txt",

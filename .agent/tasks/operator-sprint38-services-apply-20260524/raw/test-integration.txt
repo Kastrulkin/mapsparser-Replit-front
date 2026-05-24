@@ -8,3 +8,16 @@ Local browser smoke:
 Note:
 - No authenticated browser apply click was run in this pass.
 - Service/API behavior is covered by focused unit tests and lint guardrails.
+
+Production backend deploy smoke:
+- Synced `src`, `scripts`, `docs`, and proof bundle to `/opt/seo-app`.
+- Restarted `app` and `worker`.
+- `docker compose ps`: app, worker, postgres up.
+- `curl -I http://localhost:8000`: `HTTP/1.1 200 OK`.
+- Live route ownership: `{'route': 'operator_api.operator_services_optimize_apply', 'ok': True}`.
+- Live approval boundary audit: PASS.
+
+Production frontend deploy:
+- `scripts/deploy_frontend_dist.sh --build`: `EXIT=0`.
+- Live root bundle: `/assets/index-CX8Hv5g3.js`.
+- Operator bundle built: `OperatorPage-Dx6N_A8W.js`.

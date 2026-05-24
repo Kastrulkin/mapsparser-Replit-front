@@ -54,7 +54,9 @@
         "Focused pytest passed with 25 tests.",
         "Backend lint baseline passed.",
         "npm run build passed.",
-        "Local browser render smoke passed."
+        "Local browser render smoke passed.",
+        "Production backend route ownership check passed.",
+        "Production frontend deploy exited 0 and live index references /assets/index-CX8Hv5g3.js."
       ],
       "gaps": [
         "No authenticated end-to-end browser apply click in this pass."
@@ -77,7 +79,9 @@
     "PYTHONPATH=src:. python3 -m pytest -q tests/test_operator_services_optimization.py tests/test_approval_boundaries_audit.py tests/test_operator_paid_action_adapter.py tests/test_operator_review_reply_bulk.py tests/test_operator_paid_executor.py tests/test_operator_manual_publish.py",
     "scripts/lint_backend_baseline.sh",
     "cd frontend && npm run build",
-    "browser smoke http://127.0.0.1:5174/dashboard/operator"
+    "browser smoke http://127.0.0.1:5174/dashboard/operator",
+    "server backend deploy smoke with route ownership check",
+    "scripts/deploy_frontend_dist.sh --build"
   ],
   "known_gaps": [
     "Telegram apply command is not included in Sprint 38.",

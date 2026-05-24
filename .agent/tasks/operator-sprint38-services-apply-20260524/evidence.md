@@ -48,9 +48,11 @@
 - Proof:
   - `py_compile` passed for changed backend modules.
   - Focused pytest passed with `25 passed`.
-  - `scripts/lint_backend_baseline.sh` passed.
-  - `npm run build` passed with `OperatorPage-Dx6N_A8W.js`.
-  - Local browser smoke opened `/dashboard/operator` and rendered login state without crashing.
+- `scripts/lint_backend_baseline.sh` passed.
+- `npm run build` passed with `OperatorPage-Dx6N_A8W.js`.
+- Local browser smoke opened `/dashboard/operator` and rendered login state without crashing.
+- Production backend deploy restarted `app` and `worker`; route ownership check returned `operator_api.operator_services_optimize_apply`.
+- Production frontend deploy exited 0 and live index references `/assets/index-CX8Hv5g3.js`.
 - Gaps:
   - No authenticated browser apply click in this pass.
 
@@ -60,6 +62,8 @@
 - `scripts/lint_backend_baseline.sh`
 - `cd frontend && npm run build`
 - Browser smoke: `http://127.0.0.1:5174/dashboard/operator`
+- Backend deploy smoke: server `docker compose ps`, `curl -I http://localhost:8000`, live Operator route ownership import.
+- Frontend deploy: `scripts/deploy_frontend_dist.sh --build`
 
 ## Raw artifacts
 - .agent/tasks/operator-sprint38-services-apply-20260524/raw/build.txt
