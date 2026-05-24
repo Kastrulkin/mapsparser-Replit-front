@@ -79,7 +79,12 @@ type AgentRunStep = {
   step_key: string;
   step_type: string;
   status: string;
-  output_json?: Record<string, unknown>;
+  output_json?: {
+    status?: string;
+    external_dispatch_performed?: boolean;
+    queue_count?: number;
+    [key: string]: unknown;
+  };
   error_text?: string | null;
 };
 
@@ -149,13 +154,20 @@ export const AgentBlueprintsPage = () => {
     [blueprintDetails?.approval_queue],
   );
 
-  const queuedButNotDispatched = useMemo(
-    () => (activeRun?.artifacts || []).find((artifact) => {
-      const payload = artifact.payload_json || {};
+  const queuedButNotDispatched = useMemo(() => {
+    const artifact = (activeRun?.artifacts || []).find((item) => {
+      const payload = item.payload_json || {};
       return payload.status === 'queued_for_dispatch' && payload.external_dispatch_performed === false;
-    }) || null,
-    [activeRun?.artifacts],
-  );
+    });
+    if (artifact?.payload_json) {
+      return artifact.payload_json;
+    }
+    const step = (activeRun?.steps || []).find((item) => {
+      const output = item.output_json || {};
+      return output.status === 'queued_for_dispatch' && output.external_dispatch_performed === false;
+    });
+    return step?.output_json || null;
+  }, [activeRun?.artifacts, activeRun?.steps]);
 
   const metrics = useMemo(
     () => [
@@ -449,7 +461,7 @@ export const AgentBlueprintsPage = () => {
               {queuedButNotDispatched ? (
                 <DashboardActionPanel
                   title="Queued but not dispatched"
-                  description={`Send step поставил batch в очередь: ${Number(queuedButNotDispatched.payload_json?.queue_count || 0)} items. Внешняя отправка не запускалась внутри blueprint runtime.`}
+                  description={`Send step поставил batch в очередь: ${Number(queuedButNotDispatched.queue_count || 0)} items. Внешняя отправка не запускалась внутри blueprint runtime.`}
                   status={<StatusBadge status="queued_for_dispatch" />}
                   tone="amber"
                   actions={<Send className="h-4 w-4 text-amber-600" />}
