@@ -111,6 +111,17 @@ def test_agent_blueprint_draft_builder_creates_safe_document_agent():
     assert "external_delivery" in draft["summary"]["approval_boundaries"]
 
 
+def test_agent_blueprint_draft_builder_respects_explicit_category():
+    from services.agent_blueprint_draft_builder import build_agent_blueprint_draft
+
+    draft = build_agent_blueprint_draft("Подготовь результат по этому контексту", "documents")
+
+    assert draft["category"] == "documents"
+    assert draft["name"] == "Подготовь результат по этому контексту"
+    assert draft["version_payload"]["capability_allowlist"] == []
+    assert draft["summary"]["external_dispatch_performed"] is False
+
+
 def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     api_source = Path("src/api/agent_blueprints_api.py").read_text(encoding="utf-8")
 

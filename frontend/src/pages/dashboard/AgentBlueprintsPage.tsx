@@ -10,6 +10,7 @@ import {
   FileText,
   Loader2,
   Mail,
+  MessageSquareText,
   Play,
   RefreshCw,
   Send,
@@ -18,6 +19,7 @@ import {
   Star,
   Upload,
   Users,
+  Wrench,
   Workflow,
 } from 'lucide-react';
 
@@ -174,6 +176,19 @@ type AgentDraftSummary = {
   }>;
 };
 
+type AgentBuilderScenario = {
+  category: string;
+  title: string;
+  description: string;
+  prompt: string;
+  dataSources: string;
+  extraction: string;
+  processing: string;
+  output: string;
+  manualControl: string;
+  icon: typeof FileText;
+};
+
 const runStatusFilters = [
   { value: 'all', label: 'Все' },
   { value: 'running', label: 'В работе' },
@@ -189,36 +204,102 @@ const agentPromptExamples = [
   'Отвечай на отзывы в моём стиле',
 ];
 
-const agentTemplates = [
+const agentScenarios: AgentBuilderScenario[] = [
   {
+    category: 'documents',
     title: 'Документы',
     description: 'Извлечь поля, проверить правила и собрать результат по образцу.',
+    prompt: 'Обработай документ, найди риски и подготовь краткий результат для проверки',
+    dataSources: 'файл документа, ручной контекст, профиль бизнеса',
+    extraction: 'ключевые условия, сроки, суммы, ответственность, спорные места',
+    processing: 'не придумывать факты, ссылаться только на добавленный документ, отдельно показывать риски',
+    output: 'краткий отчёт: summary, риски, что уточнить, черновик письма при необходимости',
+    manualControl: 'перед использованием результата и перед любым внешним действием',
     icon: FileText,
   },
   {
+    category: 'email',
     title: 'Письма',
     description: 'Подготовить черновик, показать на подтверждение и сохранить результат.',
+    prompt: 'Подготовь письмо клиенту по моему контексту и шаблону',
+    dataSources: 'ручной контекст, шаблон письма, профиль бизнеса',
+    extraction: 'цель письма, адресат, факты, ограничения по тону',
+    processing: 'писать коротко, без неподтверждённых обещаний, сохранять стиль бизнеса',
+    output: 'тема письма и готовый черновик',
+    manualControl: 'письмо только как черновик, отправка вручную после проверки',
     icon: Mail,
   },
   {
+    category: 'tables',
     title: 'Таблицы',
     description: 'Разобрать строки, найти исключения и подготовить отчёт.',
+    prompt: 'Разбери таблицу, найди исключения и собери отчёт',
+    dataSources: 'CSV/XLSX, ручной контекст',
+    extraction: 'строки, пустые поля, аномалии, суммы и статусы',
+    processing: 'показывать только проверяемые исключения, группировать по причине',
+    output: 'отчёт по исключениям и список строк для проверки',
+    manualControl: 'перед изменением данных или отправкой отчёта',
     icon: FileCheck2,
   },
   {
+    category: 'outreach',
     title: 'Поиск клиентов',
     description: 'Найти лидов, собрать shortlist и подготовить сообщения.',
+    prompt: 'Найди клиентов и покажи черновики сообщений перед отправкой',
+    dataSources: 'prospectingleads, профиль бизнеса, услуги',
+    extraction: 'подходящие лиды, канал связи, причина релевантности',
+    processing: 'не отправлять без approval, ограничить объём, сохранять источник лида',
+    output: 'shortlist и черновики сообщений',
+    manualControl: 'shortlist, черновики и очередь отправки подтверждаются вручную',
     icon: Users,
   },
   {
+    category: 'reviews',
     title: 'Отзывы',
     description: 'Подготовить ответы в стиле бизнеса и ждать ручного подтверждения.',
+    prompt: 'Подготовь ответы на отзывы в стиле моего бизнеса',
+    dataSources: 'отзывы, профиль бизнеса, услуги',
+    extraction: 'тон отзыва, проблема, услуга, факты для ответа',
+    processing: 'не спорить, не обещать невозможное, негативные отзывы помечать отдельно',
+    output: 'черновики ответов на отзывы',
+    manualControl: 'публикация только вручную после проверки',
     icon: Star,
   },
   {
+    category: 'partnerships',
     title: 'Партнёрства',
     description: 'Найти подходящие компании и подготовить предложение.',
+    prompt: 'Подготовь партнёрское предложение для локальных компаний',
+    dataSources: 'prospectingleads, услуги, профиль бизнеса',
+    extraction: 'тип партнёра, пересечение аудитории, повод для предложения',
+    processing: 'не отправлять наружу, сначала показать предложение',
+    output: 'короткое партнёрское предложение и список адресатов',
+    manualControl: 'перед отправкой и публикацией',
     icon: Sparkles,
+  },
+  {
+    category: 'services',
+    title: 'Услуги',
+    description: 'Понять текущие услуги и предложить улучшения без автоприменения.',
+    prompt: 'Оптимизируй описание услуг и покажи предложения перед применением',
+    dataSources: 'услуги, профиль бизнеса, отзывы',
+    extraction: 'названия услуг, цены, длительность, слабые описания',
+    processing: 'не менять услуги без отдельного подтверждения',
+    output: 'предложения по улучшению услуг',
+    manualControl: 'применение изменений только вручную',
+    icon: Wrench,
+  },
+  {
+    category: 'booking',
+    title: 'Бронирование',
+    description: 'Собрать правила записи и подготовить сценарий общения.',
+    prompt: 'Помоги настроить агента записи: вопросы клиенту, правила и ограничения',
+    dataSources: 'профиль бизнеса, услуги, ручной контекст',
+    extraction: 'правила записи, ограничения, обязательные вопросы, доступные услуги',
+    processing: 'не подтверждать запись без понятных правил и ручного контроля',
+    output: 'сценарий записи и список недостающих правил',
+    manualControl: 'сложные случаи и изменения расписания подтверждаются человеком',
+    icon: MessageSquareText,
   },
 ];
 
@@ -276,6 +357,18 @@ const metaLabels: Record<string, string> = {
   manual_context: 'ручной контекст',
   final_output: 'финальный результат',
   external_delivery: 'внешняя отправка',
+  title: 'название',
+  summary: 'кратко',
+  risks: 'риски',
+  subject: 'тема',
+  body: 'текст',
+  format: 'формат',
+  source_name: 'источник',
+  raw: 'данные',
+  missing_information: 'что уточнить',
+  result: 'результат',
+  rules_applied: 'правила',
+  feedback_notes: 'правки',
 };
 
 const humanizeStatus = (status: string) => statusLabels[status] || status;
@@ -329,6 +422,16 @@ export const AgentBlueprintsPage = () => {
   const [runCategory, setRunCategory] = useState('');
   const [runLimit, setRunLimit] = useState('30');
   const [agentPrompt, setAgentPrompt] = useState('');
+  const [builderCategory, setBuilderCategory] = useState('documents');
+  const [builderDataSources, setBuilderDataSources] = useState('файл документа, ручной контекст, профиль бизнеса');
+  const [builderExtractionRules, setBuilderExtractionRules] = useState('ключевые условия, сроки, суммы, ответственность, спорные места');
+  const [builderProcessingRules, setBuilderProcessingRules] = useState('не придумывать факты, ссылаться только на добавленные данные, отдельно показывать риски');
+  const [builderOutputFormat, setBuilderOutputFormat] = useState('краткий отчёт: summary, риски, что уточнить, черновик письма при необходимости');
+  const [builderManualControl, setBuilderManualControl] = useState('перед использованием результата и перед любым внешним действием');
+  const [builderSourceName, setBuilderSourceName] = useState('');
+  const [builderSourceText, setBuilderSourceText] = useState('');
+  const [builderFileSource, setBuilderFileSource] = useState<{ name: string; content: string } | null>(null);
+  const [builderInternalSource, setBuilderInternalSource] = useState('business_profile');
   const [lastDraft, setLastDraft] = useState<AgentDraftSummary | null>(null);
   const [agentReview, setAgentReview] = useState<AgentReview | null>(null);
   const [setupDataSources, setSetupDataSources] = useState('профиль бизнеса, ручной контекст');
@@ -374,6 +477,21 @@ export const AgentBlueprintsPage = () => {
     });
     return step?.output_json?.orchestrator?.result || step?.output_json || null;
   }, [activeRun?.artifacts, activeRun?.steps]);
+
+  const selectedScenario = useMemo(
+    () => agentScenarios.find((item) => item.category === builderCategory) || agentScenarios[0],
+    [builderCategory],
+  );
+
+  const applyBuilderScenario = (scenario: AgentBuilderScenario) => {
+    setBuilderCategory(scenario.category);
+    setAgentPrompt(scenario.prompt);
+    setBuilderDataSources(scenario.dataSources);
+    setBuilderExtractionRules(scenario.extraction);
+    setBuilderProcessingRules(scenario.processing);
+    setBuilderOutputFormat(scenario.output);
+    setBuilderManualControl(scenario.manualControl);
+  };
 
   const metrics = useMemo<DashboardMetricItem[]>(
     () => [
@@ -528,6 +646,7 @@ export const AgentBlueprintsPage = () => {
       const response = await api.post('/agent-blueprints/draft', {
         business_id: currentBusinessId,
         description: agentPrompt.trim(),
+        category: builderCategory,
       });
       const blueprint = response.data?.blueprint;
       const summary = response.data?.draft?.summary;
@@ -544,11 +663,45 @@ export const AgentBlueprintsPage = () => {
       }
       await loadBlueprints();
       if (blueprint?.id) {
+        await api.post(`/agent-blueprints/${blueprint.id}/setup`, {
+          workflow_description: agentPrompt.trim(),
+          data_sources: builderDataSources.split(',').map((item) => item.trim()).filter(Boolean),
+          extraction_rules: builderExtractionRules,
+          processing_rules: builderProcessingRules,
+          output_format: builderOutputFormat,
+          approval_boundaries: ['final_output', 'external_delivery'],
+          manual_control: builderManualControl,
+        });
+        if (builderSourceText.trim()) {
+          await api.post(`/agent-blueprints/${blueprint.id}/sources`, {
+            source_type: 'text',
+            name: builderSourceName.trim() || 'Контекст для агента',
+            content_text: builderSourceText,
+          });
+        }
+        if (builderFileSource) {
+          await api.post(`/agent-blueprints/${blueprint.id}/sources`, {
+            source_type: 'file',
+            name: builderFileSource.name,
+            file_name: builderFileSource.name,
+            content_text: builderFileSource.content,
+          });
+        }
+        if (builderInternalSource !== 'none') {
+          await api.post(`/agent-blueprints/${blueprint.id}/sources`, {
+            source_type: 'internal',
+            name: humanizeMeta(builderInternalSource),
+            internal_source: builderInternalSource,
+          });
+        }
         setSelectedBlueprintId(blueprint.id);
         await loadBlueprintDetails(blueprint.id);
         await loadBlueprintReview(blueprint.id);
       }
       setAgentPrompt('');
+      setBuilderSourceName('');
+      setBuilderSourceText('');
+      setBuilderFileSource(null);
     } catch (requestError) {
       console.error(requestError);
       setError('Не удалось собрать черновик агента.');
@@ -747,38 +900,34 @@ export const AgentBlueprintsPage = () => {
         )}
       />
 
-      <DashboardActionPanel
-        title="Опишите, какого агента хотите создать"
-        description="LocalOS сохранит задачу как повторяемый агент: входные данные, шаги, результаты и места, где нужен ручной контроль."
-        tone="sky"
-        status={(
-          <div className="grid gap-3">
-            <textarea
-              className="min-h-28 w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-slate-400"
-              value={agentPrompt}
-              onChange={(event) => setAgentPrompt(event.target.value)}
-              placeholder="Например: найди клиентов в моём городе, подготовь короткие сообщения и покажи мне перед отправкой"
-            />
-            <div className="flex flex-wrap gap-2">
-              {agentPromptExamples.map((example) => (
-                <button
-                  key={example}
-                  type="button"
-                  className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-950"
-                  onClick={() => setAgentPrompt(example)}
-                >
-                  {example}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        actions={(
-          <Button type="button" onClick={createAgentFromPrompt} disabled={actionLoading || !currentBusinessId || !agentPrompt.trim()}>
-            {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-            Создать агента
-          </Button>
-        )}
+      <AgentBuilderPanel
+        prompt={agentPrompt}
+        selectedScenario={selectedScenario}
+        scenarios={agentScenarios}
+        examples={agentPromptExamples}
+        dataSources={builderDataSources}
+        extractionRules={builderExtractionRules}
+        processingRules={builderProcessingRules}
+        outputFormat={builderOutputFormat}
+        manualControl={builderManualControl}
+        sourceName={builderSourceName}
+        sourceText={builderSourceText}
+        fileSource={builderFileSource}
+        internalSource={builderInternalSource}
+        actionLoading={actionLoading}
+        canCreate={Boolean(currentBusinessId && agentPrompt.trim())}
+        onScenarioSelect={applyBuilderScenario}
+        onPromptChange={setAgentPrompt}
+        onDataSourcesChange={setBuilderDataSources}
+        onExtractionRulesChange={setBuilderExtractionRules}
+        onProcessingRulesChange={setBuilderProcessingRules}
+        onOutputFormatChange={setBuilderOutputFormat}
+        onManualControlChange={setBuilderManualControl}
+        onSourceNameChange={setBuilderSourceName}
+        onSourceTextChange={setBuilderSourceText}
+        onFileSourceChange={setBuilderFileSource}
+        onInternalSourceChange={setBuilderInternalSource}
+        onCreate={createAgentFromPrompt}
       />
 
       {lastDraft ? <AgentDraftPreview draft={lastDraft} /> : null}
@@ -815,14 +964,14 @@ export const AgentBlueprintsPage = () => {
         description="Быстрые стартовые точки для агентов по документам, письмам, таблицам и поиску клиентов."
       >
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {agentTemplates.map((template) => {
+          {agentScenarios.map((template) => {
             const Icon = template.icon;
             return (
               <button
                 key={template.title}
                 type="button"
                 className="rounded-xl border border-slate-200 bg-white px-4 py-4 text-left transition hover:border-slate-300 hover:bg-slate-50"
-                onClick={() => setAgentPrompt(`${template.title}: ${template.description}`)}
+                onClick={() => applyBuilderScenario(template)}
               >
                 <div className="flex items-start gap-3">
                   <div className="rounded-lg bg-slate-100 p-2 text-slate-700">
@@ -1158,6 +1307,205 @@ const AgentDraftPreview = ({ draft }: { draft: AgentDraftSummary }) => (
   </DashboardSection>
 );
 
+const AgentBuilderPanel = ({
+  prompt,
+  selectedScenario,
+  scenarios,
+  examples,
+  dataSources,
+  extractionRules,
+  processingRules,
+  outputFormat,
+  manualControl,
+  sourceName,
+  sourceText,
+  fileSource,
+  internalSource,
+  actionLoading,
+  canCreate,
+  onScenarioSelect,
+  onPromptChange,
+  onDataSourcesChange,
+  onExtractionRulesChange,
+  onProcessingRulesChange,
+  onOutputFormatChange,
+  onManualControlChange,
+  onSourceNameChange,
+  onSourceTextChange,
+  onFileSourceChange,
+  onInternalSourceChange,
+  onCreate,
+}: {
+  prompt: string;
+  selectedScenario: AgentBuilderScenario;
+  scenarios: AgentBuilderScenario[];
+  examples: string[];
+  dataSources: string;
+  extractionRules: string;
+  processingRules: string;
+  outputFormat: string;
+  manualControl: string;
+  sourceName: string;
+  sourceText: string;
+  fileSource: { name: string; content: string } | null;
+  internalSource: string;
+  actionLoading: boolean;
+  canCreate: boolean;
+  onScenarioSelect: (scenario: AgentBuilderScenario) => void;
+  onPromptChange: (value: string) => void;
+  onDataSourcesChange: (value: string) => void;
+  onExtractionRulesChange: (value: string) => void;
+  onProcessingRulesChange: (value: string) => void;
+  onOutputFormatChange: (value: string) => void;
+  onManualControlChange: (value: string) => void;
+  onSourceNameChange: (value: string) => void;
+  onSourceTextChange: (value: string) => void;
+  onFileSourceChange: (value: { name: string; content: string } | null) => void;
+  onInternalSourceChange: (value: string) => void;
+  onCreate: () => void;
+}) => {
+  const handleBuilderFile = async (file?: File | null) => {
+    if (!file) {
+      onFileSourceChange(null);
+      return;
+    }
+    let content = '';
+    try {
+      content = await file.text();
+    } catch (readError) {
+      console.error(readError);
+    }
+    onFileSourceChange({ name: file.name, content });
+  };
+
+  return (
+    <DashboardSection
+      title="Создать агента"
+      description="Опишите задачу обычным языком, выберите тип, добавьте данные и правила. LocalOS соберёт reusable agent без внешних действий по умолчанию."
+      actions={(
+        <Button type="button" onClick={onCreate} disabled={actionLoading || !canCreate}>
+          {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+          Создать агента
+        </Button>
+      )}
+    >
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(21rem,0.8fr)]">
+        <div className="space-y-4">
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+            {scenarios.map((scenario) => {
+              const Icon = scenario.icon;
+              const selected = scenario.category === selectedScenario.category;
+              return (
+                <button
+                  key={scenario.category}
+                  type="button"
+                  className={cn(
+                    'rounded-xl border px-3 py-3 text-left transition',
+                    selected ? 'border-slate-900 bg-slate-950 text-white' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50',
+                  )}
+                  onClick={() => onScenarioSelect(scenario)}
+                >
+                  <div className="flex items-center gap-2">
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="text-sm font-semibold">{scenario.title}</span>
+                  </div>
+                  <div className={cn('mt-1 line-clamp-2 text-xs leading-5', selected ? 'text-slate-300' : 'text-slate-500')}>
+                    {scenario.description}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <textarea
+            className="min-h-32 w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-slate-400"
+            value={prompt}
+            onChange={(event) => onPromptChange(event.target.value)}
+            placeholder="Например: обработай договор, найди риски и подготовь письмо клиенту"
+          />
+          <div className="flex flex-wrap gap-2">
+            {examples.map((example) => (
+              <button
+                key={example}
+                type="button"
+                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-950"
+                onClick={() => onPromptChange(example)}
+              >
+                {example}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <WizardTextArea label="Какие данные использовать" value={dataSources} onChange={onDataSourcesChange} placeholder="Файл, текст, профиль бизнеса, услуги, отзывы" />
+            <WizardTextArea label="Что агент должен извлечь или понять" value={extractionRules} onChange={onExtractionRulesChange} placeholder="Поля, риски, сроки, исключения, факты" />
+            <WizardTextArea label="Какие правила применить" value={processingRules} onChange={onProcessingRulesChange} placeholder="Не придумывать факты, учитывать стиль, помечать спорное" />
+            <WizardTextArea label="Какой результат подготовить" value={outputFormat} onChange={onOutputFormatChange} placeholder="Отчёт, письмо, таблица, shortlist, черновики" />
+          </div>
+          <WizardTextArea label="Где нужен ручной контроль" value={manualControl} onChange={onManualControlChange} placeholder="Перед отправкой, публикацией, платежом, изменением данных" />
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
+            <Database className="h-4 w-4" />
+            Данные агента при создании
+          </div>
+          <div className="space-y-3">
+            <input
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+              value={sourceName}
+              onChange={(event) => onSourceNameChange(event.target.value)}
+              placeholder="Название текста или файла"
+            />
+            <textarea
+              className="min-h-28 w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+              value={sourceText}
+              onChange={(event) => onSourceTextChange(event.target.value)}
+              placeholder="Вставьте текст документа, шаблон письма, CSV или контекст задачи"
+            />
+            <div className="flex flex-wrap gap-2">
+              <label className="inline-flex cursor-pointer items-center rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
+                <Upload className="mr-2 h-4 w-4" />
+                {fileSource ? fileSource.name : 'Добавить файл'}
+                <input
+                  type="file"
+                  className="hidden"
+                  accept=".txt,.csv,.tsv,.md,.pdf,.docx,.xlsx"
+                  onChange={(event) => {
+                    void handleBuilderFile(event.target.files?.[0] || null);
+                    event.target.value = '';
+                  }}
+                />
+              </label>
+              {fileSource ? (
+                <Button type="button" size="sm" variant="outline" onClick={() => onFileSourceChange(null)}>
+                  Убрать файл
+                </Button>
+              ) : null}
+            </div>
+            <select
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+              value={internalSource}
+              onChange={(event) => onInternalSourceChange(event.target.value)}
+            >
+              <option value="business_profile">Профиль бизнеса</option>
+              <option value="services">Услуги</option>
+              <option value="reviews">Отзывы</option>
+              <option value="prospectingleads">Лиды</option>
+              <option value="outreach_drafts">Черновики outreach</option>
+              <option value="none">Не подключать источник LocalOS</option>
+            </select>
+            <div className="rounded-xl border border-emerald-100 bg-white px-3 py-3 text-xs leading-5 text-slate-600">
+              <div className="font-semibold text-slate-950">Безопасность v1</div>
+              <div className="mt-1">Generic agents готовят результат и ждут подтверждения. Отправка, публикация, платежи и destructive actions не выполняются автоматически.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </DashboardSection>
+  );
+};
+
 const AgentWorkspacePanel = ({
   setupDataSources,
   setupExtractionRules,
@@ -1330,12 +1678,27 @@ const AgentRunReviewPanel = ({
       </div>
       {review?.run_status ? <StatusBadge status={review.run_status} /> : null}
     </div>
+    <div className="mb-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,0.7fr)]">
+      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Как настроен агент</div>
+        <div className="mt-2 space-y-1 text-sm leading-6 text-slate-700">
+          <div><span className="font-medium text-slate-950">Задача:</span> {String(review?.setup?.workflow_description || 'не задана')}</div>
+          <div><span className="font-medium text-slate-950">Извлечь:</span> {String(review?.setup?.extraction_rules || 'не задано')}</div>
+          <div><span className="font-medium text-slate-950">Результат:</span> {String(review?.setup?.output_format || 'не задан')}</div>
+        </div>
+      </div>
+      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Источники</div>
+        <AgentSourcesList sources={review?.sources || []} />
+      </div>
+    </div>
     {review?.sections?.length ? (
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {review.sections.map((section) => (
           <div key={`${section.artifact_type || section.title}`} className="rounded-xl bg-slate-50 px-3 py-3 ring-1 ring-slate-200">
             <div className="text-sm font-medium text-slate-950">{section.title || 'Результат'}</div>
             <div className="mt-1 text-xs leading-5 text-slate-600">{section.summary || section.status || 'Готово'}</div>
+            <HumanPayloadView payload={section.payload || {}} />
             <details className="mt-2">
               <summary className="cursor-pointer text-xs font-medium text-slate-500 hover:text-slate-900">Технический журнал</summary>
               <pre className="mt-2 max-h-56 overflow-auto rounded-lg bg-slate-950 p-3 text-[11px] leading-5 text-slate-100">
@@ -1361,6 +1724,70 @@ const AgentRunReviewPanel = ({
     </div>
   </div>
 );
+
+const HumanPayloadView = ({ payload }: { payload: Record<string, unknown> }) => {
+  const result = payload.result && typeof payload.result === 'object' && !Array.isArray(payload.result) ? payload.result : null;
+  const items = Array.isArray(payload.items) ? payload.items : [];
+  const missing = Array.isArray(payload.missing_information) ? payload.missing_information : [];
+  const provenance = Array.isArray(payload.provenance) ? payload.provenance : [];
+
+  return (
+    <div className="mt-3 space-y-2 text-xs leading-5 text-slate-700">
+      {missing.length ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-2 text-amber-800">
+          Нужно уточнить: {missing.map((item) => String(item)).join(', ')}
+        </div>
+      ) : null}
+      {provenance.length ? (
+        <div className="rounded-lg bg-white px-2 py-2 ring-1 ring-slate-200">
+          Источники: {provenance.map((item) => String(item)).join(', ')}
+        </div>
+      ) : null}
+      {items.length ? (
+        <div className="space-y-1">
+          {items.slice(0, 3).map((item, index) => (
+            <div key={`payload-item-${index}`} className="rounded-lg bg-white px-2 py-2 ring-1 ring-slate-200">
+              {formatPayloadItem(item)}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {result ? <HumanResultView result={result} /> : null}
+    </div>
+  );
+};
+
+const HumanResultView = ({ result }: { result: object }) => {
+  const entries = Object.entries(result).filter(([, value]) => value !== '' && value !== null && value !== undefined);
+  return (
+    <div className="rounded-lg bg-white px-2 py-2 ring-1 ring-slate-200">
+      {entries.slice(0, 5).map(([key, value]) => (
+        <div key={key} className="mt-1 first:mt-0">
+          <span className="font-medium text-slate-950">{humanizeMeta(key)}:</span> {formatPayloadValue(value)}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const formatPayloadItem = (value: unknown) => {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const entries = Object.entries(value).filter(([, itemValue]) => itemValue !== '' && itemValue !== null && itemValue !== undefined);
+    return entries.slice(0, 3).map(([key, itemValue]) => `${humanizeMeta(key)}: ${formatPayloadValue(itemValue)}`).join(' · ');
+  }
+  return formatPayloadValue(value);
+};
+
+const formatPayloadValue = (value: unknown): string => {
+  if (Array.isArray(value)) {
+    return value.slice(0, 4).map((item) => formatPayloadValue(item)).join(', ');
+  }
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value).filter(([, itemValue]) => itemValue !== '' && itemValue !== null && itemValue !== undefined);
+    return entries.slice(0, 3).map(([key, itemValue]) => `${humanizeMeta(key)}: ${formatPayloadValue(itemValue)}`).join('; ');
+  }
+  return String(value ?? '');
+};
 
 const DraftPreviewBlock = ({ title, items, empty }: { title: string; items: string[]; empty: string }) => (
   <div className="rounded-xl bg-white px-3 py-3 ring-1 ring-emerald-100">

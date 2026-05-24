@@ -1,0 +1,41 @@
+{
+  "task_id": "agents-ux-document-agent-20260524",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Agents page has scenario builder, wizard fields, data source inputs, and technical JSON remains collapsed."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Document agent category can be explicit, setup/sources are saved at creation, and runner stops for final_output approval."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Run review has human-readable setup, sources, and payload summaries before technical journal."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Generic agents keep empty capability allowlist and no external dispatch; guardrails passed."
+    },
+    {
+      "id": "GAP1",
+      "status": "PASS",
+      "reason": "Authenticated browser smoke was blocked by missing logged-in session."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/api/agent_blueprints_api.py src/services/agent_blueprint_draft_builder.py src/services/agent_blueprint_workspace.py src/services/agent_blueprint_runner.py",
+    "PYTHONPATH=src:. python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "npm --prefix frontend run build",
+    "scripts/lint_backend_baseline.sh",
+    "PYTHONPATH=src:. python3 -m pytest -q tests/test_agent_blueprint_layer.py tests/test_operator_chat_fallback_api.py tests/test_operator_intent_ai_router.py"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/agents-ux-document-agent-20260524/evidence.md"
+  ]
+}

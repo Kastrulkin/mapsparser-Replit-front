@@ -1,0 +1,59 @@
+{
+  "task_id": "agents-ux-document-agent-20260524",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Product-level Agents builder replaces technical-first creation flow.",
+      "status": "PASS",
+      "proof": [
+        "AgentBuilderPanel with explicit scenarios and wizard fields",
+        "Data source inputs are available during creation",
+        "JSON stays collapsed under technical journal"
+      ],
+      "gaps": [
+        "Authenticated browser smoke still requires logged-in session"
+      ]
+    },
+    {
+      "id": "AC2",
+      "text": "Document agent works through setup, sources, run artifacts, approval, and feedback version draft.",
+      "status": "PASS",
+      "proof": [
+        "Explicit category is accepted by draft builder/API",
+        "test_generic_document_runner_uses_sources_and_stops_for_final_approval covers document run",
+        "feedback endpoint/version draft coverage remains in route and guardrail tests"
+      ],
+      "gaps": [
+        "Binary PDF/DOCX/XLSX deep extraction is not part of v1"
+      ]
+    },
+    {
+      "id": "AC3",
+      "text": "Safety boundaries remain intact.",
+      "status": "PASS",
+      "proof": [
+        "Generic capability allowlist remains empty",
+        "lint backend baseline passed",
+        "No direct dispatcher call from blueprint runtime"
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
+    "src/api/agent_blueprints_api.py",
+    "src/services/agent_blueprint_draft_builder.py",
+    "tests/test_agent_blueprint_layer.py",
+    "scripts/lint_backend_baseline.sh"
+  ],
+  "commands_for_fresh_verifier": [
+    "PYTHONPATH=src:. python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "npm --prefix frontend run build",
+    "scripts/lint_backend_baseline.sh"
+  ],
+  "known_gaps": [
+    "Authenticated browser smoke still needs a real logged-in session or explicit test credentials.",
+    "Generic document v1 handles pasted/text-readable content; deeper binary document parsing remains separate."
+  ]
+}

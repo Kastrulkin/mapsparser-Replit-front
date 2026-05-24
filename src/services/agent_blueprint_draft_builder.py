@@ -31,9 +31,9 @@ def infer_blueprint_category(description: str) -> str:
     return "custom"
 
 
-def build_agent_blueprint_draft(description: str) -> Dict[str, Any]:
+def build_agent_blueprint_draft(description: str, preferred_category: str = "") -> Dict[str, Any]:
     request_text = _normalized_text(description)
-    category = infer_blueprint_category(request_text)
+    category = _normalized_category(preferred_category) or infer_blueprint_category(request_text)
     if category == "outreach":
         version_payload = default_supervised_outreach_version_payload()
         version_payload["goal"] = request_text or version_payload["goal"]
@@ -91,6 +91,26 @@ def _draft_name(description: str, fallback: str) -> str:
     return cleaned[:77].rstrip() + "..."
 
 
+def _normalized_category(value: str) -> str:
+    category = _normalized_text(value).lower()
+    allowed = {"documents", "email", "tables", "outreach", "reviews", "partnerships", "booking", "services", "custom"}
+    aliases = {
+        "document": "documents",
+        "docs": "documents",
+        "letters": "email",
+        "mail": "email",
+        "spreadsheet": "tables",
+        "spreadsheets": "tables",
+        "leads": "outreach",
+        "clients": "outreach",
+        "partnership": "partnerships",
+        "booking_agent": "booking",
+        "services_optimize": "services",
+    }
+    category = aliases.get(category, category)
+    return category if category in allowed else ""
+
+
 def _default_name_for_category(category: str) -> str:
     names = {
         "documents": "Агент обработки документов",
@@ -98,6 +118,8 @@ def _default_name_for_category(category: str) -> str:
         "tables": "Агент обработки таблиц",
         "reviews": "Агент ответов на отзывы",
         "partnerships": "Агент партнёрств",
+        "booking": "Агент бронирования",
+        "services": "Агент оптимизации услуг",
     }
     return names.get(category, "Кастомный агент")
 
@@ -113,6 +135,10 @@ def _sources_for_category(category: str) -> List[str]:
         return ["external_reviews", "business_profile", "services"]
     if category == "partnerships":
         return ["prospectingleads", "services", "business_profile"]
+    if category == "booking":
+        return ["business_profile", "services", "manual_context"]
+    if category == "services":
+        return ["services", "business_profile", "reviews"]
     return ["manual_context", "business_profile"]
 
 
@@ -192,6 +218,8 @@ def _output_format_for_category(category: str) -> str:
         "tables": "exceptions_report",
         "reviews": "reply_drafts",
         "partnerships": "proposal_draft",
+        "booking": "booking_rules_summary",
+        "services": "service_optimization_plan",
     }
     return formats.get(category, "custom_artifact")
 

@@ -278,7 +278,7 @@ def create_agent_blueprint_draft():
     if not business_id or not description:
         return _json_error("business_id and description are required", 400, "VALIDATION_ERROR")
 
-    draft = build_agent_blueprint_draft(description)
+    draft = build_agent_blueprint_draft(description, str(payload.get("category") or ""))
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
