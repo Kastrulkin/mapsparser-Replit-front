@@ -454,8 +454,13 @@ export const AgentBlueprintsPage = () => {
     [activeRun],
   );
 
+  const activeRunPendingApprovals = useMemo(
+    () => (activeRun?.approvals || []).filter((item) => item.status === 'pending'),
+    [activeRun?.approvals],
+  );
+
   const pendingApprovals = useMemo(
-    () => blueprintDetails?.approval_queue || [],
+    () => (blueprintDetails?.approval_queue || []).filter((item) => item.status === 'pending'),
     [blueprintDetails?.approval_queue],
   );
 
@@ -513,12 +518,12 @@ export const AgentBlueprintsPage = () => {
       },
       {
         label: 'Подтверждения',
-        value: pendingApprovals.length || activeRun?.approvals?.length || 0,
+        value: pendingApprovals.length || activeRunPendingApprovals.length,
         hint: pendingApprovals.length ? 'Есть ожидающие решения' : 'Нет ожидающих решений',
         tone: pendingApprovals.length || pendingApproval ? 'warning' : 'default',
       },
     ],
-    [activeRun, blueprints.length, currentBusiness?.name, pendingApproval, pendingApprovals.length],
+    [activeRun, activeRunPendingApprovals.length, blueprints.length, currentBusiness?.name, pendingApproval, pendingApprovals.length],
   );
 
   const loadBlueprints = useCallback(async () => {
@@ -579,6 +584,7 @@ export const AgentBlueprintsPage = () => {
       const response = await api.get(`/agent-runs/${runId}`);
       setActiveRun(response.data?.run || null);
       if (selectedBlueprint?.id) {
+        await loadBlueprintDetails(selectedBlueprint.id);
         await loadBlueprintReview(selectedBlueprint.id);
       }
     } catch (requestError) {
@@ -750,6 +756,7 @@ export const AgentBlueprintsPage = () => {
       });
       setActiveRun(response.data?.run || null);
       if (selectedBlueprint?.id) {
+        await loadBlueprintDetails(selectedBlueprint.id);
         await loadBlueprintReview(selectedBlueprint.id);
       }
     } catch (requestError) {
