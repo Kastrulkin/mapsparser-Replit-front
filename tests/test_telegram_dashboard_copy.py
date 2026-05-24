@@ -201,6 +201,12 @@ def test_operator_refresh_jobs_text_keeps_publication_manual() -> None:
                     "created_at": "2026-05-24T10:00:00+00:00",
                     "new_reviews_count": 2,
                     "new_unanswered_reviews_count": 1,
+                    "reliability_state": {
+                        "status": "failed",
+                        "title": "Таймаут парсинга",
+                        "reason_code": "timeout",
+                        "next_step": "Проверьте ссылку и повторите обновление позже.",
+                    },
                     "new_reviews": [
                         {
                             "author_name": "Анна",
@@ -217,5 +223,6 @@ def test_operator_refresh_jobs_text_keeps_publication_manual() -> None:
     assert "В работе: 1" in text
     assert "Новых отзывов: 2" in text
     assert "Анна" in text
+    assert "Надёжность: Таймаут парсинга (timeout)" in text
     assert "подготовь ответы на отзывы" in text
     assert "публикация в карты остаётся ручной" in text.lower()

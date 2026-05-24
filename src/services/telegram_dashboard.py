@@ -292,6 +292,15 @@ def _format_operator_refresh_jobs_text(refresh_jobs: dict[str, Any]) -> str:
             error_message = str(job.get("error_message") or "").strip()
             if error_message:
                 lines.append(f"   Ошибка: {error_message}")
+            reliability = job.get("reliability_state") if isinstance(job.get("reliability_state"), dict) else {}
+            reliability_title = str(reliability.get("title") or "").strip()
+            reliability_reason = str(reliability.get("reason_code") or "").strip()
+            reliability_next = str(reliability.get("next_step") or "").strip()
+            if reliability_title and str(reliability.get("status") or "") not in {"ok", "processing"}:
+                reason_suffix = f" ({reliability_reason})" if reliability_reason else ""
+                lines.append(f"   Надёжность: {reliability_title}{reason_suffix}.")
+                if reliability_next:
+                    lines.append(f"   Что делать: {reliability_next}")
             reviews = job.get("new_reviews") if isinstance(job.get("new_reviews"), list) else []
             for review in reviews[:2]:
                 if not isinstance(review, dict):

@@ -1,0 +1,85 @@
+{
+  "task_id": "operator-sprint42-parse-reliability-panel-20260524",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Refresh result and refresh-job history expose typed reliability_state from existing parsequeue/worker fields.",
+      "status": "PASS",
+      "proof": [
+        "services.operator_refresh_result.build_parse_reliability_state creates reliability_state.",
+        "build_refresh_result_status and list_refresh_jobs include reliability_state in API payloads."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Reliability state covers success, processing, retrying, captcha, failed, paused, completed-with-warnings, and known parser failure reasons.",
+      "status": "PASS",
+      "proof": [
+        "Reliability labels/explanations map parser reason codes from parsing_failure_taxonomy.",
+        "tests/test_operator_refresh_result.py covers timeout, retrying, captcha, and completed warnings."
+      ],
+      "gaps": [
+        "Future parser reason codes fall back to unknown until explicitly mapped."
+      ]
+    },
+    {
+      "id": "AC3",
+      "text": "Web Operator shows retry/captcha/error/warning counters and a user-facing explanation per refresh job.",
+      "status": "PASS",
+      "proof": [
+        "OperatorPage adds RefreshReliabilityState, renderReliabilityDetails, and summary counters.",
+        "npm --prefix frontend run build passed."
+      ],
+      "gaps": [
+        "No browser screenshot captured in this pass."
+      ]
+    },
+    {
+      "id": "AC4",
+      "text": "Telegram refresh-job summaries include compact reliability information when a job needs attention.",
+      "status": "PASS",
+      "proof": [
+        "services.telegram_dashboard adds a Надёжность line for non-ok/non-processing jobs.",
+        "tests/test_telegram_dashboard_copy.py asserts the Telegram reliability copy."
+      ],
+      "gaps": [
+        "No live Telegram message was sent during verification."
+      ]
+    },
+    {
+      "id": "AC5",
+      "text": "Feature stays read-only: no retry execution, no Apify start, no credit mutation, no external map writes.",
+      "status": "PASS",
+      "proof": [
+        "scripts/lint_backend_baseline.sh includes read-only guardrails for refresh reliability.",
+        "Docs state Sprint 42 does not retry, start Apify, mutate credits, publish replies, or write to external providers."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/services/operator_refresh_result.py",
+    "src/services/telegram_dashboard.py",
+    "frontend/src/pages/dashboard/OperatorPage.tsx",
+    "tests/test_operator_refresh_result.py",
+    "tests/test_telegram_dashboard_copy.py",
+    "scripts/lint_backend_baseline.sh",
+    "docs/agents/localos-operator.md",
+    "docs/agents/tool-registry.md",
+    "docs/agents/index.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/services/operator_refresh_result.py src/services/telegram_dashboard.py src/api/operator_api.py src/worker.py",
+    "PYTHONPATH=src:. python3 -m pytest -q tests/test_operator_refresh_result.py tests/test_telegram_dashboard_copy.py tests/test_operator_refresh_telegram_followup.py tests/test_worker_apify_settlement.py tests/test_operator_map_refresh.py",
+    "scripts/lint_backend_baseline.sh",
+    "npm --prefix frontend run build",
+    "git diff --check",
+    "scripts/proof_loop.sh validate operator-sprint42-parse-reliability-panel-20260524"
+  ],
+  "known_gaps": [
+    "No production parse failure was manually triggered.",
+    "No browser screenshot captured; Vite build validates frontend compilation."
+  ]
+}

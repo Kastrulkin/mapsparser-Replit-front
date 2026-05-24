@@ -453,6 +453,16 @@ Sprint 41 adds Telegram actual follow-up after paid refresh completion:
 
 Sprint 41 does not start new parser jobs, bypass credit checks, publish replies, send customer messages, or write to external map providers. It only sends a one-time owner notification about a refresh job that has already completed in LocalOS.
 
+Sprint 42 adds parse reliability visibility for refresh jobs:
+
+- backend service: `services.operator_refresh_result.build_parse_reliability_state`;
+- refresh result and refresh-job history now include `reliability_state`;
+- reliability state classifies parser outcomes such as retrying, captcha, timeout, proxy/transport failure, empty payload, quality gate failure, retry exhaustion, and completed-with-warnings;
+- web Operator shows retry/captcha/error/warning counters and a user-facing explanation on each refresh job;
+- Telegram refresh-job summaries include a compact reliability line when a job needs attention.
+
+Sprint 42 does not retry jobs, start Apify, change pricing, release or charge credits, publish review replies, or write to external map providers. It makes existing parsequeue and worker state understandable to the user.
+
 Sprint 14 still does not call Apify, create parsequeue jobs, generate AI content, write to external providers, publish to maps, or enable production execution. It only tightens the safety gate before future paid runtime rollout.
 
 Sprint 15 adds manual review intake through Operator chat:

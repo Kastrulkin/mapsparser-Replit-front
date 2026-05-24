@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from parsing_failure_taxonomy import classify_failure_reason
 from services.operator_manual_review import _build_ui_action
 from services.operator_news_generation import _clean_text, _row_to_dict
 
@@ -11,11 +12,54 @@ REVIEWS_URL = "/dashboard/card?tab=reviews&review_filter=needs_reply"
 MAP_REFRESH_SOURCE = "apify_yandex"
 MAP_REFRESH_TASK_TYPE = "parse_card"
 
+REASON_LABELS = {
+    "captcha": "Нужна проверка",
+    "empty_payload": "Пустой ответ парсера",
+    "parser_mismatch": "Ошибка парсера",
+    "proxy_transport": "Сетевая ошибка",
+    "timeout": "Таймаут парсинга",
+    "blocked_session": "Сессия парсинга прервана",
+    "invalid_org_url": "Некорректная ссылка",
+    "quality_gate_fail": "Данные не прошли проверку",
+    "retry_exhausted": "Повторы исчерпаны",
+    "task_ttl_exceeded": "Задача устарела",
+    "closed_business": "Бизнес закрыт в источнике",
+    "unknown": "Причина уточняется",
+}
+
+REASON_EXPLANATIONS = {
+    "captcha": "Источник запросил дополнительную проверку. LocalOS не публикует ничего во внешние карты и ждёт безопасного продолжения парсинга.",
+    "empty_payload": "Провайдер или парсер вернул недостаточно данных, поэтому LocalOS не стал обновлять карточку слабым результатом.",
+    "parser_mismatch": "Структура ответа отличалась от ожидаемой. Нужна повторная попытка или разбор парсера.",
+    "proxy_transport": "Запрос не прошёл через транспортный слой или прокси. Обычно помогает повтор после восстановления сети.",
+    "timeout": "Источник отвечал слишком долго. Если есть retry, LocalOS попробует снова по расписанию.",
+    "blocked_session": "Сессия парсинга была потеряна или заблокирована. Нужно дождаться новой попытки или запустить обновление позже.",
+    "invalid_org_url": "Ссылка на карточку выглядит некорректной. Проверьте URL в профиле бизнеса.",
+    "quality_gate_fail": "Данные пришли, но не прошли внутреннюю проверку качества. Старый snapshot сохранён.",
+    "retry_exhausted": "Автоматические повторы закончились. Лучше проверить ссылку и запустить обновление заново.",
+    "task_ttl_exceeded": "Задача слишком долго не могла завершиться и была остановлена.",
+    "closed_business": "Источник сообщает, что бизнес закрыт. Проверьте карточку и ссылку.",
+    "unknown": "LocalOS сохранил техническую причину. Если ошибка повторяется, её стоит передать в поддержку.",
+}
+
+
+def _extract_reason_code(status: Any, error_message: Any) -> str:
+    message = _clean_text(error_message)
+    marker = "reason_code="
+    if marker in message:
+        tail = message.split(marker, 1)[1]
+        code = tail.split(";", 1)[0].strip()
+        if code:
+            return code
+    return classify_failure_reason(status, message)
+
 
 def _load_queue(cursor: Any, *, business_id: str, user_id: str, queue_id: str) -> dict[str, Any] | None:
     cursor.execute(
         """
-        SELECT id, business_id, user_id, status, source, task_type, error_message, created_at, updated_at
+        SELECT id, business_id, user_id, status, source, task_type, error_message,
+               retry_after, captcha_required, captcha_url, captcha_status, resume_requested,
+               warnings, created_at, updated_at
         FROM parsequeue
         WHERE id = %s
           AND business_id = %s
@@ -50,6 +94,151 @@ def _int_value(value: Any) -> int:
         return int(value or 0)
     except Exception:
         return 0
+
+
+def _bool_value(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    return _clean_text(value).lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _split_notes(value: Any) -> list[str]:
+    text = _clean_text(value)
+    if not text:
+        return []
+    chunks: list[str] = []
+    for part in text.replace("\n", " | ").split("|"):
+        clean = part.strip()
+        if clean:
+            chunks.append(clean)
+    return chunks[:6]
+
+
+def build_parse_reliability_state(queue: dict[str, Any] | None) -> dict[str, Any]:
+    if not queue:
+        return {
+            "status": "unknown",
+            "severity": "warning",
+            "reason_code": "unknown",
+            "title": "Статус парсинга не найден",
+            "explanation": "LocalOS не нашёл задачу обновления.",
+            "next_step": "Проверьте историю обновлений или запустите refresh заново.",
+            "retry_after": None,
+            "captcha_required": False,
+            "resume_requested": False,
+            "warnings": [],
+        }
+
+    queue_status = _clean_text(queue.get("status")).lower()
+    error_message = _clean_text(queue.get("error_message"))
+    warnings = _split_notes(queue.get("warnings"))
+    retry_after = queue.get("retry_after")
+    captcha_required = _bool_value(queue.get("captcha_required")) or queue_status == "captcha"
+    resume_requested = _bool_value(queue.get("resume_requested"))
+    reason_code = _extract_reason_code(queue_status, error_message)
+
+    if queue_status in {"pending", "processing"} and retry_after:
+        return {
+            "status": "retrying",
+            "severity": "warning",
+            "reason_code": reason_code,
+            "title": "Запланирована повторная попытка",
+            "explanation": "Предыдущая попытка не дала стабильный результат. Worker попробует снова без публикаций во внешние карты.",
+            "next_step": "Дождитесь времени retry и проверьте результат обновления позже.",
+            "retry_after": retry_after,
+            "captcha_required": captcha_required,
+            "resume_requested": resume_requested,
+            "warnings": warnings,
+            "error_message": error_message,
+        }
+
+    if captcha_required:
+        return {
+            "status": "captcha_required",
+            "severity": "warning",
+            "reason_code": "captcha",
+            "title": REASON_LABELS["captcha"],
+            "explanation": REASON_EXPLANATIONS["captcha"],
+            "next_step": "Дождитесь обработки captcha-flow или запустите обновление позже, если задача перейдёт в ошибку.",
+            "retry_after": retry_after,
+            "captcha_required": True,
+            "captcha_status": queue.get("captcha_status"),
+            "resume_requested": resume_requested,
+            "warnings": warnings,
+            "error_message": error_message,
+        }
+
+    if queue_status in {"pending", "processing"}:
+        return {
+            "status": "processing",
+            "severity": "info",
+            "reason_code": "",
+            "title": "Парсинг выполняется",
+            "explanation": "Worker собирает read-only данные с карт. Внешние публикации и ответы не выполняются.",
+            "next_step": "Проверьте результат немного позже.",
+            "retry_after": retry_after,
+            "captcha_required": False,
+            "resume_requested": resume_requested,
+            "warnings": warnings,
+        }
+
+    if queue_status in {"completed", "done", "success"}:
+        if warnings:
+            return {
+                "status": "warning",
+                "severity": "warning",
+                "reason_code": "completed_with_warnings",
+                "title": "Обновление завершено с предупреждениями",
+                "explanation": "Данные сохранены, но worker оставил технические предупреждения по качеству или settlement.",
+                "next_step": "Проверьте найденные отзывы и billing details. Если предупреждение повторяется, передайте его в поддержку.",
+                "retry_after": None,
+                "captcha_required": False,
+                "resume_requested": resume_requested,
+                "warnings": warnings,
+            }
+        return {
+            "status": "ok",
+            "severity": "success",
+            "reason_code": "",
+            "title": "Парсинг завершён",
+            "explanation": "Read-only обновление завершилось штатно.",
+            "next_step": "Если появились отзывы без ответа, подготовьте черновики ответов.",
+            "retry_after": None,
+            "captcha_required": False,
+            "resume_requested": resume_requested,
+            "warnings": [],
+        }
+
+    if queue_status == "paused":
+        return {
+            "status": "paused",
+            "severity": "warning",
+            "reason_code": reason_code,
+            "title": "Парсинг на паузе",
+            "explanation": "Задача остановлена до следующего безопасного продолжения.",
+            "next_step": "Проверьте статус позже или обратитесь в поддержку, если пауза не снимается.",
+            "retry_after": retry_after,
+            "captcha_required": captcha_required,
+            "resume_requested": resume_requested,
+            "warnings": warnings,
+            "error_message": error_message,
+        }
+
+    return {
+        "status": "failed",
+        "severity": "error",
+        "reason_code": reason_code,
+        "title": REASON_LABELS.get(reason_code, REASON_LABELS["unknown"]),
+        "explanation": REASON_EXPLANATIONS.get(reason_code, REASON_EXPLANATIONS["unknown"]),
+        "next_step": "Проверьте ссылку на карту и повторите обновление позже. Если ошибка повторится, передайте код причины в поддержку.",
+        "retry_after": retry_after,
+        "captcha_required": captcha_required,
+        "resume_requested": resume_requested,
+        "warnings": warnings,
+        "error_message": error_message,
+    }
 
 
 def _load_refresh_billing_state(cursor: Any, *, business_id: str, user_id: str, queue_id: str) -> dict[str, Any]:
@@ -197,6 +386,7 @@ def build_refresh_result_status(
 
     queue_status = _clean_text(queue.get("status")).lower()
     billing_state = _load_refresh_billing_state(cursor, business_id=business_id, user_id=user_id, queue_id=clean_queue_id)
+    reliability_state = build_parse_reliability_state(queue)
     if queue_status in {"pending", "processing", "captcha"}:
         return {
             "status": "processing",
@@ -204,6 +394,7 @@ def build_refresh_result_status(
             "queue_id": clean_queue_id,
             "queue_status": queue_status,
             "billing_state": billing_state,
+            "reliability_state": reliability_state,
             "new_reviews_count": 0,
             "new_unanswered_reviews_count": 0,
             "new_reviews": [],
@@ -217,6 +408,7 @@ def build_refresh_result_status(
             "queue_id": clean_queue_id,
             "queue_status": queue_status,
             "billing_state": billing_state,
+            "reliability_state": reliability_state,
             "new_reviews_count": 0,
             "new_unanswered_reviews_count": 0,
             "new_reviews": [],
@@ -245,6 +437,7 @@ def build_refresh_result_status(
         "queue_id": clean_queue_id,
         "queue_status": queue_status,
         "billing_state": billing_state,
+        "reliability_state": reliability_state,
         "new_reviews_count": count,
         "new_unanswered_reviews_count": unanswered_count,
         "new_reviews": new_reviews,
@@ -280,7 +473,9 @@ def _load_recent_refresh_queues(
 ) -> list[dict[str, Any]]:
     cursor.execute(
         """
-        SELECT id, business_id, user_id, status, source, task_type, error_message, created_at, updated_at
+        SELECT id, business_id, user_id, status, source, task_type, error_message,
+               retry_after, captcha_required, captcha_url, captcha_status, resume_requested,
+               warnings, created_at, updated_at
         FROM parsequeue
         WHERE business_id = %s
           AND user_id = %s
@@ -315,6 +510,7 @@ def list_refresh_jobs(
     )
     jobs: list[dict[str, Any]] = []
     status_counts = {"processing": 0, "completed": 0, "failed": 0}
+    reliability_counts = {"retrying": 0, "captcha_required": 0, "failed": 0, "warning": 0}
     total_new_reviews = 0
     total_new_unanswered = 0
     total_reserved_credits = 0
@@ -337,6 +533,10 @@ def list_refresh_jobs(
         total_new_reviews += new_reviews_count
         total_new_unanswered += new_unanswered_count
         billing_state = result.get("billing_state") if isinstance(result.get("billing_state"), dict) else {}
+        reliability_state = result.get("reliability_state") if isinstance(result.get("reliability_state"), dict) else {}
+        reliability_status = _clean_text(reliability_state.get("status"))
+        if reliability_status in reliability_counts:
+            reliability_counts[reliability_status] = reliability_counts.get(reliability_status, 0) + 1
         total_reserved_credits += int(billing_state.get("outstanding_credits") or 0)
         total_charged_credits += int(billing_state.get("charged_credits") or 0)
         total_released_credits += int(billing_state.get("released_credits") or 0)
@@ -352,6 +552,7 @@ def list_refresh_jobs(
                 "new_reviews_count": new_reviews_count,
                 "new_unanswered_reviews_count": new_unanswered_count,
                 "billing_state": billing_state,
+                "reliability_state": reliability_state,
                 "new_reviews": list(result.get("new_reviews") or [])[:5],
                 "chat_response": result.get("chat_response"),
                 "blocked_reasons": list(result.get("blocked_reasons") or []),
@@ -383,6 +584,10 @@ def list_refresh_jobs(
             "charged_credits": total_charged_credits,
             "released_credits": total_released_credits,
             "overage_credits": total_overage_credits,
+            "retrying_count": reliability_counts.get("retrying", 0),
+            "captcha_required_count": reliability_counts.get("captcha_required", 0),
+            "reliability_failed_count": reliability_counts.get("failed", 0),
+            "warning_count": reliability_counts.get("warning", 0),
         },
         "limits": {
             "external_calls_performed": False,

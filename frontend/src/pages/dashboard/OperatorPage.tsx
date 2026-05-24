@@ -292,6 +292,14 @@ const refreshBillingStyles: Record<string, string> = {
   unknown: 'bg-slate-100 text-slate-700 ring-slate-200',
 };
 
+const refreshReliabilityStyles: Record<string, string> = {
+  success: 'bg-emerald-50 text-emerald-800 ring-emerald-200',
+  info: 'bg-sky-50 text-sky-800 ring-sky-200',
+  warning: 'bg-amber-50 text-amber-800 ring-amber-200',
+  error: 'bg-rose-50 text-rose-800 ring-rose-200',
+  unknown: 'bg-slate-100 text-slate-700 ring-slate-200',
+};
+
 type OperatorChatResult = {
   status: 'completed' | 'blocked' | 'unsupported';
   intent: string;
@@ -393,6 +401,7 @@ type RefreshResult = {
   queue_id?: string;
   queue_status?: string;
   billing_state?: RefreshBillingState;
+  reliability_state?: RefreshReliabilityState;
   new_reviews_count?: number;
   new_unanswered_reviews_count?: number;
   new_reviews?: RefreshReview[];
@@ -410,6 +419,7 @@ type RefreshJob = {
   new_reviews_count?: number;
   new_unanswered_reviews_count?: number;
   billing_state?: RefreshBillingState;
+  reliability_state?: RefreshReliabilityState;
   new_reviews?: RefreshReview[];
   chat_response?: string;
   blocked_reasons?: string[];
@@ -432,6 +442,21 @@ type RefreshBillingState = {
   actual_credits?: number | string | null;
 };
 
+type RefreshReliabilityState = {
+  status: 'ok' | 'processing' | 'retrying' | 'captcha_required' | 'failed' | 'warning' | 'paused' | 'unknown' | string;
+  severity?: 'success' | 'info' | 'warning' | 'error' | string;
+  reason_code?: string;
+  title?: string;
+  explanation?: string;
+  next_step?: string;
+  retry_after?: string | null;
+  captcha_required?: boolean;
+  captcha_status?: string;
+  resume_requested?: boolean;
+  warnings?: string[];
+  error_message?: string;
+};
+
 type RefreshJobs = {
   status: string;
   summary: {
@@ -447,6 +472,10 @@ type RefreshJobs = {
     charged_credits?: number;
     released_credits?: number;
     overage_credits?: number;
+    retrying_count?: number;
+    captcha_required_count?: number;
+    reliability_failed_count?: number;
+    warning_count?: number;
   };
   jobs: RefreshJob[];
 };
@@ -546,6 +575,39 @@ const renderBillingDetails = (billing: RefreshBillingState | undefined) => {
         <div>Возврат: {billing.released_credits || 0}</div>
         <div>Overage: {billing.overage_credits || 0}</div>
       </div>
+    </div>
+  );
+};
+
+const renderReliabilityDetails = (reliability: RefreshReliabilityState | undefined) => {
+  if (!reliability) return null;
+  const severity = reliability.severity || 'unknown';
+  const style = refreshReliabilityStyles[severity] || refreshReliabilityStyles.unknown;
+  const warnings = reliability.warnings || [];
+  return (
+    <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-700">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={cn('rounded-full px-2 py-1 text-xs font-medium ring-1', style)}>
+          {reliability.title || reliability.status}
+        </span>
+        {reliability.reason_code ? (
+          <span className="text-xs font-semibold text-slate-500">код: {reliability.reason_code}</span>
+        ) : null}
+        {reliability.retry_after ? (
+          <span className="text-xs font-semibold text-slate-500">retry: {formatDateTime(reliability.retry_after)}</span>
+        ) : null}
+      </div>
+      {reliability.explanation ? <p className="mt-2">{reliability.explanation}</p> : null}
+      {reliability.next_step ? <p className="mt-1 font-medium text-slate-800">{reliability.next_step}</p> : null}
+      {warnings.length > 0 ? (
+        <div className="mt-2 space-y-1">
+          {warnings.slice(0, 3).map((warning) => (
+            <div key={warning} className="rounded-lg bg-slate-50 px-2 py-1 text-xs text-slate-600">
+              {warning}
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 };
@@ -1266,6 +1328,7 @@ export const OperatorPage = () => {
                       </div>
                     </div>
                     {renderBillingDetails(refreshResult.billing_state)}
+                    {renderReliabilityDetails(refreshResult.reliability_state)}
                     {refreshResult.new_reviews?.length ? (
                       <div className="mt-3 space-y-2">
                         {refreshResult.new_reviews.map((review) => (
@@ -1531,6 +1594,22 @@ export const OperatorPage = () => {
                 <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Списано</div>
                 <div className="mt-1 text-xl font-semibold text-slate-950">{refreshJobs.summary.charged_credits || 0}</div>
               </div>
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Retry</div>
+                <div className="mt-1 text-xl font-semibold text-slate-950">{refreshJobs.summary.retrying_count || 0}</div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Captcha</div>
+                <div className="mt-1 text-xl font-semibold text-slate-950">{refreshJobs.summary.captcha_required_count || 0}</div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Ошибки</div>
+                <div className="mt-1 text-xl font-semibold text-slate-950">{refreshJobs.summary.reliability_failed_count || 0}</div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Warnings</div>
+                <div className="mt-1 text-xl font-semibold text-slate-950">{refreshJobs.summary.warning_count || 0}</div>
+              </div>
             </div>
             {refreshJobs.jobs.length > 0 ? (
               <div className="space-y-3">
@@ -1555,6 +1634,7 @@ export const OperatorPage = () => {
                         {job.chat_response ? <p className="mt-2 text-sm leading-6 text-slate-700">{job.chat_response}</p> : null}
                         {job.error_message ? <p className="mt-2 text-sm leading-6 text-rose-700">{job.error_message}</p> : null}
                         {renderBillingDetails(job.billing_state)}
+                        {renderReliabilityDetails(job.reliability_state)}
                         {job.new_reviews?.length ? (
                           <div className="mt-3 space-y-2">
                             {job.new_reviews.map((review) => (

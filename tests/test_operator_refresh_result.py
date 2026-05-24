@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from services.operator_refresh_result import build_refresh_result_status, list_refresh_jobs
+from services.operator_refresh_result import build_parse_reliability_state, build_refresh_result_status, list_refresh_jobs
 
 
 class FakeCursor:
@@ -117,7 +117,7 @@ def test_refresh_result_reports_worker_failure() -> None:
             "business_id": "biz-1",
             "user_id": "user-1",
             "status": "failed",
-            "error_message": "apify timeout",
+            "error_message": "reason_code=timeout; apify timeout",
             "created_at": datetime(2026, 5, 24, 10, 0, tzinfo=timezone.utc),
         }
     )
@@ -127,6 +127,9 @@ def test_refresh_result_reports_worker_failure() -> None:
     assert result["status"] == "failed"
     assert result["blocked_reasons"] == ["refresh_job_failed"]
     assert "apify timeout" in result["chat_response"]
+    assert result["reliability_state"]["status"] == "failed"
+    assert result["reliability_state"]["reason_code"] == "timeout"
+    assert "Таймаут" in result["reliability_state"]["title"]
 
 
 def test_refresh_result_requires_known_queue() -> None:
@@ -156,6 +159,7 @@ def test_list_refresh_jobs_summarizes_recent_jobs() -> None:
                 "business_id": "biz-1",
                 "user_id": "user-1",
                 "status": "processing",
+                "retry_after": "2026-05-24T10:10:00+00:00",
                 "source": "apify_yandex",
                 "task_type": "parse_card",
                 "created_at": started_at,
@@ -195,9 +199,12 @@ def test_list_refresh_jobs_summarizes_recent_jobs() -> None:
     assert result["summary"]["processing_count"] == 1
     assert result["summary"]["completed_count"] == 1
     assert result["summary"]["failed_count"] == 1
+    assert result["summary"]["retrying_count"] == 1
+    assert result["summary"]["reliability_failed_count"] == 1
     assert result["summary"]["new_unanswered_reviews_count"] == 1
     assert result["jobs"][0]["queue_id"] == "queue-completed"
     assert result["jobs"][0]["ui_actions"][0]["action"] == "check_refresh_result"
+    assert result["jobs"][1]["reliability_state"]["status"] == "retrying"
     assert result["limits"]["external_writes_performed"] is False
 
 
@@ -244,3 +251,33 @@ def test_refresh_result_includes_billing_state_from_reservation_metadata() -> No
     assert result["billing_state"]["charged_credits"] == 3
     assert result["billing_state"]["released_credits"] == 2
     assert result["billing_state"]["provider_actual_cost"] == "0.24"
+
+
+def test_parse_reliability_state_explains_captcha_without_external_writes() -> None:
+    result = build_parse_reliability_state(
+        {
+            "status": "captcha",
+            "captcha_required": 1,
+            "captcha_status": "waiting",
+            "error_message": "reason_code=captcha; captcha_required",
+            "warnings": "",
+        }
+    )
+
+    assert result["status"] == "captcha_required"
+    assert result["severity"] == "warning"
+    assert result["reason_code"] == "captcha"
+    assert "не публикует" in result["explanation"]
+
+
+def test_parse_reliability_state_reports_completed_warnings() -> None:
+    result = build_parse_reliability_state(
+        {
+            "status": "completed",
+            "warnings": "operator_apify_settlement:charged:credits=3 | low_quality_payload:services",
+        }
+    )
+
+    assert result["status"] == "warning"
+    assert result["reason_code"] == "completed_with_warnings"
+    assert len(result["warnings"]) == 2

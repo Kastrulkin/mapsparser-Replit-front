@@ -65,6 +65,8 @@ Sprint 40 polishes paid refresh billing visibility. Refresh results and refresh-
 
 Sprint 41 adds the first automatic Telegram follow-up for paid refresh completion. After worker marks a read-only map refresh completed, LocalOS can send the owner a one-time Telegram summary with new-review counts, billing status, and the manual next step. It does not publish replies, send customer messages, or write to map providers.
 
+Sprint 42 adds parse reliability visibility for refresh jobs. Operator now shows retry, captcha, failed, and warning states with user-facing explanations from the existing `parsequeue`/worker status, both in the dashboard and compact Telegram summaries. It does not run new parsing or mutate external providers.
+
 The Operator model keeps one context, one permission system, one credit/usage ledger, one approval policy, and one audit trail across web and Telegram. Sprint 0 defines the product contract only; it does not imply that the web-chat runtime or Telegram Operator runtime is fully implemented.
 
 ## What Agents Must Not Assume
