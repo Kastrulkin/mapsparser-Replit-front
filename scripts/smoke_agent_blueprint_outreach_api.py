@@ -115,33 +115,11 @@ def setup_fixture(ids):
                 "Smoke City",
                 "lead-smoke@example.invalid",
                 "smoke_agent_blueprint",
-                "channel_selected",
-                "email",
+                "shortlist_approved",
+                "",
                 ids["business_id"],
                 "client_outreach",
                 "in_progress",
-            ),
-        )
-        cursor.execute(
-            """
-            INSERT INTO outreachmessagedrafts (
-                id, lead_id, channel, angle_type, tone, status,
-                generated_text, approved_text, created_by, approved_by,
-                created_at, updated_at
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-            """,
-            (
-                ids["draft_id"],
-                ids["lead_id"],
-                "email",
-                "partnership",
-                "short",
-                "approved",
-                "Smoke generated text",
-                "Smoke approved text",
-                ids["user_id"],
-                ids["user_id"],
             ),
         )
         conn.commit()
@@ -189,9 +167,9 @@ def cleanup_fixture(ids):
         cursor.execute("DELETE FROM agent_runs WHERE blueprint_id = %s", (ids["blueprint_id"],))
         cursor.execute("DELETE FROM agent_blueprint_versions WHERE blueprint_id = %s", (ids["blueprint_id"],))
         cursor.execute("DELETE FROM agent_blueprints WHERE id = %s", (ids["blueprint_id"],))
-        cursor.execute("DELETE FROM outreachsendqueue WHERE draft_id = %s", (ids["draft_id"],))
+        cursor.execute("DELETE FROM outreachsendqueue WHERE lead_id = %s", (ids["lead_id"],))
         cursor.execute("DELETE FROM outreachsendbatches WHERE id = %s", (ids["batch_id"],))
-        cursor.execute("DELETE FROM outreachmessagedrafts WHERE id = %s", (ids["draft_id"],))
+        cursor.execute("DELETE FROM outreachmessagedrafts WHERE lead_id = %s", (ids["lead_id"],))
         cursor.execute("DELETE FROM prospectingleads WHERE id = %s", (ids["lead_id"],))
         cursor.execute("DELETE FROM usersessions WHERE user_id = %s", (ids["user_id"],))
         cursor.execute("DELETE FROM businesses WHERE id = %s", (ids["business_id"],))
@@ -220,9 +198,11 @@ def assert_no_dispatch(ids):
                 b.status AS batch_status
             FROM outreachsendqueue q
             JOIN outreachsendbatches b ON b.id = q.batch_id
-            WHERE q.draft_id = %s
+            WHERE q.lead_id = %s
+            ORDER BY q.created_at DESC
+            LIMIT 1
             """,
-            (ids["draft_id"],),
+            (ids["lead_id"],),
         )
         if not row:
             raise RuntimeError("send queue row was not created")
@@ -244,7 +224,7 @@ def main():
         "user_id": f"smoke-agent-user-{suffix}",
         "business_id": f"smoke-agent-business-{suffix}",
         "lead_id": f"smoke-agent-lead-{suffix}",
-        "draft_id": f"smoke-agent-draft-{suffix}",
+        "draft_id": "",
         "blueprint_id": "",
         "run_id": "",
         "batch_id": "",
@@ -279,7 +259,7 @@ def main():
         _, run_payload = request_json(
             "POST",
             f"/api/agent-blueprints/{ids['blueprint_id']}/runs",
-            {"input": {"draft_ids": [ids["draft_id"]], "daily_limit": 10}},
+            {"input": {"lead_ids": [ids["lead_id"]], "daily_limit": 10, "limit": 5}},
             token=token,
             expected_status=201,
         )
@@ -306,6 +286,20 @@ def main():
 
         if run.get("status") != "completed":
             raise RuntimeError(f"run did not complete: {run.get('status')} {run.get('error_text')}")
+        draft_artifacts = [
+            item
+            for item in run.get("artifacts", [])
+            if item.get("artifact_type") == "message_drafts"
+        ]
+        draft_items = []
+        if draft_artifacts:
+            payload = draft_artifacts[-1].get("payload_json") or {}
+            draft_items = payload.get("items") if isinstance(payload.get("items"), list) else []
+        if not draft_items:
+            raise RuntimeError(f"run completed without message draft artifacts: {run}")
+        ids["draft_id"] = str(draft_items[0].get("id") or "")
+        if not ids["draft_id"]:
+            raise RuntimeError(f"message draft artifact has no draft id: {draft_items[0]}")
         queue_row = assert_no_dispatch(ids)
         time.sleep(2)
         assert_no_dispatch(ids)

@@ -209,6 +209,62 @@ def test_runner_blocks_send_capability_without_required_drafts_approval():
     assert blocked_steps[0]["output_json"]["required_approval_type"] == "drafts"
 
 
+def test_runner_creates_drafts_after_shortlist_approval_and_queues_after_drafts_approval():
+    from services.agent_blueprint_runner import AgentBlueprintRunner, default_supervised_outreach_version_payload
+
+    cursor = FakeCursor()
+    cursor.tables["agent_blueprints"]["bp1"] = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "name": "Outreach",
+        "category": "outreach",
+    }
+    cursor.tables["agent_blueprint_versions"]["ver1"] = {
+        "id": "ver1",
+        "blueprint_id": "bp1",
+        "steps_json": default_supervised_outreach_version_payload()["steps"],
+        "capability_allowlist_json": ["outreach.send_batch"],
+    }
+    cursor.tables["prospectingleads"]["lead1"] = {
+        "id": "lead1",
+        "business_id": "biz1",
+        "name": "Lead One",
+        "category": "beauty",
+        "city": "Moscow",
+        "email": "owner@example.com",
+        "status": "shortlist_approved",
+        "selected_channel": "",
+        "pipeline_status": "in_progress",
+    }
+    orchestrator = CountingOrchestrator()
+    runner = AgentBlueprintRunner(cursor, orchestrator=orchestrator)
+
+    result = runner.start_run("ver1", {"lead_ids": ["lead1"], "limit": 5}, {"user_id": "user1"})
+    run = result["run"]
+    shortlist_approval = run["approvals"][0]
+    assert shortlist_approval["payload_json"]["artifact_type"] == "lead_shortlist"
+    assert shortlist_approval["payload_json"]["count"] == 1
+
+    after_shortlist = runner.approve(run["id"], shortlist_approval["id"], {"user_id": "user1"})
+    draft_approval = after_shortlist["run"]["approvals"][-1]
+    assert draft_approval["approval_type"] == "drafts"
+    assert draft_approval["payload_json"]["artifact_type"] == "message_drafts"
+    assert draft_approval["payload_json"]["count"] == 1
+    draft_id = draft_approval["payload_json"]["items"][0]["id"]
+    assert cursor.tables["outreachmessagedrafts"][draft_id]["status"] == "generated"
+    assert cursor.tables["prospectingleads"]["lead1"]["status"] == "channel_selected"
+
+    after_drafts = runner.approve(after_shortlist["run"]["id"], draft_approval["id"], {"user_id": "user1"})
+
+    assert after_drafts["run"]["status"] == "completed"
+    assert cursor.tables["outreachmessagedrafts"][draft_id]["status"] == "approved"
+    assert cursor.tables["prospectingleads"]["lead1"]["status"] == "draft_ready"
+    assert orchestrator.calls == 1
+    assert orchestrator.last_envelope["capability"] == "outreach.send_batch"
+    assert orchestrator.last_envelope["payload"]["draft_ids"] == [draft_id]
+    assert orchestrator.last_envelope["payload"]["daily_limit"] == 10
+
+
 def test_risk_policy_requires_human_for_dangerous_capabilities():
     from core.action_policy import evaluate_risk_policy
 
@@ -227,6 +283,8 @@ class FakeCursor:
             "agent_run_steps": {},
             "agent_artifacts": {},
             "agent_approvals": {},
+            "prospectingleads": {},
+            "outreachmessagedrafts": {},
         }
         self.last_result = None
         self.last_results = []
@@ -325,9 +383,25 @@ class FakeCursor:
             run_id = params[0]
             self.last_results = [item for item in self.tables["agent_artifacts"].values() if item["run_id"] == run_id]
             return None
+        if normalized_query.startswith("select * from agent_approvals where id"):
+            approval_id = params[0]
+            run_id = params[1]
+            approval = self.tables["agent_approvals"].get(approval_id)
+            self.last_result = approval if approval and approval["run_id"] == run_id else None
+            return None
         if normalized_query.startswith("select * from agent_approvals"):
             run_id = params[0]
             self.last_results = [item for item in self.tables["agent_approvals"].values() if item["run_id"] == run_id]
+            return None
+        if normalized_query.startswith("select payload_json from agent_artifacts"):
+            run_id = params[0]
+            artifact_type = params[1]
+            matches = [
+                item
+                for item in self.tables["agent_artifacts"].values()
+                if item["run_id"] == run_id and item["artifact_type"] == artifact_type
+            ]
+            self.last_result = {"payload_json": matches[-1]["payload_json"]} if matches else None
             return None
         if normalized_query.startswith("select 1 from agent_approvals"):
             run_id = params[0]
@@ -341,6 +415,144 @@ class FakeCursor:
             ]
             self.last_result = {"?column?": 1} if matches else None
             return None
+        if normalized_query.startswith("select id, name, city, email"):
+            business_id = params[0]
+            lead_ids = params[1] if len(params) > 2 else []
+            rows = []
+            for lead in self.tables["prospectingleads"].values():
+                if lead.get("business_id") != business_id:
+                    continue
+                if lead_ids and lead.get("id") not in lead_ids:
+                    continue
+                rows.append(lead)
+            self.last_results = rows
+            return None
+        if normalized_query.startswith("update prospectingleads set status = case"):
+            business_id = params[3]
+            lead_ids = params[4]
+            for lead_id in lead_ids:
+                lead = self.tables["prospectingleads"].get(lead_id)
+                if lead and lead.get("business_id") == business_id and lead.get("status") not in {
+                    "channel_selected",
+                    "draft_ready",
+                    "queued_for_send",
+                    "sent",
+                    "delivered",
+                }:
+                    lead["status"] = params[0]
+                    lead["pipeline_status"] = params[1]
+                    lead["last_manual_action_by"] = params[2]
+            return None
+        if normalized_query.startswith("select d.id"):
+            business_id = params[0]
+            draft_ids = params[1] if len(params) > 2 else []
+            rows = []
+            for draft in self.tables["outreachmessagedrafts"].values():
+                lead = self.tables["prospectingleads"].get(draft.get("lead_id"))
+                if not lead or lead.get("business_id") != business_id:
+                    continue
+                if draft_ids and draft.get("id") not in draft_ids:
+                    continue
+                rows.append(
+                    {
+                        **draft,
+                        "lead_name": lead.get("name"),
+                    }
+                )
+            self.last_results = rows
+            return None
+        if normalized_query.startswith("select id, name, category"):
+            business_id = params[0]
+            lead_ids = set(params[1])
+            limit = params[2]
+            rows = []
+            for lead in self.tables["prospectingleads"].values():
+                if lead.get("business_id") != business_id or lead.get("id") not in lead_ids:
+                    continue
+                has_draft = any(
+                    draft.get("lead_id") == lead.get("id") and draft.get("status") in {"generated", "edited", "approved"}
+                    for draft in self.tables["outreachmessagedrafts"].values()
+                )
+                if not has_draft:
+                    rows.append(lead)
+            self.last_results = rows[:limit]
+            return None
+        if normalized_query.startswith("insert into outreachmessagedrafts"):
+            self.tables["outreachmessagedrafts"][params[0]] = {
+                "id": params[0],
+                "lead_id": params[1],
+                "channel": params[2],
+                "angle_type": params[3],
+                "tone": params[4],
+                "status": params[5],
+                "generated_text": params[6],
+                "edited_text": params[7],
+                "learning_note_json": json.loads(params[8]),
+                "created_by": params[9],
+                "approved_text": None,
+            }
+            return None
+        if normalized_query.startswith("update prospectingleads set status = %s, selected_channel"):
+            lead = self.tables["prospectingleads"].get(params[3])
+            if lead and lead.get("business_id") == params[4]:
+                lead["status"] = params[0]
+                lead["selected_channel"] = params[1]
+                lead["pipeline_status"] = params[2]
+            return None
+        if normalized_query.startswith("update outreachmessagedrafts set status = %s"):
+            draft_ids = params[2]
+            business_id = params[3]
+            for draft_id in draft_ids:
+                draft = self.tables["outreachmessagedrafts"].get(draft_id)
+                lead = self.tables["prospectingleads"].get((draft or {}).get("lead_id"))
+                if draft and lead and lead.get("business_id") == business_id:
+                    draft["status"] = params[0]
+                    draft["approved_by"] = params[1]
+                    draft["approved_text"] = draft.get("edited_text") or draft.get("generated_text")
+                    draft["edited_text"] = draft.get("edited_text") or draft.get("generated_text")
+            return None
+        if normalized_query.startswith("update prospectingleads set status = %s, pipeline_status"):
+            business_id = params[2]
+            draft_ids = set(params[3])
+            lead_ids = {
+                draft.get("lead_id")
+                for draft in self.tables["outreachmessagedrafts"].values()
+                if draft.get("id") in draft_ids
+            }
+            for lead_id in lead_ids:
+                lead = self.tables["prospectingleads"].get(lead_id)
+                if lead and lead.get("business_id") == business_id:
+                    lead["status"] = params[0]
+                    lead["pipeline_status"] = params[1]
+            return None
+        if normalized_query.startswith("update agent_approvals set status = 'approved'"):
+            approval = self.tables["agent_approvals"].get(params[2])
+            if approval and approval["run_id"] == params[3]:
+                approval["status"] = "approved"
+                approval["decided_by_user_id"] = params[0]
+                approval["decision_reason"] = params[1]
+            return None
+        if normalized_query.startswith("update agent_run_steps set status = 'completed'"):
+            step = self.tables["agent_run_steps"].get(params[1])
+            if step:
+                step["status"] = "completed"
+                step["output_json"] = json.loads(params[0])
+            return None
+        if normalized_query.startswith("update agent_runs set status = 'running'"):
+            self.tables["agent_runs"][params[0]]["status"] = "running"
+            return None
+        if normalized_query.startswith("update agent_runs set status = 'completed'"):
+            self.tables["agent_runs"][params[1]]["status"] = "completed"
+            self.tables["agent_runs"][params[1]]["output_json"] = json.loads(params[0])
+            return None
+        if normalized_query.startswith("select count(*) as count from agent_artifacts"):
+            run_id = params[0]
+            self.last_result = {"count": len([item for item in self.tables["agent_artifacts"].values() if item["run_id"] == run_id])}
+            return None
+        if normalized_query.startswith("select count(*) as count from agent_approvals"):
+            run_id = params[0]
+            self.last_result = {"count": len([item for item in self.tables["agent_approvals"].values() if item["run_id"] == run_id])}
+            return None
         raise AssertionError(f"Unhandled SQL in fake cursor: {query}")
 
     def fetchone(self):
@@ -353,9 +565,11 @@ class FakeCursor:
 class CountingOrchestrator:
     def __init__(self):
         self.calls = 0
+        self.last_envelope = None
 
     def execute(self, envelope, user_data, *, allow_execute_when_approved=False):
         self.calls += 1
+        self.last_envelope = envelope
         return {"success": True, "status": "completed", "result": {"status": "queued_for_dispatch"}}
 
 

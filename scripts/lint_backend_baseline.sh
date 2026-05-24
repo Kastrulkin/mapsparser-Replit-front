@@ -166,6 +166,9 @@ required = {
         "allow_execute_when_approved=True",
         "CAPABILITY_BLOCKED",
         "required_approval_type",
+        "_create_message_drafts_for_approved_shortlist",
+        "_apply_drafts_approval",
+        "_latest_artifact_item_ids",
     ],
     "src/services/agent_blueprint_orchestrator.py": [
         "OUTREACH_SEND_BATCH_CAPABILITY",

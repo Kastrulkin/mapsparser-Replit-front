@@ -7,6 +7,14 @@ from core.action_orchestrator import ActionOrchestrator
 
 RUNNING_STATUSES = {"running", "waiting_approval"}
 DANGEROUS_CAPABILITY_WORDS = ("send", "publish", "payment", "delete", "destructive", "mass")
+SHORTLIST_APPROVED = "shortlist_approved"
+SELECTED_FOR_OUTREACH = "selected_for_outreach"
+CHANNEL_SELECTED = "channel_selected"
+DRAFT_GENERATED = "generated"
+DRAFT_APPROVED = "approved"
+DRAFT_READY = "draft_ready"
+PIPELINE_IN_PROGRESS = "in_progress"
+SUPPORTED_BLUEPRINT_CHANNELS = ("telegram", "whatsapp", "email", "manual")
 
 
 def parse_json_field(value: Any, fallback: Any) -> Any:
@@ -187,6 +195,11 @@ class AgentBlueprintRunner:
                 approval.get("step_id"),
             ),
         )
+        approval_type = str(approval.get("approval_type") or "").strip()
+        if approval_type == "shortlist":
+            self._apply_shortlist_approval(run_id, user_id)
+        if approval_type == "drafts":
+            self._apply_drafts_approval(run_id, user_id)
         self.cursor.execute(
             "UPDATE agent_runs SET status = 'running', updated_at = NOW() WHERE id = %s",
             (run_id,),
@@ -350,6 +363,19 @@ class AgentBlueprintRunner:
         run_input = self._run_input(run)
         draft_ids = [str(item).strip() for item in run_input.get("draft_ids", []) if str(item).strip()] if isinstance(run_input.get("draft_ids"), list) else []
         limit = self._safe_limit(run_input.get("limit"), 30)
+        rows = self._load_message_draft_rows(run, draft_ids, limit)
+        if not rows and not draft_ids and self._has_required_approval(str(run.get("id") or ""), {"required_approval_type": "shortlist"}):
+            self._create_message_drafts_for_approved_shortlist(run, limit)
+            rows = self._load_message_draft_rows(run, draft_ids, limit)
+        return {
+            **base_payload,
+            "status": "hydrated" if rows else base_payload.get("status", "draft"),
+            "source": "outreachmessagedrafts",
+            "count": len(rows),
+            "items": rows,
+        }
+
+    def _load_message_draft_rows(self, run: Dict[str, Any], draft_ids: List[str], limit: int) -> List[Dict[str, Any]]:
         query = """
             SELECT d.id, d.lead_id, d.channel, d.status, d.generated_text, d.approved_text, l.name AS lead_name
             FROM outreachmessagedrafts d
@@ -366,16 +392,121 @@ class AgentBlueprintRunner:
         params.append(limit)
         try:
             self.cursor.execute(query, tuple(params))
-            rows = [dict(row) for row in (self.cursor.fetchall() or [])]
+            return [dict(row) for row in (self.cursor.fetchall() or [])]
         except Exception:
-            rows = []
-        return {
-            **base_payload,
-            "status": "hydrated" if rows else base_payload.get("status", "draft"),
-            "source": "outreachmessagedrafts",
-            "count": len(rows),
-            "items": rows,
-        }
+            return []
+
+    def _create_message_drafts_for_approved_shortlist(self, run: Dict[str, Any], limit: int) -> None:
+        lead_ids = self._latest_artifact_item_ids(str(run.get("id") or ""), "lead_shortlist", "id")
+        if not lead_ids:
+            return
+        try:
+            self.cursor.execute(
+                """
+                SELECT id, name, category, city, rating, reviews_count, website, phone,
+                       email, telegram_url, whatsapp_url, selected_channel, status
+                FROM prospectingleads
+                WHERE business_id = %s
+                  AND id = ANY(%s)
+                  AND NOT EXISTS (
+                        SELECT 1
+                        FROM outreachmessagedrafts d
+                        WHERE d.lead_id = prospectingleads.id
+                          AND d.status IN ('generated', 'edited', 'approved')
+                  )
+                ORDER BY updated_at DESC, created_at DESC
+                LIMIT %s
+                """,
+                (str(run.get("business_id") or ""), lead_ids, limit),
+            )
+            leads = [dict(row) for row in (self.cursor.fetchall() or [])]
+        except Exception:
+            return
+
+        actor_id = str(run.get("created_by_user_id") or "")
+        for lead in leads:
+            channel = self._select_blueprint_channel(lead)
+            if not channel:
+                continue
+            draft_id = str(uuid.uuid4())
+            draft_text = self._render_blueprint_outreach_draft(lead, channel)
+            self.cursor.execute(
+                """
+                INSERT INTO outreachmessagedrafts (
+                    id, lead_id, channel, angle_type, tone, status,
+                    generated_text, edited_text, learning_note_json, created_by
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s
+                )
+                """,
+                (
+                    draft_id,
+                    lead.get("id"),
+                    channel,
+                    "maps_growth",
+                    "professional",
+                    DRAFT_GENERATED,
+                    draft_text,
+                    draft_text,
+                    json.dumps(
+                        {
+                            "source": "agent_blueprint_local",
+                            "prompt_key": "supervised_outreach.blueprint.local_v1",
+                            "run_id": run.get("id"),
+                        },
+                        ensure_ascii=False,
+                    ),
+                    actor_id or None,
+                ),
+            )
+            self.cursor.execute(
+                """
+                UPDATE prospectingleads
+                SET status = %s,
+                    selected_channel = %s,
+                    pipeline_status = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                  AND business_id = %s
+                """,
+                (CHANNEL_SELECTED, channel, PIPELINE_IN_PROGRESS, lead.get("id"), str(run.get("business_id") or "")),
+            )
+
+    def _select_blueprint_channel(self, lead: Dict[str, Any]) -> str:
+        selected = str(lead.get("selected_channel") or "").strip().lower()
+        candidates = [selected] if selected else []
+        candidates.extend(channel for channel in SUPPORTED_BLUEPRINT_CHANNELS if channel not in candidates)
+        for channel in candidates:
+            if self._lead_has_channel_contact(lead, channel):
+                return channel
+        return ""
+
+    def _lead_has_channel_contact(self, lead: Dict[str, Any], channel: str) -> bool:
+        if channel == "manual":
+            return True
+        if channel == "telegram":
+            return bool(str(lead.get("telegram_url") or "").strip())
+        if channel == "whatsapp":
+            return bool(str(lead.get("whatsapp_url") or "").strip())
+        if channel == "email":
+            return bool(str(lead.get("email") or "").strip())
+        return False
+
+    def _render_blueprint_outreach_draft(self, lead: Dict[str, Any], channel: str) -> str:
+        company_name = str(lead.get("name") or "вашей компании").strip()
+        category = str(lead.get("category") or "локального бизнеса").strip()
+        city = str(lead.get("city") or "").strip()
+        location = f" в {city}" if city else ""
+        if channel == "email":
+            return (
+                f"Здравствуйте! Мы посмотрели карточку {company_name} в картах. "
+                f"Видим вас в категории «{category}»{location}. "
+                "Можем прислать короткий разбор: что мешает получать больше обращений и какие правки дадут быстрый эффект."
+            )
+        return (
+            f"Здравствуйте. Посмотрели карточку {company_name}: видим вас в категории «{category}»{location}. "
+            "Если актуально, пришлю короткий разбор с конкретными точками роста."
+        )
 
     def _build_outreach_outcomes_payload(self, run: Dict[str, Any], base_payload: Dict[str, Any]) -> Dict[str, Any]:
         run_input = self._run_input(run)
@@ -418,7 +549,7 @@ class AgentBlueprintRunner:
         step_id = self._insert_step(run, step, step_index, "waiting_approval", {}, {"approval": "pending"})
         approval_id = str(uuid.uuid4())
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
-        payload = step.get("payload") if isinstance(step.get("payload"), dict) else {}
+        payload = self._build_approval_payload(run, step)
         self.cursor.execute(
             """
             INSERT INTO agent_approvals (
@@ -472,6 +603,8 @@ class AgentBlueprintRunner:
         if not isinstance(run_input, dict):
             run_input = {}
         payload = {**run_input, **step_payload}
+        if capability == "outreach.send_batch" and not payload.get("draft_ids"):
+            payload["draft_ids"] = self._latest_artifact_item_ids(str(run.get("id") or ""), "message_drafts", "id")
         envelope = {
             "tenant_id": str(run.get("business_id") or ""),
             "actor": {
@@ -688,6 +821,122 @@ class AgentBlueprintRunner:
             return True
         lowered = capability.lower()
         return any(word in lowered for word in DANGEROUS_CAPABILITY_WORDS)
+
+    def _build_approval_payload(self, run: Dict[str, Any], step: Dict[str, Any]) -> Dict[str, Any]:
+        payload = step.get("payload") if isinstance(step.get("payload"), dict) else {}
+        approval_type = str(step.get("approval_type") or step.get("key") or "").strip()
+        artifact_type = ""
+        if approval_type == "shortlist":
+            artifact_type = "lead_shortlist"
+        if approval_type == "drafts":
+            artifact_type = "message_drafts"
+        if not artifact_type:
+            return dict(payload)
+        artifact_payload = self._latest_artifact_payload(str(run.get("id") or ""), artifact_type)
+        if not artifact_payload:
+            return dict(payload)
+        return {
+            **payload,
+            "artifact_type": artifact_type,
+            "artifact": artifact_payload,
+            "count": artifact_payload.get("count", 0),
+            "items": artifact_payload.get("items", []),
+        }
+
+    def _latest_artifact_payload(self, run_id: str, artifact_type: str) -> Dict[str, Any]:
+        self.cursor.execute(
+            """
+            SELECT payload_json
+            FROM agent_artifacts
+            WHERE run_id = %s
+              AND artifact_type = %s
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (run_id, artifact_type),
+        )
+        row = self.cursor.fetchone()
+        if not row:
+            return {}
+        payload = row.get("payload_json") if isinstance(row, dict) else row[0]
+        parsed = parse_json_field(payload, {})
+        return parsed if isinstance(parsed, dict) else {}
+
+    def _latest_artifact_item_ids(self, run_id: str, artifact_type: str, id_key: str) -> List[str]:
+        payload = self._latest_artifact_payload(run_id, artifact_type)
+        items = payload.get("items") if isinstance(payload.get("items"), list) else []
+        result = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            item_id = str(item.get(id_key) or "").strip()
+            if item_id:
+                result.append(item_id)
+        return list(dict.fromkeys(result))
+
+    def _apply_shortlist_approval(self, run_id: str, user_id: str) -> None:
+        run = self._load_run_header(run_id)
+        if not run:
+            return
+        lead_ids = self._latest_artifact_item_ids(run_id, "lead_shortlist", "id")
+        if not lead_ids:
+            return
+        self.cursor.execute(
+            """
+            UPDATE prospectingleads
+            SET status = CASE
+                    WHEN status IN ('channel_selected', 'draft_ready', 'queued_for_send', 'sent', 'delivered') THEN status
+                    ELSE %s
+                END,
+                pipeline_status = %s,
+                last_manual_action_at = NOW(),
+                last_manual_action_by = %s,
+                updated_at = NOW()
+            WHERE business_id = %s
+              AND id = ANY(%s)
+            """,
+            (SELECTED_FOR_OUTREACH, PIPELINE_IN_PROGRESS, user_id or None, str(run.get("business_id") or ""), lead_ids),
+        )
+
+    def _apply_drafts_approval(self, run_id: str, user_id: str) -> None:
+        run = self._load_run_header(run_id)
+        if not run:
+            return
+        draft_ids = self._latest_artifact_item_ids(run_id, "message_drafts", "id")
+        if not draft_ids:
+            return
+        self.cursor.execute(
+            """
+            UPDATE outreachmessagedrafts
+            SET status = %s,
+                approved_text = COALESCE(NULLIF(edited_text, ''), generated_text),
+                edited_text = COALESCE(NULLIF(edited_text, ''), generated_text),
+                approved_by = %s,
+                updated_at = NOW()
+            WHERE id = ANY(%s)
+              AND lead_id IN (
+                    SELECT id
+                    FROM prospectingleads
+                    WHERE business_id = %s
+              )
+            """,
+            (DRAFT_APPROVED, user_id or None, draft_ids, str(run.get("business_id") or "")),
+        )
+        self.cursor.execute(
+            """
+            UPDATE prospectingleads
+            SET status = %s,
+                pipeline_status = %s,
+                updated_at = NOW()
+            WHERE business_id = %s
+              AND id IN (
+                    SELECT lead_id
+                    FROM outreachmessagedrafts
+                    WHERE id = ANY(%s)
+              )
+            """,
+            (DRAFT_READY, PIPELINE_IN_PROGRESS, str(run.get("business_id") or ""), draft_ids),
+        )
 
     def _build_run_output(self, run_id: str) -> Dict[str, Any]:
         self.cursor.execute("SELECT COUNT(*) AS count FROM agent_artifacts WHERE run_id = %s", (run_id,))
