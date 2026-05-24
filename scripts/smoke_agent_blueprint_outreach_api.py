@@ -115,11 +115,11 @@ def setup_fixture(ids):
                 "Smoke City",
                 "lead-smoke@example.invalid",
                 "smoke_agent_blueprint",
-                "shortlist_approved",
+                "new",
                 "",
                 ids["business_id"],
                 "client_outreach",
-                "in_progress",
+                "unprocessed",
             ),
         )
         conn.commit()
@@ -259,7 +259,16 @@ def main():
         _, run_payload = request_json(
             "POST",
             f"/api/agent-blueprints/{ids['blueprint_id']}/runs",
-            {"input": {"lead_ids": [ids["lead_id"]], "daily_limit": 10, "limit": 5}},
+            {
+                "input": {
+                    "source": "smoke_agent_blueprint",
+                    "city": "Smoke City",
+                    "category": "",
+                    "intent": "client_outreach",
+                    "daily_limit": 10,
+                    "limit": 5,
+                }
+            },
             token=token,
             expected_status=201,
         )
@@ -298,6 +307,18 @@ def main():
             raise RuntimeError(f"lead sourcing did not use prospectingleads: {source_payload}")
         if source_payload.get("status") != "hydrated" or source_payload.get("count") != 1:
             raise RuntimeError(f"lead sourcing artifact was not hydrated from real leads: {source_payload}")
+        shortlist_artifacts = [
+            item
+            for item in run.get("artifacts", [])
+            if item.get("artifact_type") == "lead_shortlist"
+        ]
+        if not shortlist_artifacts:
+            raise RuntimeError(f"run completed without lead_shortlist artifact: {run}")
+        shortlist_payload = shortlist_artifacts[-1].get("payload_json") or {}
+        if shortlist_payload.get("source_artifact") != "lead_source_plan":
+            raise RuntimeError(f"shortlist did not derive from lead_source_plan: {shortlist_payload}")
+        if shortlist_payload.get("count") != 1:
+            raise RuntimeError(f"shortlist did not include sourced lead: {shortlist_payload}")
         draft_artifacts = [
             item
             for item in run.get("artifacts", [])

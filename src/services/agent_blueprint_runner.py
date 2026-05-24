@@ -401,6 +401,7 @@ class AgentBlueprintRunner:
     def _build_lead_shortlist_payload(self, run: Dict[str, Any], base_payload: Dict[str, Any]) -> Dict[str, Any]:
         run_input = self._run_input(run)
         lead_ids = self._normalized_string_list(run_input.get("lead_ids"))
+        source_lead_ids = self._latest_artifact_item_ids(str(run.get("id") or ""), "lead_source_plan", "id")
         limit = self._safe_limit(run_input.get("limit"), 30)
         query = """
             SELECT id, name, city, email, telegram_url, whatsapp_url, status, selected_channel, pipeline_status
@@ -411,6 +412,9 @@ class AgentBlueprintRunner:
         if lead_ids:
             query += " AND id = ANY(%s)"
             params.append(lead_ids)
+        elif source_lead_ids:
+            query += " AND id = ANY(%s)"
+            params.append(source_lead_ids)
         else:
             query += """
               AND (
@@ -429,6 +433,7 @@ class AgentBlueprintRunner:
             **base_payload,
             "status": "hydrated" if rows else base_payload.get("status", "draft"),
             "source": "prospectingleads",
+            "source_artifact": "lead_source_plan" if source_lead_ids and not lead_ids else "",
             "count": len(rows),
             "items": rows,
         }
@@ -585,6 +590,8 @@ class AgentBlueprintRunner:
     def _build_outreach_outcomes_payload(self, run: Dict[str, Any], base_payload: Dict[str, Any]) -> Dict[str, Any]:
         run_input = self._run_input(run)
         draft_ids = self._normalized_string_list(run_input.get("draft_ids"))
+        if not draft_ids:
+            draft_ids = self._latest_artifact_item_ids(str(run.get("id") or ""), "message_drafts", "id")
         if not draft_ids:
             return {**base_payload, "source": "outreachsendqueue", "count": 0, "items": []}
         try:

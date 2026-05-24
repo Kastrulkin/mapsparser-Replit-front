@@ -273,6 +273,57 @@ def test_runner_creates_drafts_after_shortlist_approval_and_queues_after_drafts_
     assert orchestrator.last_envelope["payload"]["daily_limit"] == 10
 
 
+def test_runner_builds_shortlist_from_sourced_unprocessed_leads():
+    from services.agent_blueprint_runner import AgentBlueprintRunner, default_supervised_outreach_version_payload
+
+    cursor = FakeCursor()
+    cursor.tables["agent_blueprints"]["bp1"] = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "name": "Outreach",
+        "category": "outreach",
+    }
+    cursor.tables["agent_blueprint_versions"]["ver1"] = {
+        "id": "ver1",
+        "blueprint_id": "bp1",
+        "steps_json": default_supervised_outreach_version_payload()["steps"],
+        "capability_allowlist_json": ["outreach.send_batch"],
+    }
+    cursor.tables["prospectingleads"]["lead1"] = {
+        "id": "lead1",
+        "business_id": "biz1",
+        "name": "Fresh Lead",
+        "category": "beauty",
+        "city": "Moscow",
+        "email": "fresh@example.com",
+        "source": "yandex_maps",
+        "status": "new",
+        "selected_channel": "",
+        "pipeline_status": "unprocessed",
+    }
+    runner = AgentBlueprintRunner(cursor, orchestrator=CountingOrchestrator())
+
+    result = runner.start_run(
+        "ver1",
+        {"source": "yandex_maps", "city": "Moscow", "intent": "client_outreach", "limit": 5},
+        {"user_id": "user1"},
+    )
+    run = result["run"]
+    shortlist_artifact = [item for item in run["artifacts"] if item["artifact_type"] == "lead_shortlist"][-1]
+    shortlist_payload = shortlist_artifact["payload_json"]
+
+    assert shortlist_payload["source"] == "prospectingleads"
+    assert shortlist_payload["source_artifact"] == "lead_source_plan"
+    assert shortlist_payload["count"] == 1
+    assert shortlist_payload["items"][0]["id"] == "lead1"
+
+    shortlist_approval = run["approvals"][0]
+    after_shortlist = runner.approve(run["id"], shortlist_approval["id"], {"user_id": "user1"})
+
+    assert cursor.tables["prospectingleads"]["lead1"]["status"] == "channel_selected"
+    assert after_shortlist["run"]["approvals"][-1]["approval_type"] == "drafts"
+
+
 def test_risk_policy_requires_human_for_dangerous_capabilities():
     from core.action_policy import evaluate_risk_policy
 

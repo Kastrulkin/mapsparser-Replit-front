@@ -1,0 +1,54 @@
+$ scripts/lint_backend_baseline.sh
+[backend-lint] py_compile focused backend modules
+[backend-lint] import and route ownership smoke
+✅ Rate limiting включен для чувствительных endpoint'ов
+⚠️  Файл с популярными запросами не найден
+✅ Rate limiting включен для чувствительных endpoint'ов
+OK: extracted routes are registered through their API blueprints
+[backend-lint] agent blueprint routes stay out of main.py
+OK: agent blueprint routes are not declared in main.py
+[backend-lint] auth/user routes stay out of main.py
+OK: auth/user routes are not declared in main.py
+[backend-lint] superadmin business routes stay out of main.py
+OK: superadmin business routes are not declared in main.py
+[backend-lint] superadmin business route ownership smoke
+✅ Rate limiting включен для чувствительных endpoint'ов
+⚠️  Файл с популярными запросами не найден
+✅ Rate limiting включен для чувствительных endpoint'ов
+OK: superadmin business routes are registered through superadmin_business_api
+[backend-lint] agent blueprint capability guardrails
+OK: agent blueprint runtime uses registered safe outreach capability
+[backend-lint] operator route and paid draft guardrails
+✅ Rate limiting включен для чувствительных endpoint'ов
+⚠️  Файл с популярными запросами не найден
+✅ Rate limiting включен для чувствительных endpoint'ов
+OK: Operator bulk/manual review routes are registered through operator_api
+OK: paid Operator drafts and Agent Blueprint dispatch boundaries are guarded
+[backend-lint] Operator services apply smoke is self-contained
+OK: Operator services apply smoke is self-contained
+[backend-lint] outreach dispatcher stays explicit opt-in
+OK: outreach dispatcher is disabled unless explicitly enabled
+[backend-lint] Operator refresh Telegram follow-up stays bounded
+OK: Operator refresh Telegram follow-up is once-only and manual-publication bounded
+[backend-lint] Operator refresh reliability stays read-only
+OK: Operator refresh reliability is read-only and visible
+[backend-lint] Operator refresh retry stays controlled
+OK: Operator refresh retry requires confirmation and uses paid enqueue boundary
+[backend-lint] approval boundary audit
+OK: Blueprint/Operator approval, billing, manual-publication, and dispatcher boundaries are guarded
+[backend-lint] extracted growth routes stay out of main.py
+OK: extracted growth routes are not declared in main.py
+[backend-lint] growth stage duplicate route smoke
+✅ Rate limiting включен для чувствительных endpoint'ов
+⚠️  Файл с популярными запросами не найден
+✅ Rate limiting включен для чувствительных endpoint'ов
+OK: growth stage routes have no stale main.py duplicates
+[backend-lint] admin business-type duplicate route smoke
+✅ Rate limiting включен для чувствительных endpoint'ов
+⚠️  Файл с популярными запросами не найден
+✅ Rate limiting включен для чувствительных endpoint'ов
+OK: admin business-type routes have no stale main.py duplicates
+[backend-lint] runtime SQL placeholder scan
+OK: no direct runtime SQLite ? placeholders outside allowed legacy reports blueprint
+[backend-lint] growth workflow SQL placeholder scan
+OK: growth workflow blueprint uses PostgreSQL placeholders

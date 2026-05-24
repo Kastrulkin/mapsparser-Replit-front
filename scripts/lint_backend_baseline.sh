@@ -174,6 +174,7 @@ required = {
         "required_approval_type",
         "_build_lead_source_payload",
         "source\": \"prospectingleads",
+        "source_artifact\": \"lead_source_plan",
         "status_counts",
         "_create_message_drafts_for_approved_shortlist",
         "_apply_drafts_approval",
