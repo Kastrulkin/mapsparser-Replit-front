@@ -18,6 +18,7 @@ from services.operator_news_generation import classify_news_generate_intent, gen
 from services.operator_paid_executor import build_paid_action_execution_attempt
 from services.operator_paid_preflight import build_paid_action_preflight
 from services.operator_refresh_result import build_refresh_result_status, list_refresh_jobs
+from services.operator_refresh_retry import request_refresh_retry
 from services.operator_review_reply_bulk import classify_bulk_review_reply_intent, generate_review_reply_drafts_for_unanswered_reviews
 from services.operator_services_optimization import (
     apply_service_optimization_suggestions,
@@ -715,6 +716,66 @@ def operator_review_refresh_jobs():
         )
         db.conn.commit()
         return jsonify({"success": True, "refresh_jobs": result})
+    except Exception:
+        db.conn.rollback()
+        return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
+    finally:
+        db.close()
+
+
+@operator_bp.route("/reviews/refresh-jobs/<queue_id>/retry", methods=["POST"])
+def operator_review_refresh_job_retry(queue_id: str):
+    user_data = require_auth_from_request()
+    if not user_data:
+        return jsonify({"success": False, "error": "Требуется авторизация"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    business_id = str(payload.get("business_id") or request.args.get("business_id") or "").strip()
+    if not business_id:
+        return jsonify({"success": False, "error": "business_id обязателен"}), 400
+
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        has_access, owner_id = verify_business_access(cursor, business_id, user_data)
+        if not has_access:
+            status_code = 403 if owner_id else 404
+            message = "Нет доступа" if owner_id else "Бизнес не найден"
+            return jsonify({"success": False, "error": message}), status_code
+
+        user_id = str(user_data.get("user_id") or user_data.get("id") or "")
+        result = request_refresh_retry(
+            cursor,
+            business_id=business_id,
+            user_id=user_id,
+            queue_id=queue_id,
+            estimated_credits=payload.get("estimated_credits"),
+            confirm_retry=bool(payload.get("confirm_retry")),
+        )
+        record_operator_event(
+            cursor,
+            business_id=business_id,
+            user_id=user_id,
+            event_type="operator_tool_executed" if result.get("status") == "queued" else "operator_execution_blocked",
+            action_key="map_reviews_refresh",
+            status=str(result.get("status") or "blocked"),
+            reason_code=",".join(result.get("blocked_reasons") or []) or None,
+            input_summary={"queue_id": queue_id, "retry": True},
+            output_summary={
+                "new_queue_id": result.get("new_queue_id"),
+                "reservation_id": result.get("reservation_id"),
+                "estimated_credits": result.get("estimated_credits"),
+            },
+            metadata={
+                "source_queue_id": queue_id,
+                "retry_requested": True,
+                "external_writes_performed": False,
+                "manual_publication_only": True,
+                "credit_reserved": bool((result.get("side_effects") or {}).get("credit_reserved")),
+            },
+        )
+        db.conn.commit()
+        return jsonify({"success": result.get("status") == "queued", "retry_result": result})
     except Exception:
         db.conn.rollback()
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500

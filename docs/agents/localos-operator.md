@@ -719,6 +719,20 @@ After Apify result:
 Найдено 3 новых отзыва, 2 без ответа.
 ```
 
+### Retry Failed Refresh
+
+If a read-only map refresh ends in `failed`, `captcha_required`, `paused`, or `warning`, Operator may offer a controlled retry.
+
+Sprint 43 source of truth:
+
+- retry planner/executor: `services.operator_refresh_retry`;
+- API endpoint: `POST /api/operator/reviews/refresh-jobs/<queue_id>/retry`;
+- web surface: refresh-job history button `Повторить refresh`;
+- execution path: existing `map_reviews_refresh` preflight/reserve/enqueue boundary;
+- side-effect rule: creates a new `parsequeue` job and reservation, leaves the old job unchanged, performs no provider writes, and keeps publication manual.
+
+Clicking `Повторить refresh` is the explicit retry confirmation. If credits are insufficient or the source job is still processing/not retryable, Operator must block and show billing or the reason code.
+
 ## Audit And Ledger Events
 
 Every Operator action should be traceable:

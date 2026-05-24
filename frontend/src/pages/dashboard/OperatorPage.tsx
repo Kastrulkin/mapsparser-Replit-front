@@ -480,6 +480,16 @@ type RefreshJobs = {
   jobs: RefreshJob[];
 };
 
+type RefreshRetryResult = {
+  status: 'queued' | 'blocked' | string;
+  chat_response?: string;
+  new_queue_id?: string;
+  reservation_id?: string;
+  estimated_credits?: number;
+  billing_url?: string;
+  blocked_reasons?: string[];
+};
+
 type ContentHistoryItem = {
   id: string;
   kind: 'review_reply_draft' | 'news_draft' | 'social_post_draft' | 'service_suggestion' | 'service_apply' | string;
@@ -612,6 +622,11 @@ const renderReliabilityDetails = (reliability: RefreshReliabilityState | undefin
   );
 };
 
+const canRequestRefreshRetry = (job: RefreshJob) => {
+  const reliabilityStatus = job.reliability_state?.status || '';
+  return ['failed', 'captcha_required', 'paused', 'warning'].includes(reliabilityStatus);
+};
+
 const getItemIcon = (item: AttentionItem) => {
   if (item.action_class === 'approval_required') return ShieldCheck;
   if (item.action_class === 'paid_external') return CreditCard;
@@ -644,6 +659,8 @@ export const OperatorPage = () => {
   const [chatResult, setChatResult] = useState<OperatorChatResult | null>(null);
   const [refreshResult, setRefreshResult] = useState<RefreshResult | null>(null);
   const [refreshChecking, setRefreshChecking] = useState(false);
+  const [refreshRetryingQueueId, setRefreshRetryingQueueId] = useState<string | null>(null);
+  const [refreshRetryResult, setRefreshRetryResult] = useState<RefreshRetryResult | null>(null);
   const [copiedChatReply, setCopiedChatReply] = useState(false);
   const [copiedInboxItemId, setCopiedInboxItemId] = useState<string | null>(null);
   const [bulkGeneratingKey, setBulkGeneratingKey] = useState<string | null>(null);
@@ -906,6 +923,32 @@ export const OperatorPage = () => {
       });
     } finally {
       setRefreshChecking(false);
+    }
+  };
+
+  const requestRefreshRetry = async (queueId: string | undefined) => {
+    if (!currentBusinessId || !queueId) return;
+    setRefreshRetryingQueueId(queueId);
+    setRefreshRetryResult(null);
+    try {
+      const response = await api.post(`/operator/reviews/refresh-jobs/${queueId}/retry`, {
+        business_id: currentBusinessId,
+        confirm_retry: true,
+      });
+      const result = response.data.retry_result || null;
+      setRefreshRetryResult(result);
+      await loadBrief();
+      await loadInbox();
+      await loadRefreshJobs();
+      await loadOperatorEvents();
+    } catch (err) {
+      setRefreshRetryResult({
+        status: 'blocked',
+        chat_response: err instanceof Error ? err.message : 'Не удалось запустить повтор refresh',
+        blocked_reasons: ['operator_refresh_retry_failed'],
+      });
+    } finally {
+      setRefreshRetryingQueueId(null);
     }
   };
 
@@ -1569,6 +1612,24 @@ export const OperatorPage = () => {
       >
         {refreshJobs ? (
           <div className="space-y-3">
+            {refreshRetryResult ? (
+              <div className={cn(
+                'rounded-2xl border px-4 py-3 text-sm leading-6',
+                refreshRetryResult.status === 'queued'
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                  : 'border-amber-200 bg-amber-50 text-amber-900',
+              )}>
+                <div className="font-semibold">
+                  {refreshRetryResult.status === 'queued' ? 'Повтор refresh запущен' : 'Повтор refresh недоступен'}
+                </div>
+                {refreshRetryResult.chat_response ? <div className="mt-1 whitespace-pre-line">{refreshRetryResult.chat_response}</div> : null}
+                {refreshRetryResult.blocked_reasons?.length ? (
+                  <div className="mt-1 text-xs font-semibold">
+                    Причины: {refreshRetryResult.blocked_reasons.join(', ')}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             <div className="grid gap-3 sm:grid-cols-4 lg:grid-cols-6">
               <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
                 <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Всего</div>
@@ -1665,6 +1726,18 @@ export const OperatorPage = () => {
                           {refreshChecking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                           Проверить результат
                         </Button>
+                        {canRequestRefreshRetry(job) ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void requestRefreshRetry(job.queue_id)}
+                            disabled={refreshRetryingQueueId === job.queue_id}
+                          >
+                            {refreshRetryingQueueId === job.queue_id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                            Повторить refresh
+                          </Button>
+                        ) : null}
                         <Button type="button" size="sm" variant="outline" asChild>
                           <Link to="/dashboard/card?tab=reviews&review_filter=needs_reply">
                             Открыть отзывы

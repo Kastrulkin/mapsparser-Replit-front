@@ -21,6 +21,7 @@ python3 -m py_compile \
   src/worker.py \
   src/services/operator_review_reply_bulk.py \
   src/services/operator_refresh_result.py \
+  src/services/operator_refresh_retry.py \
   src/services/operator_refresh_telegram_followup.py \
   scripts/audit_approval_boundaries.py \
   scripts/smoke_operator_services_apply_api.py \
@@ -214,6 +215,7 @@ expected = {
     "/api/operator/chat": "operator_api.operator_chat",
     "/api/operator/review-reply-drafts/<draft_id>/mark-manual-published": "operator_api.operator_review_reply_draft_mark_manual_published",
     "/api/operator/services/optimize/apply": "operator_api.operator_services_optimize_apply",
+    "/api/operator/reviews/refresh-jobs/<queue_id>/retry": "operator_api.operator_review_refresh_job_retry",
 }
 
 actual = {rule.rule: rule.endpoint for rule in main.app.url_map.iter_rules()}
@@ -365,6 +367,40 @@ for marker in ("renderReliabilityDetails", "retrying_count", "captcha_required_c
         raise SystemExit(f"operator UI missing refresh reliability marker: {marker}")
 
 print("OK: Operator refresh reliability is read-only and visible")
+PY
+
+echo "[backend-lint] Operator refresh retry stays controlled"
+python3 - <<'PY'
+from pathlib import Path
+
+retry_text = Path("src/services/operator_refresh_retry.py").read_text(encoding="utf-8")
+api_text = Path("src/api/operator_api.py").read_text(encoding="utf-8")
+
+for marker in (
+    "confirm_retry: bool = False",
+    "explicit_retry_confirmation_required",
+    "enqueue_paid_operator_map_refresh",
+    "Старый failed job не изменялся",
+    "external_writes_performed",
+    "credit_charged\": False",
+):
+    if marker not in retry_text:
+        raise SystemExit(f"operator refresh retry missing guardrail marker: {marker}")
+
+for forbidden in (
+    "UPDATE parsequeue",
+    "DELETE FROM parsequeue",
+    "ApifyClient",
+    "send_message(",
+    "publish",
+):
+    if forbidden in retry_text:
+        raise SystemExit(f"operator refresh retry must not mutate old job or call providers directly: {forbidden}")
+
+if "confirm_retry=bool(payload.get(\"confirm_retry\"))" not in api_text:
+    raise SystemExit("operator refresh retry route must pass explicit confirm_retry")
+
+print("OK: Operator refresh retry requires confirmation and uses paid enqueue boundary")
 PY
 
 echo "[backend-lint] approval boundary audit"

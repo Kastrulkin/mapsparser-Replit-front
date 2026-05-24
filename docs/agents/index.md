@@ -67,6 +67,8 @@ Sprint 41 adds the first automatic Telegram follow-up for paid refresh completio
 
 Sprint 42 adds parse reliability visibility for refresh jobs. Operator now shows retry, captcha, failed, and warning states with user-facing explanations from the existing `parsequeue`/worker status, both in the dashboard and compact Telegram summaries. It does not run new parsing or mutate external providers.
 
+Sprint 43 adds a controlled retry request for failed/captcha/warning refresh jobs. The web Operator can create a new paid read-only refresh job from the previous job URL through the same preflight/reserve/enqueue boundary, while leaving the old failed job unchanged and keeping all map publication manual.
+
 The Operator model keeps one context, one permission system, one credit/usage ledger, one approval policy, and one audit trail across web and Telegram. Sprint 0 defines the product contract only; it does not imply that the web-chat runtime or Telegram Operator runtime is fully implemented.
 
 ## What Agents Must Not Assume
