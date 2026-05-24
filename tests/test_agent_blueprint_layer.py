@@ -120,7 +120,10 @@ def test_outreach_send_batch_handler_queues_approved_drafts_without_external_dis
     assert output["queue_count"] == 1
     assert output["draft_ids"] == ["draft1"]
     assert output["daily_limit"] == 10
+    assert output["dispatch_state"] == "queued_not_dispatched"
+    assert output["dispatcher_required"] is True
     assert output["external_dispatch_performed"] is False
+    assert "External dispatcher did not run" in output["operator_note"]
     assert connection.committed is True
     assert any(item["kind"] == "batch" and item["status"] == "approved" for item in connection.inserted)
     assert any(item["kind"] == "queue" and item["draft_id"] == "draft1" for item in connection.inserted)
@@ -570,7 +573,15 @@ class CountingOrchestrator:
     def execute(self, envelope, user_data, *, allow_execute_when_approved=False):
         self.calls += 1
         self.last_envelope = envelope
-        return {"success": True, "status": "completed", "result": {"status": "queued_for_dispatch"}}
+        return {
+            "success": True,
+            "status": "completed",
+            "result": {
+                "status": "queued_for_dispatch",
+                "dispatch_state": "queued_not_dispatched",
+                "external_dispatch_performed": False,
+            },
+        }
 
 
 class FakeOutreachConnection:

@@ -300,6 +300,19 @@ def main():
         ids["draft_id"] = str(draft_items[0].get("id") or "")
         if not ids["draft_id"]:
             raise RuntimeError(f"message draft artifact has no draft id: {draft_items[0]}")
+        send_steps = [
+            item
+            for item in run.get("steps", [])
+            if item.get("step_key") == "send_limited_batch"
+        ]
+        if not send_steps:
+            raise RuntimeError(f"run completed without send_limited_batch step: {run}")
+        send_output = send_steps[-1].get("output_json") or {}
+        send_result = ((send_output.get("orchestrator") or {}).get("result") or {})
+        if send_result.get("dispatch_state") != "queued_not_dispatched":
+            raise RuntimeError(f"send step did not expose queued_not_dispatched state: {send_result}")
+        if send_result.get("external_dispatch_performed") is not False:
+            raise RuntimeError(f"send step claims external dispatch happened: {send_result}")
         queue_row = assert_no_dispatch(ids)
         time.sleep(2)
         assert_no_dispatch(ids)
@@ -316,6 +329,7 @@ def main():
                     "batch_id": ids["batch_id"],
                     "approval_count": approval_count,
                     "queue_status": queue_row.get("delivery_status"),
+                    "dispatch_state": send_result.get("dispatch_state"),
                     "dispatcher_started": False,
                     "fixture_cleaned": not KEEP_FIXTURE,
                 },

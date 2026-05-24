@@ -536,6 +536,10 @@ class AgentBlueprintRunner:
             "status": "hydrated" if rows else base_payload.get("status", "pending"),
             "source": "outreachsendqueue",
             "count": len(rows),
+            "queued_count": len([row for row in rows if str(row.get("delivery_status") or "") == "queued"]),
+            "dispatch_state": "queued_not_dispatched" if rows else "not_queued",
+            "external_dispatch_performed": False,
+            "operator_note": "Queue rows are LocalOS handoff records. External dispatcher is a separate contour.",
             "items": rows,
         }
 

@@ -176,6 +176,7 @@ required = {
     ],
     "src/services/outreach_send_capability.py": [
         "external_dispatch_performed",
+        "queued_not_dispatched",
         "dispatch_due_outreach_queue",
         "l.business_id = %s",
     ],

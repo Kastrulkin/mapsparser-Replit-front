@@ -174,12 +174,15 @@ def handle_outreach_send_batch(envelope: dict[str, Any], user_data: dict[str, An
         return {
             "result": {
                 "status": "queued_for_dispatch",
+                "dispatch_state": "queued_not_dispatched",
                 "batch_id": batch_id,
                 "queue_count": len(valid_rows),
                 "draft_ids": queued_draft_ids,
                 "daily_limit": MAX_DAILY_OUTREACH_BATCH,
                 "requested_limit": requested_limit,
                 "external_dispatch_performed": False,
+                "dispatcher_required": True,
+                "operator_note": "Queued in LocalOS only. External dispatcher did not run inside Agent Blueprint runtime.",
                 "next_step": "dispatch_due_outreach_queue",
             }
         }
