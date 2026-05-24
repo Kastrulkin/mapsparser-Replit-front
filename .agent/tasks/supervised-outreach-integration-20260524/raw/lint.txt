@@ -1,0 +1,21 @@
+No lint output captured yet.
+Command:
+scripts/lint_backend_baseline.sh
+
+Result:
+[backend-lint] py_compile focused backend modules
+[backend-lint] import and route ownership smoke
+OK: extracted routes are registered through their API blueprints
+[backend-lint] agent blueprint routes stay out of main.py
+OK: agent blueprint routes are not declared in main.py
+[backend-lint] agent blueprint capability guardrails
+OK: agent blueprint runtime uses registered safe outreach capability
+[backend-lint] operator route and paid draft guardrails
+OK: Operator bulk/manual review routes are registered through operator_api
+OK: paid Operator drafts and Agent Blueprint dispatch boundaries are guarded
+[backend-lint] outreach dispatcher stays explicit opt-in
+OK: outreach dispatcher is disabled unless explicitly enabled
+[backend-lint] runtime SQL placeholder scan
+OK: no direct runtime SQLite ? placeholders outside allowed legacy reports blueprint
+[backend-lint] growth workflow SQL placeholder scan
+OK: growth workflow blueprint uses PostgreSQL placeholders

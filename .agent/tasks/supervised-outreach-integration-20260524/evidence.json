@@ -1,0 +1,100 @@
+{
+  "task_id": "supervised-outreach-integration-20260524",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Blueprint run can start from lead_ids and hydrate a real shortlist artifact from prospectingleads.",
+      "status": "PASS",
+      "proof": [
+        "Runner hydrates lead_shortlist from prospectingleads.",
+        "Live smoke used lead_ids as run input, not prepared draft_ids.",
+        "Targeted test asserts shortlist approval payload includes lead_shortlist artifact."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Shortlist approval contains actual shortlist payload and advances selected leads in the existing outreach pipeline.",
+      "status": "PASS",
+      "proof": [
+        "_build_approval_payload attaches artifact payload to shortlist approval.",
+        "_apply_shortlist_approval updates selected leads in prospectingleads.",
+        "Targeted test verifies approval payload count and artifact type."
+      ],
+      "gaps": [
+        "Per-lead partial approval is future product polish."
+      ]
+    },
+    {
+      "id": "AC3",
+      "text": "After shortlist approval, blueprint creates LocalOS outreach message drafts without external provider writes.",
+      "status": "PASS",
+      "proof": [
+        "_create_message_drafts_for_approved_shortlist inserts outreachmessagedrafts rows from lead data.",
+        "Draft metadata marks source as agent_blueprint_local.",
+        "Targeted test verifies generated draft and channel_selected lead transition."
+      ],
+      "gaps": [
+        "Draft text is deterministic local v1, not AI/prompt-backed yet."
+      ]
+    },
+    {
+      "id": "AC4",
+      "text": "Draft approval approves generated drafts and passes their draft_ids to outreach.send_batch.",
+      "status": "PASS",
+      "proof": [
+        "_apply_drafts_approval updates outreachmessagedrafts to approved.",
+        "_execute_capability_step derives draft_ids from latest message_drafts artifact.",
+        "Targeted test verifies ActionOrchestrator receives outreach.send_batch with generated draft_id.",
+        "Transaction visibility bug was fixed by committing approval side effects before capability execution."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Send batch creates queue rows only; dispatcher remains disabled and no external dispatch side effect occurs.",
+      "status": "PASS",
+      "proof": [
+        "Live smoke returned queue_status=queued and dispatcher_started=false.",
+        "Production worker env returned OUTREACH_DISPATCH_ENABLED=false.",
+        "Production worker logs had no OUTREACH_DISPATCH entries."
+      ],
+      "gaps": [
+        "Real provider dispatch remains intentionally outside this task."
+      ]
+    },
+    {
+      "id": "AC6",
+      "text": "Targeted tests, backend lint, deploy, and live API smoke pass.",
+      "status": "PASS",
+      "proof": [
+        "Targeted pytest passed with 18 tests.",
+        "scripts/lint_backend_baseline.sh passed.",
+        "Production deploy and root health passed.",
+        "Live authenticated API smoke passed and cleaned fixture."
+      ],
+      "gaps": [
+        "Full test suite was not run."
+      ]
+    }
+  ],
+  "changed_files": [
+    "src/services/agent_blueprint_runner.py",
+    "tests/test_agent_blueprint_layer.py",
+    "scripts/smoke_agent_blueprint_outreach_api.py",
+    "scripts/lint_backend_baseline.sh",
+    ".agent/tasks/supervised-outreach-integration-20260524/*"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/services/agent_blueprint_runner.py scripts/smoke_agent_blueprint_outreach_api.py",
+    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py tests/test_operator_paid_action_adapter.py tests/test_operator_review_reply_bulk.py",
+    "scripts/lint_backend_baseline.sh",
+    "ssh -i ~/.ssh/localos_prod -o ConnectTimeout=15 root@80.78.242.105 'cd /opt/seo-app && docker compose ps && curl -I http://localhost:8000 && docker compose exec -T worker sh -lc \"printenv OUTREACH_DISPATCH_ENABLED\"'"
+  ],
+  "known_gaps": [
+    "Per-lead partial approval remains future product polish.",
+    "AI/prompt-backed blueprint drafting is not implemented in this task.",
+    "Unrelated Operator Sprint 36 changes remained in the working tree."
+  ]
+}
