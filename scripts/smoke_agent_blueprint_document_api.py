@@ -91,7 +91,7 @@ def setup_fixture(ids):
                 "Smoke Street 3",
                 "Smoke City",
                 "US",
-                "trial",
+                "starter",
                 "active",
             ),
         )
