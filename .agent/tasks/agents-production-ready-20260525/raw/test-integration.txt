@@ -1,0 +1,27 @@
+Command:
+cd /opt/seo-app && docker compose exec -T app env SMOKE_BASE_URL=http://localhost:8000 python scripts/smoke_agent_blueprint_document_api.py
+
+Result:
+{
+  "success": true,
+  "base_url": "http://localhost:8000",
+  "business_id": "smoke-doc-agent-business-54962ceecf",
+  "blueprint_id": "65e64fd3-0c7b-4d85-8c1e-c1f81e15c5af",
+  "run_id": "7bcf433d-0aab-4e3d-8928-7df063356c12",
+  "initial_version": 1,
+  "feedback_version": 3,
+  "approval_type": "final_output",
+  "external_dispatch_performed": false,
+  "system_agents_config_persisted": true,
+  "fixture_cleaned": true
+}
+
+Authenticated browser smoke:
+- Logged in as a temporary paid smoke user.
+- Opened https://localos.pro/dashboard/agents.
+- Verified one main "Создать агента" CTA, "Системные агенты", "Пользовательские агенты", "Ждут решения", "Последние запуски".
+- Opened document agent run review.
+- Verified review/result showed extracted/result sections and "Технический журнал" markers.
+- Verified no payload_json / blueprint_version_id noise on the main review surface.
+- Browser console errors after fix: [].
+- Temporary production fixture was cleaned.

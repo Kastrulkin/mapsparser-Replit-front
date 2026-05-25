@@ -1,0 +1,16 @@
+Command:
+cd frontend && npm run build
+
+Result:
+PASS
+
+Notes:
+- Local frontend production bundle built successfully after the missing Zap import fix.
+- The fixed bundle was deployed to production host and served from the app container.
+- Production UI asset verified in container:
+  /app/frontend/dist/assets/AgentBlueprintsPage-CD4-MZqQ.js
+
+Production health after deploy:
+- cd /opt/seo-app && docker compose ps: app, worker, postgres up.
+- cd /opt/seo-app && curl -I http://localhost:8000: 200 OK.
+- App logs showed normal startup and enabled rate limiting.

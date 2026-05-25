@@ -1,0 +1,11 @@
+Command:
+python3 -m pytest -q tests/test_agent_blueprint_layer.py
+
+Result:
+14 passed
+
+Coverage notes:
+- Agent Blueprint model/API/runtime compatibility.
+- Document source ingestion for text/docx/xlsx.
+- Unsafe extension rejection.
+- Document agent output shape and feedback/version behavior.

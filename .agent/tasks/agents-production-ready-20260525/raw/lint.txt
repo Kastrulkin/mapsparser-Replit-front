@@ -1,0 +1,13 @@
+Command:
+scripts/lint_backend_baseline.sh
+
+Result:
+PASS
+
+Guardrails covered:
+- Backend import checks.
+- Route ownership checks.
+- PostgreSQL-only runtime SQL checks.
+- Agent Blueprint dispatch boundary checks.
+- ActionOrchestrator guardrails for side-effect capabilities.
+- Self-contained smoke script checks.
