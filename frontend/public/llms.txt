@@ -18,6 +18,7 @@ Canonical human and agent documentation:
 - https://localos.pro/localos-agents.txt
 - https://localos.pro/localos-agent-policy.json
 - https://localos.pro/localos-agent-tools.json
+- https://localos.pro/api/agent-api/openapi.json
 - https://localos.pro/localos-agent-openapi.json
 
 Core capabilities:
@@ -45,7 +46,7 @@ Agent API security:
 - suspicious behavior should trigger rate limits, cooldown, manual review or suspension;
 - every agent action should leave an audit trail.
 - current foundation includes agent_clients, scoped keys, approval request ledger and superadmin ledger view.
-- minimal Agent API OpenAPI contract is available at https://localos.pro/localos-agent-openapi.json.
+- minimal Agent API OpenAPI contract is available at https://localos.pro/api/agent-api/openapi.json, with a root-level alias at https://localos.pro/localos-agent-openapi.json.
 - sandbox onboarding self-test is available at POST https://localos.pro/api/agent-api/self-test.
 
 Agents should:

@@ -43,6 +43,7 @@ TRACKED_DISCOVERY_FILES = {
     "/localos-agent-policy.json",
     "/localos-agent-tools.json",
     "/localos-agent-openapi.json",
+    "/api/agent-api/openapi.json",
 }
 
 
@@ -815,7 +816,7 @@ def build_agent_self_test_summary(client: dict[str, Any], access: dict[str, Any]
         ],
         "blocked_direct_actions": blocked_actions,
         "next_steps": [
-            "Read /localos-agent-openapi.json.",
+            "Read /api/agent-api/openapi.json or /localos-agent-openapi.json.",
             "Create a test approval request with POST /api/agent-api/approvals/request.",
             "Ask a superadmin to review promotion before live access.",
         ],

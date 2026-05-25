@@ -104,10 +104,12 @@ Status: `beta/internal`.
 
 These endpoints implement the first Agent API security foundation. They are not a full public MCP/API product yet.
 
-Machine-readable minimal contract: `/localos-agent-openapi.json`.
+Machine-readable minimal contract: `/api/agent-api/openapi.json`.
+Root-level alias for static discovery: `/localos-agent-openapi.json`.
 
 | Method | Path | Status | Notes |
 | --- | --- | --- | --- |
+| `GET` | `/api/agent-api/openapi.json` | `beta/internal` | Returns the minimal OpenAPI contract for the Agent API security endpoints. |
 | `GET` | `/api/agent-api/security/policy` | `beta/internal` | Returns current Agent API security policy summary. |
 | `POST` | `/api/agent-api/clients` | `beta/internal` | Superadmin creates a sandbox agent client. The key is returned once. |
 | `GET` | `/api/agent-api/clients` | `beta/internal` | Superadmin lists registered agent clients without key material. |

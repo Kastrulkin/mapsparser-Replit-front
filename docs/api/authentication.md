@@ -61,7 +61,8 @@ Preferred public Agent API flow:
 - action ledger and approval trace.
 
 Status: `beta/internal` for the current Agent API security foundation; `gap` for a complete public product-wide agent-token system.
-The minimal contract is published at `/localos-agent-openapi.json`.
+The minimal contract is published at `/api/agent-api/openapi.json`.
+The root-level `/localos-agent-openapi.json` alias remains available for static discovery.
 
 See also [Agent API Security Model](../agents/security-model.md).
 

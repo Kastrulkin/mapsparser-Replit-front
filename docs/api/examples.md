@@ -103,6 +103,12 @@ Agent rule: preview first, ask approval, then import.
 
 ## Agent API Quickstart
 
+Fetch the contract:
+
+```bash
+curl -s "https://localos.pro/api/agent-api/openapi.json"
+```
+
 Read policy:
 
 ```bash

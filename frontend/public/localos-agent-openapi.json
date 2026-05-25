@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LocalOS Agent API Security Contract",
-    "version": "2026-05-19",
+    "version": "2026-05-25",
     "summary": "Minimal beta/internal OpenAPI contract for the implemented LocalOS Agent API security endpoints.",
     "description": "This contract describes only the Agent API security endpoints that exist in LocalOS today: policy, client registry, promotion requests, approval requests, ledger, discovery and Telegram binding lookup. It is not an MCP server contract and does not imply autonomous publish, payment, destructive or external-system execution."
   },
@@ -39,6 +39,37 @@
     }
   ],
   "paths": {
+    "/api/agent-api/openapi.json": {
+      "get": {
+        "tags": [
+          "Discovery"
+        ],
+        "operationId": "getAgentApiOpenApiContract",
+        "summary": "Get this OpenAPI contract",
+        "description": "Returns the minimal beta/internal OpenAPI contract for the implemented Agent API security endpoints. This endpoint is an API-namespace alias for /localos-agent-openapi.json.",
+        "x-localos": {
+          "status": "beta/internal",
+          "risk_class": "read_only",
+          "approval_required": false
+        },
+        "responses": {
+          "200": {
+            "description": "OpenAPI contract returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
     "/api/agent-api/security/policy": {
       "get": {
         "tags": ["Policy"],

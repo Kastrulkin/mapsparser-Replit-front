@@ -1,10 +1,11 @@
 {
-  "schema_version": "2026-05-19",
+  "schema_version": "2026-05-25",
   "product": "LocalOS",
   "status": "beta_manifest_not_mcp_server",
   "summary": "Machine-readable capability map for AI agents. This is not a public MCP server and not a guarantee that every tool is externally callable today.",
   "security_policy": "https://localos.pro/localos-agent-policy.json",
-  "openapi_contract": "https://localos.pro/localos-agent-openapi.json",
+  "openapi_contract": "https://localos.pro/api/agent-api/openapi.json",
+  "openapi_contract_alias": "https://localos.pro/localos-agent-openapi.json",
   "human_docs": "https://localos.pro/docs",
   "agent_guide": "https://localos.pro/localos-agents.txt",
   "principles": [

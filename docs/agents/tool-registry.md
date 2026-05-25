@@ -195,7 +195,8 @@ Initial LocalOS registry entries should be derived from:
 - [LocalOS Operator](localos-operator.md);
 - `/localos-agent-policy.json`.
 - `/localos-agent-tools.json`.
-- `/localos-agent-openapi.json`.
+- `/api/agent-api/openapi.json`.
+- `/localos-agent-openapi.json` as a root-level static alias.
 
 ## Public Manifest
 
@@ -209,7 +210,7 @@ It is deliberately narrower than a public MCP server:
 
 It must not be described as a live MCP endpoint until a server, auth flow, request schemas, tests and deployment checks exist.
 
-`/localos-agent-openapi.json` is the minimal machine-readable HTTP contract for the implemented Agent API security endpoints only. It covers policy, clients, onboarding self-test, approvals, ledger, discovery and Telegram binding lookup, but not product-wide automation APIs.
+`/api/agent-api/openapi.json` is the minimal machine-readable HTTP contract for the implemented Agent API security endpoints only. It covers policy, clients, onboarding self-test, approvals, ledger, discovery and Telegram binding lookup, but not product-wide automation APIs. `/localos-agent-openapi.json` remains as a static discovery alias.
 
 ## Checklist For Adding A Tool
 

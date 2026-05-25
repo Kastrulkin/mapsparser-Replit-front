@@ -1,6 +1,7 @@
 import json
+import os
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_from_directory
 
 from auth_system import verify_session
 from database_manager import DatabaseManager
@@ -25,6 +26,18 @@ from core.agent_api_alerts import notify_superadmins_agent_alert
 
 
 agent_security_bp = Blueprint("agent_security_api", __name__)
+
+AGENT_OPENAPI_FILENAME = "localos-agent-openapi.json"
+
+
+def _agent_openapi_directories() -> list[str]:
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    candidates = [
+        os.getenv("FRONTEND_DIST_DIR", ""),
+        os.path.join(repo_root, "frontend", "dist"),
+        os.path.join(repo_root, "frontend", "public"),
+    ]
+    return [os.path.abspath(path) for path in candidates if path]
 
 
 def _json_error(message: str, status: int, code: str):
@@ -111,6 +124,17 @@ def _parse_json_field(value, default):
 @agent_security_bp.route("/api/agent-api/security/policy", methods=["GET"])
 def agent_security_policy():
     return jsonify({"success": True, "policy": public_agent_policy()})
+
+
+@agent_security_bp.route("/api/agent-api/openapi.json", methods=["GET"])
+def agent_api_openapi_contract():
+    for directory in _agent_openapi_directories():
+        contract_path = os.path.join(directory, AGENT_OPENAPI_FILENAME)
+        if os.path.isfile(contract_path):
+            response = send_from_directory(directory, AGENT_OPENAPI_FILENAME, mimetype="application/json")
+            response.headers["Cache-Control"] = "no-cache"
+            return response
+    return _json_error("Agent API OpenAPI contract is not built", 404, "CONTRACT_NOT_FOUND")
 
 
 @agent_security_bp.route("/api/agent-api/clients", methods=["POST", "OPTIONS"])

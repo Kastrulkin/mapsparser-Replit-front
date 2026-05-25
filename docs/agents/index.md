@@ -97,7 +97,8 @@ The Operator model keeps one context, one permission system, one credit/usage le
 ## Related Docs
 
 - Machine-readable tool map: `/localos-agent-tools.json`
-- Minimal Agent API OpenAPI contract: `/localos-agent-openapi.json`
+- Minimal Agent API OpenAPI contract: `/api/agent-api/openapi.json`
+- Static OpenAPI alias: `/localos-agent-openapi.json`
 - Sandbox self-test: `POST /api/agent-api/self-test`
 - [Capabilities](capabilities.md)
 - [LocalOS Operator](localos-operator.md)
