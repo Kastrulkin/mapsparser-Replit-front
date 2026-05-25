@@ -114,9 +114,21 @@ type RefreshResult = {
     provider_actual_cost?: string | number | null;
   };
   reliability_state?: {
+    status?: string;
     title?: string;
     explanation?: string;
     next_step?: string;
+  };
+  recovery_result?: {
+    status?: string;
+    retry_allowed?: boolean;
+    release_allowed?: boolean;
+    reservation_id?: string | null;
+    outstanding_credits?: number;
+    blocked_reasons?: string[];
+    side_effects?: {
+      reservation_released?: boolean;
+    };
   };
   new_reviews_count?: number;
   new_unanswered_reviews_count?: number;
@@ -189,6 +201,7 @@ export const OperatorPage = () => {
   const [bulkGeneratingKey, setBulkGeneratingKey] = useState<string | null>(null);
   const [applyingServiceJobId, setApplyingServiceJobId] = useState<string | null>(null);
   const [manualPublishDraftId, setManualPublishDraftId] = useState<string | null>(null);
+  const [recoveringQueueId, setRecoveringQueueId] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   const appendPair = (userText: string, result: OperatorChatResult) => {
@@ -282,6 +295,50 @@ export const OperatorPage = () => {
       );
     } finally {
       setBulkGeneratingKey(null);
+    }
+  };
+
+  const recoverRefreshJob = async (queueId: string | undefined, confirmRelease = false) => {
+    if (!currentBusinessId || !queueId) return;
+    setRecoveringQueueId(queueId);
+    try {
+      const response = confirmRelease
+        ? await api.post(`/operator/reviews/refresh-jobs/${queueId}/recovery`, {
+            business_id: currentBusinessId,
+            confirm_release: true,
+          })
+        : await api.get(`/operator/reviews/refresh-jobs/${queueId}/recovery`, {
+            params: { business_id: currentBusinessId },
+          });
+      const recovery = response.data.recovery_result || {};
+      appendOperatorResult(
+        {
+          status: recovery.status || 'blocked',
+          queue_id: queueId,
+          chat_response:
+            recovery.status === 'released'
+              ? 'Зарезервированные кредиты по failed refresh возвращены. Внешних публикаций не было.'
+              : recovery.release_allowed
+                ? `Recovery доступен: можно вернуть ${recovery.outstanding_credits || 0} зарезервированных кредитов.`
+                : 'Для этой задачи нет доступного recovery-действия.',
+          recovery_result: recovery,
+          blocked_reasons: recovery.blocked_reasons || [],
+          manual_publication_only: true,
+        },
+        confirmRelease ? 'recovery-release' : 'recovery-plan',
+      );
+    } catch (err) {
+      appendOperatorResult(
+        {
+          status: 'blocked',
+          queue_id: queueId,
+          chat_response: err instanceof Error ? err.message : 'Не удалось выполнить recovery refresh job',
+          blocked_reasons: ['operator_refresh_recovery_failed'],
+        },
+        'recovery-error',
+      );
+    } finally {
+      setRecoveringQueueId(null);
     }
   };
 
@@ -409,10 +466,12 @@ export const OperatorPage = () => {
                         bulkGeneratingKey,
                         applyingServiceJobId,
                         manualPublishDraftId,
+                        recoveringQueueId,
                       }}
                       onCopy={copyText}
                       onCheckRefresh={checkRefreshResult}
                       onGenerateReplies={generateReviewReplies}
+                      onRecoverRefresh={recoverRefreshJob}
                       onApplyServices={applyServiceSuggestions}
                       onMarkManualPublished={markManualPublished}
                     />
@@ -460,10 +519,12 @@ type OperatorResultActionsProps = {
     bulkGeneratingKey: string | null;
     applyingServiceJobId: string | null;
     manualPublishDraftId: string | null;
+    recoveringQueueId: string | null;
   };
   onCopy: (key: string, text: string) => Promise<void>;
   onCheckRefresh: (queueId: string | undefined) => Promise<void>;
   onGenerateReplies: () => Promise<void>;
+  onRecoverRefresh: (queueId: string | undefined, confirmRelease?: boolean) => Promise<void>;
   onApplyServices: (jobId: string | undefined) => Promise<void>;
   onMarkManualPublished: (draftId: string | undefined) => Promise<void>;
 };
@@ -475,6 +536,7 @@ const OperatorResultActions = ({
   onCopy,
   onCheckRefresh,
   onGenerateReplies,
+  onRecoverRefresh,
   onApplyServices,
   onMarkManualPublished,
 }: OperatorResultActionsProps) => {
@@ -490,6 +552,12 @@ const OperatorResultActions = ({
   const aiRouter = result.ai_router;
   const queueId = result.queue_id;
   const status = result.status || '';
+  const reliabilityStatus = 'reliability_state' in result ? result.reliability_state?.status || '' : '';
+  const outstandingCredits = 'billing_state' in result ? Number(result.billing_state?.outstanding_credits || 0) : 0;
+  const showRecoveryActions =
+    Boolean(queueId) &&
+    (outstandingCredits > 0 || ['failed', 'captcha_required', 'paused', 'warning'].includes(reliabilityStatus));
+  const recoveryResult = 'recovery_result' in result ? result.recovery_result : undefined;
 
   return (
     <div className="mt-3 space-y-3">
@@ -538,6 +606,21 @@ const OperatorResultActions = ({
           <div className="font-semibold text-slate-950">{result.reliability_state.title}</div>
           {result.reliability_state.explanation ? <div>{result.reliability_state.explanation}</div> : null}
           {result.reliability_state.next_step ? <div className="mt-1 font-medium">{result.reliability_state.next_step}</div> : null}
+        </div>
+      ) : null}
+
+      {recoveryResult ? (
+        <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sky-950">
+          <div className="font-semibold">Recovery refresh job</div>
+          <div>
+            Статус: {recoveryResult.status || 'blocked'}
+            {typeof recoveryResult.outstanding_credits === 'number'
+              ? `; резерв к возврату: ${recoveryResult.outstanding_credits}`
+              : ''}
+          </div>
+          {recoveryResult.blocked_reasons?.length ? (
+            <div className="mt-1 text-sky-800">Причины: {recoveryResult.blocked_reasons.join(', ')}</div>
+          ) : null}
         </div>
       ) : null}
 
@@ -632,6 +715,32 @@ const OperatorResultActions = ({
           >
             {loading.bulkGeneratingKey === 'review_replies_generate' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquareText className="mr-2 h-4 w-4" />}
             Подготовить ответы
+          </Button>
+        ) : null}
+
+        {showRecoveryActions ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => void onRecoverRefresh(queueId, false)}
+            disabled={loading.recoveringQueueId === queueId}
+          >
+            {loading.recoveringQueueId === queueId ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+            Проверить recovery
+          </Button>
+        ) : null}
+
+        {showRecoveryActions && outstandingCredits > 0 ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => void onRecoverRefresh(queueId, true)}
+            disabled={loading.recoveringQueueId === queueId}
+          >
+            {loading.recoveringQueueId === queueId ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+            Вернуть резерв
           </Button>
         ) : null}
 
