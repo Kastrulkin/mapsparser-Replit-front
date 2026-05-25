@@ -3384,6 +3384,28 @@ def send_user_password_setup(user_id):
         return jsonify({"error": str(e)}), 500
 
 
+SENSITIVE_PROBE_PATH_MARKERS = (
+    ".env",
+    ".git",
+    "phpinfo",
+    "app_dev.php",
+    "_profiler",
+)
+SENSITIVE_PROBE_EXACT_PATHS = {
+    "test.php",
+    "api/test",
+}
+
+
+def _is_sensitive_probe_path(path: str) -> bool:
+    normalized = str(path or "").strip().lower().lstrip("/")
+    if not normalized:
+        return False
+    if normalized in SENSITIVE_PROBE_EXACT_PATHS:
+        return True
+    return any(marker in normalized for marker in SENSITIVE_PROBE_PATH_MARKERS)
+
+
 # SPA-фолбэк: любые не-API пути возвращают index.html
 @app.route('/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'])
 def spa_fallback(path):
@@ -3392,6 +3414,9 @@ def spa_fallback(path):
         # Для несуществующих API путей отвечаем корректным JSON и статусами, а не HTML/405
         if request.method == 'OPTIONS':
             return ('', 204)
+        return jsonify({"error": "Not Found"}), 404
+
+    if _is_sensitive_probe_path(path):
         return jsonify({"error": "Not Found"}), 404
 
     if path.startswith('public-audit/'):
