@@ -205,6 +205,41 @@ type FeedbackVersionNotice = {
   next_run_note?: string;
 };
 
+type AgentBuilderMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+};
+
+type AgentBuilderQuestion = {
+  key?: string;
+  question: string;
+};
+
+type AgentBuilderPreview = {
+  understood_task?: string;
+  category?: string;
+  category_label?: string;
+  agent_name?: string;
+  data_sources?: string[];
+  extraction_rules?: string;
+  processing_rules?: string;
+  output_format?: string;
+  manual_control?: string;
+  approval_boundaries?: string[];
+  external_dispatch_performed?: boolean;
+};
+
+type AgentBuilderSession = {
+  id: string;
+  business_id: string;
+  status: string;
+  category: string;
+  messages?: AgentBuilderMessage[];
+  preview?: AgentBuilderPreview;
+  missing_questions?: AgentBuilderQuestion[];
+  blueprint_id?: string | null;
+};
+
 const getRequestErrorMessage = (requestError: unknown, fallback: string) => {
   if (requestError instanceof Error && requestError.message.trim()) {
     return requestError.message
@@ -507,6 +542,9 @@ export const AgentBlueprintsPage = () => {
   const [builderSourceText, setBuilderSourceText] = useState('');
   const [builderFileSource, setBuilderFileSource] = useState<File | null>(null);
   const [builderInternalSource, setBuilderInternalSource] = useState('business_profile');
+  const [dialogBuilderInput, setDialogBuilderInput] = useState('');
+  const [dialogBuilderReply, setDialogBuilderReply] = useState('');
+  const [dialogBuilderSession, setDialogBuilderSession] = useState<AgentBuilderSession | null>(null);
   const [agentReview, setAgentReview] = useState<AgentReview | null>(null);
   const [setupDataSources, setSetupDataSources] = useState('профиль бизнеса, ручной контекст');
   const [setupExtractionRules, setSetupExtractionRules] = useState('');
@@ -789,6 +827,94 @@ export const AgentBlueprintsPage = () => {
     }
   };
 
+  const startDialogBuilderSession = async () => {
+    if (!currentBusinessId || !dialogBuilderInput.trim()) {
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    try {
+      const response = await api.post('/agent-builder/sessions', {
+        business_id: currentBusinessId,
+        message: dialogBuilderInput.trim(),
+      });
+      setDialogBuilderSession(response.data?.session || null);
+      setAgentPrompt(dialogBuilderInput.trim());
+      const preview = response.data?.session?.preview || {};
+      if (typeof preview.category === 'string') {
+        setBuilderCategory(preview.category);
+      }
+      if (Array.isArray(preview.data_sources)) {
+        setBuilderDataSources(preview.data_sources.join(', '));
+      }
+      if (typeof preview.extraction_rules === 'string') {
+        setBuilderExtractionRules(preview.extraction_rules);
+      }
+      if (typeof preview.processing_rules === 'string') {
+        setBuilderProcessingRules(preview.processing_rules);
+      }
+      if (typeof preview.output_format === 'string') {
+        setBuilderOutputFormat(preview.output_format);
+      }
+      if (typeof preview.manual_control === 'string') {
+        setBuilderManualControl(preview.manual_control);
+      }
+    } catch (requestError) {
+      console.error(requestError);
+      setError(getRequestErrorMessage(requestError, 'Не удалось начать диалог создания агента.'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const sendDialogBuilderReply = async () => {
+    if (!dialogBuilderSession || !dialogBuilderReply.trim()) {
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    try {
+      const response = await api.post(`/agent-builder/sessions/${dialogBuilderSession.id}/message`, {
+        message: dialogBuilderReply.trim(),
+      });
+      setDialogBuilderSession(response.data?.session || null);
+      setDialogBuilderReply('');
+    } catch (requestError) {
+      console.error(requestError);
+      setError(getRequestErrorMessage(requestError, 'Не удалось отправить уточнение агенту.'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const createAgentFromDialogSession = async () => {
+    if (!dialogBuilderSession) {
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    try {
+      const response = await api.post(`/agent-builder/sessions/${dialogBuilderSession.id}/create-blueprint`, {});
+      const blueprint = response.data?.blueprint;
+      await loadBlueprints();
+      if (blueprint?.id) {
+        setSelectedBlueprintId(blueprint.id);
+        await loadBlueprintDetails(blueprint.id);
+        await loadBlueprintReview(blueprint.id);
+      }
+      setDialogBuilderInput('');
+      setDialogBuilderReply('');
+      setDialogBuilderSession(null);
+      setCreateWizardOpen(false);
+      setWorkspaceMode('settings');
+    } catch (requestError) {
+      console.error(requestError);
+      setError(getRequestErrorMessage(requestError, 'Не удалось создать агента из диалога.'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const createAgentFromPrompt = async () => {
     if (!currentBusinessId || !agentPrompt.trim()) {
       return;
@@ -1042,9 +1168,25 @@ export const AgentBlueprintsPage = () => {
           <DialogHeader>
             <DialogTitle>Создать агента</DialogTitle>
             <DialogDescription>
-              Выберите тип, добавьте данные, правила и ожидаемый результат. Шаблоны здесь только стартовая точка.
+              Опишите задачу обычным языком. LocalOS уточнит недостающие детали и покажет preview агента перед созданием.
             </DialogDescription>
           </DialogHeader>
+          <DialogAgentBuilder
+            input={dialogBuilderInput}
+            reply={dialogBuilderReply}
+            session={dialogBuilderSession}
+            actionLoading={actionLoading}
+            onInputChange={setDialogBuilderInput}
+            onReplyChange={setDialogBuilderReply}
+            onStart={startDialogBuilderSession}
+            onSendReply={sendDialogBuilderReply}
+            onCreate={createAgentFromDialogSession}
+          />
+          <details className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <summary className="cursor-pointer text-sm font-medium text-slate-700">
+              Открыть ручной мастер
+            </summary>
+            <div className="mt-4">
           <CreateAgentWizard
             step={createWizardStep}
             prompt={agentPrompt}
@@ -1076,6 +1218,8 @@ export const AgentBlueprintsPage = () => {
             onInternalSourceChange={setBuilderInternalSource}
             onCreate={createAgentFromPrompt}
           />
+            </div>
+          </details>
         </DialogContent>
       </Dialog>
 
@@ -1557,6 +1701,132 @@ const CreateAgentWizard = ({
     </div>
   );
 };
+
+const DialogAgentBuilder = ({
+  input,
+  reply,
+  session,
+  actionLoading,
+  onInputChange,
+  onReplyChange,
+  onStart,
+  onSendReply,
+  onCreate,
+}: {
+  input: string;
+  reply: string;
+  session: AgentBuilderSession | null;
+  actionLoading: boolean;
+  onInputChange: (value: string) => void;
+  onReplyChange: (value: string) => void;
+  onStart: () => void;
+  onSendReply: () => void;
+  onCreate: () => void;
+}) => {
+  const preview = session?.preview || null;
+  const questions = session?.missing_questions || [];
+  const messages = session?.messages || [];
+  return (
+    <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+        <textarea
+          className="min-h-28 resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm leading-6 outline-none transition focus:border-slate-400"
+          value={input}
+          onChange={(event) => onInputChange(event.target.value)}
+          placeholder="Например: мне нужен агент, который проверяет договоры, находит риски и готовит краткий отчёт"
+        />
+        <Button type="button" onClick={onStart} disabled={actionLoading || !input.trim()}>
+          {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+          Начать диалог
+        </Button>
+      </div>
+
+      {session ? (
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(20rem,1.05fr)]">
+          <div className="space-y-3">
+            <div className="text-sm font-semibold text-slate-950">Диалог настройки</div>
+            <div className="max-h-72 space-y-2 overflow-auto rounded-xl bg-slate-50 p-3">
+              {messages.slice(-6).map((message, index) => (
+                <div
+                  key={`${message.role}-${index}-${message.content.slice(0, 12)}`}
+                  className={cn(
+                    'rounded-xl px-3 py-2 text-sm leading-6',
+                    message.role === 'user' ? 'ml-8 bg-slate-950 text-white' : 'mr-8 bg-white text-slate-700 ring-1 ring-slate-200',
+                  )}
+                >
+                  {message.content}
+                </div>
+              ))}
+            </div>
+            {questions.length ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3">
+                <div className="text-sm font-semibold text-amber-900">Нужно уточнить</div>
+                <div className="mt-2 space-y-1">
+                  {questions.map((question) => (
+                    <div key={question.key || question.question} className="text-sm leading-6 text-amber-900">
+                      {question.question}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-900">
+                Данных достаточно для первого blueprint. После создания можно добавить файлы и источники.
+              </div>
+            )}
+            <div className="grid gap-2 md:grid-cols-[1fr_auto]">
+              <textarea
+                className="min-h-16 resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+                value={reply}
+                onChange={(event) => onReplyChange(event.target.value)}
+                placeholder="Ответьте на уточнение или добавьте правило"
+              />
+              <Button type="button" variant="outline" onClick={onSendReply} disabled={actionLoading || !reply.trim()}>
+                Ответить
+              </Button>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-slate-950">Preview будущего агента</div>
+                <div className="mt-1 text-xs text-slate-500">Проверьте задачу, данные, правила и ручной контроль перед созданием.</div>
+              </div>
+              <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+                {preview?.category_label || humanizeCategory(session.category)}
+              </span>
+            </div>
+            <div className="mt-4 space-y-3 text-sm leading-6 text-slate-700">
+              <PreviewRow label="Понял задачу так" value={preview?.understood_task || input} />
+              <PreviewRow label="Данные" value={(preview?.data_sources || []).map((item) => humanizeMeta(item)).join(', ') || 'уточнить'} />
+              <PreviewRow label="Что извлечь" value={preview?.extraction_rules || 'уточнить'} />
+              <PreviewRow label="Правила" value={preview?.processing_rules || 'уточнить'} />
+              <PreviewRow label="Результат" value={preview?.output_format || 'уточнить'} />
+              <PreviewRow label="Ручной контроль" value={preview?.manual_control || 'перед внешним действием'} />
+            </div>
+            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-900">
+              Внешние отправки, публикации, платежи и destructive actions не запускаются из builder. Рискованные действия требуют approval.
+            </div>
+            <div className="mt-4 flex justify-end">
+              <Button type="button" onClick={onCreate} disabled={actionLoading}>
+                {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                Создать из preview
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+const PreviewRow = ({ label, value }: { label: string; value: string }) => (
+  <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-slate-200">
+    <div className="text-xs font-semibold uppercase text-slate-500">{label}</div>
+    <div className="mt-1 text-slate-800">{value}</div>
+  </div>
+);
 
 const SystemAgentCard = ({
   title,

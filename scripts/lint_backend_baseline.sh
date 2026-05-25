@@ -11,10 +11,12 @@ python3 -m py_compile \
   src/api/admin_growth_api.py \
   src/api/business_types_api.py \
   src/api/reports_api.py \
+  src/api/agent_builder_api.py \
   src/api/agent_blueprints_api.py \
   src/api/auth_user_api.py \
   src/api/superadmin_business_api.py \
   src/services/agent_blueprint_orchestrator.py \
+  src/services/agent_builder_session.py \
   src/services/agent_blueprint_draft_builder.py \
   src/services/agent_blueprint_workspace.py \
   src/services/agent_source_ingestion.py \
@@ -32,6 +34,7 @@ python3 -m py_compile \
   scripts/smoke_operator_bulk_review_replies.py \
   scripts/smoke_agent_blueprint_document_api.py \
   scripts/smoke_agent_blueprint_generic_boundaries.py \
+  scripts/smoke_agent_builder_dialog_api.py \
   src/api/growth_workflow_api.py \
   src/auth_encryption.py \
   tests/test_reports_api_routes.py \
@@ -51,6 +54,7 @@ import api.admin_growth_api
 import api.business_types_api
 import api.growth_workflow_api
 import api.reports_api
+import api.agent_builder_api
 import api.agent_blueprints_api
 import api.auth_user_api
 import api.superadmin_business_api
@@ -63,6 +67,9 @@ rules = {
     "/api/business/<business_id>/optimization-wizard": "growth_workflow_api.business_optimization_wizard",
     "/api/business/<business_id>/sprint": "growth_workflow_api.business_sprint",
     "/api/business-types": "business_types_api.get_business_types_public",
+    "/api/agent-builder/sessions": "agent_builder_api.create_agent_builder_session",
+    "/api/agent-builder/sessions/<session_id>/message": "agent_builder_api.add_agent_builder_message",
+    "/api/agent-builder/sessions/<session_id>/create-blueprint": "agent_builder_api.create_blueprint_from_agent_builder_session",
     "/api/agent-blueprints/draft": "agent_blueprints_api.create_agent_blueprint_draft",
     "/api/agent-blueprints/<blueprint_id>": "agent_blueprints_api.get_agent_blueprint",
     "/api/agent-blueprints/<blueprint_id>/setup": "agent_blueprints_api.setup_agent_blueprint",
@@ -173,8 +180,10 @@ python3 - <<'PY'
 from pathlib import Path
 
 api_text = Path("src/api/agent_blueprints_api.py").read_text(encoding="utf-8")
+builder_api_text = Path("src/api/agent_builder_api.py").read_text(encoding="utf-8")
 runner_text = Path("src/services/agent_blueprint_runner.py").read_text(encoding="utf-8")
 orchestrator_text = Path("src/services/agent_blueprint_orchestrator.py").read_text(encoding="utf-8")
+builder_session_text = Path("src/services/agent_builder_session.py").read_text(encoding="utf-8")
 draft_builder_text = Path("src/services/agent_blueprint_draft_builder.py").read_text(encoding="utf-8")
 workspace_text = Path("src/services/agent_blueprint_workspace.py").read_text(encoding="utf-8")
 source_ingestion_text = Path("src/services/agent_source_ingestion.py").read_text(encoding="utf-8")
@@ -182,6 +191,22 @@ capability_text = Path("src/services/outreach_send_capability.py").read_text(enc
 ui_text = Path("frontend/src/pages/dashboard/AgentBlueprintsPage.tsx").read_text(encoding="utf-8")
 
 required = {
+    "src/api/agent_builder_api.py": [
+        "/api/agent-builder/sessions",
+        "/api/agent-builder/sessions/<session_id>/message",
+        "/api/agent-builder/sessions/<session_id>/create-blueprint",
+        "build_agent_builder_state",
+        "preview_to_setup",
+        "agent_builder_sessions",
+        "blueprint_created",
+    ],
+    "src/services/agent_builder_session.py": [
+        "QUESTION_LIBRARY",
+        "build_agent_builder_state",
+        "missing_questions",
+        "external_dispatch_performed",
+        "preview_to_setup",
+    ],
     "src/api/agent_blueprints_api.py": [
         "VERSION_BLUEPRINT_MISMATCH",
         "build_agent_blueprint_orchestrator()",
@@ -265,6 +290,10 @@ required = {
         "sources/upload",
         "Новая активная версия",
         "ApprovalPayloadSummary",
+        "DialogAgentBuilder",
+        "Preview будущего агента",
+        "Нужно уточнить",
+        "Создать из preview",
     ],
     "scripts/smoke_agent_blueprint_document_api.py": [
         "/api/agent-blueprints/draft",
@@ -285,10 +314,20 @@ required = {
         "final_output",
         "dispatcher_started",
     ],
+    "scripts/smoke_agent_builder_dialog_api.py": [
+        "/api/agent-builder/sessions",
+        "/message",
+        "/create-blueprint",
+        "missing_questions",
+        "preview_available",
+        "blueprint_created",
+    ],
 }
 
 texts = {
+    "src/api/agent_builder_api.py": builder_api_text,
     "src/api/agent_blueprints_api.py": api_text,
+    "src/services/agent_builder_session.py": builder_session_text,
     "src/services/agent_blueprint_runner.py": runner_text,
     "src/services/agent_blueprint_orchestrator.py": orchestrator_text,
     "src/services/agent_blueprint_draft_builder.py": draft_builder_text,
@@ -298,6 +337,7 @@ texts = {
     "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx": ui_text,
     "scripts/smoke_agent_blueprint_document_api.py": Path("scripts/smoke_agent_blueprint_document_api.py").read_text(encoding="utf-8"),
     "scripts/smoke_agent_blueprint_generic_boundaries.py": Path("scripts/smoke_agent_blueprint_generic_boundaries.py").read_text(encoding="utf-8"),
+    "scripts/smoke_agent_builder_dialog_api.py": Path("scripts/smoke_agent_builder_dialog_api.py").read_text(encoding="utf-8"),
 }
 
 for path, markers in required.items():

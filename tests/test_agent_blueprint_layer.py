@@ -6,6 +6,15 @@ def test_agent_blueprint_routes_are_owned_by_blueprint():
     import main
 
     expected = {
+        "/api/agent-builder/sessions": {
+            "POST": "agent_builder_api.create_agent_builder_session",
+        },
+        "/api/agent-builder/sessions/<session_id>/message": {
+            "POST": "agent_builder_api.add_agent_builder_message",
+        },
+        "/api/agent-builder/sessions/<session_id>/create-blueprint": {
+            "POST": "agent_builder_api.create_blueprint_from_agent_builder_session",
+        },
         "/api/agent-blueprints": {
             "GET": "agent_blueprints_api.list_agent_blueprints",
             "POST": "agent_blueprints_api.create_agent_blueprint",
@@ -76,6 +85,16 @@ def test_agent_blueprint_migration_creates_expected_tables():
     assert "20260521_001" in migration
 
 
+def test_agent_builder_session_migration_creates_expected_table():
+    migration = Path("alembic_migrations/versions/20260525_add_agent_builder_sessions.py").read_text(encoding="utf-8")
+
+    assert "CREATE TABLE IF NOT EXISTS agent_builder_sessions" in migration
+    assert "preview_json JSONB" in migration
+    assert "missing_questions_json JSONB" in migration
+    assert "20260525_001" in migration
+    assert "20260523_001" in migration
+
+
 def test_default_supervised_outreach_template_has_approval_gates():
     from services.agent_blueprint_runner import default_supervised_outreach_version_payload
 
@@ -125,8 +144,40 @@ def test_agent_blueprint_draft_builder_respects_explicit_category():
     assert draft["summary"]["external_dispatch_performed"] is False
 
 
+def test_agent_builder_session_understands_document_task_and_asks_questions():
+    from services.agent_builder_session import build_agent_builder_state
+
+    state = build_agent_builder_state(
+        [{"role": "user", "content": "Нужен агент, который проверяет договоры и ищет риски"}],
+    )
+
+    assert state["category"] == "documents"
+    assert state["preview"]["category"] == "documents"
+    assert "Понял задачу" in state["messages"][-1]["content"]
+    assert state["preview"]["external_dispatch_performed"] is False
+    assert state["missing_questions"]
+    assert any("документ" in item["question"].lower() for item in state["missing_questions"])
+
+
+def test_agent_builder_session_reduces_questions_after_clarification():
+    from services.agent_builder_session import append_user_message, build_agent_builder_state
+
+    messages = [{"role": "user", "content": "Сделай агента"}]
+    initial = build_agent_builder_state(messages)
+    clarified_messages = append_user_message(
+        initial["messages"],
+        "Он проверяет договоры из DOCX, извлекает суммы, сроки и риски, результат нужен как краткий отчёт, человек проверяет итог.",
+    )
+    clarified = build_agent_builder_state(clarified_messages)
+
+    assert clarified["category"] == "documents"
+    assert len(clarified["missing_questions"]) < len(initial["missing_questions"])
+    assert clarified["preview"]["output_format"]
+
+
 def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     api_source = Path("src/api/agent_blueprints_api.py").read_text(encoding="utf-8")
+    builder_api_source = Path("src/api/agent_builder_api.py").read_text(encoding="utf-8")
 
     assert "VERSION_BLUEPRINT_MISMATCH" in api_source
     assert "_load_blueprint_version_for_blueprint" in api_source
@@ -141,6 +192,9 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "/api/agent-blueprints/<blueprint_id>/sources/upload" in api_source
     assert "build_agent_source_from_upload" in api_source
     assert "/api/agent-runs/<run_id>/feedback" in api_source
+    assert "/api/agent-builder/sessions" in builder_api_source
+    assert "build_agent_builder_state" in builder_api_source
+    assert "create_blueprint_from_agent_builder_session" in builder_api_source
 
 
 def test_generic_document_runner_uses_sources_and_stops_for_final_approval():
