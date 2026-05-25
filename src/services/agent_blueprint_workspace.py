@@ -60,10 +60,14 @@ def normalize_agent_source(payload: Dict[str, Any]) -> Dict[str, Any]:
         "source_type": source_type,
         "name": name,
         "file_name": file_name if source_type == "file" else "",
+        "mime_type": _clean_text(payload.get("mime_type")) if source_type == "file" else "",
+        "file_size_bytes": _safe_int(payload.get("file_size_bytes")),
         "internal_source": _clean_text(payload.get("internal_source")) if source_type == "internal" else "",
         "content_text": content[:MAX_SOURCE_TEXT_CHARS],
         "content_length": len(content),
-        "extraction_state": extraction_state,
+        "extraction_state": _clean_text(payload.get("extraction_state")) or extraction_state,
+        "extraction_method": _clean_text(payload.get("extraction_method")),
+        "extraction_error": _clean_text(payload.get("extraction_error")),
     }
 
 
@@ -280,6 +284,9 @@ def _render_output(category: str, setup: Dict[str, Any], extracted: List[Dict[st
             "title": "Разбор документа",
             "summary": facts,
             "risks": _risk_hints(facts, rules),
+            "facts": facts,
+            "fields": _document_fields(facts),
+            "next_questions": _document_next_questions(facts),
             "format": output_format,
         }
     return {
@@ -525,6 +532,39 @@ def _risk_hints(facts: List[str], rules: str) -> List[str]:
     return risks[:8]
 
 
+def _document_fields(facts: List[str]) -> Dict[str, str]:
+    fields: Dict[str, str] = {}
+    labels = {
+        "срок": "Сроки",
+        "оплат": "Оплата",
+        "сумм": "Суммы",
+        "штраф": "Штрафы",
+        "ответствен": "Ответственность",
+        "расторж": "Расторжение",
+        "персональн": "Персональные данные",
+    }
+    for fact in facts:
+        lowered = fact.lower()
+        for keyword, label in labels.items():
+            if keyword in lowered and label not in fields:
+                fields[label] = fact[:300]
+    return fields
+
+
+def _document_next_questions(facts: List[str]) -> List[str]:
+    text = " ".join(facts).lower()
+    questions = []
+    if "подпис" not in text:
+        questions.append("Кто подписывает документ и есть ли полномочия?")
+    if "срок" not in text:
+        questions.append("Какие сроки исполнения или действия документа?")
+    if "оплат" not in text and "сумм" not in text:
+        questions.append("Какие суммы, порядок оплаты и условия возврата?")
+    if "ответствен" not in text and "штраф" not in text:
+        questions.append("Какая ответственность сторон и что происходит при нарушении?")
+    return questions[:4]
+
+
 def _file_extension(file_name: str) -> str:
     if "." not in file_name:
         return ""
@@ -546,3 +586,10 @@ def _clean_list(value: Any) -> List[str]:
 
 def _clean_text(value: Any) -> str:
     return str(value or "").strip()
+
+
+def _safe_int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except Exception:
+        return 0

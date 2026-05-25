@@ -21,3 +21,5 @@ pytz==2025.2
 telethon
 pysocks
 python-socks[asyncio]
+pypdf
+openpyxl

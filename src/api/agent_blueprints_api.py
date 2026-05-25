@@ -21,6 +21,7 @@ from services.agent_blueprint_workspace import (
     normalize_agent_source,
     workspace_parse_json_field,
 )
+from services.agent_source_ingestion import build_agent_source_from_upload
 
 
 agent_blueprints_bp = Blueprint("agent_blueprints_api", __name__)
@@ -469,6 +470,37 @@ def add_agent_blueprint_source(blueprint_id: str):
         metadata = _blueprint_metadata(blueprint)
         sources = metadata.get("agent_sources") if isinstance(metadata.get("agent_sources"), list) else []
         source = normalize_agent_source(payload)
+        sources.append(source)
+        metadata["agent_sources"] = sources[-50:]
+        _save_blueprint_metadata(cursor, blueprint_id, metadata)
+        db.conn.commit()
+        return jsonify({"success": True, "source": source, "sources": metadata["agent_sources"]}), 201
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/sources/upload", methods=["POST"])
+def upload_agent_blueprint_source(blueprint_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    uploaded_file = request.files.get("file")
+    preferred_name = str(request.form.get("name") or "").strip()
+    source_payload, upload_error = build_agent_source_from_upload(uploaded_file, preferred_name)
+    if upload_error:
+        return _json_error(str(upload_error.get("message") or "file upload failed"), 400, str(upload_error.get("code") or "UPLOAD_FAILED"))
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        metadata = _blueprint_metadata(blueprint)
+        sources = metadata.get("agent_sources") if isinstance(metadata.get("agent_sources"), list) else []
+        source = normalize_agent_source(source_payload)
         sources.append(source)
         metadata["agent_sources"] = sources[-50:]
         _save_blueprint_metadata(cursor, blueprint_id, metadata)

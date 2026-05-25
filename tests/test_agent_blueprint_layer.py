@@ -25,6 +25,9 @@ def test_agent_blueprint_routes_are_owned_by_blueprint():
         "/api/agent-blueprints/<blueprint_id>/sources": {
             "POST": "agent_blueprints_api.add_agent_blueprint_source",
         },
+        "/api/agent-blueprints/<blueprint_id>/sources/upload": {
+            "POST": "agent_blueprints_api.upload_agent_blueprint_source",
+        },
         "/api/agent-blueprints/<blueprint_id>/review": {
             "GET": "agent_blueprints_api.review_agent_blueprint",
         },
@@ -135,6 +138,8 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "_insert_version(cursor, blueprint_id, version_payload, user_data)" in api_source
     assert "/api/agent-blueprints/<blueprint_id>/setup" in api_source
     assert "/api/agent-blueprints/<blueprint_id>/sources" in api_source
+    assert "/api/agent-blueprints/<blueprint_id>/sources/upload" in api_source
+    assert "build_agent_source_from_upload" in api_source
     assert "/api/agent-runs/<run_id>/feedback" in api_source
 
 
@@ -191,7 +196,76 @@ def test_generic_document_runner_uses_sources_and_stops_for_final_approval():
     output = [item for item in run["artifacts"] if item["artifact_type"] == "agent_output_draft"][0]
     assert output["payload_json"]["external_dispatch_performed"] is False
     assert output["payload_json"]["result"]["title"] == "Разбор документа"
+    assert output["payload_json"]["result"]["facts"]
+    assert output["payload_json"]["result"]["fields"]["Оплата"]
+    assert output["payload_json"]["result"]["fields"]["Ответственность"]
+    assert output["payload_json"]["dispatch_state"] == "not_dispatched"
     assert run["approvals"][0]["approval_type"] == "final_output"
+
+
+def test_agent_source_ingestion_extracts_text_docx_xlsx_and_rejects_unsafe_files():
+    import io
+    import zipfile
+
+    from openpyxl import Workbook
+
+    from services.agent_source_ingestion import build_agent_source_from_upload
+
+    text_source, text_error = build_agent_source_from_upload(
+        FakeUpload("contract.txt", "text/plain", "Оплата 10000. Ответственность: штраф.".encode("utf-8")),
+        "Договор",
+    )
+    assert text_error == {}
+    assert text_source["content_text"].startswith("Оплата 10000")
+    assert text_source["extraction_state"] == "ready"
+
+    docx_buffer = io.BytesIO()
+    archive = zipfile.ZipFile(docx_buffer, "w")
+    try:
+        archive.writestr(
+            "word/document.xml",
+            (
+                '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+                "<w:body><w:p><w:r><w:t>Документ содержит срок и оплату.</w:t></w:r></w:p></w:body>"
+                "</w:document>"
+            ),
+        )
+    finally:
+        archive.close()
+    docx_source, docx_error = build_agent_source_from_upload(
+        FakeUpload(
+            "contract.docx",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            docx_buffer.getvalue(),
+        )
+    )
+    assert docx_error == {}
+    assert "срок и оплату" in docx_source["content_text"]
+    assert docx_source["extraction_method"] == "docx_xml"
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Риски"
+    sheet.append(["Поле", "Значение"])
+    sheet.append(["Штраф", "10%"])
+    xlsx_buffer = io.BytesIO()
+    workbook.save(xlsx_buffer)
+    xlsx_source, xlsx_error = build_agent_source_from_upload(
+        FakeUpload(
+            "risks.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            xlsx_buffer.getvalue(),
+        )
+    )
+    assert xlsx_error == {}
+    assert "Штраф" in xlsx_source["content_text"]
+    assert xlsx_source["extraction_method"] == "openpyxl"
+
+    unsafe_source, unsafe_error = build_agent_source_from_upload(
+        FakeUpload("payload.exe", "application/octet-stream", b"bad"),
+    )
+    assert unsafe_source == {}
+    assert unsafe_error["code"] == "UNSUPPORTED_FILE_TYPE"
 
 
 def test_outreach_send_batch_handler_queues_approved_drafts_without_external_dispatch(monkeypatch):
@@ -753,6 +827,16 @@ class CountingOrchestrator:
                 "external_dispatch_performed": False,
             },
         }
+
+
+class FakeUpload:
+    def __init__(self, filename, mimetype, data):
+        self.filename = filename
+        self.mimetype = mimetype
+        self._data = data
+
+    def read(self):
+        return self._data
 
 
 class FakeOutreachConnection:

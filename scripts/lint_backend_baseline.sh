@@ -17,6 +17,7 @@ python3 -m py_compile \
   src/services/agent_blueprint_orchestrator.py \
   src/services/agent_blueprint_draft_builder.py \
   src/services/agent_blueprint_workspace.py \
+  src/services/agent_source_ingestion.py \
   src/services/agent_blueprint_runner.py \
   src/services/outreach_send_capability.py \
   src/api/operator_api.py \
@@ -29,6 +30,7 @@ python3 -m py_compile \
   scripts/audit_approval_boundaries.py \
   scripts/smoke_operator_services_apply_api.py \
   scripts/smoke_operator_bulk_review_replies.py \
+  scripts/smoke_agent_blueprint_document_api.py \
   src/api/growth_workflow_api.py \
   src/auth_encryption.py \
   tests/test_reports_api_routes.py \
@@ -63,8 +65,9 @@ rules = {
     "/api/agent-blueprints/draft": "agent_blueprints_api.create_agent_blueprint_draft",
     "/api/agent-blueprints/<blueprint_id>": "agent_blueprints_api.get_agent_blueprint",
     "/api/agent-blueprints/<blueprint_id>/setup": "agent_blueprints_api.setup_agent_blueprint",
-    "/api/agent-blueprints/<blueprint_id>/sources": "agent_blueprints_api.add_agent_blueprint_source",
-    "/api/agent-blueprints/<blueprint_id>/review": "agent_blueprints_api.review_agent_blueprint",
+        "/api/agent-blueprints/<blueprint_id>/sources": "agent_blueprints_api.add_agent_blueprint_source",
+        "/api/agent-blueprints/<blueprint_id>/sources/upload": "agent_blueprints_api.upload_agent_blueprint_source",
+        "/api/agent-blueprints/<blueprint_id>/review": "agent_blueprints_api.review_agent_blueprint",
     "/api/agent-blueprints/<blueprint_id>/runs": "agent_blueprints_api.start_agent_blueprint_run",
     "/api/agent-runs/<run_id>": "agent_blueprints_api.get_agent_run",
     "/api/agent-runs/<run_id>/feedback": "agent_blueprints_api.create_agent_run_feedback",
@@ -173,6 +176,7 @@ runner_text = Path("src/services/agent_blueprint_runner.py").read_text(encoding=
 orchestrator_text = Path("src/services/agent_blueprint_orchestrator.py").read_text(encoding="utf-8")
 draft_builder_text = Path("src/services/agent_blueprint_draft_builder.py").read_text(encoding="utf-8")
 workspace_text = Path("src/services/agent_blueprint_workspace.py").read_text(encoding="utf-8")
+source_ingestion_text = Path("src/services/agent_source_ingestion.py").read_text(encoding="utf-8")
 capability_text = Path("src/services/outreach_send_capability.py").read_text(encoding="utf-8")
 ui_text = Path("frontend/src/pages/dashboard/AgentBlueprintsPage.tsx").read_text(encoding="utf-8")
 
@@ -184,6 +188,8 @@ required = {
         "/api/agent-blueprints/draft",
         "/api/agent-blueprints/<blueprint_id>/setup",
         "/api/agent-blueprints/<blueprint_id>/sources",
+        "/api/agent-blueprints/<blueprint_id>/sources/upload",
+        "build_agent_source_from_upload",
         "/api/agent-runs/<run_id>/feedback",
     ],
     "src/services/agent_blueprint_draft_builder.py": [
@@ -200,6 +206,16 @@ required = {
         "build_generic_artifact_payload",
         "build_blueprint_review",
         "external_dispatch_performed",
+        "_document_fields",
+        "_document_next_questions",
+    ],
+    "src/services/agent_source_ingestion.py": [
+        "MAX_AGENT_SOURCE_FILE_BYTES",
+        "SUPPORTED_AGENT_SOURCE_EXTENSIONS",
+        "extract_text_from_agent_source_bytes",
+        "_extract_pdf_text",
+        "_extract_docx_text",
+        "_extract_xlsx_text",
     ],
     "src/services/agent_blueprint_runner.py": [
         "allow_execute_when_approved=True",
@@ -245,7 +261,16 @@ required = {
         "Источник лидов: prospectingleads",
         "source_artifact",
         "Поставлено в очередь, но не отправлено",
+        "sources/upload",
+        "Создана версия",
         "ApprovalPayloadSummary",
+    ],
+    "scripts/smoke_agent_blueprint_document_api.py": [
+        "/api/agent-blueprints/draft",
+        "/sources/upload",
+        "/feedback",
+        "external_dispatch_performed",
+        "system_agents_config_persisted",
     ],
 }
 
@@ -255,8 +280,10 @@ texts = {
     "src/services/agent_blueprint_orchestrator.py": orchestrator_text,
     "src/services/agent_blueprint_draft_builder.py": draft_builder_text,
     "src/services/agent_blueprint_workspace.py": workspace_text,
+    "src/services/agent_source_ingestion.py": source_ingestion_text,
     "src/services/outreach_send_capability.py": capability_text,
     "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx": ui_text,
+    "scripts/smoke_agent_blueprint_document_api.py": Path("scripts/smoke_agent_blueprint_document_api.py").read_text(encoding="utf-8"),
 }
 
 for path, markers in required.items():

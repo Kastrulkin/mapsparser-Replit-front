@@ -198,6 +198,12 @@ type PersonaAgent = {
 
 type AgentWorkspaceMode = 'settings' | 'run' | 'results';
 
+type FeedbackVersionNotice = {
+  version_number?: number;
+  feedback?: string;
+  next_run_note?: string;
+};
+
 const runStatusFilters = [
   { value: 'all', label: 'Все' },
   { value: 'running', label: 'В работе' },
@@ -422,6 +428,26 @@ const parseAgentConfig = (business?: DashboardContext['currentBusiness']) => {
   }
 };
 
+const uploadAgentSource = async (blueprintId: string, file: File, name: string) => {
+  const token = newAuth.getToken();
+  if (!token) {
+    throw new Error('Authorization required');
+  }
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('name', name || file.name);
+  const response = await fetch(`/api/agent-blueprints/${blueprintId}/sources/upload`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  const data = await response.json();
+  if (!response.ok || !data.success) {
+    throw new Error(data.error || 'Не удалось прочитать файл');
+  }
+  return data;
+};
+
 export const AgentBlueprintsPage = () => {
   const { currentBusinessId, currentBusiness } = useOutletContext<DashboardContext>();
   const [blueprints, setBlueprints] = useState<AgentBlueprint[]>([]);
@@ -450,7 +476,7 @@ export const AgentBlueprintsPage = () => {
   const [builderManualControl, setBuilderManualControl] = useState('перед использованием результата и перед любым внешним действием');
   const [builderSourceName, setBuilderSourceName] = useState('');
   const [builderSourceText, setBuilderSourceText] = useState('');
-  const [builderFileSource, setBuilderFileSource] = useState<{ name: string; content: string } | null>(null);
+  const [builderFileSource, setBuilderFileSource] = useState<File | null>(null);
   const [builderInternalSource, setBuilderInternalSource] = useState('business_profile');
   const [agentReview, setAgentReview] = useState<AgentReview | null>(null);
   const [setupDataSources, setSetupDataSources] = useState('профиль бизнеса, ручной контекст');
@@ -462,6 +488,7 @@ export const AgentBlueprintsPage = () => {
   const [sourceText, setSourceText] = useState('');
   const [internalSource, setInternalSource] = useState('business_profile');
   const [feedbackText, setFeedbackText] = useState('');
+  const [feedbackVersionNotice, setFeedbackVersionNotice] = useState<FeedbackVersionNotice | null>(null);
   const [systemAgentConfig, setSystemAgentConfig] = useState<Record<string, { enabled?: boolean }>>({});
 
   useEffect(() => {
@@ -765,12 +792,7 @@ export const AgentBlueprintsPage = () => {
           });
         }
         if (builderFileSource) {
-          await api.post(`/agent-blueprints/${blueprint.id}/sources`, {
-            source_type: 'file',
-            name: builderFileSource.name,
-            file_name: builderFileSource.name,
-            content_text: builderFileSource.content,
-          });
+          await uploadAgentSource(blueprint.id, builderFileSource, builderSourceName.trim() || builderFileSource.name);
         }
         if (builderInternalSource !== 'none') {
           await api.post(`/agent-blueprints/${blueprint.id}/sources`, {
@@ -928,18 +950,7 @@ export const AgentBlueprintsPage = () => {
     setActionLoading(true);
     setError(null);
     try {
-      let contentText = '';
-      try {
-        contentText = await file.text();
-      } catch (readError) {
-        console.error(readError);
-      }
-      await api.post(`/agent-blueprints/${selectedBlueprint.id}/sources`, {
-        source_type: 'file',
-        name: file.name,
-        file_name: file.name,
-        content_text: contentText,
-      });
+      await uploadAgentSource(selectedBlueprint.id, file, file.name);
       await loadBlueprintReview(selectedBlueprint.id);
     } catch (requestError) {
       console.error(requestError);
@@ -956,7 +967,13 @@ export const AgentBlueprintsPage = () => {
     setActionLoading(true);
     setError(null);
     try {
-      await api.post(`/agent-runs/${activeRun.id}/feedback`, { feedback: feedbackText });
+      const response = await api.post(`/agent-runs/${activeRun.id}/feedback`, { feedback: feedbackText });
+      const version = response.data?.version || {};
+      setFeedbackVersionNotice({
+        version_number: typeof version.version_number === 'number' ? version.version_number : undefined,
+        feedback: feedbackText,
+        next_run_note: 'Новые запуски будут использовать эту версию; старые запуски остаются привязаны к своей версии.',
+      });
       setFeedbackText('');
       if (selectedBlueprint?.id) {
         await loadBlueprintDetails(selectedBlueprint.id);
@@ -1147,6 +1164,7 @@ export const AgentBlueprintsPage = () => {
           queuedButNotDispatched={queuedButNotDispatched}
           agentReview={agentReview}
           feedbackText={feedbackText}
+          feedbackVersionNotice={feedbackVersionNotice}
           actionLoading={actionLoading}
           setupDataSources={setupDataSources}
           setupExtractionRules={setupExtractionRules}
@@ -1322,7 +1340,7 @@ const CreateAgentWizard = ({
   manualControl: string;
   sourceName: string;
   sourceText: string;
-  fileSource: { name: string; content: string } | null;
+  fileSource: File | null;
   internalSource: string;
   actionLoading: boolean;
   canCreate: boolean;
@@ -1336,7 +1354,7 @@ const CreateAgentWizard = ({
   onManualControlChange: (value: string) => void;
   onSourceNameChange: (value: string) => void;
   onSourceTextChange: (value: string) => void;
-  onFileSourceChange: (value: { name: string; content: string } | null) => void;
+  onFileSourceChange: (value: File | null) => void;
   onInternalSourceChange: (value: string) => void;
   onCreate: () => void;
 }) => {
@@ -1346,13 +1364,7 @@ const CreateAgentWizard = ({
       onFileSourceChange(null);
       return;
     }
-    let content = '';
-    try {
-      content = await file.text();
-    } catch (readError) {
-      console.error(readError);
-    }
-    onFileSourceChange({ name: file.name, content });
+    onFileSourceChange(file);
   };
 
   return (
@@ -1624,6 +1636,7 @@ const AgentDetailPanel = ({
   queuedButNotDispatched,
   agentReview,
   feedbackText,
+  feedbackVersionNotice,
   actionLoading,
   setupDataSources,
   setupExtractionRules,
@@ -1667,6 +1680,7 @@ const AgentDetailPanel = ({
   queuedButNotDispatched: AgentArtifact['payload_json'] | AgentRunStep['output_json'] | null;
   agentReview: AgentReview | null;
   feedbackText: string;
+  feedbackVersionNotice: FeedbackVersionNotice | null;
   actionLoading: boolean;
   setupDataSources: string;
   setupExtractionRules: string;
@@ -1814,6 +1828,7 @@ const AgentDetailPanel = ({
         <AgentRunReviewPanel
           review={agentReview}
           feedbackText={feedbackText}
+          feedbackVersionNotice={feedbackVersionNotice}
           actionLoading={actionLoading}
           onFeedbackTextChange={onFeedbackTextChange}
           onSubmitFeedback={onSubmitFeedback}
@@ -1977,12 +1992,14 @@ const AgentSourcesList = ({ sources }: { sources: AgentSource[] }) => (
 const AgentRunReviewPanel = ({
   review,
   feedbackText,
+  feedbackVersionNotice,
   actionLoading,
   onFeedbackTextChange,
   onSubmitFeedback,
 }: {
   review: AgentReview | null;
   feedbackText: string;
+  feedbackVersionNotice: FeedbackVersionNotice | null;
   actionLoading: boolean;
   onFeedbackTextChange: (value: string) => void;
   onSubmitFeedback: () => void;
@@ -2039,6 +2056,15 @@ const AgentRunReviewPanel = ({
         Создать новую версию
       </Button>
     </div>
+    {feedbackVersionNotice ? (
+      <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm leading-6 text-emerald-900">
+        <div className="font-semibold">
+          Создана версия {feedbackVersionNotice.version_number ? `v${feedbackVersionNotice.version_number}` : 'агента'}
+        </div>
+        <div className="mt-1">Правка: {feedbackVersionNotice.feedback}</div>
+        <div className="mt-1 text-xs">{feedbackVersionNotice.next_run_note}</div>
+      </div>
+    ) : null}
   </div>
 );
 
