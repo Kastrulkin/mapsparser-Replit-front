@@ -1,0 +1,9 @@
+Command:
+python3 -m pytest -q tests/test_agent_blueprint_layer.py
+
+Result:
+14 passed
+
+Added coverage:
+- Unsupported upload type keeps a user-facing message.
+- Empty file keeps a user-facing message.

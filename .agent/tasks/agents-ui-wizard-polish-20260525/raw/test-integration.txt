@@ -1,0 +1,32 @@
+Production generic boundary smoke:
+{
+  "success": true,
+  "base_url": "http://localhost:8000",
+  "business_id": "smoke-generic-agent-business-84bae7cf22",
+  "checked_categories": ["documents", "email", "tables", "reviews"],
+  "external_dispatch_performed": false,
+  "dispatcher_started": false,
+  "approvals_required": true,
+  "fixture_cleaned": true
+}
+
+Authenticated browser smoke checks:
+{
+  "hasReview": true,
+  "hasTechJournal": true,
+  "hasNoPayloadJson": true,
+  "hasVersion": true,
+  "hasApproval": true
+}
+
+Feedback/version browser checks:
+{
+  "hasNewActiveVersion": true,
+  "mentionsNextRuns": true,
+  "hidesTechnicalIds": true
+}
+
+Fixture cleanup:
+- users 0
+- businesses 0
+- agent_blueprints 0

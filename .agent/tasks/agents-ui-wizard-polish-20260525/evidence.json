@@ -1,0 +1,59 @@
+{
+  "task_id": "agents-ui-wizard-polish-20260525",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Agents UI shows active version and feedback impact clearly.",
+      "status": "PASS",
+      "proof": ["frontend/src/pages/dashboard/AgentBlueprintsPage.tsx", "authenticated browser smoke"],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Document/file upload errors are user-facing.",
+      "status": "PASS",
+      "proof": ["src/services/agent_source_ingestion.py", "tests/test_agent_blueprint_layer.py"],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Generic agents do not dispatch externally and require approval.",
+      "status": "PASS",
+      "proof": ["scripts/smoke_agent_blueprint_generic_boundaries.py", "production smoke result"],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Changes were committed, pushed, and deployed between steps.",
+      "status": "PASS",
+      "proof": ["b491764", "5ad21a7", "production deploy checks"],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Authenticated production wizard flow passes.",
+      "status": "PASS",
+      "proof": ["browser smoke created document agent, ran it, reviewed result, submitted feedback"],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
+    "src/services/agent_source_ingestion.py",
+    "tests/test_agent_blueprint_layer.py",
+    "scripts/lint_backend_baseline.sh",
+    "scripts/smoke_agent_blueprint_generic_boundaries.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "scripts/lint_backend_baseline.sh",
+    "cd frontend && npm run build",
+    "cd /opt/seo-app && docker compose ps",
+    "cd /opt/seo-app && docker compose exec -T app env SMOKE_BASE_URL=http://localhost:8000 python /app/scripts/smoke_agent_blueprint_generic_boundaries.py"
+  ],
+  "known_gaps": [
+    "Browser automation used ASCII input due missing virtual clipboard; UI flow was still completed through the wizard.",
+    "Server checkout remains dirty, so smoke script was copied into the running app container for execution."
+  ]
+}

@@ -1,0 +1,9 @@
+Command:
+scripts/lint_backend_baseline.sh
+
+Result:
+PASS
+
+Added guardrails:
+- New generic safety smoke is py-compiled.
+- Lint checks smoke markers for documents/email/tables/reviews, capability-step block, dispatch state, final approval, dispatcher not started.

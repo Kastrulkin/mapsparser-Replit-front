@@ -1,0 +1,25 @@
+{
+  "task_id": "agents-ui-wizard-polish-20260525",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {"id": "AC1", "status": "PASS", "reason": "Active version and feedback impact are visible in the product UI."},
+    {"id": "AC2", "status": "PASS", "reason": "Upload failures now return actionable Russian messages and tests cover key cases."},
+    {"id": "AC3", "status": "PASS", "reason": "Production generic boundary smoke passed for four safe categories."},
+    {"id": "AC4", "status": "PASS", "reason": "Implementation commits were pushed and deployed before the next verification step."},
+    {"id": "AC5", "status": "PASS", "reason": "Authenticated production browser flow created, ran, reviewed, and versioned a document agent."}
+  ],
+  "commands_run": [
+    "python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "scripts/lint_backend_baseline.sh",
+    "cd frontend && npm run build",
+    "bash scripts/deploy_backend_src.sh",
+    "bash scripts/deploy_frontend_dist.sh --build",
+    "production generic boundary smoke",
+    "authenticated browser smoke"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/agents-ui-wizard-polish-20260525/evidence.md",
+    ".agent/tasks/agents-ui-wizard-polish-20260525/evidence.json",
+    ".agent/tasks/agents-ui-wizard-polish-20260525/raw/test-integration.txt"
+  ]
+}

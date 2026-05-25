@@ -1,0 +1,14 @@
+Command:
+cd frontend && npm run build
+
+Result:
+PASS
+
+Key output:
+- vite build completed.
+- Agent bundle emitted: AgentBlueprintsPage-DYwM21r4.js.
+
+Deploy:
+- bash scripts/deploy_frontend_dist.sh --build
+- Production frontend dist verified.
+- curl -I http://localhost:8000 returned 200 OK after deploy.
