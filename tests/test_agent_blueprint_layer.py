@@ -266,6 +266,14 @@ def test_agent_source_ingestion_extracts_text_docx_xlsx_and_rejects_unsafe_files
     )
     assert unsafe_source == {}
     assert unsafe_error["code"] == "UNSUPPORTED_FILE_TYPE"
+    assert "поддерживается" in unsafe_error["message"].lower()
+
+    empty_source, empty_error = build_agent_source_from_upload(
+        FakeUpload("empty.txt", "text/plain", b""),
+    )
+    assert empty_source == {}
+    assert empty_error["code"] == "EMPTY_FILE"
+    assert "пустой" in empty_error["message"].lower()
 
 
 def test_outreach_send_batch_handler_queues_approved_drafts_without_external_dispatch(monkeypatch):

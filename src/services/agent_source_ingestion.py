@@ -10,6 +10,7 @@ from xml.etree import ElementTree
 
 MAX_AGENT_SOURCE_FILE_BYTES = 10 * 1024 * 1024
 MAX_EXTRACTED_TEXT_CHARS = 30000
+SUPPORTED_AGENT_SOURCE_EXTENSIONS_HINT = "TXT, CSV, TSV, MD, PDF, DOCX, XLSX"
 SUPPORTED_AGENT_SOURCE_EXTENSIONS = {".txt", ".md", ".csv", ".tsv", ".pdf", ".docx", ".xlsx"}
 SUPPORTED_AGENT_SOURCE_MIME_PREFIXES = {
     "text/",
@@ -29,20 +30,20 @@ SUPPORTED_AGENT_SOURCE_MIME_TYPES = {
 
 def build_agent_source_from_upload(file_storage: Any, preferred_name: str = "") -> Tuple[Dict[str, Any], Dict[str, Any]]:
     if not file_storage:
-        return {}, {"code": "FILE_REQUIRED", "message": "file is required"}
+        return {}, {"code": "FILE_REQUIRED", "message": "Выберите файл для агента."}
     file_name = _clean_text(getattr(file_storage, "filename", "")) or "uploaded-file"
     extension = _file_extension(file_name)
     if extension not in SUPPORTED_AGENT_SOURCE_EXTENSIONS:
         return {}, {
             "code": "UNSUPPORTED_FILE_TYPE",
-            "message": f"unsupported file type: {extension or 'unknown'}",
+            "message": f"Этот тип файла пока не поддерживается. Загрузите {SUPPORTED_AGENT_SOURCE_EXTENSIONS_HINT}.",
             "supported_extensions": sorted(SUPPORTED_AGENT_SOURCE_EXTENSIONS),
         }
     mime_type = _clean_text(getattr(file_storage, "mimetype", ""))
     if not _is_supported_mime(mime_type):
         return {}, {
             "code": "UNSUPPORTED_MIME_TYPE",
-            "message": f"unsupported mime type: {mime_type or 'unknown'}",
+            "message": f"Формат файла не похож на поддерживаемый документ. Поддерживаются {SUPPORTED_AGENT_SOURCE_EXTENSIONS_HINT}.",
             "supported_extensions": sorted(SUPPORTED_AGENT_SOURCE_EXTENSIONS),
         }
 
@@ -50,11 +51,11 @@ def build_agent_source_from_upload(file_storage: Any, preferred_name: str = "") 
     if len(data) > MAX_AGENT_SOURCE_FILE_BYTES:
         return {}, {
             "code": "FILE_TOO_LARGE",
-            "message": "file is too large",
+            "message": "Файл слишком большой. Максимальный размер для агента - 10 МБ.",
             "max_bytes": MAX_AGENT_SOURCE_FILE_BYTES,
         }
     if not data:
-        return {}, {"code": "EMPTY_FILE", "message": "file is empty"}
+        return {}, {"code": "EMPTY_FILE", "message": "Файл пустой. Добавьте документ с текстом или вставьте текст вручную."}
 
     extracted_text, extraction_error = extract_text_from_agent_source_bytes(data, file_name, mime_type)
     if extraction_error:
@@ -62,7 +63,7 @@ def build_agent_source_from_upload(file_storage: Any, preferred_name: str = "") 
     if not _clean_text(extracted_text):
         return {}, {
             "code": "EMPTY_EXTRACTION",
-            "message": "file was accepted but no text could be extracted",
+            "message": "Файл загружен, но текст извлечь не удалось. Попробуйте DOCX/TXT или вставьте текст вручную.",
         }
 
     return {
@@ -92,11 +93,14 @@ def extract_text_from_agent_source_bytes(data: bytes, file_name: str, mime_type:
         exc = sys.exc_info()[1]
         return "", {
             "code": "EXTRACTION_FAILED",
-            "message": "could not extract text from file",
+            "message": "Не удалось извлечь текст из файла. Попробуйте другой формат или вставьте текст вручную.",
             "details": str(exc)[:200],
             "mime_type": mime_type,
         }
-    return "", {"code": "UNSUPPORTED_FILE_TYPE", "message": f"unsupported file type: {extension or 'unknown'}"}
+    return "", {
+        "code": "UNSUPPORTED_FILE_TYPE",
+        "message": f"Этот тип файла пока не поддерживается. Загрузите {SUPPORTED_AGENT_SOURCE_EXTENSIONS_HINT}.",
+    }
 
 
 def _extract_pdf_text(data: bytes) -> str:

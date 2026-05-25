@@ -205,6 +205,34 @@ type FeedbackVersionNotice = {
   next_run_note?: string;
 };
 
+const getRequestErrorMessage = (requestError: unknown, fallback: string) => {
+  if (requestError instanceof Error && requestError.message.trim()) {
+    return requestError.message
+      .replace(/^Ошибка соединения с сервером:\s*/i, '')
+      .replace(/^Ошибка запроса:\s*/i, '');
+  }
+  return fallback;
+};
+
+const getVersionNumber = (version: Record<string, unknown> | undefined) => {
+  const value = version?.version_number;
+  return typeof value === 'number' ? value : null;
+};
+
+const getLatestVersionNumber = (blueprint: AgentBlueprint, details?: AgentBlueprintDetails | null) => {
+  if (typeof blueprint.latest_version_number === 'number') {
+    return blueprint.latest_version_number;
+  }
+  const versionNumbers: number[] = [];
+  (details?.versions || []).forEach((version) => {
+    const versionNumber = getVersionNumber(version);
+    if (typeof versionNumber === 'number') {
+      versionNumbers.push(versionNumber);
+    }
+  });
+  return versionNumbers.length ? Math.max(...versionNumbers) : null;
+};
+
 const runStatusFilters = [
   { value: 'all', label: 'Все' },
   { value: 'running', label: 'В работе' },
@@ -815,7 +843,7 @@ export const AgentBlueprintsPage = () => {
       setWorkspaceMode('settings');
     } catch (requestError) {
       console.error(requestError);
-      setError('Не удалось собрать черновик агента.');
+      setError(getRequestErrorMessage(requestError, 'Не удалось собрать черновик агента.'));
     } finally {
       setActionLoading(false);
     }
@@ -955,7 +983,7 @@ export const AgentBlueprintsPage = () => {
       await loadBlueprintReview(selectedBlueprint.id);
     } catch (requestError) {
       console.error(requestError);
-      setError('Не удалось добавить файл.');
+      setError(getRequestErrorMessage(requestError, 'Не удалось добавить файл.'));
     } finally {
       setActionLoading(false);
     }
@@ -973,7 +1001,7 @@ export const AgentBlueprintsPage = () => {
       setFeedbackVersionNotice({
         version_number: typeof version.version_number === 'number' ? version.version_number : undefined,
         feedback: feedbackText,
-        next_run_note: 'Новые запуски будут использовать эту версию; старые запуски остаются привязаны к своей версии.',
+        next_run_note: 'Эта версия стала активной для следующих запусков; старые запуски остаются привязаны к версии, на которой были созданы.',
       });
       setFeedbackText('');
       if (selectedBlueprint?.id) {
@@ -982,7 +1010,7 @@ export const AgentBlueprintsPage = () => {
       }
     } catch (requestError) {
       console.error(requestError);
-      setError('Не удалось сохранить правку агента.');
+      setError(getRequestErrorMessage(requestError, 'Не удалось сохранить правку агента.'));
     } finally {
       setActionLoading(false);
     }
@@ -1123,9 +1151,10 @@ export const AgentBlueprintsPage = () => {
               {blueprints.map((blueprint) => {
                 const selected = selectedBlueprint?.id === blueprint.id;
                 return (
-                  <BlueprintAgentCard
+                    <BlueprintAgentCard
                     key={blueprint.id}
                     blueprint={blueprint}
+                    latestVersionNumber={getLatestVersionNumber(blueprint, selected ? blueprintDetails : null)}
                     selected={selected}
                     onSelect={() => {
                       setSelectedBlueprintId(blueprint.id);
@@ -1160,6 +1189,7 @@ export const AgentBlueprintsPage = () => {
         <AgentDetailPanel
           mode={workspaceMode}
           blueprint={selectedBlueprint}
+          blueprintDetails={blueprintDetails}
           activeRun={activeRun}
           pendingApproval={pendingApproval}
           queuedButNotDispatched={queuedButNotDispatched}
@@ -1566,6 +1596,7 @@ const SystemAgentCard = ({
 
 const BlueprintAgentCard = ({
   blueprint,
+  latestVersionNumber,
   selected,
   onSelect,
   onConfigure,
@@ -1573,6 +1604,7 @@ const BlueprintAgentCard = ({
   onResults,
 }: {
   blueprint: AgentBlueprint;
+  latestVersionNumber: number | null;
   selected: boolean;
   onSelect: () => void;
   onConfigure: () => void;
@@ -1584,7 +1616,9 @@ const BlueprintAgentCard = ({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold text-slate-950">{blueprint.name}</div>
-          <div className="mt-1 text-xs font-medium text-slate-500">{humanizeCategory(blueprint.category)} · Workflow agent</div>
+          <div className="mt-1 text-xs font-medium text-slate-500">
+            {humanizeCategory(blueprint.category)} · {latestVersionNumber ? `активная версия v${latestVersionNumber}` : 'версия ещё не создана'}
+          </div>
         </div>
         <StatusBadge status={blueprint.status || 'draft'} />
       </div>
@@ -1632,6 +1666,7 @@ const PersonaAgentCard = ({ agent, onConfigure }: { agent: PersonaAgent; onConfi
 const AgentDetailPanel = ({
   mode,
   blueprint,
+  blueprintDetails,
   activeRun,
   pendingApproval,
   queuedButNotDispatched,
@@ -1676,6 +1711,7 @@ const AgentDetailPanel = ({
 }: {
   mode: AgentWorkspaceMode;
   blueprint: AgentBlueprint;
+  blueprintDetails: AgentBlueprintDetails | null;
   activeRun: AgentRun | null;
   pendingApproval: AgentApproval | null;
   queuedButNotDispatched: AgentArtifact['payload_json'] | AgentRunStep['output_json'] | null;
@@ -1717,10 +1753,13 @@ const AgentDetailPanel = ({
   onRunCityChange: (value: string) => void;
   onRunCategoryChange: (value: string) => void;
   onRunLimitChange: (value: string) => void;
-}) => (
+}) => {
+  const latestVersionNumber = getLatestVersionNumber(blueprint, blueprintDetails);
+  const versions = blueprintDetails?.versions || [];
+  return (
   <DashboardSection
     title={blueprint.name}
-    description={`${humanizeCategory(blueprint.category)} · ${mode === 'settings' ? 'настройка агента' : mode === 'run' ? 'запуск из карточки' : 'сохранённые результаты'}`}
+    description={`${humanizeCategory(blueprint.category)} · ${latestVersionNumber ? `активная версия v${latestVersionNumber}` : 'нет активной версии'} · ${mode === 'settings' ? 'настройка агента' : mode === 'run' ? 'запуск из карточки' : 'сохранённые результаты'}`}
     actions={(
       <div className="flex flex-wrap gap-2">
         <Button type="button" size="sm" variant={mode === 'settings' ? 'default' : 'outline'} onClick={() => onModeChange('settings')}>Настроить</Button>
@@ -1730,7 +1769,9 @@ const AgentDetailPanel = ({
     )}
   >
     {mode === 'settings' ? (
-      <AgentWorkspacePanel
+        <AgentWorkspacePanel
+        versions={versions}
+        latestVersionNumber={latestVersionNumber}
         setupDataSources={setupDataSources}
         setupExtractionRules={setupExtractionRules}
         setupProcessingRules={setupProcessingRules}
@@ -1828,6 +1869,7 @@ const AgentDetailPanel = ({
         )}
         <AgentRunReviewPanel
           review={agentReview}
+          latestVersionNumber={latestVersionNumber}
           feedbackText={feedbackText}
           feedbackVersionNotice={feedbackVersionNotice}
           actionLoading={actionLoading}
@@ -1837,9 +1879,12 @@ const AgentDetailPanel = ({
       </div>
     ) : null}
   </DashboardSection>
-);
+  );
+};
 
 const AgentWorkspacePanel = ({
+  versions,
+  latestVersionNumber,
   setupDataSources,
   setupExtractionRules,
   setupProcessingRules,
@@ -1863,6 +1908,8 @@ const AgentWorkspacePanel = ({
   onAddInternalSource,
   onAddFileSource,
 }: {
+  versions: Array<Record<string, unknown>>;
+  latestVersionNumber: number | null;
   setupDataSources: string;
   setupExtractionRules: string;
   setupProcessingRules: string;
@@ -1892,6 +1939,7 @@ const AgentWorkspacePanel = ({
   >
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
       <div className="grid gap-3">
+        <VersionSummary versions={versions} latestVersionNumber={latestVersionNumber} />
         <WizardTextArea label="Какие данные использовать" value={setupDataSources} onChange={onSetupDataSourcesChange} placeholder="Например: профиль бизнеса, отзывы, файл с договором" />
         <WizardTextArea label="Что извлечь или понять" value={setupExtractionRules} onChange={onSetupExtractionRulesChange} placeholder="Например: риски, сроки, суммы, обязательства сторон" />
         <WizardTextArea label="Какие правила применить" value={setupProcessingRules} onChange={onSetupProcessingRulesChange} placeholder="Например: выделять спорные условия и не придумывать факты" />
@@ -1990,8 +2038,39 @@ const AgentSourcesList = ({ sources }: { sources: AgentSource[] }) => (
   </div>
 );
 
+const VersionSummary = ({ versions, latestVersionNumber }: { versions: Array<Record<string, unknown>>; latestVersionNumber: number | null }) => {
+  const newestVersions = versions.slice(0, 3);
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-700">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="font-semibold text-slate-950">Версия агента</div>
+        <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
+          {latestVersionNumber ? `Активна v${latestVersionNumber}` : 'Нет активной версии'}
+        </span>
+      </div>
+      <div className="mt-1 text-xs text-slate-500">
+        Новые запуски используют активную версию. Старые результаты остаются привязаны к версии, на которой были созданы.
+      </div>
+      {newestVersions.length ? (
+        <div className="mt-3 space-y-1">
+          {newestVersions.map((version) => {
+            const versionNumber = getVersionNumber(version);
+            return (
+              <div key={String(version.id || versionNumber || 'version')} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-2 py-1.5 text-xs text-slate-600">
+                <span>{versionNumber ? `v${versionNumber}` : 'версия'}</span>
+                <span>{versionNumber === latestVersionNumber ? 'используется сейчас' : 'предыдущая'}</span>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
 const AgentRunReviewPanel = ({
   review,
+  latestVersionNumber,
   feedbackText,
   feedbackVersionNotice,
   actionLoading,
@@ -1999,6 +2078,7 @@ const AgentRunReviewPanel = ({
   onSubmitFeedback,
 }: {
   review: AgentReview | null;
+  latestVersionNumber: number | null;
   feedbackText: string;
   feedbackVersionNotice: FeedbackVersionNotice | null;
   actionLoading: boolean;
@@ -2009,7 +2089,10 @@ const AgentRunReviewPanel = ({
     <div className="mb-3 flex items-center justify-between gap-3">
       <div>
         <div className="text-sm font-semibold text-slate-950">Review результата</div>
-        <div className="mt-1 text-xs text-slate-500">Входные данные, что агент понял, результат и подтверждения без JSON по умолчанию.</div>
+        <div className="mt-1 text-xs text-slate-500">
+          Входные данные, что агент понял, результат и подтверждения без JSON по умолчанию.
+          {latestVersionNumber ? ` Следующий запуск пойдёт на v${latestVersionNumber}.` : ''}
+        </div>
       </div>
       {review?.run_status ? <StatusBadge status={review.run_status} /> : null}
     </div>
@@ -2060,9 +2143,10 @@ const AgentRunReviewPanel = ({
     {feedbackVersionNotice ? (
       <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm leading-6 text-emerald-900">
         <div className="font-semibold">
-          Создана версия {feedbackVersionNotice.version_number ? `v${feedbackVersionNotice.version_number}` : 'агента'}
+          Новая активная версия {feedbackVersionNotice.version_number ? `v${feedbackVersionNotice.version_number}` : 'агента'} готова
         </div>
         <div className="mt-1">Правка: {feedbackVersionNotice.feedback}</div>
+        <div className="mt-1">Что изменится: следующие запуски будут учитывать эту правку в правилах результата.</div>
         <div className="mt-1 text-xs">{feedbackVersionNotice.next_run_note}</div>
       </div>
     ) : null}

@@ -262,7 +262,7 @@ required = {
         "source_artifact",
         "Поставлено в очередь, но не отправлено",
         "sources/upload",
-        "Создана версия",
+        "Новая активная версия",
         "ApprovalPayloadSummary",
     ],
     "scripts/smoke_agent_blueprint_document_api.py": [
