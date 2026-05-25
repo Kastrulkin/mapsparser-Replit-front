@@ -21,6 +21,7 @@ import {
   Users,
   Wrench,
   Workflow,
+  Zap,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
