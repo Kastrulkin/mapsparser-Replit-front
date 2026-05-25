@@ -31,6 +31,7 @@ python3 -m py_compile \
   scripts/smoke_operator_services_apply_api.py \
   scripts/smoke_operator_bulk_review_replies.py \
   scripts/smoke_agent_blueprint_document_api.py \
+  scripts/smoke_agent_blueprint_generic_boundaries.py \
   src/api/growth_workflow_api.py \
   src/auth_encryption.py \
   tests/test_reports_api_routes.py \
@@ -272,6 +273,18 @@ required = {
         "external_dispatch_performed",
         "system_agents_config_persisted",
     ],
+    "scripts/smoke_agent_blueprint_generic_boundaries.py": [
+        "GENERIC_AGENT_CASES",
+        "documents",
+        "email",
+        "tables",
+        "reviews",
+        "step_type\") == \"capability",
+        "external_dispatch_performed",
+        "dispatch_state",
+        "final_output",
+        "dispatcher_started",
+    ],
 }
 
 texts = {
@@ -284,6 +297,7 @@ texts = {
     "src/services/outreach_send_capability.py": capability_text,
     "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx": ui_text,
     "scripts/smoke_agent_blueprint_document_api.py": Path("scripts/smoke_agent_blueprint_document_api.py").read_text(encoding="utf-8"),
+    "scripts/smoke_agent_blueprint_generic_boundaries.py": Path("scripts/smoke_agent_blueprint_generic_boundaries.py").read_text(encoding="utf-8"),
 }
 
 for path, markers in required.items():
