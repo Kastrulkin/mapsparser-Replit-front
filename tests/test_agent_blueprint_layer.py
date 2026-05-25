@@ -180,6 +180,8 @@ def test_agent_builder_session_reduces_questions_after_clarification():
 
 def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     api_source = Path("src/api/agent_blueprints_api.py").read_text(encoding="utf-8")
+    workspace_source = Path("src/services/agent_blueprint_workspace.py").read_text(encoding="utf-8")
+    document_llm_source = Path("src/services/agent_document_llm.py").read_text(encoding="utf-8")
     builder_api_source = Path("src/api/agent_builder_api.py").read_text(encoding="utf-8")
 
     assert "VERSION_BLUEPRINT_MISMATCH" in api_source
@@ -197,6 +199,10 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "build_agent_datahub_catalog" in api_source
     assert "build_agent_source_from_upload" in api_source
     assert "/api/agent-runs/<run_id>/feedback" in api_source
+    assert "analyze_document_sources_with_llm" in workspace_source
+    assert "analyze_text_with_gigachat" in document_llm_source
+    assert "external_dispatch_performed" in document_llm_source
+    assert "provenance" in document_llm_source
     assert "/api/agent-builder/sessions" in builder_api_source
     assert "build_agent_builder_state" in builder_api_source
     assert "create_blueprint_from_agent_builder_session" in builder_api_source
@@ -351,6 +357,77 @@ def test_agent_datahub_catalog_returns_available_internal_sources():
     assert by_key["services"]["connected"] is True
     assert by_key["reviews"]["preview"]
     assert by_key["prospectingleads"]["state"] == "empty"
+
+
+def test_agent_document_llm_analysis_uses_generator_rules_and_provenance():
+    from services.agent_document_llm import analyze_document_sources_with_llm
+
+    captured = {}
+
+    def fake_generator(prompt, *, business_id="", user_id=""):
+        captured["prompt"] = prompt
+        captured["business_id"] = business_id
+        captured["user_id"] = user_id
+        return json.dumps(
+            {
+                "title": "LLM contract analysis",
+                "summary": ["Оплата 10000 рублей"],
+                "risks": ["Штраф 10% за просрочку"],
+                "facts": ["Срок 30 дней", "Оплата 10000 рублей"],
+                "fields": {"Оплата": "10000 рублей", "Срок": "30 дней"},
+                "next_questions": ["Кто подписывает договор?"],
+                "rules_applied": ["Не придумывать факты"],
+            },
+            ensure_ascii=False,
+        )
+
+    result = analyze_document_sources_with_llm(
+        {
+            "workflow_description": "Проверить договор",
+            "extraction_rules": "Суммы, сроки, штрафы",
+            "processing_rules": "Не придумывать факты",
+            "output_format": "Краткий отчёт",
+        },
+        [
+            {
+                "source_name": "contract.txt",
+                "summary": "Оплата 10000 рублей. Срок 30 дней. Штраф 10%.",
+                "raw": {"text": "Оплата 10000 рублей. Срок 30 дней. Штраф 10%."},
+            }
+        ],
+        business_id="biz1",
+        user_id="user1",
+        generator=fake_generator,
+    )
+
+    assert result["llm_analysis_used"] is True
+    assert result["analysis_source"] == "gigachat"
+    assert result["external_dispatch_performed"] is False
+    assert result["fields"]["Оплата"] == "10000 рублей"
+    assert result["provenance"] == ["contract.txt"]
+    assert captured["business_id"] == "biz1"
+    assert captured["user_id"] == "user1"
+    assert "Не придумывать факты" in captured["prompt"]
+    assert "contract.txt" in captured["prompt"]
+
+
+def test_agent_document_llm_analysis_falls_back_without_external_dispatch():
+    from services.agent_document_llm import analyze_document_sources_with_llm
+
+    def failing_generator(prompt, *, business_id="", user_id=""):
+        raise RuntimeError("provider unavailable")
+
+    result = analyze_document_sources_with_llm(
+        {"processing_rules": "Показывать риски", "output_format": "Отчёт"},
+        [{"source_name": "contract.txt", "summary": "Оплата 10000. Ответственность: штраф.", "raw": {}}],
+        generator=failing_generator,
+    )
+
+    assert result["llm_analysis_used"] is False
+    assert result["analysis_source"] == "deterministic_fallback"
+    assert result["external_dispatch_performed"] is False
+    assert result["provenance"] == ["contract.txt"]
+    assert result["risks"]
 
 
 def test_outreach_send_batch_handler_queues_approved_drafts_without_external_dispatch(monkeypatch):

@@ -169,8 +169,10 @@ def main():
         "run_id": "",
         "email": f"smoke-doc-agent-{suffix}@example.invalid",
     }
+    fixture_created = False
     try:
         setup_fixture(ids)
+        fixture_created = True
         _, login_payload = request_json(
             "POST",
             "/api/auth/login",
@@ -268,6 +270,16 @@ def main():
         result = output_payload.get("result") or {}
         if output_payload.get("external_dispatch_performed") is not False or output_payload.get("dispatch_state") != "not_dispatched":
             raise RuntimeError(f"document output side effect boundary failed: {output_payload}")
+        if output_payload.get("analysis_source") not in {"gigachat", "deterministic_fallback"}:
+            raise RuntimeError(f"document output missing analysis source: {output_payload}")
+        if "llm_analysis_used" not in output_payload:
+            raise RuntimeError(f"document output missing llm usage flag: {output_payload}")
+        if not output_payload.get("provenance"):
+            raise RuntimeError(f"document output missing provenance: {output_payload}")
+        if result.get("external_dispatch_performed") is not False:
+            raise RuntimeError(f"document result side effect boundary failed: {result}")
+        if result.get("analysis_source") not in {"gigachat", "deterministic_fallback"}:
+            raise RuntimeError(f"document result missing analysis source: {result}")
         for key in ("summary", "facts", "fields", "risks", "next_questions"):
             if key not in result:
                 raise RuntimeError(f"document result missing {key}: {result}")
@@ -325,6 +337,9 @@ def main():
                     "initial_version": initial_version.get("version_number"),
                     "feedback_version": new_version.get("version_number"),
                     "approval_type": pending[0].get("approval_type"),
+                    "analysis_source": output_payload.get("analysis_source"),
+                    "llm_analysis_used": output_payload.get("llm_analysis_used"),
+                    "provenance": output_payload.get("provenance"),
                     "external_dispatch_performed": False,
                     "system_agents_config_persisted": True,
                     "fixture_cleaned": not KEEP_FIXTURE,
@@ -336,7 +351,7 @@ def main():
     finally:
         if KEEP_FIXTURE:
             print("SMOKE_KEEP_FIXTURE enabled; fixture was not removed.", file=sys.stderr)
-        else:
+        elif fixture_created:
             cleanup_fixture(ids)
         time.sleep(0.1)
 

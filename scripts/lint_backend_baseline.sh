@@ -21,6 +21,7 @@ python3 -m py_compile \
   src/services/agent_blueprint_workspace.py \
   src/services/agent_source_ingestion.py \
   src/services/agent_datahub.py \
+  src/services/agent_document_llm.py \
   src/services/agent_blueprint_runner.py \
   src/services/outreach_send_capability.py \
   src/api/operator_api.py \
@@ -190,6 +191,7 @@ draft_builder_text = Path("src/services/agent_blueprint_draft_builder.py").read_
 workspace_text = Path("src/services/agent_blueprint_workspace.py").read_text(encoding="utf-8")
 source_ingestion_text = Path("src/services/agent_source_ingestion.py").read_text(encoding="utf-8")
 datahub_text = Path("src/services/agent_datahub.py").read_text(encoding="utf-8")
+document_llm_text = Path("src/services/agent_document_llm.py").read_text(encoding="utf-8")
 capability_text = Path("src/services/outreach_send_capability.py").read_text(encoding="utf-8")
 ui_text = Path("frontend/src/pages/dashboard/AgentBlueprintsPage.tsx").read_text(encoding="utf-8")
 
@@ -237,8 +239,18 @@ required = {
         "build_generic_artifact_payload",
         "build_blueprint_review",
         "external_dispatch_performed",
+        "analyze_document_sources_with_llm",
         "_document_fields",
         "_document_next_questions",
+    ],
+    "src/services/agent_document_llm.py": [
+        "analyze_text_with_gigachat",
+        "agent_document_analysis",
+        "analysis_source",
+        "deterministic_fallback",
+        "external_dispatch_performed",
+        "provenance",
+        "MAX_DOCUMENT_LLM_CONTEXT_CHARS",
     ],
     "src/services/agent_source_ingestion.py": [
         "MAX_AGENT_SOURCE_FILE_BYTES",
@@ -349,6 +361,7 @@ texts = {
     "src/services/agent_blueprint_workspace.py": workspace_text,
     "src/services/agent_source_ingestion.py": source_ingestion_text,
     "src/services/agent_datahub.py": datahub_text,
+    "src/services/agent_document_llm.py": document_llm_text,
     "src/services/outreach_send_capability.py": capability_text,
     "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx": ui_text,
     "scripts/smoke_agent_blueprint_document_api.py": Path("scripts/smoke_agent_blueprint_document_api.py").read_text(encoding="utf-8"),

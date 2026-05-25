@@ -6,6 +6,8 @@ import json
 import uuid
 from typing import Any, Dict, List, Optional
 
+from services.agent_document_llm import analyze_document_sources_with_llm
+
 
 MAX_SOURCE_TEXT_CHARS = 30000
 MAX_REVIEW_ITEMS = 12
@@ -182,6 +184,8 @@ def _load_workspace(cursor: Any, run: Dict[str, Any]) -> Dict[str, Any]:
         "internal_sources": internal_sources,
         "feedback_history": metadata.get("feedback_history") if isinstance(metadata.get("feedback_history"), list) else [],
         "run_input": parse_json_field(run.get("input_json"), {}),
+        "business_id": _clean_text(run.get("business_id")),
+        "user_id": _clean_text(run.get("created_by_user_id")),
     }
 
 
@@ -226,13 +230,16 @@ def _build_output_draft_payload(base_payload: Dict[str, Any], workspace: Dict[st
     setup = workspace["setup"] if isinstance(workspace.get("setup"), dict) else {}
     category = _clean_text(base_payload.get("category") or (workspace.get("metadata") or {}).get("draft_category") or "custom")
     extracted = _extract_source_items(workspace.get("sources") or []) + (workspace.get("internal_sources") or [])
-    output = _render_output(category, setup, extracted, workspace.get("feedback_history") or [])
+    output = _render_output(category, setup, extracted, workspace.get("feedback_history") or [], workspace)
     return {
         **base_payload,
         "status": "generated",
         "category": category,
         "result": output,
         "items_used": len(extracted),
+        "provenance": output.get("provenance") if isinstance(output, dict) else [],
+        "analysis_source": output.get("analysis_source") if isinstance(output, dict) else "",
+        "llm_analysis_used": bool(output.get("llm_analysis_used")) if isinstance(output, dict) else False,
         "approval_required": True,
         "external_dispatch_performed": False,
         "dispatch_state": "not_dispatched",
@@ -252,7 +259,13 @@ def _build_final_result_payload(cursor: Any, run: Dict[str, Any], base_payload: 
     }
 
 
-def _render_output(category: str, setup: Dict[str, Any], extracted: List[Dict[str, Any]], feedback_history: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _render_output(
+    category: str,
+    setup: Dict[str, Any],
+    extracted: List[Dict[str, Any]],
+    feedback_history: List[Dict[str, Any]],
+    workspace: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
     facts = [item.get("summary") for item in extracted if item.get("summary")]
     facts = [str(item) for item in facts][:6]
     rules = _clean_text(setup.get("processing_rules"))
@@ -280,15 +293,13 @@ def _render_output(category: str, setup: Dict[str, Any], extracted: List[Dict[st
             "format": output_format,
         }
     if category == "documents":
-        return {
-            "title": "Разбор документа",
-            "summary": facts,
-            "risks": _risk_hints(facts, rules),
-            "facts": facts,
-            "fields": _document_fields(facts),
-            "next_questions": _document_next_questions(facts),
-            "format": output_format,
-        }
+        return analyze_document_sources_with_llm(
+            setup,
+            extracted,
+            feedback_history,
+            business_id=_clean_text((workspace or {}).get("business_id")),
+            user_id=_clean_text((workspace or {}).get("user_id")),
+        )
     return {
         "title": "Результат агента",
         "summary": facts,
