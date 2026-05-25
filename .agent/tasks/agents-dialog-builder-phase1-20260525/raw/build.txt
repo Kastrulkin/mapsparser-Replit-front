@@ -1,0 +1,5 @@
+cd frontend && npm run build
+
+vite build completed successfully.
+Key live bundle after deploy: /assets/index-CZ3zmknh.js
+Key agent page chunk after deploy: /assets/AgentBlueprintsPage-Be-0ZOp2.js

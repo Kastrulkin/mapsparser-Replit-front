@@ -1,0 +1,47 @@
+{
+  "task_id": "agents-dialog-builder-phase1-20260525",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Backend session table, API routes, and route ownership guardrails are present and verified."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "API smoke created a documents blueprint from one free-text description."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Builder returned clarifying questions and reduced them after the user reply."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Authenticated production browser smoke confirmed dialog, preview, questions, and create-from-preview."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Targeted tests, lint baseline, frontend build, production deploy, API smoke, and live health passed."
+    }
+  ],
+  "commands_run": [
+    "python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "scripts/lint_backend_baseline.sh",
+    "cd frontend && npm run build",
+    "bash scripts/deploy_backend_src.sh",
+    "bash scripts/deploy_frontend_dist.sh --build",
+    "production API smoke",
+    "authenticated production browser smoke"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/agents-dialog-builder-phase1-20260525/evidence.md",
+    ".agent/tasks/agents-dialog-builder-phase1-20260525/raw/test-unit.txt",
+    ".agent/tasks/agents-dialog-builder-phase1-20260525/raw/lint.txt",
+    ".agent/tasks/agents-dialog-builder-phase1-20260525/raw/build.txt",
+    ".agent/tasks/agents-dialog-builder-phase1-20260525/raw/test-integration.txt"
+  ]
+}

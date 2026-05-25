@@ -1,0 +1,21 @@
+Production API smoke:
+
+{
+  "success": true,
+  "base_url": "http://localhost:8000",
+  "business_id": "smoke-dialog-builder-business-cdbf027e79",
+  "session_id": "0e7505e3-41a4-4832-b162-2529f8d83aed",
+  "blueprint_id": "c5662356-0462-4d74-9fb6-24604203540b",
+  "category": "documents",
+  "questions_initial": 2,
+  "questions_after_reply": 0,
+  "preview_available": true,
+  "fixture_cleaned": true
+}
+
+Authenticated production browser smoke:
+- Opened https://localos.pro/dashboard/agents as temporary test user.
+- Clicked "Создать агента".
+- Confirmed dialog builder text, clarifying questions, "Preview будущего агента", and "Создать из preview".
+- Created blueprint from preview.
+- Cleaned temporary user/business/session/blueprint data from production DB.

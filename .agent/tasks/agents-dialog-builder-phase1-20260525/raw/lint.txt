@@ -1,0 +1,9 @@
+scripts/lint_backend_baseline.sh
+
+PASS
+
+Server verification:
+- docker compose ps: app/worker/postgres up.
+- app logs: migrations complete at revision 20260525_001.
+- curl -I http://localhost:8000: HTTP/1.1 200 OK.
+- DB backup before migration: backups/pre_agent_builder_sessions_20260525_151353.sql.gz (120M).
