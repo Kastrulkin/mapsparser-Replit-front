@@ -906,8 +906,8 @@ class FakeDatahubCursor:
             return None
         if "from userservices" in normalized_query:
             self.last_results = [
-                {"id": "svc1", "name": "Haircut", "price": 1000, "duration": 60},
-                {"id": "svc2", "name": "Color", "price": 3000, "duration": 120},
+                {"id": "svc1", "name": "Haircut", "price": 1000, "description": "Cut"},
+                {"id": "svc2", "name": "Color", "price": 3000, "description": "Color"},
             ]
             return None
         if "from externalbusinessreviews" in normalized_query:

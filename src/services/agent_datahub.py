@@ -14,7 +14,7 @@ AGENT_DATAHUB_SOURCES = [
         "key": "services",
         "title": "Услуги",
         "description": "Текущий список услуг, цены и длительность.",
-        "query": "SELECT id, name, price, duration FROM userservices WHERE business_id = %s ORDER BY name ASC LIMIT 20",
+        "query": "SELECT id, name, price, description FROM userservices WHERE business_id = %s ORDER BY name ASC LIMIT 20",
     },
     {
         "key": "reviews",
