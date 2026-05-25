@@ -25,6 +25,14 @@ import {
 
 import { Button } from '@/components/ui/button';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   DashboardActionPanel,
   DashboardCompactMetricsRow,
   DashboardEmptyState,
@@ -32,6 +40,7 @@ import {
   DashboardSection,
 } from '@/components/dashboard/DashboardPrimitives';
 import { AIAgentSettings } from '@/components/AIAgentSettings';
+import { newAuth } from '@/lib/auth_new';
 import { api } from '@/services/api';
 import { cn } from '@/lib/utils';
 
@@ -164,18 +173,6 @@ type AgentReview = {
   approvals?: AgentApproval[];
 };
 
-type AgentDraftSummary = {
-  category?: string;
-  sources?: string[];
-  outputs?: string[];
-  approval_boundaries?: string[];
-  steps?: Array<{
-    key?: string;
-    title?: string;
-    type?: string;
-  }>;
-};
-
 type AgentBuilderScenario = {
   category: string;
   title: string;
@@ -188,6 +185,18 @@ type AgentBuilderScenario = {
   manualControl: string;
   icon: typeof FileText;
 };
+
+type PersonaAgent = {
+  id: string;
+  name?: string;
+  type?: string;
+  description?: string;
+  task?: string;
+  identity?: string;
+  is_active?: boolean;
+};
+
+type AgentWorkspaceMode = 'settings' | 'run' | 'results';
 
 const runStatusFilters = [
   { value: 'all', label: 'Все' },
@@ -390,21 +399,27 @@ const StatusBadge = ({ status }: { status: string }) => (
   </span>
 );
 
-const normalizeStringList = (value: unknown) => (
-  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
-);
-
-const normalizeDraftSteps = (value: unknown): AgentDraftSummary['steps'] => {
-  if (!Array.isArray(value)) {
-    return [];
+const parseAgentConfig = (business?: DashboardContext['currentBusiness']) => {
+  const rawConfig = business?.ai_agents_config;
+  if (!rawConfig) {
+    return {};
   }
-  return value
-    .filter((item): item is Record<string, unknown> => item !== null && typeof item === 'object')
-    .map((item) => ({
-      key: typeof item.key === 'string' ? item.key : undefined,
-      title: typeof item.title === 'string' ? item.title : undefined,
-      type: typeof item.type === 'string' ? item.type : undefined,
-    }));
+  try {
+    const parsed = typeof rawConfig === 'string' ? JSON.parse(rawConfig) : rawConfig;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {};
+    }
+    const normalized: Record<string, { enabled?: boolean }> = {};
+    Object.entries(parsed).forEach(([key, value]) => {
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        const enabledEntry = Object.entries(value).find(([entryKey]) => entryKey === 'enabled');
+        normalized[key] = { enabled: Boolean(enabledEntry ? enabledEntry[1] : false) };
+      }
+    });
+    return normalized;
+  } catch {
+    return {};
+  }
 };
 
 export const AgentBlueprintsPage = () => {
@@ -421,6 +436,11 @@ export const AgentBlueprintsPage = () => {
   const [runCity, setRunCity] = useState('');
   const [runCategory, setRunCategory] = useState('');
   const [runLimit, setRunLimit] = useState('30');
+  const [createWizardOpen, setCreateWizardOpen] = useState(false);
+  const [createWizardStep, setCreateWizardStep] = useState(0);
+  const [systemSettingsOpen, setSystemSettingsOpen] = useState(false);
+  const [workspaceMode, setWorkspaceMode] = useState<AgentWorkspaceMode>('run');
+  const [availablePersonaAgents, setAvailablePersonaAgents] = useState<PersonaAgent[]>([]);
   const [agentPrompt, setAgentPrompt] = useState('');
   const [builderCategory, setBuilderCategory] = useState('documents');
   const [builderDataSources, setBuilderDataSources] = useState('файл документа, ручной контекст, профиль бизнеса');
@@ -432,7 +452,6 @@ export const AgentBlueprintsPage = () => {
   const [builderSourceText, setBuilderSourceText] = useState('');
   const [builderFileSource, setBuilderFileSource] = useState<{ name: string; content: string } | null>(null);
   const [builderInternalSource, setBuilderInternalSource] = useState('business_profile');
-  const [lastDraft, setLastDraft] = useState<AgentDraftSummary | null>(null);
   const [agentReview, setAgentReview] = useState<AgentReview | null>(null);
   const [setupDataSources, setSetupDataSources] = useState('профиль бизнеса, ручной контекст');
   const [setupExtractionRules, setSetupExtractionRules] = useState('');
@@ -443,6 +462,11 @@ export const AgentBlueprintsPage = () => {
   const [sourceText, setSourceText] = useState('');
   const [internalSource, setInternalSource] = useState('business_profile');
   const [feedbackText, setFeedbackText] = useState('');
+  const [systemAgentConfig, setSystemAgentConfig] = useState<Record<string, { enabled?: boolean }>>({});
+
+  useEffect(() => {
+    setSystemAgentConfig(parseAgentConfig(currentBusiness));
+  }, [currentBusiness]);
 
   const selectedBlueprint = useMemo(
     () => blueprints.find((item) => item.id === selectedBlueprintId) || blueprints[0] || null,
@@ -488,6 +512,30 @@ export const AgentBlueprintsPage = () => {
     [builderCategory],
   );
 
+  const systemAgents = useMemo(() => [
+    {
+      key: 'booking_agent',
+      title: 'Агент записи',
+      description: 'Помогает с правилами записи, вопросами клиенту и сценарием общения.',
+      icon: Bot,
+      enabled: Boolean(systemAgentConfig.booking_agent?.enabled),
+    },
+    {
+      key: 'marketing_agent',
+      title: 'Маркетинговый агент',
+      description: 'Готовит идеи, тексты и маркетинговые черновики в стиле бизнеса.',
+      icon: Zap,
+      enabled: Boolean(systemAgentConfig.marketing_agent?.enabled),
+    },
+  ], [systemAgentConfig]);
+
+  const activeAgentsCount = useMemo(
+    () => systemAgents.filter((item) => item.enabled).length + blueprints.filter((item) => item.status === 'active').length,
+    [blueprints, systemAgents],
+  );
+
+  const lastArtifactsCount = activeRun?.artifacts?.length || 0;
+
   const applyBuilderScenario = (scenario: AgentBuilderScenario) => {
     setBuilderCategory(scenario.category);
     setAgentPrompt(scenario.prompt);
@@ -501,29 +549,28 @@ export const AgentBlueprintsPage = () => {
   const metrics = useMemo<DashboardMetricItem[]>(
     () => [
       {
-        label: 'Мои агенты',
-        value: blueprints.length,
-        hint: currentBusiness?.name || 'Текущий бизнес',
+        label: 'Активны',
+        value: activeAgentsCount,
+        hint: `${systemAgents.length + blueprints.length} всего`,
       },
       {
-        label: 'Активный запуск',
-        value: activeRun ? <StatusBadge status={activeRun.status} /> : 'нет',
-        hint: activeRun ? `Журнал ${activeRun.id.slice(0, 8)}` : 'Запустите агента',
-        tone: activeRun?.status === 'waiting_approval' ? 'warning' : 'default',
-      },
-      {
-        label: 'Результаты',
-        value: activeRun?.artifacts?.length || 0,
-        hint: 'Сохранённые находки, списки и черновики',
-      },
-      {
-        label: 'Подтверждения',
+        label: 'Ждут решения',
         value: pendingApprovals.length || activeRunPendingApprovals.length,
         hint: pendingApprovals.length ? 'Есть ожидающие решения' : 'Нет ожидающих решений',
         tone: pendingApprovals.length || pendingApproval ? 'warning' : 'default',
       },
+      {
+        label: 'Последние результаты',
+        value: lastArtifactsCount,
+        hint: activeRun ? `Запуск ${activeRun.id.slice(0, 8)}` : 'Нет активных запусков',
+      },
+      {
+        label: 'Пользовательские агенты',
+        value: blueprints.length + availablePersonaAgents.length,
+        hint: currentBusiness?.name || 'Текущий бизнес',
+      },
     ],
-    [activeRun, activeRunPendingApprovals.length, blueprints.length, currentBusiness?.name, pendingApproval, pendingApprovals.length],
+    [activeAgentsCount, activeRun, activeRunPendingApprovals.length, availablePersonaAgents.length, blueprints.length, currentBusiness?.name, lastArtifactsCount, pendingApproval, pendingApprovals.length, systemAgents.length],
   );
 
   const loadBlueprints = useCallback(async () => {
@@ -550,6 +597,49 @@ export const AgentBlueprintsPage = () => {
   useEffect(() => {
     void loadBlueprints();
   }, [loadBlueprints]);
+
+  const loadPersonaAgents = useCallback(async () => {
+    if (!currentBusinessId) {
+      setAvailablePersonaAgents([]);
+      return;
+    }
+    try {
+      const token = newAuth.getToken();
+      if (!token) {
+        setAvailablePersonaAgents([]);
+        return;
+      }
+      const response = await fetch(`/api/business/${currentBusinessId}/ai-agents/manage`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        setAvailablePersonaAgents([]);
+        return;
+      }
+      const data = await response.json();
+      const agents = Array.isArray(data.agents) ? data.agents : [];
+      const normalized = agents
+        .filter((agent) => agent && typeof agent === 'object')
+        .map((agent) => ({
+          id: String(agent.id || ''),
+          name: typeof agent.name === 'string' ? agent.name : '',
+          type: typeof agent.type === 'string' ? agent.type : '',
+          description: typeof agent.description === 'string' ? agent.description : '',
+          task: typeof agent.task === 'string' ? agent.task : '',
+          identity: typeof agent.identity === 'string' ? agent.identity : '',
+          is_active: agent.is_active !== false,
+        }))
+        .filter((agent) => agent.id);
+      setAvailablePersonaAgents(normalized);
+    } catch (requestError) {
+      console.error(requestError);
+      setAvailablePersonaAgents([]);
+    }
+  }, [currentBusinessId]);
+
+  useEffect(() => {
+    void loadPersonaAgents();
+  }, [loadPersonaAgents]);
 
   const loadBlueprintDetails = useCallback(async (blueprintId: string) => {
     setError(null);
@@ -583,6 +673,7 @@ export const AgentBlueprintsPage = () => {
     try {
       const response = await api.get(`/agent-runs/${runId}`);
       setActiveRun(response.data?.run || null);
+      setWorkspaceMode('results');
       if (selectedBlueprint?.id) {
         await loadBlueprintDetails(selectedBlueprint.id);
         await loadBlueprintReview(selectedBlueprint.id);
@@ -655,18 +746,6 @@ export const AgentBlueprintsPage = () => {
         category: builderCategory,
       });
       const blueprint = response.data?.blueprint;
-      const summary = response.data?.draft?.summary;
-      if (summary && typeof summary === 'object') {
-        setLastDraft({
-          category: typeof summary.category === 'string' ? summary.category : undefined,
-          sources: normalizeStringList(summary.sources),
-          outputs: normalizeStringList(summary.outputs),
-          approval_boundaries: normalizeStringList(summary.approval_boundaries),
-          steps: normalizeDraftSteps(summary.steps),
-        });
-      } else {
-        setLastDraft(null);
-      }
       await loadBlueprints();
       if (blueprint?.id) {
         await api.post(`/agent-blueprints/${blueprint.id}/setup`, {
@@ -708,6 +787,9 @@ export const AgentBlueprintsPage = () => {
       setBuilderSourceName('');
       setBuilderSourceText('');
       setBuilderFileSource(null);
+      setCreateWizardOpen(false);
+      setCreateWizardStep(0);
+      setWorkspaceMode('settings');
     } catch (requestError) {
       console.error(requestError);
       setError('Не удалось собрать черновик агента.');
@@ -716,14 +798,15 @@ export const AgentBlueprintsPage = () => {
     }
   };
 
-  const startRun = async () => {
-    if (!selectedBlueprint) {
+  const startRun = async (blueprintToRun?: AgentBlueprint | null) => {
+    const targetBlueprint = blueprintToRun || selectedBlueprint;
+    if (!targetBlueprint) {
       return;
     }
     setActionLoading(true);
     setError(null);
     try {
-      const response = await api.post(`/agent-blueprints/${selectedBlueprint.id}/runs`, {
+      const response = await api.post(`/agent-blueprints/${targetBlueprint.id}/runs`, {
         input: {
           source: runSource.trim() || 'dashboard',
           city: runCity.trim(),
@@ -734,8 +817,9 @@ export const AgentBlueprintsPage = () => {
         },
       });
       setActiveRun(response.data?.run || null);
-      await loadBlueprintDetails(selectedBlueprint.id);
-      await loadBlueprintReview(selectedBlueprint.id);
+      setWorkspaceMode('results');
+      await loadBlueprintDetails(targetBlueprint.id);
+      await loadBlueprintReview(targetBlueprint.id);
     } catch (requestError) {
       console.error(requestError);
       setError('Не удалось запустить blueprint.');
@@ -891,7 +975,7 @@ export const AgentBlueprintsPage = () => {
       <DashboardPageHeader
         eyebrow="LocalOS"
         title="Агенты"
-        description="Готовые помощники, пользовательские агенты, запуски и ручные подтверждения в одном разделе."
+        description="Центр управления системными и пользовательскими агентами."
         icon={Bot}
         actions={(
           <>
@@ -899,45 +983,55 @@ export const AgentBlueprintsPage = () => {
               <RefreshCw className={cn('mr-2 h-4 w-4', loading && 'animate-spin')} />
               Обновить
             </Button>
-            <Button type="button" onClick={() => createDefaultBlueprint()} disabled={actionLoading || !currentBusinessId}>
-              {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-              Добавить агента поиска клиентов
+            <Button type="button" onClick={() => setCreateWizardOpen(true)} disabled={actionLoading || !currentBusinessId}>
+              <Sparkles className="mr-2 h-4 w-4" />
+              Создать агента
             </Button>
           </>
         )}
       />
 
-      <AgentBuilderPanel
-        prompt={agentPrompt}
-        selectedScenario={selectedScenario}
-        scenarios={agentScenarios}
-        examples={agentPromptExamples}
-        dataSources={builderDataSources}
-        extractionRules={builderExtractionRules}
-        processingRules={builderProcessingRules}
-        outputFormat={builderOutputFormat}
-        manualControl={builderManualControl}
-        sourceName={builderSourceName}
-        sourceText={builderSourceText}
-        fileSource={builderFileSource}
-        internalSource={builderInternalSource}
-        actionLoading={actionLoading}
-        canCreate={Boolean(currentBusinessId && agentPrompt.trim())}
-        onScenarioSelect={applyBuilderScenario}
-        onPromptChange={setAgentPrompt}
-        onDataSourcesChange={setBuilderDataSources}
-        onExtractionRulesChange={setBuilderExtractionRules}
-        onProcessingRulesChange={setBuilderProcessingRules}
-        onOutputFormatChange={setBuilderOutputFormat}
-        onManualControlChange={setBuilderManualControl}
-        onSourceNameChange={setBuilderSourceName}
-        onSourceTextChange={setBuilderSourceText}
-        onFileSourceChange={setBuilderFileSource}
-        onInternalSourceChange={setBuilderInternalSource}
-        onCreate={createAgentFromPrompt}
-      />
-
-      {lastDraft ? <AgentDraftPreview draft={lastDraft} /> : null}
+      <Dialog open={createWizardOpen} onOpenChange={setCreateWizardOpen}>
+        <DialogContent className="max-h-[88vh] max-w-5xl overflow-y-auto rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Создать агента</DialogTitle>
+            <DialogDescription>
+              Выберите тип, добавьте данные, правила и ожидаемый результат. Шаблоны здесь только стартовая точка.
+            </DialogDescription>
+          </DialogHeader>
+          <CreateAgentWizard
+            step={createWizardStep}
+            prompt={agentPrompt}
+            selectedScenario={selectedScenario}
+            scenarios={agentScenarios}
+            examples={agentPromptExamples}
+            dataSources={builderDataSources}
+            extractionRules={builderExtractionRules}
+            processingRules={builderProcessingRules}
+            outputFormat={builderOutputFormat}
+            manualControl={builderManualControl}
+            sourceName={builderSourceName}
+            sourceText={builderSourceText}
+            fileSource={builderFileSource}
+            internalSource={builderInternalSource}
+            actionLoading={actionLoading}
+            canCreate={Boolean(currentBusinessId && agentPrompt.trim())}
+            onStepChange={setCreateWizardStep}
+            onScenarioSelect={applyBuilderScenario}
+            onPromptChange={setAgentPrompt}
+            onDataSourcesChange={setBuilderDataSources}
+            onExtractionRulesChange={setBuilderExtractionRules}
+            onProcessingRulesChange={setBuilderProcessingRules}
+            onOutputFormatChange={setBuilderOutputFormat}
+            onManualControlChange={setBuilderManualControl}
+            onSourceNameChange={setBuilderSourceName}
+            onSourceTextChange={setBuilderSourceText}
+            onFileSourceChange={setBuilderFileSource}
+            onInternalSourceChange={setBuilderInternalSource}
+            onCreate={createAgentFromPrompt}
+          />
+        </DialogContent>
+      </Dialog>
 
       <DashboardCompactMetricsRow items={metrics} />
 
@@ -958,45 +1052,102 @@ export const AgentBlueprintsPage = () => {
 
       {currentBusinessId ? (
         <DashboardSection
-          title="Готовые агенты и поведение"
-          description="Агент для записи, маркетинговый агент и persona-настройки теперь находятся здесь, рядом с кастомными агентами."
-          contentClassName="p-0"
+          title="Системные агенты"
+          description="Предустановленные агенты LocalOS. Они включаются и настраиваются отдельно от workflow-запусков."
+          actions={(
+            <Button type="button" variant="outline" onClick={() => setSystemSettingsOpen(true)}>
+              Настроить системных
+            </Button>
+          )}
         >
-          <AIAgentSettings businessId={currentBusinessId} business={currentBusiness} />
+          <div className="grid gap-4 md:grid-cols-2">
+            {systemAgents.map((agent) => (
+              <SystemAgentCard
+                key={agent.key}
+                title={agent.title}
+                description={agent.description}
+                icon={agent.icon}
+                enabled={agent.enabled}
+                onConfigure={() => setSystemSettingsOpen(true)}
+              />
+            ))}
+          </div>
         </DashboardSection>
       ) : null}
 
+      <Dialog open={systemSettingsOpen} onOpenChange={setSystemSettingsOpen}>
+        <DialogContent className="max-h-[88vh] max-w-6xl overflow-y-auto rounded-2xl p-0">
+          <DialogHeader className="px-6 pt-6">
+            <DialogTitle>Системные агенты</DialogTitle>
+            <DialogDescription>Настройки агента записи, маркетингового агента и persona/chat поведения.</DialogDescription>
+          </DialogHeader>
+          <AIAgentSettings businessId={currentBusinessId} business={currentBusiness} />
+        </DialogContent>
+      </Dialog>
+
       <DashboardSection
-        title="Шаблоны"
-        description="Быстрые стартовые точки для агентов по документам, письмам, таблицам и поиску клиентов."
+        title="Пользовательские агенты"
+        description="Процессные агенты запускают задачи, агенты голоса задают стиль общения."
       >
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {agentScenarios.map((template) => {
-            const Icon = template.icon;
-            return (
-              <button
-                key={template.title}
-                type="button"
-                className="rounded-xl border border-slate-200 bg-white px-4 py-4 text-left transition hover:border-slate-300 hover:bg-slate-50"
-                onClick={() => applyBuilderScenario(template)}
-              >
-                <div className="flex items-start gap-3">
-                  <div className="rounded-lg bg-slate-100 p-2 text-slate-700">
-                    <Icon className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold text-slate-950">{template.title}</div>
-                    <div className="mt-1 text-sm leading-6 text-slate-600">{template.description}</div>
-                  </div>
-                </div>
-              </button>
-            );
-          })}
+        <div className="space-y-6">
+          {loading ? (
+            <div className="flex items-center gap-2 text-sm text-slate-500">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Загружаем агентов...
+            </div>
+          ) : blueprints.length === 0 && availablePersonaAgents.length === 0 ? (
+            <DashboardEmptyState
+              title="Пользовательских агентов пока нет"
+              description="Создайте агента через мастер или добавьте persona для голоса общения."
+            />
+          ) : (
+            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+              {blueprints.map((blueprint) => {
+                const selected = selectedBlueprint?.id === blueprint.id;
+                return (
+                  <BlueprintAgentCard
+                    key={blueprint.id}
+                    blueprint={blueprint}
+                    selected={selected}
+                    onSelect={() => {
+                      setSelectedBlueprintId(blueprint.id);
+                      setActiveRun(null);
+                    }}
+                    onConfigure={() => {
+                      setSelectedBlueprintId(blueprint.id);
+                      setActiveRun(null);
+                      setWorkspaceMode('settings');
+                    }}
+                    onRun={() => {
+                      setSelectedBlueprintId(blueprint.id);
+                      setWorkspaceMode('run');
+                      void startRun(blueprint);
+                    }}
+                    onResults={() => {
+                      setSelectedBlueprintId(blueprint.id);
+                      setWorkspaceMode('results');
+                    }}
+                  />
+                );
+              })}
+              {availablePersonaAgents.map((agent) => (
+                <PersonaAgentCard key={agent.id} agent={agent} onConfigure={() => setSystemSettingsOpen(true)} />
+              ))}
+            </div>
+          )}
         </div>
       </DashboardSection>
 
       {selectedBlueprint ? (
-        <AgentWorkspacePanel
+        <AgentDetailPanel
+          mode={workspaceMode}
+          blueprint={selectedBlueprint}
+          activeRun={activeRun}
+          pendingApproval={pendingApproval}
+          queuedButNotDispatched={queuedButNotDispatched}
+          agentReview={agentReview}
+          feedbackText={feedbackText}
+          actionLoading={actionLoading}
           setupDataSources={setupDataSources}
           setupExtractionRules={setupExtractionRules}
           setupProcessingRules={setupProcessingRules}
@@ -1005,8 +1156,16 @@ export const AgentBlueprintsPage = () => {
           sourceName={sourceName}
           sourceText={sourceText}
           internalSource={internalSource}
-          review={agentReview}
-          actionLoading={actionLoading}
+          runSource={runSource}
+          runCity={runCity}
+          runCategory={runCategory}
+          runLimit={runLimit}
+          onModeChange={setWorkspaceMode}
+          onStartRun={() => startRun(selectedBlueprint)}
+          onApprove={() => decideApproval('approve')}
+          onReject={() => decideApproval('reject')}
+          onFeedbackTextChange={setFeedbackText}
+          onSubmitFeedback={sendRunFeedback}
           onSetupDataSourcesChange={setSetupDataSources}
           onSetupExtractionRulesChange={setSetupExtractionRules}
           onSetupProcessingRulesChange={setSetupProcessingRules}
@@ -1019,186 +1178,17 @@ export const AgentBlueprintsPage = () => {
           onAddTextSource={addTextSource}
           onAddInternalSource={addInternalSource}
           onAddFileSource={addFileSource}
+          onRunSourceChange={setRunSource}
+          onRunCityChange={setRunCity}
+          onRunCategoryChange={setRunCategory}
+          onRunLimitChange={setRunLimit}
         />
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(20rem,0.9fr)_minmax(0,1.4fr)]">
-        <DashboardSection title="Мои кастомные агенты" description="Сохранённые процессы, которые можно запускать повторно и контролировать через подтверждения.">
-          {loading ? (
-            <div className="flex items-center gap-2 text-sm text-slate-500">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Загружаем агентов...
-            </div>
-          ) : blueprints.length === 0 ? (
-            <DashboardEmptyState
-              title="Кастомных агентов пока нет"
-              description="Опишите задачу сверху или добавьте агента поиска клиентов."
-            />
-          ) : (
-            <div className="space-y-3">
-              {blueprints.map((blueprint) => {
-                const selected = selectedBlueprint?.id === blueprint.id;
-                return (
-                  <button
-                    key={blueprint.id}
-                    type="button"
-                    className={cn(
-                      'w-full rounded-2xl border p-4 text-left transition',
-                      selected
-                        ? 'border-slate-900 bg-slate-950 text-white shadow-sm'
-                        : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50',
-                    )}
-                    onClick={() => {
-                      setSelectedBlueprintId(blueprint.id);
-                      setActiveRun(null);
-                    }}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold">{blueprint.name}</div>
-                        <div className={cn('mt-1 text-xs', selected ? 'text-slate-300' : 'text-slate-500')}>
-                          {blueprint.category || 'custom'} · версия {blueprint.latest_version_number || '—'}
-                        </div>
-                      </div>
-                      <StatusBadge status={blueprint.status || 'draft'} />
-                    </div>
-                    {blueprint.latest_goal ? (
-                      <div className={cn('mt-3 line-clamp-2 text-sm leading-6', selected ? 'text-slate-200' : 'text-slate-600')}>
-                        {blueprint.latest_goal}
-                      </div>
-                    ) : null}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </DashboardSection>
-
-        <DashboardSection
-          title="Запуск агента"
-          description="Агент идёт по шагам, показывает результаты и останавливается там, где нужно ваше решение."
-          actions={(
-            <Button type="button" onClick={startRun} disabled={!selectedBlueprint || actionLoading}>
-              {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
-              Запустить
-            </Button>
-          )}
-        >
-          <div className="mb-4 grid gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4 md:grid-cols-[1fr_1fr_1fr_8rem]">
-            <label className="text-xs font-medium text-slate-600">
-              Источник
-              <input
-                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
-                value={runSource}
-                onChange={(event) => setRunSource(event.target.value)}
-                placeholder="dashboard"
-              />
-            </label>
-            <label className="text-xs font-medium text-slate-600">
-              Город
-              <input
-                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
-                value={runCity}
-                onChange={(event) => setRunCity(event.target.value)}
-                placeholder="Москва"
-              />
-            </label>
-            <label className="text-xs font-medium text-slate-600">
-              Категория
-              <input
-                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
-                value={runCategory}
-                onChange={(event) => setRunCategory(event.target.value)}
-                placeholder="beauty"
-              />
-            </label>
-            <label className="text-xs font-medium text-slate-600">
-              Лимит
-              <input
-                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
-                inputMode="numeric"
-                value={runLimit}
-                onChange={(event) => setRunLimit(event.target.value)}
-              />
-            </label>
-          </div>
-          {!activeRun ? (
-              <DashboardEmptyState
-                title="Запусков в этой сессии нет"
-                description="Выберите агента и запустите его или откройте один из последних запусков."
-              />
-          ) : (
-            <div className="space-y-5">
-              <DashboardActionPanel
-                title="Текущий запуск"
-                description={activeRun.error_text || 'Что агент уже сделал, какие результаты подготовил и где ждёт подтверждение.'}
-                status={<StatusBadge status={activeRun.status} />}
-                tone={activeRun.status === 'waiting_approval' ? 'amber' : 'default'}
-                actions={pendingApproval ? (
-                  <>
-                    <Button type="button" variant="outline" onClick={() => decideApproval('reject')} disabled={actionLoading}>
-                      Отклонить
-                    </Button>
-                    <Button type="button" onClick={() => decideApproval('approve')} disabled={actionLoading}>
-                      Подтвердить
-                    </Button>
-                  </>
-                ) : null}
-              />
-
-              {queuedButNotDispatched ? (
-                <DashboardActionPanel
-                  title="Поставлено в очередь, но не отправлено"
-                  description={`${queuedButNotDispatched.operator_note || 'Агент подготовил очередь, но внешняя отправка запускается отдельным контуром.'} В очереди: ${Number(queuedButNotDispatched.queue_count || queuedButNotDispatched.queued_count || 0)}.`}
-                  status={<StatusBadge status="queued_for_dispatch" />}
-                  tone="amber"
-                  actions={<Send className="h-4 w-4 text-amber-600" />}
-                />
-              ) : null}
-
-              <div className="grid gap-4 lg:grid-cols-3">
-                <RunColumn title="Шаги" icon={Clock3}>
-                  {(activeRun.steps || []).map((step) => (
-                    <TimelineItem
-                      key={step.id}
-                      title={humanizeStep(step.step_key)}
-                      meta={humanizeMeta(step.error_text || step.step_type)}
-                      status={step.status}
-                    />
-                  ))}
-                </RunColumn>
-                <RunColumn title="Результаты" icon={FileText}>
-                  {(activeRun.artifacts || []).map((artifact) => (
-                    <ArtifactItem key={artifact.id} artifact={artifact} />
-                  ))}
-                </RunColumn>
-                <RunColumn title="Подтверждения" icon={CheckCircle2}>
-                  {(activeRun.approvals || []).map((approval) => (
-                    <TimelineItem
-                      key={approval.id}
-                      title={approval.title}
-                      meta={approval.decision_reason || humanizeMeta(approval.approval_type)}
-                      status={approval.status}
-                    />
-                  ))}
-                </RunColumn>
-              </div>
-              <AgentRunReviewPanel
-                review={agentReview}
-                feedbackText={feedbackText}
-                actionLoading={actionLoading}
-                onFeedbackTextChange={setFeedbackText}
-                onSubmitFeedback={sendRunFeedback}
-              />
-            </div>
-          )}
-        </DashboardSection>
-      </div>
-
       {selectedBlueprint ? (
         <DashboardSection
-          title="История запусков"
-          description="Последние запуски выбранного агента. Откройте запуск, чтобы увидеть шаги, результаты и подтверждения."
+          title="Последние запуски"
+          description="Короткая история выбранного агента."
           actions={(
             <div className="flex flex-wrap gap-2">
               {runStatusFilters.map((filter) => (
@@ -1251,7 +1241,7 @@ export const AgentBlueprintsPage = () => {
 
       {selectedBlueprint ? (
         <DashboardSection
-          title="Ожидают подтверждения"
+          title="Ждут решения"
           description="Решения, без которых агент не продолжит рискованное действие."
         >
           {pendingApprovals.length ? (
@@ -1289,32 +1279,8 @@ export const AgentBlueprintsPage = () => {
   );
 };
 
-const AgentDraftPreview = ({ draft }: { draft: AgentDraftSummary }) => (
-  <DashboardSection
-    title="Черновик агента создан"
-    description={`Тип: ${humanizeCategory(draft.category)}. Проверьте шаги и запустите агента, когда будете готовы.`}
-    actions={<StatusBadge status="draft" />}
-    className="border-emerald-200/80 bg-emerald-50/70"
-  >
-    <div className="grid gap-3 md:grid-cols-3">
-      <DraftPreviewBlock title="Данные" items={draft.sources || []} empty="Нужно будет добавить контекст" />
-      <DraftPreviewBlock title="Результат" items={draft.outputs || []} empty="Результат задаётся в настройках" />
-      <DraftPreviewBlock title="Ручной контроль" items={draft.approval_boundaries || []} empty="Безопасные действия без отправки" />
-    </div>
-    {draft.steps?.length ? (
-      <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-        {draft.steps.map((step, index) => (
-          <div key={`${step.key || step.title || 'step'}-${index}`} className="rounded-xl bg-white px-3 py-3 text-sm ring-1 ring-emerald-100">
-            <div className="font-medium text-slate-950">{step.title || humanizeStep(step.key || 'step')}</div>
-            <div className="mt-1 text-xs text-slate-500">{humanizeMeta(step.type || 'artifact')}</div>
-          </div>
-        ))}
-      </div>
-    ) : null}
-  </DashboardSection>
-);
-
-const AgentBuilderPanel = ({
+const CreateAgentWizard = ({
+  step,
   prompt,
   selectedScenario,
   scenarios,
@@ -1330,6 +1296,7 @@ const AgentBuilderPanel = ({
   internalSource,
   actionLoading,
   canCreate,
+  onStepChange,
   onScenarioSelect,
   onPromptChange,
   onDataSourcesChange,
@@ -1343,6 +1310,7 @@ const AgentBuilderPanel = ({
   onInternalSourceChange,
   onCreate,
 }: {
+  step: number;
   prompt: string;
   selectedScenario: AgentBuilderScenario;
   scenarios: AgentBuilderScenario[];
@@ -1358,6 +1326,7 @@ const AgentBuilderPanel = ({
   internalSource: string;
   actionLoading: boolean;
   canCreate: boolean;
+  onStepChange: (value: number) => void;
   onScenarioSelect: (scenario: AgentBuilderScenario) => void;
   onPromptChange: (value: string) => void;
   onDataSourcesChange: (value: string) => void;
@@ -1371,6 +1340,7 @@ const AgentBuilderPanel = ({
   onInternalSourceChange: (value: string) => void;
   onCreate: () => void;
 }) => {
+  const steps = ['Тип агента', 'Данные', 'Правила и контроль', 'Результат'];
   const handleBuilderFile = async (file?: File | null) => {
     if (!file) {
       onFileSourceChange(null);
@@ -1386,17 +1356,25 @@ const AgentBuilderPanel = ({
   };
 
   return (
-    <DashboardSection
-      title="Создать агента"
-      description="Опишите задачу обычным языком, выберите тип, добавьте данные и правила. LocalOS соберёт reusable agent без внешних действий по умолчанию."
-      actions={(
-        <Button type="button" onClick={onCreate} disabled={actionLoading || !canCreate}>
-          {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-          Создать агента
-        </Button>
-      )}
-    >
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(21rem,0.8fr)]">
+    <div className="space-y-5">
+      <div className="grid gap-2 md:grid-cols-4">
+        {steps.map((label, index) => (
+          <button
+            key={label}
+            type="button"
+            className={cn(
+              'rounded-xl border px-3 py-2 text-left text-sm font-medium transition',
+              step === index ? 'border-slate-900 bg-slate-950 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300',
+            )}
+            onClick={() => onStepChange(index)}
+          >
+            <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-white/15 text-xs">{index + 1}</span>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {step === 0 ? (
         <div className="space-y-4">
           <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
             {scenarios.map((scenario) => {
@@ -1423,12 +1401,11 @@ const AgentBuilderPanel = ({
               );
             })}
           </div>
-
           <textarea
             className="min-h-32 w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-slate-400"
             value={prompt}
             onChange={(event) => onPromptChange(event.target.value)}
-            placeholder="Например: обработай договор, найди риски и подготовь письмо клиенту"
+            placeholder="Опишите, какого агента хотите создать"
           />
           <div className="flex flex-wrap gap-2">
             {examples.map((example) => (
@@ -1442,38 +1419,29 @@ const AgentBuilderPanel = ({
               </button>
             ))}
           </div>
-
-          <div className="grid gap-3 md:grid-cols-2">
-            <WizardTextArea label="Какие данные использовать" value={dataSources} onChange={onDataSourcesChange} placeholder="Файл, текст, профиль бизнеса, услуги, отзывы" />
-            <WizardTextArea label="Что агент должен извлечь или понять" value={extractionRules} onChange={onExtractionRulesChange} placeholder="Поля, риски, сроки, исключения, факты" />
-            <WizardTextArea label="Какие правила применить" value={processingRules} onChange={onProcessingRulesChange} placeholder="Не придумывать факты, учитывать стиль, помечать спорное" />
-            <WizardTextArea label="Какой результат подготовить" value={outputFormat} onChange={onOutputFormatChange} placeholder="Отчёт, письмо, таблица, shortlist, черновики" />
-          </div>
-          <WizardTextArea label="Где нужен ручной контроль" value={manualControl} onChange={onManualControlChange} placeholder="Перед отправкой, публикацией, платежом, изменением данных" />
         </div>
+      ) : null}
 
-        <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
-            <Database className="h-4 w-4" />
-            Данные агента при создании
-          </div>
-          <div className="space-y-3">
+      {step === 1 ? (
+        <div className="grid gap-4 lg:grid-cols-[1fr_20rem]">
+          <WizardTextArea label="Какие данные использовать" value={dataSources} onChange={onDataSourcesChange} placeholder="Файл, текст, профиль бизнеса, услуги, отзывы" />
+          <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
             <input
               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
               value={sourceName}
               onChange={(event) => onSourceNameChange(event.target.value)}
-              placeholder="Название текста или файла"
+              placeholder="Название источника"
             />
             <textarea
               className="min-h-28 w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
               value={sourceText}
               onChange={(event) => onSourceTextChange(event.target.value)}
-              placeholder="Вставьте текст документа, шаблон письма, CSV или контекст задачи"
+              placeholder="Вставьте текст, CSV или контекст задачи"
             />
             <div className="flex flex-wrap gap-2">
               <label className="inline-flex cursor-pointer items-center rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
                 <Upload className="mr-2 h-4 w-4" />
-                {fileSource ? fileSource.name : 'Добавить файл'}
+                {fileSource ? fileSource.name : 'Файл'}
                 <input
                   type="file"
                   className="hidden"
@@ -1486,7 +1454,7 @@ const AgentBuilderPanel = ({
               </label>
               {fileSource ? (
                 <Button type="button" size="sm" variant="outline" onClick={() => onFileSourceChange(null)}>
-                  Убрать файл
+                  Убрать
                 </Button>
               ) : null}
             </div>
@@ -1502,16 +1470,358 @@ const AgentBuilderPanel = ({
               <option value="outreach_drafts">Черновики outreach</option>
               <option value="none">Не подключать источник LocalOS</option>
             </select>
-            <div className="rounded-xl border border-emerald-100 bg-white px-3 py-3 text-xs leading-5 text-slate-600">
-              <div className="font-semibold text-slate-950">Безопасность v1</div>
-              <div className="mt-1">Generic agents готовят результат и ждут подтверждения. Отправка, публикация, платежи и destructive actions не выполняются автоматически.</div>
-            </div>
           </div>
         </div>
-      </div>
-    </DashboardSection>
+      ) : null}
+
+      {step === 2 ? (
+        <div className="grid gap-3 md:grid-cols-2">
+          <WizardTextArea label="Что агент должен извлечь или понять" value={extractionRules} onChange={onExtractionRulesChange} placeholder="Поля, риски, сроки, исключения, факты" />
+          <WizardTextArea label="Какие правила применить" value={processingRules} onChange={onProcessingRulesChange} placeholder="Не придумывать факты, учитывать стиль, помечать спорное" />
+          <WizardTextArea label="Где нужен ручной контроль" value={manualControl} onChange={onManualControlChange} placeholder="Перед отправкой, публикацией, платежом, изменением данных" />
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-4 text-sm leading-6 text-emerald-900">
+            Generic agents в v1 готовят результат и ждут проверки. Внешние отправки, публикации, платежи и destructive actions не запускаются из wizard.
+          </div>
+        </div>
+      ) : null}
+
+      {step === 3 ? (
+        <div className="grid gap-4 lg:grid-cols-[1fr_20rem]">
+          <WizardTextArea label="Какой результат подготовить" value={outputFormat} onChange={onOutputFormatChange} placeholder="Отчёт, письмо, таблица, shortlist, черновики" />
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-sm leading-6 text-slate-700">
+            <div className="font-semibold text-slate-950">{selectedScenario.title}</div>
+            <div className="mt-2">{prompt || selectedScenario.prompt}</div>
+            <div className="mt-3 text-xs text-slate-500">После создания агент появится в “Пользовательских агентах”. Запуск будет из карточки агента.</div>
+          </div>
+        </div>
+      ) : null}
+
+      <DialogFooter className="gap-2 sm:justify-between">
+        <Button type="button" variant="outline" onClick={() => onStepChange(Math.max(0, step - 1))} disabled={step === 0}>
+          Назад
+        </Button>
+        {step < 3 ? (
+          <Button type="button" onClick={() => onStepChange(Math.min(3, step + 1))}>
+            Далее
+          </Button>
+        ) : (
+          <Button type="button" onClick={onCreate} disabled={actionLoading || !canCreate}>
+            {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+            Создать агента
+          </Button>
+        )}
+      </DialogFooter>
+    </div>
   );
 };
+
+const SystemAgentCard = ({
+  title,
+  description,
+  icon: Icon,
+  enabled,
+  onConfigure,
+}: {
+  title: string;
+  description: string;
+  icon: typeof Bot;
+  enabled: boolean;
+  onConfigure: () => void;
+}) => (
+  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="flex items-start justify-between gap-3">
+      <div className="flex min-w-0 items-start gap-3">
+        <div className="rounded-xl bg-slate-100 p-2 text-slate-700">
+          <Icon className="h-5 w-5" />
+        </div>
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-slate-950">{title}</div>
+          <div className="mt-1 text-sm leading-6 text-slate-600">{description}</div>
+        </div>
+      </div>
+      <span className={cn('shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ring-1', enabled ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-slate-100 text-slate-600 ring-slate-200')}>
+        {enabled ? 'Включён' : 'Выключен'}
+      </span>
+    </div>
+    <div className="mt-4 flex justify-end">
+      <Button type="button" size="sm" variant="outline" onClick={onConfigure}>
+        Настроить
+      </Button>
+    </div>
+  </div>
+);
+
+const BlueprintAgentCard = ({
+  blueprint,
+  selected,
+  onSelect,
+  onConfigure,
+  onRun,
+  onResults,
+}: {
+  blueprint: AgentBlueprint;
+  selected: boolean;
+  onSelect: () => void;
+  onConfigure: () => void;
+  onRun: () => void;
+  onResults: () => void;
+}) => (
+  <div className={cn('rounded-2xl border bg-white p-4 shadow-sm transition', selected ? 'border-slate-900' : 'border-slate-200 hover:border-slate-300')}>
+    <button type="button" className="w-full text-left" onClick={onSelect}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold text-slate-950">{blueprint.name}</div>
+          <div className="mt-1 text-xs font-medium text-slate-500">{humanizeCategory(blueprint.category)} · Workflow agent</div>
+        </div>
+        <StatusBadge status={blueprint.status || 'draft'} />
+      </div>
+      <div className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">
+        {blueprint.description || blueprint.latest_goal || 'Пользовательский агент с настройками, запусками и результатами.'}
+      </div>
+    </button>
+    <div className="mt-4 flex flex-wrap gap-2">
+      <Button type="button" size="sm" variant="outline" onClick={onConfigure}>
+        Настроить
+      </Button>
+      <Button type="button" size="sm" onClick={onRun}>
+        <Play className="mr-2 h-4 w-4" />
+        Запустить
+      </Button>
+      <Button type="button" size="sm" variant="ghost" onClick={onResults}>
+        Результаты
+      </Button>
+    </div>
+  </div>
+);
+
+const PersonaAgentCard = ({ agent, onConfigure }: { agent: PersonaAgent; onConfigure: () => void }) => (
+  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <div className="truncate text-sm font-semibold text-slate-950">{agent.name || 'Persona agent'}</div>
+        <div className="mt-1 text-xs font-medium text-slate-500">Голос и стиль общения</div>
+      </div>
+      <span className={cn('rounded-full px-2.5 py-1 text-xs font-medium ring-1', agent.is_active ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-slate-100 text-slate-600 ring-slate-200')}>
+        {agent.is_active ? 'Включён' : 'Выключен'}
+      </span>
+    </div>
+    <div className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">
+      {agent.description || agent.task || agent.identity || 'Настраивает тон, стиль и ограничения общения. Не является workflow runtime.'}
+    </div>
+    <div className="mt-4 flex justify-end">
+      <Button type="button" size="sm" variant="outline" onClick={onConfigure}>
+        Открыть настройки
+      </Button>
+    </div>
+  </div>
+);
+
+const AgentDetailPanel = ({
+  mode,
+  blueprint,
+  activeRun,
+  pendingApproval,
+  queuedButNotDispatched,
+  agentReview,
+  feedbackText,
+  actionLoading,
+  setupDataSources,
+  setupExtractionRules,
+  setupProcessingRules,
+  setupOutputFormat,
+  setupManualControl,
+  sourceName,
+  sourceText,
+  internalSource,
+  runSource,
+  runCity,
+  runCategory,
+  runLimit,
+  onModeChange,
+  onStartRun,
+  onApprove,
+  onReject,
+  onFeedbackTextChange,
+  onSubmitFeedback,
+  onSetupDataSourcesChange,
+  onSetupExtractionRulesChange,
+  onSetupProcessingRulesChange,
+  onSetupOutputFormatChange,
+  onSetupManualControlChange,
+  onSourceNameChange,
+  onSourceTextChange,
+  onInternalSourceChange,
+  onSaveSetup,
+  onAddTextSource,
+  onAddInternalSource,
+  onAddFileSource,
+  onRunSourceChange,
+  onRunCityChange,
+  onRunCategoryChange,
+  onRunLimitChange,
+}: {
+  mode: AgentWorkspaceMode;
+  blueprint: AgentBlueprint;
+  activeRun: AgentRun | null;
+  pendingApproval: AgentApproval | null;
+  queuedButNotDispatched: AgentArtifact['payload_json'] | AgentRunStep['output_json'] | null;
+  agentReview: AgentReview | null;
+  feedbackText: string;
+  actionLoading: boolean;
+  setupDataSources: string;
+  setupExtractionRules: string;
+  setupProcessingRules: string;
+  setupOutputFormat: string;
+  setupManualControl: string;
+  sourceName: string;
+  sourceText: string;
+  internalSource: string;
+  runSource: string;
+  runCity: string;
+  runCategory: string;
+  runLimit: string;
+  onModeChange: (mode: AgentWorkspaceMode) => void;
+  onStartRun: () => void;
+  onApprove: () => void;
+  onReject: () => void;
+  onFeedbackTextChange: (value: string) => void;
+  onSubmitFeedback: () => void;
+  onSetupDataSourcesChange: (value: string) => void;
+  onSetupExtractionRulesChange: (value: string) => void;
+  onSetupProcessingRulesChange: (value: string) => void;
+  onSetupOutputFormatChange: (value: string) => void;
+  onSetupManualControlChange: (value: string) => void;
+  onSourceNameChange: (value: string) => void;
+  onSourceTextChange: (value: string) => void;
+  onInternalSourceChange: (value: string) => void;
+  onSaveSetup: () => void;
+  onAddTextSource: () => void;
+  onAddInternalSource: () => void;
+  onAddFileSource: (file?: File | null) => void;
+  onRunSourceChange: (value: string) => void;
+  onRunCityChange: (value: string) => void;
+  onRunCategoryChange: (value: string) => void;
+  onRunLimitChange: (value: string) => void;
+}) => (
+  <DashboardSection
+    title={blueprint.name}
+    description={`${humanizeCategory(blueprint.category)} · ${mode === 'settings' ? 'настройка агента' : mode === 'run' ? 'запуск из карточки' : 'сохранённые результаты'}`}
+    actions={(
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" size="sm" variant={mode === 'settings' ? 'default' : 'outline'} onClick={() => onModeChange('settings')}>Настроить</Button>
+        <Button type="button" size="sm" variant={mode === 'run' ? 'default' : 'outline'} onClick={() => onModeChange('run')}>Запуск</Button>
+        <Button type="button" size="sm" variant={mode === 'results' ? 'default' : 'outline'} onClick={() => onModeChange('results')}>Сохранённые результаты</Button>
+      </div>
+    )}
+  >
+    {mode === 'settings' ? (
+      <AgentWorkspacePanel
+        setupDataSources={setupDataSources}
+        setupExtractionRules={setupExtractionRules}
+        setupProcessingRules={setupProcessingRules}
+        setupOutputFormat={setupOutputFormat}
+        setupManualControl={setupManualControl}
+        sourceName={sourceName}
+        sourceText={sourceText}
+        internalSource={internalSource}
+        review={agentReview}
+        actionLoading={actionLoading}
+        onSetupDataSourcesChange={onSetupDataSourcesChange}
+        onSetupExtractionRulesChange={onSetupExtractionRulesChange}
+        onSetupProcessingRulesChange={onSetupProcessingRulesChange}
+        onSetupOutputFormatChange={onSetupOutputFormatChange}
+        onSetupManualControlChange={onSetupManualControlChange}
+        onSourceNameChange={onSourceNameChange}
+        onSourceTextChange={onSourceTextChange}
+        onInternalSourceChange={onInternalSourceChange}
+        onSaveSetup={onSaveSetup}
+        onAddTextSource={onAddTextSource}
+        onAddInternalSource={onAddInternalSource}
+        onAddFileSource={onAddFileSource}
+      />
+    ) : null}
+
+    {mode === 'run' ? (
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-slate-950">Запуск агента</div>
+            <div className="mt-1 text-sm leading-6 text-slate-600">
+              Запуск открывается из карточки конкретного агента. Для outreach показываем поля поиска, для остальных типов используем подключённые данные агента.
+            </div>
+          </div>
+          <Button type="button" onClick={onStartRun} disabled={actionLoading}>
+            {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+            Запустить
+          </Button>
+        </div>
+        {blueprint.category === 'outreach' ? (
+          <div className="mt-4 grid gap-3 md:grid-cols-4">
+            <input className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400" value={runSource} onChange={(event) => onRunSourceChange(event.target.value)} placeholder="Источник" />
+            <input className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400" value={runCity} onChange={(event) => onRunCityChange(event.target.value)} placeholder="Город" />
+            <input className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400" value={runCategory} onChange={(event) => onRunCategoryChange(event.target.value)} placeholder="Категория" />
+            <input className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400" value={runLimit} onChange={(event) => onRunLimitChange(event.target.value)} placeholder="Лимит" />
+          </div>
+        ) : (
+          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
+            Этот агент возьмёт данные из блока “Данные агента” и подготовит результат без внешней отправки.
+          </div>
+        )}
+      </div>
+    ) : null}
+
+    {mode === 'results' ? (
+      <div className="space-y-4">
+        {queuedButNotDispatched ? (
+          <DashboardActionPanel
+            title="Поставлено в очередь, но не отправлено"
+            description="Агент поставил batch в безопасную очередь. Dispatcher не запускался из этого экрана."
+            tone="amber"
+          />
+        ) : null}
+        {pendingApproval ? (
+          <DashboardActionPanel
+            title="Ждёт решения"
+            description={pendingApproval.title}
+            tone="amber"
+            actions={(
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" onClick={onApprove} disabled={actionLoading}>Принять</Button>
+                <Button type="button" variant="outline" onClick={onReject} disabled={actionLoading}>Отклонить</Button>
+              </div>
+            )}
+          />
+        ) : null}
+        {activeRun ? (
+          <div className="grid gap-4 xl:grid-cols-3">
+            <RunColumn title="Что сделал агент" icon={Clock3}>
+              {(activeRun.steps || []).map((step) => (
+                <TimelineItem key={step.id} title={humanizeStep(step.step_key)} meta={humanizeMeta(step.step_type)} status={step.status} />
+              ))}
+            </RunColumn>
+            <RunColumn title="Сохранённые результаты" icon={FileCheck2}>
+              {(activeRun.artifacts || []).map((artifact) => <ArtifactItem key={artifact.id} artifact={artifact} />)}
+            </RunColumn>
+            <RunColumn title="Ручной контроль" icon={ShieldCheck}>
+              {(activeRun.approvals || []).map((approval) => (
+                <TimelineItem key={approval.id} title={approval.title} meta={humanizeMeta(approval.approval_type)} status={approval.status} />
+              ))}
+            </RunColumn>
+          </div>
+        ) : (
+          <DashboardEmptyState title="Нет активных запусков" description="Запустите агента из карточки, чтобы увидеть результат." />
+        )}
+        <AgentRunReviewPanel
+          review={agentReview}
+          feedbackText={feedbackText}
+          actionLoading={actionLoading}
+          onFeedbackTextChange={onFeedbackTextChange}
+          onSubmitFeedback={onSubmitFeedback}
+        />
+      </div>
+    ) : null}
+  </DashboardSection>
+);
 
 const AgentWorkspacePanel = ({
   setupDataSources,
@@ -1795,21 +2105,6 @@ const formatPayloadValue = (value: unknown): string => {
   }
   return String(value ?? '');
 };
-
-const DraftPreviewBlock = ({ title, items, empty }: { title: string; items: string[]; empty: string }) => (
-  <div className="rounded-xl bg-white px-3 py-3 ring-1 ring-emerald-100">
-    <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">{title}</div>
-    <div className="mt-2 flex flex-wrap gap-1.5">
-      {items.length ? items.map((item) => (
-        <span key={item} className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 ring-1 ring-emerald-100">
-          {humanizeMeta(item)}
-        </span>
-      )) : (
-        <span className="text-sm text-slate-500">{empty}</span>
-      )}
-    </div>
-  </div>
-);
 
 const RunColumn = ({
   title,
