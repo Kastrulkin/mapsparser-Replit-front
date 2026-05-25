@@ -1,0 +1,22 @@
+Command:
+cd /opt/seo-app && docker compose exec -T app env SMOKE_BASE_URL=http://localhost:8000 python /app/scripts/smoke_agent_blueprint_document_api.py
+
+Result:
+{
+  "success": true,
+  "base_url": "http://localhost:8000",
+  "business_id": "smoke-doc-agent-business-2152466b7d",
+  "blueprint_id": "3f03d148-efbf-4a7a-8625-86a074d78889",
+  "run_id": "eefb345d-a241-459f-bf7c-45e7a6f93b50",
+  "initial_version": 1,
+  "feedback_version": 3,
+  "approval_type": "final_output",
+  "analysis_source": "gigachat",
+  "llm_analysis_used": true,
+  "provenance": [
+    "Smoke contract"
+  ],
+  "external_dispatch_performed": false,
+  "system_agents_config_persisted": true,
+  "fixture_cleaned": true
+}

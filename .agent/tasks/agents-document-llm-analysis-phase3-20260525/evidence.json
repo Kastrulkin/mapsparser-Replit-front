@@ -1,0 +1,91 @@
+{
+  "task_id": "agents-document-llm-analysis-phase3-20260525",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Document runner reads extracted Datahub-lite source text for document agents.",
+      "status": "PASS",
+      "proof": [
+        "src/services/agent_blueprint_workspace.py passes extracted uploaded/internal source items into analyze_document_sources_with_llm.",
+        "src/services/agent_document_llm.py builds prompt context from raw.text first, then source summaries."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Document analysis uses an LLM path to produce summary, risks, facts, fields, next questions, and rules applied.",
+      "status": "PASS",
+      "proof": [
+        "src/services/agent_document_llm.py calls analyze_text_with_gigachat with task_type=agent_document_analysis.",
+        "Production smoke returned analysis_source=gigachat and llm_analysis_used=true."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Agent setup rules and recent feedback are included in the LLM prompt.",
+      "status": "PASS",
+      "proof": [
+        "Prompt includes workflow_description, extraction_rules, processing_rules, output_format, manual_control, feedback_notes, and sources.",
+        "Unit test asserts rules and source name are present in the prompt."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Provider failure falls back to deterministic analysis instead of breaking the run.",
+      "status": "PASS",
+      "proof": [
+        "Unit test test_agent_document_llm_analysis_falls_back_without_external_dispatch covers provider failure."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Output artifact records provenance, analysis source, LLM usage flag, prompt version, and no external dispatch.",
+      "status": "PASS",
+      "proof": [
+        "Server smoke checks provenance, analysis_source, llm_analysis_used, external_dispatch_performed=false, dispatch_state=not_dispatched."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC6",
+      "text": "Existing approval/final-result flow and feedback version loop still work.",
+      "status": "PASS",
+      "proof": [
+        "Server smoke approved final_output and created feedback version 3 from initial version 1."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC7",
+      "text": "Backend guardrails, targeted unit tests, deploy, and server smoke pass.",
+      "status": "PASS",
+      "proof": [
+        "Unit tests 20 passed.",
+        "Backend lint baseline passed.",
+        "Backend deploy passed.",
+        "Server document smoke passed."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/services/agent_document_llm.py",
+    "src/services/agent_blueprint_workspace.py",
+    "tests/test_agent_blueprint_layer.py",
+    "scripts/lint_backend_baseline.sh",
+    "scripts/smoke_agent_blueprint_document_api.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "scripts/lint_backend_baseline.sh",
+    "cd /opt/seo-app && docker compose exec -T app env SMOKE_BASE_URL=http://localhost:8000 python /app/scripts/smoke_agent_blueprint_document_api.py"
+  ],
+  "known_gaps": [
+    "Local smoke requires DATABASE_URL and is intentionally verified in the server Docker/Postgres runtime.",
+    "LLM output quality still depends on provider behavior; deterministic fallback preserves availability."
+  ]
+}

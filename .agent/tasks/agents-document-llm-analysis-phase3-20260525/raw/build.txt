@@ -1,0 +1,4 @@
+No frontend build required.
+
+Reason:
+Backend-only change in document agent runtime, tests, lint guardrails, and API smoke.

@@ -1,0 +1,6 @@
+Command:
+python3 -m pytest -q tests/test_agent_blueprint_layer.py
+
+Result:
+....................                                                     [100%]
+20 passed in 2.55s

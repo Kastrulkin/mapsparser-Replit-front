@@ -1,0 +1,53 @@
+{
+  "task_id": "agents-document-llm-analysis-phase3-20260525",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Document runner passes extracted source text into the document LLM analyzer."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "LLM path creates structured document analysis and server smoke used GigaChat."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Setup rules and feedback are included in the prompt."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Provider failure is covered by deterministic fallback tests."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Artifacts include provenance, analysis flags, and no-dispatch markers."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "Approval and feedback version loop passed in server smoke."
+    },
+    {
+      "id": "AC7",
+      "status": "PASS",
+      "reason": "Tests, lint, deploy, health, and server smoke passed."
+    }
+  ],
+  "commands_run": [
+    "python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "scripts/lint_backend_baseline.sh",
+    "scripts/deploy_backend_src.sh",
+    "docker compose exec -T app env SMOKE_BASE_URL=http://localhost:8000 python /app/scripts/smoke_agent_blueprint_document_api.py"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/agents-document-llm-analysis-phase3-20260525/raw/test-unit.txt",
+    ".agent/tasks/agents-document-llm-analysis-phase3-20260525/raw/lint.txt",
+    ".agent/tasks/agents-document-llm-analysis-phase3-20260525/raw/test-integration.txt",
+    ".agent/tasks/agents-document-llm-analysis-phase3-20260525/raw/deploy.txt"
+  ]
+}
