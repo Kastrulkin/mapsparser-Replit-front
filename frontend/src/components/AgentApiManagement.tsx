@@ -152,7 +152,7 @@ export const AgentApiManagement = () => {
   const [promotionNotes, setPromotionNotes] = useState<Record<string, string>>({});
   const [selfTestKey, setSelfTestKey] = useState('');
   const [selfTestResult, setSelfTestResult] = useState<SelfTestResult | null>(null);
-  const [ledgerFilter, setLedgerFilter] = useState<'all' | 'self_test'>('all');
+  const [ledgerFilter, setLedgerFilter] = useState<'all' | 'self_test' | 'errors' | 'promotion'>('all');
   const { toast } = useToast();
 
   const metrics = useMemo(() => {
@@ -163,7 +163,8 @@ export const AgentApiManagement = () => {
     const denied = ledger.filter((item) => item.status === 'denied').length;
     const selfTests = ledger.filter((item) => item.action_type === 'agent_api_self_test').length;
     const promotionRequests = ledger.filter((item) => item.action_type === 'agent_client_promotion_request').length;
-    return { live, sandbox, suspended, pending, denied, selfTests, promotionRequests };
+    const authScopeErrors = ledger.filter((item) => item.reason_code === 'AGENT_AUTH_REQUIRED' || item.reason_code === 'SCOPE_REQUIRED').length;
+    return { live, sandbox, suspended, pending, denied, selfTests, promotionRequests, authScopeErrors };
   }, [clients, ledger]);
 
   const telegramEvents = useMemo(
@@ -181,6 +182,12 @@ export const AgentApiManagement = () => {
   const visibleLedger = useMemo(() => {
     if (ledgerFilter === 'self_test') {
       return ledger.filter((item) => item.action_type === 'agent_api_self_test');
+    }
+    if (ledgerFilter === 'errors') {
+      return ledger.filter((item) => item.status === 'denied' || item.reason_code === 'AGENT_AUTH_REQUIRED' || item.reason_code === 'SCOPE_REQUIRED');
+    }
+    if (ledgerFilter === 'promotion') {
+      return ledger.filter((item) => item.action_type.startsWith('agent_client_promotion_'));
     }
     return ledger;
   }, [ledger, ledgerFilter]);
@@ -464,7 +471,7 @@ curl -s -X POST "https://localos.pro/api/agent-api/clients/promotion/request" \\
           <CardContent className="p-4">
             <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Approval</div>
             <div className="mt-2 text-2xl font-semibold text-slate-950">{metrics.pending}</div>
-            <div className="mt-1 text-xs text-slate-500">self-test {metrics.selfTests} · promotion {metrics.promotionRequests}</div>
+            <div className="mt-1 text-xs text-slate-500">self-test {metrics.selfTests} · promotion {metrics.promotionRequests} · errors {metrics.authScopeErrors}</div>
           </CardContent>
         </Card>
       </div>
@@ -515,7 +522,17 @@ curl -s -X POST "https://localos.pro/api/agent-api/clients/promotion/request" \\
                 <div className="mt-1">
                   Scopes: {(selfTestResult.self_test?.client?.allowed_scopes || []).join(', ') || 'нет'}
                 </div>
+                <div className="mt-1">
+                  Доступно: read {(selfTestResult.self_test?.available?.read_scopes || []).length}, draft {(selfTestResult.self_test?.available?.draft_scopes || []).length}, approval {selfTestResult.self_test?.available?.can_create_approval_request ? 'да' : 'нет'}.
+                </div>
                 <div className="mt-1 text-emerald-800">Ledger: {selfTestResult.ledger_id || 'записан'}</div>
+                {(selfTestResult.self_test?.next_steps || []).length > 0 ? (
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-emerald-800">
+                    {(selfTestResult.self_test?.next_steps || []).map((step) => (
+                      <li key={step}>{step}</li>
+                    ))}
+                  </ul>
+                ) : null}
               </div>
             ) : (
               <div className="text-sm text-slate-500">
@@ -805,6 +822,12 @@ curl -s -X POST "https://localos.pro/api/agent-api/clients/promotion/request" \\
               <Button size="sm" variant={ledgerFilter === 'self_test' ? 'default' : 'outline'} onClick={() => setLedgerFilter('self_test')}>
                 Последние self-test
               </Button>
+              <Button size="sm" variant={ledgerFilter === 'errors' ? 'default' : 'outline'} onClick={() => setLedgerFilter('errors')}>
+                Auth/scope ошибки
+              </Button>
+              <Button size="sm" variant={ledgerFilter === 'promotion' ? 'default' : 'outline'} onClick={() => setLedgerFilter('promotion')}>
+                Promotion
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -841,7 +864,7 @@ curl -s -X POST "https://localos.pro/api/agent-api/clients/promotion/request" \\
       <div className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
         <div>
-          API остаётся beta/internal. Перед продом нужна миграция БД; live scopes выдаём только после ручного review.
+          API остаётся beta/internal. Live scopes выдаём только после ручного review; публикации, отправки, платежи и внешние действия идут через approval.
         </div>
       </div>
     </div>

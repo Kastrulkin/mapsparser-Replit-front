@@ -267,6 +267,30 @@ const getActiveSection = (slug?: string) => {
   return sections.find((section) => section.slug === slug) ?? sections[0];
 };
 
+const agentQuickstart = `# 1. Read the Agent API contract
+curl -s "https://localos.pro/api/agent-api/openapi.json"
+
+# 2. Check the safety policy
+curl -s "https://localos.pro/api/agent-api/security/policy"
+
+# 3. Run sandbox self-test
+curl -s -X POST "https://localos.pro/api/agent-api/self-test" \\
+  -H "X-LocalOS-Agent-Key: $LOCALOS_AGENT_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"purpose":"sandbox onboarding","checks":["auth","scopes","ledger"]}'
+
+# 4. Create a safe test approval request
+curl -s -X POST "https://localos.pro/api/agent-api/approvals/request" \\
+  -H "X-LocalOS-Agent-Key: $LOCALOS_AGENT_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"action_type":"test_publish_review_reply","capability":"reviews.reply.publish","risk_level":"high","requested_scope":"publish:request","input_summary":{"source":"sandbox quickstart"},"proposed_output":"Test approval request only."}'
+
+# 5. Request live promotion after sandbox verification
+curl -s -X POST "https://localos.pro/api/agent-api/clients/promotion/request" \\
+  -H "X-LocalOS-Agent-Key: $LOCALOS_AGENT_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"requested_scopes":["audit:read","reviews:draft","approvals:create"],"use_case":"Read audits and draft review replies under human approval.","contact":"ops@example.com"}'`;
+
 const DocsPage = () => {
   const { section } = useParams();
   const activeSection = getActiveSection(section);
@@ -399,6 +423,31 @@ const DocsPage = () => {
                 </Card>
               ))}
             </div>
+
+            {activeSection.slug === "api" ? (
+              <section className="rounded-3xl border border-slate-200 bg-slate-950 p-6 text-white shadow-sm">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <Badge className="border-blue-300 bg-blue-400/10 text-blue-100 hover:bg-blue-400/10" variant="outline">
+                      Sandbox quickstart
+                    </Badge>
+                    <h2 className="mt-4 text-2xl font-semibold tracking-normal">Как подключить агента</h2>
+                    <p className="mt-2 max-w-3xl leading-7 text-slate-300">
+                      Агент начинает в sandbox, проверяет ключ через self-test, создаёт тестовый approval request и только потом просит live-доступ. Все действия остаются в ledger.
+                    </p>
+                  </div>
+                  <Button asChild className="bg-white text-slate-950 hover:bg-slate-100">
+                    <a href="/api/agent-api/openapi.json">
+                      OpenAPI
+                      <ExternalLink className="ml-2 h-4 w-4" />
+                    </a>
+                  </Button>
+                </div>
+                <pre className="mt-5 overflow-x-auto rounded-2xl border border-white/10 bg-black/30 p-4 text-xs leading-6 text-slate-100">
+                  <code>{agentQuickstart}</code>
+                </pre>
+              </section>
+            ) : null}
 
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <Card className="border-slate-200 bg-white shadow-none">
