@@ -34,6 +34,9 @@ def test_agent_blueprint_routes_are_owned_by_blueprint():
         "/api/agent-blueprints/<blueprint_id>/sources": {
             "POST": "agent_blueprints_api.add_agent_blueprint_source",
         },
+        "/api/agent-blueprints/<blueprint_id>/sources/catalog": {
+            "GET": "agent_blueprints_api.list_agent_blueprint_source_catalog",
+        },
         "/api/agent-blueprints/<blueprint_id>/sources/upload": {
             "POST": "agent_blueprints_api.upload_agent_blueprint_source",
         },
@@ -189,7 +192,9 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "_insert_version(cursor, blueprint_id, version_payload, user_data)" in api_source
     assert "/api/agent-blueprints/<blueprint_id>/setup" in api_source
     assert "/api/agent-blueprints/<blueprint_id>/sources" in api_source
+    assert "/api/agent-blueprints/<blueprint_id>/sources/catalog" in api_source
     assert "/api/agent-blueprints/<blueprint_id>/sources/upload" in api_source
+    assert "build_agent_datahub_catalog" in api_source
     assert "build_agent_source_from_upload" in api_source
     assert "/api/agent-runs/<run_id>/feedback" in api_source
     assert "/api/agent-builder/sessions" in builder_api_source
@@ -328,6 +333,24 @@ def test_agent_source_ingestion_extracts_text_docx_xlsx_and_rejects_unsafe_files
     assert empty_source == {}
     assert empty_error["code"] == "EMPTY_FILE"
     assert "пустой" in empty_error["message"].lower()
+
+
+def test_agent_datahub_catalog_returns_available_internal_sources():
+    from services.agent_datahub import build_agent_datahub_catalog
+
+    cursor = FakeDatahubCursor()
+    catalog = build_agent_datahub_catalog(
+        cursor,
+        "biz1",
+        [{"source_type": "internal", "internal_source": "services"}],
+    )
+
+    by_key = {item["key"]: item for item in catalog}
+    assert by_key["business_profile"]["available_count"] == 1
+    assert by_key["services"]["available_count"] == 2
+    assert by_key["services"]["connected"] is True
+    assert by_key["reviews"]["preview"]
+    assert by_key["prospectingleads"]["state"] == "empty"
 
 
 def test_outreach_send_batch_handler_queues_approved_drafts_without_external_dispatch(monkeypatch):
@@ -867,6 +890,36 @@ class FakeCursor:
 
     def fetchone(self):
         return self.last_result
+
+    def fetchall(self):
+        return self.last_results
+
+
+class FakeDatahubCursor:
+    def __init__(self):
+        self.last_results = []
+
+    def execute(self, query, params=None):
+        normalized_query = " ".join(query.split()).lower()
+        if "from businesses" in normalized_query:
+            self.last_results = [{"id": "biz1", "name": "Local Test", "business_type": "beauty", "city": "Moscow", "address": "Street"}]
+            return None
+        if "from userservices" in normalized_query:
+            self.last_results = [
+                {"id": "svc1", "name": "Haircut", "price": 1000, "duration": 60},
+                {"id": "svc2", "name": "Color", "price": 3000, "duration": 120},
+            ]
+            return None
+        if "from externalbusinessreviews" in normalized_query:
+            self.last_results = [{"id": "rev1", "author_name": "Anna", "rating": 5, "text": "Great"}]
+            return None
+        if "from prospectingleads" in normalized_query:
+            self.last_results = []
+            return None
+        if "from outreachmessagedrafts" in normalized_query:
+            self.last_results = [{"id": "draft1", "channel": "email", "status": "generated", "generated_text": "Hello"}]
+            return None
+        raise AssertionError(f"Unhandled Datahub SQL: {query}")
 
     def fetchall(self):
         return self.last_results

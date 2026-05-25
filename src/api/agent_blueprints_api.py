@@ -22,6 +22,7 @@ from services.agent_blueprint_workspace import (
     workspace_parse_json_field,
 )
 from services.agent_source_ingestion import build_agent_source_from_upload
+from services.agent_datahub import build_agent_datahub_catalog
 
 
 agent_blueprints_bp = Blueprint("agent_blueprints_api", __name__)
@@ -478,6 +479,25 @@ def add_agent_blueprint_source(blueprint_id: str):
     except Exception:
         db.conn.rollback()
         raise
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/sources/catalog", methods=["GET"])
+def list_agent_blueprint_source_catalog(blueprint_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        metadata = _blueprint_metadata(blueprint)
+        sources = metadata.get("agent_sources") if isinstance(metadata.get("agent_sources"), list) else []
+        catalog = build_agent_datahub_catalog(cursor, str(blueprint.get("business_id") or ""), sources)
+        return jsonify({"success": True, "catalog": catalog})
     finally:
         db.close()
 

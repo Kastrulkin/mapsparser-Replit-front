@@ -156,6 +156,16 @@ type AgentSource = {
   content_length?: number;
 };
 
+type AgentSourceCatalogItem = {
+  key: string;
+  title: string;
+  description?: string;
+  available_count?: number;
+  connected?: boolean;
+  preview?: string[];
+  state?: string;
+};
+
 type AgentReviewSection = {
   title?: string;
   artifact_type?: string;
@@ -546,6 +556,7 @@ export const AgentBlueprintsPage = () => {
   const [dialogBuilderReply, setDialogBuilderReply] = useState('');
   const [dialogBuilderSession, setDialogBuilderSession] = useState<AgentBuilderSession | null>(null);
   const [agentReview, setAgentReview] = useState<AgentReview | null>(null);
+  const [sourceCatalog, setSourceCatalog] = useState<AgentSourceCatalogItem[]>([]);
   const [setupDataSources, setSetupDataSources] = useState('профиль бизнеса, ручной контекст');
   const [setupExtractionRules, setSetupExtractionRules] = useState('');
   const [setupProcessingRules, setSetupProcessingRules] = useState('');
@@ -789,13 +800,26 @@ export const AgentBlueprintsPage = () => {
     }
   }, []);
 
+  const loadSourceCatalog = useCallback(async (blueprintId: string) => {
+    try {
+      const response = await api.get(`/agent-blueprints/${blueprintId}/sources/catalog`);
+      const catalog = Array.isArray(response.data?.catalog) ? response.data.catalog : [];
+      setSourceCatalog(catalog);
+    } catch (requestError) {
+      console.error(requestError);
+      setSourceCatalog([]);
+    }
+  }, []);
+
   useEffect(() => {
     if (selectedBlueprint?.id) {
       void loadBlueprintReview(selectedBlueprint.id);
+      void loadSourceCatalog(selectedBlueprint.id);
     } else {
       setAgentReview(null);
+      setSourceCatalog([]);
     }
-  }, [loadBlueprintReview, selectedBlueprint?.id]);
+  }, [loadBlueprintReview, loadSourceCatalog, selectedBlueprint?.id]);
 
   const createDefaultBlueprint = async (requestText = '') => {
     if (!currentBusinessId) {
@@ -818,6 +842,7 @@ export const AgentBlueprintsPage = () => {
         setSelectedBlueprintId(blueprint.id);
         await loadBlueprintDetails(blueprint.id);
         await loadBlueprintReview(blueprint.id);
+        await loadSourceCatalog(blueprint.id);
       }
     } catch (requestError) {
       console.error(requestError);
@@ -1046,6 +1071,7 @@ export const AgentBlueprintsPage = () => {
       });
       await loadBlueprintDetails(selectedBlueprint.id);
       await loadBlueprintReview(selectedBlueprint.id);
+      await loadSourceCatalog(selectedBlueprint.id);
     } catch (requestError) {
       console.error(requestError);
       setError('Не удалось сохранить настройку агента.');
@@ -1069,6 +1095,7 @@ export const AgentBlueprintsPage = () => {
       setSourceName('');
       setSourceText('');
       await loadBlueprintReview(selectedBlueprint.id);
+      await loadSourceCatalog(selectedBlueprint.id);
     } catch (requestError) {
       console.error(requestError);
       setError('Не удалось добавить источник данных.');
@@ -1090,6 +1117,30 @@ export const AgentBlueprintsPage = () => {
         internal_source: internalSource,
       });
       await loadBlueprintReview(selectedBlueprint.id);
+      await loadSourceCatalog(selectedBlueprint.id);
+    } catch (requestError) {
+      console.error(requestError);
+      setError('Не удалось подключить источник LocalOS.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const addInternalSourceByKey = async (sourceKey: string) => {
+    if (!selectedBlueprint || !sourceKey) {
+      return;
+    }
+    setInternalSource(sourceKey);
+    setActionLoading(true);
+    setError(null);
+    try {
+      await api.post(`/agent-blueprints/${selectedBlueprint.id}/sources`, {
+        source_type: 'internal',
+        name: humanizeMeta(sourceKey),
+        internal_source: sourceKey,
+      });
+      await loadBlueprintReview(selectedBlueprint.id);
+      await loadSourceCatalog(selectedBlueprint.id);
     } catch (requestError) {
       console.error(requestError);
       setError('Не удалось подключить источник LocalOS.');
@@ -1107,6 +1158,7 @@ export const AgentBlueprintsPage = () => {
     try {
       await uploadAgentSource(selectedBlueprint.id, file, file.name);
       await loadBlueprintReview(selectedBlueprint.id);
+      await loadSourceCatalog(selectedBlueprint.id);
     } catch (requestError) {
       console.error(requestError);
       setError(getRequestErrorMessage(requestError, 'Не удалось добавить файл.'));
@@ -1349,6 +1401,7 @@ export const AgentBlueprintsPage = () => {
           sourceName={sourceName}
           sourceText={sourceText}
           internalSource={internalSource}
+          sourceCatalog={sourceCatalog}
           runSource={runSource}
           runCity={runCity}
           runCategory={runCategory}
@@ -1370,6 +1423,7 @@ export const AgentBlueprintsPage = () => {
           onSaveSetup={saveAgentSetup}
           onAddTextSource={addTextSource}
           onAddInternalSource={addInternalSource}
+          onAddCatalogSource={addInternalSourceByKey}
           onAddFileSource={addFileSource}
           onRunSourceChange={setRunSource}
           onRunCityChange={setRunCity}
@@ -1952,6 +2006,7 @@ const AgentDetailPanel = ({
   sourceName,
   sourceText,
   internalSource,
+  sourceCatalog,
   runSource,
   runCity,
   runCategory,
@@ -1973,6 +2028,7 @@ const AgentDetailPanel = ({
   onSaveSetup,
   onAddTextSource,
   onAddInternalSource,
+  onAddCatalogSource,
   onAddFileSource,
   onRunSourceChange,
   onRunCityChange,
@@ -1997,6 +2053,7 @@ const AgentDetailPanel = ({
   sourceName: string;
   sourceText: string;
   internalSource: string;
+  sourceCatalog: AgentSourceCatalogItem[];
   runSource: string;
   runCity: string;
   runCategory: string;
@@ -2018,6 +2075,7 @@ const AgentDetailPanel = ({
   onSaveSetup: () => void;
   onAddTextSource: () => void;
   onAddInternalSource: () => void;
+  onAddCatalogSource: (sourceKey: string) => void;
   onAddFileSource: (file?: File | null) => void;
   onRunSourceChange: (value: string) => void;
   onRunCityChange: (value: string) => void;
@@ -2050,6 +2108,7 @@ const AgentDetailPanel = ({
         sourceName={sourceName}
         sourceText={sourceText}
         internalSource={internalSource}
+        sourceCatalog={sourceCatalog}
         review={agentReview}
         actionLoading={actionLoading}
         onSetupDataSourcesChange={onSetupDataSourcesChange}
@@ -2063,6 +2122,7 @@ const AgentDetailPanel = ({
         onSaveSetup={onSaveSetup}
         onAddTextSource={onAddTextSource}
         onAddInternalSource={onAddInternalSource}
+        onAddCatalogSource={onAddCatalogSource}
         onAddFileSource={onAddFileSource}
       />
     ) : null}
@@ -2163,6 +2223,7 @@ const AgentWorkspacePanel = ({
   sourceName,
   sourceText,
   internalSource,
+  sourceCatalog,
   review,
   actionLoading,
   onSetupDataSourcesChange,
@@ -2176,6 +2237,7 @@ const AgentWorkspacePanel = ({
   onSaveSetup,
   onAddTextSource,
   onAddInternalSource,
+  onAddCatalogSource,
   onAddFileSource,
 }: {
   versions: Array<Record<string, unknown>>;
@@ -2188,6 +2250,7 @@ const AgentWorkspacePanel = ({
   sourceName: string;
   sourceText: string;
   internalSource: string;
+  sourceCatalog: AgentSourceCatalogItem[];
   review: AgentReview | null;
   actionLoading: boolean;
   onSetupDataSourcesChange: (value: string) => void;
@@ -2201,6 +2264,7 @@ const AgentWorkspacePanel = ({
   onSaveSetup: () => void;
   onAddTextSource: () => void;
   onAddInternalSource: () => void;
+  onAddCatalogSource: (sourceKey: string) => void;
   onAddFileSource: (file?: File | null) => void;
 }) => (
   <DashboardSection
@@ -2274,6 +2338,11 @@ const AgentWorkspacePanel = ({
               Подключить
             </Button>
           </div>
+          <DatahubCatalogList
+            catalog={sourceCatalog}
+            actionLoading={actionLoading}
+            onConnect={onAddCatalogSource}
+          />
           <AgentSourcesList sources={review?.sources || []} />
         </div>
       </div>
@@ -2291,6 +2360,63 @@ const WizardTextArea = ({ label, value, onChange, placeholder }: { label: string
       placeholder={placeholder}
     />
   </label>
+);
+
+const DatahubCatalogList = ({
+  catalog,
+  actionLoading,
+  onConnect,
+}: {
+  catalog: AgentSourceCatalogItem[];
+  actionLoading: boolean;
+  onConnect: (sourceKey: string) => void;
+}) => (
+  <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+    <div className="flex items-center justify-between gap-3">
+      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Datahub LocalOS</div>
+      <span className="text-xs text-slate-400">{catalog.length ? `${catalog.length} источников` : 'источники не загружены'}</span>
+    </div>
+    {catalog.length ? catalog.map((item) => (
+      <div key={item.key} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-slate-950">{item.title || humanizeMeta(item.key)}</div>
+            <div className="mt-1 text-xs leading-5 text-slate-500">{item.description || 'Источник данных LocalOS'}</div>
+          </div>
+          <span className={cn(
+            'shrink-0 rounded-full px-2 py-1 text-xs font-medium ring-1',
+            item.connected ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : item.available_count ? 'bg-white text-slate-700 ring-slate-200' : 'bg-slate-100 text-slate-500 ring-slate-200',
+          )}>
+            {item.connected ? 'подключено' : item.available_count ? `${item.available_count}` : 'пусто'}
+          </span>
+        </div>
+        {item.preview?.length ? (
+          <div className="mt-2 space-y-1">
+            {item.preview.slice(0, 2).map((line, index) => (
+              <div key={`${item.key}-${index}`} className="truncate rounded-md bg-white px-2 py-1 text-xs text-slate-600 ring-1 ring-slate-100">
+                {line}
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <div className="mt-2 flex justify-end">
+          <Button
+            type="button"
+            size="sm"
+            variant={item.connected ? 'outline' : 'default'}
+            onClick={() => onConnect(item.key)}
+            disabled={actionLoading || Boolean(item.connected) || item.state === 'empty'}
+          >
+            {item.connected ? 'Уже подключено' : 'Подключить'}
+          </Button>
+        </div>
+      </div>
+    )) : (
+      <div className="rounded-lg border border-dashed border-slate-200 px-3 py-3 text-sm text-slate-500">
+        Каталог появится после выбора агента.
+      </div>
+    )}
+  </div>
 );
 
 const AgentSourcesList = ({ sources }: { sources: AgentSource[] }) => (
