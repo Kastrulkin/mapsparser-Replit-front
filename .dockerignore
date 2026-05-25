@@ -22,6 +22,8 @@ reports.db
 db_backups
 backups
 data
+.agent_untracked_backup_*
+.agent/tasks
 
 # IDE и служебные каталоги
 .cursor
