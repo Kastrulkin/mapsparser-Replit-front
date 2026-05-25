@@ -2180,6 +2180,24 @@ def _finalize_failed_operator_refresh(cursor: Any, queue_id: str, commit_func: A
     }
 
 
+def _run_optional_detail_sync(cursor: Any, label: str, callback: Any) -> bool:
+    savepoint_name = "optional_detail_" + "".join(char if char.isalnum() else "_" for char in str(label or "sync").lower())
+    try:
+        cursor.execute(f"SAVEPOINT {savepoint_name}")
+        callback()
+        cursor.execute(f"RELEASE SAVEPOINT {savepoint_name}")
+        return True
+    except Exception:
+        error_text = str(sys.exc_info()[1])
+        try:
+            cursor.execute(f"ROLLBACK TO SAVEPOINT {savepoint_name}")
+            cursor.execute(f"RELEASE SAVEPOINT {savepoint_name}")
+        except Exception:
+            print(f"⚠️ Optional detail sync savepoint cleanup failed ({label}): {sys.exc_info()[1]}", flush=True)
+        print(f"⚠️ Optional detail sync skipped ({label}): {error_text}", flush=True)
+        return False
+
+
 def _handle_worker_error(queue_id: str, error_msg: str):
     """Обновить статус задачи на error с сообщением"""
     try:
@@ -4604,12 +4622,12 @@ def process_queue():
                                     external_posts.append(ext_post)
                                 
                                 if external_posts:
-                                    try:
+                                    def sync_external_posts():
                                         sync_worker._upsert_posts(db_manager, external_posts)
                                         print(f"✅ Saved {len(external_posts)} posts to ExternalBusinessPosts")
-                                    except Exception as posts_err:
-                                        # Не блокируем синк услуг/статистики, если таблица постов ещё не мигрирована.
-                                        print(f"⚠️ Skip posts sync (ExternalBusinessPosts unavailable): {posts_err}")
+
+                                    # Не блокируем синк услуг/статистики, если таблица постов ещё не мигрирована.
+                                    _run_optional_detail_sync(cursor, "external_posts", sync_external_posts)
 
                             # 3. СОХРАНЕНИЕ УСЛУГ (Services)
                             products = card_data.get('products')
@@ -4620,8 +4638,11 @@ def process_queue():
                                 owner_row = cursor.fetchone()
                                 if owner_row:
                                     owner_id = owner_row[0] if isinstance(owner_row, (list, tuple)) else owner_row.get("owner_id")
-                                    sync_worker._sync_services_to_db(db_manager.conn, business_id, products, owner_id)
-                                    print(f"💾 Синхронизировано {services_count} услуг (owner_id={owner_id})")
+                                    def sync_services():
+                                        sync_worker._sync_services_to_db(db_manager.conn, business_id, products, owner_id, commit=False)
+                                        print(f"💾 Синхронизировано {services_count} услуг (owner_id={owner_id})")
+
+                                    _run_optional_detail_sync(cursor, "services", sync_services)
                                 else:
                                     print(f"⚠️ Cannot sync services: owner_id not found for business {business_id}")
 
@@ -4646,8 +4667,11 @@ def process_queue():
                                     views_total=None,
                                     actions_total=None
                                 )
-                                sync_worker._upsert_stats(db_manager, [stat_point])
-                                print(f"💾 Сохранена статистика (Рейтинг: {rating_val}, Отзывов: {reviews_count})")
+                                def sync_stats():
+                                    sync_worker._upsert_stats(db_manager, [stat_point])
+                                    print(f"💾 Сохранена статистика (Рейтинг: {rating_val}, Отзывов: {reviews_count})")
+
+                                _run_optional_detail_sync(cursor, "stats", sync_stats)
 
                             # Commit changes to External Data tables
                             if db_manager and db_manager.conn:

@@ -36,6 +36,14 @@ class FakeFailureCursor:
         return None
 
 
+class FakeSavepointCursor:
+    def __init__(self):
+        self.queries = []
+
+    def execute(self, query, params=None):
+        self.queries.append(" ".join(str(query or "").lower().split()))
+
+
 def test_extract_apify_cost_from_run_data() -> None:
     payload = {"run_data": {"usageTotalUsd": 0.42}}
 
@@ -174,3 +182,31 @@ def test_failed_operator_refresh_skips_followup_without_reservation(monkeypatch)
 
     assert result["status"] == "skipped"
     assert result["reason"] == "operator_reservation_not_found_or_not_releasable"
+
+
+def test_optional_detail_sync_rolls_back_failed_savepoint() -> None:
+    cursor = FakeSavepointCursor()
+
+    def fail_callback():
+        raise RuntimeError("missing optional table")
+
+    result = worker._run_optional_detail_sync(cursor, "external_posts", fail_callback)
+
+    assert result is False
+    assert cursor.queries == [
+        "savepoint optional_detail_external_posts",
+        "rollback to savepoint optional_detail_external_posts",
+        "release savepoint optional_detail_external_posts",
+    ]
+
+
+def test_optional_detail_sync_releases_successful_savepoint() -> None:
+    cursor = FakeSavepointCursor()
+
+    result = worker._run_optional_detail_sync(cursor, "services", lambda: None)
+
+    assert result is True
+    assert cursor.queries == [
+        "savepoint optional_detail_services",
+        "release savepoint optional_detail_services",
+    ]

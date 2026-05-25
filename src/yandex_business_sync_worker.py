@@ -51,7 +51,7 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
         repository = ExternalDataRepository(db)
         repository.upsert_stats(stats)
     
-    def _sync_services_to_db(self, conn, business_id: str, products: list, owner_id: str):
+    def _sync_services_to_db(self, conn, business_id: str, products: list, owner_id: str, commit: bool = True):
         """
         Синхронизирует распаршенные услуги в таблицу UserServices.
         (Дубликат логики из worker.py для избежания циклических импортов)
@@ -145,7 +145,8 @@ class YandexBusinessSyncWorker(BaseSyncWorker):
                     """, (service_id, business_id, owner_id, name, description, category_name, price_cents))
                     count_new += 1
                     
-        conn.commit()
+        if commit:
+            conn.commit()
         print(f"📊 [SyncWorker] Синхронизация услуг: {count_new} новых, {count_updated} обновлено.")
 
     @staticmethod
