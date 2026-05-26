@@ -1,0 +1,11 @@
+Command:
+npm --prefix frontend run build
+
+Result:
+PASS
+
+Relevant output:
+- vite v7.3.1 building client environment for production
+- 3356 modules transformed
+- AgentBlueprintsPage-Jm0iA-0A.js generated
+- built successfully

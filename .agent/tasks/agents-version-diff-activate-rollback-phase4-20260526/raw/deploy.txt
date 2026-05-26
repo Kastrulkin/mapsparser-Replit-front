@@ -1,0 +1,19 @@
+Backend deploy:
+- scripts/deploy_backend_src.sh
+- docker compose up -d --force-recreate app worker
+- curl -I http://localhost:8000 returned HTTP/1.1 200 OK after startup retry
+- targeted runtime source check returned APP_CORE_OK
+
+Frontend deploy:
+- scripts/deploy_frontend_dist.sh --build
+- frontend/dist integrity check passed
+- public-dist integrity check passed
+- live asset check found /assets/index-B-Vt4HCq.js
+
+Post-deploy health:
+- cd /opt/seo-app && docker compose ps: app, worker, postgres up; postgres healthy
+- cd /opt/seo-app && curl -I http://localhost:8000: HTTP/1.1 200 OK
+- https://localos.pro/dashboard/agents loaded dashboard assets and redirected unauthenticated browser session to /login
+
+Notes:
+- Frontend deploy logged tar warnings about files changing during read, but final integrity checks and live asset checks passed.

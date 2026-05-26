@@ -1,0 +1,73 @@
+{
+  "task_id": "agents-version-diff-activate-rollback-phase4-20260526",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "API exposes active version for blueprint list/detail without schema migration.",
+      "status": "PASS",
+      "proof": ["Active version is stored in metadata_json and returned by list/detail endpoints."],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Version diff shows readable changed fields between versions.",
+      "status": "PASS",
+      "proof": ["build_agent_version_diff added and unit-tested.", "Server smoke verified feedback diff changed output_schema."],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Feedback-created version becomes active and returns diff/event metadata.",
+      "status": "PASS",
+      "proof": ["Feedback endpoint returns diff and version_event.", "Server smoke verified active_version_id equals feedback version."],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "User can activate a version and rollback to an older version.",
+      "status": "PASS",
+      "proof": ["activate and rollback endpoints added.", "Server smoke rolled back to v1 and reactivated v3."],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "New runs default to active version, and explicit blueprint_version_id still starts that specific version.",
+      "status": "PASS",
+      "proof": ["Server smoke started explicit old-version run and verified default run after rollback used v1."],
+      "gaps": []
+    },
+    {
+      "id": "AC6",
+      "text": "/dashboard/agents shows active version, diff summary, activate/rollback, and run-version actions.",
+      "status": "PASS",
+      "proof": ["Frontend version panel updated and build passed.", "Browser sanity loaded production dashboard bundle and redirected unauthenticated user cleanly."],
+      "gaps": ["No full authenticated browser click-through in this cycle."]
+    },
+    {
+      "id": "AC7",
+      "text": "Tests, lint, frontend build, deploy, and server smoke pass.",
+      "status": "PASS",
+      "proof": ["21 unit tests passed.", "lint baseline passed.", "frontend build passed.", "backend/frontend deploy passed.", "server smoke passed."],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/api/agent_blueprints_api.py",
+    "src/services/agent_blueprint_workspace.py",
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
+    "tests/test_agent_blueprint_layer.py",
+    "scripts/lint_backend_baseline.sh",
+    "scripts/smoke_agent_blueprint_document_api.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "scripts/lint_backend_baseline.sh",
+    "npm --prefix frontend run build",
+    "cd /opt/seo-app && docker compose exec -T app env SMOKE_BASE_URL=http://localhost:8000 python /app/scripts/smoke_agent_blueprint_document_api.py"
+  ],
+  "known_gaps": [
+    "Diff is field-level readable summary, not a full visual diff editor.",
+    "Authenticated browser click-through remains a future UI smoke."
+  ]
+}

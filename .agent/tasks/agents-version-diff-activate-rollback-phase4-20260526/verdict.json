@@ -1,0 +1,28 @@
+{
+  "task_id": "agents-version-diff-activate-rollback-phase4-20260526",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {"id": "AC1", "status": "PASS", "reason": "Active version is returned by blueprint list/detail and stored in metadata_json."},
+    {"id": "AC2", "status": "PASS", "reason": "Readable version diff is implemented and tested."},
+    {"id": "AC3", "status": "PASS", "reason": "Feedback creates active version with diff and event metadata."},
+    {"id": "AC4", "status": "PASS", "reason": "Activate and rollback endpoints work in server smoke."},
+    {"id": "AC5", "status": "PASS", "reason": "Explicit-version run and active-version default run are verified."},
+    {"id": "AC6", "status": "PASS", "reason": "Dashboard version UI was updated and production bundle loaded cleanly."},
+    {"id": "AC7", "status": "PASS", "reason": "Tests, lint, build, deploy, health, and server smoke passed."}
+  ],
+  "commands_run": [
+    "python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "scripts/lint_backend_baseline.sh",
+    "npm --prefix frontend run build",
+    "scripts/deploy_backend_src.sh",
+    "scripts/deploy_frontend_dist.sh --build",
+    "docker compose exec -T app env SMOKE_BASE_URL=http://localhost:8000 python /app/scripts/smoke_agent_blueprint_document_api.py"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/agents-version-diff-activate-rollback-phase4-20260526/raw/test-unit.txt",
+    ".agent/tasks/agents-version-diff-activate-rollback-phase4-20260526/raw/lint.txt",
+    ".agent/tasks/agents-version-diff-activate-rollback-phase4-20260526/raw/build.txt",
+    ".agent/tasks/agents-version-diff-activate-rollback-phase4-20260526/raw/test-integration.txt",
+    ".agent/tasks/agents-version-diff-activate-rollback-phase4-20260526/raw/deploy.txt"
+  ]
+}

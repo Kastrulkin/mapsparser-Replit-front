@@ -1,0 +1,12 @@
+Command:
+scripts/lint_backend_baseline.sh
+
+Result:
+PASS
+
+Relevant output:
+- OK: extracted routes are registered through their API blueprints
+- OK: agent blueprint runtime uses registered safe outreach capability
+- OK: paid Operator drafts and Agent Blueprint dispatch boundaries are guarded
+- OK: Blueprint/Operator approval, billing, manual-publication, and dispatcher boundaries are guarded
+- OK: no direct runtime SQLite ? placeholders outside allowed legacy reports blueprint
