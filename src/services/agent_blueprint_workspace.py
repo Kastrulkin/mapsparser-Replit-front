@@ -76,12 +76,12 @@ def normalize_agent_source(payload: Dict[str, Any]) -> Dict[str, Any]:
 def build_version_payload_from_row(version: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "goal": _clean_text(version.get("goal")),
-        "inputs_schema": parse_json_field(version.get("inputs_schema_json"), {}),
-        "steps": parse_json_field(version.get("steps_json"), []),
+        "inputs_schema": _copy_json_value(parse_json_field(version.get("inputs_schema_json"), {}), {}),
+        "steps": _copy_json_value(parse_json_field(version.get("steps_json"), []), []),
         "persona_agent_id": _clean_text(version.get("persona_agent_id")) or None,
-        "capability_allowlist": parse_json_field(version.get("capability_allowlist_json"), []),
-        "approval_policy": parse_json_field(version.get("approval_policy_json"), {}),
-        "output_schema": parse_json_field(version.get("output_schema_json"), {}),
+        "capability_allowlist": _copy_json_value(parse_json_field(version.get("capability_allowlist_json"), []), []),
+        "approval_policy": _copy_json_value(parse_json_field(version.get("approval_policy_json"), {}), {}),
+        "output_schema": _copy_json_value(parse_json_field(version.get("output_schema_json"), {}), {}),
     }
 
 
@@ -646,6 +646,13 @@ def _clean_text(value: Any) -> str:
 
 def _stable_json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+
+
+def _copy_json_value(value: Any, fallback: Any) -> Any:
+    try:
+        return json.loads(json.dumps(value, ensure_ascii=False, default=str))
+    except Exception:
+        return fallback
 
 
 def _change_type(before: Any, after: Any) -> str:
