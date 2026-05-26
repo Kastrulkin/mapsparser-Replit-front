@@ -28,6 +28,15 @@ def test_agent_blueprint_routes_are_owned_by_blueprint():
         "/api/agent-blueprints/<blueprint_id>/versions": {
             "POST": "agent_blueprints_api.create_agent_blueprint_version",
         },
+        "/api/agent-blueprints/<blueprint_id>/versions/<version_id>/diff": {
+            "GET": "agent_blueprints_api.get_agent_blueprint_version_diff",
+        },
+        "/api/agent-blueprints/<blueprint_id>/versions/<version_id>/activate": {
+            "POST": "agent_blueprints_api.activate_agent_blueprint_version",
+        },
+        "/api/agent-blueprints/<blueprint_id>/versions/<version_id>/rollback": {
+            "POST": "agent_blueprints_api.rollback_agent_blueprint_version",
+        },
         "/api/agent-blueprints/<blueprint_id>/setup": {
             "POST": "agent_blueprints_api.setup_agent_blueprint",
         },
@@ -199,6 +208,12 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "build_agent_datahub_catalog" in api_source
     assert "build_agent_source_from_upload" in api_source
     assert "/api/agent-runs/<run_id>/feedback" in api_source
+    assert "/api/agent-blueprints/<blueprint_id>/versions/<version_id>/diff" in api_source
+    assert "/api/agent-blueprints/<blueprint_id>/versions/<version_id>/activate" in api_source
+    assert "/api/agent-blueprints/<blueprint_id>/versions/<version_id>/rollback" in api_source
+    assert "_resolve_active_version" in api_source
+    assert "_remember_active_version" in api_source
+    assert "build_agent_version_diff" in workspace_source
     assert "analyze_document_sources_with_llm" in workspace_source
     assert "analyze_text_with_gigachat" in document_llm_source
     assert "external_dispatch_performed" in document_llm_source
@@ -428,6 +443,39 @@ def test_agent_document_llm_analysis_falls_back_without_external_dispatch():
     assert result["external_dispatch_performed"] is False
     assert result["provenance"] == ["contract.txt"]
     assert result["risks"]
+
+
+def test_agent_version_diff_shows_readable_changes():
+    from services.agent_blueprint_workspace import build_agent_version_diff
+
+    first_version = {
+        "id": "ver1",
+        "version_number": 1,
+        "goal": "Проверить договор",
+        "inputs_schema_json": {"agent_setup": {"processing_rules": "Показывать риски"}},
+        "steps_json": [{"key": "prepare_output", "type": "artifact"}],
+        "capability_allowlist_json": [],
+        "approval_policy_json": {"required_for": ["final_output"]},
+        "output_schema_json": {"format": "summary"},
+    }
+    second_version = {
+        "id": "ver2",
+        "version_number": 2,
+        "goal": "Проверить договор и выделить санкции",
+        "inputs_schema_json": {"agent_setup": {"processing_rules": "Показывать риски и санкции отдельно"}},
+        "steps_json": [{"key": "prepare_output", "type": "artifact"}],
+        "capability_allowlist_json": [],
+        "approval_policy_json": {"required_for": ["final_output"]},
+        "output_schema_json": {"format": "summary", "feedback_history": [{"feedback": "Выделяй санкции"}]},
+    }
+
+    diff = build_agent_version_diff(first_version, second_version)
+
+    assert diff["change_type"] == "changed"
+    assert "goal" in diff["changed_fields"]
+    assert "inputs_schema" in diff["changed_fields"]
+    assert "output_schema" in diff["changed_fields"]
+    assert diff["summary"].startswith("Изменено:")
 
 
 def test_outreach_send_batch_handler_queues_approved_drafts_without_external_dispatch(monkeypatch):

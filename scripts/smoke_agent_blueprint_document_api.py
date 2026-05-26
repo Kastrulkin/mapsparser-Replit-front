@@ -315,6 +315,64 @@ def main():
             raise RuntimeError(f"feedback did not create a newer version: {feedback_payload}")
         if new_version.get("id") == approved_run.get("blueprint_version_id"):
             raise RuntimeError(f"feedback version reused old run version: {feedback_payload}")
+        diff = feedback_payload.get("diff") or {}
+        if "output_schema" not in (diff.get("changed_fields") or []):
+            raise RuntimeError(f"feedback diff did not show output_schema change: {feedback_payload}")
+
+        _, details_payload = request_json(
+            "GET",
+            f"/api/agent-blueprints/{ids['blueprint_id']}",
+            token=token,
+            expected_status=200,
+        )
+        if details_payload.get("active_version_id") != new_version.get("id"):
+            raise RuntimeError(f"feedback version did not become active: {details_payload}")
+        decorated_versions = details_payload.get("versions") or []
+        active_versions = [item for item in decorated_versions if item.get("is_active")]
+        if len(active_versions) != 1 or active_versions[0].get("id") != new_version.get("id"):
+            raise RuntimeError(f"active version decoration failed: {details_payload}")
+
+        _, version_run_payload = request_json(
+            "POST",
+            f"/api/agent-blueprints/{ids['blueprint_id']}/runs",
+            {"blueprint_version_id": initial_version.get("id"), "input": {"source": "document_smoke_old_version"}},
+            token=token,
+            expected_status=201,
+        )
+        old_version_run = version_run_payload["run"]
+        if old_version_run.get("blueprint_version_id") != initial_version.get("id"):
+            raise RuntimeError(f"explicit version run used the wrong version: {old_version_run}")
+
+        _, rollback_payload = request_json(
+            "POST",
+            f"/api/agent-blueprints/{ids['blueprint_id']}/versions/{initial_version.get('id')}/rollback",
+            {"reason": "document smoke rollback"},
+            token=token,
+            expected_status=200,
+        )
+        if (rollback_payload.get("active_version") or {}).get("id") != initial_version.get("id"):
+            raise RuntimeError(f"rollback did not activate initial version: {rollback_payload}")
+
+        _, active_run_payload = request_json(
+            "POST",
+            f"/api/agent-blueprints/{ids['blueprint_id']}/runs",
+            {"input": {"source": "document_smoke_active_version_after_rollback"}},
+            token=token,
+            expected_status=201,
+        )
+        rollback_run = active_run_payload["run"]
+        if rollback_run.get("blueprint_version_id") != initial_version.get("id"):
+            raise RuntimeError(f"default run did not use rollback active version: {rollback_run}")
+
+        _, reactivate_payload = request_json(
+            "POST",
+            f"/api/agent-blueprints/{ids['blueprint_id']}/versions/{new_version.get('id')}/activate",
+            {"reason": "document smoke reactivate"},
+            token=token,
+            expected_status=200,
+        )
+        if (reactivate_payload.get("active_version") or {}).get("id") != new_version.get("id"):
+            raise RuntimeError(f"activate did not restore feedback version: {reactivate_payload}")
 
         _, review_payload = request_json(
             "GET",
@@ -336,6 +394,9 @@ def main():
                     "run_id": ids["run_id"],
                     "initial_version": initial_version.get("version_number"),
                     "feedback_version": new_version.get("version_number"),
+                    "explicit_version_run": old_version_run.get("blueprint_version_id"),
+                    "rollback_active_version": (rollback_payload.get("active_version") or {}).get("version_number"),
+                    "reactivated_version": (reactivate_payload.get("active_version") or {}).get("version_number"),
                     "approval_type": pending[0].get("approval_type"),
                     "analysis_source": output_payload.get("analysis_source"),
                     "llm_analysis_used": output_payload.get("llm_analysis_used"),

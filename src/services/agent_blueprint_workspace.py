@@ -85,6 +85,51 @@ def build_version_payload_from_row(version: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def build_agent_version_diff(from_version: Dict[str, Any] | None, to_version: Dict[str, Any]) -> Dict[str, Any]:
+    from_payload = build_version_payload_from_row(from_version or {})
+    to_payload = build_version_payload_from_row(to_version or {})
+    fields = [
+        ("goal", "Цель агента"),
+        ("inputs_schema", "Входные данные"),
+        ("steps", "Шаги workflow"),
+        ("persona_agent_id", "Голос агента"),
+        ("capability_allowlist", "Разрешённые действия"),
+        ("approval_policy", "Ручной контроль"),
+        ("output_schema", "Формат результата"),
+    ]
+    changes = []
+    for key, label in fields:
+        before = from_payload.get(key)
+        after = to_payload.get(key)
+        if _stable_json(before) == _stable_json(after):
+            continue
+        changes.append(
+            {
+                "field": key,
+                "label": label,
+                "change_type": _change_type(before, after),
+                "before": _human_diff_value(before),
+                "after": _human_diff_value(after),
+            }
+        )
+    if not from_version:
+        change_type = "created"
+    elif changes:
+        change_type = "changed"
+    else:
+        change_type = "unchanged"
+    return {
+        "from_version_id": _clean_text((from_version or {}).get("id")),
+        "from_version_number": _safe_int((from_version or {}).get("version_number")),
+        "to_version_id": _clean_text(to_version.get("id")),
+        "to_version_number": _safe_int(to_version.get("version_number")),
+        "change_type": change_type,
+        "changed_fields": [item["field"] for item in changes],
+        "changes": changes,
+        "summary": _version_diff_summary(changes, change_type),
+    }
+
+
 def build_feedback_version_payload(version: Dict[str, Any], feedback: Dict[str, Any]) -> Dict[str, Any]:
     payload = build_version_payload_from_row(version)
     output_schema = payload.get("output_schema") if isinstance(payload.get("output_schema"), dict) else {}
@@ -597,6 +642,42 @@ def _clean_list(value: Any) -> List[str]:
 
 def _clean_text(value: Any) -> str:
     return str(value or "").strip()
+
+
+def _stable_json(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+
+
+def _change_type(before: Any, after: Any) -> str:
+    if before in (None, "", [], {}) and after not in (None, "", [], {}):
+        return "added"
+    if before not in (None, "", [], {}) and after in (None, "", [], {}):
+        return "removed"
+    return "changed"
+
+
+def _human_diff_value(value: Any) -> Any:
+    if isinstance(value, list):
+        return value[:8]
+    if isinstance(value, dict):
+        result: Dict[str, Any] = {}
+        for index, key in enumerate(value.keys()):
+            if index >= 8:
+                result["..."] = "truncated"
+                break
+            result[str(key)] = value.get(key)
+        return result
+    return value
+
+
+def _version_diff_summary(changes: List[Dict[str, Any]], change_type: str) -> str:
+    if change_type == "created":
+        return "Первая версия агента создана."
+    if not changes:
+        return "Изменений между версиями не найдено."
+    labels = [str(item.get("label") or item.get("field") or "") for item in changes]
+    labels = [item for item in labels if item]
+    return "Изменено: " + ", ".join(labels[:4]) + ("." if len(labels) <= 4 else " и ещё.")
 
 
 def _safe_int(value: Any) -> int:

@@ -67,6 +67,9 @@ type AgentBlueprint = {
   latest_version_id?: string | null;
   latest_version_number?: number | null;
   latest_goal?: string | null;
+  active_version_id?: string | null;
+  active_version_number?: number | null;
+  active_goal?: string | null;
 };
 
 type AgentApproval = {
@@ -144,6 +147,9 @@ type AgentBlueprintDetails = {
   versions: Array<Record<string, unknown>>;
   runs: AgentRun[];
   approval_queue?: AgentApproval[];
+  active_version?: Record<string, unknown> | null;
+  active_version_id?: string;
+  active_version_number?: number;
 };
 
 type AgentSource = {
@@ -276,6 +282,32 @@ const getLatestVersionNumber = (blueprint: AgentBlueprint, details?: AgentBluepr
     }
   });
   return versionNumbers.length ? Math.max(...versionNumbers) : null;
+};
+
+const getActiveVersionNumber = (blueprint: AgentBlueprint, details?: AgentBlueprintDetails | null) => {
+  if (typeof details?.active_version_number === 'number' && details.active_version_number > 0) {
+    return details.active_version_number;
+  }
+  if (typeof blueprint.active_version_number === 'number' && blueprint.active_version_number > 0) {
+    return blueprint.active_version_number;
+  }
+  const active = (details?.versions || []).find((version) => version.is_active === true);
+  const activeNumber = getVersionNumber(active);
+  if (typeof activeNumber === 'number') {
+    return activeNumber;
+  }
+  return getLatestVersionNumber(blueprint, details);
+};
+
+const getActiveVersionId = (blueprint: AgentBlueprint, details?: AgentBlueprintDetails | null) => {
+  if (typeof details?.active_version_id === 'string' && details.active_version_id) {
+    return details.active_version_id;
+  }
+  if (typeof blueprint.active_version_id === 'string' && blueprint.active_version_id) {
+    return blueprint.active_version_id;
+  }
+  const active = (details?.versions || []).find((version) => version.is_active === true);
+  return typeof active?.id === 'string' ? active.id : '';
 };
 
 const runStatusFilters = [
@@ -755,6 +787,9 @@ export const AgentBlueprintsPage = () => {
         versions: Array.isArray(response.data?.versions) ? response.data.versions : [],
         runs: Array.isArray(response.data?.runs) ? response.data.runs : [],
         approval_queue: Array.isArray(response.data?.approval_queue) ? response.data.approval_queue : [],
+        active_version: response.data?.active_version || null,
+        active_version_id: typeof response.data?.active_version_id === 'string' ? response.data.active_version_id : '',
+        active_version_number: typeof response.data?.active_version_number === 'number' ? response.data.active_version_number : 0,
       };
       setBlueprintDetails(details);
     } catch (requestError) {
@@ -1000,7 +1035,7 @@ export const AgentBlueprintsPage = () => {
     }
   };
 
-  const startRun = async (blueprintToRun?: AgentBlueprint | null) => {
+  const startRun = async (blueprintToRun?: AgentBlueprint | null, blueprintVersionId = '') => {
     const targetBlueprint = blueprintToRun || selectedBlueprint;
     if (!targetBlueprint) {
       return;
@@ -1009,6 +1044,7 @@ export const AgentBlueprintsPage = () => {
     setError(null);
     try {
       const response = await api.post(`/agent-blueprints/${targetBlueprint.id}/runs`, {
+        blueprint_version_id: blueprintVersionId || undefined,
         input: {
           source: runSource.trim() || 'dashboard',
           city: runCity.trim(),
@@ -1025,6 +1061,27 @@ export const AgentBlueprintsPage = () => {
     } catch (requestError) {
       console.error(requestError);
       setError('Не удалось запустить blueprint.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const activateVersion = async (versionId: string, action: 'activate' | 'rollback') => {
+    if (!selectedBlueprint || !versionId) {
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    try {
+      await api.post(`/agent-blueprints/${selectedBlueprint.id}/versions/${versionId}/${action}`, {
+        reason: action === 'rollback' ? 'Rollback from dashboard' : 'Activated from dashboard',
+      });
+      await loadBlueprints();
+      await loadBlueprintDetails(selectedBlueprint.id);
+      await loadBlueprintReview(selectedBlueprint.id);
+    } catch (requestError) {
+      console.error(requestError);
+      setError(action === 'rollback' ? 'Не удалось откатить версию агента.' : 'Не удалось активировать версию агента.');
     } finally {
       setActionLoading(false);
     }
@@ -1350,7 +1407,7 @@ export const AgentBlueprintsPage = () => {
                     <BlueprintAgentCard
                     key={blueprint.id}
                     blueprint={blueprint}
-                    latestVersionNumber={getLatestVersionNumber(blueprint, selected ? blueprintDetails : null)}
+                    latestVersionNumber={getActiveVersionNumber(blueprint, selected ? blueprintDetails : null)}
                     selected={selected}
                     onSelect={() => {
                       setSelectedBlueprintId(blueprint.id);
@@ -1408,6 +1465,9 @@ export const AgentBlueprintsPage = () => {
           runLimit={runLimit}
           onModeChange={setWorkspaceMode}
           onStartRun={() => startRun(selectedBlueprint)}
+          onStartVersionRun={(versionId) => startRun(selectedBlueprint, versionId)}
+          onActivateVersion={(versionId) => activateVersion(versionId, 'activate')}
+          onRollbackVersion={(versionId) => activateVersion(versionId, 'rollback')}
           onApprove={() => decideApproval('approve')}
           onReject={() => decideApproval('reject')}
           onFeedbackTextChange={setFeedbackText}
@@ -2013,6 +2073,9 @@ const AgentDetailPanel = ({
   runLimit,
   onModeChange,
   onStartRun,
+  onStartVersionRun,
+  onActivateVersion,
+  onRollbackVersion,
   onApprove,
   onReject,
   onFeedbackTextChange,
@@ -2060,6 +2123,9 @@ const AgentDetailPanel = ({
   runLimit: string;
   onModeChange: (mode: AgentWorkspaceMode) => void;
   onStartRun: () => void;
+  onStartVersionRun: (versionId: string) => void;
+  onActivateVersion: (versionId: string) => void;
+  onRollbackVersion: (versionId: string) => void;
   onApprove: () => void;
   onReject: () => void;
   onFeedbackTextChange: (value: string) => void;
@@ -2082,7 +2148,8 @@ const AgentDetailPanel = ({
   onRunCategoryChange: (value: string) => void;
   onRunLimitChange: (value: string) => void;
 }) => {
-  const latestVersionNumber = getLatestVersionNumber(blueprint, blueprintDetails);
+  const latestVersionNumber = getActiveVersionNumber(blueprint, blueprintDetails);
+  const activeVersionId = getActiveVersionId(blueprint, blueprintDetails);
   const versions = blueprintDetails?.versions || [];
   return (
   <DashboardSection
@@ -2100,6 +2167,7 @@ const AgentDetailPanel = ({
         <AgentWorkspacePanel
         versions={versions}
         latestVersionNumber={latestVersionNumber}
+        activeVersionId={activeVersionId}
         setupDataSources={setupDataSources}
         setupExtractionRules={setupExtractionRules}
         setupProcessingRules={setupProcessingRules}
@@ -2120,6 +2188,9 @@ const AgentDetailPanel = ({
         onSourceTextChange={onSourceTextChange}
         onInternalSourceChange={onInternalSourceChange}
         onSaveSetup={onSaveSetup}
+        onStartVersionRun={onStartVersionRun}
+        onActivateVersion={onActivateVersion}
+        onRollbackVersion={onRollbackVersion}
         onAddTextSource={onAddTextSource}
         onAddInternalSource={onAddInternalSource}
         onAddCatalogSource={onAddCatalogSource}
@@ -2215,6 +2286,7 @@ const AgentDetailPanel = ({
 const AgentWorkspacePanel = ({
   versions,
   latestVersionNumber,
+  activeVersionId,
   setupDataSources,
   setupExtractionRules,
   setupProcessingRules,
@@ -2235,6 +2307,9 @@ const AgentWorkspacePanel = ({
   onSourceTextChange,
   onInternalSourceChange,
   onSaveSetup,
+  onStartVersionRun,
+  onActivateVersion,
+  onRollbackVersion,
   onAddTextSource,
   onAddInternalSource,
   onAddCatalogSource,
@@ -2242,6 +2317,7 @@ const AgentWorkspacePanel = ({
 }: {
   versions: Array<Record<string, unknown>>;
   latestVersionNumber: number | null;
+  activeVersionId: string;
   setupDataSources: string;
   setupExtractionRules: string;
   setupProcessingRules: string;
@@ -2262,6 +2338,9 @@ const AgentWorkspacePanel = ({
   onSourceTextChange: (value: string) => void;
   onInternalSourceChange: (value: string) => void;
   onSaveSetup: () => void;
+  onStartVersionRun: (versionId: string) => void;
+  onActivateVersion: (versionId: string) => void;
+  onRollbackVersion: (versionId: string) => void;
   onAddTextSource: () => void;
   onAddInternalSource: () => void;
   onAddCatalogSource: (sourceKey: string) => void;
@@ -2273,7 +2352,14 @@ const AgentWorkspacePanel = ({
   >
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
       <div className="grid gap-3">
-        <VersionSummary versions={versions} latestVersionNumber={latestVersionNumber} />
+        <VersionSummary
+          versions={versions}
+          latestVersionNumber={latestVersionNumber}
+          activeVersionId={activeVersionId}
+          onStartVersionRun={onStartVersionRun}
+          onActivateVersion={onActivateVersion}
+          onRollbackVersion={onRollbackVersion}
+        />
         <WizardTextArea label="Какие данные использовать" value={setupDataSources} onChange={onSetupDataSourcesChange} placeholder="Например: профиль бизнеса, отзывы, файл с договором" />
         <WizardTextArea label="Что извлечь или понять" value={setupExtractionRules} onChange={onSetupExtractionRulesChange} placeholder="Например: риски, сроки, суммы, обязательства сторон" />
         <WizardTextArea label="Какие правила применить" value={setupProcessingRules} onChange={onSetupProcessingRulesChange} placeholder="Например: выделять спорные условия и не придумывать факты" />
@@ -2434,8 +2520,22 @@ const AgentSourcesList = ({ sources }: { sources: AgentSource[] }) => (
   </div>
 );
 
-const VersionSummary = ({ versions, latestVersionNumber }: { versions: Array<Record<string, unknown>>; latestVersionNumber: number | null }) => {
-  const newestVersions = versions.slice(0, 3);
+const VersionSummary = ({
+  versions,
+  latestVersionNumber,
+  activeVersionId,
+  onStartVersionRun,
+  onActivateVersion,
+  onRollbackVersion,
+}: {
+  versions: Array<Record<string, unknown>>;
+  latestVersionNumber: number | null;
+  activeVersionId: string;
+  onStartVersionRun: (versionId: string) => void;
+  onActivateVersion: (versionId: string) => void;
+  onRollbackVersion: (versionId: string) => void;
+}) => {
+  const newestVersions = versions.slice(0, 5);
   return (
     <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-700">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -2448,13 +2548,37 @@ const VersionSummary = ({ versions, latestVersionNumber }: { versions: Array<Rec
         Новые запуски используют активную версию. Старые результаты остаются привязаны к версии, на которой были созданы.
       </div>
       {newestVersions.length ? (
-        <div className="mt-3 space-y-1">
+        <div className="mt-3 space-y-2">
           {newestVersions.map((version) => {
             const versionNumber = getVersionNumber(version);
+            const versionId = typeof version.id === 'string' ? version.id : '';
+            const isActive = Boolean(version.is_active) || Boolean(versionId && versionId === activeVersionId);
+            const summaryValue = version.diff_from_previous && typeof version.diff_from_previous === 'object' && 'summary' in version.diff_from_previous
+              ? version.diff_from_previous.summary
+              : '';
+            const summary = typeof summaryValue === 'string' ? summaryValue : '';
             return (
-              <div key={String(version.id || versionNumber || 'version')} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-2 py-1.5 text-xs text-slate-600">
-                <span>{versionNumber ? `v${versionNumber}` : 'версия'}</span>
-                <span>{versionNumber === latestVersionNumber ? 'используется сейчас' : 'предыдущая'}</span>
+              <div key={String(version.id || versionNumber || 'version')} className="rounded-lg bg-slate-50 px-2 py-2 text-xs text-slate-600">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium text-slate-900">{versionNumber ? `v${versionNumber}` : 'версия'}</span>
+                  <span>{isActive ? 'используется сейчас' : 'не активна'}</span>
+                </div>
+                {summary ? <div className="mt-1 text-slate-500">{summary}</div> : null}
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Button type="button" size="sm" variant="outline" onClick={() => onStartVersionRun(versionId)} disabled={!versionId}>
+                    Запустить эту версию
+                  </Button>
+                  {!isActive ? (
+                    <Button type="button" size="sm" variant="outline" onClick={() => onActivateVersion(versionId)} disabled={!versionId}>
+                      Сделать активной
+                    </Button>
+                  ) : null}
+                  {!isActive && versionNumber && latestVersionNumber && versionNumber < latestVersionNumber ? (
+                    <Button type="button" size="sm" variant="outline" onClick={() => onRollbackVersion(versionId)} disabled={!versionId}>
+                      Откатиться
+                    </Button>
+                  ) : null}
+                </div>
               </div>
             );
           })}

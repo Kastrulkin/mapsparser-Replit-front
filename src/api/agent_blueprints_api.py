@@ -1,5 +1,6 @@
 import json
 import uuid
+from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
 
@@ -14,6 +15,7 @@ from services.agent_blueprint_runner import (
 from services.agent_blueprint_orchestrator import build_agent_blueprint_orchestrator
 from services.agent_blueprint_draft_builder import build_agent_blueprint_draft
 from services.agent_blueprint_workspace import (
+    build_agent_version_diff,
     build_blueprint_review,
     build_feedback_version_payload,
     build_version_payload_from_row,
@@ -70,13 +72,19 @@ def _load_blueprint(cursor, blueprint_id: str):
 def _load_blueprint_version_for_blueprint(cursor, blueprint_id: str, version_id: str):
     cursor.execute(
         """
-        SELECT id
+        SELECT *
         FROM agent_blueprint_versions
         WHERE id = %s
           AND blueprint_id = %s
         """,
         (version_id, blueprint_id),
     )
+    row = cursor.fetchone()
+    return dict(row) if row else None
+
+
+def _load_blueprint_version(cursor, version_id: str):
+    cursor.execute("SELECT * FROM agent_blueprint_versions WHERE id = %s", (version_id,))
     row = cursor.fetchone()
     return dict(row) if row else None
 
@@ -111,6 +119,66 @@ def _save_blueprint_metadata(cursor, blueprint_id: str, metadata: dict) -> None:
         """,
         (json.dumps(metadata, ensure_ascii=False), blueprint_id),
     )
+
+
+def _utc_now_text() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _version_number(version: dict | None) -> int:
+    try:
+        return int((version or {}).get("version_number") or 0)
+    except Exception:
+        return 0
+
+
+def _resolve_active_version(cursor, blueprint: dict):
+    metadata = _blueprint_metadata(blueprint)
+    active_version_id = str(metadata.get("active_version_id") or "").strip()
+    if active_version_id:
+        version = _load_blueprint_version_for_blueprint(cursor, str(blueprint.get("id") or ""), active_version_id)
+        if version:
+            return version
+    return _load_latest_blueprint_version(cursor, str(blueprint.get("id") or ""))
+
+
+def _remember_active_version(cursor, blueprint: dict, version: dict, user_data: dict, action: str, reason: str = "") -> dict:
+    blueprint_id = str(blueprint.get("id") or "")
+    refreshed_blueprint = _load_blueprint(cursor, blueprint_id) if blueprint_id else None
+    metadata = _blueprint_metadata(refreshed_blueprint or blueprint)
+    previous_active_id = str(metadata.get("active_version_id") or "").strip()
+    event = {
+        "action": action,
+        "previous_active_version_id": previous_active_id,
+        "active_version_id": str(version.get("id") or ""),
+        "active_version_number": _version_number(version),
+        "reason": reason,
+        "created_by_user_id": _user_id(user_data),
+        "created_at": _utc_now_text(),
+    }
+    events = metadata.get("version_events") if isinstance(metadata.get("version_events"), list) else []
+    events.append(event)
+    metadata["active_version_id"] = event["active_version_id"]
+    metadata["active_version_number"] = event["active_version_number"]
+    metadata["active_version_updated_at"] = event["created_at"]
+    metadata["version_events"] = events[-50:]
+    _save_blueprint_metadata(cursor, blueprint_id, metadata)
+    return event
+
+
+def _decorate_versions(cursor, blueprint: dict, versions: list[dict]) -> tuple[list[dict], dict | None]:
+    active_version = _resolve_active_version(cursor, blueprint)
+    active_version_id = str((active_version or {}).get("id") or "")
+    by_number = {_version_number(version): version for version in versions}
+    decorated = []
+    for version in versions:
+        previous = by_number.get(_version_number(version) - 1)
+        decorated_version = dict(version)
+        decorated_version["is_active"] = str(version.get("id") or "") == active_version_id
+        decorated_version["active_state"] = "active" if decorated_version["is_active"] else "inactive"
+        decorated_version["diff_from_previous"] = build_agent_version_diff(previous, version)
+        decorated.append(decorated_version)
+    return decorated, active_version
 
 
 def _require_blueprint_access(cursor, blueprint_id: str, user_data: dict):
@@ -188,7 +256,10 @@ def list_agent_blueprints():
             SELECT b.*,
                    v.id AS latest_version_id,
                    v.version_number AS latest_version_number,
-                   v.goal AS latest_goal
+                   v.goal AS latest_goal,
+                   av.id AS active_version_id,
+                   av.version_number AS active_version_number,
+                   av.goal AS active_goal
             FROM agent_blueprints b
             LEFT JOIN LATERAL (
                 SELECT id, version_number, goal
@@ -197,6 +268,13 @@ def list_agent_blueprints():
                 ORDER BY version_number DESC
                 LIMIT 1
             ) v ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT id, version_number, goal
+                FROM agent_blueprint_versions
+                WHERE blueprint_id = b.id
+                  AND id = COALESCE(NULLIF(b.metadata_json->>'active_version_id', ''), v.id)
+                LIMIT 1
+            ) av ON TRUE
             {where_sql}
             ORDER BY b.created_at DESC
             LIMIT 200
@@ -253,6 +331,7 @@ def create_agent_blueprint():
             version_payload = default_supervised_outreach_version_payload()
             version_payload["persona_agent_id"] = payload.get("persona_agent_id")
             version = _insert_version(cursor, blueprint_id, version_payload, user_data)
+            _remember_active_version(cursor, {"id": blueprint_id, "metadata_json": metadata}, version, user_data, "created")
         db.conn.commit()
         blueprint = _load_blueprint(cursor, blueprint_id)
         return jsonify(
@@ -308,6 +387,7 @@ def create_agent_blueprint_draft():
         )
         version_payload = draft.get("version_payload") if isinstance(draft.get("version_payload"), dict) else {}
         version = _insert_version(cursor, blueprint_id, version_payload, user_data)
+        _remember_active_version(cursor, {"id": blueprint_id, "metadata_json": draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}}, version, user_data, "created")
         db.conn.commit()
         blueprint = _load_blueprint(cursor, blueprint_id)
         return jsonify(
@@ -349,6 +429,7 @@ def get_agent_blueprint(blueprint_id: str):
             (blueprint_id,),
         )
         versions = [_normalize_json_row(dict(row)) for row in (cursor.fetchall() or [])]
+        versions, active_version = _decorate_versions(cursor, blueprint, versions)
         run_status = str(request.args.get("run_status") or "").strip().lower()
         run_params = [blueprint_id]
         run_where = "WHERE blueprint_id = %s"
@@ -385,6 +466,9 @@ def get_agent_blueprint(blueprint_id: str):
             {
                 "success": True,
                 "blueprint": _normalize_json_row(blueprint),
+                "active_version": _normalize_json_row(active_version) if active_version else None,
+                "active_version_id": str((active_version or {}).get("id") or ""),
+                "active_version_number": _version_number(active_version),
                 "versions": versions,
                 "runs": runs,
                 "approval_queue": approval_queue,
@@ -409,8 +493,120 @@ def create_agent_blueprint_version(blueprint_id: str):
         if access_error:
             return access_error
         version = _insert_version(cursor, str(blueprint.get("id")), payload, user_data)
+        event = _remember_active_version(cursor, blueprint, version, user_data, "created")
         db.conn.commit()
-        return jsonify({"success": True, "version": version}), 201
+        return jsonify({"success": True, "version": version, "active_version": version, "version_event": event}), 201
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/versions/<version_id>/diff", methods=["GET"])
+def get_agent_blueprint_version_diff(blueprint_id: str, version_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        version = _load_blueprint_version_for_blueprint(cursor, str(blueprint.get("id") or ""), version_id)
+        if not version:
+            return _json_error("Blueprint version not found", 404, "VERSION_NOT_FOUND")
+        compare_to_id = str(request.args.get("compare_to_version_id") or "").strip()
+        compare_to = None
+        if compare_to_id:
+            compare_to = _load_blueprint_version_for_blueprint(cursor, str(blueprint.get("id") or ""), compare_to_id)
+            if not compare_to:
+                return _json_error("Compare version not found", 404, "COMPARE_VERSION_NOT_FOUND")
+        else:
+            cursor.execute(
+                """
+                SELECT *
+                FROM agent_blueprint_versions
+                WHERE blueprint_id = %s
+                  AND version_number < %s
+                ORDER BY version_number DESC
+                LIMIT 1
+                """,
+                (blueprint.get("id"), _version_number(version)),
+            )
+            row = cursor.fetchone()
+            compare_to = dict(row) if row else None
+        diff = build_agent_version_diff(compare_to, version)
+        return jsonify({"success": True, "version": _normalize_json_row(version), "compare_to": _normalize_json_row(compare_to) if compare_to else None, "diff": diff})
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/versions/<version_id>/activate", methods=["POST"])
+def activate_agent_blueprint_version(blueprint_id: str, version_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    payload = request.get_json(silent=True) or {}
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        version = _load_blueprint_version_for_blueprint(cursor, str(blueprint.get("id") or ""), version_id)
+        if not version:
+            return _json_error("Blueprint version not found", 404, "VERSION_NOT_FOUND")
+        active_before = _resolve_active_version(cursor, blueprint)
+        event = _remember_active_version(cursor, blueprint, version, user_data, "activated", str(payload.get("reason") or ""))
+        db.conn.commit()
+        return jsonify(
+            {
+                "success": True,
+                "active_version": _normalize_json_row(version),
+                "previous_active_version": _normalize_json_row(active_before) if active_before else None,
+                "diff": build_agent_version_diff(active_before, version),
+                "version_event": event,
+            }
+        )
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/versions/<version_id>/rollback", methods=["POST"])
+def rollback_agent_blueprint_version(blueprint_id: str, version_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    payload = request.get_json(silent=True) or {}
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        version = _load_blueprint_version_for_blueprint(cursor, str(blueprint.get("id") or ""), version_id)
+        if not version:
+            return _json_error("Blueprint version not found", 404, "VERSION_NOT_FOUND")
+        active_before = _resolve_active_version(cursor, blueprint)
+        if active_before and str(active_before.get("id") or "") == str(version.get("id") or ""):
+            return _json_error("Version is already active", 400, "VERSION_ALREADY_ACTIVE")
+        reason = str(payload.get("reason") or "rollback").strip()
+        event = _remember_active_version(cursor, blueprint, version, user_data, "rollback", reason)
+        db.conn.commit()
+        return jsonify(
+            {
+                "success": True,
+                "active_version": _normalize_json_row(version),
+                "previous_active_version": _normalize_json_row(active_before) if active_before else None,
+                "diff": build_agent_version_diff(active_before, version),
+                "version_event": event,
+            }
+        )
     except Exception:
         db.conn.rollback()
         raise
@@ -446,6 +642,7 @@ def setup_agent_blueprint(blueprint_id: str):
             output_schema["human_review"] = True
             version_payload["output_schema"] = output_schema
             version = _insert_version(cursor, blueprint_id, version_payload, user_data)
+            _remember_active_version(cursor, blueprint, version, user_data, "setup_updated")
         db.conn.commit()
         refreshed = _load_blueprint(cursor, blueprint_id)
         return jsonify({"success": True, "blueprint": _normalize_json_row(refreshed), "setup": setup, "version": version})
@@ -563,18 +760,8 @@ def start_agent_blueprint_run(blueprint_id: str):
             return access_error
         version_id = str(payload.get("blueprint_version_id") or "").strip()
         if not version_id:
-            cursor.execute(
-                """
-                SELECT id
-                FROM agent_blueprint_versions
-                WHERE blueprint_id = %s
-                ORDER BY version_number DESC
-                LIMIT 1
-                """,
-                (blueprint.get("id"),),
-            )
-            version_row = cursor.fetchone()
-            version_id = str((version_row or {}).get("id") or "")
+            active_version = _resolve_active_version(cursor, blueprint)
+            version_id = str((active_version or {}).get("id") or "")
         elif not _load_blueprint_version_for_blueprint(cursor, str(blueprint.get("id") or ""), version_id):
             return _json_error("Blueprint version does not belong to this blueprint", 400, "VERSION_BLUEPRINT_MISMATCH")
         if not version_id:
@@ -649,8 +836,10 @@ def create_agent_run_feedback(run_id: str):
         _save_blueprint_metadata(cursor, str(blueprint.get("id") or ""), metadata)
         version_payload = build_feedback_version_payload(version, feedback)
         new_version = _insert_version(cursor, str(blueprint.get("id") or ""), version_payload, user_data)
+        diff = build_agent_version_diff(version, new_version)
+        event = _remember_active_version(cursor, blueprint, new_version, user_data, "feedback_applied", feedback_text)
         db.conn.commit()
-        return jsonify({"success": True, "feedback": feedback, "version": new_version}), 201
+        return jsonify({"success": True, "feedback": feedback, "version": new_version, "diff": diff, "version_event": event}), 201
     except Exception:
         db.conn.rollback()
         raise
