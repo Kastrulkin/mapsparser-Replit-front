@@ -187,6 +187,46 @@ def test_agent_builder_session_reduces_questions_after_clarification():
     assert clarified["preview"]["output_format"]
 
 
+def test_agent_datahub_catalog_includes_connected_text_and_file_sources():
+    from services.agent_datahub import build_agent_datahub_catalog
+
+    class EmptyCursor:
+        def execute(self, query, params=None):
+            return None
+
+        def fetchall(self):
+            return []
+
+    catalog = build_agent_datahub_catalog(
+        EmptyCursor(),
+        "biz-1",
+        [
+            {
+                "id": "source-text",
+                "source_type": "text",
+                "name": "Контекст договора",
+                "content_text": "Оплата 15000 до 10 июня. Штраф 12%.",
+                "extraction_state": "ready",
+            },
+            {
+                "id": "source-file",
+                "source_type": "file",
+                "name": "contract.docx",
+                "file_name": "contract.docx",
+                "content_text": "DOCX text",
+                "extraction_state": "ready",
+                "extraction_method": "docx_xml",
+            },
+        ],
+    )
+
+    connected = [item for item in catalog if item.get("connected") is True and str(item.get("key", "")).startswith("agent_source:")]
+    assert [item["title"] for item in connected[:2]] == ["Контекст договора", "contract.docx"]
+    assert connected[0]["state"] == "ready"
+    assert connected[1]["source_type"] == "file"
+    assert "DOCX text" in connected[1]["preview"][0]
+
+
 def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     api_source = Path("src/api/agent_blueprints_api.py").read_text(encoding="utf-8")
     workspace_source = Path("src/services/agent_blueprint_workspace.py").read_text(encoding="utf-8")

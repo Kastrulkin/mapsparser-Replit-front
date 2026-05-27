@@ -1,0 +1,1 @@
+{'user_id': 'smoke-rima-agent-user-9d8f2a6c31', 'business_id': 'smoke-rima-agent-business-9d8f2a6c31', 'email': 'smoke-rima-agent-9d8f2a6c31@example.invalid'}

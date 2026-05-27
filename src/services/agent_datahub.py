@@ -38,12 +38,13 @@ AGENT_DATAHUB_SOURCES = [
 
 
 def build_agent_datahub_catalog(cursor: Any, business_id: str, connected_sources: List[Dict[str, Any]] | None = None) -> List[Dict[str, Any]]:
+    connected_sources = [item for item in (connected_sources or []) if isinstance(item, dict)]
     connected_keys = {
         _clean_text(item.get("internal_source"))
-        for item in (connected_sources or [])
-        if isinstance(item, dict) and _clean_text(item.get("source_type")) == "internal"
+        for item in connected_sources
+        if _clean_text(item.get("source_type")) == "internal"
     }
-    catalog = []
+    catalog = _connected_source_catalog_items(connected_sources)
     for definition in AGENT_DATAHUB_SOURCES:
         key = _clean_text(definition.get("key"))
         rows = _safe_catalog_rows(cursor, _clean_text(definition.get("query")), (business_id,))
@@ -59,6 +60,67 @@ def build_agent_datahub_catalog(cursor: Any, business_id: str, connected_sources
             }
         )
     return catalog
+
+
+def _connected_source_catalog_items(connected_sources: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    items = []
+    for source in connected_sources:
+        source_type = _clean_text(source.get("source_type")) or "text"
+        source_id = _clean_text(source.get("id")) or _clean_text(source.get("internal_source")) or _clean_text(source.get("name"))
+        name = _clean_text(source.get("name")) or _clean_text(source.get("file_name")) or _clean_text(source.get("internal_source")) or "Источник агента"
+        state = _source_state(source)
+        preview = _source_preview(source)
+        items.append(
+            {
+                "key": f"agent_source:{source_id}",
+                "title": name,
+                "description": _source_description(source),
+                "available_count": 1 if preview else 0,
+                "connected": True,
+                "preview": preview,
+                "state": state,
+                "source_type": source_type,
+                "source_id": source_id,
+                "extraction_state": _clean_text(source.get("extraction_state")) or state,
+                "error": _clean_text(source.get("extraction_error")),
+            }
+        )
+    return items
+
+
+def _source_state(source: Dict[str, Any]) -> str:
+    extraction_state = _clean_text(source.get("extraction_state"))
+    if extraction_state:
+        return extraction_state
+    if _clean_text(source.get("extraction_error")):
+        return "failed"
+    if _clean_text(source.get("content_text")) or _clean_text(source.get("internal_source")):
+        return "ready"
+    return "empty"
+
+
+def _source_description(source: Dict[str, Any]) -> str:
+    source_type = _clean_text(source.get("source_type"))
+    if source_type == "file":
+        file_name = _clean_text(source.get("file_name"))
+        method = _clean_text(source.get("extraction_method"))
+        return "Файл агента" + (f": {file_name}" if file_name else "") + (f" · извлечение: {method}" if method else "")
+    if source_type == "internal":
+        return "Источник LocalOS, подключённый к агенту."
+    return "Текстовый контекст, подключённый к агенту."
+
+
+def _source_preview(source: Dict[str, Any]) -> List[str]:
+    content = _clean_text(source.get("content_text"))
+    if content:
+        return [content[:160]]
+    internal_source = _clean_text(source.get("internal_source"))
+    if internal_source:
+        return [internal_source]
+    error = _clean_text(source.get("extraction_error"))
+    if error:
+        return [error[:160]]
+    return []
 
 
 def _safe_catalog_rows(cursor: Any, query: str, params: tuple[Any, ...]) -> List[Dict[str, Any]]:
