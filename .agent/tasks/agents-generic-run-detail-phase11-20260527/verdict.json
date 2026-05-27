@@ -1,0 +1,55 @@
+{
+  "task_id": "agents-generic-run-detail-phase11-20260527",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "GenericRunProgress renders the human run path and production browser smoke verified it for document agent."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Technical runtime and JSON are not the primary view."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Generic output fields now use product-readable labels."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Targeted tests, frontend build, and backend lint baseline passed."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Frontend deployed and authenticated production UI smoke passed."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "Production fixture cleanup and zero-row verification passed."
+    }
+  ],
+  "commands_run": [
+    "python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "npm --prefix frontend run build",
+    "scripts/lint_backend_baseline.sh",
+    "frontend tar-over-ssh production deploy",
+    "production document-agent fixture setup",
+    "authenticated browser smoke on /dashboard/agents",
+    "production fixture cleanup and zero-row verification"
+  ],
+  "artifacts_used": [
+    "raw/test-unit.txt",
+    "raw/build.txt",
+    "raw/lint.txt",
+    "raw/deploy.txt",
+    "raw/prod-document-ui-fixture.txt",
+    "raw/browser-smoke.txt",
+    "raw/prod-document-ui-cleanup.txt",
+    "raw/prod-document-ui-cleanup-verify.txt"
+  ]
+}

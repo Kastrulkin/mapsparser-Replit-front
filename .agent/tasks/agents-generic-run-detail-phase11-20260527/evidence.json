@@ -1,0 +1,81 @@
+{
+  "task_id": "agents-generic-run-detail-phase11-20260527",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Generic document/email/table/reviews runs show a human progress overview.",
+      "status": "PASS",
+      "proof": [
+        "GenericRunProgress added.",
+        "raw/browser-smoke.txt"
+      ],
+      "gaps": [
+        "Authenticated UI smoke covered document agent; email/table/reviews share the same component."
+      ]
+    },
+    {
+      "id": "AC2",
+      "text": "Technical runtime columns and JSON are not the primary view.",
+      "status": "PASS",
+      "proof": [
+        "Runtime columns moved behind technical summary disclosure.",
+        "Per-entry JSON remains behind technical journal.",
+        "raw/browser-smoke.txt"
+      ],
+      "gaps": [
+        "Technical summary was not visible in the smoke because activeRun was not selected, but technical JSON remained hidden behind details."
+      ]
+    },
+    {
+      "id": "AC3",
+      "text": "Result payloads use readable labels for generic outputs.",
+      "status": "PASS",
+      "proof": [
+        "resultFieldLabels added.",
+        "Browser smoke verified document output labels."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Targeted tests, build, and lint pass.",
+      "status": "PASS",
+      "proof": [
+        "raw/test-unit.txt",
+        "raw/build.txt",
+        "raw/lint.txt"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Frontend deployed to production and authenticated UI smoke passes.",
+      "status": "PASS",
+      "proof": [
+        "raw/deploy.txt",
+        "raw/prod-document-ui-fixture.txt",
+        "raw/browser-smoke.txt"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC6",
+      "text": "Production smoke fixture is cleaned up.",
+      "status": "PASS",
+      "proof": [
+        "raw/prod-document-ui-cleanup.txt",
+        "raw/prod-document-ui-cleanup-verify.txt"
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
+    "tests/test_agent_blueprint_layer.py"
+  ],
+  "commands_for_fresh_verifier": [],
+  "known_gaps": [
+    "Separate authenticated UI fixtures for email/table/reviews remain future coverage."
+  ]
+}

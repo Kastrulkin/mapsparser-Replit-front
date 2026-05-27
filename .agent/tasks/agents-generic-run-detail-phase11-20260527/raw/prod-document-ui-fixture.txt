@@ -1,0 +1,16 @@
+{
+  "success": true,
+  "email": "smoke-doc-agent-42063985e4@example.invalid",
+  "user_id": "smoke-doc-agent-user-42063985e4",
+  "business_id": "smoke-doc-agent-business-42063985e4",
+  "blueprint_id": "75d8df00-169a-49e7-99c4-62fe9e7dd54e",
+  "run_id": "8b911ca3-277d-4d4c-838f-78a267799e01",
+  "journal_kinds": [
+    "approval",
+    "extraction",
+    "input",
+    "output"
+  ],
+  "run_status": "waiting_approval",
+  "fixture_cleaned": false
+}

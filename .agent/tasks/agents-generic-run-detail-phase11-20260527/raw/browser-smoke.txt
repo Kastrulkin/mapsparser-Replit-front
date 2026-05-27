@@ -1,0 +1,267 @@
+url=https://localos.pro/dashboard/agents
+{
+  "Путь документы-агента": true,
+  "Входные данные": true,
+  "Что понял": true,
+  "Результат": true,
+  "Ручной контроль": true,
+  "Техническая сводка запуска": false,
+  "Технический журнал": true,
+  "Название результата": true,
+  "Риски": true
+}
+
+- region "Notifications (F8)":
+  - list
+- region "Notifications alt+T"
+- link "LocalOS":
+  - /url: /dashboard/profile
+  - generic: LocalOS
+- button "Свернуть меню":
+- navigation:
+  - link "Оператор":
+    - /url: /dashboard/operator
+    - generic: Оператор
+  - link "Агенты":
+    - /url: /dashboard/agents
+    - generic: Агенты
+  - link "Профиль и бизнес":
+    - /url: /dashboard/profile
+    - generic: Профиль и бизнес
+  - link "Работа с картами":
+    - /url: /dashboard/card
+    - generic: Работа с картами
+  - link "Прогресс":
+    - /url: /dashboard/progress
+    - generic: Прогресс
+  - link "Бронирования":
+    - /url: /dashboard/bookings
+    - generic: Бронирования
+  - link "Чаты":
+    - /url: /dashboard/chats
+    - generic: Чаты
+  - link "Поиск партнёров":
+    - /url: /dashboard/partnerships
+    - generic: Поиск партнёров
+  - link "Финансы":
+    - /url: /dashboard/finance
+    - generic: Финансы
+  - link "Средний чек":
+    - /url: /dashboard/average-ticket
+    - generic: Средний чек
+  - link "Промоушен AI Chat":
+    - /url: /dashboard/ai-chat-promotion
+    - generic: Промоушен AI Chat
+  - link "Настройки":
+    - /url: /dashboard/settings
+    - generic: Настройки
+- generic: LocalOS
+- paragraph: Освободись от рутины! 🚀
+- banner:
+  - heading "Smoke Document Agent Business" [level=1]
+  - button "🇷🇺 Русский":
+    - generic: 🇷🇺
+    - generic: Русский
+  - combobox:
+    - generic: ₽
+  - link "smoke-doc-agent-42063985e4":
+    - /url: /dashboard/profile
+    - generic: smoke-doc-agent-42063985e4
+  - button:
+- main:
+  - generic: LocalOS
+  - heading "Агенты" [level=1]
+  - paragraph: Центр управления системными и пользовательскими агентами.
+  - button "Обновить":
+    - text: Обновить
+  - button "Создать агента":
+    - text: Создать агента
+  - generic: Активны
+  - generic: "0"
+  - generic: 3 всего
+  - generic: Ждут решения
+  - generic: "1"
+  - generic: Есть ожидающие решения
+  - generic: Последние результаты
+  - generic: "0"
+  - generic: Нет активных запусков
+  - generic: Пользовательские агенты
+  - generic: "3"
+  - generic: Smoke Document Agent Business
+  - heading "Системные агенты" [level=2]
+  - paragraph: Предустановленные агенты LocalOS. Они включаются и настраиваются отдельно от workflow-запусков.
+  - button "Настроить системных"
+  - generic: Агент записи
+  - generic: Помогает с правилами записи, вопросами клиенту и сценарием общения.
+  - generic: Выключен
+  - button "Настроить"
+  - generic: Маркетинговый агент
+  - generic: Готовит идеи, тексты и маркетинговые черновики в стиле бизнеса.
+  - generic: Выключен
+  - button "Настроить"
+  - heading "Пользовательские агенты" [level=2]
+  - paragraph: Процессные агенты запускают задачи, агенты голоса задают стиль общения.
+  - button "Обработай договор, извлеки факты, риски и поля Документы · активная версия v2 Черновик Обработай договор, извлеки факты, риски и поля":
+    - generic: Обработай договор, извлеки факты, риски и поля
+    - generic: Документы · активная версия v2
+    - generic: Черновик
+    - generic: Обработай договор, извлеки факты, риски и поля
+  - button "Настроить"
+  - button "Запустить":
+    - text: Запустить
+  - button "Результаты"
+  - generic: Booking Agent
+  - generic: Голос и стиль общения
+  - generic: Включён
+  - generic: Агент для записи клиентов
+  - button "Открыть настройки"
+  - generic: Тест 1
+  - generic: Голос и стиль общения
+  - generic: Включён
+  - generic: Настраивает тон, стиль и ограничения общения. Не является workflow runtime.
+  - button "Открыть настройки"
+  - heading "Обработай договор, извлеки факты, риски и поля" [level=2]
+  - paragraph: Документы · активная версия v2 · сохранённые результаты
+  - button "Настроить"
+  - button "Запуск"
+  - button "Сохранённые результаты" [active]
+  - generic: Путь документы-агента
+  - generic: "Агент проходит понятный цикл: данные, понимание, результат и ручной контроль. Технические детали спрятаны ниже."
+  - generic: Ждёт решения
+  - generic: Входные данные
+  - generic: Что агент получил на вход
+  - generic: ready
+  - generic: "1"
+  - generic: Что понял
+  - generic: Что извлёк из источников
+  - generic: extracted
+  - generic: "1"
+  - generic: Результат
+  - generic: Что подготовил для проверки
+  - generic: Подготовлено
+  - generic: "Фактов: 3 · Рисков: 2 · не выполнялась"
+  - generic: Ручной контроль
+  - generic: Что требует решения человека
+  - generic: Ожидает
+  - generic: pending
+  - heading "Нет активных запусков" [level=3]
+  - paragraph: Запустите агента из карточки, чтобы увидеть результат.
+  - generic: Журнал запуска
+  - generic: Входные данные, что агент извлёк, какие правила применил, результат и ручной контроль. Следующий запуск пойдёт на v2.
+  - generic: Ждёт решения
+  - generic: Как настроен агент
+  - generic: "Задача: Проверить договор перед отправкой клиенту"
+  - generic: "Извлечь: Найти оплату, сроки, ответственность, штрафы и открытые вопросы"
+  - generic: "Правила: Не придумывать факты, показывать только то, что есть в документе"
+  - generic: "Результат: summary, facts, fields, risks, next_questions"
+  - generic: Источники
+  - generic: Smoke contract
+  - generic: text · ready · 137 chars
+  - generic: входные данные
+  - generic: Входные данные
+  - generic: Проверить договор перед отправкой клиенту
+  - generic: ready
+  - generic: Что сделать
+  - generic: Проверить договор перед отправкой клиенту
+  - generic: Какие данные
+  - generic: manual_context
+  - generic: Что извлечь
+  - generic: Найти оплату, сроки, ответственность, штрафы и открытые вопросы
+  - generic: Какие правила
+  - generic: Не придумывать факты, показывать только то, что есть в документе
+  - generic: Какой результат
+  - generic: summary, facts, fields, risks, next_questions
+  - generic: Ручной контроль
+  - generic: Итог проверяет человек перед использованием
+  - generic: Подключено источников
+  - generic: "1"
+  - generic "Технический журнал"
+  - generic: входные данные
+  - generic: Проверка входных данных
+  - generic: ready
+  - generic: ready
+  - generic: Задача
+  - generic: Проверить договор перед отправкой клиенту
+  - generic: Источники
+  - generic: Smoke contract
+  - generic: Ручной контроль
+  - generic: Итог проверяет человек перед использованием
+  - generic "Технический журнал"
+  - generic: извлечение
+  - generic: Что агент извлёк
+  - generic: "Найдено элементов: 1"
+  - generic: extracted
+  - generic: Извлечено элементов
+  - generic: "1"
+  - generic: Что обработано
+  - generic: Smoke contract
+  - generic: "Источники: Smoke contract"
+  - generic: "данные: text: Договор оказания услуг. Оплата 10000 рублей до 10 июня. Ответственность за просрочку: штраф 10% от суммы. Срок действия договора 30 дней. · источник: Smoke contract · кратко: Договор оказания услуг. Оплата 10000 рублей до 10 июня. Ответственность за просрочку: штраф 10% от суммы. Срок действия договора 30 дней."
+  - generic "Технический журнал"
+  - generic: результат
+  - generic: Подготовленный результат
+  - generic: Проверка договора перед отправкой клиенту
+  - generic: Подготовлено
+  - generic: Источник анализа
+  - generic: gigachat
+  - generic: Использовал LLM
+  - generic: да
+  - generic: Provenance
+  - generic: Smoke contract
+  - generic: Фактов
+  - generic: "3"
+  - generic: Рисков
+  - generic: "2"
+  - generic: Вопросов
+  - generic: "2"
+  - generic: Внешняя отправка
+  - generic: не выполнялась
+  - generic: "Источники: Smoke contract"
+  - generic: Название результата
+  - generic: Проверка договора перед отправкой клиенту
+  - generic: Краткий вывод
+  - generic: Оплата составляет 10000 рублей до 10 июня., Штраф за просрочку — 10% от суммы., Срок действия договора — 30 дней.
+  - generic: Риски
+  - generic: Риск задержки оплаты свыше установленного срока (10 июня) с начислением штрафа 10%., Отсутствие детализированной ответственности сторон кроме условия о просрочке платежа.
+  - generic: Факты
+  - generic: Сроки выполнения обязательств указаны (до 10 июня), Сумма оплаты определена точно (10000 руб.), Размер штрафа определен фиксировано (10%)
+  - generic: Поля
+  - generic: "contract_duration: 30 дней; due_date: 10 июня; payment_amount: 10000 руб."
+  - generic: Что уточнить
+  - generic: Какие дополнительные условия ответственности предусмотрены договором?, Есть ли в договоре информация о порядке изменения условий или досрочного расторжения?
+  - generic "Технический журнал"
+  - generic: требуется подтверждение
+  - generic: Ручное решение
+  - generic: Подтвердить результат
+  - generic: Ожидает
+  - generic: Тип решения
+  - generic: final_output
+  - generic: Статус
+  - generic: pending
+  - generic: Артефакт
+  - generic: agent_output_draft
+  - generic: Элементов
+  - generic: "0"
+  - generic "Технический журнал"
+  - textbox "Что исправить в логике агента для следующей версии?"
+  - button "Создать новую версию" [disabled]
+  - heading "Последние запуски" [level=2]
+  - paragraph: Короткая история выбранного агента.
+  - button "Все"
+  - button "В работе"
+  - button "Ждёт решения"
+  - button "Готово"
+  - button "Ошибка"
+  - button "Запуск 8b911ca3 Ждёт решения Wed, 27 May 2026 16:13:55 GMT":
+    - generic: Запуск 8b911ca3
+    - generic: Ждёт решения
+    - generic: Wed, 27 May 2026 16:13:55 GMT
+  - heading "Ждут решения" [level=2]
+  - paragraph: Решения, без которых агент не продолжит рискованное действие.
+  - 'button "Подтвердить результат Запуск 8b911ca3 · финальный результат Ожидает Wed, 27 May 2026 16:13:55 GMT Результат: agent_output_draft Ожидают решения: 0"':
+    - generic: Подтвердить результат
+    - generic: Запуск 8b911ca3 · финальный результат
+    - generic: Ожидает
+    - generic: Wed, 27 May 2026 16:13:55 GMT
+    - generic: "Результат: agent_output_draft"
+    - generic: "Ожидают решения: 0"
