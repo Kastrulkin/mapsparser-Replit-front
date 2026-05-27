@@ -13,6 +13,7 @@ import {
   MessageSquareText,
   Play,
   RefreshCw,
+  Search,
   Send,
   ShieldCheck,
   Sparkles,
@@ -475,8 +476,14 @@ const metaLabels: Record<string, string> = {
   artifact: 'результат',
   approval: 'требуется подтверждение',
   capability: 'действие через безопасный контур',
+  input: 'входные данные',
+  output: 'результат',
+  extraction: 'извлечение',
+  final: 'принятый итог',
+  sourcing: 'поиск лидов',
   shortlist: 'список клиентов',
   drafts: 'черновики сообщений',
+  queue: 'очередь',
   business_profile: 'профиль бизнеса',
   services: 'услуги',
   reviews: 'отзывы',
@@ -497,10 +504,16 @@ const metaLabels: Record<string, string> = {
   source_name: 'источник',
   raw: 'данные',
   missing_information: 'что уточнить',
-  result: 'результат',
   rules_applied: 'правила',
   feedback_notes: 'правки',
 };
+
+const outreachProgressStages = [
+  { kind: 'sourcing', title: 'Нашёл лидов', detailLabel: 'Найдено лидов', icon: Search },
+  { kind: 'shortlist', title: 'Собрал shortlist', detailLabel: 'Лидов в shortlist', icon: Users },
+  { kind: 'drafts', title: 'Подготовил черновики', detailLabel: 'Черновиков', icon: MessageSquareText },
+  { kind: 'queue', title: 'Поставил в очередь', detailLabel: 'В очереди', icon: Send },
+];
 
 const humanizeStatus = (status: string) => statusLabels[status] || status;
 const humanizeStep = (step: string) => stepLabels[step] || step;
@@ -2239,6 +2252,9 @@ const AgentDetailPanel = ({
 
     {mode === 'results' ? (
       <div className="space-y-4">
+        {blueprint.category === 'outreach' ? (
+          <OutreachRunProgress review={agentReview} activeRun={activeRun} />
+        ) : null}
         {queuedButNotDispatched ? (
           <DashboardActionPanel
             title="Поставлено в очередь, но не отправлено"
@@ -2683,6 +2699,83 @@ const buildJournalFromSections = (sections: AgentReviewSection[]) => sections.ma
   details: [],
   payload: section.payload || {},
 }));
+
+const OutreachRunProgress = ({ review, activeRun }: { review: AgentReview | null; activeRun: AgentRun | null }) => {
+  const journal = review?.journal && review.journal.length ? review.journal : [];
+  const completedStepKeys = new Set((activeRun?.steps || []).filter((step) => step.status === 'completed').map((step) => step.step_key));
+  const hasAnyStage = outreachProgressStages.some((stage) => journal.some((entry) => entry.kind === stage.kind));
+
+  if (!activeRun && !hasAnyStage) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-slate-950">Путь outreach-агента</div>
+          <div className="mt-1 text-sm leading-6 text-slate-600">
+            Агент проходит этапы по порядку: лиды, shortlist, черновики и безопасная очередь.
+          </div>
+        </div>
+        {activeRun?.status ? <StatusBadge status={activeRun.status} /> : null}
+      </div>
+      <div className="mt-4 grid gap-3 lg:grid-cols-4">
+        {outreachProgressStages.map((stage) => {
+          const entry = journal.find((item) => item.kind === stage.kind);
+          const detailValue = findJournalDetailValue(entry, stage.detailLabel);
+          const boundary = stage.kind === 'queue' ? findJournalDetailValue(entry, 'Внешняя отправка') : '';
+          const isDone = Boolean(entry) || (
+            stage.kind === 'sourcing' && completedStepKeys.has('source_leads')
+          ) || (
+            stage.kind === 'shortlist' && completedStepKeys.has('shortlist')
+          ) || (
+            stage.kind === 'drafts' && completedStepKeys.has('draft_messages')
+          ) || (
+            stage.kind === 'queue' && completedStepKeys.has('send_limited_batch')
+          );
+          const Icon = stage.icon;
+          return (
+            <div
+              key={stage.kind}
+              className={cn(
+                'rounded-xl border px-3 py-3',
+                isDone ? 'border-emerald-200 bg-emerald-50/60' : 'border-slate-200 bg-slate-50',
+              )}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className={cn(
+                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1',
+                    isDone ? 'bg-white text-emerald-700 ring-emerald-200' : 'bg-white text-slate-500 ring-slate-200',
+                  )}>
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-slate-950">{stage.title}</div>
+                    <div className="mt-0.5 text-xs text-slate-500">{isDone ? 'готово' : 'ещё не выполнено'}</div>
+                  </div>
+                </div>
+                {entry?.status ? <StatusBadge status={entry.status} /> : null}
+              </div>
+              <div className="mt-3 text-sm font-semibold text-slate-950">{detailValue || '0'}</div>
+              {entry?.summary ? <div className="mt-1 line-clamp-2 text-xs leading-5 text-slate-600">{entry.summary}</div> : null}
+              {boundary ? <div className="mt-2 rounded-lg bg-white px-2 py-1.5 text-xs font-medium text-amber-700 ring-1 ring-amber-200">{boundary}</div> : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const findJournalDetailValue = (entry: AgentJournalEntry | undefined, label: string) => {
+  if (!entry || !Array.isArray(entry.details)) {
+    return '';
+  }
+  const detail = entry.details.find((item) => item.label === label);
+  return detail?.value || '';
+};
 
 const JournalEntryCard = ({ entry }: { entry: AgentJournalEntry }) => {
   const payload = entry.payload || {};
