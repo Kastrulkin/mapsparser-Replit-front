@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 
 from services.agent_document_llm import analyze_document_sources_with_llm
 from services.agent_email_llm import draft_email_with_llm
+from services.agent_review_reply_analysis import draft_review_replies_with_llm
 from services.agent_table_analysis import analyze_table_with_llm
 
 
@@ -338,11 +339,13 @@ def _render_output(
             user_id=_clean_text((workspace or {}).get("user_id")),
         )
     if category == "reviews":
-        return {
-            "title": "Черновики ответов на отзывы",
-            "replies": _review_replies(facts),
-            "format": output_format,
-        }
+        return draft_review_replies_with_llm(
+            setup,
+            extracted,
+            feedback_history,
+            business_id=_clean_text((workspace or {}).get("business_id")),
+            user_id=_clean_text((workspace or {}).get("user_id")),
+        )
     if category == "documents":
         return analyze_document_sources_with_llm(
             setup,
@@ -582,6 +585,8 @@ def _output_details(payload: Dict[str, Any]) -> List[Dict[str, str]]:
     checklist = result.get("checklist") if isinstance(result.get("checklist"), list) else []
     exceptions = result.get("exceptions") if isinstance(result.get("exceptions"), list) else []
     rows_to_review = result.get("rows_to_review") if isinstance(result.get("rows_to_review"), list) else []
+    reply_drafts = result.get("reply_drafts") if isinstance(result.get("reply_drafts"), list) else []
+    manual_review_reasons = result.get("manual_review_reasons") if isinstance(result.get("manual_review_reasons"), list) else []
     return _non_empty_details(
         [
             ("Источник анализа", payload.get("analysis_source") or result.get("analysis_source")),
@@ -592,9 +597,12 @@ def _output_details(payload: Dict[str, Any]) -> List[Dict[str, str]]:
             ("Рисков", str(len(risks)) if risks else ""),
             ("Исключений", str(len(exceptions)) if exceptions else ""),
             ("Строк к проверке", str(len(rows_to_review)) if rows_to_review else ""),
+            ("Черновиков ответов", str(len(reply_drafts)) if reply_drafts else ""),
+            ("Причин ручной проверки", str(len(manual_review_reasons)) if manual_review_reasons else ""),
             ("Вопросов", str(len(next_questions)) if next_questions else ""),
             ("Чеклист", str(len(checklist)) if checklist else ""),
             ("Внешняя отправка", "не выполнялась" if payload.get("external_dispatch_performed") is False else ""),
+            ("Публикация", "не выполнялась" if result.get("publish_state") == "not_published" else ""),
         ]
     )
 

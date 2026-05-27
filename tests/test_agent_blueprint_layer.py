@@ -192,6 +192,7 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     workspace_source = Path("src/services/agent_blueprint_workspace.py").read_text(encoding="utf-8")
     document_llm_source = Path("src/services/agent_document_llm.py").read_text(encoding="utf-8")
     email_llm_source = Path("src/services/agent_email_llm.py").read_text(encoding="utf-8")
+    review_analysis_source = Path("src/services/agent_review_reply_analysis.py").read_text(encoding="utf-8")
     table_analysis_source = Path("src/services/agent_table_analysis.py").read_text(encoding="utf-8")
     builder_api_source = Path("src/api/agent_builder_api.py").read_text(encoding="utf-8")
 
@@ -220,15 +221,20 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "journal" in workspace_source
     assert "analyze_document_sources_with_llm" in workspace_source
     assert "draft_email_with_llm" in workspace_source
+    assert "draft_review_replies_with_llm" in workspace_source
     assert "analyze_table_with_llm" in workspace_source
     assert "analyze_text_with_gigachat" in document_llm_source
     assert "agent_email_draft" in email_llm_source
+    assert "agent_review_replies" in review_analysis_source
     assert "agent_table_analysis" in table_analysis_source
     assert "external_dispatch_performed" in document_llm_source
     assert "external_dispatch_performed" in email_llm_source
+    assert "external_dispatch_performed" in review_analysis_source
+    assert "publish_state" in review_analysis_source
     assert "external_dispatch_performed" in table_analysis_source
     assert "provenance" in document_llm_source
     assert "provenance" in email_llm_source
+    assert "provenance" in review_analysis_source
     assert "provenance" in table_analysis_source
     assert "/api/agent-builder/sessions" in builder_api_source
     assert "build_agent_builder_state" in builder_api_source
@@ -413,6 +419,72 @@ def test_generic_table_runner_prepares_report_and_never_dispatches():
     assert table_result["rows_to_review"]
     assert table_result["recommendations"]
     assert table_result["provenance"] == ["clients.csv"]
+    assert run["approvals"][0]["approval_type"] == "final_output"
+
+
+def test_generic_reviews_runner_prepares_reply_drafts_and_never_publishes():
+    from services.agent_blueprint_draft_builder import build_agent_blueprint_draft
+    from services.agent_blueprint_runner import AgentBlueprintRunner
+
+    cursor = FakeCursor()
+    draft = build_agent_blueprint_draft("Подготовь ответы на отзывы", "reviews")
+    reviews_text = (
+        "author_name,rating,text\n"
+        "Анна,5,Очень понравился сервис\n"
+        "Иван,2,Долго ждал и администратор был груб\n"
+    )
+    cursor.tables["agent_blueprints"]["bp1"] = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "name": "Reviews agent",
+        "category": "reviews",
+        "metadata_json": {
+            **draft["metadata"],
+            "agent_setup": {
+                "workflow_description": "Подготовить ответы на отзывы",
+                "extraction_rules": "Определить тон, проблему клиента и безопасный ответ",
+                "processing_rules": "Не обещать скидку, компенсацию или публикацию без подтверждения",
+                "output_format": "reply_drafts, manual_review_reasons, checklist",
+                "approval_boundaries": ["final_output", "external_delivery"],
+            },
+            "agent_sources": [
+                {
+                    "id": "src1",
+                    "source_type": "text",
+                    "name": "Отзывы",
+                    "content_text": reviews_text,
+                    "content_length": len(reviews_text),
+                    "extraction_state": "ready",
+                }
+            ],
+        },
+    }
+    cursor.tables["agent_blueprint_versions"]["ver1"] = {
+        "id": "ver1",
+        "blueprint_id": "bp1",
+        "steps_json": draft["version_payload"]["steps"],
+        "capability_allowlist_json": [],
+    }
+
+    result = AgentBlueprintRunner(cursor).start_run("ver1", {}, {"user_id": "user1"})
+
+    assert result["success"] is True
+    run = result["run"]
+    assert run["status"] == "waiting_approval"
+    assert not [step for step in run["steps"] if step["step_type"] == "capability"]
+    output = [item for item in run["artifacts"] if item["artifact_type"] == "agent_output_draft"][0]
+    payload = output["payload_json"]
+    review_result = payload["result"]
+    assert payload["category"] == "reviews"
+    assert payload["external_dispatch_performed"] is False
+    assert payload["dispatch_state"] == "not_dispatched"
+    assert review_result["external_dispatch_performed"] is False
+    assert review_result["publish_state"] == "not_published"
+    assert review_result["delivery_state"] == "not_dispatched"
+    assert review_result["reply_drafts"]
+    assert review_result["manual_review_reasons"]
+    assert review_result["checklist"]
+    assert review_result["provenance"] == ["Отзывы"]
     assert run["approvals"][0]["approval_type"] == "final_output"
 
 
@@ -722,6 +794,96 @@ def test_agent_table_analysis_falls_back_without_external_dispatch():
     assert result["delivery_state"] == "not_dispatched"
     assert result["exceptions"]
     assert result["rows_to_review"]
+
+
+def test_agent_review_reply_analysis_uses_generator_rules_and_provenance():
+    from services.agent_review_reply_analysis import draft_review_replies_with_llm
+
+    captured = {}
+
+    def fake_generator(prompt, *, business_id="", user_id=""):
+        captured["prompt"] = prompt
+        captured["business_id"] = business_id
+        captured["user_id"] = user_id
+        return json.dumps(
+            {
+                "title": "Review replies",
+                "summary": ["Подготовлено 2 черновика"],
+                "reply_drafts": [
+                    {
+                        "review_id": "rev1",
+                        "author_name": "Иван",
+                        "rating": "2",
+                        "sentiment": "negative",
+                        "reply": "Иван, спасибо за обратную связь. Мы разберём ситуацию с ожиданием.",
+                        "manual_review_reason": "Негативный отзыв требует проверки менеджером.",
+                    }
+                ],
+                "manual_review_reasons": ["Негативный отзыв требует проверки менеджером."],
+                "checklist": ["Проверить тон", "Не обещать компенсацию"],
+                "rules_applied": ["Не обещать скидку"],
+            },
+            ensure_ascii=False,
+        )
+
+    result = draft_review_replies_with_llm(
+        {
+            "workflow_description": "Подготовить ответы на отзывы",
+            "extraction_rules": "Тональность и причина недовольства",
+            "processing_rules": "Не обещать скидку",
+            "output_format": "reply_drafts/checklist",
+        },
+        [
+            {
+                "source_name": "Отзывы",
+                "summary": "Иван поставил 2: долго ждал",
+                "raw": {"id": "rev1", "author_name": "Иван", "rating": 2, "text": "Долго ждал"},
+            }
+        ],
+        business_id="biz1",
+        user_id="user1",
+        generator=fake_generator,
+    )
+
+    assert result["llm_analysis_used"] is True
+    assert result["analysis_source"] == "gigachat"
+    assert result["external_dispatch_performed"] is False
+    assert result["publish_state"] == "not_published"
+    assert result["delivery_state"] == "not_dispatched"
+    assert result["reply_drafts"][0]["reply"]
+    assert result["manual_review_reasons"]
+    assert result["provenance"] == ["Отзывы"]
+    assert captured["business_id"] == "biz1"
+    assert captured["user_id"] == "user1"
+    assert "Не обещать скидку" in captured["prompt"]
+
+
+def test_agent_review_reply_analysis_falls_back_without_publish():
+    from services.agent_review_reply_analysis import draft_review_replies_with_llm
+
+    def failing_generator(prompt, *, business_id="", user_id=""):
+        raise RuntimeError("provider unavailable")
+
+    result = draft_review_replies_with_llm(
+        {"workflow_description": "Ответить на отзывы", "processing_rules": "Проверить негатив вручную"},
+        [
+            {
+                "source_name": "Отзывы",
+                "summary": "Ольга поставила 2: плохо и долго",
+                "raw": {"id": "rev2", "author_name": "Ольга", "rating": 2, "text": "Плохо и долго"},
+            }
+        ],
+        generator=failing_generator,
+    )
+
+    assert result["llm_analysis_used"] is False
+    assert result["analysis_source"] == "deterministic_fallback"
+    assert result["external_dispatch_performed"] is False
+    assert result["publish_state"] == "not_published"
+    assert result["delivery_state"] == "not_dispatched"
+    assert result["reply_drafts"]
+    assert result["manual_review_reasons"]
+    assert result["provenance"] == ["Отзывы"]
 
 
 def test_agent_version_diff_shows_readable_changes():
