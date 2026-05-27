@@ -482,6 +482,42 @@ def _review_journal(
 
 
 def _artifact_journal_entry(artifact_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    if artifact_type == "lead_source_plan":
+        return {
+            "kind": "sourcing",
+            "title": "Откуда агент взял лидов",
+            "status": payload.get("status") or "completed",
+            "summary": _payload_summary(payload),
+            "details": _lead_source_details(payload),
+            "payload": payload,
+        }
+    if artifact_type == "lead_shortlist":
+        return {
+            "kind": "shortlist",
+            "title": "Кого агент предложил взять в работу",
+            "status": payload.get("status") or "completed",
+            "summary": _payload_summary(payload),
+            "details": _lead_shortlist_details(payload),
+            "payload": payload,
+        }
+    if artifact_type == "message_drafts":
+        return {
+            "kind": "drafts",
+            "title": "Черновики сообщений",
+            "status": payload.get("status") or "completed",
+            "summary": _payload_summary(payload),
+            "details": _message_draft_details(payload),
+            "payload": payload,
+        }
+    if artifact_type == "outreach_outcomes":
+        return {
+            "kind": "queue",
+            "title": "Очередь отправки",
+            "status": payload.get("status") or "completed",
+            "summary": _payload_summary(payload),
+            "details": _outreach_queue_details(payload),
+            "payload": payload,
+        }
     if artifact_type == "agent_input_plan":
         return {
             "kind": "input",
@@ -630,6 +666,94 @@ def _generic_payload_details(payload: Dict[str, Any]) -> List[Dict[str, str]]:
     )
 
 
+def _lead_source_details(payload: Dict[str, Any]) -> List[Dict[str, str]]:
+    filters = payload.get("filters") if isinstance(payload.get("filters"), dict) else {}
+    status_counts = payload.get("status_counts") if isinstance(payload.get("status_counts"), dict) else {}
+    filter_text = _compact_key_values(filters, ("source", "city", "category", "intent", "limit"))
+    status_text = _compact_key_values(status_counts, tuple(status_counts.keys()))
+    return _non_empty_details(
+        [
+            ("Источник данных", payload.get("source")),
+            ("Найдено лидов", str(payload.get("count")) if payload.get("count") is not None else ""),
+            ("Фильтры", filter_text),
+            ("Статусы", status_text),
+        ]
+    )
+
+
+def _lead_shortlist_details(payload: Dict[str, Any]) -> List[Dict[str, str]]:
+    items = payload.get("items") if isinstance(payload.get("items"), list) else []
+    names = _item_values(items, "name")
+    channels = _item_values(items, "selected_channel")
+    return _non_empty_details(
+        [
+            ("Источник", payload.get("source")),
+            ("Лидов в shortlist", str(payload.get("count")) if payload.get("count") is not None else ""),
+            ("Сформировано из", payload.get("source_artifact")),
+            ("Лиды", ", ".join(names[:5])),
+            ("Каналы", ", ".join(channels[:5])),
+        ]
+    )
+
+
+def _message_draft_details(payload: Dict[str, Any]) -> List[Dict[str, str]]:
+    items = payload.get("items") if isinstance(payload.get("items"), list) else []
+    channels = _item_values(items, "channel")
+    statuses = _item_values(items, "status")
+    lead_names = _item_values(items, "lead_name")
+    return _non_empty_details(
+        [
+            ("Источник", payload.get("source")),
+            ("Черновиков", str(payload.get("count")) if payload.get("count") is not None else ""),
+            ("Лиды", ", ".join(lead_names[:5])),
+            ("Каналы", ", ".join(channels[:5])),
+            ("Статусы", ", ".join(statuses[:5])),
+            ("Внешняя отправка", "не выполнялась"),
+        ]
+    )
+
+
+def _outreach_queue_details(payload: Dict[str, Any]) -> List[Dict[str, str]]:
+    items = payload.get("items") if isinstance(payload.get("items"), list) else []
+    delivery_statuses = _item_values(items, "delivery_status")
+    return _non_empty_details(
+        [
+            ("Источник", payload.get("source")),
+            ("В очереди", str(payload.get("queued_count")) if payload.get("queued_count") is not None else ""),
+            ("Элементов", str(payload.get("count")) if payload.get("count") is not None else ""),
+            ("Dispatch", payload.get("dispatch_state")),
+            ("Delivery", ", ".join(delivery_statuses[:5])),
+            ("Внешняя отправка", "не выполнялась" if payload.get("external_dispatch_performed") is False else ""),
+            ("Контур", payload.get("operator_note")),
+        ]
+    )
+
+
+def _item_values(items: List[Any], key: str) -> List[str]:
+    result = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        value = _clean_text(item.get(key))
+        if value:
+            result.append(value)
+    return list(dict.fromkeys(result))
+
+
+def _compact_key_values(payload: Dict[str, Any], keys: tuple[Any, ...]) -> str:
+    parts = []
+    for key in keys:
+        value = payload.get(key)
+        if isinstance(value, list):
+            clean_items = [_clean_text(item) for item in value if _clean_text(item)]
+            clean_value = ", ".join(clean_items)
+        else:
+            clean_value = _clean_text(value)
+        if clean_value:
+            parts.append(f"{key}: {clean_value}")
+    return "; ".join(parts)
+
+
 def _non_empty_details(items: List[tuple[str, Any]]) -> List[Dict[str, str]]:
     details = []
     for label, value in items:
@@ -725,6 +849,10 @@ def _human_artifact_title(artifact_type: str) -> str:
         "agent_extracted_context": "Что агент понял",
         "agent_output_draft": "Подготовленный результат",
         "agent_final_result": "Принятый итог",
+        "lead_source_plan": "Откуда агент взял лидов",
+        "lead_shortlist": "Shortlist лидов",
+        "message_drafts": "Черновики сообщений",
+        "outreach_outcomes": "Очередь отправки",
     }
     return titles.get(artifact_type, artifact_type or "Результат")
 

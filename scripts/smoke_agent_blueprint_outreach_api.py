@@ -350,6 +350,28 @@ def main():
         time.sleep(2)
         assert_no_dispatch(ids)
 
+        _, review_payload = request_json(
+            "GET",
+            f"/api/agent-blueprints/{ids['blueprint_id']}/review",
+            token=token,
+            expected_status=200,
+        )
+        journal = review_payload.get("review", {}).get("journal") or []
+        journal_kinds = {str(item.get("kind") or "") for item in journal if isinstance(item, dict)}
+        required_kinds = {"sourcing", "shortlist", "drafts", "queue"}
+        if not required_kinds.issubset(journal_kinds):
+            raise RuntimeError(f"outreach review journal missing product stages: {review_payload}")
+        journal_labels = set()
+        for item in journal:
+            if not isinstance(item, dict):
+                continue
+            for detail in item.get("details") or []:
+                if isinstance(detail, dict):
+                    journal_labels.add(str(detail.get("label") or ""))
+        required_labels = {"Источник данных", "Найдено лидов", "Лидов в shortlist", "Черновиков", "В очереди", "Dispatch", "Внешняя отправка"}
+        if not required_labels.issubset(journal_labels):
+            raise RuntimeError(f"outreach review journal missing human labels: {review_payload}")
+
         print(
             json.dumps(
                 {
@@ -365,6 +387,8 @@ def main():
                     "approval_count": approval_count,
                     "queue_status": queue_row.get("delivery_status"),
                     "dispatch_state": send_result.get("dispatch_state"),
+                    "journal_kinds": sorted(journal_kinds),
+                    "journal_labels": sorted(journal_labels),
                     "dispatcher_started": False,
                     "fixture_cleaned": not KEEP_FIXTURE,
                 },

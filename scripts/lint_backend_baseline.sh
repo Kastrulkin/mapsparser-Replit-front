@@ -40,6 +40,7 @@ python3 -m py_compile \
   scripts/smoke_agent_blueprint_document_api.py \
   scripts/smoke_agent_blueprint_email_api.py \
   scripts/smoke_agent_blueprint_reviews_api.py \
+  scripts/smoke_agent_blueprint_outreach_api.py \
   scripts/smoke_agent_blueprint_table_api.py \
   scripts/smoke_agent_blueprint_generic_boundaries.py \
   scripts/smoke_agent_builder_dialog_api.py \

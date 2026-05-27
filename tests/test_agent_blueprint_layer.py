@@ -964,6 +964,83 @@ def test_agent_run_review_journal_is_human_readable():
     assert output_entry["payload"]["external_dispatch_performed"] is False
 
 
+def test_outreach_run_review_journal_explains_pipeline_and_queue_boundary():
+    from services.agent_blueprint_workspace import _review_journal
+
+    journal = _review_journal(
+        {"id": "run1", "input_json": {"source": "yandex_maps", "city": "Moscow", "limit": 5}},
+        [
+            {
+                "artifact_type": "lead_source_plan",
+                "payload_json": {
+                    "status": "hydrated",
+                    "source": "prospectingleads",
+                    "count": 1,
+                    "filters": {"source": "yandex_maps", "city": "Moscow", "intent": "client_outreach", "limit": 5},
+                    "status_counts": {"new": 1},
+                    "items": [{"id": "lead1", "name": "Fresh Lead", "status": "new"}],
+                },
+            },
+            {
+                "artifact_type": "lead_shortlist",
+                "payload_json": {
+                    "status": "hydrated",
+                    "source": "prospectingleads",
+                    "source_artifact": "lead_source_plan",
+                    "count": 1,
+                    "items": [{"id": "lead1", "name": "Fresh Lead", "selected_channel": "email"}],
+                },
+            },
+            {
+                "artifact_type": "message_drafts",
+                "payload_json": {
+                    "status": "hydrated",
+                    "source": "outreachmessagedrafts",
+                    "count": 1,
+                    "items": [{"id": "draft1", "lead_name": "Fresh Lead", "channel": "email", "status": "generated"}],
+                },
+            },
+            {
+                "artifact_type": "outreach_outcomes",
+                "payload_json": {
+                    "status": "hydrated",
+                    "source": "outreachsendqueue",
+                    "count": 1,
+                    "queued_count": 1,
+                    "dispatch_state": "queued_not_dispatched",
+                    "external_dispatch_performed": False,
+                    "operator_note": "Queue rows are LocalOS handoff records. External dispatcher is a separate contour.",
+                    "items": [{"id": "queue1", "delivery_status": "queued"}],
+                },
+            },
+        ],
+        [],
+        {
+            "agent_setup": {
+                "workflow_description": "Найти клиентов и подготовить сообщения",
+                "manual_control": "Подтверждать shortlist и черновики",
+            },
+        },
+    )
+
+    kinds = [item["kind"] for item in journal]
+    assert "sourcing" in kinds
+    assert "shortlist" in kinds
+    assert "drafts" in kinds
+    assert "queue" in kinds
+    sourcing_labels = [item["label"] for item in [entry for entry in journal if entry["kind"] == "sourcing"][0]["details"]]
+    shortlist_labels = [item["label"] for item in [entry for entry in journal if entry["kind"] == "shortlist"][0]["details"]]
+    draft_labels = [item["label"] for item in [entry for entry in journal if entry["kind"] == "drafts"][0]["details"]]
+    queue_labels = [item["label"] for item in [entry for entry in journal if entry["kind"] == "queue"][0]["details"]]
+    assert "Источник данных" in sourcing_labels
+    assert "Найдено лидов" in sourcing_labels
+    assert "Лидов в shortlist" in shortlist_labels
+    assert "Черновиков" in draft_labels
+    assert "В очереди" in queue_labels
+    assert "Dispatch" in queue_labels
+    assert "Внешняя отправка" in queue_labels
+
+
 def test_outreach_send_batch_handler_queues_approved_drafts_without_external_dispatch(monkeypatch):
     from services import outreach_send_capability
 
