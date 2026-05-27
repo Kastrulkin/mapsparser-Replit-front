@@ -1,0 +1,89 @@
+NAME                 IMAGE            COMMAND                  SERVICE    CREATED       STATUS                 PORTS
+seo-app-app-1        seo-app-app      "/app/entrypoint.sh …"   app        7 hours ago   Up 7 hours             0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp
+seo-app-postgres-1   postgres:16      "docker-entrypoint.s…"   postgres   6 weeks ago   Up 3 weeks (healthy)   5432/tcp
+seo-app-worker-1     seo-app-worker   "/app/entrypoint.sh …"   worker     7 hours ago   Up 7 hours             
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:49] "GET /assets/scroll-area-D-w90Y_7.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:49] "GET /assets/textarea-BYfa4QPL.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:49] "GET /api/agent-blueprints?business_id=smoke-table-agent-business-47484062c1 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:49] "GET /api/business/smoke-table-agent-business-47484062c1/ai-agents/manage HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:49] "GET /api/agent-blueprints/a973ed9f-8193-460a-99c8-af10e8187aeb/review HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:49] "GET /api/agent-blueprints/a973ed9f-8193-460a-99c8-af10e8187aeb HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:49] "GET /api/agent-blueprints?business_id=smoke-table-agent-business-47484062c1 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:49] "GET /api/agent-blueprints/a973ed9f-8193-460a-99c8-af10e8187aeb/sources/catalog HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:49] "GET /api/agent-runs/3ecbcb2a-3453-4fc9-99a1-4e3a80c4fa2c HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:49] "GET /api/agent-blueprints/a973ed9f-8193-460a-99c8-af10e8187aeb HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:50] "GET /api/agent-blueprints/a973ed9f-8193-460a-99c8-af10e8187aeb/review HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:50] "GET /login HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:50] "GET /assets/index-DSQ2R5r3.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:50] "GET /assets/vendor-Bd6D5Py9.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:50] "GET /assets/radix-BmXOczxJ.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:50] "GET /assets/router-0HhFJHfj.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:50] "GET /assets/icons-COJcFGfp.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:50] "GET /assets/query-4qgXgvfz.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:50] "GET /assets/index-Bdpj_cyG.css HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /assets/en-CTrHCRWS.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /assets/auth_new-C9_tYoOh.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /assets/LanguageSwitcher-D54k46AF.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /assets/Header-BkLsb9pb.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /assets/api-Bhbs2s3U.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /assets/Footer-BNLsixZz.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /assets/Login-KFwExRy9.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /assets/logo-BY03Vnee.png HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "POST /api/auth/login HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /assets/select-Dg6qxrIh.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /assets/DashboardLayout-gjDjPs5a.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /assets/BusinessSwitcher-PhNdxHAR.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /dashboard/agents HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /assets/networkRepresentative-CRdnvs4A.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /assets/index-DSQ2R5r3.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /assets/index-Bdpj_cyG.css HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /assets/vendor-Bd6D5Py9.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /assets/router-0HhFJHfj.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /assets/radix-BmXOczxJ.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /assets/query-4qgXgvfz.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /assets/icons-COJcFGfp.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /assets/en-CTrHCRWS.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /assets/networkRepresentative-CRdnvs4A.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /assets/api-Bhbs2s3U.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /assets/auth_new-C9_tYoOh.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /assets/select-Dg6qxrIh.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /assets/DashboardLayout-gjDjPs5a.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /assets/BusinessSwitcher-PhNdxHAR.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /assets/LanguageSwitcher-D54k46AF.js HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:51] "GET /api/auth/me HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:52] "GET /api/auth/me HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:52] "GET /assets/logo-BY03Vnee.png HTTP/1.0" 304 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:52] "GET /assets/dialog-DzR2-QLn.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:52] "GET /assets/AgentBlueprintsPage-CrMHjOCO.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:52] "GET /assets/tabs-B0Rb3orT.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:52] "GET /assets/input-DqO-0gqk.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:52] "GET /assets/DashboardPrimitives-CpMat98S.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:52] "GET /assets/switch-DNR2OqQv.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:52] "GET /assets/label-RDB0hF20.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:52] "GET /assets/subscriptionAccess-B3ig_O45.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:52] "GET /assets/AIAgentsManagement-Cl9SgRFw.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:52] "GET /assets/card-gH_pZBvV.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:52] "GET /assets/textarea-BYfa4QPL.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:52] "GET /assets/api-Cic1JMzt.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:52] "GET /assets/badge-DnY0lvwe.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:52] "GET /assets/scroll-area-D-w90Y_7.js HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:52] "GET /api/agent-blueprints?business_id=smoke-reviews-agent-business-5c45084913 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:52] "GET /api/business/smoke-reviews-agent-business-5c45084913/ai-agents/manage HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:52] "GET /api/agent-blueprints?business_id=smoke-reviews-agent-business-5c45084913 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:52] "GET /api/agent-blueprints/989d80a3-9161-47b7-9c10-ca40b8980051/review HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:52] "GET /api/agent-blueprints/989d80a3-9161-47b7-9c10-ca40b8980051 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:52] "GET /api/agent-blueprints/989d80a3-9161-47b7-9c10-ca40b8980051/sources/catalog HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:52] "GET /api/agent-runs/99077fe9-ed66-4256-8094-f1df8ce5b8ef HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:52] "GET /api/agent-blueprints/989d80a3-9161-47b7-9c10-ca40b8980051 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:30:52] "GET /api/agent-blueprints/989d80a3-9161-47b7-9c10-ca40b8980051/review HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:33:07] "GET /wp-admin/install.php?step=1 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:33:49] "GET / HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:33:49] "GET /wp-includes/wlwmanifest.xml HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:33:50] "GET /xmlrpc.php?rsd HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:33:50] "GET / HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 16:33:50] "GET /blog/wp-includes/wlwmanifest.xml HTTP/1.0" 200 -
+HTTP/1.1 200 OK
+Server: Werkzeug/3.1.8 Python/3.11.15
+Date: Wed, 27 May 2026 16:34:52 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 5532

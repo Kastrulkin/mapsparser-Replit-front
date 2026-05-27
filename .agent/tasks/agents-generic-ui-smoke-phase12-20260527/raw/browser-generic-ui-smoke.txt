@@ -1,0 +1,62 @@
+running email
+running tables
+running reviews
+{
+  "success": true,
+  "base_url": "https://localos.pro",
+  "results": [
+    {
+      "name": "email",
+      "email": "smoke-email-agent-62f874d491@example.invalid",
+      "run_id": "88641347-03d6-4d76-8c83-76a0e5b4e581",
+      "checked_text": [
+        "Путь письма-агента",
+        "Входные данные",
+        "Что понял",
+        "Результат",
+        "Ручной контроль",
+        "Тема письма",
+        "Внешняя отправка",
+        "Технический журнал"
+      ],
+      "visible_pre_count_before_technical_journal": 0,
+      "screenshot": "browser-email-results.png"
+    },
+    {
+      "name": "tables",
+      "email": "smoke-table-agent-47484062c1@example.invalid",
+      "run_id": "3ecbcb2a-3453-4fc9-99a1-4e3a80c4fa2c",
+      "checked_text": [
+        "Путь таблицы-агента",
+        "Входные данные",
+        "Что понял",
+        "Результат",
+        "Ручной контроль",
+        "Исключений",
+        "Строк к проверке",
+        "Внешняя отправка",
+        "Технический журнал"
+      ],
+      "visible_pre_count_before_technical_journal": 0,
+      "screenshot": "browser-tables-results.png"
+    },
+    {
+      "name": "reviews",
+      "email": "smoke-reviews-agent-5c45084913@example.invalid",
+      "run_id": "99077fe9-ed66-4256-8094-f1df8ce5b8ef",
+      "checked_text": [
+        "Путь отзывы-агента",
+        "Входные данные",
+        "Что понял",
+        "Результат",
+        "Ручной контроль",
+        "Черновиков ответов",
+        "Причин ручной проверки",
+        "Публикация",
+        "Технический журнал"
+      ],
+      "visible_pre_count_before_technical_journal": 0,
+      "screenshot": "browser-reviews-results.png"
+    }
+  ]
+}

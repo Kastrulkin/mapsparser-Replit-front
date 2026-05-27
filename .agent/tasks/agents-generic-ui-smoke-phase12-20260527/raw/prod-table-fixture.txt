@@ -1,0 +1,22 @@
+{
+  "success": true,
+  "base_url": "http://localhost:8000",
+  "business_id": "smoke-table-agent-business-47484062c1",
+  "blueprint_id": "a973ed9f-8193-460a-99c8-af10e8187aeb",
+  "run_id": "3ecbcb2a-3453-4fc9-99a1-4e3a80c4fa2c",
+  "approval_type": "final_output",
+  "analysis_source": "gigachat",
+  "llm_analysis_used": true,
+  "exceptions_count": 2,
+  "rows_to_review_count": 2,
+  "journal_detail_labels": [
+    "Provenance",
+    "Внешняя отправка",
+    "Исключений",
+    "Использовал LLM",
+    "Источник анализа",
+    "Строк к проверке"
+  ],
+  "external_dispatch_performed": false,
+  "fixture_cleaned": false
+}

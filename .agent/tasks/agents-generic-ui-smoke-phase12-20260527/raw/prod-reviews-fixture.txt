@@ -1,0 +1,25 @@
+{
+  "success": true,
+  "base_url": "http://localhost:8000",
+  "business_id": "smoke-reviews-agent-business-5c45084913",
+  "blueprint_id": "989d80a3-9161-47b7-9c10-ca40b8980051",
+  "run_id": "99077fe9-ed66-4256-8094-f1df8ce5b8ef",
+  "approval_type": "final_output",
+  "analysis_source": "gigachat",
+  "llm_analysis_used": true,
+  "reply_drafts_count": 2,
+  "manual_review_reasons_count": 3,
+  "journal_detail_labels": [
+    "Provenance",
+    "Внешняя отправка",
+    "Использовал LLM",
+    "Источник анализа",
+    "Причин ручной проверки",
+    "Публикация",
+    "Чеклист",
+    "Черновиков ответов"
+  ],
+  "publish_state": "not_published",
+  "external_dispatch_performed": false,
+  "fixture_cleaned": false
+}

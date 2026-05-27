@@ -1,0 +1,65 @@
+{
+  "task_id": "agents-generic-ui-smoke-phase12-20260527",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Production API fixtures can create email, table, and reviews generic agent runs with LLM analysis and no external dispatch.",
+      "status": "PASS",
+      "proof": [
+        "raw/prod-email-fixture.txt",
+        "raw/prod-table-fixture.txt",
+        "raw/prod-reviews-fixture.txt"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Authenticated browser UI smoke can log in as each test user, open /dashboard/agents, select the run result, and see a human-readable run path for each agent type.",
+      "status": "PASS",
+      "proof": [
+        "raw/browser-generic-ui-smoke.txt",
+        "raw/browser-email-results.png",
+        "raw/browser-tables-results.png",
+        "raw/browser-reviews-results.png"
+      ],
+      "gaps": [
+        "In-app browser typing was blocked by missing virtual clipboard, so local headless Playwright was used."
+      ]
+    },
+    {
+      "id": "AC3",
+      "text": "JSON/runtime payload stays hidden behind Technical Journal by default for email, table, and reviews result views.",
+      "status": "PASS",
+      "proof": [
+        "raw/browser-generic-ui-smoke.txt"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Temporary production smoke fixtures are cleaned up and verified absent.",
+      "status": "PASS",
+      "proof": [
+        "raw/prod-fixtures-cleanup.txt",
+        "raw/prod-fixtures-cleanup-verify.txt"
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    ".agent/tasks/agents-generic-ui-smoke-phase12-20260527/spec.md",
+    ".agent/tasks/agents-generic-ui-smoke-phase12-20260527/evidence.md",
+    ".agent/tasks/agents-generic-ui-smoke-phase12-20260527/evidence.json",
+    ".agent/tasks/agents-generic-ui-smoke-phase12-20260527/verdict.json",
+    ".agent/tasks/agents-generic-ui-smoke-phase12-20260527/raw/generic_ui_smoke.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "Review raw/prod-*-fixture.txt for API fixture results.",
+    "Review raw/browser-generic-ui-smoke.txt and screenshots for UI smoke results.",
+    "Review raw/prod-fixtures-cleanup-verify.txt for production cleanup zero counts."
+  ],
+  "known_gaps": [
+    "No product code changed in this cycle, so no deploy was needed."
+  ]
+}
