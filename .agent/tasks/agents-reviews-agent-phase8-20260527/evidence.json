@@ -1,0 +1,79 @@
+{
+  "task_id": "agents-reviews-agent-phase8-20260527",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Reviews agent creates useful reply drafts from review text/internal sources.",
+      "status": "PASS",
+      "proof": [
+        "src/services/agent_review_reply_analysis.py implements LLM-backed and fallback reply drafting.",
+        "tests/test_agent_blueprint_layer.py covers generic reviews runner output.",
+        "Production smoke produced reply_drafts_count=2."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Result includes manual review reasons, checklist, provenance, and LLM/fallback metadata.",
+      "status": "PASS",
+      "proof": [
+        "Unit tests cover generator and fallback paths.",
+        "Production smoke returned manual_review_reasons_count=3, analysis_source=gigachat, llm_analysis_used=true."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Reviews agent performs no publish/send/dispatch capability and stops at final approval.",
+      "status": "PASS",
+      "proof": [
+        "Runner test asserts no capability steps.",
+        "Smoke asserts external_dispatch_performed=false, delivery_state=not_dispatched, publish_state=not_published.",
+        "Smoke stopped at approval_type=final_output."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Run review journal exposes human labels for reply drafts, manual review reasons, and publication state.",
+      "status": "PASS",
+      "proof": [
+        "Workspace journal output details include reply draft count, manual review reason count, and publication state.",
+        "Production smoke confirmed the labels."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Local checks, production deploy, and targeted production API smoke pass.",
+      "status": "PASS",
+      "proof": [
+        "31 unit tests passed.",
+        "lint_backend_baseline passed.",
+        "frontend build passed.",
+        "backend deploy exited 0.",
+        "production reviews smoke passed and cleaned fixture."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/services/agent_review_reply_analysis.py",
+    "src/services/agent_blueprint_workspace.py",
+    "tests/test_agent_blueprint_layer.py",
+    "scripts/smoke_agent_blueprint_reviews_api.py",
+    "scripts/lint_backend_baseline.sh"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "scripts/lint_backend_baseline.sh",
+    "npm --prefix frontend run build",
+    "SMOKE_BASE_URL=http://localhost:8000 python scripts/smoke_agent_blueprint_reviews_api.py"
+  ],
+  "known_gaps": [
+    "Publishing provider integration is intentionally not implemented.",
+    "UI click-through for a reviews agent was not part of this backend-focused phase.",
+    "Server logs still show the previously known explicit GigaChat SSL verification workaround warning."
+  ]
+}

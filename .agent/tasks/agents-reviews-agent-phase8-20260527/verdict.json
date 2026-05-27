@@ -1,0 +1,46 @@
+{
+  "task_id": "agents-reviews-agent-phase8-20260527",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Reviews blueprint now produces useful reply drafts from review source data."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Result includes manual review reasons, checklist, provenance, and LLM/fallback metadata."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "No capability dispatch or publication is performed; run stops at final approval."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Review journal exposes human-readable labels for reply drafts, review reasons, and publication state."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Unit, lint, build, deploy, and production smoke checks passed."
+    }
+  ],
+  "commands_run": [
+    "python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "scripts/lint_backend_baseline.sh",
+    "npm --prefix frontend run build",
+    "scripts/deploy_backend_src.sh",
+    "docker compose exec -T app env SMOKE_BASE_URL=http://localhost:8000 python /app/scripts/smoke_agent_blueprint_reviews_api.py",
+    "docker compose ps && docker compose logs --since 10m app | tail -n 140 && curl -I http://localhost:8000"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/agents-reviews-agent-phase8-20260527/raw/test-unit.txt",
+    ".agent/tasks/agents-reviews-agent-phase8-20260527/raw/lint.txt",
+    ".agent/tasks/agents-reviews-agent-phase8-20260527/raw/build.txt",
+    ".agent/tasks/agents-reviews-agent-phase8-20260527/raw/test-integration.txt",
+    ".agent/tasks/agents-reviews-agent-phase8-20260527/raw/server-health.txt"
+  ]
+}
