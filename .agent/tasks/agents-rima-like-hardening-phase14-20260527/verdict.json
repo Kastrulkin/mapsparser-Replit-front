@@ -1,0 +1,47 @@
+{
+  "task_id": "agents-rima-like-hardening-phase14-20260527",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Production UI/API smoke created a document agent through dialog builder and verified builder/setup metadata."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Datahub catalog includes connected text and uploaded file sources with ready state and preview."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Run review, feedback version creation, diff, rollback, and activation were verified."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Generic documents/email/tables/reviews smoke verified approval boundary and no external dispatch."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Production fixture cleanup verified zero remaining rows and service health returned 200 OK."
+    }
+  ],
+  "commands_run": [
+    "python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'agent_datahub_catalog or agent_builder_session'",
+    "scripts/lint_backend_baseline.sh",
+    "SMOKE_UI_PASSWORD=... python3 .agent/tasks/agents-rima-like-hardening-phase14-20260527/raw/rima_like_dialog_datahub_version_smoke.py",
+    "ssh ... 'cd /opt/seo-app && docker compose exec -T app ... python -' < scripts/smoke_agent_blueprint_generic_boundaries.py",
+    "ssh ... 'cd /opt/seo-app && docker compose exec -T postgres psql ... cleanup/verify ...'",
+    "ssh ... 'cd /opt/seo-app && docker compose ps && curl -I -sS http://localhost:8000 | head -5'"
+  ],
+  "artifacts_used": [
+    "raw/dialog-datahub-version-smoke-after-proof-fix.txt",
+    "raw/prod-generic-boundaries-smoke-after-fix.txt",
+    "raw/prod-fixture-cleanup-verify.txt",
+    "raw/prod-health-after-phase14.txt",
+    "raw/test-unit.txt",
+    "raw/lint.txt"
+  ]
+}

@@ -1,0 +1,5 @@
+NAME                 IMAGE            COMMAND                  SERVICE    CREATED       STATUS                  PORTS
+seo-app-app-1        seo-app-app      "/app/entrypoint.sh …"   app        9 hours ago   Up Less than a second   0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp
+seo-app-postgres-1   postgres:16      "docker-entrypoint.s…"   postgres   6 weeks ago   Up 3 weeks (healthy)    5432/tcp
+seo-app-worker-1     seo-app-worker   "/app/entrypoint.sh …"   worker     9 hours ago   Up Less than a second   
+{'key': 'agent_source:s1', 'title': 'Smoke source', 'description': 'Текстовый контекст, подключённый к агенту.', 'available_count': 1, 'connected': True, 'preview': ['hello'], 'state': 'ready', 'source_type': 'text', 'source_id': 's1', 'extraction_state': 'ready', 'error': ''}

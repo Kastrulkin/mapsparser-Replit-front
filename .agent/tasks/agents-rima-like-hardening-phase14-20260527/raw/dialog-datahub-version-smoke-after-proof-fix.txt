@@ -1,0 +1,57 @@
+{
+  "success": true,
+  "base_url": "https://localos.pro",
+  "business_id": "smoke-rima-agent-business-9d8f2a6c31",
+  "blueprint_id": "34583930-7b09-4de2-b063-3f66b5508551",
+  "category": "documents",
+  "builder": "dialog_builder_v1",
+  "setup_completed": true,
+  "datahub": {
+    "text_source": {
+      "content_length": 80,
+      "content_text": "Договор: оплата 15000 до 10 июня. Штраф 12% за просрочку. Срок оказания 30 дней.",
+      "extraction_error": "",
+      "extraction_method": "",
+      "extraction_state": "ready",
+      "file_name": "",
+      "file_size_bytes": 0,
+      "id": "1222751f-26aa-4aad-996e-73ced487d939",
+      "internal_source": "",
+      "mime_type": "",
+      "name": "Smoke договор контекст",
+      "source_type": "text"
+    },
+    "upload_source": {
+      "content_length": 68,
+      "content_text": "Smoke contract upload. Payment 15000. Penalty 12%. Deadline 10 June.",
+      "extraction_error": "",
+      "extraction_method": "plain_text",
+      "extraction_state": "ready",
+      "file_name": "smoke-contract.txt",
+      "file_size_bytes": 68,
+      "id": "5713947f-2432-464e-b0e7-949f80e46040",
+      "internal_source": "",
+      "mime_type": "text/plain",
+      "name": "Smoke uploaded contract",
+      "source_type": "file"
+    },
+    "catalog_count": 7
+  },
+  "version_loop": {
+    "run_id": "3b38cb89-e857-48dd-bb75-3be8ffb71a54",
+    "initial_version": 1,
+    "feedback_version": 2,
+    "journal_kinds": [
+      "approval",
+      "extraction",
+      "input",
+      "output"
+    ],
+    "dispatch_state": "not_dispatched",
+    "external_dispatch_performed": false,
+    "diff_changed_fields": [
+      "approval_policy",
+      "output_schema"
+    ]
+  }
+}

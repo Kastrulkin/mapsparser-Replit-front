@@ -1,0 +1,65 @@
+NAME                 IMAGE            COMMAND                  SERVICE    CREATED       STATUS                 PORTS
+seo-app-app-1        seo-app-app      "/app/entrypoint.sh …"   app        9 hours ago   Up 4 minutes           0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp
+seo-app-postgres-1   postgres:16      "docker-entrypoint.s…"   postgres   6 weeks ago   Up 3 weeks (healthy)   5432/tcp
+seo-app-worker-1     seo-app-worker   "/app/entrypoint.sh …"   worker     9 hours ago   Up 4 minutes           
+app-1  | 172.18.0.1 - - [27/May/2026 17:45:07] "POST /api/agent-blueprints/34583930-7b09-4de2-b063-3f66b5508551/runs HTTP/1.0" 201 -
+app-1  | 172.18.0.1 - - [27/May/2026 17:45:08] "GET /api/agent-blueprints/34583930-7b09-4de2-b063-3f66b5508551/review HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 17:45:09] "GET /api/agent-blueprints/34583930-7b09-4de2-b063-3f66b5508551 HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 17:45:10] "POST /api/agent-runs/3b38cb89-e857-48dd-bb75-3be8ffb71a54/feedback HTTP/1.0" 201 -
+app-1  | 172.18.0.1 - - [27/May/2026 17:45:10] "POST /api/agent-blueprints/34583930-7b09-4de2-b063-3f66b5508551/versions/d9f251bb-da4a-49d9-b79a-b2df0cd1101e/rollback HTTP/1.0" 200 -
+app-1  | 172.18.0.1 - - [27/May/2026 17:45:11] "POST /api/agent-blueprints/34583930-7b09-4de2-b063-3f66b5508551/versions/7115367d-de31-443f-a4ab-6ea106cd1882/activate HTTP/1.0" 200 -
+app-1  | 127.0.0.1 - - [27/May/2026 17:45:28] "POST /api/auth/login HTTP/1.1" 200 -
+app-1  | 127.0.0.1 - - [27/May/2026 17:45:28] "POST /api/agent-blueprints/draft HTTP/1.1" 201 -
+app-1  | 127.0.0.1 - - [27/May/2026 17:45:28] "POST /api/agent-blueprints/db1fdc6a-393a-4728-beb8-2e9d402207fe/setup HTTP/1.1" 200 -
+app-1  | 127.0.0.1 - - [27/May/2026 17:45:28] "POST /api/agent-blueprints/db1fdc6a-393a-4728-beb8-2e9d402207fe/sources HTTP/1.1" 201 -
+app-1  | /usr/local/lib/python3.11/site-packages/urllib3/connectionpool.py:1110: InsecureRequestWarning: Unverified HTTPS request is being made to host 'gigachat.devices.sberbank.ru'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+app-1  |   warnings.warn(
+app-1  | 127.0.0.1 - - [27/May/2026 17:45:34] "POST /api/agent-blueprints/db1fdc6a-393a-4728-beb8-2e9d402207fe/runs HTTP/1.1" 201 -
+app-1  | 127.0.0.1 - - [27/May/2026 17:45:34] "POST /api/agent-blueprints/draft HTTP/1.1" 201 -
+app-1  | 127.0.0.1 - - [27/May/2026 17:45:34] "POST /api/agent-blueprints/5bb0cae2-60f1-4abf-89e9-8d6862636b4d/setup HTTP/1.1" 200 -
+app-1  | 127.0.0.1 - - [27/May/2026 17:45:34] "POST /api/agent-blueprints/5bb0cae2-60f1-4abf-89e9-8d6862636b4d/sources HTTP/1.1" 201 -
+app-1  | /usr/local/lib/python3.11/site-packages/urllib3/connectionpool.py:1110: InsecureRequestWarning: Unverified HTTPS request is being made to host 'gigachat.devices.sberbank.ru'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+app-1  |   warnings.warn(
+app-1  | 127.0.0.1 - - [27/May/2026 17:45:39] "POST /api/agent-blueprints/5bb0cae2-60f1-4abf-89e9-8d6862636b4d/runs HTTP/1.1" 201 -
+app-1  | 127.0.0.1 - - [27/May/2026 17:45:39] "POST /api/agent-blueprints/draft HTTP/1.1" 201 -
+app-1  | 127.0.0.1 - - [27/May/2026 17:45:39] "POST /api/agent-blueprints/174d309b-c310-42a6-b31a-c7803d8b7bc2/setup HTTP/1.1" 200 -
+app-1  | 127.0.0.1 - - [27/May/2026 17:45:39] "POST /api/agent-blueprints/174d309b-c310-42a6-b31a-c7803d8b7bc2/sources HTTP/1.1" 201 -
+app-1  | /usr/local/lib/python3.11/site-packages/urllib3/connectionpool.py:1110: InsecureRequestWarning: Unverified HTTPS request is being made to host 'gigachat.devices.sberbank.ru'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+app-1  |   warnings.warn(
+app-1  | 127.0.0.1 - - [27/May/2026 17:45:44] "POST /api/agent-blueprints/174d309b-c310-42a6-b31a-c7803d8b7bc2/runs HTTP/1.1" 201 -
+app-1  | 127.0.0.1 - - [27/May/2026 17:45:44] "POST /api/agent-blueprints/draft HTTP/1.1" 201 -
+app-1  | 127.0.0.1 - - [27/May/2026 17:45:44] "POST /api/agent-blueprints/86a94eb6-c55d-4cf9-b472-b1aa41e4d231/setup HTTP/1.1" 200 -
+app-1  | 127.0.0.1 - - [27/May/2026 17:45:44] "POST /api/agent-blueprints/86a94eb6-c55d-4cf9-b472-b1aa41e4d231/sources HTTP/1.1" 201 -
+app-1  | /usr/local/lib/python3.11/site-packages/urllib3/connectionpool.py:1110: InsecureRequestWarning: Unverified HTTPS request is being made to host 'gigachat.devices.sberbank.ru'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+app-1  |   warnings.warn(
+app-1  | 127.0.0.1 - - [27/May/2026 17:45:49] "POST /api/agent-blueprints/86a94eb6-c55d-4cf9-b472-b1aa41e4d231/runs HTTP/1.1" 201 -
+app-1  | 127.0.0.1 - - [27/May/2026 17:46:05] "POST /api/auth/login HTTP/1.1" 200 -
+app-1  | 127.0.0.1 - - [27/May/2026 17:46:05] "POST /api/agent-blueprints/draft HTTP/1.1" 201 -
+app-1  | 127.0.0.1 - - [27/May/2026 17:46:06] "POST /api/agent-blueprints/702669fa-89f0-4711-9ef7-372cddff8f13/setup HTTP/1.1" 200 -
+app-1  | 127.0.0.1 - - [27/May/2026 17:46:06] "POST /api/agent-blueprints/702669fa-89f0-4711-9ef7-372cddff8f13/sources HTTP/1.1" 201 -
+app-1  | /usr/local/lib/python3.11/site-packages/urllib3/connectionpool.py:1110: InsecureRequestWarning: Unverified HTTPS request is being made to host 'gigachat.devices.sberbank.ru'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+app-1  |   warnings.warn(
+app-1  | 127.0.0.1 - - [27/May/2026 17:46:11] "POST /api/agent-blueprints/702669fa-89f0-4711-9ef7-372cddff8f13/runs HTTP/1.1" 201 -
+app-1  | 127.0.0.1 - - [27/May/2026 17:46:11] "POST /api/agent-blueprints/draft HTTP/1.1" 201 -
+app-1  | 127.0.0.1 - - [27/May/2026 17:46:11] "POST /api/agent-blueprints/b012988a-0c9d-417f-902e-13a7a1bd3eb3/setup HTTP/1.1" 200 -
+app-1  | 127.0.0.1 - - [27/May/2026 17:46:11] "POST /api/agent-blueprints/b012988a-0c9d-417f-902e-13a7a1bd3eb3/sources HTTP/1.1" 201 -
+app-1  | /usr/local/lib/python3.11/site-packages/urllib3/connectionpool.py:1110: InsecureRequestWarning: Unverified HTTPS request is being made to host 'gigachat.devices.sberbank.ru'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+app-1  |   warnings.warn(
+app-1  | 127.0.0.1 - - [27/May/2026 17:46:20] "POST /api/agent-blueprints/b012988a-0c9d-417f-902e-13a7a1bd3eb3/runs HTTP/1.1" 201 -
+app-1  | 127.0.0.1 - - [27/May/2026 17:46:20] "POST /api/agent-blueprints/draft HTTP/1.1" 201 -
+app-1  | 127.0.0.1 - - [27/May/2026 17:46:20] "POST /api/agent-blueprints/9b53a71a-ba47-4ff5-b52b-d8106b5897d8/setup HTTP/1.1" 200 -
+app-1  | 127.0.0.1 - - [27/May/2026 17:46:20] "POST /api/agent-blueprints/9b53a71a-ba47-4ff5-b52b-d8106b5897d8/sources HTTP/1.1" 201 -
+app-1  | /usr/local/lib/python3.11/site-packages/urllib3/connectionpool.py:1110: InsecureRequestWarning: Unverified HTTPS request is being made to host 'gigachat.devices.sberbank.ru'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+app-1  |   warnings.warn(
+app-1  | 127.0.0.1 - - [27/May/2026 17:46:25] "POST /api/agent-blueprints/9b53a71a-ba47-4ff5-b52b-d8106b5897d8/runs HTTP/1.1" 201 -
+app-1  | 127.0.0.1 - - [27/May/2026 17:46:25] "POST /api/agent-blueprints/draft HTTP/1.1" 201 -
+app-1  | 127.0.0.1 - - [27/May/2026 17:46:25] "POST /api/agent-blueprints/6f68bef5-6b51-4993-b213-dd540abc6c7b/setup HTTP/1.1" 200 -
+app-1  | 127.0.0.1 - - [27/May/2026 17:46:25] "POST /api/agent-blueprints/6f68bef5-6b51-4993-b213-dd540abc6c7b/sources HTTP/1.1" 201 -
+app-1  | /usr/local/lib/python3.11/site-packages/urllib3/connectionpool.py:1110: InsecureRequestWarning: Unverified HTTPS request is being made to host 'gigachat.devices.sberbank.ru'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+app-1  |   warnings.warn(
+app-1  | 127.0.0.1 - - [27/May/2026 17:46:31] "POST /api/agent-blueprints/6f68bef5-6b51-4993-b213-dd540abc6c7b/runs HTTP/1.1" 201 -
+HTTP/1.1 200 OK
+Server: Werkzeug/3.1.8 Python/3.11.15
+Date: Wed, 27 May 2026 17:47:04 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 5532

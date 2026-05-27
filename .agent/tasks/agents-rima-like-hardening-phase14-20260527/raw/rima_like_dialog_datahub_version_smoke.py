@@ -130,11 +130,19 @@ def add_datahub_sources(token, blueprint_id):
     )
     catalog_payload = request_json("GET", f"/api/agent-blueprints/{blueprint_id}/sources/catalog", token=token)
     catalog = catalog_payload.get("catalog") or []
-    names = {str(item.get("name") or "") for item in catalog}
-    if "Smoke договор контекст" not in names or "Smoke uploaded contract" not in names:
+    connected_sources = [
+        item for item in catalog
+        if item.get("connected") is True and str(item.get("key") or "").startswith("agent_source:")
+    ]
+    titles = {str(item.get("title") or "") for item in connected_sources}
+    if "Smoke договор контекст" not in titles or "Smoke uploaded contract" not in titles:
         raise RuntimeError(f"Datahub catalog missing sources: {catalog_payload}")
-    statuses = {str(item.get("status") or "") for item in catalog if str(item.get("name") or "").startswith("Smoke")}
-    if "ready" not in statuses:
+    states = {
+        str(item.get("source_type") or ""): str(item.get("state") or "")
+        for item in connected_sources
+        if str(item.get("title") or "").startswith("Smoke")
+    }
+    if states.get("text") != "ready" or states.get("file") != "ready":
         raise RuntimeError(f"Datahub sources not ready: {catalog_payload}")
     return {"text_source": text_payload.get("source"), "upload_source": upload_payload.get("source"), "catalog_count": len(catalog)}
 

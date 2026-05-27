@@ -1,0 +1,33 @@
+{
+  "success": true,
+  "base_url": "http://localhost:8000",
+  "business_id": "smoke-generic-agent-business-7abe6a574f",
+  "checked_categories": [
+    "documents",
+    "email",
+    "tables",
+    "reviews"
+  ],
+  "blueprints": [
+    {
+      "category": "documents",
+      "blueprint_id": "702669fa-89f0-4711-9ef7-372cddff8f13"
+    },
+    {
+      "category": "email",
+      "blueprint_id": "b012988a-0c9d-417f-902e-13a7a1bd3eb3"
+    },
+    {
+      "category": "tables",
+      "blueprint_id": "9b53a71a-ba47-4ff5-b52b-d8106b5897d8"
+    },
+    {
+      "category": "reviews",
+      "blueprint_id": "6f68bef5-6b51-4993-b213-dd540abc6c7b"
+    }
+  ],
+  "external_dispatch_performed": false,
+  "dispatcher_started": false,
+  "approvals_required": true,
+  "fixture_cleaned": true
+}

@@ -1,0 +1,12 @@
+DELETE 1
+DELETE 1
+DELETE 2
+DELETE 1
+DELETE 8
+DELETE 1
+DELETE 1
+   status   
+------------
+ cleanup_ok
+(1 row)
+

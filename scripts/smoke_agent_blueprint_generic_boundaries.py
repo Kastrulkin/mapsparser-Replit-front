@@ -50,7 +50,7 @@ GENERIC_AGENT_CASES = [
         "description": "Подготовь ответы на отзывы без публикации",
         "source_name": "Отзывы",
         "source_text": "Анна: отлично, 5 звезд. Иван: долго ждал, 3 звезды.",
-        "expected_result_keys": {"replies"},
+        "expected_result_keys": {"reply_drafts"},
     },
 ]
 
