@@ -1,0 +1,41 @@
+{
+  "task_id": "agents-outreach-journal-phase9-20260527",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Outreach artifacts are represented as product stages in the run review journal."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Journal details expose source, counts, filters, channels, queue state, and no-send boundary."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Production smoke confirmed prospectingleads sourcing, approvals, drafts, queue, and no dispatcher."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Local checks, deploy verification, and production smoke passed."
+    }
+  ],
+  "commands_run": [
+    "python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "scripts/lint_backend_baseline.sh",
+    "npm --prefix frontend run build",
+    "partial deploy via scp and docker compose restart app worker",
+    "docker compose exec -T app env SMOKE_BASE_URL=http://localhost:8000 python /app/scripts/smoke_agent_blueprint_outreach_api.py",
+    "docker compose ps && docker compose logs --since 10m app | tail -n 160 && curl -I http://localhost:8000"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/agents-outreach-journal-phase9-20260527/raw/test-unit.txt",
+    ".agent/tasks/agents-outreach-journal-phase9-20260527/raw/lint.txt",
+    ".agent/tasks/agents-outreach-journal-phase9-20260527/raw/build.txt",
+    ".agent/tasks/agents-outreach-journal-phase9-20260527/raw/test-integration.txt",
+    ".agent/tasks/agents-outreach-journal-phase9-20260527/raw/server-health.txt"
+  ]
+}
