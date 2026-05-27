@@ -1,0 +1,79 @@
+{
+  "task_id": "agents-run-detail-human-journal-phase5-20260527",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Backend review endpoint returns a human-readable journal for the latest run.",
+      "status": "PASS",
+      "proof": [
+        "agent_blueprint_workspace.py builds review.journal via _review_journal",
+        "test_agent_run_review_journal_is_human_readable passed"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Journal entries cover inputs, extraction/processing, result, and approvals.",
+      "status": "PASS",
+      "proof": [
+        "Production smoke returned journal_kinds: approval, extraction, input, output"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "UI shows journal by default and keeps technical payload collapsed.",
+      "status": "PASS",
+      "proof": [
+        "AgentBlueprintsPage renders Журнал запуска, JournalEntryCard, and collapsed Технический журнал"
+      ],
+      "gaps": [
+        "Authenticated production browser click-through was not performed under a real user in this phase."
+      ]
+    },
+    {
+      "id": "AC4",
+      "text": "Document-agent smoke validates the journal contract and no external dispatch.",
+      "status": "PASS",
+      "proof": [
+        "smoke_agent_blueprint_document_api.py validates review.journal",
+        "Production smoke returned external_dispatch_performed=false and fixture_cleaned=true"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Local checks, production deploy, and live sanity checks pass.",
+      "status": "PASS",
+      "proof": [
+        "Unit tests passed: 22 passed",
+        "lint_backend_baseline.sh passed",
+        "frontend build passed",
+        "deploy EXIT=0",
+        "server curl returned HTTP/1.1 200 OK",
+        "browser sanity loaded deployed bundle with no console errors"
+      ],
+      "gaps": [
+        "Frontend deploy logged tar static-sync warnings, but integrity checks and live asset references passed."
+      ]
+    }
+  ],
+  "changed_files": [
+    "src/services/agent_blueprint_workspace.py",
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
+    "tests/test_agent_blueprint_layer.py",
+    "scripts/smoke_agent_blueprint_document_api.py",
+    "scripts/lint_backend_baseline.sh"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "scripts/lint_backend_baseline.sh",
+    "npm --prefix frontend run build",
+    "scripts/smoke_agent_blueprint_document_api.py"
+  ],
+  "known_gaps": [
+    "Authenticated production UI smoke under a real user was not performed in this phase; API/live bundle checks passed.",
+    "Old unrelated untracked .agent/tasks/agent-api-contract-onboarding-20260525/ remains untouched."
+  ]
+}
