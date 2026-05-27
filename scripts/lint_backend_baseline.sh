@@ -22,6 +22,7 @@ python3 -m py_compile \
   src/services/agent_source_ingestion.py \
   src/services/agent_datahub.py \
   src/services/agent_document_llm.py \
+  src/services/agent_email_llm.py \
   src/services/agent_blueprint_runner.py \
   src/services/outreach_send_capability.py \
   src/api/operator_api.py \
@@ -35,6 +36,7 @@ python3 -m py_compile \
   scripts/smoke_operator_services_apply_api.py \
   scripts/smoke_operator_bulk_review_replies.py \
   scripts/smoke_agent_blueprint_document_api.py \
+  scripts/smoke_agent_blueprint_email_api.py \
   scripts/smoke_agent_blueprint_generic_boundaries.py \
   scripts/smoke_agent_builder_dialog_api.py \
   src/api/growth_workflow_api.py \

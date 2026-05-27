@@ -191,6 +191,7 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     api_source = Path("src/api/agent_blueprints_api.py").read_text(encoding="utf-8")
     workspace_source = Path("src/services/agent_blueprint_workspace.py").read_text(encoding="utf-8")
     document_llm_source = Path("src/services/agent_document_llm.py").read_text(encoding="utf-8")
+    email_llm_source = Path("src/services/agent_email_llm.py").read_text(encoding="utf-8")
     builder_api_source = Path("src/api/agent_builder_api.py").read_text(encoding="utf-8")
 
     assert "VERSION_BLUEPRINT_MISMATCH" in api_source
@@ -217,9 +218,13 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "_review_journal" in workspace_source
     assert "journal" in workspace_source
     assert "analyze_document_sources_with_llm" in workspace_source
+    assert "draft_email_with_llm" in workspace_source
     assert "analyze_text_with_gigachat" in document_llm_source
+    assert "agent_email_draft" in email_llm_source
     assert "external_dispatch_performed" in document_llm_source
+    assert "external_dispatch_performed" in email_llm_source
     assert "provenance" in document_llm_source
+    assert "provenance" in email_llm_source
     assert "/api/agent-builder/sessions" in builder_api_source
     assert "build_agent_builder_state" in builder_api_source
     assert "create_blueprint_from_agent_builder_session" in builder_api_source
@@ -282,6 +287,66 @@ def test_generic_document_runner_uses_sources_and_stops_for_final_approval():
     assert output["payload_json"]["result"]["fields"]["Оплата"]
     assert output["payload_json"]["result"]["fields"]["Ответственность"]
     assert output["payload_json"]["dispatch_state"] == "not_dispatched"
+    assert run["approvals"][0]["approval_type"] == "final_output"
+
+
+def test_generic_email_runner_prepares_draft_and_never_dispatches():
+    from services.agent_blueprint_draft_builder import build_agent_blueprint_draft
+    from services.agent_blueprint_runner import AgentBlueprintRunner
+
+    cursor = FakeCursor()
+    draft = build_agent_blueprint_draft("Подготовь письмо клиенту по контексту", "email")
+    cursor.tables["agent_blueprints"]["bp1"] = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "name": "Email agent",
+        "category": "email",
+        "metadata_json": {
+            **draft["metadata"],
+            "agent_setup": {
+                "workflow_description": "Подготовить письмо клиенту о новой услуге",
+                "extraction_rules": "Взять услугу, выгоду и ограничение по тону",
+                "processing_rules": "Писать дружелюбно, не обещать скидку без подтверждения",
+                "output_format": "subject, body, checklist, missing_info",
+                "approval_boundaries": ["final_output", "external_delivery"],
+            },
+            "agent_sources": [
+                {
+                    "id": "src1",
+                    "source_type": "text",
+                    "name": "Контекст письма",
+                    "content_text": "Адресат: Анна. Услуга: уход для волос. Цель: пригласить на консультацию.",
+                    "content_length": 77,
+                    "extraction_state": "ready",
+                }
+            ],
+        },
+    }
+    cursor.tables["agent_blueprint_versions"]["ver1"] = {
+        "id": "ver1",
+        "blueprint_id": "bp1",
+        "steps_json": draft["version_payload"]["steps"],
+        "capability_allowlist_json": [],
+    }
+
+    result = AgentBlueprintRunner(cursor).start_run("ver1", {}, {"user_id": "user1"})
+
+    assert result["success"] is True
+    run = result["run"]
+    assert run["status"] == "waiting_approval"
+    assert not [step for step in run["steps"] if step["step_type"] == "capability"]
+    output = [item for item in run["artifacts"] if item["artifact_type"] == "agent_output_draft"][0]
+    payload = output["payload_json"]
+    email_result = payload["result"]
+    assert payload["category"] == "email"
+    assert payload["external_dispatch_performed"] is False
+    assert payload["dispatch_state"] == "not_dispatched"
+    assert email_result["external_dispatch_performed"] is False
+    assert email_result["delivery_state"] == "not_dispatched"
+    assert email_result["subject"]
+    assert email_result["body"]
+    assert email_result["checklist"]
+    assert email_result["provenance"] == ["Контекст письма"]
     assert run["approvals"][0]["approval_type"] == "final_output"
 
 
@@ -445,6 +510,79 @@ def test_agent_document_llm_analysis_falls_back_without_external_dispatch():
     assert result["external_dispatch_performed"] is False
     assert result["provenance"] == ["contract.txt"]
     assert result["risks"]
+
+
+def test_agent_email_llm_draft_uses_generator_rules_and_provenance():
+    from services.agent_email_llm import draft_email_with_llm
+
+    captured = {}
+
+    def fake_generator(prompt, *, business_id="", user_id=""):
+        captured["prompt"] = prompt
+        captured["business_id"] = business_id
+        captured["user_id"] = user_id
+        return json.dumps(
+            {
+                "title": "Email draft",
+                "subject": "Анна, приглашаем на консультацию",
+                "body": "Здравствуйте, Анна! Приглашаем на консультацию по уходу для волос.",
+                "checklist": ["Проверить имя", "Проверить оффер"],
+                "assumptions": ["Контекст взят из источника"],
+                "missing_info": ["Дата консультации"],
+                "rules_applied": ["Не обещать скидку"],
+            },
+            ensure_ascii=False,
+        )
+
+    result = draft_email_with_llm(
+        {
+            "workflow_description": "Подготовить письмо клиенту",
+            "extraction_rules": "Адресат, услуга, цель",
+            "processing_rules": "Не обещать скидку",
+            "output_format": "subject/body/checklist",
+        },
+        [
+            {
+                "source_name": "Контекст",
+                "summary": "Адресат: Анна. Услуга: уход для волос.",
+                "raw": {"text": "Адресат: Анна. Услуга: уход для волос. Цель: консультация."},
+            }
+        ],
+        business_id="biz1",
+        user_id="user1",
+        generator=fake_generator,
+    )
+
+    assert result["llm_analysis_used"] is True
+    assert result["analysis_source"] == "gigachat"
+    assert result["external_dispatch_performed"] is False
+    assert result["delivery_state"] == "not_dispatched"
+    assert result["subject"] == "Анна, приглашаем на консультацию"
+    assert result["checklist"]
+    assert result["provenance"] == ["Контекст"]
+    assert captured["business_id"] == "biz1"
+    assert captured["user_id"] == "user1"
+    assert "Не обещать скидку" in captured["prompt"]
+
+
+def test_agent_email_llm_falls_back_without_external_dispatch():
+    from services.agent_email_llm import draft_email_with_llm
+
+    def failing_generator(prompt, *, business_id="", user_id=""):
+        raise RuntimeError("provider unavailable")
+
+    result = draft_email_with_llm(
+        {"workflow_description": "Подготовить письмо", "processing_rules": "Дружелюбно"},
+        [{"source_name": "Контекст", "summary": "Адресат: Анна. Услуга: консультация.", "raw": {}}],
+        generator=failing_generator,
+    )
+
+    assert result["llm_analysis_used"] is False
+    assert result["analysis_source"] == "deterministic_fallback"
+    assert result["external_dispatch_performed"] is False
+    assert result["delivery_state"] == "not_dispatched"
+    assert result["subject"]
+    assert result["body"]
 
 
 def test_agent_version_diff_shows_readable_changes():

@@ -7,6 +7,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from services.agent_document_llm import analyze_document_sources_with_llm
+from services.agent_email_llm import draft_email_with_llm
 
 
 MAX_SOURCE_TEXT_CHARS = 30000
@@ -320,12 +321,13 @@ def _render_output(
     feedback_notes = [_clean_text(item.get("feedback")) for item in feedback_history if isinstance(item, dict)]
     feedback_notes = [item for item in feedback_notes if item][-3:]
     if category == "email":
-        return {
-            "title": "Черновик письма",
-            "subject": "Предложение по вашему запросу",
-            "body": _email_body(facts, rules, feedback_notes),
-            "format": output_format,
-        }
+        return draft_email_with_llm(
+            setup,
+            extracted,
+            feedback_history,
+            business_id=_clean_text((workspace or {}).get("business_id")),
+            user_id=_clean_text((workspace or {}).get("user_id")),
+        )
     if category == "tables":
         return {
             "title": "Отчёт по таблице",
@@ -575,14 +577,17 @@ def _output_details(payload: Dict[str, Any]) -> List[Dict[str, str]]:
     risks = result.get("risks") if isinstance(result.get("risks"), list) else []
     facts = result.get("facts") if isinstance(result.get("facts"), list) else []
     next_questions = result.get("next_questions") if isinstance(result.get("next_questions"), list) else []
+    checklist = result.get("checklist") if isinstance(result.get("checklist"), list) else []
     return _non_empty_details(
         [
             ("Источник анализа", payload.get("analysis_source") or result.get("analysis_source")),
             ("Использовал LLM", "да" if payload.get("llm_analysis_used") or result.get("llm_analysis_used") else ""),
+            ("Тема письма", result.get("subject")),
             ("Provenance", ", ".join(str(item) for item in provenance)),
             ("Фактов", str(len(facts)) if facts else ""),
             ("Рисков", str(len(risks)) if risks else ""),
             ("Вопросов", str(len(next_questions)) if next_questions else ""),
+            ("Чеклист", str(len(checklist)) if checklist else ""),
             ("Внешняя отправка", "не выполнялась" if payload.get("external_dispatch_performed") is False else ""),
         ]
     )
