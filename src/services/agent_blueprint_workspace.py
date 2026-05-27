@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 
 from services.agent_document_llm import analyze_document_sources_with_llm
 from services.agent_email_llm import draft_email_with_llm
+from services.agent_table_analysis import analyze_table_with_llm
 
 
 MAX_SOURCE_TEXT_CHARS = 30000
@@ -329,12 +330,13 @@ def _render_output(
             user_id=_clean_text((workspace or {}).get("user_id")),
         )
     if category == "tables":
-        return {
-            "title": "Отчёт по таблице",
-            "summary": facts,
-            "exceptions": _table_exceptions(extracted),
-            "format": output_format,
-        }
+        return analyze_table_with_llm(
+            setup,
+            extracted,
+            feedback_history,
+            business_id=_clean_text((workspace or {}).get("business_id")),
+            user_id=_clean_text((workspace or {}).get("user_id")),
+        )
     if category == "reviews":
         return {
             "title": "Черновики ответов на отзывы",
@@ -578,6 +580,8 @@ def _output_details(payload: Dict[str, Any]) -> List[Dict[str, str]]:
     facts = result.get("facts") if isinstance(result.get("facts"), list) else []
     next_questions = result.get("next_questions") if isinstance(result.get("next_questions"), list) else []
     checklist = result.get("checklist") if isinstance(result.get("checklist"), list) else []
+    exceptions = result.get("exceptions") if isinstance(result.get("exceptions"), list) else []
+    rows_to_review = result.get("rows_to_review") if isinstance(result.get("rows_to_review"), list) else []
     return _non_empty_details(
         [
             ("Источник анализа", payload.get("analysis_source") or result.get("analysis_source")),
@@ -586,6 +590,8 @@ def _output_details(payload: Dict[str, Any]) -> List[Dict[str, str]]:
             ("Provenance", ", ".join(str(item) for item in provenance)),
             ("Фактов", str(len(facts)) if facts else ""),
             ("Рисков", str(len(risks)) if risks else ""),
+            ("Исключений", str(len(exceptions)) if exceptions else ""),
+            ("Строк к проверке", str(len(rows_to_review)) if rows_to_review else ""),
             ("Вопросов", str(len(next_questions)) if next_questions else ""),
             ("Чеклист", str(len(checklist)) if checklist else ""),
             ("Внешняя отправка", "не выполнялась" if payload.get("external_dispatch_performed") is False else ""),

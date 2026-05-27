@@ -192,6 +192,7 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     workspace_source = Path("src/services/agent_blueprint_workspace.py").read_text(encoding="utf-8")
     document_llm_source = Path("src/services/agent_document_llm.py").read_text(encoding="utf-8")
     email_llm_source = Path("src/services/agent_email_llm.py").read_text(encoding="utf-8")
+    table_analysis_source = Path("src/services/agent_table_analysis.py").read_text(encoding="utf-8")
     builder_api_source = Path("src/api/agent_builder_api.py").read_text(encoding="utf-8")
 
     assert "VERSION_BLUEPRINT_MISMATCH" in api_source
@@ -219,12 +220,16 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "journal" in workspace_source
     assert "analyze_document_sources_with_llm" in workspace_source
     assert "draft_email_with_llm" in workspace_source
+    assert "analyze_table_with_llm" in workspace_source
     assert "analyze_text_with_gigachat" in document_llm_source
     assert "agent_email_draft" in email_llm_source
+    assert "agent_table_analysis" in table_analysis_source
     assert "external_dispatch_performed" in document_llm_source
     assert "external_dispatch_performed" in email_llm_source
+    assert "external_dispatch_performed" in table_analysis_source
     assert "provenance" in document_llm_source
     assert "provenance" in email_llm_source
+    assert "provenance" in table_analysis_source
     assert "/api/agent-builder/sessions" in builder_api_source
     assert "build_agent_builder_state" in builder_api_source
     assert "create_blueprint_from_agent_builder_session" in builder_api_source
@@ -347,6 +352,67 @@ def test_generic_email_runner_prepares_draft_and_never_dispatches():
     assert email_result["body"]
     assert email_result["checklist"]
     assert email_result["provenance"] == ["Контекст письма"]
+    assert run["approvals"][0]["approval_type"] == "final_output"
+
+
+def test_generic_table_runner_prepares_report_and_never_dispatches():
+    from services.agent_blueprint_draft_builder import build_agent_blueprint_draft
+    from services.agent_blueprint_runner import AgentBlueprintRunner
+
+    cursor = FakeCursor()
+    draft = build_agent_blueprint_draft("Проверь CSV и найди ошибки", "tables")
+    cursor.tables["agent_blueprints"]["bp1"] = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "name": "Table agent",
+        "category": "tables",
+        "metadata_json": {
+            **draft["metadata"],
+            "agent_setup": {
+                "workflow_description": "Проверить таблицу клиентов",
+                "extraction_rules": "Найти пустые email, дубли и строки к проверке",
+                "processing_rules": "Не изменять таблицу, только показать проблемы",
+                "output_format": "summary, exceptions, rows_to_review, recommendations",
+                "approval_boundaries": ["final_output", "external_delivery"],
+            },
+            "agent_sources": [
+                {
+                    "id": "src1",
+                    "source_type": "text",
+                    "name": "clients.csv",
+                    "content_text": "name,email,phone\nАнна,anna@example.com,+1\nАнна,anna@example.com,+1\nБорис,,+2\n",
+                    "content_length": 83,
+                    "extraction_state": "ready",
+                }
+            ],
+        },
+    }
+    cursor.tables["agent_blueprint_versions"]["ver1"] = {
+        "id": "ver1",
+        "blueprint_id": "bp1",
+        "steps_json": draft["version_payload"]["steps"],
+        "capability_allowlist_json": [],
+    }
+
+    result = AgentBlueprintRunner(cursor).start_run("ver1", {}, {"user_id": "user1"})
+
+    assert result["success"] is True
+    run = result["run"]
+    assert run["status"] == "waiting_approval"
+    assert not [step for step in run["steps"] if step["step_type"] == "capability"]
+    output = [item for item in run["artifacts"] if item["artifact_type"] == "agent_output_draft"][0]
+    payload = output["payload_json"]
+    table_result = payload["result"]
+    assert payload["category"] == "tables"
+    assert payload["external_dispatch_performed"] is False
+    assert payload["dispatch_state"] == "not_dispatched"
+    assert table_result["external_dispatch_performed"] is False
+    assert table_result["delivery_state"] == "not_dispatched"
+    assert table_result["summary"]
+    assert table_result["exceptions"]
+    assert table_result["rows_to_review"]
+    assert table_result["recommendations"]
+    assert table_result["provenance"] == ["clients.csv"]
     assert run["approvals"][0]["approval_type"] == "final_output"
 
 
@@ -583,6 +649,79 @@ def test_agent_email_llm_falls_back_without_external_dispatch():
     assert result["delivery_state"] == "not_dispatched"
     assert result["subject"]
     assert result["body"]
+
+
+def test_agent_table_analysis_uses_generator_rules_and_provenance():
+    from services.agent_table_analysis import analyze_table_with_llm
+
+    captured = {}
+
+    def fake_generator(prompt, *, business_id="", user_id=""):
+        captured["prompt"] = prompt
+        captured["business_id"] = business_id
+        captured["user_id"] = user_id
+        return json.dumps(
+            {
+                "title": "Table report",
+                "summary": ["Проверено 3 строки"],
+                "exceptions": ["Строка 3: пустой email"],
+                "rows_to_review": [
+                    {"row": 3, "reason": "пустой email", "source_name": "clients.csv", "values": {"name": "Борис"}}
+                ],
+                "recommendations": ["Заполнить email"],
+                "rules_applied": ["Не изменять таблицу"],
+            },
+            ensure_ascii=False,
+        )
+
+    result = analyze_table_with_llm(
+        {
+            "workflow_description": "Проверить клиентов",
+            "extraction_rules": "Пустые email и дубли",
+            "processing_rules": "Не изменять таблицу",
+            "output_format": "exceptions report",
+        },
+        [
+            {"source_name": "clients.csv", "summary": "name: Борис; email: ; phone: +2", "raw": {"name": "Борис", "email": "", "phone": "+2"}}
+        ],
+        business_id="biz1",
+        user_id="user1",
+        generator=fake_generator,
+    )
+
+    assert result["llm_analysis_used"] is True
+    assert result["analysis_source"] == "gigachat"
+    assert result["external_dispatch_performed"] is False
+    assert result["delivery_state"] == "not_dispatched"
+    assert result["exceptions"] == ["Строка 3: пустой email"]
+    assert result["rows_to_review"][0]["row"] == 3
+    assert result["provenance"] == ["clients.csv"]
+    assert captured["business_id"] == "biz1"
+    assert captured["user_id"] == "user1"
+    assert "Не изменять таблицу" in captured["prompt"]
+
+
+def test_agent_table_analysis_falls_back_without_external_dispatch():
+    from services.agent_table_analysis import analyze_table_with_llm
+
+    def failing_generator(prompt, *, business_id="", user_id=""):
+        raise RuntimeError("provider unavailable")
+
+    result = analyze_table_with_llm(
+        {"workflow_description": "Проверить таблицу", "processing_rules": "Только отчёт"},
+        [
+            {"source_name": "clients.csv", "summary": "name: Анна; email: anna@example.com", "raw": {"name": "Анна", "email": "anna@example.com"}},
+            {"source_name": "clients.csv", "summary": "name: Борис; email: ", "raw": {"name": "Борис", "email": ""}},
+        ],
+        generator=failing_generator,
+    )
+
+    assert result["llm_analysis_used"] is False
+    assert result["analysis_source"] == "deterministic_fallback"
+    assert result["external_dispatch_performed"] is False
+    assert result["delivery_state"] == "not_dispatched"
+    assert result["exceptions"]
+    assert result["rows_to_review"]
 
 
 def test_agent_version_diff_shows_readable_changes():
