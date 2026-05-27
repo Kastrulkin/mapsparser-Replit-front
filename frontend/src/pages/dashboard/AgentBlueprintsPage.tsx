@@ -160,6 +160,8 @@ type AgentSource = {
   file_name?: string;
   internal_source?: string;
   extraction_state?: string;
+  extraction_error?: string;
+  file_size_bytes?: number;
   content_length?: number;
 };
 
@@ -171,6 +173,9 @@ type AgentSourceCatalogItem = {
   connected?: boolean;
   preview?: string[];
   state?: string;
+  source_type?: string;
+  extraction_state?: string;
+  error?: string;
 };
 
 type AgentReviewSection = {
@@ -493,6 +498,13 @@ const metaLabels: Record<string, string> = {
   uploaded_documents: 'документы',
   uploaded_tables: 'таблицы',
   manual_context: 'ручной контекст',
+  goal: 'цель',
+  inputs_schema: 'входные данные',
+  steps: 'шаги',
+  persona_agent_id: 'голос агента',
+  capability_allowlist: 'разрешённые действия',
+  approval_policy: 'ручной контроль',
+  output_schema: 'формат результата',
   final_output: 'финальный результат',
   external_delivery: 'внешняя отправка',
   title: 'название',
@@ -556,6 +568,31 @@ const humanizeCategory = (category?: string) => ({
   custom: 'Кастомная задача',
 }[category || 'custom'] || category || 'Кастомная задача');
 
+const humanizeSourceType = (sourceType?: string) => ({
+  text: 'Текст',
+  file: 'Файл',
+  internal: 'Источник LocalOS',
+}[sourceType || ''] || 'Источник');
+
+const humanizeSourceState = (state?: string) => ({
+  ready: 'готово',
+  available: 'доступно',
+  empty: 'нет данных',
+  unsupported_file_type: 'неподдерживаемый файл',
+  needs_text_export: 'нужно извлечь текст',
+  extraction_failed: 'не удалось прочитать',
+}[state || ''] || state || 'готово');
+
+const formatSourceSize = (chars?: number, bytes?: number) => {
+  if (typeof chars === 'number' && chars > 0) {
+    return `${chars} знаков`;
+  }
+  if (typeof bytes === 'number' && bytes > 0) {
+    return bytes >= 1024 ? `${Math.round(bytes / 1024)} KB` : `${bytes} B`;
+  }
+  return 'без текста';
+};
+
 const StatusBadge = ({ status }: { status: string }) => (
   <span className={cn('inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1', statusTone[status] || 'bg-slate-50 text-slate-600 ring-slate-200')}>
     {humanizeStatus(status)}
@@ -600,7 +637,15 @@ const uploadAgentSource = async (blueprintId: string, file: File, name: string) 
   });
   const data = await response.json();
   if (!response.ok || !data.success) {
-    throw new Error(data.error || 'Не удалось прочитать файл');
+    const code = String(data.code || data.error_code || '');
+    const friendlyMessage = code === 'FILE_TOO_LARGE'
+      ? 'Файл слишком большой. Загрузите файл меньшего размера или вставьте текст вручную.'
+      : code === 'UNSUPPORTED_FILE_TYPE'
+        ? 'Этот тип файла пока не поддерживается. Поддерживаются TXT, CSV, TSV, MD, PDF, DOCX и XLSX.'
+        : code === 'EMPTY_FILE'
+          ? 'Файл пустой. Добавьте файл с текстом или вставьте контекст вручную.'
+          : data.error || 'Не удалось извлечь текст из файла. Попробуйте другой файл или вставьте текст вручную.';
+    throw new Error(friendlyMessage);
   }
   return data;
 };
@@ -651,6 +696,7 @@ export const AgentBlueprintsPage = () => {
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackVersionNotice, setFeedbackVersionNotice] = useState<FeedbackVersionNotice | null>(null);
   const [systemAgentConfig, setSystemAgentConfig] = useState<Record<string, { enabled?: boolean }>>({});
+  const [recentCreatedAgentName, setRecentCreatedAgentName] = useState('');
 
   useEffect(() => {
     setSystemAgentConfig(parseAgentConfig(currentBusiness));
@@ -776,7 +822,7 @@ export const AgentBlueprintsPage = () => {
       }
     } catch (requestError) {
       console.error(requestError);
-      setError('Не удалось загрузить workflow agents.');
+      setError('Не удалось загрузить агентов.');
     } finally {
       setLoading(false);
     }
@@ -845,7 +891,7 @@ export const AgentBlueprintsPage = () => {
       setBlueprintDetails(details);
     } catch (requestError) {
       console.error(requestError);
-      setError('Не удалось загрузить историю blueprint.');
+      setError('Не удалось загрузить историю агента.');
     }
   }, [runStatusFilter]);
 
@@ -929,10 +975,11 @@ export const AgentBlueprintsPage = () => {
         await loadBlueprintDetails(blueprint.id);
         await loadBlueprintReview(blueprint.id);
         await loadSourceCatalog(blueprint.id);
+        setRecentCreatedAgentName(String(blueprint.name || 'Новый агент'));
       }
     } catch (requestError) {
       console.error(requestError);
-      setError('Не удалось создать supervised outreach blueprint.');
+      setError('Не удалось создать агента поиска клиентов.');
     } finally {
       setActionLoading(false);
     }
@@ -1012,6 +1059,8 @@ export const AgentBlueprintsPage = () => {
         setSelectedBlueprintId(blueprint.id);
         await loadBlueprintDetails(blueprint.id);
         await loadBlueprintReview(blueprint.id);
+        await loadSourceCatalog(blueprint.id);
+        setRecentCreatedAgentName(String(blueprint.name || 'Новый агент'));
       }
       setDialogBuilderInput('');
       setDialogBuilderReply('');
@@ -1070,6 +1119,8 @@ export const AgentBlueprintsPage = () => {
         setSelectedBlueprintId(blueprint.id);
         await loadBlueprintDetails(blueprint.id);
         await loadBlueprintReview(blueprint.id);
+        await loadSourceCatalog(blueprint.id);
+        setRecentCreatedAgentName(String(blueprint.name || 'Новый агент'));
       }
       setAgentPrompt('');
       setBuilderSourceName('');
@@ -1111,7 +1162,7 @@ export const AgentBlueprintsPage = () => {
       await loadBlueprintReview(targetBlueprint.id);
     } catch (requestError) {
       console.error(requestError);
-      setError('Не удалось запустить blueprint.');
+      setError('Не удалось запустить агента.');
     } finally {
       setActionLoading(false);
     }
@@ -1390,6 +1441,19 @@ export const AgentBlueprintsPage = () => {
           title="Ошибка"
           description={error}
           tone="amber"
+        />
+      ) : null}
+
+      {recentCreatedAgentName ? (
+        <DashboardActionPanel
+          title="Агент создан"
+          description={`${recentCreatedAgentName} выбран ниже. Проверьте данные агента, активную версию и запустите его из карточки.`}
+          tone="sky"
+          actions={(
+            <Button type="button" size="sm" variant="outline" onClick={() => setRecentCreatedAgentName('')}>
+              Понятно
+            </Button>
+          )}
         />
       ) : null}
 
@@ -1776,7 +1840,22 @@ const CreateAgentWizard = ({
 
       {step === 1 ? (
         <div className="grid gap-4 lg:grid-cols-[1fr_20rem]">
-          <WizardTextArea label="Какие данные использовать" value={dataSources} onChange={onDataSourcesChange} placeholder="Файл, текст, профиль бизнеса, услуги, отзывы" />
+          <div className="space-y-3">
+            <WizardTextArea label="Какие данные использовать" value={dataSources} onChange={onDataSourcesChange} placeholder="Файл, текст, профиль бизнеса, услуги, отзывы" />
+            <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-600">
+              <div className="font-medium text-slate-950">Что уже будет подключено</div>
+              <div className="mt-1">
+                {[
+                  sourceText.trim() ? `текст “${sourceName.trim() || 'Контекст для агента'}”` : '',
+                  fileSource ? `файл ${fileSource.name}` : '',
+                  internalSource !== 'none' ? humanizeMeta(internalSource) : '',
+                ].filter(Boolean).join(', ') || 'пока ничего; добавьте текст, файл или источник LocalOS'}
+              </div>
+              <div className="mt-2 text-xs text-slate-500">
+                PDF, DOCX и XLSX читаются на backend. Если текст извлечь не получится, агент покажет понятную ошибку и не запустит внешнее действие.
+              </div>
+            </div>
+          </div>
           <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
             <input
               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
@@ -1843,7 +1922,15 @@ const CreateAgentWizard = ({
           <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-sm leading-6 text-slate-700">
             <div className="font-semibold text-slate-950">{selectedScenario.title}</div>
             <div className="mt-2">{prompt || selectedScenario.prompt}</div>
-            <div className="mt-3 text-xs text-slate-500">После создания агент появится в “Пользовательских агентах”. Запуск будет из карточки агента.</div>
+            <div className="mt-4 space-y-2">
+              <PreviewRow label="Данные" value={dataSources || 'уточнить'} />
+              <PreviewRow label="Что понял" value={extractionRules || 'уточнить'} />
+              <PreviewRow label="Правила" value={processingRules || 'уточнить'} />
+              <PreviewRow label="Ручной контроль" value={manualControl || 'перед внешним действием'} />
+            </div>
+            <div className="mt-3 text-xs text-slate-500">
+              После создания LocalOS сразу откроет карточку агента. Там будут данные, активная версия, запуск и журнал результатов.
+            </div>
           </div>
         </div>
       ) : null}
@@ -1936,7 +2023,7 @@ const DialogAgentBuilder = ({
               </div>
             ) : (
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-900">
-                Данных достаточно для первого blueprint. После создания можно добавить файлы и источники.
+                Данных достаточно для первой версии агента. После создания можно добавить файлы и источники.
               </div>
             )}
             <div className="grid gap-2 md:grid-cols-[1fr_auto]">
@@ -1969,6 +2056,7 @@ const DialogAgentBuilder = ({
               <PreviewRow label="Правила" value={preview?.processing_rules || 'уточнить'} />
               <PreviewRow label="Результат" value={preview?.output_format || 'уточнить'} />
               <PreviewRow label="Ручной контроль" value={preview?.manual_control || 'перед внешним действием'} />
+              <PreviewRow label="Подключение" value="источники добавляются в карточке агента; внешние действия выключены по умолчанию" />
             </div>
             <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-900">
               Внешние отправки, публикации, платежи и destructive actions не запускаются из builder. Рискованные действия требуют approval.
@@ -2310,30 +2398,6 @@ const AgentDetailPanel = ({
             )}
           />
         ) : null}
-        {activeRun ? (
-          <details className="rounded-2xl border border-slate-200 bg-white p-4">
-            <summary className="cursor-pointer text-sm font-semibold text-slate-700 hover:text-slate-950">
-              Техническая сводка запуска
-            </summary>
-            <div className="mt-4 grid gap-4 xl:grid-cols-3">
-              <RunColumn title="Шаги runtime" icon={Clock3}>
-                {(activeRun.steps || []).map((step) => (
-                  <TimelineItem key={step.id} title={humanizeStep(step.step_key)} meta={humanizeMeta(step.step_type)} status={step.status} />
-                ))}
-              </RunColumn>
-              <RunColumn title="Artifacts" icon={FileCheck2}>
-                {(activeRun.artifacts || []).map((artifact) => <ArtifactItem key={artifact.id} artifact={artifact} />)}
-              </RunColumn>
-              <RunColumn title="Approvals" icon={ShieldCheck}>
-                {(activeRun.approvals || []).map((approval) => (
-                  <TimelineItem key={approval.id} title={approval.title} meta={humanizeMeta(approval.approval_type)} status={approval.status} />
-                ))}
-              </RunColumn>
-            </div>
-          </details>
-        ) : (
-          <DashboardEmptyState title="Нет активных запусков" description="Запустите агента из карточки, чтобы увидеть результат." />
-        )}
         <AgentRunReviewPanel
           review={agentReview}
           latestVersionNumber={latestVersionNumber}
@@ -2343,6 +2407,30 @@ const AgentDetailPanel = ({
           onFeedbackTextChange={onFeedbackTextChange}
           onSubmitFeedback={onSubmitFeedback}
         />
+        {activeRun ? (
+          <details className="rounded-2xl border border-slate-200 bg-white p-4">
+            <summary className="cursor-pointer text-sm font-semibold text-slate-700 hover:text-slate-950">
+              Технический журнал
+            </summary>
+            <div className="mt-4 grid gap-4 xl:grid-cols-3">
+              <RunColumn title="Шаги runtime" icon={Clock3}>
+                {(activeRun.steps || []).map((step) => (
+                  <TimelineItem key={step.id} title={humanizeStep(step.step_key)} meta={humanizeMeta(step.step_type)} status={step.status} />
+                ))}
+              </RunColumn>
+              <RunColumn title="Сохранённые результаты" icon={FileCheck2}>
+                {(activeRun.artifacts || []).map((artifact) => <ArtifactItem key={artifact.id} artifact={artifact} />)}
+              </RunColumn>
+              <RunColumn title="Решения" icon={ShieldCheck}>
+                {(activeRun.approvals || []).map((approval) => (
+                  <TimelineItem key={approval.id} title={approval.title} meta={humanizeMeta(approval.approval_type)} status={approval.status} />
+                ))}
+              </RunColumn>
+            </div>
+          </details>
+        ) : (
+          <DashboardEmptyState title="Нет активных запусков" description="Запустите агента из карточки, чтобы увидеть результат." />
+        )}
       </div>
     ) : null}
   </DashboardSection>
@@ -2522,61 +2610,139 @@ const DatahubCatalogList = ({
   catalog: AgentSourceCatalogItem[];
   actionLoading: boolean;
   onConnect: (sourceKey: string) => void;
-}) => (
-  <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
-    <div className="flex items-center justify-between gap-3">
-      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Datahub LocalOS</div>
-      <span className="text-xs text-slate-400">{catalog.length ? `${catalog.length} источников` : 'источники не загружены'}</span>
-    </div>
-    {catalog.length ? catalog.map((item) => (
-      <div key={item.key} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-sm font-medium text-slate-950">{item.title || humanizeMeta(item.key)}</div>
-            <div className="mt-1 text-xs leading-5 text-slate-500">{item.description || 'Источник данных LocalOS'}</div>
-          </div>
-          <span className={cn(
-            'shrink-0 rounded-full px-2 py-1 text-xs font-medium ring-1',
-            item.connected ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : item.available_count ? 'bg-white text-slate-700 ring-slate-200' : 'bg-slate-100 text-slate-500 ring-slate-200',
-          )}>
-            {item.connected ? 'подключено' : item.available_count ? `${item.available_count}` : 'пусто'}
-          </span>
+}) => {
+  const connected = catalog.filter((item) => item.connected);
+  const available = catalog.filter((item) => !item.connected);
+  return (
+    <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Данные агента</div>
+          <div className="mt-1 text-xs text-slate-500">Сначала подключённые источники, ниже доступные источники LocalOS.</div>
         </div>
-        {item.preview?.length ? (
-          <div className="mt-2 space-y-1">
-            {item.preview.slice(0, 2).map((line, index) => (
-              <div key={`${item.key}-${index}`} className="truncate rounded-md bg-white px-2 py-1 text-xs text-slate-600 ring-1 ring-slate-100">
-                {line}
-              </div>
-            ))}
-          </div>
-        ) : null}
-        <div className="mt-2 flex justify-end">
-          <Button
-            type="button"
-            size="sm"
-            variant={item.connected ? 'outline' : 'default'}
-            onClick={() => onConnect(item.key)}
-            disabled={actionLoading || Boolean(item.connected) || item.state === 'empty'}
-          >
-            {item.connected ? 'Уже подключено' : 'Подключить'}
-          </Button>
-        </div>
+        <span className="text-xs text-slate-400">{catalog.length ? `${catalog.length} источников` : 'источники не загружены'}</span>
       </div>
+      {catalog.length ? (
+        <>
+          <DatahubCatalogGroup
+            title="Подключено к агенту"
+            emptyText="У агента пока нет подключённых источников."
+            items={connected}
+            actionLoading={actionLoading}
+            onConnect={onConnect}
+          />
+          <DatahubCatalogGroup
+            title="Доступно в LocalOS"
+            emptyText="Доступных источников LocalOS пока нет."
+            items={available}
+            actionLoading={actionLoading}
+            onConnect={onConnect}
+          />
+        </>
+      ) : (
+        <div className="rounded-lg border border-dashed border-slate-200 px-3 py-3 text-sm text-slate-500">
+          Каталог появится после выбора агента.
+        </div>
+      )}
+    </div>
+  );
+};
+
+const DatahubCatalogGroup = ({
+  title,
+  emptyText,
+  items,
+  actionLoading,
+  onConnect,
+}: {
+  title: string;
+  emptyText: string;
+  items: AgentSourceCatalogItem[];
+  actionLoading: boolean;
+  onConnect: (sourceKey: string) => void;
+}) => (
+  <div className="space-y-2">
+    <div className="text-xs font-semibold text-slate-700">{title}</div>
+    {items.length ? items.map((item) => (
+      <DatahubCatalogItem key={item.key} item={item} actionLoading={actionLoading} onConnect={onConnect} />
     )) : (
-      <div className="rounded-lg border border-dashed border-slate-200 px-3 py-3 text-sm text-slate-500">
-        Каталог появится после выбора агента.
+      <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-500">
+        {emptyText}
       </div>
     )}
   </div>
 );
+
+const DatahubCatalogItem = ({
+  item,
+  actionLoading,
+  onConnect,
+}: {
+  item: AgentSourceCatalogItem;
+  actionLoading: boolean;
+  onConnect: (sourceKey: string) => void;
+}) => {
+  const state = item.extraction_state || item.state;
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-sm font-medium text-slate-950">{item.title || humanizeMeta(item.key)}</div>
+          <div className="mt-1 text-xs leading-5 text-slate-500">{item.description || 'Источник данных LocalOS'}</div>
+        </div>
+        <span className={cn(
+          'shrink-0 rounded-full px-2 py-1 text-xs font-medium ring-1',
+          item.connected ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : item.available_count ? 'bg-white text-slate-700 ring-slate-200' : 'bg-slate-100 text-slate-500 ring-slate-200',
+        )}>
+          {item.connected ? humanizeSourceState(state) : item.available_count ? `${item.available_count}` : humanizeSourceState(state)}
+        </span>
+      </div>
+      {item.error ? (
+        <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">
+          {item.error}
+        </div>
+      ) : null}
+      {item.preview?.length ? (
+        <div className="mt-2 space-y-1">
+          {item.preview.slice(0, 2).map((line, index) => (
+            <div key={`${item.key}-${index}`} className="truncate rounded-md bg-white px-2 py-1 text-xs text-slate-600 ring-1 ring-slate-100">
+              {line}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <div className="mt-2 flex justify-end">
+        <Button
+          type="button"
+          size="sm"
+          variant={item.connected ? 'outline' : 'default'}
+          onClick={() => onConnect(item.key)}
+          disabled={actionLoading || Boolean(item.connected) || item.state === 'empty'}
+        >
+          {item.connected ? 'Уже подключено' : 'Подключить'}
+        </Button>
+      </div>
+    </div>
+  );
+};
 
 const AgentSourcesList = ({ sources }: { sources: AgentSource[] }) => (
   <div className="space-y-2">
     {sources.length ? sources.map((source) => (
       <div key={source.id || source.name || source.file_name} className="rounded-lg bg-white px-3 py-2 text-xs leading-5 text-slate-600 ring-1 ring-slate-200">
         <div className="font-medium text-slate-900">{source.name || source.file_name || source.internal_source || 'Источник'}</div>
-        <div>{humanizeMeta(source.internal_source || source.source_type || 'manual_context')} · {source.extraction_state || 'ready'} · {Number(source.content_length || 0)} chars</div>
+        <div>
+          {source.internal_source ? humanizeMeta(source.internal_source) : humanizeSourceType(source.source_type)}
+          {' · '}
+          {humanizeSourceState(source.extraction_state)}
+          {' · '}
+          {formatSourceSize(source.content_length, source.file_size_bytes)}
+        </div>
+        {source.extraction_error ? (
+          <div className="mt-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-amber-800">
+            {source.extraction_error}
+          </div>
+        ) : null}
       </div>
     )) : (
       <div className="rounded-lg border border-dashed border-slate-200 bg-white px-3 py-3 text-sm text-slate-500">
@@ -2623,6 +2789,10 @@ const VersionSummary = ({
               ? version.diff_from_previous.summary
               : '';
             const summary = typeof summaryValue === 'string' ? summaryValue : '';
+            const diffValue = version.diff_from_previous && typeof version.diff_from_previous === 'object' ? version.diff_from_previous : {};
+            const changedFieldsValue = 'changed_fields' in diffValue ? diffValue.changed_fields : [];
+            const changedFields = Array.isArray(changedFieldsValue) ? changedFieldsValue.map((item) => humanizeMeta(String(item))) : [];
+            const createdAt = typeof version.created_at === 'string' ? version.created_at : '';
             return (
               <div key={String(version.id || versionNumber || 'version')} className="rounded-lg bg-slate-50 px-2 py-2 text-xs text-slate-600">
                 <div className="flex items-center justify-between gap-3">
@@ -2630,6 +2800,16 @@ const VersionSummary = ({
                   <span>{isActive ? 'используется сейчас' : 'не активна'}</span>
                 </div>
                 {summary ? <div className="mt-1 text-slate-500">{summary}</div> : null}
+                {changedFields.length ? (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {changedFields.slice(0, 4).map((field) => (
+                      <span key={`${versionId}-${field}`} className="rounded-full bg-white px-2 py-0.5 text-[11px] text-slate-600 ring-1 ring-slate-200">
+                        {field}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                {createdAt ? <div className="mt-1 text-[11px] text-slate-400">Создана: {createdAt}</div> : null}
                 <div className="mt-2 flex flex-wrap gap-2">
                   <Button type="button" size="sm" variant="outline" onClick={() => onStartVersionRun(versionId)} disabled={!versionId}>
                     Запустить эту версию

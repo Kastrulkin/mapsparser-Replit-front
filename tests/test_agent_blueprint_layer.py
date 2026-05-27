@@ -282,7 +282,7 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "create_blueprint_from_agent_builder_session" in builder_api_source
     assert "GenericRunProgress" in agents_page_source
     assert "Путь {humanizeCategory(category).toLowerCase()}-агента" in agents_page_source
-    assert "Техническая сводка запуска" in agents_page_source
+    assert "Технический журнал" in agents_page_source
     assert "resultFieldLabels" in agents_page_source
 
 
