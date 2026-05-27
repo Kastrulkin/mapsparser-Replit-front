@@ -29,6 +29,19 @@ logger = logging.getLogger(__name__)
 VERBOSE_OPTIONAL_STARTUP = os.getenv('LOCALOS_VERBOSE_STARTUP_WARNINGS', '').strip().lower() in {'1', 'true', 'yes'}
 
 
+def _normalize_existing_queue_status(queue_row: Any, default: str = "idle") -> str:
+    if not queue_row:
+        return default
+    status = ""
+    if hasattr(queue_row, "get"):
+        status = str(queue_row.get("status") or "").strip()
+    elif isinstance(queue_row, (list, tuple)) and queue_row:
+        status = str(queue_row[0] or "").strip()
+    if not status:
+        return default
+    return normalize_status(status) or default
+
+
 def _optional_startup_notice(feature: str, error: Exception, *, enabled: bool = False) -> None:
     if enabled or VERBOSE_OPTIONAL_STARTUP:
         logger.warning("Optional integration '%s' is unavailable: %s", feature, error)
@@ -7688,7 +7701,7 @@ def get_parse_status(business_id):
             )
             raw_latest_queue = cursor.fetchone()
             latest_queue = _row_to_dict(cursor, raw_latest_queue) if raw_latest_queue else None
-            latest_queue_status = normalize_status((latest_queue or {}).get("status") or "") or "idle"
+            latest_queue_status = _normalize_existing_queue_status(latest_queue)
 
             active_parse_in_progress = latest_queue_status in active_statuses
 
@@ -11592,7 +11605,7 @@ def admin_sync_business_yandex(business_id):
         )
         raw_latest_queue = cursor.fetchone()
         latest_queue = _row_to_dict(cursor, raw_latest_queue) if raw_latest_queue else None
-        latest_queue_status = normalize_status((latest_queue or {}).get("status") or "") or "idle"
+        latest_queue_status = _normalize_existing_queue_status(latest_queue)
         if latest_queue_status in ("pending", "queued", "processing", "captcha"):
             db.close()
             return jsonify({
@@ -11805,7 +11818,7 @@ def admin_sync_business_2gis(business_id):
         )
         raw_latest_queue = cursor.fetchone()
         latest_queue = _row_to_dict(cursor, raw_latest_queue) if raw_latest_queue else None
-        latest_queue_status = normalize_status((latest_queue or {}).get("status") or "") or "idle"
+        latest_queue_status = _normalize_existing_queue_status(latest_queue)
         if latest_queue_status in ("pending", "queued", "processing", "captcha"):
             db.close()
             return jsonify({
