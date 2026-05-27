@@ -1,0 +1,21 @@
+{
+  "success": true,
+  "base_url": "http://localhost:8000",
+  "business_id": "smoke-email-agent-business-72084d1022",
+  "blueprint_id": "b8cb4b75-c893-455b-9d8a-1d15189919ae",
+  "run_id": "959b667f-2a3a-463b-8354-f9446a95d3cb",
+  "approval_type": "final_output",
+  "analysis_source": "gigachat",
+  "llm_analysis_used": true,
+  "subject": "Приглашение на консультацию по уходу за волосами",
+  "journal_detail_labels": [
+    "Provenance",
+    "Внешняя отправка",
+    "Использовал LLM",
+    "Источник анализа",
+    "Тема письма",
+    "Чеклист"
+  ],
+  "external_dispatch_performed": false,
+  "fixture_cleaned": true
+}

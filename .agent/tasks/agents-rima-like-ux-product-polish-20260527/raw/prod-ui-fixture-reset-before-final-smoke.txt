@@ -1,0 +1,9 @@
+DELETE 1
+DELETE 0
+DELETE 1
+DELETE 1
+  status  
+----------
+ reset_ok
+(1 row)
+

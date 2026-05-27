@@ -1,0 +1,17 @@
+{
+  "success": true,
+  "base_url": "https://localos.pro",
+  "checked": [
+    "single create CTA",
+    "dialog builder preview",
+    "created agent banner",
+    "agent settings panel",
+    "version summary",
+    "datahub connected/available split"
+  ],
+  "technical_words_on_first_screen": {
+    "workflow_agents": false,
+    "blueprint_version_id": false,
+    "payload": false
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "task_id": "agents-rima-like-ux-product-polish-20260527",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Creation UX has one CTA, dialog preview, connected-data summary, and post-create selected-agent confirmation.",
+      "status": "PASS",
+      "proof": ["raw/prod-agents-ux-ui-smoke.txt", "raw/prod-agents-ux-ui-smoke.png"],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Run detail prioritizes product journal and hides runtime internals under a collapsed technical journal.",
+      "status": "PASS",
+      "proof": ["raw/test-unit.txt", "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx"],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Datahub-lite separates connected agent sources from available LocalOS sources and shows readable source states.",
+      "status": "PASS",
+      "proof": ["raw/prod-agents-ux-ui-smoke.txt"],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Version UX shows active version, changed fields, and run/activate/rollback controls.",
+      "status": "PASS",
+      "proof": ["raw/prod-agents-ux-ui-smoke.txt", "raw/test-unit.txt"],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Email agent end-to-end produces a draft, requires approval, and does not externally send.",
+      "status": "PASS",
+      "proof": ["raw/prod-email-agent-smoke.txt"],
+      "gaps": []
+    },
+    {
+      "id": "AC6",
+      "text": "Production deploy, cleanup, health, build, tests, and lint pass.",
+      "status": "PASS",
+      "proof": [
+        "raw/build.txt",
+        "raw/test-unit.txt",
+        "raw/lint.txt",
+        "raw/deploy-frontend.txt",
+        "raw/prod-ui-fixture-cleanup-verify.txt",
+        "raw/prod-health-after-ux-polish.txt"
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
+    "scripts/lint_backend_baseline.sh",
+    "tests/test_agent_blueprint_layer.py",
+    ".agent/tasks/agents-rima-like-ux-product-polish-20260527/raw/prod_agents_ux_ui_smoke.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'agent_blueprint_api_guards_version_blueprint_mismatch or agent_version_diff_shows_readable_changes or agent_run_review_journal_is_human_readable'",
+    "npm --prefix frontend run build",
+    "scripts/lint_backend_baseline.sh",
+    "scripts/deploy_frontend_dist.sh",
+    "SMOKE_UI_EMAIL='<fixture email>' SMOKE_UI_PASSWORD='<fixture password>' python3 .agent/tasks/agents-rima-like-ux-product-polish-20260527/raw/prod_agents_ux_ui_smoke.py",
+    "ssh root@80.78.242.105 'cd /opt/seo-app && docker compose exec -T app sh -lc \"cd /app && env SMOKE_BASE_URL=http://localhost:8000 SMOKE_PASSWORD=<password> python -\"' < scripts/smoke_agent_blueprint_email_api.py"
+  ],
+  "known_gaps": [
+    "Browser plugin input failed because virtual clipboard was unavailable; production UI smoke was completed with local Playwright.",
+    "Real-world PDF/DOCX/XLSX quality testing remains a later product-polish item."
+  ]
+}

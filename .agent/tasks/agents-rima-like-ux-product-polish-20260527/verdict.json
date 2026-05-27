@@ -1,0 +1,55 @@
+{
+  "task_id": "agents-rima-like-ux-product-polish-20260527",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Production authenticated UI smoke verified single CTA, dialog preview, creation banner, and no first-screen technical words."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Run review panel is shown before collapsed technical journal; human-readable review journal unit test passes."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Datahub-lite UI separates connected and available sources and shows readable states."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Version summary is visible and version diff test passes."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Production email agent smoke produced a draft, required final output approval, and did not dispatch externally."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "Build, tests, lint, deploy, cleanup, and health checks passed."
+    }
+  ],
+  "commands_run": [
+    "python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'agent_blueprint_api_guards_version_blueprint_mismatch or agent_version_diff_shows_readable_changes or agent_run_review_journal_is_human_readable'",
+    "npm --prefix frontend run build",
+    "scripts/lint_backend_baseline.sh",
+    "scripts/deploy_frontend_dist.sh",
+    "python3 .agent/tasks/agents-rima-like-ux-product-polish-20260527/raw/prod_agents_ux_ui_smoke.py",
+    "ssh ... 'cd /opt/seo-app && docker compose exec -T app ...' < scripts/smoke_agent_blueprint_email_api.py",
+    "ssh ... 'cd /opt/seo-app && docker compose exec -T postgres psql ... cleanup/verify ...'",
+    "ssh ... 'cd /opt/seo-app && docker compose ps && curl -I -sS http://localhost:8000 | head -5'"
+  ],
+  "artifacts_used": [
+    "raw/prod-agents-ux-ui-smoke.txt",
+    "raw/prod-email-agent-smoke.txt",
+    "raw/prod-ui-fixture-cleanup-verify.txt",
+    "raw/prod-health-after-ux-polish.txt",
+    "raw/build.txt",
+    "raw/test-unit.txt",
+    "raw/lint.txt"
+  ]
+}
