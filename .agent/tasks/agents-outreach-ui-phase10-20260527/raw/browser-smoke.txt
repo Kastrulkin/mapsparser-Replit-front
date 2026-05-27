@@ -1,0 +1,273 @@
+url=https://localos.pro/dashboard/agents
+checks=Путь outreach-агента,Нашёл лидов,Собрал shortlist,Подготовил черновики,Поставил в очередь,Внешняя отправка,Технический журнал
+contains_all=true
+excerpt:
+- region "Notifications (F8)":
+  - list
+- region "Notifications alt+T"
+- link "LocalOS":
+  - /url: /dashboard/profile
+  - generic: LocalOS
+- button "Свернуть меню":
+- navigation:
+  - link "Оператор":
+    - /url: /dashboard/operator
+    - generic: Оператор
+  - link "Агенты":
+    - /url: /dashboard/agents
+    - generic: Агенты
+  - link "Профиль и бизнес":
+    - /url: /dashboard/profile
+    - generic: Профиль и бизнес
+  - link "Работа с картами":
+    - /url: /dashboard/card
+    - generic: Работа с картами
+  - link "Прогресс":
+    - /url: /dashboard/progress
+    - generic: Прогресс
+  - link "Бронирования":
+    - /url: /dashboard/bookings
+    - generic: Бронирования
+  - link "Чаты":
+    - /url: /dashboard/chats
+    - generic: Чаты
+  - link "Поиск партнёров":
+    - /url: /dashboard/partnerships
+    - generic: Поиск партнёров
+  - link "Финансы":
+    - /url: /dashboard/finance
+    - generic: Финансы
+  - link "Средний чек":
+    - /url: /dashboard/average-ticket
+    - generic: Средний чек
+  - link "Промоушен AI Chat":
+    - /url: /dashboard/ai-chat-promotion
+    - generic: Промоушен AI Chat
+  - link "Настройки":
+    - /url: /dashboard/settings
+    - generic: Настройки
+- generic: LocalOS
+- paragraph: Освободись от рутины! 🚀
+- banner:
+  - heading "Smoke Agent Blueprint Business" [level=1]
+  - button "🇷🇺 Русский":
+    - generic: 🇷🇺
+    - generic: Русский
+  - combobox:
+    - generic: ₽
+  - link "smoke-agent-2e547a1593":
+    - /url: /dashboard/profile
+    - generic: smoke-agent-2e547a1593
+  - button:
+- main:
+  - generic: LocalOS
+  - heading "Агенты" [level=1]
+  - paragraph: Центр управления системными и пользовательскими агентами.
+  - button "Обновить":
+    - text: Обновить
+  - button "Создать агента":
+    - text: Создать агента
+  - generic: Активны
+  - generic: "0"
+  - generic: 3 всего
+  - generic: Ждут решения
+  - generic: "0"
+  - generic: Нет ожидающих решений
+  - generic: Последние результаты
+  - generic: "0"
+  - generic: Нет активных запусков
+  - generic: Пользовательские агенты
+  - generic: "3"
+  - generic: Smoke Agent Blueprint Business
+  - heading "Системные агенты" [level=2]
+  - paragraph: Предустановленные агенты LocalOS. Они включаются и настраиваются отдельно от workflow-запусков.
+  - button "Настроить системных"
+  - generic: Агент записи
+  - generic: Помогает с правилами записи, вопросами клиенту и сценарием общения.
+  - generic: Выключен
+  - button "Настроить"
+  - generic: Маркетинговый агент
+  - generic: Готовит идеи, тексты и маркетинговые черновики в стиле бизнеса.
+  - generic: Выключен
+  - button "Настроить"
+  - heading "Пользовательские агенты" [level=2]
+  - paragraph: Процессные агенты запускают задачи, агенты голоса задают стиль общения.
+  - 'button "Smoke Supervised Outreach Agent Поиск клиентов · активная версия v1 Черновик Supervised outreach: найти лиды, подготовить shortlist и черновики, отправлять только после подтверждения человека."':
+    - generic: Smoke Supervised Outreach Agent
+    - generic: Поиск клиентов · активная версия v1
+    - generic: Черновик
+    - generic: "Supervised outreach: найти лиды, подготовить shortlist и черновики, отправлять только после подтверждения человека."
+  - button "Настроить"
+  - button "Запустить":
+    - text: Запустить
+  - button "Результаты"
+  - generic: Booking Agent
+  - generic: Голос и стиль общения
+  - generic: Включён
+  - generic: Агент для записи клиентов
+  - button "Открыть настройки"
+  - generic: Тест 1
+  - generic: Голос и стиль общения
+  - generic: Включён
+  - generic: Настраивает тон, стиль и ограничения общения. Не является workflow runtime.
+  - button "Открыть настройки"
+  - heading "Smoke Supervised Outreach Agent" [level=2]
+  - paragraph: Поиск клиентов · активная версия v1 · сохранённые результаты
+  - button "Настроить"
+  - button "Запуск"
+  - button "Сохранённые результаты" [active]
+  - generic: Путь outreach-агента
+  - generic: "Агент проходит этапы по порядку: лиды, shortlist, черновики и безопасная очередь."
+  - generic: Нашёл лидов
+  - generic: готово
+  - generic: hydrated
+  - generic: "1"
+  - generic: "Найдено элементов: 1"
+  - generic: Собрал shortlist
+  - generic: готово
+  - generic: hydrated
+  - generic: "1"
+  - generic: "Найдено элементов: 1"
+  - generic: Подготовил черновики
+  - generic: готово
+  - generic: hydrated
+  - generic: "1"
+  - generic: "Найдено элементов: 1"
+  - generic: Поставил в очередь
+  - generic: готово
+  - generic: hydrated
+  - generic: "1"
+  - generic: "Найдено элементов: 1"
+  - generic: не выполнялась
+  - heading "Нет активных запусков" [level=3]
+  - paragraph: Запустите агента из карточки, чтобы увидеть результат.
+  - generic: Журнал запуска
+  - generic: Входные данные, что агент извлёк, какие правила применил, результат и ручной контроль. Следующий запуск пойдёт на v1.
+  - generic: Готово
+  - generic: Как настроен агент
+  - generic: "Задача: не задана"
+  - generic: "Извлечь: не задано"
+  - generic: "Правила: не заданы"
+  - generic: "Результат: не задан"
+  - generic: Источники
+  - generic: Добавьте текст, файл или источник LocalOS.
+  - generic: входные данные
+  - generic: Входные данные
+  - generic: Агент получил задачу и источники.
+  - generic: ready
+  - generic "Технический журнал"
+  - generic: поиск лидов
+  - generic: Откуда агент взял лидов
+  - generic: "Найдено элементов: 1"
+  - generic: hydrated
+  - generic: Источник данных
+  - generic: prospectingleads
+  - generic: Найдено лидов
+  - generic: "1"
+  - generic: Фильтры
+  - generic: "source: smoke_agent_blueprint; city: Smoke City; intent: client_outreach; limit: 5"
+  - generic: Статусы
+  - generic: "new: 1"
+  - generic: "city: Smoke City · created_at: 2026-05-27 10:32:06.840196+00:00 · id: smoke-agent-lead-2e547a1593"
+  - generic "Технический журнал"
+  - generic: список клиентов
+  - generic: Кого агент предложил взять в работу
+  - generic: "Найдено элементов: 1"
+  - generic: hydrated
+  - generic: Источник
+  - generic: prospectingleads
+  - generic: Лидов в shortlist
+  - generic: "1"
+  - generic: Сформировано из
+  - generic: lead_source_plan
+  - generic: Лиды
+  - generic: Smoke Outreach Lead
+  - generic: "city: Smoke City · email: lead-smoke@example.invalid · id: smoke-agent-lead-2e547a1593"
+  - generic "Технический журнал"
+  - generic: черновики сообщений
+  - generic: Черновики сообщений
+  - generic: "Найдено элементов: 1"
+  - generic: hydrated
+  - generic: Источник
+  - generic: outreachmessagedrafts
+  - generic: Черновиков
+  - generic: "1"
+  - generic: Лиды
+  - generic: Smoke Outreach Lead
+  - generic: Каналы
+  - generic: email
+  - generic: Статусы
+  - generic: generated
+  - generic: Внешняя отправка
+  - generic: не выполнялась
+  - generic: "channel: email · generated_text: Здравствуйте! Мы посмотрели карточку Smoke Outreach Lead в картах. Видим вас в категории «локального бизнеса» в Smoke City. Можем прислать короткий разбор: что мешает получать больше обращений и какие правки дадут быстрый эффект. · id: c0af244e-d43d-4058-a21f-070bb6b93918"
+  - generic "Технический журнал"
+  - generic: очередь
+  - generic: Очередь отправки
+  - generic: "Найдено элементов: 1"
+  - generic: hydrated
+  - generic: Источник
+  - generic: outreachsendqueue
+  - generic: В очереди
+  - generic: "1"
+  - generic: Элементов
+  - generic: "1"
+  - generic: Dispatch
+  - generic: queued_not_dispatched
+  - generic: Delivery
+  - generic: queued
+  - generic: Внешняя отправка
+  - generic: не выполнялась
+  - generic: Контур
+  - generic: Queue rows are LocalOS handoff records. External dispatcher is a separate contour.
+  - generic: "batch_id: 548e3610-fc19-471b-8b07-044d34d35e05 · channel: email · delivery_status: queued"
+  - generic "Технический журнал"
+  - generic: требуется подтверждение
+  - generic: Ручное решение
+  - generic: Подтвердить shortlist
+  - generic: Подтверждено
+  - generic: Тип решения
+  - generic: shortlist
+  - generic: Статус
+  - generic: approved
+  - generic: Артефакт
+  - generic: lead_shortlist
+  - generic: Элементов
+  - generic: "1"
+  - generic: Причина
+  - generic: smoke approved
+  - generic: "city: Smoke City · email: lead-smoke@example.invalid · id: smoke-agent-lead-2e547a1593"
+  - generic "Технический журнал"
+  - generic: требуется подтверждение
+  - generic: Ручное решение
+  - generic: Подтвердить черновики
+  - generic: Подтверждено
+  - generic: Тип решения
+  - generic: drafts
+  - generic: Статус
+  - generic: approved
+  - generic: Артефакт
+  - generic: message_drafts
+  - generic: Элементов
+  - generic: "1"
+  - generic: Причина
+  - generic: smoke approved
+  - generic: "channel: email · generated_text: Здравствуйте! Мы посмотрели карточку Smoke Outreach Lead в картах. Видим вас в категории «локального бизнеса» в Smoke City. Можем прислать короткий разбор: что мешает получать больше обращений и какие правки дадут быстрый эффект. · id: c0af244e-d43d-4058-a21f-070bb6b93918"
+  - generic "Технический журнал"
+  - textbox "Что исправить в логике агента для следующей версии?"
+  - button "Создать новую версию" [disabled]
+  - heading "Последние запуски" [level=2]
+  - paragraph: Короткая история выбранного агента.
+  - button "Все"
+  - button "В работе"
+  - button "Ждёт решения"
+  - button "Готово"
+  - button "Ошибка"
+  - button "Запуск e7597c5d Готово Wed, 27 May 2026 10:32:06 GMT":
+    - generic: Запуск e7597c5d
+    - generic: Готово
+    - generic: Wed, 27 May 2026 10:32:06 GMT
+  - heading "Ждут решения" [level=2]
+  - paragraph: Решения, без которых агент не продолжит рискованное действие.
+  - heading "Очередь approval пуста" [level=3]
+  - paragraph: Когда агент остановится на ручном подтверждении, решение появится здесь.

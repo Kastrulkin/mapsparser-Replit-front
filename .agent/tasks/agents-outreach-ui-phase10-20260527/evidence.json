@@ -1,0 +1,67 @@
+{
+  "task_id": "agents-outreach-ui-phase10-20260527",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "/dashboard/agents shows a supervised outreach progress overview in saved results.",
+      "status": "PASS",
+      "proof": [
+        "Authenticated browser smoke found outreach stages in saved results.",
+        "raw/browser-smoke.txt"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "The overview uses existing journal/review data and keeps raw payloads behind technical journal.",
+      "status": "PASS",
+      "proof": [
+        "UI reads review journal entries and active run step status.",
+        "raw/browser-smoke.txt"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Frontend build, lint baseline, and Agent Blueprint tests pass.",
+      "status": "PASS",
+      "proof": [
+        "raw/test-unit.txt",
+        "raw/build.txt",
+        "raw/lint.txt"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Production frontend is deployed and authenticated smoke verifies the outreach results view.",
+      "status": "PASS",
+      "proof": [
+        "raw/deploy.txt",
+        "raw/prod-fixture-smoke.txt",
+        "raw/browser-smoke.txt"
+      ],
+      "gaps": [
+        "Screenshot capture timed out; DOM proof was captured."
+      ]
+    },
+    {
+      "id": "AC5",
+      "text": "Production smoke fixture is removed after verification.",
+      "status": "PASS",
+      "proof": [
+        "raw/prod-fixture-cleanup.txt",
+        "raw/prod-fixture-cleanup-verify.txt"
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx"
+  ],
+  "commands_for_fresh_verifier": [],
+  "known_gaps": [
+    "Screenshot capture timed out; authenticated browser DOM proof is stored."
+  ]
+}
