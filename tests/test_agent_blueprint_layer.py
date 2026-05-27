@@ -195,6 +195,7 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     review_analysis_source = Path("src/services/agent_review_reply_analysis.py").read_text(encoding="utf-8")
     table_analysis_source = Path("src/services/agent_table_analysis.py").read_text(encoding="utf-8")
     builder_api_source = Path("src/api/agent_builder_api.py").read_text(encoding="utf-8")
+    agents_page_source = Path("frontend/src/pages/dashboard/AgentBlueprintsPage.tsx").read_text(encoding="utf-8")
 
     assert "VERSION_BLUEPRINT_MISMATCH" in api_source
     assert "_load_blueprint_version_for_blueprint" in api_source
@@ -239,6 +240,10 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "/api/agent-builder/sessions" in builder_api_source
     assert "build_agent_builder_state" in builder_api_source
     assert "create_blueprint_from_agent_builder_session" in builder_api_source
+    assert "GenericRunProgress" in agents_page_source
+    assert "Путь {humanizeCategory(category).toLowerCase()}-агента" in agents_page_source
+    assert "Техническая сводка запуска" in agents_page_source
+    assert "resultFieldLabels" in agents_page_source
 
 
 def test_generic_document_runner_uses_sources_and_stops_for_final_approval():

@@ -508,11 +508,39 @@ const metaLabels: Record<string, string> = {
   feedback_notes: 'правки',
 };
 
+const resultFieldLabels: Record<string, string> = {
+  title: 'Название результата',
+  summary: 'Краткий вывод',
+  risks: 'Риски',
+  facts: 'Факты',
+  fields: 'Поля',
+  next_questions: 'Что уточнить',
+  subject: 'Тема письма',
+  body: 'Текст письма',
+  checklist: 'Проверить перед использованием',
+  exceptions: 'Исключения',
+  rows_to_review: 'Строки к проверке',
+  recommendations: 'Рекомендации',
+  reply_drafts: 'Черновики ответов',
+  manual_review_reasons: 'Почему нужен ручной контроль',
+  rules_applied: 'Применённые правила',
+  provenance: 'Источники',
+  delivery_state: 'Отправка',
+  publish_state: 'Публикация',
+};
+
 const outreachProgressStages = [
   { kind: 'sourcing', title: 'Нашёл лидов', detailLabel: 'Найдено лидов', icon: Search },
   { kind: 'shortlist', title: 'Собрал shortlist', detailLabel: 'Лидов в shortlist', icon: Users },
   { kind: 'drafts', title: 'Подготовил черновики', detailLabel: 'Черновиков', icon: MessageSquareText },
   { kind: 'queue', title: 'Поставил в очередь', detailLabel: 'В очереди', icon: Send },
+];
+
+const genericRunStages = [
+  { kind: 'input', title: 'Входные данные', description: 'Что агент получил на вход', icon: Database },
+  { kind: 'extraction', title: 'Что понял', description: 'Что извлёк из источников', icon: Search },
+  { kind: 'output', title: 'Результат', description: 'Что подготовил для проверки', icon: FileCheck2 },
+  { kind: 'approval', title: 'Ручной контроль', description: 'Что требует решения человека', icon: ShieldCheck },
 ];
 
 const humanizeStatus = (status: string) => statusLabels[status] || status;
@@ -2254,7 +2282,14 @@ const AgentDetailPanel = ({
       <div className="space-y-4">
         {blueprint.category === 'outreach' ? (
           <OutreachRunProgress review={agentReview} activeRun={activeRun} />
-        ) : null}
+        ) : (
+          <GenericRunProgress
+            category={blueprint.category}
+            review={agentReview}
+            activeRun={activeRun}
+            pendingApproval={pendingApproval}
+          />
+        )}
         {queuedButNotDispatched ? (
           <DashboardActionPanel
             title="Поставлено в очередь, но не отправлено"
@@ -2276,21 +2311,26 @@ const AgentDetailPanel = ({
           />
         ) : null}
         {activeRun ? (
-          <div className="grid gap-4 xl:grid-cols-3">
-            <RunColumn title="Что сделал агент" icon={Clock3}>
-              {(activeRun.steps || []).map((step) => (
-                <TimelineItem key={step.id} title={humanizeStep(step.step_key)} meta={humanizeMeta(step.step_type)} status={step.status} />
-              ))}
-            </RunColumn>
-            <RunColumn title="Сохранённые результаты" icon={FileCheck2}>
-              {(activeRun.artifacts || []).map((artifact) => <ArtifactItem key={artifact.id} artifact={artifact} />)}
-            </RunColumn>
-            <RunColumn title="Ручной контроль" icon={ShieldCheck}>
-              {(activeRun.approvals || []).map((approval) => (
-                <TimelineItem key={approval.id} title={approval.title} meta={humanizeMeta(approval.approval_type)} status={approval.status} />
-              ))}
-            </RunColumn>
-          </div>
+          <details className="rounded-2xl border border-slate-200 bg-white p-4">
+            <summary className="cursor-pointer text-sm font-semibold text-slate-700 hover:text-slate-950">
+              Техническая сводка запуска
+            </summary>
+            <div className="mt-4 grid gap-4 xl:grid-cols-3">
+              <RunColumn title="Шаги runtime" icon={Clock3}>
+                {(activeRun.steps || []).map((step) => (
+                  <TimelineItem key={step.id} title={humanizeStep(step.step_key)} meta={humanizeMeta(step.step_type)} status={step.status} />
+                ))}
+              </RunColumn>
+              <RunColumn title="Artifacts" icon={FileCheck2}>
+                {(activeRun.artifacts || []).map((artifact) => <ArtifactItem key={artifact.id} artifact={artifact} />)}
+              </RunColumn>
+              <RunColumn title="Approvals" icon={ShieldCheck}>
+                {(activeRun.approvals || []).map((approval) => (
+                  <TimelineItem key={approval.id} title={approval.title} meta={humanizeMeta(approval.approval_type)} status={approval.status} />
+                ))}
+              </RunColumn>
+            </div>
+          </details>
         ) : (
           <DashboardEmptyState title="Нет активных запусков" description="Запустите агента из карточки, чтобы увидеть результат." />
         )}
@@ -2700,6 +2740,188 @@ const buildJournalFromSections = (sections: AgentReviewSection[]) => sections.ma
   payload: section.payload || {},
 }));
 
+const GenericRunProgress = ({
+  category,
+  review,
+  activeRun,
+  pendingApproval,
+}: {
+  category: string;
+  review: AgentReview | null;
+  activeRun: AgentRun | null;
+  pendingApproval: AgentApproval | null;
+}) => {
+  const journal = review?.journal && review.journal.length ? review.journal : buildJournalFromSections(review?.sections || []);
+  const stepStatuses = buildStepStatusMap(activeRun?.steps || []);
+  const hasRunData = Boolean(activeRun || journal.length || review?.has_run);
+
+  if (!hasRunData) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-slate-950">Путь {humanizeCategory(category).toLowerCase()}-агента</div>
+          <div className="mt-1 text-sm leading-6 text-slate-600">
+            Агент проходит понятный цикл: данные, понимание, результат и ручной контроль. Технические детали спрятаны ниже.
+          </div>
+        </div>
+        {activeRun?.status || review?.run_status ? <StatusBadge status={activeRun?.status || review?.run_status || ''} /> : null}
+      </div>
+      <div className="mt-4 grid gap-3 lg:grid-cols-4">
+        {genericRunStages.map((stage) => {
+          const entry = findJournalEntryForGenericStage(journal, stage.kind);
+          const stageStatus = getGenericStageStatus(stage.kind, entry, stepStatuses, pendingApproval);
+          const detail = getGenericStageDetail(stage.kind, entry, category, pendingApproval);
+          const Icon = stage.icon;
+          return (
+            <div
+              key={stage.kind}
+              className={cn(
+                'rounded-xl border px-3 py-3',
+                stageStatus === 'completed' || stageStatus === 'approved' || stageStatus === 'generated'
+                  ? 'border-emerald-200 bg-emerald-50/60'
+                  : stageStatus === 'waiting_approval' || stageStatus === 'pending'
+                    ? 'border-amber-200 bg-amber-50/60'
+                    : 'border-slate-200 bg-slate-50',
+              )}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className={cn(
+                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white ring-1',
+                    stageStatus === 'completed' || stageStatus === 'approved' || stageStatus === 'generated'
+                      ? 'text-emerald-700 ring-emerald-200'
+                      : stageStatus === 'waiting_approval' || stageStatus === 'pending'
+                        ? 'text-amber-700 ring-amber-200'
+                        : 'text-slate-500 ring-slate-200',
+                  )}>
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-slate-950">{stage.title}</div>
+                    <div className="mt-0.5 text-xs text-slate-500">{stage.description}</div>
+                  </div>
+                </div>
+                {stageStatus ? <StatusBadge status={stageStatus} /> : null}
+              </div>
+              {detail ? <div className="mt-3 text-sm leading-6 text-slate-700">{detail}</div> : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const buildStepStatusMap = (steps: AgentRunStep[]) => {
+  const statuses: Record<string, string> = {};
+  steps.forEach((step) => {
+    if (step.step_key && step.status) {
+      statuses[step.step_key] = step.status;
+    }
+  });
+  return statuses;
+};
+
+const findJournalEntryForGenericStage = (journal: AgentJournalEntry[], kind: string) => {
+  if (kind === 'approval') {
+    return journal.find((entry) => entry.kind === 'approval');
+  }
+  return journal.find((entry) => entry.kind === kind);
+};
+
+const getGenericStageStatus = (
+  kind: string,
+  entry: AgentJournalEntry | undefined,
+  stepStatuses: Record<string, string>,
+  pendingApproval: AgentApproval | null,
+) => {
+  if (kind === 'approval' && pendingApproval) {
+    return 'waiting_approval';
+  }
+  if (entry?.status) {
+    return entry.status;
+  }
+  if (kind === 'input') {
+    return stepStatuses.collect_inputs || '';
+  }
+  if (kind === 'extraction') {
+    return stepStatuses.extract_context || '';
+  }
+  if (kind === 'output') {
+    return stepStatuses.prepare_output || '';
+  }
+  if (kind === 'approval') {
+    return stepStatuses.approve_output || '';
+  }
+  return '';
+};
+
+const getGenericStageDetail = (
+  kind: string,
+  entry: AgentJournalEntry | undefined,
+  category: string,
+  pendingApproval: AgentApproval | null,
+) => {
+  if (kind === 'input') {
+    return findJournalDetailValue(entry, 'Подключено источников') || findJournalDetailValue(entry, 'Источники') || 'Данные агента подключены к запуску.';
+  }
+  if (kind === 'extraction') {
+    return findJournalDetailValue(entry, 'Извлечено элементов') || findJournalDetailValue(entry, 'Что обработано') || entry?.summary || 'Агент разобрал источники.';
+  }
+  if (kind === 'output') {
+    return getOutputStageDetail(entry, category);
+  }
+  if (kind === 'approval') {
+    if (pendingApproval) {
+      return pendingApproval.title || 'Нужно решение перед продолжением.';
+    }
+    return findJournalDetailValue(entry, 'Статус') || entry?.summary || 'Решения сохранены в журнале.';
+  }
+  return '';
+};
+
+const getOutputStageDetail = (entry: AgentJournalEntry | undefined, category: string) => {
+  if (!entry) {
+    return 'Результат появится после запуска.';
+  }
+  if (category === 'documents') {
+    return compactJoin([
+      labelCount('Фактов', findJournalDetailValue(entry, 'Фактов')),
+      labelCount('Рисков', findJournalDetailValue(entry, 'Рисков')),
+      findJournalDetailValue(entry, 'Внешняя отправка'),
+    ]);
+  }
+  if (category === 'email') {
+    return compactJoin([
+      findJournalDetailValue(entry, 'Тема письма'),
+      labelCount('Пунктов чеклиста', findJournalDetailValue(entry, 'Чеклист')),
+      findJournalDetailValue(entry, 'Внешняя отправка'),
+    ]);
+  }
+  if (category === 'tables') {
+    return compactJoin([
+      labelCount('Исключений', findJournalDetailValue(entry, 'Исключений')),
+      labelCount('Строк к проверке', findJournalDetailValue(entry, 'Строк к проверке')),
+      findJournalDetailValue(entry, 'Внешняя отправка'),
+    ]);
+  }
+  if (category === 'reviews') {
+    return compactJoin([
+      labelCount('Черновиков ответов', findJournalDetailValue(entry, 'Черновиков ответов')),
+      labelCount('Причин ручной проверки', findJournalDetailValue(entry, 'Причин ручной проверки')),
+      findJournalDetailValue(entry, 'Публикация'),
+    ]);
+  }
+  return entry.summary || 'Агент подготовил результат.';
+};
+
+const labelCount = (label: string, value: string) => (value ? `${label}: ${value}` : '');
+const compactJoin = (items: string[]) => items.filter((item) => item.trim()).join(' · ');
+
 const OutreachRunProgress = ({ review, activeRun }: { review: AgentReview | null; activeRun: AgentRun | null }) => {
   const journal = review?.journal && review.journal.length ? review.journal : [];
   const completedStepKeys = new Set((activeRun?.steps || []).filter((step) => step.status === 'completed').map((step) => step.step_key));
@@ -2816,7 +3038,7 @@ const JournalEntryCard = ({ entry }: { entry: AgentJournalEntry }) => {
 };
 
 const HumanPayloadView = ({ payload }: { payload: Record<string, unknown> }) => {
-  const result = payload.result && typeof payload.result === 'object' && !Array.isArray(payload.result) ? payload.result : null;
+  const result = toRecordOrNull(payload.result);
   const items = Array.isArray(payload.items) ? payload.items : [];
   const missing = Array.isArray(payload.missing_information) ? payload.missing_information : [];
   const provenance = Array.isArray(payload.provenance) ? payload.provenance : [];
@@ -2847,15 +3069,55 @@ const HumanPayloadView = ({ payload }: { payload: Record<string, unknown> }) => 
   );
 };
 
-const HumanResultView = ({ result }: { result: object }) => {
+const toRecordOrNull = (value: unknown): Record<string, unknown> | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  return Object.fromEntries(Object.entries(value));
+};
+
+const HumanResultView = ({ result }: { result: Record<string, unknown> }) => {
   const entries = Object.entries(result).filter(([, value]) => value !== '' && value !== null && value !== undefined);
+  const priorityKeys = [
+    'title',
+    'summary',
+    'risks',
+    'facts',
+    'fields',
+    'next_questions',
+    'subject',
+    'body',
+    'checklist',
+    'exceptions',
+    'rows_to_review',
+    'recommendations',
+    'reply_drafts',
+    'manual_review_reasons',
+    'rules_applied',
+    'provenance',
+    'delivery_state',
+    'publish_state',
+  ];
+  const priorityEntries = priorityKeys
+    .map((key) => ({ key, value: result[key] }))
+    .filter((entry) => entry.value !== '' && entry.value !== null && entry.value !== undefined);
   return (
-    <div className="rounded-lg bg-white px-2 py-2 ring-1 ring-slate-200">
-      {entries.slice(0, 5).map(([key, value]) => (
-        <div key={key} className="mt-1 first:mt-0">
-          <span className="font-medium text-slate-950">{humanizeMeta(key)}:</span> {formatPayloadValue(value)}
+    <div className="space-y-2">
+      {priorityEntries.slice(0, 6).map(({ key, value }) => (
+        <div key={key} className="rounded-lg bg-white px-2 py-2 ring-1 ring-slate-200">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{resultFieldLabels[key] || humanizeMeta(key)}</div>
+          <div className="mt-1 text-slate-700">{formatPayloadValue(value)}</div>
         </div>
       ))}
+      {priorityEntries.length ? null : (
+        <div className="rounded-lg bg-white px-2 py-2 ring-1 ring-slate-200">
+          {entries.slice(0, 5).map(([key, value]) => (
+            <div key={key} className="mt-1 first:mt-0">
+              <span className="font-medium text-slate-950">{humanizeMeta(key)}:</span> {formatPayloadValue(value)}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
