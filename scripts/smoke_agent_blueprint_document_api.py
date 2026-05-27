@@ -383,6 +383,17 @@ def main():
         sections = review_payload.get("review", {}).get("sections") or []
         if not sections:
             raise RuntimeError(f"review did not expose human-readable sections: {review_payload}")
+        journal = review_payload.get("review", {}).get("journal") or []
+        journal_kinds = {str(item.get("kind") or "") for item in journal if isinstance(item, dict)}
+        if not {"input", "output", "approval"}.issubset(journal_kinds):
+            raise RuntimeError(f"review did not expose human-readable journal: {review_payload}")
+        output_entries = [item for item in journal if isinstance(item, dict) and item.get("kind") == "output"]
+        if not output_entries:
+            raise RuntimeError(f"review journal missing output entry: {review_payload}")
+        output_details = output_entries[-1].get("details") or []
+        output_detail_labels = {str(item.get("label") or "") for item in output_details if isinstance(item, dict)}
+        if "Источник анализа" not in output_detail_labels or "Внешняя отправка" not in output_detail_labels:
+            raise RuntimeError(f"review journal output is not useful enough: {review_payload}")
 
         print(
             json.dumps(
@@ -401,6 +412,7 @@ def main():
                     "analysis_source": output_payload.get("analysis_source"),
                     "llm_analysis_used": output_payload.get("llm_analysis_used"),
                     "provenance": output_payload.get("provenance"),
+                    "journal_kinds": sorted(journal_kinds),
                     "external_dispatch_performed": False,
                     "system_agents_config_persisted": True,
                     "fixture_cleaned": not KEEP_FIXTURE,

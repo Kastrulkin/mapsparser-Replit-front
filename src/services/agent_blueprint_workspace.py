@@ -180,6 +180,7 @@ def build_blueprint_review(cursor: Any, blueprint_id: str) -> Dict[str, Any]:
             "setup": metadata.get("agent_setup") if isinstance(metadata.get("agent_setup"), dict) else {},
             "sources": metadata.get("agent_sources") if isinstance(metadata.get("agent_sources"), list) else [],
             "sections": [],
+            "journal": [],
             "approvals": [],
         }
     run_dict = dict(run)
@@ -211,6 +212,7 @@ def build_blueprint_review(cursor: Any, blueprint_id: str) -> Dict[str, Any]:
         "setup": metadata.get("agent_setup") if isinstance(metadata.get("agent_setup"), dict) else {},
         "sources": metadata.get("agent_sources") if isinstance(metadata.get("agent_sources"), list) else [],
         "sections": _review_sections(artifacts),
+        "journal": _review_journal(run_dict, artifacts, approvals, metadata),
         "approvals": [_human_approval(item) for item in approvals],
     }
 
@@ -426,6 +428,196 @@ def _review_sections(artifacts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             }
         )
     return sections
+
+
+def _review_journal(
+    run: Dict[str, Any],
+    artifacts: List[Dict[str, Any]],
+    approvals: List[Dict[str, Any]],
+    metadata: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    journal: List[Dict[str, Any]] = []
+    setup = metadata.get("agent_setup") if isinstance(metadata.get("agent_setup"), dict) else {}
+    journal.append(
+        {
+            "kind": "input",
+            "title": "Входные данные",
+            "status": "ready",
+            "summary": _clean_text(setup.get("workflow_description")) or "Агент получил задачу и источники.",
+            "details": _setup_details(setup, metadata),
+            "payload": {
+                "run_id": run.get("id"),
+                "input": parse_json_field(run.get("input_json"), {}),
+                "setup": setup,
+                "sources": metadata.get("agent_sources") if isinstance(metadata.get("agent_sources"), list) else [],
+            },
+        }
+    )
+    for artifact in artifacts:
+        artifact_type = _clean_text(artifact.get("artifact_type"))
+        payload = parse_json_field(artifact.get("payload_json"), {})
+        if not isinstance(payload, dict):
+            payload = {}
+        journal.append(_artifact_journal_entry(artifact_type, payload))
+    for approval in approvals:
+        payload = parse_json_field(approval.get("payload_json"), {})
+        journal.append(
+            {
+                "kind": "approval",
+                "title": "Ручное решение",
+                "status": approval.get("status"),
+                "summary": _clean_text(approval.get("title")) or _clean_text(approval.get("approval_type")) or "Ожидает решения",
+                "details": _approval_details(approval, payload if isinstance(payload, dict) else {}),
+                "payload": payload,
+            }
+        )
+    return journal
+
+
+def _artifact_journal_entry(artifact_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    if artifact_type == "agent_input_plan":
+        return {
+            "kind": "input",
+            "title": "Проверка входных данных",
+            "status": payload.get("status") or "ready",
+            "summary": _payload_summary(payload),
+            "details": _input_plan_details(payload),
+            "payload": payload,
+        }
+    if artifact_type == "agent_extracted_context":
+        return {
+            "kind": "extraction",
+            "title": "Что агент извлёк",
+            "status": payload.get("status") or "completed",
+            "summary": _payload_summary(payload),
+            "details": _extraction_details(payload),
+            "payload": payload,
+        }
+    if artifact_type == "agent_output_draft":
+        return {
+            "kind": "output",
+            "title": "Подготовленный результат",
+            "status": payload.get("status") or "generated",
+            "summary": _payload_summary(payload),
+            "details": _output_details(payload),
+            "payload": payload,
+        }
+    if artifact_type == "agent_final_result":
+        return {
+            "kind": "final",
+            "title": "Принятый итог",
+            "status": payload.get("status") or "completed",
+            "summary": _payload_summary(payload),
+            "details": _output_details(payload),
+            "payload": payload,
+        }
+    return {
+        "kind": "artifact",
+        "title": _human_artifact_title(artifact_type),
+        "status": payload.get("status") or "completed",
+        "summary": _payload_summary(payload),
+        "details": _generic_payload_details(payload),
+        "payload": payload,
+    }
+
+
+def _setup_details(setup: Dict[str, Any], metadata: Dict[str, Any]) -> List[Dict[str, str]]:
+    sources = metadata.get("agent_sources") if isinstance(metadata.get("agent_sources"), list) else []
+    return _non_empty_details(
+        [
+            ("Что сделать", setup.get("workflow_description")),
+            ("Какие данные", ", ".join(_clean_list(setup.get("data_sources")))),
+            ("Что извлечь", setup.get("extraction_rules")),
+            ("Какие правила", setup.get("processing_rules")),
+            ("Какой результат", setup.get("output_format")),
+            ("Ручной контроль", setup.get("manual_control")),
+            ("Подключено источников", str(len(sources)) if sources else ""),
+        ]
+    )
+
+
+def _input_plan_details(payload: Dict[str, Any]) -> List[Dict[str, str]]:
+    sources = payload.get("data_sources") if isinstance(payload.get("data_sources"), list) else []
+    source_names = []
+    for source in sources:
+        if isinstance(source, dict):
+            source_names.append(_clean_text(source.get("name") or source.get("type")))
+    missing = payload.get("missing_information") if isinstance(payload.get("missing_information"), list) else []
+    return _non_empty_details(
+        [
+            ("Задача", payload.get("workflow_description")),
+            ("Источники", ", ".join(source_names)),
+            ("Не хватает", ", ".join(str(item) for item in missing)),
+            ("Ручной контроль", payload.get("manual_control")),
+        ]
+    )
+
+
+def _extraction_details(payload: Dict[str, Any]) -> List[Dict[str, str]]:
+    items = payload.get("items") if isinstance(payload.get("items"), list) else []
+    names = []
+    for item in items[:5]:
+        if isinstance(item, dict):
+            names.append(_clean_text(item.get("source_name") or item.get("name") or item.get("source_type")))
+    return _non_empty_details(
+        [
+            ("Источник", payload.get("source")),
+            ("Извлечено элементов", str(len(items)) if items else ""),
+            ("Что обработано", ", ".join(names)),
+            ("Правило извлечения", payload.get("extraction_rules")),
+        ]
+    )
+
+
+def _output_details(payload: Dict[str, Any]) -> List[Dict[str, str]]:
+    result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
+    provenance = payload.get("provenance") if isinstance(payload.get("provenance"), list) else []
+    risks = result.get("risks") if isinstance(result.get("risks"), list) else []
+    facts = result.get("facts") if isinstance(result.get("facts"), list) else []
+    next_questions = result.get("next_questions") if isinstance(result.get("next_questions"), list) else []
+    return _non_empty_details(
+        [
+            ("Источник анализа", payload.get("analysis_source") or result.get("analysis_source")),
+            ("Использовал LLM", "да" if payload.get("llm_analysis_used") or result.get("llm_analysis_used") else ""),
+            ("Provenance", ", ".join(str(item) for item in provenance)),
+            ("Фактов", str(len(facts)) if facts else ""),
+            ("Рисков", str(len(risks)) if risks else ""),
+            ("Вопросов", str(len(next_questions)) if next_questions else ""),
+            ("Внешняя отправка", "не выполнялась" if payload.get("external_dispatch_performed") is False else ""),
+        ]
+    )
+
+
+def _approval_details(approval: Dict[str, Any], payload: Dict[str, Any]) -> List[Dict[str, str]]:
+    return _non_empty_details(
+        [
+            ("Тип решения", approval.get("approval_type")),
+            ("Статус", approval.get("status")),
+            ("Артефакт", payload.get("artifact_type")),
+            ("Элементов", str(payload.get("count")) if payload.get("count") is not None else ""),
+            ("Причина", approval.get("decision_reason")),
+        ]
+    )
+
+
+def _generic_payload_details(payload: Dict[str, Any]) -> List[Dict[str, str]]:
+    return _non_empty_details(
+        [
+            ("Статус", payload.get("status")),
+            ("Источник", payload.get("source")),
+            ("Элементов", str(payload.get("count")) if payload.get("count") is not None else ""),
+            ("Dispatch", payload.get("dispatch_state")),
+        ]
+    )
+
+
+def _non_empty_details(items: List[tuple[str, Any]]) -> List[Dict[str, str]]:
+    details = []
+    for label, value in items:
+        clean_value = _clean_text(value)
+        if clean_value:
+            details.append({"label": label, "value": clean_value})
+    return details
 
 
 def _human_approval(approval: Dict[str, Any]) -> Dict[str, Any]:

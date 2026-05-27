@@ -180,6 +180,15 @@ type AgentReviewSection = {
   payload?: Record<string, unknown>;
 };
 
+type AgentJournalEntry = {
+  kind?: string;
+  title?: string;
+  status?: string;
+  summary?: string;
+  details?: Array<{ label?: string; value?: string }>;
+  payload?: Record<string, unknown>;
+};
+
 type AgentReview = {
   has_run?: boolean;
   run_id?: string;
@@ -187,6 +196,7 @@ type AgentReview = {
   setup?: Record<string, unknown>;
   sources?: AgentSource[];
   sections?: AgentReviewSection[];
+  journal?: AgentJournalEntry[];
   approvals?: AgentApproval[];
 };
 
@@ -2604,74 +2614,113 @@ const AgentRunReviewPanel = ({
   actionLoading: boolean;
   onFeedbackTextChange: (value: string) => void;
   onSubmitFeedback: () => void;
-}) => (
-  <div className="rounded-2xl border border-slate-200 bg-white p-4">
-    <div className="mb-3 flex items-center justify-between gap-3">
-      <div>
-        <div className="text-sm font-semibold text-slate-950">Review результата</div>
-        <div className="mt-1 text-xs text-slate-500">
-          Входные данные, что агент понял, результат и подтверждения без JSON по умолчанию.
-          {latestVersionNumber ? ` Следующий запуск пойдёт на v${latestVersionNumber}.` : ''}
-        </div>
-      </div>
-      {review?.run_status ? <StatusBadge status={review.run_status} /> : null}
-    </div>
-    <div className="mb-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,0.7fr)]">
-      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Как настроен агент</div>
-        <div className="mt-2 space-y-1 text-sm leading-6 text-slate-700">
-          <div><span className="font-medium text-slate-950">Задача:</span> {String(review?.setup?.workflow_description || 'не задана')}</div>
-          <div><span className="font-medium text-slate-950">Извлечь:</span> {String(review?.setup?.extraction_rules || 'не задано')}</div>
-          <div><span className="font-medium text-slate-950">Результат:</span> {String(review?.setup?.output_format || 'не задан')}</div>
-        </div>
-      </div>
-      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Источники</div>
-        <AgentSourcesList sources={review?.sources || []} />
-      </div>
-    </div>
-    {review?.sections?.length ? (
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {review.sections.map((section) => (
-          <div key={`${section.artifact_type || section.title}`} className="rounded-xl bg-slate-50 px-3 py-3 ring-1 ring-slate-200">
-            <div className="text-sm font-medium text-slate-950">{section.title || 'Результат'}</div>
-            <div className="mt-1 text-xs leading-5 text-slate-600">{section.summary || section.status || 'Готово'}</div>
-            <HumanPayloadView payload={section.payload || {}} />
-            <details className="mt-2">
-              <summary className="cursor-pointer text-xs font-medium text-slate-500 hover:text-slate-900">Технический журнал</summary>
-              <pre className="mt-2 max-h-56 overflow-auto rounded-lg bg-slate-950 p-3 text-[11px] leading-5 text-slate-100">
-                {JSON.stringify(section.payload || {}, null, 2)}
-              </pre>
-            </details>
+}) => {
+  const journal = review?.journal && review.journal.length ? review.journal : buildJournalFromSections(review?.sections || []);
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-slate-950">Журнал запуска</div>
+          <div className="mt-1 text-xs text-slate-500">
+            Входные данные, что агент извлёк, какие правила применил, результат и ручной контроль.
+            {latestVersionNumber ? ` Следующий запуск пойдёт на v${latestVersionNumber}.` : ''}
           </div>
-        ))}
-      </div>
-    ) : (
-      <DashboardEmptyState title="Review появится после запуска" description="Запустите агента, чтобы увидеть extraction, processing и output." />
-    )}
-    <div className="mt-4 grid gap-2 md:grid-cols-[1fr_auto]">
-      <textarea
-        className="min-h-20 resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
-        value={feedbackText}
-        onChange={(event) => onFeedbackTextChange(event.target.value)}
-        placeholder="Что исправить в логике агента для следующей версии?"
-      />
-      <Button type="button" onClick={onSubmitFeedback} disabled={actionLoading || !feedbackText.trim()}>
-        Создать новую версию
-      </Button>
-    </div>
-    {feedbackVersionNotice ? (
-      <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm leading-6 text-emerald-900">
-        <div className="font-semibold">
-          Новая активная версия {feedbackVersionNotice.version_number ? `v${feedbackVersionNotice.version_number}` : 'агента'} готова
         </div>
-        <div className="mt-1">Правка: {feedbackVersionNotice.feedback}</div>
-        <div className="mt-1">Что изменится: следующие запуски будут учитывать эту правку в правилах результата.</div>
-        <div className="mt-1 text-xs">{feedbackVersionNotice.next_run_note}</div>
+        {review?.run_status ? <StatusBadge status={review.run_status} /> : null}
       </div>
-    ) : null}
-  </div>
-);
+      <div className="mb-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,0.7fr)]">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Как настроен агент</div>
+          <div className="mt-2 space-y-1 text-sm leading-6 text-slate-700">
+            <div><span className="font-medium text-slate-950">Задача:</span> {String(review?.setup?.workflow_description || 'не задана')}</div>
+            <div><span className="font-medium text-slate-950">Извлечь:</span> {String(review?.setup?.extraction_rules || 'не задано')}</div>
+            <div><span className="font-medium text-slate-950">Правила:</span> {String(review?.setup?.processing_rules || 'не заданы')}</div>
+            <div><span className="font-medium text-slate-950">Результат:</span> {String(review?.setup?.output_format || 'не задан')}</div>
+          </div>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Источники</div>
+          <AgentSourcesList sources={review?.sources || []} />
+        </div>
+      </div>
+      {journal.length ? (
+        <div className="space-y-3">
+          {journal.map((entry, index) => <JournalEntryCard key={`${entry.kind || 'entry'}-${entry.title || index}`} entry={entry} />)}
+        </div>
+      ) : (
+        <DashboardEmptyState title="Журнал появится после запуска" description="Запустите агента, чтобы увидеть extraction, processing и output." />
+      )}
+      <div className="mt-4 grid gap-2 md:grid-cols-[1fr_auto]">
+        <textarea
+          className="min-h-20 resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+          value={feedbackText}
+          onChange={(event) => onFeedbackTextChange(event.target.value)}
+          placeholder="Что исправить в логике агента для следующей версии?"
+        />
+        <Button type="button" onClick={onSubmitFeedback} disabled={actionLoading || !feedbackText.trim()}>
+          Создать новую версию
+        </Button>
+      </div>
+      {feedbackVersionNotice ? (
+        <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm leading-6 text-emerald-900">
+          <div className="font-semibold">
+            Новая активная версия {feedbackVersionNotice.version_number ? `v${feedbackVersionNotice.version_number}` : 'агента'} готова
+          </div>
+          <div className="mt-1">Правка: {feedbackVersionNotice.feedback}</div>
+          <div className="mt-1">Что изменится: следующие запуски будут учитывать эту правку в правилах результата.</div>
+          <div className="mt-1 text-xs">{feedbackVersionNotice.next_run_note}</div>
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+const buildJournalFromSections = (sections: AgentReviewSection[]) => sections.map((section) => ({
+  kind: humanizeMeta(section.artifact_type || 'artifact'),
+  title: section.title || 'Результат',
+  status: section.status || 'completed',
+  summary: section.summary || '',
+  details: [],
+  payload: section.payload || {},
+}));
+
+const JournalEntryCard = ({ entry }: { entry: AgentJournalEntry }) => {
+  const payload = entry.payload || {};
+  const details = Array.isArray(entry.details) ? entry.details : [];
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
+              {humanizeMeta(entry.kind || 'step')}
+            </span>
+            <div className="text-sm font-semibold text-slate-950">{entry.title || 'Шаг запуска'}</div>
+          </div>
+          {entry.summary ? <div className="mt-2 text-sm leading-6 text-slate-600">{entry.summary}</div> : null}
+        </div>
+        {entry.status ? <StatusBadge status={entry.status} /> : null}
+      </div>
+      {details.length ? (
+        <div className="mt-3 grid gap-2 md:grid-cols-2">
+          {details.map((detail) => (
+            <div key={`${detail.label || ''}-${detail.value || ''}`} className="rounded-lg bg-white px-3 py-2 text-xs leading-5 ring-1 ring-slate-200">
+              <div className="font-medium text-slate-950">{detail.label || 'Деталь'}</div>
+              <div className="mt-1 text-slate-600">{detail.value || ''}</div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <HumanPayloadView payload={payload} />
+      <details className="mt-3">
+        <summary className="cursor-pointer text-xs font-medium text-slate-500 hover:text-slate-900">Технический журнал</summary>
+        <pre className="mt-2 max-h-72 overflow-auto rounded-lg bg-slate-950 p-3 text-[11px] leading-5 text-slate-100">
+          {JSON.stringify(payload, null, 2)}
+        </pre>
+      </details>
+    </div>
+  );
+};
 
 const HumanPayloadView = ({ payload }: { payload: Record<string, unknown> }) => {
   const result = payload.result && typeof payload.result === 'object' && !Array.isArray(payload.result) ? payload.result : null;

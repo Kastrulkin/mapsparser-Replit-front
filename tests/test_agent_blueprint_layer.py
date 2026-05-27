@@ -214,6 +214,8 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "_resolve_active_version" in api_source
     assert "_remember_active_version" in api_source
     assert "build_agent_version_diff" in workspace_source
+    assert "_review_journal" in workspace_source
+    assert "journal" in workspace_source
     assert "analyze_document_sources_with_llm" in workspace_source
     assert "analyze_text_with_gigachat" in document_llm_source
     assert "external_dispatch_performed" in document_llm_source
@@ -476,6 +478,51 @@ def test_agent_version_diff_shows_readable_changes():
     assert "inputs_schema" in diff["changed_fields"]
     assert "output_schema" in diff["changed_fields"]
     assert diff["summary"].startswith("Изменено:")
+
+
+def test_agent_run_review_journal_is_human_readable():
+    from services.agent_blueprint_workspace import _review_journal
+
+    journal = _review_journal(
+        {"id": "run1", "input_json": {"source": "smoke"}},
+        [
+            {
+                "artifact_type": "agent_output_draft",
+                "payload_json": {
+                    "status": "generated",
+                    "analysis_source": "gigachat",
+                    "llm_analysis_used": True,
+                    "provenance": ["contract.txt"],
+                    "external_dispatch_performed": False,
+                    "result": {
+                        "title": "Разбор документа",
+                        "facts": ["Оплата 10000"],
+                        "risks": ["Штраф 10%"],
+                        "next_questions": ["Кто подписывает?"],
+                    },
+                },
+            }
+        ],
+        [{"id": "approval1", "status": "pending", "title": "Подтвердить результат", "approval_type": "final_output", "payload_json": {}}],
+        {
+            "agent_setup": {
+                "workflow_description": "Проверить договор",
+                "processing_rules": "Не придумывать факты",
+                "output_format": "summary/risks",
+            },
+            "agent_sources": [{"name": "contract.txt", "source_type": "file"}],
+        },
+    )
+
+    kinds = [item["kind"] for item in journal]
+    assert "input" in kinds
+    assert "output" in kinds
+    assert "approval" in kinds
+    output_entry = [item for item in journal if item["kind"] == "output"][0]
+    detail_labels = [item["label"] for item in output_entry["details"]]
+    assert "Источник анализа" in detail_labels
+    assert "Внешняя отправка" in detail_labels
+    assert output_entry["payload"]["external_dispatch_performed"] is False
 
 
 def test_outreach_send_batch_handler_queues_approved_drafts_without_external_dispatch(monkeypatch):
