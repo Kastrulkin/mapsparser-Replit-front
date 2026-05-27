@@ -1,0 +1,8 @@
+blueprints=3
+blueprint=f860e7bb-92a5-460d-ac74-476e509ea055 category=email name=Smoke wizard email: подготовь письмо клиенту по контексту и не отправляй наружу
+blueprint=2f6b79a5-2a1d-4a7e-ae1c-567bed66a380 category=tables name=Smoke wizard tables: проверь CSV клиентов, найди дубли и пустые поля
+blueprint=cc7806cb-26a5-4d0d-8360-bace653b6879 category=reviews name=Smoke wizard reviews: подготовь ответы на отзывы в стиле бизнеса и не публикуй
+runs=3
+capability_steps=0
+external_dispatch_true_artifacts=0
+pending_approvals=3

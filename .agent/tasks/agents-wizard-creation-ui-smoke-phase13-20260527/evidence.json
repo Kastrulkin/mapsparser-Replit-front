@@ -1,0 +1,63 @@
+{
+  "task_id": "agents-wizard-creation-ui-smoke-phase13-20260527",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Production test user can create email, table, and reviews agents through /dashboard/agents manual wizard.",
+      "status": "PASS",
+      "proof": [
+        "raw/browser-wizard-creation-ui-smoke.txt",
+        "raw/browser-email-created-run.png",
+        "raw/browser-tables-created-run.png",
+        "raw/browser-reviews-created-run.png"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Each created agent can be launched from its card and reaches a human-readable review/result view.",
+      "status": "PASS",
+      "proof": [
+        "raw/browser-wizard-creation-ui-smoke.txt"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Created generic agents do not execute capabilities or external dispatch; they stop on manual approval.",
+      "status": "PASS",
+      "proof": [
+        "raw/prod-created-agents-verify.txt",
+        "raw/browser-wizard-creation-ui-smoke.txt"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Temporary production smoke data is removed and verified absent.",
+      "status": "PASS",
+      "proof": [
+        "raw/prod-fixture-cleanup.txt",
+        "raw/prod-fixture-cleanup-verify.txt",
+        "raw/prod-health-after-smoke.txt"
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    ".agent/tasks/agents-wizard-creation-ui-smoke-phase13-20260527/spec.md",
+    ".agent/tasks/agents-wizard-creation-ui-smoke-phase13-20260527/evidence.md",
+    ".agent/tasks/agents-wizard-creation-ui-smoke-phase13-20260527/evidence.json",
+    ".agent/tasks/agents-wizard-creation-ui-smoke-phase13-20260527/verdict.json",
+    ".agent/tasks/agents-wizard-creation-ui-smoke-phase13-20260527/raw/wizard_creation_ui_smoke.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "Review raw/browser-wizard-creation-ui-smoke.txt and screenshots.",
+    "Review raw/prod-created-agents-verify.txt for safety boundaries.",
+    "Review raw/prod-fixture-cleanup-verify.txt for cleanup zero counts."
+  ],
+  "known_gaps": [
+    "Dialog builder preview/create flow remains the next focused proof-loop."
+  ]
+}

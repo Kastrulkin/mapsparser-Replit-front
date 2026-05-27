@@ -1,0 +1,55 @@
+{
+  "success": true,
+  "base_url": "https://localos.pro",
+  "email": "smoke-wizard-agent-b7e6d31942@example.invalid",
+  "results": [
+    {
+      "name": "email",
+      "prompt": "Smoke wizard email: подготовь письмо клиенту по контексту и не отправляй наружу",
+      "path_label": "Путь письма-агента",
+      "checked_text": [
+        "Путь письма-агента",
+        "Входные данные",
+        "Что понял",
+        "Результат",
+        "Тема письма",
+        "Внешняя отправка",
+        "Ручной контроль"
+      ],
+      "visible_open_pre_count": 0,
+      "screenshot": "browser-email-created-run.png"
+    },
+    {
+      "name": "tables",
+      "prompt": "Smoke wizard tables: проверь CSV клиентов, найди дубли и пустые поля",
+      "path_label": "Путь таблицы-агента",
+      "checked_text": [
+        "Путь таблицы-агента",
+        "Входные данные",
+        "Что понял",
+        "Результат",
+        "Исключений",
+        "Строк к проверке",
+        "Внешняя отправка"
+      ],
+      "visible_open_pre_count": 0,
+      "screenshot": "browser-tables-created-run.png"
+    },
+    {
+      "name": "reviews",
+      "prompt": "Smoke wizard reviews: подготовь ответы на отзывы в стиле бизнеса и не публикуй",
+      "path_label": "Путь отзывы-агента",
+      "checked_text": [
+        "Путь отзывы-агента",
+        "Входные данные",
+        "Что понял",
+        "Результат",
+        "Черновиков ответов",
+        "Причин ручной проверки",
+        "Публикация"
+      ],
+      "visible_open_pre_count": 0,
+      "screenshot": "browser-reviews-created-run.png"
+    }
+  ]
+}
