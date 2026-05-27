@@ -1,0 +1,82 @@
+{
+  "task_id": "agents-table-agent-phase7-20260527",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Table blueprint category creates a useful analysis result, not a static placeholder.",
+      "status": "PASS",
+      "proof": [
+        "Added src/services/agent_table_analysis.py",
+        "agent_blueprint_workspace.py routes table output through analyze_table_with_llm",
+        "test_generic_table_runner_prepares_report_and_never_dispatches passed"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Table result includes summary, exceptions, rows_to_review, recommendations, provenance, and LLM/fallback metadata.",
+      "status": "PASS",
+      "proof": [
+        "Unit tests cover LLM generator and fallback paths",
+        "Production smoke returned analysis_source=gigachat, llm_analysis_used=true, exceptions_count=2, rows_to_review_count=2"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Table agent has no external send/publish/import side effects and stops at final approval.",
+      "status": "PASS",
+      "proof": [
+        "Table version capability_allowlist remains empty",
+        "Unit test verifies no capability step",
+        "Production smoke returned external_dispatch_performed=false and approval_type=final_output"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Run review journal exposes table-specific human details.",
+      "status": "PASS",
+      "proof": [
+        "_output_details includes Исключений, Строк к проверке, and Внешняя отправка",
+        "Production smoke validated journal detail labels"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Local tests, lint, build, production deploy, and production table smoke pass.",
+      "status": "PASS",
+      "proof": [
+        "28 unit tests passed",
+        "lint_backend_baseline.sh passed",
+        "frontend build passed",
+        "backend deploy EXIT=0",
+        "production table smoke passed and cleaned fixture",
+        "server health returned HTTP/1.1 200 OK"
+      ],
+      "gaps": [
+        "Existing Sber/GigaChat SSL workaround warning appears in logs.",
+        "Authenticated browser UI click-through was not performed in this phase."
+      ]
+    }
+  ],
+  "changed_files": [
+    "src/services/agent_table_analysis.py",
+    "src/services/agent_blueprint_workspace.py",
+    "tests/test_agent_blueprint_layer.py",
+    "scripts/smoke_agent_blueprint_table_api.py",
+    "scripts/lint_backend_baseline.sh"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "scripts/lint_backend_baseline.sh",
+    "npm --prefix frontend run build",
+    "SMOKE_BASE_URL=http://localhost:8000 python /app/scripts/smoke_agent_blueprint_table_api.py"
+  ],
+  "known_gaps": [
+    "Table editing/export/import is intentionally not implemented.",
+    "No authenticated browser UI click-through for the table agent was performed in this phase; API/runtime smoke passed."
+  ]
+}
