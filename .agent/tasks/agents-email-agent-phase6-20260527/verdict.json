@@ -1,0 +1,48 @@
+{
+  "task_id": "agents-email-agent-phase6-20260527",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Email category now generates a real draft through agent_email_llm and runner tests pass."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Email result includes useful draft fields, provenance, LLM metadata, and fallback coverage."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Email agent has no capability execution and production smoke confirms no external dispatch."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Journal exposes email-specific human labels including subject and external dispatch state."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Tests, lint, build, deploy, production smoke, and health check passed."
+    }
+  ],
+  "commands_run": [
+    "python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "scripts/lint_backend_baseline.sh",
+    "npm --prefix frontend run build",
+    "scripts/deploy_backend_src.sh",
+    "SMOKE_BASE_URL=http://localhost:8000 python /app/scripts/smoke_agent_blueprint_email_api.py",
+    "docker compose ps",
+    "docker compose logs --since 10m app",
+    "curl -I http://localhost:8000"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/agents-email-agent-phase6-20260527/raw/build.txt",
+    ".agent/tasks/agents-email-agent-phase6-20260527/raw/test-unit.txt",
+    ".agent/tasks/agents-email-agent-phase6-20260527/raw/test-integration.txt",
+    ".agent/tasks/agents-email-agent-phase6-20260527/raw/lint.txt",
+    ".agent/tasks/agents-email-agent-phase6-20260527/raw/screenshot-1.png"
+  ]
+}
