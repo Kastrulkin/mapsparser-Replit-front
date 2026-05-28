@@ -1,0 +1,49 @@
+{
+  "task_id": "agents-datahub-rich-files-polish-20260528",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "PDF/DOCX/XLSX extraction is covered by unit and production API smoke."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Unsupported and empty upload errors are readable and verified."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Datahub-lite catalog exposes rich files as connected ready sources."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Rich-file document run produces human-readable review journal and useful output."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Generic document run executes no capability and performs no external dispatch."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "Production smoke temporary fixtures were cleaned and verified."
+    }
+  ],
+  "commands_run": [
+    "python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "scripts/lint_backend_baseline.sh",
+    "python3 -m py_compile scripts/smoke_agent_blueprint_rich_files_api.py",
+    "production rich files API smoke",
+    "production health/log/cleanup checks"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/agents-datahub-rich-files-polish-20260528/raw/test-agent-blueprint-layer-full.txt",
+    ".agent/tasks/agents-datahub-rich-files-polish-20260528/raw/lint.txt",
+    ".agent/tasks/agents-datahub-rich-files-polish-20260528/raw/prod-rich-files-smoke.txt",
+    ".agent/tasks/agents-datahub-rich-files-polish-20260528/raw/prod-fixture-cleanup-check.txt"
+  ]
+}

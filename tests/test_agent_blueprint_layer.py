@@ -533,13 +533,42 @@ def test_generic_reviews_runner_prepares_reply_drafts_and_never_publishes():
     assert run["approvals"][0]["approval_type"] == "final_output"
 
 
-def test_agent_source_ingestion_extracts_text_docx_xlsx_and_rejects_unsafe_files():
+def test_agent_source_ingestion_extracts_text_pdf_docx_xlsx_and_rejects_unsafe_files():
     import io
     import zipfile
 
     from openpyxl import Workbook
 
     from services.agent_source_ingestion import build_agent_source_from_upload
+
+    def build_test_pdf_bytes(text):
+        stream = f"BT /F1 12 Tf 72 720 Td ({text}) Tj ET".encode("utf-8")
+        objects = [
+            b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n",
+            b"2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n",
+            (
+                b"3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+                b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj\n"
+            ),
+            b"4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n",
+            b"5 0 obj << /Length "
+            + str(len(stream)).encode("ascii")
+            + b" >> stream\n"
+            + stream
+            + b"\nendstream endobj\n",
+        ]
+        output = bytearray(b"%PDF-1.4\n")
+        offsets = [0]
+        for item in objects:
+            offsets.append(len(output))
+            output.extend(item)
+        xref_offset = len(output)
+        output.extend(b"xref\n0 6\n0000000000 65535 f \n")
+        for offset in offsets[1:]:
+            output.extend(f"{offset:010d} 00000 n \n".encode("ascii"))
+        output.extend(b"trailer << /Root 1 0 R /Size 6 >>\n")
+        output.extend(f"startxref\n{xref_offset}\n%%EOF\n".encode("ascii"))
+        return bytes(output)
 
     text_source, text_error = build_agent_source_from_upload(
         FakeUpload("contract.txt", "text/plain", "Оплата 10000. Ответственность: штраф.".encode("utf-8")),
@@ -548,6 +577,14 @@ def test_agent_source_ingestion_extracts_text_docx_xlsx_and_rejects_unsafe_files
     assert text_error == {}
     assert text_source["content_text"].startswith("Оплата 10000")
     assert text_source["extraction_state"] == "ready"
+
+    pdf_bytes = build_test_pdf_bytes("Payment 15000. Penalty 12 percent.")
+    pdf_source, pdf_error = build_agent_source_from_upload(
+        FakeUpload("contract.pdf", "application/pdf", pdf_bytes),
+    )
+    assert pdf_error == {}
+    assert "Payment 15000" in pdf_source["content_text"]
+    assert pdf_source["extraction_method"] == "pypdf"
 
     docx_buffer = io.BytesIO()
     archive = zipfile.ZipFile(docx_buffer, "w")

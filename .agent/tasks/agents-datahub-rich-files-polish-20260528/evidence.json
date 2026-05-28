@@ -1,0 +1,74 @@
+{
+  "task_id": "agents-datahub-rich-files-polish-20260528",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "PDF, DOCX, and XLSX uploads are extracted into usable agent source text.",
+      "status": "PASS",
+      "proof": [
+        "Unit extraction test covers PDF/DOCX/XLSX.",
+        "Production smoke uploaded PDF/DOCX/XLSX and verified ready extraction methods."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Unsupported and empty uploads return readable user-facing errors.",
+      "status": "PASS",
+      "proof": [
+        "Unit and production smoke verify UNSUPPORTED_FILE_TYPE and EMPTY_FILE."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Rich uploaded files appear in the Datahub-lite catalog as connected ready sources.",
+      "status": "PASS",
+      "proof": [
+        "Production smoke verified connected catalog titles for PDF/DOCX/XLSX."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "A document agent run over rich files produces a human-readable review journal and useful output.",
+      "status": "PASS",
+      "proof": [
+        "Production smoke verified input/extraction/output/approval journal kinds and useful output details."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Generic document agents do not execute capabilities, dispatch, publish, or send externally.",
+      "status": "PASS",
+      "proof": [
+        "Production smoke verified no capability step and external_dispatch_performed=false."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC6",
+      "text": "Production smoke uses temporary data only and verifies fixture cleanup.",
+      "status": "PASS",
+      "proof": [
+        "Production smoke fixture_cleaned=true.",
+        "Follow-up DB count check found zero smoke users/businesses."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "tests/test_agent_blueprint_layer.py",
+    "scripts/smoke_agent_blueprint_rich_files_api.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "scripts/lint_backend_baseline.sh",
+    "python3 -m py_compile scripts/smoke_agent_blueprint_rich_files_api.py"
+  ],
+  "known_gaps": [
+    "GigaChat SSL warning remains an existing explicit workaround and is outside this Datahub-lite cycle."
+  ]
+}

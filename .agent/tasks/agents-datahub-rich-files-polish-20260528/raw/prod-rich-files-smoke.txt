@@ -1,0 +1,36 @@
+{
+  "success": true,
+  "base_url": "http://localhost:8000",
+  "business_id": "smoke-rich-agent-business-0f83ba134a",
+  "blueprint_id": "8a8ed073-a9bf-44eb-8770-83946df47cb2",
+  "run_id": "82960614-3356-4ce5-9910-fb63d35cb6b7",
+  "uploaded_sources": [
+    {
+      "name": "Smoke PDF contract",
+      "method": "pypdf"
+    },
+    {
+      "name": "Smoke DOCX contract",
+      "method": "docx_xml"
+    },
+    {
+      "name": "Smoke XLSX risks",
+      "method": "openpyxl"
+    }
+  ],
+  "catalog_connected_sources": [
+    "Smoke DOCX contract",
+    "Smoke PDF contract",
+    "Smoke XLSX risks"
+  ],
+  "journal_kinds": [
+    "approval",
+    "extraction",
+    "input",
+    "output"
+  ],
+  "analysis_source": "deterministic_fallback",
+  "llm_analysis_used": false,
+  "external_dispatch_performed": false,
+  "fixture_cleaned": true
+}
