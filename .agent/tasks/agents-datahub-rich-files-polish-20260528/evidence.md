@@ -62,6 +62,8 @@
 - `ssh ... 'cd /opt/seo-app && docker compose ps && curl -I -sS http://localhost:8000 | head -5'`
 - `ssh ... 'cd /opt/seo-app && docker compose logs --since 10m app | tail -80'`
 - `ssh ... 'cd /opt/seo-app && docker compose exec -T app ... cleanup count check'`
+- `ssh ... 'cd /opt/seo-app && git pull --ff-only origin main ...'`
+- `scp scripts/smoke_agent_blueprint_rich_files_api.py root@80.78.242.105:/opt/seo-app/scripts/...`
 
 ## Raw artifacts
 - .agent/tasks/agents-datahub-rich-files-polish-20260528/raw/smoke-py-compile.txt
@@ -72,6 +74,11 @@
 - .agent/tasks/agents-datahub-rich-files-polish-20260528/raw/prod-health-after-rich-files.txt
 - .agent/tasks/agents-datahub-rich-files-polish-20260528/raw/prod-app-logs-after-rich-files.txt
 - .agent/tasks/agents-datahub-rich-files-polish-20260528/raw/prod-fixture-cleanup-check.txt
+- .agent/tasks/agents-datahub-rich-files-polish-20260528/raw/deploy-sync-after-commit.txt
+- .agent/tasks/agents-datahub-rich-files-polish-20260528/raw/server-git-status-after-pull-block.txt
+- .agent/tasks/agents-datahub-rich-files-polish-20260528/raw/server-git-diff-after-pull-block.txt
+- .agent/tasks/agents-datahub-rich-files-polish-20260528/raw/deploy-script-sync-after-pull-block.txt
 
 ## Known gaps
 - GigaChat SSL warning still appears in logs under the existing explicit workaround. It did not block the smoke and is outside this Datahub-lite cycle.
+- Server repo `git pull --ff-only` is blocked by older hot-deploy working-tree changes/untracked files. Runtime is healthy and the rich-files smoke passed; clean server git hygiene should be handled as a separate cycle.

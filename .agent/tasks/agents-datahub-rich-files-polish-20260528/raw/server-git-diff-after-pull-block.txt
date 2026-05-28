@@ -1,0 +1,229 @@
+ scripts/smoke_agent_blueprint_document_api.py |  90 ++++-
+ scripts/smoke_agent_blueprint_outreach_api.py |  24 ++
+ src/api/agent_blueprints_api.py               | 241 +++++++++++-
+ src/api/agent_security_api.py                 |  26 +-
+ src/core/agent_api_security.py                |   3 +-
+ src/main.py                                   |  46 ++-
+ src/services/agent_blueprint_workspace.py     | 506 ++++++++++++++++++++++++--
+ src/services/agent_source_ingestion.py        |  20 +-
+ 8 files changed, 892 insertions(+), 64 deletions(-)
+diff --git a/scripts/smoke_agent_blueprint_document_api.py b/scripts/smoke_agent_blueprint_document_api.py
+index 91ec9f2..31f6110 100755
+--- a/scripts/smoke_agent_blueprint_document_api.py
++++ b/scripts/smoke_agent_blueprint_document_api.py
+@@ -169,8 +169,10 @@ def main():
+         "run_id": "",
+         "email": f"smoke-doc-agent-{suffix}@example.invalid",
+     }
++    fixture_created = False
+     try:
+         setup_fixture(ids)
++        fixture_created = True
+         _, login_payload = request_json(
+             "POST",
+             "/api/auth/login",
+@@ -268,6 +270,16 @@ def main():
+         result = output_payload.get("result") or {}
+         if output_payload.get("external_dispatch_performed") is not False or output_payload.get("dispatch_state") != "not_dispatched":
+             raise RuntimeError(f"document output side effect boundary failed: {output_payload}")
++        if output_payload.get("analysis_source") not in {"gigachat", "deterministic_fallback"}:
++            raise RuntimeError(f"document output missing analysis source: {output_payload}")
++        if "llm_analysis_used" not in output_payload:
++            raise RuntimeError(f"document output missing llm usage flag: {output_payload}")
++        if not output_payload.get("provenance"):
++            raise RuntimeError(f"document output missing provenance: {output_payload}")
++        if result.get("external_dispatch_performed") is not False:
++            raise RuntimeError(f"document result side effect boundary failed: {result}")
++        if result.get("analysis_source") not in {"gigachat", "deterministic_fallback"}:
++            raise RuntimeError(f"document result missing analysis source: {result}")
+         for key in ("summary", "facts", "fields", "risks", "next_questions"):
+             if key not in result:
+                 raise RuntimeError(f"document result missing {key}: {result}")
+@@ -303,6 +315,64 @@ def main():
+             raise RuntimeError(f"feedback did not create a newer version: {feedback_payload}")
+         if new_version.get("id") == approved_run.get("blueprint_version_id"):
+             raise RuntimeError(f"feedback version reused old run version: {feedback_payload}")
++        diff = feedback_payload.get("diff") or {}
++        if "output_schema" not in (diff.get("changed_fields") or []):
++            raise RuntimeError(f"feedback diff did not show output_schema change: {feedback_payload}")
++
++        _, details_payload = request_json(
++            "GET",
++            f"/api/agent-blueprints/{ids['blueprint_id']}",
++            token=token,
++            expected_status=200,
++        )
++        if details_payload.get("active_version_id") != new_version.get("id"):
++            raise RuntimeError(f"feedback version did not become active: {details_payload}")
++        decorated_versions = details_payload.get("versions") or []
++        active_versions = [item for item in decorated_versions if item.get("is_active")]
++        if len(active_versions) != 1 or active_versions[0].get("id") != new_version.get("id"):
++            raise RuntimeError(f"active version decoration failed: {details_payload}")
++
++        _, version_run_payload = request_json(
++            "POST",
++            f"/api/agent-blueprints/{ids['blueprint_id']}/runs",
++            {"blueprint_version_id": initial_version.get("id"), "input": {"source": "document_smoke_old_version"}},
++            token=token,
++            expected_status=201,
++        )
++        old_version_run = version_run_payload["run"]
++        if old_version_run.get("blueprint_version_id") != initial_version.get("id"):
++            raise RuntimeError(f"explicit version run used the wrong version: {old_version_run}")
++
++        _, rollback_payload = request_json(
++            "POST",
++            f"/api/agent-blueprints/{ids['blueprint_id']}/versions/{initial_version.get('id')}/rollback",
++            {"reason": "document smoke rollback"},
++            token=token,
++            expected_status=200,
++        )
++        if (rollback_payload.get("active_version") or {}).get("id") != initial_version.get("id"):
++            raise RuntimeError(f"rollback did not activate initial version: {rollback_payload}")
++
++        _, active_run_payload = request_json(
++            "POST",
++            f"/api/agent-blueprints/{ids['blueprint_id']}/runs",
++            {"input": {"source": "document_smoke_active_version_after_rollback"}},
++            token=token,
++            expected_status=201,
++        )
++        rollback_run = active_run_payload["run"]
++        if rollback_run.get("blueprint_version_id") != initial_version.get("id"):
++            raise RuntimeError(f"default run did not use rollback active version: {rollback_run}")
++
++        _, reactivate_payload = request_json(
++            "POST",
++            f"/api/agent-blueprints/{ids['blueprint_id']}/versions/{new_version.get('id')}/activate",
++            {"reason": "document smoke reactivate"},
++            token=token,
++            expected_status=200,
++        )
++        if (reactivate_payload.get("active_version") or {}).get("id") != new_version.get("id"):
++            raise RuntimeError(f"activate did not restore feedback version: {reactivate_payload}")
+ 
+         _, review_payload = request_json(
+             "GET",
+@@ -313,6 +383,17 @@ def main():
+         sections = review_payload.get("review", {}).get("sections") or []
+         if not sections:
+             raise RuntimeError(f"review did not expose human-readable sections: {review_payload}")
++        journal = review_payload.get("review", {}).get("journal") or []
++        journal_kinds = {str(item.get("kind") or "") for item in journal if isinstance(item, dict)}
++        if not {"input", "output", "approval"}.issubset(journal_kinds):
++            raise RuntimeError(f"review did not expose human-readable journal: {review_payload}")
++        output_entries = [item for item in journal if isinstance(item, dict) and item.get("kind") == "output"]
++        if not output_entries:
++            raise RuntimeError(f"review journal missing output entry: {review_payload}")
++        output_details = output_entries[-1].get("details") or []
++        output_detail_labels = {str(item.get("label") or "") for item in output_details if isinstance(item, dict)}
++        if "Источник анализа" not in output_detail_labels or "Внешняя отправка" not in output_detail_labels:
++            raise RuntimeError(f"review journal output is not useful enough: {review_payload}")
+ 
+         print(
+             json.dumps(
+@@ -324,7 +405,14 @@ def main():
+                     "run_id": ids["run_id"],
+                     "initial_version": initial_version.get("version_number"),
+                     "feedback_version": new_version.get("version_number"),
++                    "explicit_version_run": old_version_run.get("blueprint_version_id"),
++                    "rollback_active_version": (rollback_payload.get("active_version") or {}).get("version_number"),
++                    "reactivated_version": (reactivate_payload.get("active_version") or {}).get("version_number"),
+                     "approval_type": pending[0].get("approval_type"),
++                    "analysis_source": output_payload.get("analysis_source"),
++                    "llm_analysis_used": output_payload.get("llm_analysis_used"),
++                    "provenance": output_payload.get("provenance"),
++                    "journal_kinds": sorted(journal_kinds),
+                     "external_dispatch_performed": False,
+                     "system_agents_config_persisted": True,
+                     "fixture_cleaned": not KEEP_FIXTURE,
+@@ -336,7 +424,7 @@ def main():
+     finally:
+         if KEEP_FIXTURE:
+             print("SMOKE_KEEP_FIXTURE enabled; fixture was not removed.", file=sys.stderr)
+-        else:
++        elif fixture_created:
+             cleanup_fixture(ids)
+         time.sleep(0.1)
+ 
+diff --git a/src/api/agent_blueprints_api.py b/src/api/agent_blueprints_api.py
+index c5af173..952db51 100644
+--- a/src/api/agent_blueprints_api.py
++++ b/src/api/agent_blueprints_api.py
+@@ -1,5 +1,6 @@
+ import json
+ import uuid
++from datetime import datetime, timezone
+ 
+ from flask import Blueprint, jsonify, request
+ 
+@@ -14,6 +15,7 @@ from services.agent_blueprint_runner import (
+ from services.agent_blueprint_orchestrator import build_agent_blueprint_orchestrator
+ from services.agent_blueprint_draft_builder import build_agent_blueprint_draft
+ from services.agent_blueprint_workspace import (
++    build_agent_version_diff,
+     build_blueprint_review,
+     build_feedback_version_payload,
+     build_version_payload_from_row,
+@@ -22,6 +24,7 @@ from services.agent_blueprint_workspace import (
+     workspace_parse_json_field,
+ )
+ from services.agent_source_ingestion import build_agent_source_from_upload
++from services.agent_datahub import build_agent_datahub_catalog
+ 
+ 
+ agent_blueprints_bp = Blueprint("agent_blueprints_api", __name__)
+@@ -69,7 +72,7 @@ def _load_blueprint(cursor, blueprint_id: str):
+ def _load_blueprint_version_for_blueprint(cursor, blueprint_id: str, version_id: str):
+     cursor.execute(
+         """
+-        SELECT id
++        SELECT *
+         FROM agent_blueprint_versions
+         WHERE id = %s
+           AND blueprint_id = %s
+@@ -80,6 +83,12 @@ def _load_blueprint_version_for_blueprint(cursor, blueprint_id: str, version_id:
+     return dict(row) if row else None
+ 
+ 
++def _load_blueprint_version(cursor, version_id: str):
++    cursor.execute("SELECT * FROM agent_blueprint_versions WHERE id = %s", (version_id,))
++    row = cursor.fetchone()
++    return dict(row) if row else None
++
++
+ def _load_latest_blueprint_version(cursor, blueprint_id: str):
+     cursor.execute(
+         """
+@@ -112,6 +121,66 @@ def _save_blueprint_metadata(cursor, blueprint_id: str, metadata: dict) -> None:
+     )
+ 
+ 
++def _utc_now_text() -> str:
++    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
++
++
++def _version_number(version: dict | None) -> int:
++    try:
++        return int((version or {}).get("version_number") or 0)
++    except Exception:
++        return 0
++
++
++def _resolve_active_version(cursor, blueprint: dict):
++    metadata = _blueprint_metadata(blueprint)
++    active_version_id = str(metadata.get("active_version_id") or "").strip()
++    if active_version_id:
++        version = _load_blueprint_version_for_blueprint(cursor, str(blueprint.get("id") or ""), active_version_id)
++        if version:
++            return version
++    return _load_latest_blueprint_version(cursor, str(blueprint.get("id") or ""))
++
++
++def _remember_active_version(cursor, blueprint: dict, version: dict, user_data: dict, action: str, reason: str = "") -> dict:
++    blueprint_id = str(blueprint.get("id") or "")
++    refreshed_blueprint = _load_blueprint(cursor, blueprint_id) if blueprint_id else None
++    metadata = _blueprint_metadata(refreshed_blueprint or blueprint)
++    previous_active_id = str(metadata.get("active_version_id") or "").strip()
++    event = {
++        "action": action,

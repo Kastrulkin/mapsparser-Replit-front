@@ -69,6 +69,7 @@
     "python3 -m py_compile scripts/smoke_agent_blueprint_rich_files_api.py"
   ],
   "known_gaps": [
-    "GigaChat SSL warning remains an existing explicit workaround and is outside this Datahub-lite cycle."
+    "GigaChat SSL warning remains an existing explicit workaround and is outside this Datahub-lite cycle.",
+    "Server repo git pull --ff-only is blocked by older hot-deploy working-tree changes/untracked files; runtime is healthy and smoke passed."
   ]
 }
