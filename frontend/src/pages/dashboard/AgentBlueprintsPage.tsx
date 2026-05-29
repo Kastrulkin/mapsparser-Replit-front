@@ -201,6 +201,7 @@ type AgentReview = {
   run_status?: string;
   setup?: Record<string, unknown>;
   sources?: AgentSource[];
+  used_sources?: AgentSource[];
   sections?: AgentReviewSection[];
   journal?: AgentJournalEntry[];
   approvals?: AgentApproval[];
@@ -2726,10 +2727,10 @@ const DatahubCatalogItem = ({
   );
 };
 
-const AgentSourcesList = ({ sources }: { sources: AgentSource[] }) => (
-  <div className="space-y-2">
+const AgentSourcesList = ({ sources, compact = false }: { sources: AgentSource[]; compact?: boolean }) => (
+  <div className={cn('space-y-2', compact && 'space-y-1')}>
     {sources.length ? sources.map((source) => (
-      <div key={source.id || source.name || source.file_name} className="rounded-lg bg-white px-3 py-2 text-xs leading-5 text-slate-600 ring-1 ring-slate-200">
+      <div key={source.id || source.name || source.file_name || source.internal_source} className={cn('rounded-lg bg-white px-3 py-2 text-xs leading-5 text-slate-600 ring-1 ring-slate-200', compact && 'bg-emerald-50 ring-emerald-100')}>
         <div className="font-medium text-slate-900">{source.name || source.file_name || source.internal_source || 'Источник'}</div>
         <div>
           {source.internal_source ? humanizeMeta(source.internal_source) : humanizeSourceType(source.source_type)}
@@ -2876,6 +2877,13 @@ const AgentRunReviewPanel = ({
         </div>
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Источники</div>
+          {review?.used_sources?.length ? (
+            <div className="mb-3">
+              <div className="mb-2 text-xs font-medium text-slate-700">Использовано в последнем запуске</div>
+              <AgentSourcesList sources={review.used_sources} compact />
+            </div>
+          ) : null}
+          <div className="mb-2 text-xs font-medium text-slate-700">Подключено к агенту</div>
           <AgentSourcesList sources={review?.sources || []} />
         </div>
       </div>

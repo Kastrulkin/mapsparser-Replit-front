@@ -283,6 +283,8 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "GenericRunProgress" in agents_page_source
     assert "Путь {humanizeCategory(category).toLowerCase()}-агента" in agents_page_source
     assert "Технический журнал" in agents_page_source
+    assert "Использовано в последнем запуске" in agents_page_source
+    assert "used_sources" in workspace_source
     assert "resultFieldLabels" in agents_page_source
 
 
@@ -1042,8 +1044,54 @@ def test_agent_run_review_journal_is_human_readable():
     output_entry = [item for item in journal if item["kind"] == "output"][0]
     detail_labels = [item["label"] for item in output_entry["details"]]
     assert "Источник анализа" in detail_labels
+    assert "Использованные источники" in detail_labels
     assert "Внешняя отправка" in detail_labels
     assert output_entry["payload"]["external_dispatch_performed"] is False
+
+
+def test_agent_review_tracks_sources_used_by_latest_run():
+    from services.agent_blueprint_workspace import _used_source_summaries
+
+    used_sources = _used_source_summaries(
+        {
+            "agent_sources": [
+                {
+                    "id": "source-contract",
+                    "name": "contract.txt",
+                    "source_type": "file",
+                    "file_name": "contract.txt",
+                    "extraction_state": "ready",
+                    "content_length": 120,
+                },
+                {
+                    "id": "source-unused",
+                    "name": "unused.txt",
+                    "source_type": "file",
+                    "extraction_state": "ready",
+                },
+            ],
+        },
+        [
+            {
+                "artifact_type": "agent_extracted_context",
+                "payload_json": {
+                    "items": [{"source_name": "contract.txt", "summary": "Оплата 10000"}],
+                },
+            },
+            {
+                "artifact_type": "agent_output_draft",
+                "payload_json": {
+                    "provenance": ["contract.txt"],
+                    "result": {"summary": ["Оплата 10000"]},
+                },
+            },
+        ],
+    )
+
+    assert len(used_sources) == 1
+    assert used_sources[0]["name"] == "contract.txt"
+    assert used_sources[0]["source_type"] == "file"
+    assert used_sources[0]["content_length"] == 120
 
 
 def test_outreach_run_review_journal_explains_pipeline_and_queue_boundary():

@@ -214,6 +214,7 @@ def build_blueprint_review(cursor: Any, blueprint_id: str) -> Dict[str, Any]:
         "run_status": run_dict.get("status"),
         "setup": metadata.get("agent_setup") if isinstance(metadata.get("agent_setup"), dict) else {},
         "sources": metadata.get("agent_sources") if isinstance(metadata.get("agent_sources"), list) else [],
+        "used_sources": _used_source_summaries(metadata, artifacts),
         "sections": _review_sections(artifacts),
         "journal": _review_journal(run_dict, artifacts, approvals, metadata),
         "approvals": [_human_approval(item) for item in approvals],
@@ -628,7 +629,7 @@ def _output_details(payload: Dict[str, Any]) -> List[Dict[str, str]]:
             ("Источник анализа", payload.get("analysis_source") or result.get("analysis_source")),
             ("Использовал LLM", "да" if payload.get("llm_analysis_used") or result.get("llm_analysis_used") else ""),
             ("Тема письма", result.get("subject")),
-            ("Provenance", ", ".join(str(item) for item in provenance)),
+            ("Использованные источники", ", ".join(str(item) for item in provenance)),
             ("Фактов", str(len(facts)) if facts else ""),
             ("Рисков", str(len(risks)) if risks else ""),
             ("Исключений", str(len(exceptions)) if exceptions else ""),
@@ -785,6 +786,53 @@ def _source_summaries(sources: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 "name": source.get("name") or source.get("file_name") or source.get("internal_source"),
                 "state": source.get("extraction_state"),
                 "content_length": source.get("content_length", 0),
+            }
+        )
+    return result
+
+
+def _used_source_summaries(metadata: Dict[str, Any], artifacts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    sources = metadata.get("agent_sources") if isinstance(metadata.get("agent_sources"), list) else []
+    by_name: Dict[str, Dict[str, Any]] = {}
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        name = _clean_text(source.get("name") or source.get("file_name") or source.get("internal_source"))
+        if not name:
+            continue
+        by_name[name] = source
+
+    used_names: List[str] = []
+    for artifact in artifacts:
+        payload = parse_json_field(artifact.get("payload_json"), {})
+        if not isinstance(payload, dict):
+            continue
+        provenance = payload.get("provenance") if isinstance(payload.get("provenance"), list) else []
+        for name in provenance:
+            clean_name = _clean_text(name)
+            if clean_name and clean_name not in used_names:
+                used_names.append(clean_name)
+        items = payload.get("items") if isinstance(payload.get("items"), list) else []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            clean_name = _clean_text(item.get("source_name") or item.get("name"))
+            if clean_name and clean_name not in used_names:
+                used_names.append(clean_name)
+
+    result = []
+    for name in used_names:
+        source = by_name.get(name, {})
+        result.append(
+            {
+                "id": source.get("id"),
+                "name": name,
+                "source_type": source.get("source_type") or "internal",
+                "file_name": source.get("file_name") or "",
+                "internal_source": source.get("internal_source") or "",
+                "extraction_state": source.get("extraction_state") or "ready",
+                "content_length": source.get("content_length", 0),
+                "file_size_bytes": source.get("file_size_bytes", 0),
             }
         )
     return result
