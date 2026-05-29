@@ -1,0 +1,28 @@
+Production authenticated browser smoke, 2026-05-29:
+
+1. Created temporary smoke user/business for browser-only UI check.
+2. Logged in at https://localos.pro/login.
+3. Opened /dashboard/agents.
+4. Verified visible product IA:
+   - Агенты
+   - Создать агента
+   - Системные агенты
+   - Пользовательские агенты
+5. Opened Create Agent dialog.
+6. Entered natural-language request:
+   "Мне нужен агент, который готовит письмо клиенту по контексту, но ничего не отправляет"
+7. Verified dialog builder UI:
+   - Preview будущего агента
+   - Нужно уточнить / enough-data state
+   - Внешние отправки safety copy
+   - Открыть ручной мастер fallback
+8. Added clarification and created agent from preview.
+9. Verified after-create state:
+   - Агент создан notice
+   - selected agent card visible
+   - Настройка агента visible
+   - Версия агента visible
+   - Данные агента visible
+   - Подключено к агенту and Доступно в LocalOS visible
+   - Активна v1 visible
+10. Removed temporary smoke user/business; cleanup check returned zero rows.

@@ -1,0 +1,57 @@
+{
+  "task_id": "agents-rima-like-product-finish-20260529",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Dialog builder API and authenticated browser smoke passed."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Human-readable run journal verified by unit tests and frontend build."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Datahub-lite now exposes used_sources and UI distinguishes source groups."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Version UX controls remain covered by full agent blueprint test suite."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Email/table/reviews production smokes passed without external dispatch."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "Generic boundaries smoke passed."
+    },
+    {
+      "id": "AC7",
+      "status": "PASS",
+      "reason": "Production deploy, health checks, and fixture cleanup passed."
+    }
+  ],
+  "commands_run": [
+    "python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "scripts/lint_backend_baseline.sh",
+    "npm --prefix frontend run build",
+    "scripts/deploy_frontend_dist.sh",
+    "production dialog/email/table/reviews/boundary smokes",
+    "authenticated browser smoke"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/agents-rima-like-product-finish-20260529/raw/build.txt",
+    ".agent/tasks/agents-rima-like-product-finish-20260529/raw/test-agent-blueprint-layer-full.txt",
+    ".agent/tasks/agents-rima-like-product-finish-20260529/raw/lint.txt",
+    ".agent/tasks/agents-rima-like-product-finish-20260529/raw/prod-builder-dialog-smoke.txt",
+    ".agent/tasks/agents-rima-like-product-finish-20260529/raw/prod-generic-agent-smokes.txt",
+    ".agent/tasks/agents-rima-like-product-finish-20260529/raw/prod-ui-browser-smoke.txt"
+  ]
+}

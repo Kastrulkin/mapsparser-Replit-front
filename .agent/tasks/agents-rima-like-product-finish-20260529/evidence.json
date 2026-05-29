@@ -1,0 +1,88 @@
+{
+  "task_id": "agents-rima-like-product-finish-20260529",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Dialog creation lets a user describe an agent in natural language, asks clarifying questions, shows preview, and creates a blueprint.",
+      "status": "PASS",
+      "proof": [
+        "Production dialog builder API smoke passed.",
+        "Authenticated browser smoke verified create-from-preview UX."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Run detail/journal stays human-readable and hides technical payload behind technical journal.",
+      "status": "PASS",
+      "proof": [
+        "Frontend build passed.",
+        "Unit journal test verifies human-readable labels."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Datahub-lite distinguishes connected sources, available LocalOS sources, and sources used in the latest run.",
+      "status": "PASS",
+      "proof": [
+        "Backend review returns used_sources.",
+        "Frontend shows used/connected/available source groups.",
+        "Unit test verifies used source selection."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Version UX shows active version, diff/changed fields, activate/rollback, and run-specific version controls.",
+      "status": "PASS",
+      "proof": [
+        "VersionSummary remains active and full agent blueprint test suite passed."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Email, table, and reviews agents work end-to-end as draft/result generators without external sends or publishes.",
+      "status": "PASS",
+      "proof": [
+        "Production email/table/reviews smokes passed with no external dispatch."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC6",
+      "text": "Safety smoke proves generic agents do not dispatch externally and require approvals.",
+      "status": "PASS",
+      "proof": [
+        "Production generic boundaries smoke passed: dispatcher_started=false, approvals_required=true."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC7",
+      "text": "Production deploy and smoke checks pass, with temporary fixtures cleaned.",
+      "status": "PASS",
+      "proof": [
+        "Backend/frontend deployed.",
+        "Production health 200.",
+        "Cleanup checks returned zero smoke users/businesses."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
+    "src/services/agent_blueprint_workspace.py",
+    "tests/test_agent_blueprint_layer.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "scripts/lint_backend_baseline.sh",
+    "npm --prefix frontend run build"
+  ],
+  "known_gaps": [
+    "GigaChat SSL warning remains under the existing explicit workaround."
+  ]
+}

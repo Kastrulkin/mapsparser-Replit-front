@@ -1,0 +1,12 @@
+{
+  "success": true,
+  "base_url": "http://localhost:8000",
+  "business_id": "smoke-dialog-builder-business-0a8d74954f",
+  "session_id": "70e1c284-2bdc-4dac-8d69-6e6189b21ef1",
+  "blueprint_id": "0338ac3f-d8af-4d50-90a5-d701f5024921",
+  "category": "documents",
+  "questions_initial": 2,
+  "questions_after_reply": 0,
+  "preview_available": true,
+  "fixture_cleaned": true
+}

@@ -1,0 +1,105 @@
+===== smoke_agent_blueprint_email_api =====
+{
+  "success": true,
+  "base_url": "http://localhost:8000",
+  "business_id": "smoke-email-agent-business-27326b0cc4",
+  "blueprint_id": "aed2081b-6b50-4cae-86f3-d584c6624051",
+  "run_id": "c9677cbe-e9f7-4f1a-a86e-b99cebeae2f0",
+  "approval_type": "final_output",
+  "analysis_source": "gigachat",
+  "llm_analysis_used": true,
+  "subject": "Приглашение на консультацию по уходу за волосами",
+  "journal_detail_labels": [
+    "Внешняя отправка",
+    "Использовал LLM",
+    "Использованные источники",
+    "Источник анализа",
+    "Тема письма",
+    "Чеклист"
+  ],
+  "external_dispatch_performed": false,
+  "fixture_cleaned": true
+}
+===== smoke_agent_blueprint_table_api =====
+{
+  "success": true,
+  "base_url": "http://localhost:8000",
+  "business_id": "smoke-table-agent-business-077a77906d",
+  "blueprint_id": "5d893106-6716-4fc6-bee5-de77ad598e54",
+  "run_id": "a807f43b-099d-43fb-983f-057ab2d60b27",
+  "approval_type": "final_output",
+  "analysis_source": "gigachat",
+  "llm_analysis_used": true,
+  "exceptions_count": 2,
+  "rows_to_review_count": 2,
+  "journal_detail_labels": [
+    "Внешняя отправка",
+    "Исключений",
+    "Использовал LLM",
+    "Использованные источники",
+    "Источник анализа",
+    "Строк к проверке"
+  ],
+  "external_dispatch_performed": false,
+  "fixture_cleaned": true
+}
+===== smoke_agent_blueprint_reviews_api =====
+{
+  "success": true,
+  "base_url": "http://localhost:8000",
+  "business_id": "smoke-reviews-agent-business-eb246108aa",
+  "blueprint_id": "449a3824-a43d-4b1f-ae3b-6a0fd1d54766",
+  "run_id": "6cbff4c3-869b-420a-89ac-bc5d7b05fb69",
+  "approval_type": "final_output",
+  "analysis_source": "gigachat",
+  "llm_analysis_used": true,
+  "reply_drafts_count": 2,
+  "manual_review_reasons_count": 1,
+  "journal_detail_labels": [
+    "Внешняя отправка",
+    "Использовал LLM",
+    "Использованные источники",
+    "Источник анализа",
+    "Причин ручной проверки",
+    "Публикация",
+    "Чеклист",
+    "Черновиков ответов"
+  ],
+  "publish_state": "not_published",
+  "external_dispatch_performed": false,
+  "fixture_cleaned": true
+}
+===== smoke_agent_blueprint_generic_boundaries =====
+{
+  "success": true,
+  "base_url": "http://localhost:8000",
+  "business_id": "smoke-generic-agent-business-ed49b7b29e",
+  "checked_categories": [
+    "documents",
+    "email",
+    "tables",
+    "reviews"
+  ],
+  "blueprints": [
+    {
+      "category": "documents",
+      "blueprint_id": "ce3065ce-6792-415a-bd93-707f81fed0de"
+    },
+    {
+      "category": "email",
+      "blueprint_id": "d53a31c8-7a94-47d4-9a5e-db20c72e36e4"
+    },
+    {
+      "category": "tables",
+      "blueprint_id": "99f10b54-39f6-4303-a4a4-4700f5f6a0b1"
+    },
+    {
+      "category": "reviews",
+      "blueprint_id": "d1b1e82c-d6e5-4a6d-81e4-ed840aeb5ef1"
+    }
+  ],
+  "external_dispatch_performed": false,
+  "dispatcher_started": false,
+  "approvals_required": true,
+  "fixture_cleaned": true
+}

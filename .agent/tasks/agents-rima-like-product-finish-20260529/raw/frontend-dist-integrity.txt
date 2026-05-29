@@ -1,0 +1,7 @@
+OK: frontend/dist integrity check passed
+JS: /assets/index-Cgeb1_Tz.js
+CSS: /assets/index-Bdpj_cyG.css
+OK: frontend/dist integrity check passed
+JS: /public-audit/assets/index-D_K5_NcJ.js
+CSS: /public-audit/assets/index-Bdpj_cyG.css
+Local integrity check passed. Remote deploy skipped.

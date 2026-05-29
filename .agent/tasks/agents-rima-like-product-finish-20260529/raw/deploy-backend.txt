@@ -1,0 +1,16 @@
+Updating 54b5c1d..4ec5fd3
+Fast-forward
+ .../raw/build.txt                                  | 116 +++++++++++++++++++++
+ .../raw/lint.txt                                   |  55 ++++++++++
+ .../raw/py-compile.txt                             |   0
+ .../raw/test-agent-blueprint-layer-full.txt        |   2 +
+ .../raw/test-unit.txt                              |   2 +
+ .../src/pages/dashboard/AgentBlueprintsPage.tsx    |  14 ++-
+ src/services/agent_blueprint_workspace.py          |  50 ++++++++-
+ tests/test_agent_blueprint_layer.py                |  48 +++++++++
+ 8 files changed, 283 insertions(+), 4 deletions(-)
+ create mode 100644 .agent/tasks/agents-rima-like-product-finish-20260529/raw/build.txt
+ create mode 100644 .agent/tasks/agents-rima-like-product-finish-20260529/raw/lint.txt
+ create mode 100644 .agent/tasks/agents-rima-like-product-finish-20260529/raw/py-compile.txt
+ create mode 100644 .agent/tasks/agents-rima-like-product-finish-20260529/raw/test-agent-blueprint-layer-full.txt
+ create mode 100644 .agent/tasks/agents-rima-like-product-finish-20260529/raw/test-unit.txt
