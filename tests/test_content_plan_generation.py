@@ -2,6 +2,7 @@ from datetime import date, datetime
 
 import src.services.content_plan_service as content_plan_service
 from src.core.content_plan_generator import build_content_plan_skeleton
+from src.core.content_plan_templates import detect_content_plan_template_key
 from src.services.content_plan_service import (
     _build_learning_breakdown_summary,
     _build_learning_feedback_from_breakdowns,
@@ -126,6 +127,129 @@ def test_content_plan_skeleton_falls_back_to_30_for_invalid_period():
     assert plan["period_days"] == 30
     assert len(plan["items"]) >= 4
     assert all(item["theme"] for item in plan["items"])
+
+
+def test_content_plan_templates_detect_requested_business_types():
+    assert detect_content_plan_template_key(
+        {
+            "name": "Весёлая расчёска",
+            "categories": '["Детский салон-парикмахерская", "парикмахерская"]',
+        }
+    ) == "kids_hair_salon"
+    assert detect_content_plan_template_key(
+        {"name": "Каток", "categories": '["Культурный центр", "художественная галерея"]'}
+    ) == "culture_event_center"
+    assert detect_content_plan_template_key({"name": "Riderra (Tallinn)", "categories": ""}) == "airport_transfer"
+    assert detect_content_plan_template_key({"name": "Кафе Кебаб", "categories": '["быстрое питание"]'}) == "fast_food_kebab"
+    assert detect_content_plan_template_key({"name": "Киришиавтосервис (Сургутнефтегаз)"}) == "gas_station"
+    assert detect_content_plan_template_key({"name": "Лукойл", "categories": ""}) == "gas_station"
+
+
+def test_content_plan_skeleton_uses_kids_hair_salon_template():
+    plan = build_content_plan_skeleton(
+        {
+            "business": {
+                "name": "Весёлая расчёска",
+                "city": "Санкт-Петербург",
+                "business_type": "Салон красоты",
+                "categories": '["Детский салон-парикмахерская"]',
+            },
+            "services": [],
+            "seo_keywords": [],
+            "sales_signals": [],
+            "audit_signals": [],
+        },
+        period_days=30,
+        density="light",
+        content_mix={"templates": True, "seasonal": False},
+    )
+
+    assert plan["meta"]["template_key"] == "kids_hair_salon"
+    assert any(item["source_kind"] == "industry_template" for item in plan["items"])
+    assert any("детская стрижка" in item["goal"].lower() for item in plan["items"])
+
+
+def test_content_plan_skeleton_uses_event_center_template_for_katok():
+    plan = build_content_plan_skeleton(
+        {
+            "business": {
+                "name": "Каток",
+                "city": "Краснодар",
+                "categories": '["Культурный центр", "художественная галерея"]',
+            },
+            "services": [],
+            "seo_keywords": [],
+            "sales_signals": [],
+            "audit_signals": [],
+        },
+        period_days=30,
+        density="light",
+        content_mix={"templates": True, "seasonal": False},
+    )
+
+    assert plan["meta"]["template_key"] == "culture_event_center"
+    assert any("афиша" in item["goal"].lower() or "событ" in item["goal"].lower() for item in plan["items"])
+
+
+def test_content_plan_skeleton_uses_transfer_fast_food_and_gas_station_templates():
+    cases = [
+        (
+            {"name": "Riderra (Tallinn)", "categories": ""},
+            "airport_transfer",
+            "airport",
+        ),
+        (
+            {"name": "Кафе Кебаб", "business_type": "Кафе", "categories": '["быстрое питание"]'},
+            "fast_food_kebab",
+            "кебаб",
+        ),
+        (
+            {"name": "Киришиавтосервис (Сургутнефтегаз)", "business_type": "network"},
+            "gas_station",
+            "азс",
+        ),
+    ]
+
+    for business, template_key, expected_word in cases:
+        plan = build_content_plan_skeleton(
+            {
+                "business": business,
+                "services": [],
+                "seo_keywords": [],
+                "sales_signals": [],
+                "audit_signals": [],
+            },
+            period_days=30,
+            density="light",
+            content_mix={"templates": True, "seasonal": False},
+        )
+
+        assert plan["meta"]["template_key"] == template_key
+        assert any(expected_word in item["goal"].lower() or expected_word in item["theme"].lower() for item in plan["items"])
+
+
+def test_content_plan_skeleton_includes_riderra_route_service_posts():
+    plan = build_content_plan_skeleton(
+        {
+            "business": {"name": "Riderra (Tallinn)", "categories": ""},
+            "services": [],
+            "seo_keywords": [],
+            "sales_signals": [],
+            "audit_signals": [],
+        },
+        period_days=30,
+        density="active",
+        content_mix={"templates": True, "seasonal": False},
+    )
+
+    themes = " ".join(item["theme"] for item in plan["items"])
+    goals = " ".join(item["goal"] for item in plan["items"])
+    assert "Vilnius" in themes
+    assert "Phuket" in themes
+    assert "Zanzibar" in themes
+    assert "поездке" in goals
+    assert "маршрут" in goals
+    assert "riderra.com" in goals
 
 
 def test_scope_target_business_id_uses_parent_for_network_parent():

@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Any
 
+from core.content_plan_templates import build_template_candidates, get_content_plan_template_profile
+
 
 _CONTENT_TYPE_TITLES = {
     "seo": "SEO-запрос",
@@ -493,6 +495,10 @@ def build_content_plan_skeleton(
     business_name = _safe_text(business.get("name")) or "Бизнес"
     city = _safe_text(business.get("city"))
     recent_blob = _recent_content_blob(context)
+    template_profile = get_content_plan_template_profile(business)
+
+    if _content_mix_value(content_mix, "templates"):
+        candidates.extend(build_template_candidates(context, recent_blob))
 
     if _content_mix_value(content_mix, "services"):
         for service in services[:10]:
@@ -652,6 +658,9 @@ def build_content_plan_skeleton(
                 "service_id": candidate.get("service_id") or "",
                 "transaction_id": candidate.get("transaction_id") or "",
                 "cta_hint": candidate.get("cta_hint") or "",
+                "template_key": candidate.get("template_key") or "",
+                "template_label": candidate.get("template_label") or "",
+                "template_version": candidate.get("template_version") or "",
                 "strength_score": int(candidate.get("strength_score") or 0),
                 "learning_adjustment": int(candidate.get("learning_adjustment") or 0),
                 "base_strength_score": int(candidate.get("base_strength_score") or candidate.get("strength_score") or 0),
@@ -695,5 +704,8 @@ def build_content_plan_skeleton(
                 bool(item.get("ranking_reasons"))
                 for item in selected_items
             ),
+            "template_key": template_profile.get("template_key") or "",
+            "template_label": template_profile.get("label") or "",
+            "template_version": template_profile.get("version") or "",
         },
     }
