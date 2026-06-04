@@ -8,6 +8,8 @@ from auth_system import verify_session
 from services.content_plan_service import (
     create_generated_content_plan,
     create_news_from_plan_item,
+    delete_content_plan,
+    delete_content_plan_item,
     duplicate_content_plan_item,
     duplicate_content_plan_item_to_locations,
     generate_draft_for_plan_item,
@@ -144,6 +146,22 @@ def content_plan_get(plan_id: str):
         return jsonify({"success": False, "error": str(sys.exc_info()[1])}), 500
 
 
+@content_plans_bp.route("/<plan_id>", methods=["DELETE"])
+def content_plan_delete(plan_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    try:
+        delete_content_plan(str(user_data.get("user_id") or ""), plan_id)
+        return jsonify({"success": True})
+    except PermissionError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 404
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
 @content_plans_bp.route("/items/<item_id>", methods=["PUT"])
 def content_plan_item_update(item_id: str):
     user_data, error_response = _require_auth()
@@ -152,6 +170,22 @@ def content_plan_item_update(item_id: str):
     data = request.get_json(silent=True) or {}
     try:
         plan = update_content_plan_item(str(user_data.get("user_id") or ""), item_id, data)
+        return jsonify({"success": True, "plan": plan})
+    except PermissionError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 404
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@content_plans_bp.route("/items/<item_id>", methods=["DELETE"])
+def content_plan_item_delete(item_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    try:
+        plan = delete_content_plan_item(str(user_data.get("user_id") or ""), item_id)
         return jsonify({"success": True, "plan": plan})
     except PermissionError as exc:
         return jsonify({"success": False, "error": str(exc)}), 403

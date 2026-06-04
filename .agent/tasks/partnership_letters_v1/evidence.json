@@ -1,0 +1,79 @@
+{
+  "task_id": "partnership_letters_v1",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Backend supports first_note and commercial_offer partnership drafts.",
+      "status": "PASS",
+      "proof": [
+        "draft-offer accepts letter_type first_note/commercial_offer",
+        "commercial_offer uses commercial_offer_v1 metadata"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Draft metadata stores business type pair, package idea, prompt version, and learning context.",
+      "status": "PASS",
+      "proof": [
+        "learning_note_json now stores letter_type, our_business_type, partner_business_type, pair_pattern, package_idea, template_policy, ai_used, cache_hit"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Approval preserves metadata and records edit learning signals.",
+      "status": "PASS",
+      "proof": [
+        "approve endpoint merges existing learning_note_json and records accepted event with edited_before_accept"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Partner outcome is tracked when leads become converted.",
+      "status": "PASS",
+      "proof": [
+        "single and bulk update paths write outcome=partner learning events for pipeline_status=converted"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "UI supports preparing commercial offer drafts.",
+      "status": "PASS",
+      "proof": [
+        "frontend bulk bar has Подготовить КП",
+        "live bundle contains Подготовить КП"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC6",
+      "text": "Production drafts are prepared for current partnership leads.",
+      "status": "PASS",
+      "proof": [
+        "backup /tmp/localos_backups/partnership_letters_backup_20260604170309.sql",
+        "97 active leads updated with first_note drafts",
+        "11 commercial_offer drafts created/updated for channel-selected leads"
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/api/admin_prospecting.py",
+    "frontend/src/pages/dashboard/PartnershipSearchPage.tsx",
+    "frontend/src/components/prospecting/PartnershipPipelineSections.tsx"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/api/admin_prospecting.py",
+    "cd frontend && PATH=/Users/alexdemyanov/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin:$PATH node_modules/.bin/vite build",
+    "cd frontend && PATH=/Users/alexdemyanov/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin:$PATH node_modules/.bin/tsc -p tsconfig.app.json --noEmit",
+    "ssh localos 'cd /opt/seo-app && docker compose ps && curl -I http://localhost:8000'"
+  ],
+  "known_gaps": [
+    "TypeScript check has two pre-existing unrelated errors in CardAuditPanel.tsx and OperatorPage.tsx.",
+    "GigaChat pair-pattern generation is not implemented yet; deterministic metadata-ready generator is implemented."
+  ]
+}

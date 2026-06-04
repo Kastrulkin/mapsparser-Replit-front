@@ -1488,11 +1488,47 @@ def list_content_plans(user_id: str, business_id: str) -> list[dict[str, Any]]:
                 raise PermissionError("Нет доступа к бизнесу")
         cursor.execute(
             """
-            SELECT id, title, scope_type, scope_target_id, period_days, period_start, period_end,
-                   plan_status, generation_mode, created_at, updated_at
-            FROM contentplans
-            WHERE business_id = %s
-            ORDER BY created_at DESC
+            SELECT
+                p.id,
+                p.title,
+                p.scope_type,
+                p.scope_target_id,
+                p.period_days,
+                p.period_start,
+                p.period_end,
+                p.plan_status,
+                p.generation_mode,
+                p.created_at,
+                p.updated_at,
+                COALESCE(stats.total_items, 0) AS total_items,
+                COALESCE(stats.needs_draft_items, 0) AS needs_draft_items,
+                COALESCE(stats.ready_items, 0) AS ready_items,
+                COALESCE(stats.news_items, 0) AS news_items,
+                COALESCE(stats.skipped_items, 0) AS skipped_items
+            FROM contentplans p
+            LEFT JOIN (
+                SELECT
+                    plan_id,
+                    COUNT(*) AS total_items,
+                    COUNT(*) FILTER (
+                        WHERE COALESCE(status, '') <> 'skipped'
+                          AND COALESCE(NULLIF(TRIM(draft_text), ''), '') = ''
+                    ) AS needs_draft_items,
+                    COUNT(*) FILTER (
+                        WHERE COALESCE(NULLIF(TRIM(draft_text), ''), '') <> ''
+                          AND COALESCE(NULLIF(usernews_id, ''), '') = ''
+                    ) AS ready_items,
+                    COUNT(*) FILTER (
+                        WHERE COALESCE(NULLIF(usernews_id, ''), '') <> ''
+                    ) AS news_items,
+                    COUNT(*) FILTER (
+                        WHERE COALESCE(status, '') = 'skipped'
+                    ) AS skipped_items
+                FROM contentplanitems
+                GROUP BY plan_id
+            ) stats ON stats.plan_id = p.id
+            WHERE p.business_id = %s
+            ORDER BY p.created_at DESC
             LIMIT 50
             """,
             (business_id,),
@@ -1520,6 +1556,11 @@ def list_content_plans(user_id: str, business_id: str) -> list[dict[str, Any]]:
                     "generation_mode": str(_row_get(row, "generation_mode", 8, "") or "").strip(),
                     "created_at": _row_get(row, "created_at", 9),
                     "updated_at": _row_get(row, "updated_at", 10),
+                    "items_count": int(_row_get(row, "total_items", 11, 0) or 0),
+                    "needs_draft_count": int(_row_get(row, "needs_draft_items", 12, 0) or 0),
+                    "ready_count": int(_row_get(row, "ready_items", 13, 0) or 0),
+                    "news_count": int(_row_get(row, "news_items", 14, 0) or 0),
+                    "skipped_count": int(_row_get(row, "skipped_items", 15, 0) or 0),
                 }
             )
         return plans
@@ -1916,6 +1957,108 @@ def get_content_plan(user_id: str, plan_id: str) -> dict[str, Any]:
         db.close()
 
 
+def delete_content_plan(user_id: str, plan_id: str) -> None:
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        ensure_content_plan_tables(cursor)
+        cursor.execute(
+            """
+            SELECT id, business_id, title
+            FROM contentplans
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (plan_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise ValueError("Контент-план не найден")
+        plan = _row_to_dict(cursor, row)
+        business_id = str(plan.get("business_id") or "").strip()
+        owner_id = get_business_owner_id(cursor, business_id)
+        if str(owner_id or "").strip() != str(user_id or "").strip():
+            cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
+            if not bool(_row_get(cursor.fetchone(), "coalesce", 0, False)):
+                raise PermissionError("Нет доступа к плану")
+        cursor.execute("DELETE FROM contentplans WHERE id = %s", (plan_id,))
+        _record_content_plan_event(
+            conn=db.conn,
+            user_id=user_id,
+            business_id=business_id,
+            capability="content_plan.plan",
+            event_type="deleted",
+            final_text=str(plan.get("title") or "").strip(),
+            metadata={"plan_id": plan_id},
+        )
+        db.conn.commit()
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+def delete_content_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        ensure_content_plan_tables(cursor)
+        cursor.execute(
+            """
+            SELECT
+                i.id,
+                i.plan_id,
+                i.business_id,
+                i.theme,
+                i.source_kind,
+                i.content_type,
+                i.location_scope,
+                p.business_id AS root_business_id
+            FROM contentplanitems i
+            JOIN contentplans p ON p.id = i.plan_id
+            WHERE i.id = %s
+            LIMIT 1
+            """,
+            (item_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise ValueError("Элемент плана не найден")
+        item = _row_to_dict(cursor, row)
+        root_business_id = str(item.get("root_business_id") or item.get("business_id") or "").strip()
+        owner_id = get_business_owner_id(cursor, root_business_id)
+        if str(owner_id or "").strip() != str(user_id or "").strip():
+            cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
+            if not bool(_row_get(cursor.fetchone(), "coalesce", 0, False)):
+                raise PermissionError("Нет доступа к элементу плана")
+        plan_id = str(item.get("plan_id") or "").strip()
+        cursor.execute("DELETE FROM contentplanitems WHERE id = %s", (item_id,))
+        location_scope = str(item.get("location_scope") or item.get("business_id") or "").strip()
+        _record_content_plan_event(
+            conn=db.conn,
+            user_id=user_id,
+            business_id=root_business_id,
+            capability="content_plan.item",
+            event_type="deleted",
+            final_text=str(item.get("theme") or "").strip(),
+            metadata={
+                "item_id": item_id,
+                "plan_id": plan_id,
+                "source_kind": str(item.get("source_kind") or "").strip(),
+                "content_type": str(item.get("content_type") or "").strip(),
+                "location_scope": location_scope,
+            },
+        )
+        db.conn.commit()
+        return get_content_plan(user_id, plan_id)
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
 def update_content_plan_item(user_id: str, item_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()
@@ -2250,20 +2393,247 @@ def duplicate_content_plan_item_to_locations(user_id: str, item_id: str, payload
         db.close()
 
 
-def _fallback_draft_text(business_name: str, item: dict[str, Any]) -> str:
+def _service_names_from_fact_block(service_facts: Any, limit: int = 5) -> list[str]:
+    names: list[str] = []
+    for line in str(service_facts or "").splitlines():
+        cleaned = line.strip().lstrip("-").strip()
+        if not cleaned:
+            continue
+        name = cleaned.split("(", 1)[0].strip()
+        if name:
+            names.append(name)
+        if len(names) >= limit:
+            break
+    return names
+
+
+def _fallback_draft_text(business_name: str, item: dict[str, Any], business_facts: dict[str, Any] | None = None) -> str:
     theme = str(item.get("theme") or "Новость компании").strip()
-    source_ref = str(item.get("source_ref") or "").strip()
     keyword = str(item.get("seo_keyword") or "").strip()
     goal = str(item.get("goal") or "").strip()
+    facts = business_facts if isinstance(business_facts, dict) else {}
+    service_names = _service_names_from_fact_block(facts.get("services"))
+    lower_identity = " ".join(
+        [
+            business_name,
+            str(facts.get("business_type") or ""),
+            str(facts.get("industry") or ""),
+            str(facts.get("categories") or ""),
+            theme,
+            goal,
+        ]
+    ).lower()
+
+    if "riderra" in lower_identity:
+        return (
+            "Riderra помогает заранее спланировать трансфер из аэропорта: при заказе стоит указать маршрут, "
+            "номер рейса, адрес назначения, количество пассажиров и багаж. Так проще подготовить поездку до прилёта "
+            "и проверить детали маршрута. Забронировать трансфер можно онлайн на riderra.com."
+        )
+
+    if "school" in lower_identity or "школ" in lower_identity or "образован" in lower_identity:
+        city = str(facts.get("city") or "").strip()
+        city_text = f" в {city}" if city else ""
+        directions = ", ".join(service_names[:5]) if service_names else "занятия для детей и подростков"
+        return (
+            f"{business_name}{city_text} помогает детям и подросткам развивать учебные и цифровые навыки. "
+            f"Среди направлений: {directions}. Можно выбрать курс по возрасту, интересам ребёнка и учебной задаче. "
+            "Подробности и запись можно уточнить по контактам в карточке."
+        )
+
+    if "салон красоты" in lower_identity or "парикмахер" in lower_identity:
+        return (
+            f"В салоне {business_name} можно уточнить услуги по стрижкам, окрашиванию, уходу за волосами, "
+            "маникюру, педикюру, бровям и массажу. Если хочется обновить образ или выбрать уход, начните с подходящего "
+            "направления и уточните детали перед записью. Подробности можно узнать по контактам в карточке."
+        )
+
+    if service_names:
+        directions = ", ".join(service_names[:5])
+        return (
+            f"{business_name}: {theme}. В карточке представлены направления: {directions}. "
+            f"{goal.rstrip('.') + '.' if goal else 'Можно выбрать услугу под текущую задачу и уточнить детали перед записью.'} "
+            "Подробности и запись можно уточнить по контактам в карточке."
+        )
+
     lines = [f"{business_name}: {theme}."]
-    if source_ref:
-        lines.append(f"В фокусе сейчас: {source_ref}.")
     if keyword:
         lines.append(f"Это также помогает закрыть спрос по запросу: {keyword}.")
     if goal:
         lines.append(goal)
     lines.append("Подробности, запись или актуальные предложения можно уточнить по контактам в карточке.")
     return " ".join(lines)
+
+
+def _normalize_fact_text(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        parsed = json.loads(text)
+    except Exception:
+        parsed = None
+    if isinstance(parsed, list):
+        return ", ".join(str(item).strip() for item in parsed if str(item).strip())
+    if isinstance(parsed, dict):
+        return ", ".join(str(item).strip() for item in parsed.values() if str(item).strip())
+    return text
+
+
+def _content_plan_business_facts(business_row: Any, item: dict[str, Any]) -> dict[str, Any]:
+    name = str(_row_get(business_row, "name", 0, "Бизнес") or "Бизнес").strip() or "Бизнес"
+    city = str(_row_get(business_row, "city", 1, "") or "").strip()
+    business_type = _normalize_fact_text(_row_get(business_row, "business_type", 2, ""))
+    industry = _normalize_fact_text(_row_get(business_row, "industry", 3, ""))
+    categories = _normalize_fact_text(_row_get(business_row, "categories", 4, ""))
+    address = _normalize_fact_text(_row_get(business_row, "address", 5, ""))
+    description = _normalize_fact_text(_row_get(business_row, "description", 6, ""))
+    theme = str(item.get("theme") or "").strip()
+    goal = str(item.get("goal") or "").strip()
+    combined = " ".join([name, business_type, industry, categories, description, theme, goal]).lower()
+    cultural_markers = [
+        "культур",
+        "галере",
+        "лекци",
+        "лектор",
+        "концерт",
+        "пространств",
+        "практикум",
+        "образован",
+        "событи",
+        "выстав",
+    ]
+    ice_markers = ["лед", "лёд", "коньк", "катани", "зимн", "каток на льду"]
+    is_cultural_space = any(marker in combined for marker in cultural_markers)
+    return {
+        "name": name,
+        "city": city,
+        "business_type": business_type,
+        "industry": industry,
+        "categories": categories,
+        "address": address,
+        "description": description,
+        "is_cultural_space": is_cultural_space,
+        "ice_markers": ice_markers,
+    }
+
+
+def _load_content_plan_service_facts(cursor: Any, business_id: str, limit: int = 10) -> str:
+    try:
+        cursor.execute(
+            """
+            SELECT name, description, category
+            FROM userservices
+            WHERE business_id = %s
+            ORDER BY created_at DESC
+            LIMIT %s
+            """,
+            (business_id, limit),
+        )
+        rows = cursor.fetchall() or []
+    except Exception:
+        return ""
+    lines: list[str] = []
+    for row in rows:
+        name = _normalize_fact_text(_row_get(row, "name", 0, ""))
+        category = _normalize_fact_text(_row_get(row, "category", 2, ""))
+        description = _normalize_fact_text(_row_get(row, "description", 1, ""))
+        if not name:
+            continue
+        detail_parts = [part for part in [category, description[:180]] if part]
+        detail = f" ({'; '.join(detail_parts)})" if detail_parts else ""
+        lines.append(f"- {name}{detail}")
+    return "\n".join(lines)
+
+
+def _build_content_plan_business_fact_block(facts: dict[str, Any]) -> str:
+    lines = [
+        f"Название/бренд: {facts.get('name') or 'Бизнес'}",
+        f"Город: {facts.get('city') or 'не указан'}",
+        f"Тип бизнеса: {facts.get('business_type') or 'не указан'}",
+        f"Индустрия: {facts.get('industry') or 'не указана'}",
+        f"Категории на картах: {facts.get('categories') or 'не указаны'}",
+        f"Адрес: {facts.get('address') or 'не указан'}",
+        f"Описание карточки: {facts.get('description') or 'не указано'}",
+        f"Реальные услуги/направления:\n{facts.get('services') or 'не указаны'}",
+        (
+            "Название бизнеса может быть метафорой или брендом. "
+            "Не выводи сферу деятельности из одного названия: опирайся на тип, категории, описание, тему и цель."
+        ),
+    ]
+    if facts.get("is_cultural_space"):
+        lines.append(
+            "Фактическая сфера: культурное пространство для лекций, концертов, камерных событий, практикумов и встреч."
+        )
+        lines.append(
+            "Запрещено писать про лёд, коньки, катание, зимние развлечения и ледовую площадку, если это явно не указано в теме или цели."
+        )
+    return "\n".join(lines)
+
+
+def _looks_like_ice_rink_hallucination(text: str, facts: dict[str, Any]) -> bool:
+    if not bool(facts.get("is_cultural_space")):
+        return False
+    lower_text = str(text or "").lower()
+    return any(marker in lower_text for marker in facts.get("ice_markers", []))
+
+
+def _content_plan_draft_needs_fallback(text: str, facts: dict[str, Any]) -> bool:
+    lower_text = str(text or "").lower()
+    if not lower_text.strip():
+        return True
+    technical_markers = [
+        "manual_strategy:",
+        "google_doc",
+        "source_ref",
+        "seo-запрос",
+    ]
+    if any(marker in lower_text for marker in technical_markers):
+        return True
+    empty_marketing_markers = [
+        "профессиональные мастера",
+        "профессиональная команда",
+        "профессиональные стриж",
+        "профессиональные услуг",
+        "профессиональные процедур",
+        "профессиональные женские",
+        "ждут вас",
+        "лично в салоне",
+        "откройте для себя",
+        "приходите к нам",
+        "уютное пространство",
+        "стильный салон",
+        "без лишних хлопот",
+        "без забот",
+        "идеальный выбор",
+        "наслаждайтесь комфортом",
+        "приглашает",
+        "уникальн",
+        "пробное занят",
+        "очно или онлайн",
+        "онлайн?",
+        "комфорте и качестве",
+        "комфорт и качество",
+        "сияния кожи",
+        "эффектом омбре",
+        "омбре",
+        "без лишнего декора",
+    ]
+    if any(marker in lower_text for marker in empty_marketing_markers):
+        return True
+    combined_facts = " ".join(
+        [
+            str(facts.get("business_type") or ""),
+            str(facts.get("industry") or ""),
+            str(facts.get("categories") or ""),
+            str(facts.get("services") or ""),
+        ]
+    ).lower()
+    event_markers = ["концерт", "лекци", "мастерск", "событи", "встреч"]
+    if not bool(facts.get("is_cultural_space")) and any(marker in lower_text for marker in event_markers):
+        if not any(marker in combined_facts for marker in event_markers):
+            return True
+    return False
 
 
 def _sanitize_generated_news_text(raw_text: str) -> str:
@@ -2337,16 +2707,24 @@ def generate_draft_for_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
             cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
             if not bool(_row_get(cursor.fetchone(), "coalesce", 0, False)):
                 raise PermissionError("Нет доступа к элементу плана")
-        cursor.execute("SELECT name, city, business_type, industry, categories, address FROM businesses WHERE id = %s", (item.get("business_id"),))
+        cursor.execute(
+            "SELECT name, city, business_type, industry, categories, address, description FROM businesses WHERE id = %s",
+            (item.get("business_id"),),
+        )
         business_row = cursor.fetchone()
-        business_name = str(_row_get(business_row, "name", 0, "Бизнес") or "Бизнес").strip() or "Бизнес"
-        business_city = str(_row_get(business_row, "city", 1, "") or "").strip()
-        business_type = str(_row_get(business_row, "business_type", 2, "") or "").strip()
+        business_facts = _content_plan_business_facts(business_row, item)
+        business_facts["services"] = _load_content_plan_service_facts(
+            cursor,
+            str(item.get("business_id") or ""),
+            limit=12,
+        )
+        business_name = str(business_facts.get("name") or "Бизнес").strip() or "Бизнес"
+        business_type = str(business_facts.get("business_type") or "").strip()
         industry_key = detect_industry_key(
             business_name=business_name,
             business_type=business_type,
-            industry=_row_get(business_row, "industry", 3, ""),
-            categories=_row_get(business_row, "categories", 4, ""),
+            industry=business_facts.get("industry"),
+            categories=business_facts.get("categories"),
             service_text=str(item.get("theme") or ""),
         )
         industry_pattern_context = format_industry_pattern_prompt(industry_key, mode="news")
@@ -2362,12 +2740,14 @@ def generate_draft_for_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
             "- не возвращай JSON, markdown, эмодзи, хештеги, фигурные скобки или технические символы;\n"
             "- не выдумывай цены, скидки, акции, режим работы, бесплатные консультации, адрес, район, центр города;\n"
             "- не выдумывай пол, возраст или тип аудитории, если этого нет в фактах;\n"
+            "- не трактуй название/бренд как услугу или категорию, если это не подтверждено типом бизнеса, категориями или темой;\n"
+            "- не добавляй лекции, концерты, мастерские, события, команду, специалистов, атмосферу или оборудование, если этого нет в фактах;\n"
+            "- не используй пустые рекламные клише вроде уютное пространство, профессиональная команда, без забот, идеальный выбор;\n"
             "- не используй сезонность, если источник идеи не seasonal;\n"
             "- если данных мало, пиши нейтрально: что можно уточнить в карточке и как связаться.\n\n"
-            "Факты:\n"
-            f"Бизнес: {business_name}\n"
-            f"Город: {business_city}\n"
-            f"Тип бизнеса: {business_type}\n"
+            "Факты о бизнесе:\n"
+            f"{_build_content_plan_business_fact_block(business_facts)}\n\n"
+            "Факты о публикации:\n"
             f"Тема: {str(item.get('theme') or '').strip()}\n"
             f"Цель: {str(item.get('goal') or '').strip()}\n"
             f"Источник идеи: {source_kind} / {str(item.get('source_ref') or '').strip()}\n"
@@ -2387,9 +2767,11 @@ def generate_draft_for_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
             )
             generated_text = _sanitize_generated_news_text(str(result or ""))
             if not generated_text:
-                generated_text = _fallback_draft_text(business_name, item)
+                generated_text = _fallback_draft_text(business_name, item, business_facts)
         except Exception:
-            generated_text = _fallback_draft_text(business_name, item)
+            generated_text = _fallback_draft_text(business_name, item, business_facts)
+        if _looks_like_ice_rink_hallucination(generated_text, business_facts) or _content_plan_draft_needs_fallback(generated_text, business_facts):
+            generated_text = _fallback_draft_text(business_name, item, business_facts)
         if active_patterns:
             record_industry_pattern_impact_event(
                 db.conn,

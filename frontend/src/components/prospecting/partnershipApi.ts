@@ -50,7 +50,7 @@ const request = (path: string, init?: PartnershipRequestInit) => newAuth.makeReq
 export const loadPartnershipLeads = ({ businessId, stage, pilotCohort, query }: PartnershipLeadQuery) => {
   const params = new URLSearchParams();
   params.set('business_id', businessId);
-  if (stage !== 'all') params.set('stage', stage);
+  if (stage !== 'all') params.set('pipeline_status', stage);
   if (pilotCohort !== 'all') params.set('pilot_cohort', pilotCohort);
   if (query.trim()) params.set('q', query.trim());
   return request(`/partnership/leads?${params.toString()}`, { method: 'GET' });

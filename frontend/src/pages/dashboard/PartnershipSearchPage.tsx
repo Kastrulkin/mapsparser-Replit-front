@@ -102,6 +102,7 @@ type PartnershipLead = {
   whatsapp_url?: string;
   status?: string;
   partnership_stage?: string;
+  pipeline_status?: string;
   pilot_cohort?: string;
   selected_channel?: string;
   updated_at?: string;
@@ -199,9 +200,11 @@ type PartnershipFunnel = {
   window_days?: number;
   funnel?: PartnershipFunnelStage[];
   summary?: {
-    import_to_sent_pct?: number;
-    imported_count?: number;
-    sent_count?: number;
+    work_to_contact_pct?: number;
+    reply_to_conversion_pct?: number;
+    total_count?: number;
+    contacted_count?: number;
+    converted_count?: number;
   };
 };
 
@@ -360,22 +363,23 @@ type PartnershipRalphLoop = {
 
 const STAGE_OPTIONS = [
   { value: 'all', label: 'Все этапы' },
-  { value: 'imported', label: 'Импортировано' },
-  { value: 'deferred', label: 'Отложено' },
-  { value: 'audited', label: 'Аудит готов' },
-  { value: 'matched', label: 'Матчинг готов' },
-  { value: 'proposal_draft_ready', label: 'Черновик оффера готов' },
+  { value: 'unprocessed', label: 'Необработан' },
+  { value: 'in_progress', label: 'В работе' },
+  { value: 'contacted', label: 'Отправлено' },
+  { value: 'second_message_sent', label: 'Второе сообщение' },
+  { value: 'replied', label: 'Ответил' },
+  { value: 'converted', label: 'Конвертирован' },
+  { value: 'postponed', label: 'Отложен' },
+  { value: 'not_relevant', label: 'Неактуален' },
 ];
 const BULK_STAGE_OPTIONS = [
-  { value: 'imported', label: 'Импортировано' },
-  { value: 'deferred', label: 'Отложено' },
-  { value: 'audited', label: 'Аудит готов' },
-  { value: 'matched', label: 'Матчинг готов' },
-  { value: 'proposal_draft_ready', label: 'Черновик оффера готов' },
-  { value: 'selected_for_outreach', label: 'Выбрано для контакта' },
-  { value: 'channel_selected', label: 'Канал выбран' },
-  { value: 'approved_for_send', label: 'Готово к отправке' },
-  { value: 'sent', label: 'Отправлено' },
+  { value: 'in_progress', label: 'В работе' },
+  { value: 'contacted', label: 'Отправлено' },
+  { value: 'second_message_sent', label: 'Второе сообщение отправлено' },
+  { value: 'replied', label: 'Ответил' },
+  { value: 'converted', label: 'Конвертирован' },
+  { value: 'postponed', label: 'Отложен' },
+  { value: 'not_relevant', label: 'Неактуален' },
 ];
 const CHANNEL_OPTIONS = [
   { value: 'telegram', label: 'Telegram' },
@@ -407,7 +411,7 @@ const PARTNERSHIP_WORKSPACE_OPTIONS = [
   { value: 'sent', label: 'Отправлено' },
 ] as const;
 type PartnershipWorkspaceView = (typeof PARTNERSHIP_WORKSPACE_OPTIONS)[number]['value'];
-type PartnershipBoardColumnId = 'new' | 'in_progress' | 'contacted' | 'deferred';
+type PartnershipBoardColumnId = 'in_progress' | 'contacted' | 'second_message_sent' | 'replied' | 'converted' | 'postponed' | 'not_relevant';
 type LeadView = (typeof LEAD_VIEW_OPTIONS)[number]['value'];
 type WorkflowBadgeVariant = 'default' | 'secondary' | 'outline' | 'destructive';
 type WorkflowTone = 'default' | 'success' | 'warning' | 'info' | 'danger';
@@ -422,50 +426,155 @@ const toLeadView = (value: string): LeadView => {
   return matched ? matched.value : 'all';
 };
 
-const partnershipBoardColumnIds: PartnershipBoardColumnId[] = ['new', 'in_progress', 'contacted', 'deferred'];
+const PIPELINE_UNPROCESSED = 'unprocessed';
+const PIPELINE_IN_PROGRESS = 'in_progress';
+const PIPELINE_POSTPONED = 'postponed';
+const PIPELINE_NOT_RELEVANT = 'not_relevant';
+const PIPELINE_CONTACTED = 'contacted';
+const PIPELINE_WAITING_REPLY = 'waiting_reply';
+const PIPELINE_SECOND_MESSAGE_SENT = 'second_message_sent';
+const PIPELINE_REPLIED = 'replied';
+const PIPELINE_CONVERTED = 'converted';
+const PIPELINE_CLOSED_LOST = 'closed_lost';
 
-const partnershipBoardColumnMeta: Record<PartnershipBoardColumnId, { label: string; description: string; stageToSet: string }> = {
-  new: {
-    label: 'Новые',
-    description: 'Уже перенесены в рабочий pipeline, но ещё не доведены до контакта.',
-    stageToSet: 'selected_for_outreach',
-  },
+const partnershipBoardColumnIds: PartnershipBoardColumnId[] = ['in_progress', 'contacted', 'second_message_sent', 'replied', 'converted', 'postponed', 'not_relevant'];
+
+const partnershipBoardColumnMeta: Record<PartnershipBoardColumnId, { label: string; description: string; pipelineStatusToSet: string }> = {
   in_progress: {
     label: 'В работе',
-    description: 'Идёт аудит, матчинг, подготовка оффера и выбор канала.',
-    stageToSet: 'channel_selected',
+    description: 'Подходящие партнёры, с которыми сейчас работаем.',
+    pipelineStatusToSet: PIPELINE_IN_PROGRESS,
   },
   contacted: {
-    label: 'Контактированы',
-    description: 'Черновик утверждён и лид уже доведён до отправки или в доставке.',
-    stageToSet: 'approved_for_send',
+    label: 'Отправлено',
+    description: 'Первичный контакт уже состоялся: вручную или через письмо.',
+    pipelineStatusToSet: PIPELINE_CONTACTED,
   },
-  deferred: {
+  second_message_sent: {
+    label: 'Второе сообщение отправлено',
+    description: 'Повторное касание отправлено через доступный канал.',
+    pipelineStatusToSet: PIPELINE_SECOND_MESSAGE_SENT,
+  },
+  replied: {
+    label: 'Ответил',
+    description: 'Партнёр ответил, идёт переписка или уточнение деталей.',
+    pipelineStatusToSet: PIPELINE_REPLIED,
+  },
+  converted: {
+    label: 'Конвертирован',
+    description: 'Партнёрство перешло в следующий коммерческий этап.',
+    pipelineStatusToSet: PIPELINE_CONVERTED,
+  },
+  postponed: {
     label: 'Отложенные',
-    description: 'Сейчас не берём в работу, но держим на потом.',
-    stageToSet: 'deferred',
+    description: 'К этим партнёрам нужно вернуться позже.',
+    pipelineStatusToSet: PIPELINE_POSTPONED,
   },
+  not_relevant: {
+    label: 'Неактуален',
+    description: 'Отсеяны как неподходящие или сняты с процесса.',
+    pipelineStatusToSet: PIPELINE_NOT_RELEVANT,
+  },
+};
+
+const getLeadPipelineStatus = (lead: Partial<PartnershipLead> | null | undefined) => {
+  const explicit = String(lead?.pipeline_status || '').trim().toLowerCase();
+  if (explicit === 'qualified') return PIPELINE_IN_PROGRESS;
+  if (explicit === 'disqualified') return PIPELINE_NOT_RELEVANT;
+  if (explicit === 'deferred') return PIPELINE_POSTPONED;
+  if (explicit === 'sent' || explicit === 'delivered') return PIPELINE_CONTACTED;
+  if (explicit === 'responded') return PIPELINE_REPLIED;
+  if (explicit === 'closed') return PIPELINE_CLOSED_LOST;
+  if (explicit) return explicit;
+  const legacy = String(lead?.partnership_stage || lead?.status || '').trim().toLowerCase();
+  if (!legacy || legacy === 'imported' || legacy === 'new') return PIPELINE_UNPROCESSED;
+  if (legacy === 'deferred') return PIPELINE_POSTPONED;
+  if (['rejected', 'shortlist_rejected'].includes(legacy)) return PIPELINE_NOT_RELEVANT;
+  if (['approved_for_send', 'sent', 'delivered'].includes(legacy)) return PIPELINE_CONTACTED;
+  if (legacy === 'second_message_sent') return PIPELINE_SECOND_MESSAGE_SENT;
+  if (legacy === 'responded') return PIPELINE_REPLIED;
+  if (legacy === 'qualified') return PIPELINE_IN_PROGRESS;
+  if (legacy === 'converted') return PIPELINE_CONVERTED;
+  if (legacy === 'closed') return PIPELINE_CLOSED_LOST;
+  return PIPELINE_IN_PROGRESS;
+};
+
+const pipelineStatusLabel = (status?: string | null) => {
+  switch (String(status || '').trim().toLowerCase()) {
+    case PIPELINE_UNPROCESSED:
+      return 'Необработан';
+    case PIPELINE_IN_PROGRESS:
+      return 'В работе';
+    case PIPELINE_POSTPONED:
+      return 'Отложен';
+    case PIPELINE_NOT_RELEVANT:
+      return 'Неактуален';
+    case PIPELINE_CONTACTED:
+    case PIPELINE_WAITING_REPLY:
+      return 'Отправлено';
+    case PIPELINE_SECOND_MESSAGE_SENT:
+      return 'Второе сообщение отправлено';
+    case PIPELINE_REPLIED:
+      return 'Ответил';
+    case PIPELINE_CONVERTED:
+      return 'Конвертирован';
+    case PIPELINE_CLOSED_LOST:
+      return 'Закрыт';
+    default:
+      return '—';
+  }
 };
 
 const leadToPartnershipBoardColumn = (lead: PartnershipLead): PartnershipBoardColumnId => {
-  const stageValue = String(lead.partnership_stage || '').toLowerCase();
-  if (stageValue === 'deferred') {
-    return 'deferred';
+  const status = getLeadPipelineStatus(lead);
+  if (status === PIPELINE_POSTPONED) {
+    return 'postponed';
   }
-  if (['approved_for_send', 'sent'].includes(stageValue)) {
+  if (status === PIPELINE_NOT_RELEVANT || status === PIPELINE_CLOSED_LOST) {
+    return 'not_relevant';
+  }
+  if (status === PIPELINE_CONTACTED || status === PIPELINE_WAITING_REPLY) {
     return 'contacted';
   }
-  if (['audited', 'matched', 'proposal_draft_ready', 'channel_selected'].includes(stageValue)) {
-    return 'in_progress';
+  if (status === PIPELINE_SECOND_MESSAGE_SENT) {
+    return 'second_message_sent';
   }
-  return 'new';
+  if (status === PIPELINE_REPLIED) {
+    return 'replied';
+  }
+  if (status === PIPELINE_CONVERTED) {
+    return 'converted';
+  }
+  return 'in_progress';
 };
 
 const nextPartnershipBoardColumn = (columnId: PartnershipBoardColumnId): PartnershipBoardColumnId | null => {
-  if (columnId === 'new') return 'in_progress';
-  if (columnId === 'in_progress') return 'contacted';
-  return null;
+  const idx = partnershipBoardColumnIds.indexOf(columnId);
+  if (idx === -1 || idx >= partnershipBoardColumnIds.length - 1) {
+    return null;
+  }
+  return partnershipBoardColumnIds[idx + 1];
 };
+
+const pipelineStatusToPartnershipStage = (pipelineStatus: string, currentStage?: string) => {
+  const stageValue = String(currentStage || '').trim().toLowerCase();
+  if (pipelineStatus === PIPELINE_POSTPONED) {
+    return 'deferred';
+  }
+  if (pipelineStatus === PIPELINE_NOT_RELEVANT) {
+    return 'shortlist_rejected';
+  }
+  if (pipelineStatus === PIPELINE_CONTACTED) {
+    return 'approved_for_send';
+  }
+  if (pipelineStatus === PIPELINE_UNPROCESSED) {
+    return 'imported';
+  }
+  return stageValue && stageValue !== 'imported' && stageValue !== 'deferred' ? stageValue : 'selected_for_outreach';
+};
+
+const partnershipStageForPipelineStatus = (pipelineStatus: string, lead?: PartnershipLead) =>
+  pipelineStatusToPartnershipStage(pipelineStatus, lead?.partnership_stage);
 
 const partnershipStagePresentation = (lead: PartnershipLead): {
   label: string;
@@ -473,16 +582,16 @@ const partnershipStagePresentation = (lead: PartnershipLead): {
   tone: WorkflowTone;
   helper: string;
 } => {
-  const stageValue = String(lead.partnership_stage || '').toLowerCase();
-  if (!stageValue || stageValue === 'imported') {
+  const pipelineStatus = getLeadPipelineStatus(lead);
+  if (pipelineStatus === PIPELINE_UNPROCESSED) {
     return {
-      label: 'Новый сырой',
+      label: 'Необработан',
       variant: 'outline',
       tone: 'default',
-      helper: 'Лид ещё не перенесён в рабочий pipeline.',
+      helper: 'Лид ещё не взят в операторскую воронку.',
     };
   }
-  if (stageValue === 'deferred') {
+  if (pipelineStatus === PIPELINE_POSTPONED) {
     return {
       label: 'Отложен',
       variant: 'outline',
@@ -490,35 +599,27 @@ const partnershipStagePresentation = (lead: PartnershipLead): {
       helper: 'Лид сохранён на потом и сейчас не в активной работе.',
     };
   }
-  if (['rejected', 'shortlist_rejected'].includes(stageValue)) {
+  if (pipelineStatus === PIPELINE_NOT_RELEVANT || pipelineStatus === PIPELINE_CLOSED_LOST) {
     return {
-      label: 'Отклонён',
+      label: pipelineStatusLabel(pipelineStatus),
       variant: 'destructive',
       tone: 'danger',
       helper: 'Лид уже был снят с потока и не требует действий.',
     };
   }
-  if (['approved_for_send', 'sent'].includes(stageValue)) {
+  if ([PIPELINE_CONTACTED, PIPELINE_WAITING_REPLY, PIPELINE_SECOND_MESSAGE_SENT, PIPELINE_REPLIED, PIPELINE_CONVERTED].includes(pipelineStatus)) {
     return {
-      label: 'Контактирован',
+      label: pipelineStatusLabel(pipelineStatus),
       variant: 'secondary',
       tone: 'success',
-      helper: 'Лид уже дошёл до отправки или находится в доставке.',
-    };
-  }
-  if (['audited', 'matched', 'proposal_draft_ready', 'channel_selected', 'selected_for_outreach'].includes(stageValue)) {
-    return {
-      label: 'Уже в pipeline',
-      variant: 'secondary',
-      tone: 'info',
-      helper: 'Лид уже взят в работу: идёт аудит, матчинг или подготовка контакта.',
+      helper: 'Лид прошёл первичный контакт или уже дал результат.',
     };
   }
   return {
-    label: 'В работе',
+    label: pipelineStatusLabel(pipelineStatus),
     variant: 'secondary',
     tone: 'info',
-    helper: 'Лид уже находится внутри операторского процесса.',
+    helper: 'Лид находится внутри операторского процесса.',
   };
 };
 
@@ -743,10 +844,13 @@ export const PartnershipSearchPage: React.FC = () => {
 
   const partnershipBoardColumns = useMemo(() => {
     const buckets: Record<PartnershipBoardColumnId, PartnershipLead[]> = {
-      new: [],
       in_progress: [],
       contacted: [],
-      deferred: [],
+      second_message_sent: [],
+      replied: [],
+      converted: [],
+      postponed: [],
+      not_relevant: [],
     };
     for (const item of pipelineLeads) {
       buckets[leadToPartnershipBoardColumn(item)].push(item);
@@ -1183,7 +1287,8 @@ export const PartnershipSearchPage: React.FC = () => {
     }
     await runBulkLeadUpdate(
       {
-        partnership_stage: bulkStage || undefined,
+        pipeline_status: bulkStage || undefined,
+        partnership_stage: bulkStage ? partnershipStageForPipelineStatus(bulkStage) : undefined,
         selected_channel: bulkChannel || undefined,
         pilot_cohort: bulkPilotCohort || undefined,
       },
@@ -1226,6 +1331,7 @@ export const PartnershipSearchPage: React.FC = () => {
     if (!currentBusinessId || selectedLeadIds.length === 0) return;
     await runBulkLeadUpdate(
       {
+        pipeline_status: PIPELINE_POSTPONED,
         partnership_stage: 'deferred',
         deferred_reason: deferredReasonInput.trim() || undefined,
         deferred_until: deferredUntilInput || '',
@@ -1245,6 +1351,7 @@ export const PartnershipSearchPage: React.FC = () => {
     if (!currentBusinessId || selectedLeadIds.length === 0) return;
     await runBulkLeadUpdate(
       {
+        pipeline_status: PIPELINE_IN_PROGRESS,
         partnership_stage: 'selected_for_outreach',
         deferred_reason: '',
         deferred_until: '',
@@ -1265,9 +1372,9 @@ export const PartnershipSearchPage: React.FC = () => {
     const todayIso = new Date().toISOString().slice(0, 10);
     const overdueIds = items
       .filter((item) => {
-        const stageValue = String(item.partnership_stage || '').toLowerCase();
+        const pipelineStatus = getLeadPipelineStatus(item);
         const deferredUntil = String(item.deferred_until || '').slice(0, 10);
-        return stageValue === 'deferred' && Boolean(deferredUntil) && deferredUntil <= todayIso;
+        return pipelineStatus === PIPELINE_POSTPONED && Boolean(deferredUntil) && deferredUntil <= todayIso;
       })
       .map((item) => item.id);
     if (overdueIds.length === 0) {
@@ -1276,6 +1383,7 @@ export const PartnershipSearchPage: React.FC = () => {
     }
     await runPartnershipAction('Не удалось вернуть просроченные лиды в работу', async () => {
       const data = await bulkUpdatePartnershipLeads(currentBusinessId, overdueIds, {
+        pipeline_status: PIPELINE_IN_PROGRESS,
         partnership_stage: 'selected_for_outreach',
         deferred_reason: '',
         deferred_until: '',
@@ -1332,6 +1440,31 @@ export const PartnershipSearchPage: React.FC = () => {
         `Матчинг выполнен: ${matched}` +
           (skipped ? `, пропущено: ${skipped}` : '') +
           (errs ? `, ошибок: ${errs}` : '')
+      );
+      await refreshAllPartnershipData();
+    });
+  };
+
+  const bulkPrepareCommercialOffers = async () => {
+    if (!currentBusinessId || selectedLeadIds.length === 0) return;
+    await runPartnershipAction('Не удалось подготовить КП для выбранных партнёров', async () => {
+      let created = 0;
+      const errors: string[] = [];
+      for (const leadId of selectedLeadIds) {
+        try {
+          await runPartnershipLeadAction(currentBusinessId, leadId, 'draft-offer', {
+            channel: 'email',
+            tone: 'профессиональный',
+            letter_type: 'commercial_offer',
+          });
+          created += 1;
+        } catch (e: any) {
+          errors.push(`${leadId}: ${e?.message || 'ошибка'}`);
+        }
+      }
+      setMessage(
+        `КП подготовлены: ${created}` +
+          (errors.length ? `, ошибок: ${errors.length}` : '')
       );
       await refreshAllPartnershipData();
     });
@@ -1534,22 +1667,25 @@ export const PartnershipSearchPage: React.FC = () => {
 
   const updateLeadStage = async (
     leadId: string,
-    partnershipStage: string,
+    pipelineStatus: string,
     successMessage: string,
     options?: { deferredReason?: string | null; deferredUntil?: string | null }
   ) => {
     if (!currentBusinessId) return;
+    const currentLead = items.find((item) => item.id === leadId);
+    const partnershipStage = partnershipStageForPipelineStatus(pipelineStatus, currentLead);
     await runPartnershipAction('Не удалось обновить этап партнёра', async () => {
       await patchPartnershipLead(currentBusinessId, leadId, {
+        pipeline_status: pipelineStatus,
         partnership_stage: partnershipStage,
         deferred_reason: options?.deferredReason !== undefined ? options?.deferredReason : undefined,
         deferred_until: options?.deferredUntil !== undefined ? options?.deferredUntil : undefined,
       });
       setMessage(successMessage);
-      if (partnershipStage === 'deferred') {
+      if (pipelineStatus === PIPELINE_POSTPONED) {
         setLeadBucket('deferred');
       }
-      if (partnershipStage === 'selected_for_outreach') {
+      if (pipelineStatus === PIPELINE_IN_PROGRESS) {
         setLeadBucket('active');
       }
       await refreshOperationalData();
@@ -1558,16 +1694,19 @@ export const PartnershipSearchPage: React.FC = () => {
 
   const updateLeadStageOptimistic = async (
     leadId: string,
-    partnershipStage: string,
+    pipelineStatus: string,
     options?: { deferredReason?: string | null; deferredUntil?: string | null }
   ) => {
     if (!currentBusinessId) return;
     const previousItems = items;
+    const currentLead = items.find((item) => item.id === leadId);
+    const partnershipStage = partnershipStageForPipelineStatus(pipelineStatus, currentLead);
     setItems((prev) =>
       prev.map((item) =>
         item.id === leadId
           ? {
               ...item,
+              pipeline_status: pipelineStatus,
               partnership_stage: partnershipStage,
               deferred_reason: options?.deferredReason !== undefined ? options.deferredReason || undefined : item.deferred_reason,
               deferred_until: options?.deferredUntil !== undefined ? options.deferredUntil || undefined : item.deferred_until,
@@ -1577,6 +1716,7 @@ export const PartnershipSearchPage: React.FC = () => {
     );
     try {
       await patchPartnershipLead(currentBusinessId, leadId, {
+        pipeline_status: pipelineStatus,
         partnership_stage: partnershipStage,
         deferred_reason: options?.deferredReason !== undefined ? options?.deferredReason : undefined,
         deferred_until: options?.deferredUntil !== undefined ? options?.deferredUntil : undefined,
@@ -1613,14 +1753,14 @@ export const PartnershipSearchPage: React.FC = () => {
     if (!leadId) return;
     const lead = items.find((item) => item.id === leadId);
     if (!lead) return;
-    const nextStage = partnershipBoardColumnMeta[columnId].stageToSet;
-    if (String(lead.partnership_stage || '').toLowerCase() === nextStage) {
+    const nextPipelineStatus = partnershipBoardColumnMeta[columnId].pipelineStatusToSet;
+    if (getLeadPipelineStatus(lead) === nextPipelineStatus) {
       return;
     }
     await updateLeadStageOptimistic(
       leadId,
-      nextStage,
-      columnId === 'deferred'
+      nextPipelineStatus,
+      columnId === 'postponed'
         ? {
             deferredReason: deferredReasonInput.trim() || lead.deferred_reason || '',
             deferredUntil: deferredUntilInput || String(lead.deferred_until || '').slice(0, 10) || '',
@@ -1917,11 +2057,11 @@ export const PartnershipSearchPage: React.FC = () => {
   const getNextPipelineStage = (item: PartnershipLead) => {
     const boardColumn = leadToPartnershipBoardColumn(item);
     const nextColumn = nextPartnershipBoardColumn(boardColumn);
-    return nextColumn ? partnershipBoardColumnMeta[nextColumn].stageToSet : '';
+    return nextColumn ? partnershipBoardColumnMeta[nextColumn].pipelineStatusToSet : '';
   };
 
   const moveLeadToPipeline = (leadId: string) => {
-    void updateLeadStageOptimistic(leadId, partnershipBoardColumnMeta.new.stageToSet, { deferredReason: '', deferredUntil: '' });
+    void updateLeadStageOptimistic(leadId, PIPELINE_IN_PROGRESS, { deferredReason: '', deferredUntil: '' });
   };
 
   const moveLeadToStage = (leadId: string, stageValue: string, deferred: { deferredReason: string; deferredUntil: string }) => {
@@ -1929,7 +2069,7 @@ export const PartnershipSearchPage: React.FC = () => {
   };
 
   const deferLeadFromCard = (lead: PartnershipLead, deferred: { deferredReason: string; deferredUntil: string }) => {
-    void updateLeadStageOptimistic(lead.id, 'deferred', deferred);
+    void updateLeadStageOptimistic(lead.id, PIPELINE_POSTPONED, deferred);
   };
 
 
@@ -2333,6 +2473,7 @@ export const PartnershipSearchPage: React.FC = () => {
               onBulkRunMatch={bulkRunMatch}
               onApplyBulkUpdate={applyBulkUpdate}
               onNormalizeSelectedViaOpenClaw={normalizeSelectedViaOpenClaw}
+              onBulkPrepareCommercialOffers={bulkPrepareCommercialOffers}
               onBulkDeleteLeads={bulkDeleteLeads}
             />
           ) : null}

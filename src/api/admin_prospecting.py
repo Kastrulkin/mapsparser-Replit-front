@@ -6947,6 +6947,7 @@ def partnership_list_leads():
     try:
         requested_business_id = str(request.args.get("business_id") or "").strip() or None
         stage_filter = str(request.args.get("stage") or "").strip().lower() or None
+        pipeline_status_filter = str(request.args.get("pipeline_status") or "").strip().lower() or None
         pilot_cohort = str(request.args.get("pilot_cohort") or "").strip().lower() or None
         q = str(request.args.get("q") or "").strip().lower()
         limit = max(1, min(int(request.args.get("limit") or 100), 500))
@@ -6968,6 +6969,40 @@ def partnership_list_leads():
             if stage_filter:
                 where_sql.append("COALESCE(partnership_stage, 'imported') = %s")
                 params.append(stage_filter)
+            if pipeline_status_filter:
+                if pipeline_status_filter == "in_progress":
+                    where_sql.append(
+                        """(
+                            COALESCE(pipeline_status, 'unprocessed') IN ('in_progress', 'qualified')
+                            OR (
+                                COALESCE(pipeline_status, '') = ''
+                                AND COALESCE(partnership_stage, 'imported') IN (
+                                    'audited', 'matched', 'proposal_draft_ready', 'selected_for_outreach',
+                                    'channel_selected', 'proposal_approved', 'queued_for_send'
+                                )
+                            )
+                        )"""
+                    )
+                elif pipeline_status_filter == "postponed":
+                    where_sql.append(
+                        "(COALESCE(pipeline_status, 'unprocessed') IN ('postponed', 'deferred') OR COALESCE(partnership_stage, 'imported') = 'deferred')"
+                    )
+                elif pipeline_status_filter == "not_relevant":
+                    where_sql.append(
+                        "(COALESCE(pipeline_status, 'unprocessed') IN ('not_relevant', 'disqualified') OR COALESCE(partnership_stage, 'imported') IN ('rejected', 'shortlist_rejected'))"
+                    )
+                elif pipeline_status_filter == "contacted":
+                    where_sql.append(
+                        """(
+                            COALESCE(pipeline_status, 'unprocessed') IN ('contacted', 'waiting_reply', 'sent', 'delivered')
+                            OR COALESCE(partnership_stage, 'imported') IN ('approved_for_send', 'sent')
+                        )"""
+                    )
+                elif pipeline_status_filter == "replied":
+                    where_sql.append("COALESCE(pipeline_status, 'unprocessed') IN ('replied', 'responded')")
+                else:
+                    where_sql.append("COALESCE(pipeline_status, 'unprocessed') = %s")
+                    params.append(pipeline_status_filter)
             if pilot_cohort:
                 where_sql.append("COALESCE(pilot_cohort, 'backlog') = %s")
                 params.append(pilot_cohort)
@@ -6989,6 +7024,10 @@ def partnership_list_leads():
                        prospectingleads.whatsapp_url, prospectingleads.website, prospectingleads.rating,
                        prospectingleads.reviews_count, prospectingleads.status, prospectingleads.selected_channel,
                        prospectingleads.intent, prospectingleads.partnership_stage, prospectingleads.pilot_cohort,
+                       prospectingleads.pipeline_status, prospectingleads.disqualification_reason,
+                       prospectingleads.disqualification_comment, prospectingleads.postponed_comment,
+                       prospectingleads.next_action_at, prospectingleads.last_contact_at,
+                       prospectingleads.last_contact_channel, prospectingleads.last_contact_comment,
                        prospectingleads.parse_business_id, prospectingleads.updated_at,
                        prospectingleads.created_at,
                        pq_last.id AS parse_task_id,
@@ -7270,7 +7309,7 @@ def partnership_export():
 
 @admin_prospecting_bp.route("/api/partnership/funnel", methods=["GET"])
 def partnership_funnel():
-    """Partnership funnel metrics: import -> audit -> match -> draft -> sent."""
+    """Partnership funnel metrics aligned with the client-search operator pipeline."""
     user_data, error = _require_auth()
     if error:
         return error
@@ -7289,46 +7328,68 @@ def partnership_funnel():
             cur.execute(
                 """
                 WITH leads_scope AS (
-                    SELECT l.id, l.partnership_stage, l.updated_at, l.created_at
+                    SELECT
+                        l.id,
+                        l.partnership_stage,
+                        CASE
+                            WHEN COALESCE(l.pipeline_status, '') = 'qualified' THEN 'in_progress'
+                            WHEN COALESCE(l.pipeline_status, '') = 'disqualified' THEN 'not_relevant'
+                            WHEN COALESCE(l.pipeline_status, '') = 'deferred' THEN 'postponed'
+                            WHEN COALESCE(l.pipeline_status, '') IN ('sent', 'delivered') THEN 'contacted'
+                            WHEN COALESCE(l.pipeline_status, '') = 'responded' THEN 'replied'
+                            WHEN COALESCE(l.pipeline_status, '') <> '' THEN l.pipeline_status
+                            WHEN COALESCE(l.partnership_stage, 'imported') = 'deferred' THEN 'postponed'
+                            WHEN COALESCE(l.partnership_stage, 'imported') IN ('rejected', 'shortlist_rejected') THEN 'not_relevant'
+                            WHEN COALESCE(l.partnership_stage, 'imported') IN ('approved_for_send', 'sent') THEN 'contacted'
+                            WHEN COALESCE(l.partnership_stage, 'imported') IN (
+                                'audited', 'matched', 'proposal_draft_ready', 'selected_for_outreach',
+                                'channel_selected', 'proposal_approved', 'queued_for_send'
+                            ) THEN 'in_progress'
+                            ELSE 'unprocessed'
+                        END AS normalized_pipeline_status,
+                        l.updated_at,
+                        l.created_at
                     FROM prospectingleads l
                     WHERE l.business_id = %s
                       AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
                       AND COALESCE(l.updated_at, l.created_at) >= NOW() - (%s || ' days')::INTERVAL
-                ),
-                draft_leads AS (
-                    SELECT DISTINCT d.lead_id
-                    FROM outreachmessagedrafts d
-                    JOIN leads_scope ls ON ls.id = d.lead_id
-                ),
-                sent_leads AS (
-                    SELECT DISTINCT q.lead_id
-                    FROM outreachsendqueue q
-                    JOIN leads_scope ls ON ls.id = q.lead_id
-                    WHERE COALESCE(q.delivery_status, '') IN ('sent', 'delivered')
                 )
                 SELECT
-                    (SELECT COUNT(*)::INT FROM leads_scope) AS imported_count,
-                    (SELECT COUNT(*)::INT FROM leads_scope WHERE COALESCE(partnership_stage, 'imported') IN ('audited','matched','proposal_draft_ready','approved_for_send','sent')) AS audited_count,
-                    (SELECT COUNT(*)::INT FROM leads_scope WHERE COALESCE(partnership_stage, 'imported') IN ('matched','proposal_draft_ready','approved_for_send','sent')) AS matched_count,
-                    (SELECT COUNT(*)::INT FROM draft_leads) AS draft_count,
-                    (SELECT COUNT(*)::INT FROM sent_leads) AS sent_count
+                    COUNT(*)::INT AS total_count,
+                    COUNT(*) FILTER (WHERE normalized_pipeline_status = 'unprocessed')::INT AS unprocessed_count,
+                    COUNT(*) FILTER (WHERE normalized_pipeline_status = 'in_progress')::INT AS in_progress_count,
+                    COUNT(*) FILTER (WHERE normalized_pipeline_status IN ('contacted', 'waiting_reply'))::INT AS contacted_count,
+                    COUNT(*) FILTER (WHERE normalized_pipeline_status = 'second_message_sent')::INT AS second_message_sent_count,
+                    COUNT(*) FILTER (WHERE normalized_pipeline_status = 'replied')::INT AS replied_count,
+                    COUNT(*) FILTER (WHERE normalized_pipeline_status = 'converted')::INT AS converted_count,
+                    COUNT(*) FILTER (WHERE normalized_pipeline_status = 'postponed')::INT AS postponed_count,
+                    COUNT(*) FILTER (WHERE normalized_pipeline_status IN ('not_relevant', 'closed_lost'))::INT AS not_relevant_count
+                FROM leads_scope
                 """,
                 (business_id, window_days),
             )
             row = cur.fetchone()
             if row and hasattr(row, "keys"):
-                imported_count = int(row.get("imported_count") or 0)
-                audited_count = int(row.get("audited_count") or 0)
-                matched_count = int(row.get("matched_count") or 0)
-                draft_count = int(row.get("draft_count") or 0)
-                sent_count = int(row.get("sent_count") or 0)
+                total_count = int(row.get("total_count") or 0)
+                unprocessed_count = int(row.get("unprocessed_count") or 0)
+                in_progress_count = int(row.get("in_progress_count") or 0)
+                contacted_count = int(row.get("contacted_count") or 0)
+                second_message_sent_count = int(row.get("second_message_sent_count") or 0)
+                replied_count = int(row.get("replied_count") or 0)
+                converted_count = int(row.get("converted_count") or 0)
+                postponed_count = int(row.get("postponed_count") or 0)
+                not_relevant_count = int(row.get("not_relevant_count") or 0)
             else:
-                values = list(row or [0, 0, 0, 0, 0])
-                imported_count = int(values[0] or 0)
-                audited_count = int(values[1] or 0)
-                matched_count = int(values[2] or 0)
-                draft_count = int(values[3] or 0)
-                sent_count = int(values[4] or 0)
+                values = list(row or [0, 0, 0, 0, 0, 0, 0, 0, 0])
+                total_count = int(values[0] or 0)
+                unprocessed_count = int(values[1] or 0)
+                in_progress_count = int(values[2] or 0)
+                contacted_count = int(values[3] or 0)
+                second_message_sent_count = int(values[4] or 0)
+                replied_count = int(values[5] or 0)
+                converted_count = int(values[6] or 0)
+                postponed_count = int(values[7] or 0)
+                not_relevant_count = int(values[8] or 0)
         finally:
             conn.close()
 
@@ -7338,11 +7399,14 @@ def partnership_funnel():
             return round((numerator / denominator) * 100.0, 2)
 
         stages = [
-            {"key": "imported", "label": "Импортировано", "count": imported_count},
-            {"key": "audited", "label": "Аудит", "count": audited_count, "conversion_from_prev_pct": _pct(audited_count, imported_count)},
-            {"key": "matched", "label": "Матчинг", "count": matched_count, "conversion_from_prev_pct": _pct(matched_count, audited_count)},
-            {"key": "draft", "label": "Черновик", "count": draft_count, "conversion_from_prev_pct": _pct(draft_count, matched_count)},
-            {"key": "sent", "label": "Отправлено", "count": sent_count, "conversion_from_prev_pct": _pct(sent_count, draft_count)},
+            {"key": "unprocessed", "label": "Необработан", "count": unprocessed_count},
+            {"key": "in_progress", "label": "В работе", "count": in_progress_count, "conversion_from_prev_pct": _pct(in_progress_count, total_count)},
+            {"key": "contacted", "label": "Отправлено", "count": contacted_count, "conversion_from_prev_pct": _pct(contacted_count, in_progress_count)},
+            {"key": "second_message_sent", "label": "Второе сообщение", "count": second_message_sent_count, "conversion_from_prev_pct": _pct(second_message_sent_count, contacted_count)},
+            {"key": "replied", "label": "Ответил", "count": replied_count, "conversion_from_prev_pct": _pct(replied_count, contacted_count + second_message_sent_count)},
+            {"key": "converted", "label": "Конвертирован", "count": converted_count, "conversion_from_prev_pct": _pct(converted_count, replied_count)},
+            {"key": "postponed", "label": "Отложен", "count": postponed_count},
+            {"key": "not_relevant", "label": "Неактуален", "count": not_relevant_count},
         ]
 
         return jsonify(
@@ -7352,9 +7416,11 @@ def partnership_funnel():
                 "window_days": window_days,
                 "funnel": stages,
                 "summary": {
-                    "import_to_sent_pct": _pct(sent_count, imported_count),
-                    "imported_count": imported_count,
-                    "sent_count": sent_count,
+                    "work_to_contact_pct": _pct(contacted_count, in_progress_count),
+                    "reply_to_conversion_pct": _pct(converted_count, replied_count),
+                    "total_count": total_count,
+                    "contacted_count": contacted_count,
+                    "converted_count": converted_count,
                 },
             }
         )
@@ -7991,6 +8057,7 @@ def partnership_update_lead(lead_id):
         requested_business_id = str(data.get("business_id") or "").strip() or None
         stage = str(data.get("partnership_stage") or "").strip().lower()
         status = str(data.get("status") or "").strip().lower()
+        pipeline_status = str(data.get("pipeline_status") or "").strip().lower()
         selected_channel = str(data.get("selected_channel") or "").strip().lower() or None
         pilot_cohort = str(data.get("pilot_cohort") or "").strip().lower() or None
         deferred_reason_present = "deferred_reason" in data
@@ -8010,6 +8077,7 @@ def partnership_update_lead(lead_id):
         if (
             not stage
             and not status
+            and not pipeline_status
             and selected_channel is None
             and pilot_cohort is None
             and not deferred_reason_present
@@ -8055,15 +8123,29 @@ def partnership_update_lead(lead_id):
             }
             if selected_channel is not None and not _lead_has_channel_contact(candidate_lead, selected_channel):
                 return jsonify({"error": _outreach_channel_contact_error(selected_channel)}), 400
+            if pipeline_status and pipeline_status not in ALLOWED_PIPELINE_STATUSES:
+                return jsonify({"error": f"pipeline_status must be one of: {', '.join(sorted(ALLOWED_PIPELINE_STATUSES))}"}), 400
 
             assignments = ["updated_at = NOW()"]
             params: list[Any] = []
             if stage:
                 assignments.append("partnership_stage = %s")
                 params.append(stage)
+                if not pipeline_status:
+                    if stage == "deferred":
+                        pipeline_status = PIPELINE_POSTPONED
+                    elif stage in {"rejected", "shortlist_rejected"}:
+                        pipeline_status = PIPELINE_NOT_RELEVANT
+                    elif stage in {"approved_for_send", "sent"}:
+                        pipeline_status = PIPELINE_CONTACTED
+                    elif stage not in {"imported"}:
+                        pipeline_status = PIPELINE_IN_PROGRESS
             if status:
                 assignments.append("status = %s")
                 params.append(status)
+            if pipeline_status:
+                assignments.append("pipeline_status = %s")
+                params.append(pipeline_status)
             if selected_channel is not None:
                 assignments.append("selected_channel = %s")
                 params.append(selected_channel)
@@ -8112,7 +8194,7 @@ def partnership_update_lead(lead_id):
                 WHERE id = %s
                   AND business_id = %s
                   AND COALESCE(intent, 'client_outreach') = 'partnership_outreach'
-                RETURNING id, name, source_url, status, selected_channel, partnership_stage, pilot_cohort,
+                RETURNING id, name, source_url, status, selected_channel, partnership_stage, pipeline_status, pilot_cohort,
                           deferred_reason, deferred_until, phone, email, website, telegram_url, whatsapp_url, city, category, address, updated_at
                 """,
                 tuple(params),
@@ -8120,6 +8202,55 @@ def partnership_update_lead(lead_id):
             updated = cur.fetchone()
             if not updated:
                 return jsonify({"error": "Lead not found"}), 404
+            if pipeline_status == PIPELINE_CONVERTED:
+                ensure_ai_learning_events_table(conn)
+                cur.execute(
+                    """
+                    SELECT id, learning_note_json, generated_text, approved_text, edited_text
+                    FROM outreachmessagedrafts
+                    WHERE lead_id = %s
+                    ORDER BY updated_at DESC, created_at DESC
+                    LIMIT 1
+                    """,
+                    (lead_id,),
+                )
+                draft_row = cur.fetchone()
+                draft_context = dict(draft_row) if draft_row and hasattr(draft_row, "keys") else {}
+                learning_note = draft_context.get("learning_note_json")
+                if not isinstance(learning_note, dict):
+                    learning_note = {}
+                prompt_meta = _normalize_prompt_meta(
+                    learning_note,
+                    fallback_key="partners.draft_first_note",
+                    fallback_version="unknown",
+                    fallback_source="unknown",
+                )
+                final_text = str(
+                    draft_context.get("approved_text")
+                    or draft_context.get("edited_text")
+                    or draft_context.get("generated_text")
+                    or ""
+                ).strip()
+                record_ai_learning_event(
+                    capability="partnership.draft_offer",
+                    event_type="outcome",
+                    intent="partnership_outreach",
+                    user_id=user_data.get("user_id"),
+                    business_id=business_id,
+                    outcome="partner",
+                    prompt_key=prompt_meta.get("prompt_key"),
+                    prompt_version=prompt_meta.get("prompt_version"),
+                    final_text=final_text[:3000] if final_text else None,
+                    metadata={
+                        "lead_id": lead_id,
+                        "draft_id": str(draft_context.get("id") or ""),
+                        "pipeline_status": pipeline_status,
+                        "partnership_outcome": "partner",
+                        **learning_note,
+                        **prompt_meta,
+                    },
+                    conn=conn,
+                )
             conn.commit()
         finally:
             conn.close()
@@ -8145,6 +8276,7 @@ def partnership_bulk_update_leads():
         lead_ids = list(dict.fromkeys(lead_ids))
         stage = str(data.get("partnership_stage") or "").strip().lower()
         status = str(data.get("status") or "").strip().lower()
+        pipeline_status = str(data.get("pipeline_status") or "").strip().lower()
         selected_channel = str(data.get("selected_channel") or "").strip().lower() or None
         pilot_cohort = str(data.get("pilot_cohort") or "").strip().lower() or None
         deferred_reason_present = "deferred_reason" in data
@@ -8155,10 +8287,12 @@ def partnership_bulk_update_leads():
 
         if not lead_ids:
             return jsonify({"error": "lead_ids is required"}), 400
-        if not stage and not status and selected_channel is None and pilot_cohort is None and not deferred_reason_present and not deferred_until_present:
+        if not stage and not status and not pipeline_status and selected_channel is None and pilot_cohort is None and not deferred_reason_present and not deferred_until_present:
             return jsonify({"error": "Nothing to update"}), 400
         if selected_channel is not None and selected_channel not in ALLOWED_OUTREACH_CHANNELS:
             return jsonify({"error": "Unsupported channel"}), 400
+        if pipeline_status and pipeline_status not in ALLOWED_PIPELINE_STATUSES:
+            return jsonify({"error": f"pipeline_status must be one of: {', '.join(sorted(ALLOWED_PIPELINE_STATUSES))}"}), 400
 
         conn = get_db_connection()
         try:
@@ -8192,9 +8326,21 @@ def partnership_bulk_update_leads():
             if stage:
                 assignments.append("partnership_stage = %s")
                 params.append(stage)
+                if not pipeline_status:
+                    if stage == "deferred":
+                        pipeline_status = PIPELINE_POSTPONED
+                    elif stage in {"rejected", "shortlist_rejected"}:
+                        pipeline_status = PIPELINE_NOT_RELEVANT
+                    elif stage in {"approved_for_send", "sent"}:
+                        pipeline_status = PIPELINE_CONTACTED
+                    elif stage not in {"imported"}:
+                        pipeline_status = PIPELINE_IN_PROGRESS
             if status:
                 assignments.append("status = %s")
                 params.append(status)
+            if pipeline_status:
+                assignments.append("pipeline_status = %s")
+                params.append(pipeline_status)
             if selected_channel is not None:
                 assignments.append("selected_channel = %s")
                 params.append(selected_channel)
@@ -8221,11 +8367,62 @@ def partnership_bulk_update_leads():
                 tuple(params),
             )
             rows = cur.fetchall() or []
+            updated_ids = [row["id"] if hasattr(row, "get") else row[0] for row in rows]
+            if pipeline_status == PIPELINE_CONVERTED and updated_ids:
+                ensure_ai_learning_events_table(conn)
+                cur.execute(
+                    """
+                    SELECT DISTINCT ON (lead_id)
+                        id, lead_id, learning_note_json, generated_text, approved_text, edited_text
+                    FROM outreachmessagedrafts
+                    WHERE lead_id = ANY(%s)
+                    ORDER BY lead_id, updated_at DESC, created_at DESC
+                    """,
+                    (updated_ids,),
+                )
+                draft_rows = [dict(row) for row in cur.fetchall() or []]
+                drafts_by_lead = {str(row.get("lead_id") or ""): row for row in draft_rows}
+                for current_lead_id in updated_ids:
+                    draft_context = drafts_by_lead.get(str(current_lead_id)) or {}
+                    learning_note = draft_context.get("learning_note_json")
+                    if not isinstance(learning_note, dict):
+                        learning_note = {}
+                    prompt_meta = _normalize_prompt_meta(
+                        learning_note,
+                        fallback_key="partners.draft_first_note",
+                        fallback_version="unknown",
+                        fallback_source="unknown",
+                    )
+                    final_text = str(
+                        draft_context.get("approved_text")
+                        or draft_context.get("edited_text")
+                        or draft_context.get("generated_text")
+                        or ""
+                    ).strip()
+                    record_ai_learning_event(
+                        capability="partnership.draft_offer",
+                        event_type="outcome",
+                        intent="partnership_outreach",
+                        user_id=user_data.get("user_id"),
+                        business_id=business_id,
+                        outcome="partner",
+                        prompt_key=prompt_meta.get("prompt_key"),
+                        prompt_version=prompt_meta.get("prompt_version"),
+                        final_text=final_text[:3000] if final_text else None,
+                        metadata={
+                            "lead_id": str(current_lead_id),
+                            "draft_id": str(draft_context.get("id") or ""),
+                            "pipeline_status": pipeline_status,
+                            "partnership_outcome": "partner",
+                            **learning_note,
+                            **prompt_meta,
+                        },
+                        conn=conn,
+                    )
             conn.commit()
         finally:
             conn.close()
 
-        updated_ids = [row["id"] if hasattr(row, "get") else row[0] for row in rows]
         return jsonify({"success": True, "updated_count": len(updated_ids), "updated_ids": updated_ids})
     except Exception as e:
         print(f"Error bulk updating partnership leads: {e}")
@@ -9659,6 +9856,272 @@ def _load_partnership_lead(cur, *, lead_id: str, business_id: str):
     return dict(row) if row and hasattr(row, "keys") else None
 
 
+def _load_business_profile(cur, business_id: str) -> dict[str, Any]:
+    cur.execute("SELECT * FROM businesses WHERE id = %s LIMIT 1", (business_id,))
+    row = cur.fetchone()
+    return dict(row) if row and hasattr(row, "keys") else {}
+
+
+def _pick_business_display_name(profile: dict[str, Any]) -> str:
+    for key in ("name", "title", "company_name", "organization_name", "org_name"):
+        value = str(profile.get(key) or "").strip()
+        if value:
+            return value
+    return "наша компания"
+
+
+def _classify_partnership_business_type(*parts: Any) -> str:
+    text = " ".join(str(part or "") for part in parts).lower()
+    rules = [
+        ("dentistry", ("стомат", "зуб", "улыб", "ортодонт", "имплант")),
+        ("cosmetology", ("косметолог", "косметик", "инъекц", "ботокс", "пилинг", "лицо")),
+        ("hair_salon", ("парикмах", "стриж", "уклад", "волос", "причес", "причёс")),
+        ("beauty_salon", ("салон красот", "красот", "маник", "педик", "бров", "ресниц")),
+        ("dance_school", ("танц", "хореограф", "балет")),
+        ("theatre_studio", ("театр", "актер", "актёр", "сцен")),
+        ("swimming_pool", ("аква", "бассейн", "плаван")),
+        ("kids_center", ("детск", "дети", "ребен", "ребён", "школа", "садик", "центр развития")),
+        ("sports_section", ("секц", "спорт", "единобор", "карат", "футбол", "гимнаст")),
+        ("fitness", ("фитнес", "тренаж", "спортзал", "йога", "пилатес")),
+        ("cultural_center", ("культур", "дворец", "дом творч", "центр досуг")),
+        ("rope_park", ("веревоч", "верёвоч", "канат", "rope")),
+        ("activity_park", ("активити", "парк", "развлеч", "батут", "квест")),
+        ("gas_station", ("азс", "заправ", "топлив")),
+        ("car_wash", ("автомой", "мойка")),
+        ("car_service", ("автосервис", "сто", "ремонт авто", "шиномонтаж", "детейлинг")),
+        ("cafe", ("кафе", "кофе", "ресторан", "пекар", "кондитер", "еда")),
+        ("photo_studio", ("фото", "фотостуд", "видеостуд")),
+        ("flower_shop", ("цвет", "букет", "флорист")),
+        ("medical_center", ("медицин", "клиник", "врач", "анализ", "лаборатор")),
+        ("pet_clinic", ("ветерин", "зоомаг", "грум", "питом")),
+    ]
+    for business_type, tokens in rules:
+        if any(token in text for token in tokens):
+            return business_type
+    return "unknown_local_business"
+
+
+def _business_type_label(business_type: str) -> str:
+    labels = {
+        "dentistry": "стоматология",
+        "cosmetology": "косметология",
+        "hair_salon": "салон стрижек",
+        "beauty_salon": "салон красоты",
+        "dance_school": "школа танцев",
+        "theatre_studio": "театральная студия",
+        "swimming_pool": "бассейн",
+        "kids_center": "детский центр",
+        "sports_section": "спортивная секция",
+        "fitness": "фитнес",
+        "cultural_center": "культурный центр",
+        "rope_park": "верёвочный городок",
+        "activity_park": "активити-парк",
+        "gas_station": "АЗС",
+        "car_wash": "автомойка",
+        "car_service": "автосервис",
+        "cafe": "кафе",
+        "photo_studio": "фотостудия",
+        "flower_shop": "цветочный магазин",
+        "medical_center": "медицинский центр",
+        "pet_clinic": "зоонаправление",
+    }
+    return labels.get(str(business_type or "").strip(), "локальный бизнес")
+
+
+def _build_pair_pattern_payload(
+    *,
+    our_business_type: str,
+    partner_business_type: str,
+    client_segment: str,
+) -> dict[str, Any]:
+    pair = (our_business_type, partner_business_type)
+    shared_audience = client_segment
+    partner_value = "ваши услуги"
+    why = "оба бизнеса работают с клиентами, которым важны удобство и качественный локальный сервис"
+    risks = "не обещать результат за партнёра и не звучать как медицинская или финансовая рекомендация"
+
+    if pair in {("hair_salon", "dentistry"), ("beauty_salon", "dentistry"), ("cosmetology", "dentistry")}:
+        shared_audience = "людей, которые внимательно относятся к внешности и уходу за собой"
+        partner_value = "стоматология, эстетика улыбки и профилактический уход"
+        why = "уход за лицом, волосами и улыбкой часто воспринимается клиентами как единый образ"
+    elif partner_business_type in {"dance_school", "theatre_studio", "kids_center", "sports_section", "swimming_pool"}:
+        shared_audience = "семей с детьми, которым важен аккуратный внешний вид ребёнка перед занятиями и событиями"
+        partner_value = "быстрая подготовка образа ребёнка перед выступлением, фотоднём или новым сезоном занятий"
+        why = "детские занятия регулярно создают поводы, когда ребёнку нужно выглядеть аккуратно"
+    elif partner_business_type in {"fitness", "sports_section"}:
+        shared_audience = "людей, которые следят за внешностью, здоровьем и регулярным уходом"
+        partner_value = "уход, стрижка или восстановление после тренировок и активного графика"
+        why = "после спорта клиенты часто думают о внешнем виде, восстановлении и регулярном уходе"
+    elif partner_business_type in {"cafe", "cultural_center", "activity_park", "rope_park"}:
+        shared_audience = "жителей района и семей, которые выбирают локальные места для отдыха и повседневных дел"
+        partner_value = "удобный сервис рядом до или после визита к вам"
+        why = "локальные маршруты помогают клиентам решать несколько задач рядом"
+    elif partner_business_type in {"gas_station", "car_wash", "car_service"}:
+        shared_audience = "жителей района и владельцев автомобилей"
+        partner_value = "сервисы рядом, которые удобно совместить с регулярными поездками"
+        why = "у таких клиентов есть повторяющиеся маршруты и привычка выбирать удобные точки поблизости"
+
+    return {
+        "our_business_type": our_business_type,
+        "partner_business_type": partner_business_type,
+        "shared_audience": shared_audience,
+        "partner_value": partner_value,
+        "why_it_makes_sense": why,
+        "risk_notes": risks,
+        "confidence": 0.72 if partner_business_type != "unknown_local_business" else 0.35,
+    }
+
+
+def _build_package_idea_payload(
+    *,
+    our_business_type: str,
+    partner_business_type: str,
+    business_name: str,
+    lead: dict[str, Any],
+) -> dict[str, Any]:
+    partner_label = _business_type_label(partner_business_type)
+    our_label = _business_type_label(our_business_type)
+    idea = {
+        "package_type": "joint_package",
+        "name": "Удобный локальный пакет",
+        "our_part": f"услуга от {business_name}",
+        "partner_part": f"услуга партнёра из направления «{partner_label}»",
+        "audience": "клиенты, которым удобно решить две связанные задачи рядом",
+        "occasion": "регулярный визит или подготовка к важному дню",
+        "launch_mechanic": "тест на небольшой группе клиентов в течение 2-3 недель",
+    }
+    if partner_business_type == "dentistry":
+        idea.update(
+            {
+                "name": "Образ к важному событию",
+                "our_part": "стрижка, укладка или уход за внешним видом",
+                "partner_part": "чистка зубов, профилактический уход или консультация по эстетике улыбки",
+                "audience": "клиенты, которые готовятся к событию и хотят выглядеть ухоженно",
+                "occasion": "свадьба, фотосессия, выпускной, отпуск или важная встреча",
+            }
+        )
+    elif partner_business_type in {"dance_school", "theatre_studio", "kids_center", "sports_section", "swimming_pool"}:
+        idea.update(
+            {
+                "package_type": "event_package",
+                "name": "Готовимся к выступлению",
+                "our_part": "детская стрижка, аккуратная причёска или быстрая укладка",
+                "partner_part": "группа детей перед концертом, отчётным занятием, соревнованием или фотоднём",
+                "audience": "родители, которым важно, чтобы ребёнок выглядел аккуратно без лишней организации",
+                "occasion": "выступление, фотодень, праздник, начало сезона или серия занятий на 3-4 месяца",
+                "launch_mechanic": "тест на одной группе или одном мероприятии с предварительным сбором заявок от родителей",
+            }
+        )
+    elif partner_business_type in {"fitness", "sports_section"}:
+        idea.update(
+            {
+                "name": "Уход после активного графика",
+                "our_part": "стрижка, уход или экспресс-приведение внешнего вида в порядок",
+                "partner_part": "тренировки, абонемент или занятие у партнёра",
+                "audience": "клиенты, которые регулярно занимаются спортом и следят за внешним видом",
+                "occasion": "начало сезона, подготовка к отпуску или регулярный уход после тренировок",
+            }
+        )
+    elif partner_business_type in {"cafe", "cultural_center", "activity_park", "rope_park"}:
+        idea.update(
+            {
+                "package_type": "local_route",
+                "name": "Маршрут рядом",
+                "our_part": f"услуга в {business_name}",
+                "partner_part": f"визит в {str(lead.get('name') or partner_label).strip()}",
+                "audience": "семьи и жители района, которым удобно совместить уход, отдых и повседневные дела",
+                "occasion": "выходной, детское мероприятие, локальный праздник или обычный визит рядом",
+            }
+        )
+    elif partner_business_type in {"gas_station", "car_wash", "car_service"}:
+        idea.update(
+            {
+                "package_type": "partner_bonus",
+                "name": "Сервис рядом по пути",
+                "our_part": f"услуга в {business_name}",
+                "partner_part": f"услуга партнёра из направления «{partner_label}»",
+                "audience": "жители района и владельцы автомобилей, которые регулярно ездят по одному маршруту",
+                "occasion": "плановый визит, поездка по делам или регулярное обслуживание",
+            }
+        )
+    return idea
+
+
+def _pick_partnership_client_segment(
+    *,
+    business_profile: dict[str, Any],
+    own_services: list[str],
+    partner_category: str,
+) -> str:
+    category = str(
+        business_profile.get("category")
+        or business_profile.get("business_category")
+        or business_profile.get("industry")
+        or ""
+    ).strip().lower()
+    services_text = " ".join(own_services[:12]).lower()
+    partner_category_text = str(partner_category or "").strip().lower()
+    combined = " ".join([category, services_text, partner_category_text])
+
+    if any(token in combined for token in ("дет", "реб", "сем", "школ", "садик")):
+        return "семей с детьми и жителей района"
+    if any(token in combined for token in ("авто", "машин", "шиномонтаж", "мойк", "детейл")):
+        return "владельцев автомобилей и жителей района"
+    if any(token in combined for token in ("салон", "красот", "космет", "парик", "маник", "барбер", "spa", "спа")):
+        return "людей, которые заботятся о внешности и регулярно выбирают локальные сервисы рядом"
+    if any(token in combined for token in ("спорт", "фитнес", "йог", "танц", "массаж", "здоров")):
+        return "людей, которые следят за здоровьем, внешностью и удобством сервисов рядом"
+    if any(token in combined for token in ("кафе", "ресторан", "кофе", "еда", "пекар")):
+        return "жителей района, которые часто выбирают локальные места для повседневных покупок и отдыха"
+    return "жителей района и клиентов, которые уже пользуются нашими услугами"
+
+
+def _build_partnership_first_note(
+    *,
+    business_name: str,
+    lead: dict[str, Any],
+    client_segment: str,
+) -> str:
+    partner_name = str(lead.get("name") or "").strip()
+    greeting = "Здравствуйте!"
+    if partner_name:
+        greeting = f"Здравствуйте! Пишу по поводу {partner_name}."
+
+    lines = [
+        greeting,
+        f"Мы — {business_name}.",
+        "Пишем вам, потому что видим, что у нас есть общая аудитория клиентов.",
+        f"Среди наших клиентов много {client_segment}, которым потенциально могут быть полезны ваши услуги.",
+        "Предлагаю коротко обсудить простой тест обмена рекомендациями без сложных интеграций и затрат.",
+        "Если идея интересна, удобно созвониться на 10 минут?",
+    ]
+    return "\n\n".join(lines).strip()
+
+
+def _build_partnership_commercial_offer(
+    *,
+    business_name: str,
+    lead: dict[str, Any],
+    package_idea: dict[str, Any],
+) -> str:
+    partner_name = str(lead.get("name") or "").strip()
+    greeting = "Здравствуйте!"
+    if partner_name:
+        greeting = f"Здравствуйте! Подготовили один простой вариант для {partner_name}."
+
+    lines = [
+        greeting,
+        "Идея — протестировать небольшой пакет, который можно запустить без сложной интеграции.",
+        f"Пакет: «{package_idea.get('name') or 'совместный формат'}».",
+        f"С нашей стороны — {package_idea.get('our_part') or f'услуга в {business_name}'}.",
+        f"С вашей стороны — {package_idea.get('partner_part') or 'услуга или аудитория партнёра'}.",
+        f"Такой формат может быть интересен для аудитории: {package_idea.get('audience') or 'общие клиенты'}. Он решает понятную задачу: {package_idea.get('occasion') or 'удобно совместить связанные услуги'}.",
+        f"Запуск можно сделать как {package_idea.get('launch_mechanic') or 'тест на небольшой группе клиентов в течение 2-3 недель'}.",
+        "Если формат откликается, можем прислать короткую схему запуска и обсудить детали.",
+    ]
+    return "\n\n".join(lines).strip()
+
+
 def _collect_business_service_names(cur, business_id: str) -> list[str]:
     cur.execute(
         """
@@ -10652,6 +11115,9 @@ def partnership_draft_offer(lead_id):
         requested_business_id = str(data.get("business_id") or "").strip() or None
         tone = str(data.get("tone") or "профессиональный").strip()
         channel = str(data.get("channel") or "telegram").strip().lower()
+        letter_type = str(data.get("letter_type") or "first_note").strip().lower()
+        if letter_type not in {"first_note", "commercial_offer"}:
+            return jsonify({"error": "letter_type must be one of: first_note, commercial_offer"}), 400
         conn = get_db_connection()
         try:
             _ensure_partnership_columns(conn)
@@ -10670,15 +11136,75 @@ def partnership_draft_offer(lead_id):
             if not isinstance(match_json, dict):
                 match_json = {}
 
+            business_profile = _load_business_profile(cur, business_id)
+            business_name = _pick_business_display_name(business_profile)
+            own_services = _collect_business_service_names(cur, business_id)
+            our_business_type = _classify_partnership_business_type(
+                business_name,
+                business_profile.get("category"),
+                business_profile.get("business_category"),
+                business_profile.get("industry"),
+                " ".join(own_services[:20]),
+            )
+            partner_business_type = _classify_partnership_business_type(
+                lead.get("name"),
+                lead.get("category"),
+                lead.get("source"),
+                lead.get("search_payload_json"),
+                lead.get("enrich_payload_json"),
+            )
+            client_segment = _pick_partnership_client_segment(
+                business_profile=business_profile,
+                own_services=own_services,
+                partner_category=str(lead.get("category") or ""),
+            )
+            pair_pattern = _build_pair_pattern_payload(
+                our_business_type=our_business_type,
+                partner_business_type=partner_business_type,
+                client_segment=client_segment,
+            )
+            package_idea = _build_package_idea_payload(
+                our_business_type=our_business_type,
+                partner_business_type=partner_business_type,
+                business_name=business_name,
+                lead=lead,
+            )
+            template_policy = {
+                "goal": "get_reply_not_sell_partnership",
+                "format": "short_note" if letter_type == "first_note" else "commercial_offer",
+                "language": "ru",
+                "max_sentences": 6 if letter_type == "first_note" else 9,
+                "required_structure": [
+                    "who_we_are",
+                    "why_this_partner",
+                    "which_our_clients_can_be_useful",
+                    "simple_test",
+                    "10_min_call_question",
+                ],
+                "avoid": [
+                    "do not start with QR codes, certificates, promos, leaflets, mechanics",
+                    "do not sell partnership as an abstract idea",
+                    "do not write a long pitch",
+                    "do not use universal empty wording without one personalized client segment",
+                ],
+                "preferred_wording": "У нас есть клиенты, которым потенциально могут быть полезны ваши услуги.",
+                "business_name": business_name,
+                "client_segment": client_segment,
+                "letter_type": letter_type,
+                "our_business_type": our_business_type,
+                "partner_business_type": partner_business_type,
+                "pair_pattern": pair_pattern,
+                "package_idea": package_idea if letter_type == "commercial_offer" else None,
+            }
             draft_text: str | None = None
             prompt_meta = {
-                "prompt_key": "partners.draft_first_offer",
-                "prompt_version": "openclaw_default",
+                "prompt_key": "partners.draft_first_note" if letter_type == "first_note" else "partners.draft_commercial_offer",
+                "prompt_version": "short_note_v2" if letter_type == "first_note" else "commercial_offer_v1",
                 "prompt_source": "openclaw",
             }
             if _is_partnership_openclaw_enabled():
                 openclaw_result = _call_partnership_openclaw_capability(
-                    "partners.draft_first_offer",
+                    "partners.draft_first_offer" if letter_type == "first_note" else "partners.draft_commercial_offer",
                     tenant_id=business_id,
                     payload={
                         "business_id": business_id,
@@ -10688,6 +11214,15 @@ def partnership_draft_offer(lead_id):
                         "match": match_json,
                         "tone": tone,
                         "channel": channel,
+                        "business": {
+                            "name": business_name,
+                            "profile": business_profile,
+                            "services": own_services[:30],
+                        },
+                        "letter_type": letter_type,
+                        "pair_pattern": pair_pattern,
+                        "package_idea": package_idea if letter_type == "commercial_offer" else None,
+                        "template_policy": template_policy,
                     },
                     timeout_sec=40,
                 )
@@ -10698,35 +11233,27 @@ def partnership_draft_offer(lead_id):
                         draft_text = candidate_text
                     prompt_meta = _normalize_prompt_meta(
                         result_blob,
-                        fallback_key="partners.draft_first_offer",
-                        fallback_version="openclaw_default",
+                        fallback_key="partners.draft_first_note" if letter_type == "first_note" else "partners.draft_commercial_offer",
+                        fallback_version="short_note_v2" if letter_type == "first_note" else "commercial_offer_v1",
                         fallback_source="openclaw",
                     )
 
             if not draft_text:
-                lead_name = str(lead.get("name") or "коллеги").strip()
-                city = str(lead.get("city") or "").strip()
-                overlap = match_json.get("overlap") or []
-                complement = ((match_json.get("complement") or {}).get("partner_strength_tokens") or [])
-                opener = f"Здравствуйте! Мы посмотрели вашу карточку на картах и видим потенциал для партнёрства."
-                if city:
-                    opener += f" Работаем рядом в {city}."
-                value_line = "Можем предложить кросс-рекомендации и совместные офферы для обмена клиентским потоком."
-                if overlap:
-                    value_line += f" Уже есть пересечения по темам: {', '.join(overlap[:5])}."
-                if complement:
-                    value_line += f" И есть комплементарные направления: {', '.join(complement[:5])}."
-                draft_text = "\n".join(
-                    [
-                        opener,
-                        value_line,
-                        "Если вам интересно, подготовим короткий план пилота на 2 недели с метриками и прозрачной механикой.",
-                        "Готовы обсудить удобный формат созвона/чата?",
-                    ]
-                ).strip()
+                if letter_type == "commercial_offer":
+                    draft_text = _build_partnership_commercial_offer(
+                        business_name=business_name,
+                        lead=lead,
+                        package_idea=package_idea,
+                    )
+                else:
+                    draft_text = _build_partnership_first_note(
+                        business_name=business_name,
+                        lead=lead,
+                        client_segment=client_segment,
+                    )
                 prompt_meta = {
-                    "prompt_key": "partners.draft_first_offer_fallback",
-                    "prompt_version": "local_v1",
+                    "prompt_key": "partners.draft_first_note_fallback" if letter_type == "first_note" else "partners.draft_commercial_offer_fallback",
+                    "prompt_version": "short_note_v2" if letter_type == "first_note" else "commercial_offer_v1",
                     "prompt_source": "local_fallback",
                 }
 
@@ -10745,7 +11272,7 @@ def partnership_draft_offer(lead_id):
                     draft_id,
                     lead_id,
                     channel,
-                    "partnership_offer",
+                    "partnership_offer" if letter_type == "first_note" else "partnership_commercial_offer",
                     tone,
                     DRAFT_GENERATED,
                     draft_text,
@@ -10754,6 +11281,12 @@ def partnership_draft_offer(lead_id):
                         {
                             "intent": "partnership_outreach",
                             "auto_generated": True,
+                            "letter_type": letter_type,
+                            "our_business_type": our_business_type,
+                            "partner_business_type": partner_business_type,
+                            "pair_pattern": pair_pattern,
+                            "package_idea": package_idea if letter_type == "commercial_offer" else None,
+                            "template_policy": template_policy,
                             **prompt_meta,
                         }
                     ),
@@ -10776,6 +11309,12 @@ def partnership_draft_offer(lead_id):
                             "text": draft_text,
                             "channel": channel,
                             "tone": tone,
+                            "letter_type": letter_type,
+                            "our_business_type": our_business_type,
+                            "partner_business_type": partner_business_type,
+                            "pair_pattern": pair_pattern,
+                            "package_idea": package_idea if letter_type == "commercial_offer" else None,
+                            "template_policy": template_policy,
                             **prompt_meta,
                         }
                     ),
@@ -10807,7 +11346,17 @@ def partnership_draft_offer(lead_id):
                 prompt_version=prompt_meta.get("prompt_version"),
                 draft_text="",
                 final_text=draft_text[:3000],
-                metadata={"lead_id": lead_id, "draft_id": draft_id, "channel": channel, **prompt_meta},
+                metadata={
+                    "lead_id": lead_id,
+                    "draft_id": draft_id,
+                    "channel": channel,
+                    "letter_type": letter_type,
+                    "our_business_type": our_business_type,
+                    "partner_business_type": partner_business_type,
+                    "pair_pattern": pair_pattern,
+                    "package_idea": package_idea if letter_type == "commercial_offer" else None,
+                    **prompt_meta,
+                },
             )
         except Exception as learning_exc:
             print(f"⚠️ partnership.draft_offer learning skipped: {learning_exc}")
@@ -10840,7 +11389,8 @@ def partnership_list_drafts():
                     d.id, d.lead_id, d.channel, d.angle_type, d.tone, d.status,
                     d.generated_text, d.edited_text, d.approved_text,
                     d.learning_note_json, d.created_at, d.updated_at,
-                    l.name AS lead_name, l.category, l.city, l.selected_channel, l.status AS lead_status
+                    l.name AS lead_name, l.category, l.city, l.email,
+                    l.selected_channel, l.status AS lead_status
                 FROM outreachmessagedrafts d
                 JOIN prospectingleads l ON l.id = d.lead_id
                 WHERE l.business_id = %s
@@ -10906,10 +11456,20 @@ def partnership_approve_draft(draft_id):
             edited_before_accept = approved_text != generated_text
             prompt_meta = _normalize_prompt_meta(
                 draft_row.get("learning_note_json"),
-                fallback_key="partners.draft_first_offer",
+                fallback_key="partners.draft_first_note",
                 fallback_version="unknown",
                 fallback_source="unknown",
             )
+            learning_note = draft_row.get("learning_note_json")
+            if not isinstance(learning_note, dict):
+                learning_note = {}
+            accepted_learning_note = {
+                **learning_note,
+                "intent": "partnership_outreach",
+                "accepted": True,
+                "edited_before_accept": edited_before_accept,
+                **prompt_meta,
+            }
 
             cur.execute(
                 """
@@ -10926,7 +11486,7 @@ def partnership_approve_draft(draft_id):
                 (
                     approved_text,
                     DRAFT_APPROVED,
-                    Json({"intent": "partnership_outreach"}),
+                    Json(accepted_learning_note),
                     draft_id,
                 ),
             )
@@ -10953,7 +11513,7 @@ def partnership_approve_draft(draft_id):
                 prompt_version=prompt_meta.get("prompt_version"),
                 draft_text=generated_text[:3000] if generated_text else None,
                 final_text=approved_text[:3000],
-                metadata={"draft_id": draft_id, "lead_id": draft_row["lead_id"], **prompt_meta},
+                metadata={"draft_id": draft_id, "lead_id": draft_row["lead_id"], **accepted_learning_note},
                 conn=conn,
             )
             conn.commit()
@@ -11019,7 +11579,8 @@ def _load_partnership_send_snapshot(*, business_id: str) -> dict[str, Any]:
                 d.id, d.lead_id, d.channel, d.status,
                 d.generated_text, d.edited_text, d.approved_text,
                 d.created_at, d.updated_at,
-                l.name AS lead_name, l.category, l.city, l.selected_channel, l.status AS lead_status
+                l.name AS lead_name, l.category, l.city, l.email,
+                l.selected_channel, l.status AS lead_status
             FROM outreachmessagedrafts d
             JOIN prospectingleads l ON l.id = d.lead_id
             WHERE d.status = %s
@@ -11061,6 +11622,7 @@ def _load_partnership_send_snapshot(*, business_id: str) -> dict[str, Any]:
                     q.sent_at, q.attempts, q.last_attempt_at, q.next_retry_at, q.dlq_at,
                     q.created_at, q.updated_at,
                     l.name AS lead_name,
+                    l.email AS lead_email,
                     d.approved_text, d.generated_text,
                     r.classified_outcome AS latest_outcome,
                     r.human_confirmed_outcome AS latest_human_outcome,

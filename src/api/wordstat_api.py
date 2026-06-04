@@ -420,7 +420,69 @@ def get_keywords():
             include_negative_blocked=include_blocked,
         )
         keywords = keywords_payload.get('items', [])
-        by_category = keywords_payload.get('grouped', {})
+        if business_id:
+            _ensure_custom_table(cursor)
+            _ensure_excluded_table(cursor)
+            negative_rows = _load_negative_rows(cursor, business_id)
+            cursor.execute(
+                "SELECT keyword FROM wordstatkeywordsexcluded WHERE business_id = %s",
+                (business_id,),
+            )
+            excluded = {
+                str(_row_get(row, 'keyword', 0, '') or '').strip().lower()
+                for row in (cursor.fetchall() or [])
+            }
+            cursor.execute(
+                """
+                SELECT keyword, views, category, updated_at
+                FROM wordstatkeywordscustom
+                WHERE business_id = %s
+                ORDER BY updated_at DESC NULLS LAST
+                """,
+                (business_id,),
+            )
+            custom_keywords = []
+            for row in cursor.fetchall() or []:
+                keyword = str(_row_get(row, 'keyword', 0, '') or '').strip()
+                keyword_l = keyword.lower()
+                if not keyword or keyword_l in excluded:
+                    continue
+                category = str(_row_get(row, 'category', 2, '') or '').strip()
+                reason = _negative_reason_for(keyword, category, negative_rows)
+                if reason and not include_blocked:
+                    continue
+                item = {
+                    'keyword': keyword,
+                    'views': int(_row_get(row, 'views', 1, 0) or 0),
+                    'category': category or 'custom',
+                    'updated_at': _row_get(row, 'updated_at', 3, None),
+                    'is_custom': True,
+                    'source': 'custom',
+                    'negative_blocked': bool(reason),
+                    'negative_reason': reason or '',
+                }
+                if use_city:
+                    keywords_city = (keywords_payload.get('city') or '').strip()
+                    if keywords_city and keywords_city.lower() not in keyword_l:
+                        item['keyword_with_city'] = f"{keyword} {keywords_city}"
+                    else:
+                        item['keyword_with_city'] = keyword
+                custom_keywords.append(item)
+
+            seen_keywords = set()
+            merged_keywords = []
+            for item in custom_keywords + keywords:
+                keyword_l = str(item.get('keyword') or '').strip().lower()
+                if not keyword_l or keyword_l in seen_keywords:
+                    continue
+                seen_keywords.add(keyword_l)
+                merged_keywords.append(item)
+            keywords = merged_keywords[:600]
+
+        by_category = {}
+        for item in keywords:
+            category = str(item.get('category') or 'other').strip() or 'other'
+            by_category.setdefault(category, []).append(item)
             
         return jsonify({
             'success': True,

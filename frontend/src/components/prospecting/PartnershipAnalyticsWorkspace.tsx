@@ -40,9 +40,11 @@ type FunnelStage = {
 type FunnelData = {
   funnel?: FunnelStage[];
   summary?: {
-    import_to_sent_pct?: number;
-    imported_count?: number;
-    sent_count?: number;
+    work_to_contact_pct?: number;
+    reply_to_conversion_pct?: number;
+    total_count?: number;
+    contacted_count?: number;
+    converted_count?: number;
   };
 } | null;
 
@@ -236,13 +238,14 @@ export const PartnershipAnalyticsWorkspace = ({
               <div key={stage.key} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
                 <div className="text-xs uppercase tracking-wide text-muted-foreground">{stage.label}</div>
                 <div className="mt-1 text-2xl font-semibold text-foreground">{stage.count ?? 0}</div>
-                {stage.key !== 'imported' ? <div className="mt-1 text-xs text-muted-foreground">Конверсия: {stage.conversion_from_prev_pct ?? 0}%</div> : null}
+                {stage.key !== 'unprocessed' && stage.conversion_from_prev_pct !== undefined ? <div className="mt-1 text-xs text-muted-foreground">Конверсия: {stage.conversion_from_prev_pct ?? 0}%</div> : null}
               </div>
             ))}
           </div>
           <div className="text-sm text-muted-foreground">
-            Общая конверсия импорт → отправка: <span className="font-medium text-foreground">{funnel.summary?.import_to_sent_pct ?? 0}%</span>{' '}
-            ({funnel.summary?.sent_count ?? 0} из {funnel.summary?.imported_count ?? 0})
+            Работа → контакт: <span className="font-medium text-foreground">{funnel.summary?.work_to_contact_pct ?? 0}%</span>{' '}
+            · ответ → конверсия: <span className="font-medium text-foreground">{funnel.summary?.reply_to_conversion_pct ?? 0}%</span>{' '}
+            · всего в срезе: {funnel.summary?.total_count ?? 0}
           </div>
         </>
       )}

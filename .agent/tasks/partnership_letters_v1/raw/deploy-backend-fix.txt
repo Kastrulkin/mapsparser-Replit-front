@@ -1,0 +1,6 @@
+sync backend
+restart app
+ Container seo-app-app-1 Restarting
+ Container seo-app-app-1 Started
+
+__EXIT__0

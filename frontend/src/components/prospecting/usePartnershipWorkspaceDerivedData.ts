@@ -10,6 +10,7 @@ export type PartnershipDerivedLead = {
   source_kind?: string;
   source_provider?: string;
   partnership_stage?: string;
+  pipeline_status?: string;
   pilot_cohort?: string;
   parse_status?: string;
   deferred_until?: string;
@@ -86,6 +87,24 @@ const ACTIVE_PIPELINE_STAGES = [
 const AUDITED_FLOW_STAGES = ['audited', 'matched', 'proposal_draft_ready', 'proposal_approved', 'queued_for_send', 'sent'];
 const MATCHED_FLOW_STAGES = ['matched', 'proposal_draft_ready', 'proposal_approved', 'queued_for_send', 'sent'];
 const DRAFT_READY_FLOW_STAGES = ['proposal_draft_ready', 'proposal_approved', 'queued_for_send', 'sent'];
+const ACTIVE_PIPELINE_STATUSES = ['in_progress', 'contacted', 'waiting_reply', 'second_message_sent', 'replied', 'converted'];
+
+const getLeadPipelineStatus = (item: PartnershipDerivedLead) => {
+  const explicit = String(item.pipeline_status || '').trim().toLowerCase();
+  if (explicit === 'qualified') return 'in_progress';
+  if (explicit === 'disqualified') return 'not_relevant';
+  if (explicit === 'deferred') return 'postponed';
+  if (explicit === 'sent' || explicit === 'delivered') return 'contacted';
+  if (explicit === 'responded') return 'replied';
+  if (explicit === 'closed') return 'closed_lost';
+  if (explicit) return explicit;
+  const stageValue = String(item.partnership_stage || '').trim().toLowerCase();
+  if (stageValue === 'deferred') return 'postponed';
+  if (['rejected', 'shortlist_rejected'].includes(stageValue)) return 'not_relevant';
+  if (['approved_for_send', 'sent'].includes(stageValue)) return 'contacted';
+  if (ACTIVE_PIPELINE_STAGES.includes(stageValue)) return 'in_progress';
+  return 'unprocessed';
+};
 
 const hasAnyContact = (item: PartnershipDerivedLead) =>
   Boolean(item.phone || item.email || item.telegram_url || item.whatsapp_url || item.website);
@@ -145,13 +164,14 @@ export function usePartnershipWorkspaceDerivedData<TLead extends PartnershipDeri
     const todayIso = new Date().toISOString().slice(0, 10);
     return items.filter((item) => {
       const parseStatus = String(item.parse_status || '').toLowerCase();
-      const partnershipStage = String(item.partnership_stage || '').toLowerCase();
+      const pipelineStatus = getLeadPipelineStatus(item);
       const nextCode = String(item.next_best_action?.code || '').toLowerCase();
       const deferredUntil = String(item.deferred_until || '').slice(0, 10);
-      const isOverdueReturn = partnershipStage === 'deferred' && Boolean(deferredUntil) && deferredUntil <= todayIso;
-      if (leadBucket === 'deferred' && partnershipStage !== 'deferred') return false;
-      if (leadBucket === 'active' && partnershipStage === 'deferred') return false;
-      if (leadView === 'deferred') return partnershipStage === 'deferred';
+      const isDeferred = pipelineStatus === 'postponed';
+      const isOverdueReturn = isDeferred && Boolean(deferredUntil) && deferredUntil <= todayIso;
+      if (leadBucket === 'deferred' && !isDeferred) return false;
+      if (leadBucket === 'active' && isDeferred) return false;
+      if (leadView === 'deferred') return isDeferred;
       if (leadView === 'overdue_return') return isOverdueReturn;
       if (leadView === 'requires_action') {
         return ['captcha', 'error'].includes(parseStatus) || ['parse_captcha', 'parse_error', 'fill_contacts'].includes(nextCode);
@@ -296,29 +316,29 @@ export function usePartnershipWorkspaceDerivedData<TLead extends PartnershipDeri
   }), [items, drafts, allQueueItems, outcomes]);
 
   const deferredLeadsCount = useMemo(
-    () => items.filter((item) => String(item.partnership_stage || '').toLowerCase() === 'deferred').length,
+    () => items.filter((item) => getLeadPipelineStatus(item) === 'postponed').length,
     [items]
   );
 
   const overdueDeferredLeadsCount = useMemo(() => {
     const todayIso = new Date().toISOString().slice(0, 10);
     return items.filter((item) => {
-      const stageValue = String(item.partnership_stage || '').toLowerCase();
+      const pipelineStatus = getLeadPipelineStatus(item);
       const deferredUntil = String(item.deferred_until || '').slice(0, 10);
-      return stageValue === 'deferred' && Boolean(deferredUntil) && deferredUntil <= todayIso;
+      return pipelineStatus === 'postponed' && Boolean(deferredUntil) && deferredUntil <= todayIso;
     }).length;
   }, [items]);
 
   const activeLeadsCount = useMemo(
-    () => items.filter((item) => String(item.partnership_stage || '').toLowerCase() !== 'deferred').length,
+    () => items.filter((item) => getLeadPipelineStatus(item) !== 'postponed').length,
     [items]
   );
 
   const rawLeads = visibleLeads;
   const rawLeadCount = rawLeads.length;
   const pipelineLeads = useMemo(() => visibleLeads.filter((item) => {
-    const stageValue = String(item.partnership_stage || '').toLowerCase();
-    return stageValue && stageValue !== 'imported';
+    const pipelineStatus = getLeadPipelineStatus(item);
+    return pipelineStatus && pipelineStatus !== 'unprocessed';
   }), [visibleLeads]);
   const pipelineLeadCount = pipelineLeads.length;
   const lastGeoSearchLeadCount = lastGeoSearchLeadIds.length;
@@ -332,12 +352,12 @@ export function usePartnershipWorkspaceDerivedData<TLead extends PartnershipDeri
 
   const rawLeadStatusSummary = useMemo(() => {
     const imported = rawLeads.filter((item) => {
-      const stageValue = String(item.partnership_stage || '').toLowerCase();
-      return !stageValue || stageValue === 'imported';
+      const pipelineStatus = getLeadPipelineStatus(item);
+      return !pipelineStatus || pipelineStatus === 'unprocessed';
     }).length;
-    const inPipeline = rawLeads.filter((item) => ACTIVE_PIPELINE_STAGES.includes(String(item.partnership_stage || '').toLowerCase())).length;
-    const deferred = rawLeads.filter((item) => String(item.partnership_stage || '').toLowerCase() === 'deferred').length;
-    const rejected = rawLeads.filter((item) => ['rejected', 'shortlist_rejected'].includes(String(item.partnership_stage || '').toLowerCase())).length;
+    const inPipeline = rawLeads.filter((item) => ACTIVE_PIPELINE_STATUSES.includes(getLeadPipelineStatus(item))).length;
+    const deferred = rawLeads.filter((item) => getLeadPipelineStatus(item) === 'postponed').length;
+    const rejected = rawLeads.filter((item) => getLeadPipelineStatus(item) === 'not_relevant').length;
     return { imported, inPipeline, deferred, rejected };
   }, [rawLeads]);
 

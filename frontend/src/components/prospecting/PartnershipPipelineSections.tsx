@@ -28,6 +28,7 @@ type PipelineLead = {
   telegram_url?: string;
   whatsapp_url?: string;
   partnership_stage?: string;
+  pipeline_status?: string;
   pilot_cohort?: string;
   rating?: number;
   reviews_count?: number;
@@ -113,9 +114,11 @@ export const PartnershipLeadCard = ({
   onDeferLead,
 }: PartnershipLeadCardProps) => {
   const stageValue = String(lead.partnership_stage || '').toLowerCase();
+  const pipelineStatus = String(lead.pipeline_status || '').toLowerCase();
+  const isUnprocessed = !pipelineStatus || pipelineStatus === 'unprocessed' || pipelineStatus === 'qualified' || (!stageValue || stageValue === 'imported');
   const hasContacts = Boolean(lead.phone || lead.email || lead.telegram_url || lead.whatsapp_url || lead.website);
   const primaryActionLabel = mode === 'raw'
-    ? (!stageValue || stageValue === 'imported' ? 'В pipeline' : 'Открыть карточку')
+    ? (isUnprocessed ? 'В pipeline' : 'Открыть карточку')
     : nextStage
       ? 'Дальше'
       : 'Открыть карточку';
@@ -169,7 +172,7 @@ export const PartnershipLeadCard = ({
           tone={stagePresentation.tone}
           primaryText={mode === 'raw' ? stagePresentation.helper : (lead.next_best_action?.label || 'Следующий шаг пока не определён')}
           secondaryText={mode === 'raw'
-            ? `Текущий этап: ${lead.partnership_stage || 'imported'}`
+            ? `Воронка: ${lead.pipeline_status || 'unprocessed'} · тех. этап: ${lead.partnership_stage || 'imported'}`
             : (lead.next_best_action?.hint || 'Продолжайте по текущему pipeline без лишних промежуточных шагов.')}
         />
         <StatusSummaryCard
@@ -183,7 +186,7 @@ export const PartnershipLeadCard = ({
       </div>
       {lead.parse_error ? <div className="mt-2 text-xs text-red-600">{lead.parse_error}</div> : null}
       <WorkflowActionRow
-        primary={mode === 'raw' && (!stageValue || stageValue === 'imported')
+        primary={mode === 'raw' && isUnprocessed
           ? {
               label: primaryActionLabel,
               onClick: () => onMoveToPipeline(lead.id),
@@ -211,6 +214,7 @@ export const PartnershipLeadCard = ({
         ]}
       />
       <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+        <span className={mutedPillClass}>Воронка: {lead.pipeline_status || 'unprocessed'}</span>
         <span className={mutedPillClass}>Этап: {lead.partnership_stage || 'новый'}</span>
         <span>{parseStatusLabel}</span>
         <span>{hasContacts ? 'контакты есть' : 'контактов мало'}</span>
@@ -548,7 +552,7 @@ export const PartnershipPipelineList = ({
         </div>
         <div className="flex flex-wrap gap-2">
           <Select value={bulkStage} onValueChange={onBulkStageChange}>
-            <SelectTrigger className="w-[220px] bg-white"><SelectValue placeholder="Этап для выбранных" /></SelectTrigger>
+            <SelectTrigger className="w-[220px] bg-white"><SelectValue placeholder="Статус воронки" /></SelectTrigger>
             <SelectContent>{bulkStageOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
           </Select>
           <Select value={bulkChannel} onValueChange={onBulkChannelChange}>
@@ -597,6 +601,7 @@ export const PartnershipPipelineList = ({
                     {lead.deferred_reason ? <div className="mt-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900">Отложено: {lead.deferred_reason}</div> : null}
                     {lead.deferred_until ? <div className="mt-1 text-xs text-amber-800">Вернуться: {new Date(String(lead.deferred_until)).toLocaleDateString('ru-RU')}</div> : null}
                     <div className="mt-2 flex flex-wrap gap-1.5">
+                      <span className={mutedPillClass}>Воронка: {lead.pipeline_status || 'unprocessed'}</span>
                       <span className={mutedPillClass}>Этап: {lead.partnership_stage || 'новый'}</span>
                       <span className={mutedPillClass}>Когорта: {lead.pilot_cohort || 'резерв'}</span>
                       {lead.source_provider ? <span className={mutedPillClass}>{lead.source_provider}</span> : null}
@@ -631,10 +636,10 @@ export const PartnershipPipelineList = ({
                   <Button variant="outline" size="sm" onClick={() => onEnrichContacts(lead.id)} disabled={loading}>Обогатить контакты</Button>
                   <Button variant="outline" size="sm" onClick={() => onRunAudit(lead.id)} disabled={loading}>Аудит</Button>
                   <Button variant="outline" size="sm" onClick={() => onRunMatch(lead.id)} disabled={loading}>Матчинг</Button>
-                  <Button size="sm" className="bg-slate-950 text-white hover:bg-slate-800" onClick={() => onUpdateLeadStage(lead.id, 'selected_for_outreach', 'Партнёр добавлен в работу', { deferredReason: '', deferredUntil: '' })} disabled={loading}>
-                    {String(lead.partnership_stage || '').toLowerCase() === 'deferred' ? 'Вернуть в работу' : 'Сохранить'}
+                  <Button size="sm" className="bg-slate-950 text-white hover:bg-slate-800" onClick={() => onUpdateLeadStage(lead.id, 'in_progress', 'Партнёр добавлен в работу', { deferredReason: '', deferredUntil: '' })} disabled={loading}>
+                    {String(lead.pipeline_status || '').toLowerCase() === 'postponed' || String(lead.partnership_stage || '').toLowerCase() === 'deferred' ? 'Вернуть в работу' : 'Сохранить'}
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => onUpdateLeadStage(lead.id, 'deferred', 'Партнёр отложен на потом', { deferredReason: deferredReasonInput.trim() || lead.deferred_reason || '', deferredUntil: deferredUntilInput || String(lead.deferred_until || '').slice(0, 10) || '' })} disabled={loading}>Отложить</Button>
+                  <Button variant="outline" size="sm" onClick={() => onUpdateLeadStage(lead.id, 'postponed', 'Партнёр отложен на потом', { deferredReason: deferredReasonInput.trim() || lead.deferred_reason || '', deferredUntil: deferredUntilInput || String(lead.deferred_until || '').slice(0, 10) || '' })} disabled={loading}>Отложить</Button>
                   <Button variant="outline" size="sm" onClick={() => onDeleteLead(lead.id)} disabled={loading}>Удалить</Button>
                 </div>
               </div>
@@ -655,6 +660,7 @@ type PartnershipPipelineBulkBarProps = {
   onBulkRunMatch: () => void;
   onApplyBulkUpdate: () => void;
   onNormalizeSelectedViaOpenClaw: () => void;
+  onBulkPrepareCommercialOffers: () => void;
   onBulkDeleteLeads: () => void;
 };
 
@@ -667,6 +673,7 @@ export const PartnershipPipelineBulkBar = ({
   onBulkRunMatch,
   onApplyBulkUpdate,
   onNormalizeSelectedViaOpenClaw,
+  onBulkPrepareCommercialOffers,
   onBulkDeleteLeads,
 }: PartnershipPipelineBulkBarProps) => {
   if (selectedCount === 0) return null;
@@ -680,6 +687,7 @@ export const PartnershipPipelineBulkBar = ({
         <Button size="sm" variant="outline" onClick={onBulkRunMatch} disabled={loading}>Матчинг</Button>
         <Button size="sm" variant="outline" onClick={onApplyBulkUpdate} disabled={loading || !canApplyStageOrChannel}>Применить этап/канал</Button>
         <Button size="sm" variant="outline" onClick={onNormalizeSelectedViaOpenClaw} disabled={loading}>Подготовить черновики</Button>
+        <Button size="sm" variant="outline" onClick={onBulkPrepareCommercialOffers} disabled={loading}>Подготовить КП</Button>
         <Button size="sm" variant="outline" onClick={onBulkDeleteLeads} disabled={loading}>Удалить</Button>
       </div>
     </div>

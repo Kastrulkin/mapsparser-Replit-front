@@ -1,0 +1,6 @@
+src/components/CardAuditPanel.tsx(570,25): error TS2322: Type '{ key: string; title: string; priority: string; problem: string; evidence: string; meaning: string; action: string; help: string; }' is not assignable to type 'IntrinsicAttributes & { title: string; priority?: string; problem: string; meaning: string; action: string; outcome: string; evidence?: string; }'.
+  Property 'help' does not exist on type 'IntrinsicAttributes & { title: string; priority?: string; problem: string; meaning: string; action: string; outcome: string; evidence?: string; }'.
+src/pages/dashboard/OperatorPage.tsx(179,41): error TS2339: Property 'result_summary' does not exist on type 'OperatorChatResult | RefreshResult'.
+  Property 'result_summary' does not exist on type 'OperatorChatResult'.
+
+__EXIT__2

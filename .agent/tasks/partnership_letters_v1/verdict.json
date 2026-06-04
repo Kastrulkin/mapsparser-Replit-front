@@ -1,0 +1,52 @@
+{
+  "task_id": "partnership_letters_v1",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Backend now supports first_note and commercial_offer letter types."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Draft metadata captures letter type, business pair, pair pattern, package idea, and prompt context."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Approval preserves metadata and records edit learning events."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Converted partnership leads write outcome=partner learning events."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "UI exposes a bulk commercial-offer preparation action."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "Production has 97 active first-note drafts and 11 commercial-offer drafts."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/api/admin_prospecting.py",
+    "vite build",
+    "tsc -p frontend/tsconfig.app.json --noEmit",
+    "docker compose ps",
+    "docker compose logs --since 5m app",
+    "docker compose logs --since 5m worker",
+    "curl -I http://localhost:8000",
+    "production SQL draft count checks"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/partnership_letters_v1/raw/build.txt",
+    ".agent/tasks/partnership_letters_v1/raw/lint.txt",
+    ".agent/tasks/partnership_letters_v1/raw/deploy.txt",
+    ".agent/tasks/partnership_letters_v1/evidence.md"
+  ]
+}

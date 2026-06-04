@@ -1,3 +1,4 @@
+import { Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
@@ -16,14 +17,18 @@ type PartnershipDraftItem = {
   generated_text?: string;
   edited_text?: string;
   approved_text?: string;
+  email?: string;
 };
 
 type PartnershipQueueItem = {
   id: string;
   lead_name?: string;
+  lead_email?: string;
   delivery_status?: string;
   error_text?: string;
   channel?: string;
+  approved_text?: string;
+  generated_text?: string;
   latest_outcome?: string | null;
   latest_human_outcome?: string | null;
 };
@@ -108,6 +113,17 @@ const outcomeLabel = (value?: string | null) => {
   return value || '—';
 };
 
+const buildMailtoHref = (email?: string | null, leadName?: string | null, text?: string | null) => {
+  const recipient = String(email || '').trim();
+  const body = String(text || '').trim();
+  if (!recipient || !body) {
+    return '';
+  }
+  const subjectTarget = String(leadName || '').trim() || 'партнёрству';
+  const subject = `Партнёрское предложение для ${subjectTarget}`;
+  return `mailto:${encodeURIComponent(recipient)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+};
+
 export function PartnershipDraftsSection({
   drafts,
   selectedDraftIds,
@@ -181,6 +197,7 @@ export function PartnershipDraftsSection({
           </label>
           {drafts.map((draft) => {
             const draftText = draft.approved_text || draft.edited_text || draft.generated_text || '';
+            const mailtoHref = buildMailtoHref(draft.email, draft.lead_name || draft.lead_id, draftText);
             return (
               <div key={draft.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="flex items-start gap-3">
@@ -200,7 +217,20 @@ export function PartnershipDraftsSection({
                       value={draftText}
                       onChange={(event) => onDraftTextChange(draft.id, event.target.value)}
                     />
-                    <div className="mt-2 flex justify-end">
+                    <div className="mt-2 flex flex-wrap justify-end gap-2">
+                      <Button size="sm" variant="outline" disabled={!mailtoHref} asChild={Boolean(mailtoHref)}>
+                        {mailtoHref ? (
+                          <a href={mailtoHref}>
+                            <Mail className="mr-2 h-4 w-4" />
+                            Открыть письмо
+                          </a>
+                        ) : (
+                          <>
+                            <Mail className="mr-2 h-4 w-4" />
+                            Нет email
+                          </>
+                        )}
+                      </Button>
                       <Button size="sm" onClick={() => onApproveDraft(draft.id, draftText)} disabled={loading}>
                         Утвердить для отправки
                       </Button>
@@ -325,54 +355,73 @@ export function PartnershipQueueSection({
               </div>
               {(batch.items || []).length > 0 ? (
                 <div className="mt-2 space-y-2">
-                  {(batch.items || []).slice(0, 8).map((item) => (
-                    <div key={item.id} className="rounded-xl border border-slate-100 bg-slate-50/60 p-3 text-xs text-muted-foreground">
-                      <div className="flex items-start gap-2">
-                        <input
-                          className="mt-0.5"
-                          type="checkbox"
-                          checked={selectedQueueIds.includes(item.id)}
-                          onChange={(event) => onToggleQueueItem(item.id, event.target.checked)}
-                        />
-                        <div>
-                          <div>
-                            {item.lead_name || item.id} · {item.channel || '—'} · {item.delivery_status || '—'}
-                            {item.error_text ? ` · ${item.error_text}` : ''}
-                          </div>
-                          {item.latest_human_outcome || item.latest_outcome ? (
-                            <div className="mt-1 text-emerald-700">
-                              Результат: {outcomeLabel(item.latest_human_outcome || item.latest_outcome)}
+                  {(batch.items || []).slice(0, 8).map((item) => {
+                    const queueText = item.approved_text || item.generated_text || '';
+                    const mailtoHref = buildMailtoHref(item.lead_email, item.lead_name || item.id, queueText);
+                    return (
+                      <div key={item.id} className="rounded-xl border border-slate-100 bg-slate-50/60 p-3 text-xs text-muted-foreground">
+                        <div className="flex items-start gap-2">
+                          <input
+                            className="mt-0.5"
+                            type="checkbox"
+                            checked={selectedQueueIds.includes(item.id)}
+                            onChange={(event) => onToggleQueueItem(item.id, event.target.checked)}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div>
+                              {item.lead_name || item.id} · {item.channel || '—'} · {item.delivery_status || '—'}
+                              {item.error_text ? ` · ${item.error_text}` : ''}
                             </div>
-                          ) : null}
-                          {item.delivery_status === 'sent' && !(item.latest_human_outcome || item.latest_outcome) ? (
                             <div className="mt-2 flex flex-wrap gap-1">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 px-2"
-                                onClick={() => onRecordReaction(item.id)}
-                                disabled={Boolean(sendQueueBusy[item.id])}
-                              >
-                                Определить результат
+                              <Button size="sm" variant="outline" className="h-7 px-2" disabled={!mailtoHref} asChild={Boolean(mailtoHref)}>
+                                {mailtoHref ? (
+                                  <a href={mailtoHref}>
+                                    <Mail className="mr-1.5 h-3.5 w-3.5" />
+                                    Открыть письмо
+                                  </a>
+                                ) : (
+                                  <>
+                                    <Mail className="mr-1.5 h-3.5 w-3.5" />
+                                    Нет email
+                                  </>
+                                )}
                               </Button>
-                              {outcomeOptions.map((outcome) => (
+                            </div>
+                            {item.latest_human_outcome || item.latest_outcome ? (
+                              <div className="mt-1 text-emerald-700">
+                                Результат: {outcomeLabel(item.latest_human_outcome || item.latest_outcome)}
+                              </div>
+                            ) : null}
+                            {item.delivery_status === 'sent' && !(item.latest_human_outcome || item.latest_outcome) ? (
+                              <div className="mt-2 flex flex-wrap gap-1">
                                 <Button
-                                  key={`${item.id}-${outcome}`}
                                   size="sm"
                                   variant="outline"
                                   className="h-7 px-2"
-                                  onClick={() => onRecordReaction(item.id, outcome)}
+                                  onClick={() => onRecordReaction(item.id)}
                                   disabled={Boolean(sendQueueBusy[item.id])}
                                 >
-                                  {outcomeLabel(outcome)}
+                                  Определить результат
                                 </Button>
-                              ))}
-                            </div>
-                          ) : null}
+                                {outcomeOptions.map((outcome) => (
+                                  <Button
+                                    key={`${item.id}-${outcome}`}
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 px-2"
+                                    onClick={() => onRecordReaction(item.id, outcome)}
+                                    disabled={Boolean(sendQueueBusy[item.id])}
+                                  >
+                                    {outcomeLabel(outcome)}
+                                  </Button>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : null}
             </div>

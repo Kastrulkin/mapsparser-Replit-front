@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, CheckSquare, Lock, MapPinned, MoreHorizontal, Sparkles, Wand2 } from 'lucide-react';
+import { CalendarDays, CheckSquare, Lock, MapPinned, MoreHorizontal, Sparkles, Trash2, Wand2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
@@ -90,8 +90,16 @@ type PlanPayload = {
   scope_target_city?: string;
   scope_target_address?: string;
   plan_status?: string;
+  period_start?: string;
+  period_end?: string;
   items: PlanItem[];
+  items_count?: number;
+  needs_draft_count?: number;
+  ready_count?: number;
+  news_count?: number;
+  skipped_count?: number;
   created_at?: string;
+  updated_at?: string;
 };
 
 type LearningMetricsPayload = {
@@ -237,10 +245,10 @@ type ContentPlanTabProps = {
 type ContentMixKey = 'services' | 'seo' | 'sales' | 'audit' | 'seasonal';
 
 type ContentMixState = Record<ContentMixKey, boolean>;
-type ItemFilterKey = 'all' | 'urgent' | 'needs_draft' | 'has_draft' | 'news_created';
+type ItemFilterKey = 'all' | 'urgent' | 'has_draft';
 type SignalFilterKey = 'all' | ContentMixKey;
 type ViewPresetKey = 'overview' | 'urgent' | 'ready' | 'published' | 'focus' | 'custom';
-type QuickActionKey = 'create_month_plan' | 'open_week' | 'weak_locations' | 'fix_gaps' | 'repeat_template';
+type QuickActionKey = 'open_week' | 'weak_locations' | 'fix_gaps' | 'repeat_template';
 type ContentPlanZone = 'overview' | 'plan' | 'queue';
 type ContentPlanMode = 'point' | 'network';
 
@@ -251,7 +259,7 @@ const CONTENT_MIX_OPTIONS: Array<{ key: ContentMixKey; labelRu: string; labelEn:
   { key: 'audit', labelRu: 'Аудит', labelEn: 'Audit' },
   { key: 'seasonal', labelRu: 'Сезонность', labelEn: 'Seasonal' },
 ];
-const ITEM_FILTER_OPTIONS: ItemFilterKey[] = ['all', 'urgent', 'needs_draft', 'has_draft', 'news_created'];
+const ITEM_FILTER_OPTIONS: ItemFilterKey[] = ['all', 'has_draft', 'urgent'];
 const SIGNAL_FILTER_OPTIONS: SignalFilterKey[] = ['all', 'seo', 'services', 'sales', 'audit', 'seasonal'];
 const CONTENT_PLAN_PREFERENCES_KEY = 'content_plan_preferences_v1';
 
@@ -288,7 +296,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [selectedPlanTargetKey, setSelectedPlanTargetKey] = useState('all');
   const [selectedItemLocationKey, setSelectedItemLocationKey] = useState('all');
   const [selectedWeekKey, setSelectedWeekKey] = useState('all');
-  const [sortMode, setSortMode] = useState<'priority' | 'date'>(() => _readStoredSortMode());
+  const [dateFromFilter, setDateFromFilter] = useState('');
+  const [dateToFilter, setDateToFilter] = useState('');
+  const [sortMode, setSortMode] = useState<'priority' | 'date'>('date');
   const [selectedViewPreset, setSelectedViewPreset] = useState<ViewPresetKey>('overview');
   const [lastFocusLocationKey, setLastFocusLocationKey] = useState('all');
   const [lastFocusWeekKey, setLastFocusWeekKey] = useState('all');
@@ -307,6 +317,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [contentMode, setContentMode] = useState<ContentPlanMode>('point');
   const [selectedQueueItemId, setSelectedQueueItemId] = useState('');
   const [editorItemId, setEditorItemId] = useState('');
+  const [queueSearch, setQueueSearch] = useState('');
   const [showSelectedItemDetails, setShowSelectedItemDetails] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<Record<string, boolean>>({});
   const [showRecentPlans, setShowRecentPlans] = useState(false);
@@ -392,6 +403,19 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const visibleItems = useMemo(() => (
     filteredItems
       .filter((item) => selectedWeekKey === 'all' || _weekBucketKey(item.scheduled_for) === selectedWeekKey)
+      .filter((item) => _matchesDateRange(item.scheduled_for, dateFromFilter, dateToFilter))
+      .filter((item) => {
+        const query = queueSearch.trim().toLowerCase();
+        if (!query) return true;
+        return [
+          item.theme,
+          item.goal,
+          item.draft_text,
+          item.source_ref,
+          item.seo_keyword,
+          item.location_label,
+        ].some((value) => String(value || '').toLowerCase().includes(query));
+      })
       .slice()
       .sort((left, right) => {
         if (recentGeneratedItemId) {
@@ -402,11 +426,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
           const priorityDiff = _itemPriorityRank(left) - _itemPriorityRank(right);
           if (priorityDiff !== 0) return priorityDiff;
         }
-        const dateDiff = String(left.scheduled_for || '').localeCompare(String(right.scheduled_for || ''));
+        const dateDiff = _inputDateValue(left.scheduled_for).localeCompare(_inputDateValue(right.scheduled_for));
         if (dateDiff !== 0) return dateDiff;
         return String(left.theme || '').localeCompare(String(right.theme || ''));
       })
-  ), [filteredItems, recentGeneratedItemId, selectedWeekKey, sortMode]);
+  ), [dateFromFilter, dateToFilter, filteredItems, queueSearch, recentGeneratedItemId, selectedWeekKey, sortMode]);
   const selectedQueueItem = useMemo(() => (
     visibleItems.find((item) => item.id === selectedQueueItemId) || visibleItems[0] || null
   ), [selectedQueueItemId, visibleItems]);
@@ -423,9 +447,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     }, {
       all: 0,
       urgent: 0,
-      needs_draft: 0,
       has_draft: 0,
-      news_created: 0,
     });
   }, [currentPlan?.items]);
   const signalFilterCounts = useMemo(() => {
@@ -583,20 +605,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       label: isRu ? 'Обзор' : 'Overview',
     },
     {
-      key: 'urgent',
-      label: isRu ? 'Срочное' : 'Urgent',
-    },
-    {
       key: 'ready',
       label: isRu ? 'Готово к публикации' : 'Ready to publish',
     },
     {
-      key: 'published',
-      label: isRu ? 'Опубликовано' : 'Published',
-    },
-    {
-      key: 'focus',
-      label: isRu ? 'Фокус' : 'Focus',
+      key: 'urgent',
+      label: isRu ? 'Срочное' : 'Urgent',
     },
   ]), [
     isRu,
@@ -746,15 +760,6 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       disabled: boolean;
     }> = [
       {
-        key: 'create_month_plan',
-        title: isRu ? 'Составить план на месяц' : 'Build a monthly plan',
-        description: isRu
-          ? 'Пересобрать план на 30 дней по текущим услугам, SEO и слабым зонам.'
-          : 'Rebuild a 30 day plan from services, SEO, and weak zones.',
-        metric: currentPlan ? `${currentPlan.period_days} ${isRu ? 'дней' : 'days'}` : (isRu ? 'первый план' : 'first plan'),
-        disabled: generating || loading || !selectedScopeOption || !allowedHorizons.includes(30),
-      },
-      {
         key: 'open_week',
         title: isRu ? 'Открыть эту неделю' : 'Open this week',
         description: focusSlice
@@ -774,10 +779,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       },
       {
         key: 'fix_gaps',
-        title: isRu ? 'Дописать пустые темы' : 'Fill empty topics',
+        title: isRu ? 'Открыть темы без текста' : 'Open empty topics',
         description: isRu
-          ? 'Открыть темы без текста и готовые черновики, которые ещё не стали новостями.'
-          : 'Open items without drafts and drafts that are not yet news.',
+          ? 'Это не создаёт новый план. Откроется текущая очередь с темами, где ещё нет текста.'
+          : 'This does not create a new plan. It opens the current queue items that still need text.',
         metric: `${planOperationalSummary.needsDraft + planOperationalSummary.readyToPublish}`,
         disabled: !currentPlan || planOperationalSummary.needsDraft + planOperationalSummary.readyToPublish === 0,
       },
@@ -793,18 +798,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     ];
     return actions;
   }, [
-    allowedHorizons,
     availableItemLocations.length,
     currentPlan,
-    generating,
     isRu,
     learningMetrics?.network_quality,
-    loading,
     locationWeekFocusSummary,
     planOperationalSummary.needsDraft,
     planOperationalSummary.readyToPublish,
     repeatTemplateCandidate,
-    selectedScopeOption,
     visibleItems.length,
   ]);
   const operatorQualityInsights = useMemo(() => {
@@ -908,6 +909,65 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       setCurrentPlan(fullPlanResponse.plan || null);
     } else {
       setCurrentPlan(null);
+    }
+  };
+
+  const openPlan = async (planId: string) => {
+    if (!planId) return;
+    setError('');
+    setActionSummary(null);
+    try {
+      const response = await newAuth.makeRequest(`/content-plans/${encodeURIComponent(planId)}`, { method: 'GET' });
+      setCurrentPlan(response.plan || null);
+      setActiveZone('queue');
+      setShowRecentPlans(true);
+      setEditorItemId('');
+      setSelectedQueueItemId('');
+      clearSelectedItems();
+      setDraftEdits({});
+      setThemeEdits({});
+      setDateEdits({});
+    } catch (planError) {
+      const message = planError instanceof Error ? planError.message : (isRu ? 'Не удалось открыть план' : 'Could not open plan');
+      setError(message);
+    }
+  };
+
+  const deletePlan = async (planId: string) => {
+    if (!planId) return;
+    const confirmed = typeof window === 'undefined' ? true : window.confirm(isRu
+      ? 'Удалить выбранный контент-план целиком? Темы внутри плана тоже будут удалены.'
+      : 'Delete this content plan entirely? All topics inside it will also be deleted.');
+    if (!confirmed) return;
+    setError('');
+    setActionSummary(null);
+    try {
+      await newAuth.makeRequest(`/content-plans/${encodeURIComponent(planId)}`, { method: 'DELETE' });
+      const response = await newAuth.makeRequest(`/content-plans?business_id=${encodeURIComponent(businessId || '')}`, {
+        method: 'GET',
+      });
+      const nextPlans = Array.isArray(response.plans) ? response.plans : [];
+      setPlans(nextPlans);
+      if (currentPlan?.id === planId) {
+        if (nextPlans.length > 0) {
+          const fullPlanResponse = await newAuth.makeRequest(`/content-plans/${encodeURIComponent(nextPlans[0].id)}`, {
+            method: 'GET',
+          });
+          setCurrentPlan(fullPlanResponse.plan || null);
+        } else {
+          setCurrentPlan(null);
+        }
+      }
+      setEditorItemId('');
+      clearSelectedItems();
+      setActionSummary({
+        tone: 'success',
+        text_ru: 'План удалён.',
+        text_en: 'Plan deleted.',
+      });
+    } catch (deleteError) {
+      const message = deleteError instanceof Error ? deleteError.message : (isRu ? 'Не удалось удалить план' : 'Could not delete plan');
+      setError(message);
     }
   };
 
@@ -1030,17 +1090,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (_isValidItemFilterKey(stored.selectedItemFilter)) {
       setSelectedItemFilter(stored.selectedItemFilter);
     }
-    if (_isValidSignalFilterKey(stored.selectedSignalFilter)) {
-      setSelectedSignalFilter(stored.selectedSignalFilter);
+    if (typeof stored.dateFromFilter === 'string' && stored.dateFromFilter.trim()) {
+      setDateFromFilter(stored.dateFromFilter.slice(0, 10));
     }
-    if (typeof stored.selectedPlanTargetKey === 'string' && stored.selectedPlanTargetKey.trim()) {
-      setSelectedPlanTargetKey(stored.selectedPlanTargetKey);
-    }
-    if (typeof stored.selectedItemLocationKey === 'string' && stored.selectedItemLocationKey.trim()) {
-      setSelectedItemLocationKey(stored.selectedItemLocationKey);
-    }
-    if (typeof stored.selectedWeekKey === 'string' && stored.selectedWeekKey.trim()) {
-      setSelectedWeekKey(stored.selectedWeekKey);
+    if (typeof stored.dateToFilter === 'string' && stored.dateToFilter.trim()) {
+      setDateToFilter(stored.dateToFilter.slice(0, 10));
     }
     if (typeof stored.lastFocusLocationKey === 'string' && stored.lastFocusLocationKey.trim()) {
       setLastFocusLocationKey(stored.lastFocusLocationKey);
@@ -1073,6 +1127,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       selectedPlanTargetKey,
       selectedItemLocationKey,
       selectedWeekKey,
+      dateFromFilter,
+      dateToFilter,
       sortMode,
     }));
   }, [
@@ -1081,6 +1137,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     selectedPlanTargetKey,
     selectedItemLocationKey,
     selectedWeekKey,
+    dateFromFilter,
+    dateToFilter,
     sortMode,
   ]);
 
@@ -1095,6 +1153,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       selectedPlanTargetKey,
       selectedItemLocationKey,
       selectedWeekKey,
+      dateFromFilter,
+      dateToFilter,
       sortMode,
     });
   }, [
@@ -1107,6 +1167,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     selectedPlanTargetKey,
     selectedItemLocationKey,
     selectedWeekKey,
+    dateFromFilter,
+    dateToFilter,
     sortMode,
   ]);
 
@@ -1132,6 +1194,15 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
 
   const generatePlan = async (periodOverride?: string) => {
     if (!businessId || !selectedScopeOption) return;
+    if (currentPlan?.items?.length && typeof window !== 'undefined') {
+      const confirmed = window.confirm(isRu
+        ? 'У вас уже есть контент-план. Создать новый план? Старый не удалится, но в списке появится ещё один план.'
+        : 'You already have a content plan. Create a new one? The old plan will stay, but another plan will appear in the list.');
+      if (!confirmed) {
+        setActiveZone('queue');
+        return;
+      }
+    }
     setGenerating(true);
     setError('');
     setActionSummary(null);
@@ -1149,7 +1220,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       });
       setCurrentPlan(response.plan || null);
       setActiveZone('queue');
-      await loadPlans();
+      if (businessId) {
+        const plansResponse = await newAuth.makeRequest(`/content-plans?business_id=${encodeURIComponent(businessId)}`, {
+          method: 'GET',
+        });
+        setPlans(Array.isArray(plansResponse.plans) ? plansResponse.plans : []);
+      }
       await loadLearningMetrics();
     } catch (generationError) {
       const message = generationError instanceof Error ? generationError.message : (isRu ? 'Не удалось собрать план' : 'Could not generate plan');
@@ -1234,6 +1310,40 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     const nextPlan = response.plan || null;
     setCurrentPlan(nextPlan);
     return nextPlan;
+  };
+
+  const deleteItem = async (itemId: string) => {
+    if (!itemId) return;
+    const confirmed = typeof window === 'undefined' ? true : window.confirm(isRu
+      ? 'Удалить эту тему из выбранного плана?'
+      : 'Delete this topic from the selected plan?');
+    if (!confirmed) return;
+    setBusyItemId(itemId);
+    setError('');
+    setActionSummary(null);
+    try {
+      const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(itemId)}`, {
+        method: 'DELETE',
+      });
+      setCurrentPlan(response.plan || null);
+      setEditorItemId('');
+      setSelectedQueueItemId('');
+      setDraftEdits((prev) => _removeRecordKeys(prev, [itemId]));
+      setThemeEdits((prev) => _removeRecordKeys(prev, [itemId]));
+      setDateEdits((prev) => _removeRecordKeys(prev, [itemId]));
+      clearSelectedItems();
+      await loadPlans();
+      setActionSummary({
+        tone: 'success',
+        text_ru: 'Тема удалена из плана.',
+        text_en: 'Topic deleted from the plan.',
+      });
+    } catch (deleteError) {
+      const message = deleteError instanceof Error ? deleteError.message : (isRu ? 'Не удалось удалить тему' : 'Could not delete topic');
+      setError(message);
+    } finally {
+      setBusyItemId('');
+    }
   };
 
   const runBulkGenerateDrafts = async () => {
@@ -1510,7 +1620,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     setSelectedPlanTargetKey('all');
     setSelectedItemLocationKey('all');
     setSelectedWeekKey('all');
-    setSortMode('priority');
+    setDateFromFilter('');
+    setDateToFilter('');
+    setSortMode('date');
   };
 
   const applyViewPreset = (preset: ViewPresetKey) => {
@@ -1522,19 +1634,21 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     setSelectedSignalFilter('all');
     setSelectedItemLocationKey('all');
     setSelectedWeekKey('all');
+    setDateFromFilter('');
+    setDateToFilter('');
     if (preset === 'urgent') {
       setSelectedItemFilter('urgent');
-      setSortMode('priority');
+      setSortMode('date');
       return;
     }
     if (preset === 'ready') {
       setSelectedItemFilter('has_draft');
-      setSortMode('priority');
+      setSortMode('date');
       return;
     }
     if (preset === 'focus') {
       setSelectedItemFilter('urgent');
-      setSortMode('priority');
+      setSortMode('date');
       if (lastFocusLocationKey !== 'all') {
         setSelectedItemLocationKey(lastFocusLocationKey);
       }
@@ -1543,7 +1657,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       }
       return;
     }
-    setSelectedItemFilter('news_created');
+    setSelectedItemFilter('all');
     setSortMode('date');
   };
 
@@ -1555,7 +1669,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     setSelectedSignalFilter('all');
     setSelectedItemLocationKey(locationKey);
     setSelectedWeekKey(weekKey);
-    setSortMode('priority');
+    setSortMode('date');
   };
 
   const getLocationWeekFocusItems = (locationKey: string, weekKey: string) => (
@@ -1575,7 +1689,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     setExpandedDuplicateItemId((prev) => (prev === item.id ? '' : item.id));
     setDuplicateDateOverrides((prev) => ({
       ...prev,
-      [item.id]: prev[item.id] || String(item.scheduled_for || '').slice(0, 10) || _shiftIsoDate('', 7),
+      [item.id]: prev[item.id] || _inputDateValue(item.scheduled_for) || _shiftIsoDate('', 7),
     }));
     setDuplicateTargetSelections((prev) => ({
       ...prev,
@@ -1916,11 +2030,6 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   };
 
   const runQuickAction = (actionKey: QuickActionKey) => {
-    if (actionKey === 'create_month_plan') {
-      setSelectedPeriod('30');
-      void generatePlan('30');
-      return;
-    }
     if (actionKey === 'open_week') {
       const focusSlice = locationWeekFocusSummary[0];
       if (focusSlice) {
@@ -1955,8 +2064,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
 
   const contentPlanZones: Array<{ key: ContentPlanZone; titleRu: string; titleEn: string; hintRu: string; hintEn: string }> = [
     { key: 'overview', titleRu: 'Обзор', titleEn: 'Overview', hintRu: 'Состояние и следующий шаг', hintEn: 'Status and next step' },
-    { key: 'plan', titleRu: 'План', titleEn: 'Plan', hintRu: 'Точка, сеть и источники', hintEn: 'Location, network, inputs' },
-    { key: 'queue', titleRu: 'Очередь', titleEn: 'Queue', hintRu: 'Темы и редактор в окне', hintEn: 'Topics and modal editor' },
+    { key: 'plan', titleRu: 'План', titleEn: 'Plan', hintRu: 'Создание и источники', hintEn: 'Creation and inputs' },
+    { key: 'queue', titleRu: 'Готовая очередь по плану', titleEn: 'Plan queue', hintRu: 'Темы, тексты и создание новостей', hintEn: 'Topics, drafts, and news creation' },
   ];
 
   if (!businessId) {
@@ -2072,11 +2181,11 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                       : (isRu ? 'План выглядит спокойно' : 'The plan looks calm'))
                   : (isRu ? 'Соберите первый план публикаций' : 'Build the first content plan')}
               </div>
-              <div className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                {isRu
-                  ? 'Здесь только главное: состояние плана, слабое место и одно действие, которое двигает работу дальше.'
-                  : 'Only the essentials: plan status, weak spot, and one action that moves the work forward.'}
-              </div>
+            <div className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+              {isRu
+                ? 'Здесь короткая сводка: сколько тем уже есть, сколько текстов готово к новости, сколько ещё надо дописать и что делать следующим шагом.'
+                : 'A short summary: how many topics exist, how many drafts are ready to become news, how many still need text, and the next step.'}
+            </div>
             </div>
             {!currentPlan?.items?.length ? (
               <Button onClick={() => setActiveZone('plan')} disabled={loading}>
@@ -2085,7 +2194,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
               </Button>
             ) : planOperationalSummary.needsDraft > 0 ? (
               <Button onClick={() => { applyViewPreset('urgent'); setActiveZone('queue'); }}>
-                {isRu ? 'Дописать пустые темы' : 'Fill empty topics'}
+                {isRu ? 'Открыть темы без текста' : 'Open empty topics'}
               </Button>
             ) : planOperationalSummary.readyToPublish > 0 ? (
               <Button onClick={() => { applyViewPreset('ready'); setActiveZone('queue'); }}>
@@ -2099,6 +2208,10 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
           </div>
 
           <div className="mt-6 grid gap-3 md:grid-cols-5">
+            <div className="rounded-2xl bg-blue-50 px-4 py-4">
+              <div className="text-2xl font-semibold text-blue-950">{planOperationalSummary.total}</div>
+              <div className="mt-1 text-sm text-blue-800">{isRu ? 'Всего тем' : 'Plan topics'}</div>
+            </div>
             <div className="rounded-2xl bg-emerald-50 px-4 py-4">
               <div className="text-2xl font-semibold text-emerald-950">{planOperationalSummary.readyToPublish}</div>
               <div className="mt-1 text-sm text-emerald-800">{isRu ? 'Готово к публикации' : 'Ready to publish'}</div>
@@ -2114,10 +2227,6 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
             <div className="rounded-2xl bg-rose-50 px-4 py-4">
               <div className="text-2xl font-semibold text-rose-950">{Number(overviewRiskScore || 0).toFixed(0)}</div>
               <div className="mt-1 text-sm text-rose-800">{isRu ? 'Риск / слабые точки' : 'Risk / weak spots'}</div>
-            </div>
-            <div className="rounded-2xl bg-blue-50 px-4 py-4">
-              <div className="text-2xl font-semibold text-blue-950">{planOperationalSummary.total}</div>
-              <div className="mt-1 text-sm text-blue-800">{isRu ? 'Тем в плане' : 'Plan topics'}</div>
             </div>
           </div>
 
@@ -2245,6 +2354,141 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         </div>
       ) : null}
 
+      {currentPlan?.items?.length ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-950">
+          <div className="font-semibold">
+            {isRu ? 'План уже создан' : 'A plan already exists'}
+          </div>
+          <div className="mt-1 leading-6 text-emerald-900/90">
+            {isRu
+              ? `Сейчас активен план «${currentPlan.title || 'Контент-план'}»: ${planOperationalSummary.total} тем, ${planOperationalSummary.readyToPublish} готово к новости, ${planOperationalSummary.needsDraft} без текста. Работать с ним нужно во вкладке «Готовая очередь по плану».`
+              : `The active plan is "${currentPlan.title || 'Content plan'}": ${planOperationalSummary.total} topics, ${planOperationalSummary.readyToPublish} ready for news, ${planOperationalSummary.needsDraft} without text. Work with it in the Plan queue tab.`}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button type="button" size="sm" onClick={() => setActiveZone('queue')}>
+              {isRu ? 'Перейти в готовую очередь' : 'Open plan queue'}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="bg-white/80"
+              onClick={() => {
+                setShowRecentPlans(true);
+              }}
+            >
+              {isRu ? `Показать старые планы · ${plans.length}` : `Show old plans · ${plans.length}`}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {showRecentPlans && plans.length > 0 ? (
+        <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+            {isRu
+              ? 'Здесь можно открыть любой старый план, сравнить его с текущим по счётчикам, отредактировать темы или удалить лишнее. Детали открытого плана появятся во вкладке «Готовая очередь по плану».'
+              : 'Here you can open any old plan, compare it by counters, edit topics, or delete what is not needed. The selected plan details appear in the Plan queue tab.'}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {availablePlanTargets.map((target) => (
+              <button
+                key={target.key}
+                type="button"
+                onClick={() => setSelectedPlanTargetKey(target.key)}
+                className={[
+                  'rounded-full border px-3 py-1.5 text-sm transition-colors',
+                  selectedPlanTargetKey === target.key
+                    ? 'border-indigo-300 bg-indigo-50 text-indigo-800'
+                    : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
+                ].join(' ')}
+              >
+                {target.label}
+              </button>
+            ))}
+          </div>
+          <div className="grid gap-3 lg:grid-cols-2">
+            {visiblePlans.map((plan, index) => {
+              const isActivePlan = currentPlan?.id === plan.id;
+              const planTitle = plan.title || `${_scopeChipLabel(plan.scope_type, isRu)} · ${_planTargetLabel(plan, isRu)} · ${plan.period_days} ${isRu ? 'дней' : 'days'}`;
+              return (
+                <div
+                  key={plan.id}
+                  className={[
+                    'rounded-2xl border bg-white px-4 py-4 shadow-sm',
+                    isActivePlan ? 'border-indigo-300 ring-2 ring-indigo-100' : 'border-slate-200',
+                  ].join(' ')}
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <button type="button" className="min-w-0 text-left" onClick={() => { void openPlan(plan.id); }}>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                          {index === 0 ? (isRu ? 'Последний' : 'Latest') : `${isRu ? 'План' : 'Plan'} ${plans.length - index}`}
+                        </span>
+                        {isActivePlan ? (
+                          <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-800">
+                            {isRu ? 'Открыт сейчас' : 'Open now'}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-2 text-sm font-semibold leading-5 text-slate-950">
+                        {planTitle}
+                      </div>
+                      <div className="mt-1 text-xs leading-5 text-slate-500">
+                        {_planTargetLabel(plan, isRu)} · {_formatPlanItemDate(plan.period_start || plan.created_at, isRu)}
+                        {plan.period_end ? ` - ${_formatPlanItemDate(plan.period_end, isRu)}` : ''}
+                      </div>
+                    </button>
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={isActivePlan ? 'default' : 'outline'}
+                        onClick={() => { void openPlan(plan.id); }}
+                      >
+                        {isRu ? 'Открыть' : 'Open'}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="border-red-200 text-red-700 hover:bg-red-50"
+                        onClick={() => { void deletePlan(plan.id); }}
+                      >
+                        <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                        {isRu ? 'Удалить' : 'Delete'}
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid grid-cols-5 gap-2 text-center text-xs text-slate-500">
+                    <div className="rounded-xl bg-slate-50 px-2 py-2">
+                      <div className="text-sm font-semibold text-slate-950">{Number(plan.items_count || 0)}</div>
+                      <div>{isRu ? 'тем' : 'topics'}</div>
+                    </div>
+                    <div className="rounded-xl bg-amber-50 px-2 py-2">
+                      <div className="text-sm font-semibold text-amber-900">{Number(plan.needs_draft_count || 0)}</div>
+                      <div>{isRu ? 'без текста' : 'no draft'}</div>
+                    </div>
+                    <div className="rounded-xl bg-emerald-50 px-2 py-2">
+                      <div className="text-sm font-semibold text-emerald-900">{Number(plan.ready_count || 0)}</div>
+                      <div>{isRu ? 'готово' : 'ready'}</div>
+                    </div>
+                    <div className="rounded-xl bg-blue-50 px-2 py-2">
+                      <div className="text-sm font-semibold text-blue-900">{Number(plan.news_count || 0)}</div>
+                      <div>{isRu ? 'новостей' : 'news'}</div>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 px-2 py-2">
+                      <div className="text-sm font-semibold text-slate-950">{Number(plan.skipped_count || 0)}</div>
+                      <div>{isRu ? 'пропущено' : 'skipped'}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
       <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="mb-4">
@@ -2253,13 +2497,17 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
             </div>
             <div className="mt-1 text-lg font-semibold text-slate-950">
               {currentPlan?.items?.length
-                ? (isRu ? 'Откройте неделю или точку, а не весь план сразу' : 'Open a week or location instead of the whole plan')
+                ? (isRu ? 'У вас уже есть рабочий план' : 'You already have a working plan')
                 : (isRu ? 'Соберите первый план публикаций' : 'Build the first publication plan')}
             </div>
             <div className="mt-1 text-sm leading-6 text-slate-600">
               {isRu
-                ? 'Основное действие сверху. Источники, плотность и тонкие настройки спрятаны, чтобы экран не начинался с перегруза.'
-                : 'The primary action stays on top. Sources, density, and detailed controls are tucked away to reduce first-screen noise.'}
+                ? (currentPlan?.items?.length
+                  ? 'Новый план создавать не нужно, если вы просто хотите найти тему, дописать текст или создать новость. Для этого откройте очередь.'
+                  : 'Создайте один план. Источники, плотность и тонкие настройки спрятаны, чтобы экран не начинался с перегруза.')
+                : (currentPlan?.items?.length
+                  ? 'You do not need a new plan if you only want to find a topic, edit a draft, or create news. Open the queue instead.'
+                  : 'Create one plan. Sources, density, and detailed controls are tucked away to reduce first-screen noise.')}
             </div>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
@@ -2370,7 +2618,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
               <Sparkles className="mr-2 h-4 w-4" />
               {generating
                 ? (isRu ? 'Собираем план...' : 'Building plan...')
-                : (isRu ? 'Собрать план' : 'Build plan')}
+                : currentPlan?.items?.length
+                  ? (isRu ? 'Создать новый план' : 'Create new plan')
+                  : (isRu ? 'Собрать план' : 'Build plan')}
             </Button>
             <Button variant="outline" onClick={() => { void loadContext(); void loadPlans(); }} disabled={loading}>
               <Wand2 className="mr-2 h-4 w-4" />
@@ -2701,62 +2951,52 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         <div className="flex items-center justify-between gap-4">
           <div>
             <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
-              {isRu ? 'Последние планы' : 'Recent plans'}
+              {isRu ? 'Готовая очередь по плану' : 'Plan queue'}
             </div>
             <div className="mt-1 text-lg font-semibold text-slate-950">
               {currentPlan?.title || (isRu ? 'План ещё не собран' : 'No plan yet')}
             </div>
+            <div className="mt-1 text-sm leading-6 text-slate-600">
+              {currentPlan?.items?.length
+                ? (isRu
+                  ? 'Здесь рабочий список тем из выбранного плана: найти тему, открыть текст, создать новость.'
+                  : 'This is the working list from the selected plan: find a topic, open a draft, create news.')
+                : (isRu
+                  ? 'Очередь появится после создания первого плана.'
+                  : 'The queue appears after the first plan is created.')}
+            </div>
           </div>
-          <div className="text-sm text-slate-600">
-            {plans.length > 0 ? `${plans.length}` : '0'}
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            <div className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700">
+              {plans.length > 0 ? `${isRu ? 'Планов' : 'Plans'} · ${plans.length}` : `${isRu ? 'Планов' : 'Plans'} · 0`}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setShowRecentPlans(true);
+                setActiveZone('plan');
+              }}
+              className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              {isRu ? 'Управлять планами' : 'Manage plans'}
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowRecentPlans((prev) => !prev)}
-            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
-          >
-            {showRecentPlans ? (isRu ? 'Скрыть' : 'Hide') : (isRu ? 'Показать' : 'Show')}
-          </button>
         </div>
 
-        {showRecentPlans && plans.length > 0 ? (
-          <div className="mt-4 space-y-3">
-            <div className="flex flex-wrap gap-2">
-              {availablePlanTargets.map((target) => (
-                <button
-                  key={target.key}
-                  type="button"
-                  onClick={() => setSelectedPlanTargetKey(target.key)}
-                  className={[
-                    'rounded-full border px-3 py-1.5 text-sm transition-colors',
-                    selectedPlanTargetKey === target.key
-                      ? 'border-indigo-300 bg-indigo-50 text-indigo-800'
-                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
-                  ].join(' ')}
-                >
-                  {target.label}
-                </button>
-              ))}
+        {!currentPlan?.items?.length ? (
+          <div className="mt-6 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 py-8 text-sm leading-6 text-slate-600">
+            <div className="text-base font-semibold text-slate-950">
+              {isRu ? 'Очередь пока пустая' : 'The queue is empty'}
             </div>
-            <div className="flex flex-wrap gap-2">
-              {visiblePlans.map((plan) => (
-              <button
-                key={plan.id}
-                type="button"
-                onClick={async () => {
-                  const response = await newAuth.makeRequest(`/content-plans/${encodeURIComponent(plan.id)}`, { method: 'GET' });
-                  setCurrentPlan(response.plan || null);
-                }}
-                className={[
-                  'rounded-full border px-3 py-1.5 text-sm transition-colors',
-                  currentPlan?.id === plan.id
-                    ? 'border-indigo-300 bg-indigo-50 text-indigo-800'
-                    : 'border-slate-200 bg-white text-slate-600',
-                ].join(' ')}
-              >
-                {_scopeChipLabel(plan.scope_type, isRu)} · {_planTargetLabel(plan, isRu)} · {plan.period_days} {isRu ? 'дней' : 'days'}
-              </button>
-            ))}
+            <div className="mt-1">
+              {isRu
+                ? 'Сначала создайте план во вкладке «План». После этого здесь появятся темы, тексты и кнопки создания новостей.'
+                : 'Create a plan in the Plan tab first. Then topics, drafts, and news creation actions will appear here.'}
+            </div>
+            <div className="mt-4">
+              <Button type="button" onClick={() => setActiveZone('plan')}>
+                {isRu ? 'Перейти к созданию плана' : 'Go to plan creation'}
+              </Button>
             </div>
           </div>
         ) : null}
@@ -2771,15 +3011,15 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   </div>
                   <div className="mt-2 text-xl font-semibold">
                     {planOperationalSummary.needsDraft > 0
-                      ? (isRu ? 'Сначала закройте темы без текста' : 'Start with items without drafts')
+                      ? (isRu ? 'В плане есть темы без текста' : 'Some plan topics need text')
                       : planOperationalSummary.readyToPublish > 0
                         ? (isRu ? 'Теперь можно создать новости' : 'Now create news items')
                         : (isRu ? 'План под контролем' : 'Plan is under control')}
                   </div>
                   <div className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
                     {isRu
-                      ? 'Это операторский слой: не фильтры ради фильтров, а быстрые сценарии для недели, точки и сети.'
-                      : 'This is the operator layer: not filters for their own sake, but fast workflows for week, location, and network.'}
+                      ? 'Это не создаёт новый план. Здесь вы работаете с уже выбранным планом: дописываете тексты, находите нужную тему и создаёте новости.'
+                      : 'This does not create a new plan. Here you work with the selected plan: fill text, find topics, and create news.'}
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-center text-xs text-slate-300 sm:min-w-[320px]">
@@ -2797,7 +3037,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   </div>
                 </div>
               </div>
-              <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+              <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 {quickActions.map((action) => (
                   <button
                     key={action.key}
@@ -2846,8 +3086,12 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 </div>
               </div>
             ) : null}
-            {networkOperatingSlices.length > 0 ? (
-              <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+            {isNetworkMode && networkOperatingSlices.length > 0 ? (
+              <details className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+                <summary className="cursor-pointer list-none text-sm font-semibold text-slate-900">
+                  {isRu ? 'Сетевые срезы по точкам' : 'Network slices by location'}
+                </summary>
+                <div className="mt-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                   <div>
                     <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -2985,7 +3229,8 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     </div>
                   ))}
                 </div>
-              </div>
+                </div>
+              </details>
             ) : null}
             <div className="flex flex-wrap gap-2">
               {viewPresets.map((preset) => (
@@ -3004,7 +3249,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 </button>
               ))}
             </div>
-            {locationWeekFocusSummary.length > 0 ? (
+            {false && locationWeekFocusSummary.length > 0 ? (
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {locationWeekFocusSummary.map((focus) => (
                   <div
@@ -3298,205 +3543,103 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                 ) : null}
               </div>
             ) : null}
-            <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
-              <div>
-                <span className="font-medium text-slate-900">
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-slate-950">
+                    {isRu ? 'Найти тему в очереди' : 'Find a topic in the queue'}
+                  </div>
+                  <div className="mt-1 text-xs leading-5 text-slate-500">
+                    {isRu
+                      ? 'Поиск ищет по теме, тексту черновика, ключу и точке. Например: отпуск, ХИТ, стрижка.'
+                      : 'Search by topic, draft text, keyword, and location. For example: vacation, haircut, promo.'}
+                  </div>
+                </div>
+                <div className="flex w-full gap-2 lg:w-[420px]">
+                  <Input
+                    value={queueSearch}
+                    onChange={(event) => setQueueSearch(event.target.value)}
+                    placeholder={isRu ? 'Поиск: отпуск, ХИТ, стрижка...' : 'Search: vacation, haircut...'}
+                    className="bg-white"
+                  />
+                  {queueSearch.trim() ? (
+                    <Button type="button" variant="outline" onClick={() => setQueueSearch('')}>
+                      {isRu ? 'Сбросить' : 'Clear'}
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-slate-950">
+                    {isRu ? 'Показать в очереди' : 'Show in queue'}
+                  </div>
+                  <div className="mt-1 text-xs leading-5 text-slate-500">
+                    {isRu
+                      ? 'Выберите состояние и период публикации. Список ниже сразу обновится по календарной дате.'
+                      : 'Choose status and publication period. The list below updates by calendar date.'}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {ITEM_FILTER_OPTIONS.map((filterKey) => (
+                      <button
+                        key={filterKey}
+                        type="button"
+                        onClick={() => {
+                          setSelectedItemFilter(filterKey);
+                          setSortMode('date');
+                        }}
+                        className={[
+                          'rounded-full border px-3 py-1.5 text-sm transition-colors',
+                          selectedItemFilter === filterKey
+                            ? 'border-slate-900 bg-slate-900 text-white'
+                            : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
+                        ].join(' ')}
+                      >
+                        {_itemFilterLabel(filterKey, isRu)} · {itemFilterCounts[filterKey]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-[minmax(150px,1fr)_minmax(150px,1fr)_auto] sm:items-end">
+                  <label className="grid gap-1 text-xs font-medium text-slate-600">
+                    <span>{isRu ? 'С даты' : 'From date'}</span>
+                    <Input
+                      type="date"
+                      value={dateFromFilter}
+                      onChange={(event) => {
+                        setDateFromFilter(event.target.value);
+                        setSortMode('date');
+                      }}
+                      className="bg-white"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-xs font-medium text-slate-600">
+                    <span>{isRu ? 'По дату' : 'To date'}</span>
+                    <Input
+                      type="date"
+                      value={dateToFilter}
+                      onChange={(event) => {
+                        setDateToFilter(event.target.value);
+                        setSortMode('date');
+                      }}
+                      className="bg-white"
+                    />
+                  </label>
+                  <Button type="button" variant="outline" onClick={resetViewState}>
+                    {isRu ? 'Сбросить' : 'Reset'}
+                  </Button>
+                </div>
+              </div>
+              <div className="mt-3 text-xs text-slate-500">
+                <span className="font-medium text-slate-700">
                   {isRu ? 'Сейчас показано:' : 'Current view:'}
                 </span>{' '}
-                {_itemFilterLabel(selectedItemFilter, isRu)} · {_signalFilterLabel(selectedSignalFilter, isRu)} · {activeLocationLabel} · {activeWeekLabel} · {sortMode === 'priority' ? (isRu ? 'По приоритету' : 'By priority') : (isRu ? 'По дате' : 'By date')}
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowAdvancedControls((prev) => !prev)}
-                className="self-start rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100 md:self-auto"
-              >
-                {showAdvancedControls
-                  ? (isRu ? 'Скрыть тонкие фильтры' : 'Hide advanced filters')
-                  : (isRu ? 'Тонкие фильтры' : 'Advanced filters')}
-              </button>
-            </div>
-            {showAdvancedControls ? (
-              <>
-            <div className="flex flex-wrap gap-2">
-              {ITEM_FILTER_OPTIONS.map((filterKey) => (
-                <button
-                  key={filterKey}
-                  type="button"
-                  onClick={() => setSelectedItemFilter(filterKey)}
-                  className={[
-                    'rounded-full border px-3 py-1.5 text-sm transition-colors',
-                    selectedItemFilter === filterKey
-                      ? 'border-slate-900 bg-slate-900 text-white'
-                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
-                  ].join(' ')}
-                >
-                  {_itemFilterLabel(filterKey, isRu)} · {itemFilterCounts[filterKey]}
-                </button>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {SIGNAL_FILTER_OPTIONS.map((filterKey) => (
-                <button
-                  key={filterKey}
-                  type="button"
-                  onClick={() => setSelectedSignalFilter(filterKey)}
-                  className={[
-                    'rounded-full border px-3 py-1.5 text-sm transition-colors',
-                    selectedSignalFilter === filterKey
-                      ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
-                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
-                  ].join(' ')}
-                >
-                  {_signalFilterLabel(filterKey, isRu)} · {signalFilterCounts[filterKey]}
-                </button>
-              ))}
-            </div>
-            {isNetworkMode && availableItemLocations.length > 1 ? (
-              <div className="flex flex-wrap gap-2">
-                {availableItemLocations.map((location) => (
-                  <button
-                    key={location.key}
-                    type="button"
-                    onClick={() => setSelectedItemLocationKey(location.key)}
-                    className={[
-                      'rounded-full border px-3 py-1.5 text-sm transition-colors',
-                      selectedItemLocationKey === location.key
-                        ? 'border-sky-300 bg-sky-50 text-sky-800'
-                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
-                    ].join(' ')}
-                  >
-                    {location.label}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-            {isNetworkMode && locationOperationalSummary.length > 1 ? (
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {locationOperationalSummary.map((location) => (
-                  <button
-                    key={location.key}
-                    type="button"
-                    onClick={() => setSelectedItemLocationKey(location.key)}
-                    className={[
-                      'rounded-2xl border px-4 py-4 text-left transition-colors',
-                      selectedItemLocationKey === location.key
-                        ? 'border-sky-300 bg-sky-50'
-                        : 'border-slate-200 bg-white hover:bg-slate-50',
-                    ].join(' ')}
-                  >
-                    <div className="text-sm font-semibold text-slate-900">
-                      {location.label}
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">
-                        {isRu ? 'Всего' : 'Total'} · {location.total}
-                      </span>
-                      <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800">
-                        {isRu ? 'Без текста' : 'No draft'} · {location.needsDraft}
-                      </span>
-                      <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-800">
-                        {isRu ? 'Готово к публикации' : 'Ready to publish'} · {location.readyToPublish}
-                      </span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            ) : null}
-            {availableWeeks.length > 1 ? (
-              <div className="flex flex-wrap gap-2">
-                {availableWeeks.map((week) => (
-                  <button
-                    key={week.key}
-                    type="button"
-                    onClick={() => setSelectedWeekKey(week.key)}
-                    className={[
-                      'rounded-full border px-3 py-1.5 text-sm transition-colors',
-                      selectedWeekKey === week.key
-                        ? 'border-violet-300 bg-violet-50 text-violet-800'
-                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
-                    ].join(' ')}
-                  >
-                    {week.label}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-            {weekSummary.length > 1 ? (
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {weekSummary.map((week) => (
-                  <button
-                    key={week.key}
-                    type="button"
-                    onClick={() => setSelectedWeekKey(week.key)}
-                    className={[
-                      'rounded-2xl border px-4 py-4 text-left transition-colors',
-                      selectedWeekKey === week.key
-                        ? 'border-violet-300 bg-violet-50'
-                        : 'border-slate-200 bg-white hover:bg-slate-50',
-                    ].join(' ')}
-                  >
-                    <div className="text-sm font-semibold text-slate-900">
-                      {week.label}
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">
-                        {isRu ? 'Всего' : 'Total'} · {week.total}
-                      </span>
-                      <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800">
-                        {isRu ? 'Без текста' : 'No draft'} · {week.needsDraft}
-                      </span>
-                      <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-800">
-                        {isRu ? 'Готово к публикации' : 'Ready to publish'} · {week.readyToPublish}
-                      </span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            ) : null}
-              </>
-            ) : null}
-            <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3">
-              <div className="w-full text-xs font-medium text-slate-500">
-                {sortMode === 'priority'
-                  ? (isRu
-                    ? 'Порядок внутри списка: сначала без текста, затем готовые к публикации, затем остальные.'
-                    : 'Items are ordered by next best action: no draft first, then ready to publish, then the rest.')
-                  : (isRu
-                    ? 'Порядок внутри списка: по календарной дате, затем по теме.'
-                    : 'Items are ordered by calendar date, then by theme.')}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSortMode('priority')}
-                  className={[
-                    'rounded-full border px-3 py-1.5 text-sm transition-colors',
-                    sortMode === 'priority'
-                      ? 'border-slate-900 bg-slate-900 text-white'
-                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
-                  ].join(' ')}
-                >
-                  {isRu ? 'По приоритету' : 'By priority'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSortMode('date')}
-                  className={[
-                    'rounded-full border px-3 py-1.5 text-sm transition-colors',
-                    sortMode === 'date'
-                      ? 'border-slate-900 bg-slate-900 text-white'
-                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
-                  ].join(' ')}
-                >
-                  {isRu ? 'По дате' : 'By date'}
-                </button>
-                <button
-                  type="button"
-                  onClick={resetViewState}
-                  className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 transition-colors hover:bg-slate-50"
-                >
-                  {isRu ? 'Сбросить вид' : 'Reset view'}
-                </button>
+                {_itemFilterLabel(selectedItemFilter, isRu)}
+                {dateFromFilter || dateToFilter
+                  ? ` · ${dateFromFilter || '...'} - ${dateToFilter || '...'}`
+                  : ` · ${isRu ? 'все даты' : 'all dates'}`}
               </div>
               {selectedItems.length > 0 ? (
                 <div className="flex w-full flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-3">
@@ -3793,6 +3936,14 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                               >
                                 {isRu ? 'Пропустить' : 'Skip'}
                               </button>
+                              <button
+                                type="button"
+                                onClick={() => { void deleteItem(item.id); }}
+                                disabled={busyItemId === item.id}
+                                className="block w-full rounded-xl px-3 py-2 text-left text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
+                              >
+                                {isRu ? 'Удалить из плана' : 'Delete from plan'}
+                              </button>
                             </div>
                           </details>
                       </div>
@@ -3896,9 +4047,18 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
             ) : null}
             {visibleItems.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 py-8 text-sm text-slate-600">
-                {isRu
-                  ? 'Для выбранного сочетания фильтров пока нет публикаций. Переключите статус или источник сигнала выше.'
-                  : 'There are no items for this filter combination yet. Switch the status or signal filter above.'}
+                <div className="font-semibold text-slate-950">
+                  {isRu ? 'В этом виде ничего не найдено' : 'Nothing found in this view'}
+                </div>
+                <div className="mt-1 leading-6">
+                  {queueSearch.trim()
+                    ? (isRu
+                      ? 'Очистите поиск или нажмите «Сбросить», чтобы снова увидеть всю очередь выбранного плана.'
+                      : 'Clear search or reset the view to see the full selected plan queue again.')
+                    : (isRu
+                      ? 'Для выбранного состояния или периода пока нет публикаций. Нажмите «Сбросить» или выберите другой период.'
+                      : 'There are no items for this status or period yet. Reset the view or choose another period.')}
+                </div>
               </div>
             ) : null}
           </div>
@@ -4052,10 +4212,8 @@ function _networkOperatingRecommendation(reasons: string[], isRu: boolean): stri
 }
 
 function _itemFilterLabel(filterKey: ItemFilterKey, isRu: boolean): string {
-  if (filterKey === 'urgent') return isRu ? 'Только срочное' : 'Urgent only';
-  if (filterKey === 'needs_draft') return isRu ? 'Без текста' : 'No draft';
-  if (filterKey === 'has_draft') return isRu ? 'Есть черновик' : 'Has draft';
-  if (filterKey === 'news_created') return isRu ? 'Есть новость' : 'News created';
+  if (filterKey === 'urgent') return isRu ? 'Срочное' : 'Urgent';
+  if (filterKey === 'has_draft') return isRu ? 'Готово к публикации' : 'Ready to publish';
   return isRu ? 'Все' : 'All';
 }
 
@@ -4180,9 +4338,17 @@ function _matchesItemFilter(item: PlanItem, filterKey: ItemFilterKey): boolean {
   const hasDraft = Boolean(String(item.draft_text || '').trim());
   if (status === 'skipped') return filterKey === 'all';
   if (filterKey === 'urgent') return !hasNews;
-  if (filterKey === 'needs_draft') return !hasDraft;
   if (filterKey === 'has_draft') return hasDraft && !hasNews;
-  if (filterKey === 'news_created') return hasNews;
+  return true;
+}
+
+function _matchesDateRange(rawDate: string, fromDate: string, toDate: string): boolean {
+  const itemDate = _inputDateValue(rawDate);
+  const from = _inputDateValue(fromDate);
+  const to = _inputDateValue(toDate);
+  if (!itemDate) return !from && !to;
+  if (from && itemDate < from) return false;
+  if (to && itemDate > to) return false;
   return true;
 }
 
@@ -4265,9 +4431,7 @@ function _writeStoredPreferences(businessId: string, value: Record<string, strin
 function _isValidItemFilterKey(value: string): value is ItemFilterKey {
   return value === 'all'
     || value === 'urgent'
-    || value === 'needs_draft'
-    || value === 'has_draft'
-    || value === 'news_created';
+    || value === 'has_draft';
 }
 
 function _isValidSignalFilterKey(value: string): value is SignalFilterKey {
@@ -4294,15 +4458,21 @@ function _inferViewPresetKey(value: {
   selectedPlanTargetKey: string;
   selectedItemLocationKey: string;
   selectedWeekKey: string;
+  dateFromFilter: string;
+  dateToFilter: string;
   sortMode: 'priority' | 'date';
 }): ViewPresetKey {
-  if (value.selectedItemLocationKey !== 'all' || value.selectedWeekKey !== 'all') {
-    return 'focus';
-  }
-  if (value.selectedSignalFilter !== 'all' || value.selectedPlanTargetKey !== 'all') {
+  if (
+    value.selectedSignalFilter !== 'all'
+    || value.selectedPlanTargetKey !== 'all'
+    || value.selectedItemLocationKey !== 'all'
+    || value.selectedWeekKey !== 'all'
+    || value.dateFromFilter
+    || value.dateToFilter
+  ) {
     return 'custom';
   }
-  if (value.selectedItemFilter === 'all' && value.sortMode === 'priority') {
+  if (value.selectedItemFilter === 'all') {
     return 'overview';
   }
   if (value.selectedItemFilter === 'urgent') {
@@ -4311,14 +4481,11 @@ function _inferViewPresetKey(value: {
   if (value.selectedItemFilter === 'has_draft') {
     return 'ready';
   }
-  if (value.selectedItemFilter === 'news_created' && value.sortMode === 'date') {
-    return 'published';
-  }
   return 'custom';
 }
 
 function _shiftIsoDate(input: string, daysDelta: number): string {
-  const normalized = String(input || '').slice(0, 10);
+  const normalized = _inputDateValue(input);
   if (!normalized) {
     return new Date(Date.now() + daysDelta * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   }
@@ -4335,9 +4502,13 @@ function _autoScheduledDate(index: number): string {
 }
 
 function _inputDateValue(input: unknown): string {
-  const normalized = String(input || '').slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return '';
-  return normalized;
+  const rawValue = String(input || '').trim();
+  if (!rawValue) return '';
+  const isoMatch = rawValue.match(/\d{4}-\d{2}-\d{2}/);
+  if (isoMatch) return isoMatch[0];
+  const parsed = new Date(rawValue);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toISOString().slice(0, 10);
 }
 
 function _removeRecordKeys(source: Record<string, string>, keys: string[]): Record<string, string> {
@@ -4372,7 +4543,7 @@ function _itemPriorityRank(item: Pick<PlanItem, 'draft_text' | 'usernews_id'>): 
 }
 
 function _weekBucketKey(dateValue: string): string {
-  const value = String(dateValue || '').trim();
+  const value = _inputDateValue(dateValue);
   if (!value) return '';
   const date = new Date(`${value}T00:00:00Z`);
   if (Number.isNaN(date.getTime())) return '';
