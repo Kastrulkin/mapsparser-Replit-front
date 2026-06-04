@@ -1,0 +1,12 @@
+OK: frontend/dist integrity check passed
+JS: /assets/index-CpW4Qy1b.js
+CSS: /assets/index-DBSJZRe3.css
+OK: frontend/dist integrity check passed
+JS: /public-audit/assets/index-B3l2s0cE.js
+CSS: /public-audit/assets/index-DE-yab4Z.css
+Deploying frontend dist to root@80.78.242.105:/opt/seo-app
+Keeping previous asset files in place to avoid breaking open tabs that still reference older lazy chunks.
+Connection timed out during banner exchange
+Connection to 80.78.242.105 port 22 timed out
+scp: Connection closed
+upload frontend dist failed on attempt 1/3. Retrying in 5s...

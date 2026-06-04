@@ -1,0 +1,5 @@
+Refreshing backend runtime files
+rm: cannot remove '/app/src/api/admin_prospecting.py': Read-only file system
+rm: cannot remove '/app/src/api/content_plans_api.py': Read-only file system
+rm: cannot remove '/app/src/api/wordstat_api.py': Read-only file system
+rm: cannot remove '/app/src/services/content_plan_service.py': Read-only file system

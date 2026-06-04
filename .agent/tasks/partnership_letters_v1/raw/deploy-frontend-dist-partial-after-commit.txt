@@ -1,0 +1,7 @@
+Deploying frontend/dist only
+OK: frontend/dist integrity check passed
+JS: /assets/index-CpW4Qy1b.js
+CSS: /assets/index-DBSJZRe3.css
+Connection timed out during banner exchange
+Connection to 80.78.242.105 port 22 timed out
+rsync(82363): error: unexpected end of file

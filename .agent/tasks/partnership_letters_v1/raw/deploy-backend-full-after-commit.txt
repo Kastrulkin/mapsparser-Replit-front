@@ -1,0 +1,5 @@
+OK: backend runtime source-of-truth is clean
+Deploying backend source to root@80.78.242.105:/opt/seo-app
+Connection to 80.78.242.105 closed by remote host.
+scp: Connection closed
+upload src failed on attempt 1/3. Retrying in 5s...

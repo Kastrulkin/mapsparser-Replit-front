@@ -1,0 +1,14 @@
+Deploying targeted backend files
+Transfer starting: 3 files
+
+sent 186 bytes  received 20 bytes  247 bytes/sec
+total size is 676614  speedup is 3284.52
+Transfer starting: 1 files
+
+sent 104 bytes  received 20 bytes  1168 bytes/sec
+total size is 136451  speedup is 1100.40
+tar: api/admin_prospecting.py: Cannot open: File exists
+tar: api/content_plans_api.py: Cannot open: File exists
+tar: api/wordstat_api.py: Cannot open: File exists
+tar: services/content_plan_service.py: Cannot open: File exists
+tar: Exiting with failure status due to previous errors

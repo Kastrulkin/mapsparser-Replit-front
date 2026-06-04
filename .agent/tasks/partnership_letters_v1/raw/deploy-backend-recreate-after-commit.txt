@@ -1,0 +1,30 @@
+Recreating app and worker after targeted host sync
+ Container seo-app-postgres-1 Running
+ Container seo-app-app-1 Recreate
+ Container seo-app-worker-1 Recreate
+ Container seo-app-worker-1 Recreated
+ Container seo-app-app-1 Recreated
+ Container seo-app-postgres-1 Waiting
+ Container seo-app-postgres-1 Waiting
+ Container seo-app-postgres-1 Healthy
+ Container seo-app-worker-1 Starting
+ Container seo-app-postgres-1 Healthy
+ Container seo-app-app-1 Starting
+ Container seo-app-worker-1 Started
+ Container seo-app-app-1 Started
+NAME                 IMAGE            COMMAND                  SERVICE    CREATED          STATUS                  PORTS
+seo-app-app-1        seo-app-app      "/app/entrypoint.sh …"   app        11 seconds ago   Up Less than a second   0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp
+seo-app-postgres-1   postgres:16      "docker-entrypoint.s…"   postgres   7 weeks ago      Up 4 weeks (healthy)    5432/tcp
+seo-app-worker-1     seo-app-worker   "/app/entrypoint.sh …"   worker     11 seconds ago   Up Less than a second
+app-1  | Waiting for Postgres at postgres:5432...
+app-1  | postgres:5432 - accepting connections
+app-1  | Postgres is ready.
+app-1  | Running migrations...
+worker-1  | Waiting for Postgres at postgres:5432...
+worker-1  | postgres:5432 - accepting connections
+worker-1  | Postgres is ready.
+worker-1  | Running migrations...
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+curl: (56) Recv failure: Connection reset by peer
