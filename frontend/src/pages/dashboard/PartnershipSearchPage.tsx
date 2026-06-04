@@ -1347,6 +1347,26 @@ export const PartnershipSearchPage: React.FC = () => {
     );
   };
 
+  const bulkMarkNotRelevant = async () => {
+    if (!currentBusinessId || selectedLeadIds.length === 0) return;
+    await runBulkLeadUpdate(
+      {
+        pipeline_status: PIPELINE_NOT_RELEVANT,
+        partnership_stage: 'shortlist_rejected',
+        deferred_reason: '',
+        deferred_until: '',
+      },
+      {
+        fallback: 'Не удалось пометить выбранных партнёров как неактуальных',
+        message: (updatedCount) => `Помечено неактуальными: ${updatedCount}`,
+        afterSuccess: async () => {
+          setLeadView('all');
+          await refreshOperationalData();
+        },
+      },
+    );
+  };
+
   const bulkReturnDeferredLeads = async () => {
     if (!currentBusinessId || selectedLeadIds.length === 0) return;
     await runBulkLeadUpdate(
@@ -2217,40 +2237,7 @@ export const PartnershipSearchPage: React.FC = () => {
 
           {workspaceView === 'pipeline' ? (
           <>
-          <div className="rounded-xl border bg-white p-4 space-y-4">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <h2 className="text-lg font-semibold">Pipeline партнёрств</h2>
-                <p className="text-sm text-muted-foreground">Рабочая доска по партнёрским лидам: от новых до контакта и отложенных.</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="secondary">С аудитом: {pipelineSummary.withAudit}</Badge>
-                <Badge variant="secondary">Готово к контакту: {pipelineSummary.readyToContact}</Badge>
-                <Badge variant="secondary">Отложено: {pipelineSummary.deferred}</Badge>
-              </div>
-            </div>
-            <PartnershipPipelineBoard
-              columns={partnershipBoardColumns}
-              dropColumnId={dropColumnId}
-              draggingLeadId={draggingLeadId}
-              loading={loading}
-              deferredReasonInput={deferredReasonInput}
-              deferredUntilInput={deferredUntilInput}
-              getStagePresentation={partnershipStagePresentation}
-              getAuditPresentation={partnershipAuditPresentation}
-              getNextStage={getNextPipelineStage}
-              onColumnDragOver={handleColumnDragOver}
-              onColumnDragLeave={() => setDropColumnId(null)}
-              onColumnDrop={handleColumnDrop}
-              onLeadDragStart={handleLeadDragStart}
-              onLeadDragEnd={handleLeadDragEnd}
-              onMoveToPipeline={moveLeadToPipeline}
-              onMoveToStage={moveLeadToStage}
-              onOpenLead={setSelectedLeadId}
-              onDeferLead={deferLeadFromCard}
-            />
-          </div>
-          <div className="grid gap-4 xl:grid-cols-12">
+          <div className="space-y-4">
             <PartnershipPipelineList
               query={query}
               onQueryChange={setQuery}
@@ -2295,14 +2282,13 @@ export const PartnershipSearchPage: React.FC = () => {
               deferredUntilInput={deferredUntilInput}
               onDeferredUntilInputChange={setDeferredUntilInput}
               onRefreshLeads={() => void loadLeads()}
-              onLoadHealth={() => void loadHealth()}
               onApplyBulkUpdate={applyBulkUpdate}
               onBulkDeferLeads={bulkDeferLeads}
               onBulkReturnDeferredLeads={bulkReturnDeferredLeads}
               onBulkReturnOverdueDeferredLeads={bulkReturnOverdueDeferredLeads}
               onBulkEnrichContacts={() => void bulkEnrichContacts()}
+              onBulkMarkNotRelevant={bulkMarkNotRelevant}
               onNormalizeSelectedViaOpenClaw={normalizeSelectedViaOpenClaw}
-              onBulkDeleteLeads={bulkDeleteLeads}
               onToggleAllLeadSelection={toggleAllLeadSelection}
               onToggleLeadSelection={toggleLeadSelection}
               onRunParse={(leadId) => void runParse(leadId)}
@@ -2321,33 +2307,38 @@ export const PartnershipSearchPage: React.FC = () => {
               onPrepareLastGeoSearchBatch={() => void prepareLastGeoSearchBatch()}
             />
 
-            <div className="space-y-4 xl:col-span-5">
-              <div className="rounded-xl border bg-white p-4 space-y-3">
-                <div className="flex items-center justify-between gap-2">
-                  <h2 className="text-lg font-semibold">Метрики обучения (30 дней)</h2>
-                  <Button variant="outline" onClick={() => void loadLearningMetrics()} disabled={loading}>
-                    Обновить
-                  </Button>
+            <details className="rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-sm">
+              <summary className="cursor-pointer text-sm font-medium text-slate-700">
+                Вид по этапам и диагностика
+              </summary>
+              <div className="mt-4 space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="secondary">С аудитом: {pipelineSummary.withAudit}</Badge>
+                  <Badge variant="secondary">Готово к контакту: {pipelineSummary.readyToContact}</Badge>
+                  <Badge variant="secondary">Отложено: {pipelineSummary.deferred}</Badge>
                 </div>
-                {learningMetrics.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Метрики пока недоступны.</p>
-                ) : (
-                  <div className="grid gap-2 md:grid-cols-2">
-                    {learningMetrics.map((metric) => (
-                      <div key={metric.capability} className="rounded-lg border border-gray-200 p-3 bg-gray-50">
-                        <div className="text-sm font-semibold text-foreground">{metric.capability}</div>
-                        <div className="text-xs text-muted-foreground mt-1">
-                          Принято: {metric.accepted_total} · без правок: {metric.accepted_raw_total} ({metric.accepted_raw_pct}%)
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          С правками: {metric.accepted_edited_total} ({metric.edited_before_accept_pct}%)
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <PartnershipPipelineBoard
+                  columns={partnershipBoardColumns}
+                  dropColumnId={dropColumnId}
+                  draggingLeadId={draggingLeadId}
+                  loading={loading}
+                  deferredReasonInput={deferredReasonInput}
+                  deferredUntilInput={deferredUntilInput}
+                  getStagePresentation={partnershipStagePresentation}
+                  getAuditPresentation={partnershipAuditPresentation}
+                  getNextStage={getNextPipelineStage}
+                  onColumnDragOver={handleColumnDragOver}
+                  onColumnDragLeave={() => setDropColumnId(null)}
+                  onColumnDrop={handleColumnDrop}
+                  onLeadDragStart={handleLeadDragStart}
+                  onLeadDragEnd={handleLeadDragEnd}
+                  onMoveToPipeline={moveLeadToPipeline}
+                  onMoveToStage={moveLeadToStage}
+                  onOpenLead={setSelectedLeadId}
+                  onDeferLead={deferLeadFromCard}
+                />
               </div>
-            </div>
+            </details>
           </div>
           </>
           ) : null}

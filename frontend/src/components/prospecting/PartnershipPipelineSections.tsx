@@ -375,14 +375,13 @@ type PartnershipPipelineListProps = {
   deferredUntilInput: string;
   onDeferredUntilInputChange: (value: string) => void;
   onRefreshLeads: () => void;
-  onLoadHealth: () => void;
   onApplyBulkUpdate: () => void;
   onBulkDeferLeads: () => void;
   onBulkReturnDeferredLeads: () => void;
   onBulkReturnOverdueDeferredLeads: () => void;
   onBulkEnrichContacts: () => void;
+  onBulkMarkNotRelevant: () => void;
   onNormalizeSelectedViaOpenClaw: () => void;
-  onBulkDeleteLeads: () => void;
   onToggleAllLeadSelection: (checked: boolean) => void;
   onToggleLeadSelection: (leadId: string, checked: boolean) => void;
   onRunParse: (leadId: string) => void;
@@ -438,14 +437,13 @@ export const PartnershipPipelineList = ({
   deferredUntilInput,
   onDeferredUntilInputChange,
   onRefreshLeads,
-  onLoadHealth,
   onApplyBulkUpdate,
   onBulkDeferLeads,
   onBulkReturnDeferredLeads,
   onBulkReturnOverdueDeferredLeads,
   onBulkEnrichContacts,
+  onBulkMarkNotRelevant,
   onNormalizeSelectedViaOpenClaw,
-  onBulkDeleteLeads,
   onToggleAllLeadSelection,
   onToggleLeadSelection,
   onRunParse,
@@ -459,11 +457,11 @@ export const PartnershipPipelineList = ({
   onRunLastGeoSearchFlow,
   onPrepareLastGeoSearchBatch,
 }: PartnershipPipelineListProps) => (
-  <div className="rounded-3xl border border-slate-200/80 bg-white/95 p-5 shadow-sm xl:col-span-7">
+  <div className="rounded-3xl border border-slate-200/80 bg-white/95 p-5 shadow-sm xl:col-span-12">
     <div className="mb-5 flex flex-col gap-3">
       <div className="flex flex-col gap-1">
-        <h2 className="text-xl font-semibold text-slate-950">Рабочий список партнёров</h2>
-        <p className="text-sm text-slate-500">Короткий список для оператора: кто подходит, что с контактами и какое безопасное действие дальше.</p>
+        <h2 className="text-xl font-semibold text-slate-950">Отбор партнёров</h2>
+        <p className="text-sm text-slate-500">Выберите подходящих, закрепите канал и подготовьте письмо. Технические детали спрятаны внутри карточки.</p>
       </div>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_180px_240px_auto]">
       <Input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Поиск по названию/ссылке" />
@@ -494,29 +492,21 @@ export const PartnershipPipelineList = ({
     <div className="mb-3 flex flex-wrap gap-2">
       <Button size="sm" variant={leadBucket === 'active' ? 'default' : 'outline'} onClick={() => onLeadBucketChange('active')}>В работе</Button>
       <Button size="sm" variant={leadBucket === 'deferred' ? 'default' : 'outline'} onClick={() => onLeadBucketChange('deferred')}>Отложенные</Button>
-      {leadViewOptions.slice(0, 6).map((option) => (
+      {leadViewOptions.filter((option) => ['all', 'ready_for_letter', 'with_contacts', 'deferred', 'errors'].includes(option.value)).map((option) => (
         <Button key={`lead-chip-${option.value}`} size="sm" variant={leadView === option.value ? 'default' : 'outline'} onClick={() => onLeadViewChange(option.value)}>
           {option.label}
         </Button>
       ))}
     </div>
 
-    <div className="mb-4 grid gap-3 md:grid-cols-3">
-      <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
-        <div className="text-xs uppercase tracking-wide text-muted-foreground">Найдено компаний</div>
-        <div className="mt-1 text-2xl font-semibold">{itemsTotal}</div>
-      </div>
-      <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
-        <div className="text-xs uppercase tracking-wide text-muted-foreground">Готовы к работе</div>
-        <div className="mt-1 text-2xl font-semibold text-violet-900">{shortlistCount}</div>
-      </div>
-      <div className="rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3">
-        <div className="text-xs uppercase tracking-wide text-amber-700">Отложенные</div>
-        <div className="mt-1 flex items-center justify-between gap-3">
-          <div className="text-2xl font-semibold text-amber-900">{deferredLeadsCount}</div>
-          <Button size="sm" variant={leadView === 'deferred' ? 'default' : 'outline'} onClick={() => onLeadViewChange('deferred')}>Только отложенные</Button>
-        </div>
-        <div className="mt-2 text-xs text-amber-800">Просрочено к возврату: <span className="font-semibold">{overdueDeferredLeadsCount}</span></div>
+    <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+        <span>Всего: <span className="font-semibold text-slate-950">{itemsTotal}</span></span>
+        <span>В работе: <span className="font-semibold text-slate-950">{shortlistCount}</span></span>
+        <span>Отложены: <span className="font-semibold text-amber-800">{deferredLeadsCount}</span></span>
+        {overdueDeferredLeadsCount > 0 ? (
+          <Button size="sm" variant="outline" onClick={onBulkReturnOverdueDeferredLeads} disabled={loading}>Вернуть просроченные: {overdueDeferredLeadsCount}</Button>
+        ) : null}
       </div>
     </div>
 
@@ -569,7 +559,7 @@ export const PartnershipPipelineList = ({
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div>
           <div className="text-sm font-semibold text-foreground">Действия с выбранными</div>
-          <div className="text-xs text-muted-foreground">Выбрано: {selectedLeadIds.length}. Показываем только массовые действия, которые меняют рабочее состояние партнёров.</div>
+          <div className="text-xs text-muted-foreground">Выбрано: {selectedLeadIds.length}. Основные действия оставлены на виду, остальное доступно внутри карточки.</div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Select value={bulkStage} onValueChange={onBulkStageChange}>
@@ -586,12 +576,9 @@ export const PartnershipPipelineList = ({
           </Select>
           <Button variant="outline" onClick={onApplyBulkUpdate} disabled={loading || selectedLeadIds.length === 0}>Применить к выбранным</Button>
           <Button variant="outline" onClick={onBulkDeferLeads} disabled={loading || selectedLeadIds.length === 0}>Отложить выбранные</Button>
-          <Button variant="outline" onClick={onBulkReturnDeferredLeads} disabled={loading || selectedLeadIds.length === 0}>Вернуть в работу</Button>
-          <Button variant="outline" onClick={onBulkReturnOverdueDeferredLeads} disabled={loading || overdueDeferredLeadsCount === 0}>Вернуть просроченные</Button>
-          <Button variant="outline" onClick={onBulkEnrichContacts} disabled={loading || selectedLeadIds.length === 0}>Обогатить контакты</Button>
-          <Button variant="outline" onClick={onNormalizeSelectedViaOpenClaw} disabled={loading || selectedLeadIds.length === 0}>Подготовить черновики</Button>
-          <Button variant="outline" onClick={onLoadHealth} disabled={loading}>Проверить поток</Button>
-          <Button variant="outline" onClick={onBulkDeleteLeads} disabled={loading || selectedLeadIds.length === 0}>Удалить</Button>
+          <Button variant="outline" onClick={onNormalizeSelectedViaOpenClaw} disabled={loading || selectedLeadIds.length === 0}>Подготовить письма</Button>
+          <Button variant="outline" onClick={onBulkDeferLeads} disabled={loading || selectedLeadIds.length === 0}>Отложить</Button>
+          <Button variant="outline" onClick={onBulkMarkNotRelevant} disabled={loading || selectedLeadIds.length === 0}>Неактуальны</Button>
         </div>
       </div>
       <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_220px_auto]">

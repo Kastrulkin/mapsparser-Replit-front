@@ -143,8 +143,8 @@ export function PartnershipDraftsSection({
     <div className="space-y-4 rounded-3xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-slate-950">Черновики сообщений ({drafts.length})</h2>
-          <p className="mt-1 text-sm text-slate-500">Проверьте текст перед отправкой. Здесь оператор принимает финальное решение.</p>
+          <h2 className="text-xl font-semibold text-slate-950">Письма ({drafts.length})</h2>
+          <p className="mt-1 text-sm text-slate-500">Проверьте первое письмо или КП, поправьте текст и утвердите его для ручной отправки.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Select value={draftView} onValueChange={onDraftViewChange}>
@@ -273,8 +273,8 @@ export function PartnershipQueueSection({
     <div className="space-y-4 rounded-3xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-slate-950">Очередь отправки ({batches.length})</h2>
-          <p className="mt-1 text-sm text-slate-500">Отправка остаётся ручной и контролируемой: сначала проверка, затем фиксация результата.</p>
+          <h2 className="text-xl font-semibold text-slate-950">Отправка ({batches.length})</h2>
+          <p className="mt-1 text-sm text-slate-500">Откройте письмо в почтовой программе, отправьте вручную и отметьте результат.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Select value={queueView} onValueChange={onQueueViewChange}>
@@ -293,7 +293,7 @@ export function PartnershipQueueSection({
             Обновить
           </Button>
           <Button onClick={onCreateBatch} disabled={loading || queueReadyDraftsCount === 0}>
-            Создать очередь ({queueReadyDraftsCount})
+            Подготовить к отправке ({queueReadyDraftsCount})
           </Button>
         </div>
       </div>
@@ -326,7 +326,8 @@ export function PartnershipQueueSection({
 
       {batches.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-muted-foreground">
-          Очереди пока нет. Когда черновики будут утверждены, создайте очередь и проверьте её перед отправкой.
+          <div className="font-medium text-slate-900">Нет писем, готовых к отправке.</div>
+          <div className="mt-1">Сначала утвердите черновики в разделе «Письма». После этого здесь появится короткий список: открыть письмо, отправить вручную, отметить результат.</div>
         </div>
       ) : (
         <>
@@ -342,7 +343,7 @@ export function PartnershipQueueSection({
             <div key={batch.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <div className="font-semibold text-foreground">Группа отправки</div>
+                  <div className="font-semibold text-foreground">Письма к ручной отправке</div>
                   <div className="text-xs text-muted-foreground">
                     ID: {batch.id} · статус: {batch.status} · сообщений: {(batch.items || []).length}
                   </div>
@@ -447,7 +448,7 @@ export function PartnershipSentSection({
     <div className="space-y-4 rounded-3xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-slate-950">Отправлено и ответы ({reactions.length})</h2>
+          <h2 className="text-xl font-semibold text-slate-950">Результаты ({reactions.length})</h2>
           <p className="mt-1 text-sm text-slate-500">Фиксируйте результат касания: интерес, вопрос, нет ответа или отказ.</p>
         </div>
         <div className="flex flex-wrap gap-2">

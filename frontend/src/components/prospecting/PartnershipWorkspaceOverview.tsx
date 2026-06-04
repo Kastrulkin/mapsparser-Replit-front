@@ -17,12 +17,12 @@ type PartnershipWorkspaceOverviewProps = {
 };
 
 const workspaceLabelByValue: Record<string, string> = {
-  raw: 'поиск лидов',
-  pipeline: 'воронка',
+  raw: 'поиск',
+  pipeline: 'отбор',
   analytics: 'аналитика',
-  drafts: 'черновики',
+  drafts: 'письма',
   queue: 'отправка',
-  sent: 'отправленные',
+  sent: 'результаты',
 };
 
 export function PartnershipWorkspaceOverview({
@@ -40,21 +40,21 @@ export function PartnershipWorkspaceOverview({
       <DashboardPageHeader
         eyebrow="LocalOS"
         title="Поиск партнёров"
-        description="Находите бизнес-партнёров вокруг вашей точки, отбирайте релевантных и доводите их до первого контакта без хаоса в таблицах."
+        description="Простой маршрут: найти партнёра, отобрать подходящих, подготовить письмо, отправить вручную и зафиксировать результат."
       />
 
       <DashboardCompactMetricsRow
         items={[
           { label: 'Найдено', value: rawLeadCount, hint: 'Все импортированные и найденные компании.' },
-          { label: 'В воронке', value: pipelineLeadCount, hint: 'Партнёры, по которым уже есть следующий шаг.' },
-          { label: 'Черновики', value: visibleDraftsCount, hint: 'Сообщения, которые ждут проверки.' },
-          { label: 'Касания', value: visibleBatchesCount + visibleReactionsCount, hint: 'Очередь отправки и зафиксированные ответы.' },
+          { label: 'В отборе', value: pipelineLeadCount, hint: 'Партнёры, с которыми уже работаем.' },
+          { label: 'Письма', value: visibleDraftsCount, hint: 'Черновики, которые ждут проверки.' },
+          { label: 'Результаты', value: visibleBatchesCount + visibleReactionsCount, hint: 'Отправка и зафиксированные ответы.' },
         ]}
       />
 
       <DashboardActionPanel
         title="Следующий шаг"
-        description="Начните с поиска лидов, затем перенесите подходящих партнёров в воронку. Черновики и отправка доступны отдельными слоями, чтобы не смешивать поиск, подготовку и результат."
+        description="Двигайтесь слева направо: поиск → отбор → письма → ручная отправка → результат. Каждый экран показывает только действия текущего шага."
         status={!currentBusinessId ? 'Сначала выберите бизнес в переключателе сверху.' : `Сейчас открыт слой: ${workspaceLabelByValue[workspaceView] || 'рабочий экран'}.`}
         tone={!currentBusinessId ? 'amber' : 'default'}
       />
@@ -64,12 +64,12 @@ export function PartnershipWorkspaceOverview({
           activeWorkspace={workspaceView}
           onWorkspaceChange={onWorkspaceChange}
           workspaces={[
-            { value: 'raw', label: 'Поиск лидов', count: rawLeadCount },
-            { value: 'pipeline', label: 'Воронка', count: pipelineLeadCount },
-            { value: 'analytics', label: 'Аналитика' },
-            { value: 'drafts', label: 'Черновики', count: visibleDraftsCount },
+            { value: 'raw', label: 'Поиск', count: rawLeadCount },
+            { value: 'pipeline', label: 'Отбор', count: pipelineLeadCount },
+            { value: 'drafts', label: 'Письма', count: visibleDraftsCount },
             { value: 'queue', label: 'Отправка', count: visibleBatchesCount },
-            { value: 'sent', label: 'Отправлено', count: visibleReactionsCount },
+            { value: 'sent', label: 'Результаты', count: visibleReactionsCount },
+            { value: 'analytics', label: 'Аналитика' },
           ]}
         />
       </div>
