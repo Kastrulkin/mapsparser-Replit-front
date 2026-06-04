@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ContactPresenceBadges, StatusSummaryCard, WorkflowActionRow } from '@/components/prospecting/LeadWorkflowBlocks';
+import { ContactPresenceBadges, WorkflowActionRow } from '@/components/prospecting/LeadWorkflowBlocks';
 
 type WorkflowBadgeVariant = 'default' | 'secondary' | 'outline' | 'destructive';
 type WorkflowTone = 'default' | 'success' | 'warning' | 'info' | 'danger';
@@ -76,7 +76,21 @@ type DeferredPayload = {
   deferredUntil: string;
 };
 
-const mutedPillClass = 'inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-600';
+const mutedPillClass = 'inline-flex max-w-full items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-600';
+const compactMetaClass = 'truncate text-[11px] text-slate-500';
+
+const shortStatusLabel = (value?: string) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized || normalized === 'unprocessed') return 'Необработан';
+  if (normalized === 'in_progress' || normalized === 'qualified') return 'В работе';
+  if (normalized === 'contacted') return 'Отправлено';
+  if (normalized === 'second_message_sent') return 'КП отправлено';
+  if (normalized === 'replied') return 'Ответил';
+  if (normalized === 'converted') return 'Партнёр';
+  if (normalized === 'postponed' || normalized === 'deferred') return 'Отложен';
+  if (normalized === 'not_relevant' || normalized === 'disqualified') return 'Неактуален';
+  return value || '—';
+};
 
 type PartnershipLeadCardProps = {
   lead: PipelineLead;
@@ -137,20 +151,20 @@ export const PartnershipLeadCard = ({
       draggable={mode === 'pipeline'}
       onDragStart={mode === 'pipeline' ? onDragStart : undefined}
       onDragEnd={mode === 'pipeline' ? onDragEnd : undefined}
-      className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${dragging ? 'opacity-70' : ''}`}
+      className={`overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${dragging ? 'opacity-70' : ''}`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-base font-semibold text-foreground">{lead.name || 'Без названия'}</div>
-          <div className="mt-1 text-sm text-slate-500">
+        <div className="min-w-0 flex-1">
+          <div className="break-words text-base font-semibold leading-snug text-foreground">{lead.name || 'Без названия'}</div>
+          <div className="mt-1 line-clamp-2 text-sm text-slate-500">
             {lead.category || 'Без категории'} · {lead.city || '—'}
           </div>
           <div className="mt-1 line-clamp-1 text-sm text-slate-400">
             {lead.address || 'Адрес не указан'}
           </div>
         </div>
-        <div className="flex flex-wrap justify-end gap-1">
-          {lead.source_provider ? <Badge variant="outline">{lead.source_provider}</Badge> : null}
+        <div className="flex max-w-[45%] shrink-0 flex-wrap justify-end gap-1">
+          {lead.source_provider ? <Badge variant="outline" className="max-w-full truncate">{lead.source_provider}</Badge> : null}
           {lead.rating ? <Badge variant="secondary">★ {lead.rating}{lead.reviews_count ? ` (${lead.reviews_count})` : ''}</Badge> : null}
         </div>
       </div>
@@ -164,25 +178,27 @@ export const PartnershipLeadCard = ({
           hasMessenger={Boolean(lead.telegram_url || lead.whatsapp_url)}
         />
       </div>
-      <div className="mt-3 space-y-3">
-        <StatusSummaryCard
-          title="Статус"
-          statusLabel={stagePresentation.label}
-          statusVariant={stagePresentation.variant}
-          tone={stagePresentation.tone}
-          primaryText={mode === 'raw' ? stagePresentation.helper : (lead.next_best_action?.label || 'Следующий шаг пока не определён')}
-          secondaryText={mode === 'raw'
-            ? `Воронка: ${lead.pipeline_status || 'unprocessed'} · тех. этап: ${lead.partnership_stage || 'imported'}`
-            : (lead.next_best_action?.hint || 'Продолжайте по текущему pipeline без лишних промежуточных шагов.')}
-        />
-        <StatusSummaryCard
-          title="Аудит"
-          statusLabel={auditPresentation.label}
-          statusVariant={auditPresentation.variant}
-          tone={auditPresentation.tone}
-          primaryText={auditPresentation.primary}
-          secondaryText={auditPresentation.secondary}
-        />
+      <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
+        <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-medium uppercase text-slate-400">Статус</span>
+            <Badge variant={stagePresentation.variant} className="max-w-[55%] truncate">{stagePresentation.label}</Badge>
+          </div>
+          <div className="mt-1 line-clamp-2 font-medium text-slate-900">
+            {mode === 'raw' ? stagePresentation.helper : (lead.next_best_action?.label || 'Следующий шаг не определён')}
+          </div>
+          <div className={compactMetaClass}>
+            {shortStatusLabel(lead.pipeline_status || 'unprocessed')} · {shortStatusLabel(lead.partnership_stage || 'imported')}
+          </div>
+        </div>
+        <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-medium uppercase text-slate-400">Аудит</span>
+            <Badge variant={auditPresentation.variant} className="max-w-[55%] truncate">{auditPresentation.label}</Badge>
+          </div>
+          <div className="mt-1 line-clamp-2 font-medium text-slate-900">{auditPresentation.primary}</div>
+          <div className={compactMetaClass}>{auditPresentation.secondary}</div>
+        </div>
       </div>
       {lead.parse_error ? <div className="mt-2 text-xs text-red-600">{lead.parse_error}</div> : null}
       <WorkflowActionRow
@@ -207,6 +223,11 @@ export const PartnershipLeadCard = ({
           { label: 'Карточка', onClick: () => onOpenLead(lead.id) },
           ...(lead.source_url ? [{ label: 'Источник', href: lead.source_url }] : []),
           {
+            label: 'Неактуален',
+            onClick: () => onMoveToStage(lead.id, 'not_relevant', { deferredReason: '', deferredUntil: '' }),
+            disabled: loading,
+          },
+          {
             label: stageValue === 'deferred' ? 'Отложен' : 'Отложить',
             onClick: () => onDeferLead(lead, deferredPayload),
             disabled: loading,
@@ -214,8 +235,8 @@ export const PartnershipLeadCard = ({
         ]}
       />
       <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-        <span className={mutedPillClass}>Воронка: {lead.pipeline_status || 'unprocessed'}</span>
-        <span className={mutedPillClass}>Этап: {lead.partnership_stage || 'новый'}</span>
+        <span className={mutedPillClass}><span className="truncate">Воронка: {shortStatusLabel(lead.pipeline_status || 'unprocessed')}</span></span>
+        <span className={mutedPillClass}><span className="truncate">Этап: {shortStatusLabel(lead.partnership_stage || 'новый')}</span></span>
         <span>{parseStatusLabel}</span>
         <span>{hasContacts ? 'контакты есть' : 'контактов мало'}</span>
       </div>
@@ -590,21 +611,21 @@ export const PartnershipPipelineList = ({
             Выбрать все в текущем фильтре
           </label>
           {visibleLeads.map((lead) => (
-            <div key={lead.id} className={`rounded-2xl border bg-white p-4 shadow-sm transition hover:shadow-md ${selectedLeadId === lead.id ? 'border-primary/70 ring-2 ring-primary/10' : 'border-slate-200'}`}>
+            <div key={lead.id} className={`overflow-hidden rounded-2xl border bg-white p-4 shadow-sm transition hover:shadow-md ${selectedLeadId === lead.id ? 'border-primary/70 ring-2 ring-primary/10' : 'border-slate-200'}`}>
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="flex items-start gap-3">
+                <div className="flex min-w-0 items-start gap-3">
                   <input className="mt-1" type="checkbox" checked={selectedLeadIds.includes(lead.id)} onChange={(event) => onToggleLeadSelection(lead.id, event.target.checked)} />
-                  <div className="min-w-0">
-                    <div className="text-base font-semibold text-foreground">{lead.name || 'Без названия'}</div>
-                    <div className="mt-1 text-sm text-slate-500">{lead.category || '—'} · {lead.city || '—'}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="break-words text-base font-semibold leading-snug text-foreground">{lead.name || 'Без названия'}</div>
+                    <div className="mt-1 line-clamp-2 text-sm text-slate-500">{lead.category || '—'} · {lead.city || '—'}</div>
                     <div className="mt-1 line-clamp-1 text-sm text-slate-400">{lead.address || 'Адрес не указан'}</div>
                     {lead.deferred_reason ? <div className="mt-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900">Отложено: {lead.deferred_reason}</div> : null}
                     {lead.deferred_until ? <div className="mt-1 text-xs text-amber-800">Вернуться: {new Date(String(lead.deferred_until)).toLocaleDateString('ru-RU')}</div> : null}
                     <div className="mt-2 flex flex-wrap gap-1.5">
-                      <span className={mutedPillClass}>Воронка: {lead.pipeline_status || 'unprocessed'}</span>
-                      <span className={mutedPillClass}>Этап: {lead.partnership_stage || 'новый'}</span>
-                      <span className={mutedPillClass}>Когорта: {lead.pilot_cohort || 'резерв'}</span>
-                      {lead.source_provider ? <span className={mutedPillClass}>{lead.source_provider}</span> : null}
+                      <span className={mutedPillClass}><span className="truncate">Воронка: {shortStatusLabel(lead.pipeline_status || 'unprocessed')}</span></span>
+                      <span className={mutedPillClass}><span className="truncate">Этап: {shortStatusLabel(lead.partnership_stage || 'новый')}</span></span>
+                      <span className={mutedPillClass}><span className="truncate">Когорта: {lead.pilot_cohort || 'резерв'}</span></span>
+                      {lead.source_provider ? <span className={mutedPillClass}><span className="max-w-[180px] truncate">{lead.source_provider}</span></span> : null}
                       {lead.rating ? <span className={mutedPillClass}>★ {lead.rating}{lead.reviews_count ? ` · ${lead.reviews_count}` : ''}</span> : null}
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2 text-xs">
@@ -640,6 +661,7 @@ export const PartnershipPipelineList = ({
                     {String(lead.pipeline_status || '').toLowerCase() === 'postponed' || String(lead.partnership_stage || '').toLowerCase() === 'deferred' ? 'Вернуть в работу' : 'Сохранить'}
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => onUpdateLeadStage(lead.id, 'postponed', 'Партнёр отложен на потом', { deferredReason: deferredReasonInput.trim() || lead.deferred_reason || '', deferredUntil: deferredUntilInput || String(lead.deferred_until || '').slice(0, 10) || '' })} disabled={loading}>Отложить</Button>
+                  <Button variant="outline" size="sm" onClick={() => onUpdateLeadStage(lead.id, 'not_relevant', 'Партнёр помечен как неактуальный', { deferredReason: '', deferredUntil: '' })} disabled={loading}>Неактуален</Button>
                   <Button variant="outline" size="sm" onClick={() => onDeleteLead(lead.id)} disabled={loading}>Удалить</Button>
                 </div>
               </div>
