@@ -753,6 +753,46 @@ def test_sheets_append_row_capability_requires_orchestrator_human_gate():
     assert "spreadsheet" in decision["reason"]
 
 
+def test_approved_domain_executor_moves_sheet_request_after_human_gate():
+    from services.agent_domain_request_executors import execute_approved_domain_requests
+
+    cursor = FakeApprovedDomainExecutorCursor()
+    cursor.tables["agent_sheet_operation_requests"]["sheet-request-1"] = {
+        "id": "sheet-request-1",
+        "business_id": "biz1",
+        "action_id": "action-1",
+        "status": "request_created",
+        "approval_state": "pending_human",
+        "apply_state": "not_applied",
+        "operation": "append_row",
+        "sheet_name": "Leads",
+        "provider_write_performed": False,
+    }
+
+    result = execute_approved_domain_requests(
+        cursor,
+        run={"id": "run1", "business_id": "biz1"},
+        step={"key": "request_sheet_append"},
+        orchestrator_result={
+            "action_id": "action-1",
+            "result": {"request_id": "sheet-request-1"},
+        },
+        user_data={"user_id": "user1"},
+    )
+
+    request = cursor.tables["agent_sheet_operation_requests"]["sheet-request-1"]
+    assert result["executed"] == 1
+    assert result["provider_writes_performed"] is False
+    assert result["items"][0]["kind"] == "sheet_operation_request"
+    assert request["status"] == "approved_for_execution"
+    assert request["approval_state"] == "approved"
+    assert request["apply_state"] == "approved_not_applied"
+    assert request["provider_write_performed"] is False
+    assert cursor.ledger_entries[0]["action_type"] == "agent_domain_request_approved"
+    assert cursor.ledger_entries[0]["status"] == "approved_pending_provider_executor"
+    assert cursor.ledger_entries[0]["metadata"]["run_id"] == "run1"
+
+
 def test_telegram_trigger_runtime_records_ignored_event_when_no_custom_blueprint():
     from services.agent_trigger_runtime import dispatch_telegram_message_to_agent_blueprints
 
@@ -2769,6 +2809,81 @@ class FakeCapabilityCursor:
             self.last_result = (params[0],)
             return None
         raise AssertionError(f"Unhandled capability SQL: {query}")
+
+    def fetchone(self):
+        return self.last_result
+
+    def fetchall(self):
+        return self.last_results
+
+
+class FakeApprovedDomainExecutorCursor:
+    def __init__(self):
+        self.tables = {
+            "agent_sheet_operation_requests": {},
+            "agent_communication_requests": {},
+            "reviewreplydrafts": {},
+            "agent_service_optimization_requests": {},
+            "agent_action_ledger": {},
+        }
+        self.last_result = None
+        self.last_results = []
+        self.ledger_entries = []
+
+    def execute(self, query, params=None):
+        normalized_query = " ".join(query.split()).lower()
+        params = params or ()
+        if normalized_query.startswith("select to_regclass"):
+            table_name = str(params[0])
+            self.last_result = (table_name if table_name in self.tables else None,)
+            return None
+        if normalized_query.startswith("select id, action_id, status, approval_state"):
+            business_id = params[0]
+            request_ids = set(params[1])
+            action_ids = set(params[2])
+            self.last_results = [
+                row
+                for row in self.tables["agent_sheet_operation_requests"].values()
+                if row.get("business_id") == business_id and (row.get("id") in request_ids or row.get("action_id") in action_ids)
+            ]
+            return None
+        if "from agent_communication_requests" in normalized_query:
+            self.last_results = []
+            return None
+        if "from reviewreplydrafts" in normalized_query:
+            self.last_results = []
+            return None
+        if "from agent_service_optimization_requests" in normalized_query:
+            self.last_results = []
+            return None
+        if normalized_query.startswith("update agent_sheet_operation_requests"):
+            request = self.tables["agent_sheet_operation_requests"].get(params[0])
+            if request and request.get("business_id") == params[1] and request.get("provider_write_performed") is False:
+                request["status"] = "approved_for_execution"
+                request["approval_state"] = "approved"
+                request["apply_state"] = "approved_not_applied"
+            return None
+        if (
+            normalized_query.startswith("create table")
+            or normalized_query.startswith("create index")
+            or normalized_query.startswith("create unique index")
+        ):
+            return None
+        if normalized_query.startswith("insert into agent_action_ledger"):
+            metadata = json.loads(params[14])
+            entry = {
+                "id": params[0],
+                "action_type": params[3],
+                "capability": params[4],
+                "risk_level": params[6],
+                "status": params[10],
+                "reason_code": params[11],
+                "metadata": metadata,
+            }
+            self.ledger_entries.append(entry)
+            self.tables["agent_action_ledger"][params[0]] = entry
+            return None
+        raise AssertionError(f"Unhandled approved executor SQL: {query}")
 
     def fetchone(self):
         return self.last_result

@@ -28,6 +28,7 @@ track.
 - AC8: Architecture docs describe Compile AI custom workflows as blueprint/capability/runtime, not a parallel integration entity.
 - AC9: Targeted tests and syntax checks pass.
 - AC10: Agent run observability surfaces domain requests, approval state, apply state and plain-language waiting reasons for compiled workflows.
+- AC11: Approved executor boundary moves domain requests forward only after a human gate, records audit ledger evidence, and still performs no provider writes.
 
 ## Constraints
 - No direct Google Sheets API write in this iteration.

@@ -3,6 +3,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from core.action_orchestrator import ActionOrchestrator
+from services.agent_domain_request_executors import execute_approved_domain_requests
 from services.agent_blueprint_workspace import build_generic_artifact_payload
 
 
@@ -765,6 +766,13 @@ class AgentBlueprintRunner:
             )
             self._fail_run(str(run.get("id")), reason_code, step_id)
             return False
+        approved_executor = execute_approved_domain_requests(
+            self.cursor,
+            run=run,
+            step=step,
+            orchestrator_result=orchestrator_result,
+            user_data=user_data,
+        )
         self.cursor.execute(
             """
             UPDATE agent_run_steps
@@ -774,7 +782,14 @@ class AgentBlueprintRunner:
             WHERE id = %s
             """,
             (
-                json.dumps({"capability": capability, "orchestrator": orchestrator_result}, ensure_ascii=False),
+                json.dumps(
+                    {
+                        "capability": capability,
+                        "orchestrator": orchestrator_result,
+                        "approved_executor": approved_executor,
+                    },
+                    ensure_ascii=False,
+                ),
                 step_id,
             ),
         )
@@ -1066,6 +1081,11 @@ class AgentBlueprintRunner:
         )
         result = []
         for row in rows:
+            approval_state = str(row.get("approval_state") or "").strip()
+            apply_state = str(row.get("apply_state") or "").strip()
+            waiting_reason = "External spreadsheet write requires human approval before provider write."
+            if approval_state == "approved":
+                waiting_reason = "Human approved; waiting for the controlled provider executor. No spreadsheet write has run yet."
             result.append(
                 {
                     "kind": "sheet_operation_request",
@@ -1074,9 +1094,9 @@ class AgentBlueprintRunner:
                     "title": "Google Sheets update request",
                     "summary": f"{row.get('operation') or 'append_row'} -> {row.get('sheet_name') or row.get('spreadsheet_id') or 'sheet'}",
                     "status": row.get("status"),
-                    "approval_state": row.get("approval_state"),
-                    "apply_state": row.get("apply_state"),
-                    "why_waiting": "External spreadsheet write requires human approval before provider write.",
+                    "approval_state": approval_state or row.get("approval_state"),
+                    "apply_state": apply_state or row.get("apply_state"),
+                    "why_waiting": waiting_reason,
                     "row_values": parse_json_field(row.get("row_values_json"), []),
                     "mapping": parse_json_field(row.get("mapping_json"), {}),
                     "limits": parse_json_field(row.get("limits_json"), {}),
@@ -1104,6 +1124,11 @@ class AgentBlueprintRunner:
         for row in rows:
             recipient_count = int(row.get("recipient_count") or 0)
             channel = str(row.get("channel") or "channel").strip()
+            status = str(row.get("status") or "").strip()
+            approval_state = "approved" if status.startswith("approved_") else "pending_human"
+            waiting_reason = "External customer message requires approval, consent validation, and send limits."
+            if approval_state == "approved":
+                waiting_reason = "Human approved; waiting for controlled channel dispatch. No external send has run yet."
             result.append(
                 {
                     "kind": "communication_request",
@@ -1111,10 +1136,10 @@ class AgentBlueprintRunner:
                     "action_id": row.get("action_id"),
                     "title": "Communication send request",
                     "summary": f"{row.get('message_type') or row.get('capability') or 'message'} -> {channel} · {recipient_count} recipients",
-                    "status": row.get("status"),
-                    "approval_state": "pending_human",
+                    "status": status or row.get("status"),
+                    "approval_state": approval_state,
                     "delivery_state": row.get("delivery_state"),
-                    "why_waiting": "External customer message requires approval, consent validation, and send limits.",
+                    "why_waiting": waiting_reason,
                     "recipients": parse_json_field(row.get("recipients_json"), [])[:10],
                     "recipient_count": recipient_count,
                     "limits": parse_json_field(row.get("limits_json"), {}),
@@ -1143,6 +1168,11 @@ class AgentBlueprintRunner:
         )
         result = []
         for row in rows:
+            status = str(row.get("status") or "").strip()
+            approval_state = "approved" if status.startswith("approved_") else "pending_human"
+            waiting_reason = "Publishing a reply on behalf of the business requires approval."
+            if approval_state == "approved":
+                waiting_reason = "Human approved; waiting for controlled provider publish executor."
             result.append(
                 {
                     "kind": "review_publish_request",
@@ -1150,9 +1180,9 @@ class AgentBlueprintRunner:
                     "review_id": row.get("review_id"),
                     "title": "Review reply publish request",
                     "summary": f"{row.get('source') or 'review'} · {row.get('rating') or '-'} stars · {row.get('author_name') or 'author'}",
-                    "status": row.get("status"),
-                    "approval_state": "pending_human",
-                    "why_waiting": "Publishing a reply on behalf of the business requires approval.",
+                    "status": status or row.get("status"),
+                    "approval_state": approval_state,
+                    "why_waiting": waiting_reason,
                     "draft_text": row.get("edited_text") or row.get("generated_text"),
                     "tone": row.get("tone"),
                     "provider_write_performed": False,
@@ -1177,6 +1207,12 @@ class AgentBlueprintRunner:
         )
         result = []
         for row in rows:
+            status = str(row.get("status") or "").strip()
+            apply_state = str(row.get("apply_state") or "").strip()
+            approval_state = "approved" if status.startswith("approved_") or apply_state == "apply_ready" else "pending_human"
+            waiting_reason = "Service catalog changes require review before applying to business data."
+            if approval_state == "approved":
+                waiting_reason = "Human approved; visual diff is ready for the controlled apply executor."
             result.append(
                 {
                     "kind": "service_optimization_request",
@@ -1184,10 +1220,10 @@ class AgentBlueprintRunner:
                     "action_id": row.get("action_id"),
                     "title": "Service optimization request",
                     "summary": f"{row.get('service_count') or 0} services prepared",
-                    "status": row.get("status"),
-                    "approval_state": "pending_human",
-                    "apply_state": row.get("apply_state"),
-                    "why_waiting": "Service catalog changes require review before applying to business data.",
+                    "status": status or row.get("status"),
+                    "approval_state": approval_state,
+                    "apply_state": apply_state or row.get("apply_state"),
+                    "why_waiting": waiting_reason,
                     "suggestions": parse_json_field(row.get("suggestions_json"), []),
                     "provider_write_performed": False,
                     "created_at": row.get("created_at"),

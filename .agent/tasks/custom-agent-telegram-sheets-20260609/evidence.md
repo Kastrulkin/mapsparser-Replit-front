@@ -46,9 +46,14 @@
 - Status: PASS
 - Proof: `AgentBlueprintRunner.load_run()` now includes `observability.domain_requests` for capability-created domain requests; `AgentRunObservabilityPanel` renders “Ожидают approval” with `why_waiting`, approval/apply status, limits and payload details.
 
+### AC11
+- Status: PASS
+- Proof: `src/services/agent_domain_request_executors.py` is the approved executor boundary; `AgentBlueprintRunner` records `approved_executor` after capability success; `tests/test_agent_blueprint_layer.py::test_approved_domain_executor_moves_sheet_request_after_human_gate` verifies state transition, ledger record, and `provider_write_performed=false`.
+
 ## Commands Run
 - `PYTHONPATH=src python3 -m py_compile src/services/agent_capability_handlers.py src/services/agent_blueprint_draft_builder.py src/services/agent_trigger_runtime.py src/ai_agent_webhooks.py src/core/action_policy.py alembic_migrations/versions/20260609_add_custom_agent_integration_tables.py`
 - `PYTHONPATH=src python3 -m py_compile src/services/agent_blueprint_runner.py`
+- `PYTHONPATH=src python3 -m py_compile src/services/agent_domain_request_executors.py src/services/agent_blueprint_runner.py`
 - `PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py`
 - `PYTHONPATH=src python3 -m pytest -q tests/test_capabilities_api_phase1.py`
 - `npm --prefix frontend run build`
