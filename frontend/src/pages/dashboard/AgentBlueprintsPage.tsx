@@ -2,16 +2,21 @@ import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import {
+  Activity,
+  AlertTriangle,
   Bot,
   CheckCircle2,
   Clock3,
   Database,
+  Download,
   FileCheck2,
   FileText,
+  LifeBuoy,
   Loader2,
   Mail,
   MessageSquareText,
   Play,
+  ReceiptText,
   RefreshCw,
   Search,
   Send,
@@ -165,6 +170,67 @@ type AgentRunStep = {
   error_text?: string | null;
 };
 
+type AgentRunObservability = {
+  schema?: string;
+  run_history?: Record<string, unknown>;
+  step_history?: { count?: number; completed?: number; failed?: number; items?: AgentRunStep[] };
+  artifacts?: { count?: number; items?: AgentArtifact[] };
+  approvals?: { count?: number; pending?: number; items?: AgentApproval[] };
+  action_ids?: string[];
+  action_ledger?: {
+    count?: number;
+    items?: Array<{
+      action_id?: string;
+      capability?: string;
+      status?: string;
+      trace_id?: string;
+      billing_summary?: {
+        reserved_tokens?: number;
+        settled_tokens?: number;
+        released_tokens?: number;
+        inflight_reserved_tokens?: number;
+        total_cost?: number;
+      };
+      delivery_stats?: Record<string, unknown>;
+      timeline?: { count?: number; events?: Array<Record<string, unknown>> };
+      error?: string;
+    }>;
+  };
+  delivery_status?: {
+    state?: string;
+    queued_count?: number;
+    attempts_total?: number;
+    attempts_success?: number;
+    attempts_failed?: number;
+    last_error?: string | null;
+    external_dispatch_performed?: boolean;
+  };
+  cost_tokens?: {
+    reserved_tokens?: number;
+    settled_tokens?: number;
+    released_tokens?: number;
+    inflight_reserved_tokens?: number;
+    total_cost?: number;
+  };
+  errors?: Array<{
+    source?: string;
+    step_key?: string;
+    action_id?: string;
+    status?: string;
+    error_text?: string | null;
+  }>;
+  recovery_actions?: Array<{
+    code?: string;
+    label?: string;
+    target?: string;
+  }>;
+  support_export?: {
+    endpoint?: string;
+    formats?: string[];
+    source?: string;
+  };
+};
+
 type AgentRun = {
   id: string;
   status: string;
@@ -175,6 +241,7 @@ type AgentRun = {
   error_text?: string | null;
   started_at?: string | null;
   completed_at?: string | null;
+  observability?: AgentRunObservability;
 };
 
 type AgentBlueprintDetails = {
@@ -2576,6 +2643,7 @@ const AgentDetailPanel = ({
             <summary className="cursor-pointer text-sm font-semibold text-slate-700 hover:text-slate-950">
               Технический журнал
             </summary>
+            <AgentRunObservabilityPanel run={activeRun} />
             <div className="mt-4 grid gap-4 xl:grid-cols-3">
               <RunColumn title="Шаги runtime" icon={Clock3}>
                 {(activeRun.steps || []).map((step) => (
@@ -3572,6 +3640,103 @@ const formatPayloadValue = (value: unknown): string => {
   }
   return String(value ?? '');
 };
+
+const AgentRunObservabilityPanel = ({ run }: { run: AgentRun }) => {
+  const [downloading, setDownloading] = useState(false);
+  const observability = run.observability || {};
+  const costTokens = observability.cost_tokens || {};
+  const delivery = observability.delivery_status || {};
+  const ledgerItems = observability.action_ledger?.items || [];
+  const errors = observability.errors || [];
+  const recoveryActions = observability.recovery_actions || [];
+  const rawSupportEndpoint = observability.support_export?.endpoint || `/api/agent-runs/${run.id}/support-export`;
+  const supportEndpoint = rawSupportEndpoint.startsWith('/api/') ? rawSupportEndpoint.slice(4) : rawSupportEndpoint;
+
+  const downloadSupportExport = async () => {
+    setDownloading(true);
+    try {
+      const response = await api.get(supportEndpoint, {
+        params: { format: 'json' },
+      });
+      const content = JSON.stringify(response.data, null, 2);
+      const blob = new Blob([content], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `agent-run-${run.id}-support.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <div className="mt-4 space-y-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <AgentObservabilityMetric icon={Activity} label="Run history" value={run.status} hint={`${observability.step_history?.count || run.steps?.length || 0} шагов`} />
+        <AgentObservabilityMetric icon={ReceiptText} label="Cost / tokens" value={`${costTokens.settled_tokens || 0} ток.`} hint={`${costTokens.total_cost || 0} cost`} />
+        <AgentObservabilityMetric icon={Send} label="Delivery" value={humanizeMeta(delivery.state || 'not_applicable')} hint={`${delivery.attempts_success || 0}/${delivery.attempts_total || 0} attempts`} />
+        <AgentObservabilityMetric icon={AlertTriangle} label="Errors" value={String(errors.length)} hint={errors.length ? 'нужна проверка' : 'нет ошибок'} />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-3">
+        <RunColumn title="Action ledger" icon={ReceiptText}>
+          {ledgerItems.map((item) => (
+            <TimelineItem
+              key={item.action_id || item.trace_id || item.capability || 'action'}
+              title={item.capability || item.action_id || 'OpenClaw action'}
+              meta={`${item.action_id || 'no action id'} · ${item.billing_summary?.settled_tokens || 0} ток.`}
+              status={item.status || (item.error ? 'failed' : 'linked')}
+            />
+          ))}
+        </RunColumn>
+        <RunColumn title="Ошибки и статусы" icon={AlertTriangle}>
+          {errors.map((item, index) => (
+            <TimelineItem
+              key={`${item.source || 'error'}-${item.action_id || item.step_key || index}`}
+              title={item.error_text || item.step_key || item.action_id || 'Ошибка runtime'}
+              meta={item.source || item.status || 'agent runtime'}
+              status={item.status || 'failed'}
+            />
+          ))}
+        </RunColumn>
+        <RunColumn title="Recovery / support" icon={LifeBuoy}>
+          {recoveryActions.map((item) => (
+            <TimelineItem key={item.code || item.label || 'recovery'} title={item.label || item.code || 'Recovery action'} meta={item.target || 'support boundary'} status="needs_approval" />
+          ))}
+          <Button type="button" variant="outline" size="sm" onClick={downloadSupportExport} disabled={downloading}>
+            {downloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+            Support export
+          </Button>
+        </RunColumn>
+      </div>
+    </div>
+  );
+};
+
+const AgentObservabilityMetric = ({
+  icon: Icon,
+  label,
+  value,
+  hint,
+}: {
+  icon: typeof Clock3;
+  label: string;
+  value: string;
+  hint: string;
+}) => (
+  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+    <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+      <Icon className="h-4 w-4" />
+      {label}
+    </div>
+    <div className="mt-2 text-lg font-semibold text-slate-950">{value}</div>
+    <div className="mt-1 text-xs text-slate-500">{hint}</div>
+  </div>
+);
 
 const RunColumn = ({
   title,

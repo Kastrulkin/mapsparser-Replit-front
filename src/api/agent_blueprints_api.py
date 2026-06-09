@@ -2,7 +2,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, Response, jsonify, request
 
 from core.auth_helpers import require_auth_from_request, verify_business_access
 from database_manager import DatabaseManager
@@ -886,7 +886,33 @@ def get_agent_run(run_id: str):
         if access_error:
             return access_error
         runner = AgentBlueprintRunner(cursor, build_agent_blueprint_orchestrator())
-        return jsonify({"success": True, "run": runner.load_run(run_id)})
+        return jsonify({"success": True, "run": runner.load_run(run_id, user_data)})
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-runs/<run_id>/support-export", methods=["GET"])
+def get_agent_run_support_export(run_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute("SELECT blueprint_id FROM agent_runs WHERE id = %s", (run_id,))
+        row = cursor.fetchone()
+        if not row:
+            return _json_error("Run not found", 404, "NOT_FOUND")
+        blueprint, access_error = _require_blueprint_access(cursor, str(row.get("blueprint_id") or ""), user_data)
+        if access_error:
+            return access_error
+        runner = AgentBlueprintRunner(cursor, build_agent_blueprint_orchestrator())
+        if str(request.args.get("format") or "").strip().lower() == "markdown":
+            return Response(runner.render_run_support_export_markdown(run_id, user_data), mimetype="text/markdown")
+        result = runner.build_run_support_export(run_id, user_data)
+        if not result.get("success"):
+            return _json_error(str(result.get("error") or "support export failed"), 400, "SUPPORT_EXPORT_FAILED")
+        return jsonify(result)
     finally:
         db.close()
 

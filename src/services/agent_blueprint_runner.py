@@ -824,7 +824,7 @@ class AgentBlueprintRunner:
             (error_text, run_id),
         )
 
-    def load_run(self, run_id: str) -> Optional[Dict[str, Any]]:
+    def load_run(self, run_id: str, user_data: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
         run = self._load_run_header(run_id)
         if not run:
             return None
@@ -858,7 +858,312 @@ class AgentBlueprintRunner:
             (run_id,),
         )
         approvals = [self._normalize_json_row(dict(row)) for row in (self.cursor.fetchall() or [])]
-        return {**self._normalize_json_row(run), "steps": steps, "artifacts": artifacts, "approvals": approvals}
+        normalized_run = self._normalize_json_row(run)
+        observability = self._build_run_observability(normalized_run, steps, artifacts, approvals, user_data or {})
+        return {**normalized_run, "steps": steps, "artifacts": artifacts, "approvals": approvals, "observability": observability}
+
+    def build_run_support_export(self, run_id: str, user_data: Dict[str, Any]) -> Dict[str, Any]:
+        run = self.load_run(run_id, user_data)
+        if not run:
+            return {"success": False, "error": "run_not_found"}
+        observability = run.get("observability") if isinstance(run.get("observability"), dict) else {}
+        return {
+            "success": True,
+            "run_id": run_id,
+            "blueprint_id": run.get("blueprint_id"),
+            "business_id": run.get("business_id"),
+            "support_export": {
+                "format": "agent_run_observability_v1",
+                "run": {
+                    "id": run.get("id"),
+                    "status": run.get("status"),
+                    "started_at": run.get("started_at"),
+                    "completed_at": run.get("completed_at"),
+                    "error_text": run.get("error_text"),
+                },
+                "observability": observability,
+                "steps": run.get("steps") or [],
+                "artifacts": run.get("artifacts") or [],
+                "approvals": run.get("approvals") or [],
+            },
+        }
+
+    def render_run_support_export_markdown(self, run_id: str, user_data: Dict[str, Any]) -> str:
+        result = self.build_run_support_export(run_id, user_data)
+        if not result.get("success"):
+            return "# Agent Run Support Export\n\n- run not found\n"
+        bundle = result.get("support_export") if isinstance(result.get("support_export"), dict) else {}
+        run = bundle.get("run") if isinstance(bundle.get("run"), dict) else {}
+        observability = bundle.get("observability") if isinstance(bundle.get("observability"), dict) else {}
+        cost_tokens = observability.get("cost_tokens") if isinstance(observability.get("cost_tokens"), dict) else {}
+        lines = [
+            "# Agent Run Support Export",
+            "",
+            f"- run_id: `{run.get('id')}`",
+            f"- blueprint_id: `{result.get('blueprint_id')}`",
+            f"- business_id: `{result.get('business_id')}`",
+            f"- status: `{run.get('status')}`",
+            f"- errors: `{len(observability.get('errors') or [])}`",
+            f"- action_ids: `{', '.join(observability.get('action_ids') or []) or 'none'}`",
+            f"- settled_tokens: `{cost_tokens.get('settled_tokens') or 0}`",
+            f"- total_cost: `{cost_tokens.get('total_cost') or 0}`",
+            "",
+            "## Recovery Actions",
+        ]
+        for item in observability.get("recovery_actions") or []:
+            lines.append(f"- `{item.get('code')}` {item.get('label')}")
+        if not observability.get("recovery_actions"):
+            lines.append("- none")
+        lines.append("")
+        lines.append("## Delivery")
+        delivery = observability.get("delivery_status") if isinstance(observability.get("delivery_status"), dict) else {}
+        lines.append(f"- state: `{delivery.get('state') or 'unknown'}`")
+        lines.append(f"- attempts: `{delivery.get('attempts_total') or 0}`")
+        lines.append("")
+        return "\n".join(lines)
+
+    def _build_run_observability(
+        self,
+        run: Dict[str, Any],
+        steps: List[Dict[str, Any]],
+        artifacts: List[Dict[str, Any]],
+        approvals: List[Dict[str, Any]],
+        user_data: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        action_ids = self._extract_action_ids(steps)
+        action_observations = []
+        for action_id in action_ids:
+            action_observations.append(self._load_action_observability(action_id, user_data))
+
+        step_errors = [
+            {
+                "source": "agent_step",
+                "step_id": step.get("id"),
+                "step_key": step.get("step_key"),
+                "status": step.get("status"),
+                "error_text": step.get("error_text"),
+            }
+            for step in steps
+            if step.get("error_text") or str(step.get("status") or "") in {"failed", "blocked", "rejected"}
+        ]
+        action_errors = []
+        for observation in action_observations:
+            if observation.get("error"):
+                action_errors.append({"source": "openclaw_action", "action_id": observation.get("action_id"), "error_text": observation.get("error")})
+            for item in observation.get("errors") or []:
+                action_errors.append(item)
+
+        cost_tokens = self._aggregate_cost_tokens(action_observations)
+        delivery_status = self._build_delivery_status(artifacts, action_observations)
+        recovery_actions = self._build_recovery_actions(run, step_errors + action_errors, delivery_status, action_ids)
+
+        return {
+            "schema": "agent_run_observability_v1",
+            "run_history": {
+                "run_id": run.get("id"),
+                "blueprint_id": run.get("blueprint_id"),
+                "business_id": run.get("business_id"),
+                "status": run.get("status"),
+                "started_at": run.get("started_at"),
+                "completed_at": run.get("completed_at"),
+            },
+            "step_history": {
+                "count": len(steps),
+                "completed": len([step for step in steps if str(step.get("status") or "") == "completed"]),
+                "failed": len([step for step in steps if str(step.get("status") or "") in {"failed", "blocked", "rejected"}]),
+                "items": steps,
+            },
+            "artifacts": {"count": len(artifacts), "items": artifacts},
+            "approvals": {
+                "count": len(approvals),
+                "pending": len([item for item in approvals if str(item.get("status") or "") == "pending"]),
+                "items": approvals,
+            },
+            "action_ids": action_ids,
+            "action_ledger": {
+                "count": len(action_observations),
+                "items": action_observations,
+            },
+            "delivery_status": delivery_status,
+            "cost_tokens": cost_tokens,
+            "errors": step_errors + action_errors,
+            "recovery_actions": recovery_actions,
+            "support_export": {
+                "endpoint": f"/api/agent-runs/{run.get('id')}/support-export",
+                "formats": ["json", "markdown"],
+                "source": "agent_run_detail",
+            },
+        }
+
+    def _load_action_observability(self, action_id: str, user_data: Dict[str, Any]) -> Dict[str, Any]:
+        if not user_data:
+            return {
+                "action_id": action_id,
+                "status": "linked",
+                "support_package_loaded": False,
+                "error": "user_context_required_for_openclaw_observability",
+            }
+        support = self.orchestrator.get_action_support_package(action_id, user_data, limit=100, full=False)
+        if not support.get("success"):
+            return {
+                "action_id": action_id,
+                "status": "unavailable",
+                "support_package_loaded": False,
+                "error": support.get("error") or "support_package_unavailable",
+            }
+        billing = support.get("billing") if isinstance(support.get("billing"), dict) else {}
+        timeline = support.get("timeline") if isinstance(support.get("timeline"), dict) else {}
+        events = timeline.get("events") if isinstance(timeline.get("events"), list) else []
+        return {
+            "action_id": action_id,
+            "capability": support.get("capability"),
+            "status": support.get("status"),
+            "trace_id": support.get("trace_id"),
+            "delivery_stats": support.get("delivery_stats") if isinstance(support.get("delivery_stats"), dict) else {},
+            "billing_summary": billing.get("summary") if isinstance(billing.get("summary"), dict) else {},
+            "billing_entries": billing.get("entries") if isinstance(billing.get("entries"), list) else [],
+            "timeline": {
+                "count": len(events),
+                "events": events,
+            },
+            "errors": self._extract_timeline_errors(action_id, events),
+            "support_package_loaded": True,
+        }
+
+    def _extract_action_ids(self, steps: List[Dict[str, Any]]) -> List[str]:
+        result = []
+        for step in steps:
+            output = step.get("output_json") if isinstance(step.get("output_json"), dict) else {}
+            candidates = [
+                output.get("action_id"),
+            ]
+            orchestrator = output.get("orchestrator") if isinstance(output.get("orchestrator"), dict) else {}
+            candidates.extend([orchestrator.get("action_id")])
+            nested_result = orchestrator.get("result") if isinstance(orchestrator.get("result"), dict) else {}
+            candidates.append(nested_result.get("action_id"))
+            for candidate in candidates:
+                action_id = str(candidate or "").strip()
+                if action_id and action_id not in result:
+                    result.append(action_id)
+        return result
+
+    def _aggregate_cost_tokens(self, action_observations: List[Dict[str, Any]]) -> Dict[str, Any]:
+        reserved_tokens = 0
+        settled_tokens = 0
+        released_tokens = 0
+        total_cost = 0.0
+        for observation in action_observations:
+            summary = observation.get("billing_summary") if isinstance(observation.get("billing_summary"), dict) else {}
+            reserved_tokens += int(summary.get("reserved_tokens") or 0)
+            settled_tokens += int(summary.get("settled_tokens") or 0)
+            released_tokens += int(summary.get("released_tokens") or 0)
+            total_cost += float(summary.get("total_cost") or 0.0)
+        return {
+            "reserved_tokens": reserved_tokens,
+            "settled_tokens": settled_tokens,
+            "released_tokens": released_tokens,
+            "inflight_reserved_tokens": max(reserved_tokens - settled_tokens - released_tokens, 0),
+            "total_cost": round(total_cost, 6),
+        }
+
+    def _build_delivery_status(self, artifacts: List[Dict[str, Any]], action_observations: List[Dict[str, Any]]) -> Dict[str, Any]:
+        queued_count = 0
+        dispatch_states = []
+        for artifact in artifacts:
+            payload = artifact.get("payload_json") if isinstance(artifact.get("payload_json"), dict) else {}
+            queued_count += int(payload.get("queued_count") or payload.get("queue_count") or 0)
+            state = str(payload.get("dispatch_state") or "").strip()
+            if state:
+                dispatch_states.append(state)
+        attempts_total = 0
+        attempts_failed = 0
+        attempts_success = 0
+        last_error = ""
+        for observation in action_observations:
+            stats = observation.get("delivery_stats") if isinstance(observation.get("delivery_stats"), dict) else {}
+            attempts_total += int(stats.get("attempts_total") or 0)
+            attempts_success += int(stats.get("attempts_success") or 0)
+            attempts_failed += int(stats.get("attempts_failed") or 0)
+            if stats.get("last_error"):
+                last_error = str(stats.get("last_error") or "")
+        state = "not_applicable"
+        if queued_count > 0:
+            state = "queued"
+        if attempts_total > 0 and attempts_failed == 0:
+            state = "delivered"
+        if attempts_failed > 0:
+            state = "delivery_attention"
+        return {
+            "state": state,
+            "queued_count": queued_count,
+            "dispatch_states": dispatch_states,
+            "attempts_total": attempts_total,
+            "attempts_success": attempts_success,
+            "attempts_failed": attempts_failed,
+            "last_error": last_error or None,
+            "external_dispatch_performed": attempts_total > 0,
+        }
+
+    def _extract_timeline_errors(self, action_id: str, events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        errors = []
+        for event in events:
+            details = event.get("details") if isinstance(event.get("details"), dict) else {}
+            status = str(event.get("status") or "").lower()
+            event_type = str(event.get("event_type") or "").lower()
+            error_text = str(details.get("error_text") or details.get("error") or "").strip()
+            if status in {"failed", "retry", "dlq"} or event_type in {"failed", "error"} or error_text:
+                errors.append(
+                    {
+                        "source": str(event.get("source") or "openclaw_timeline"),
+                        "action_id": action_id,
+                        "event_type": event.get("event_type"),
+                        "status": event.get("status"),
+                        "error_text": error_text,
+                    }
+                )
+        return errors
+
+    def _build_recovery_actions(
+        self,
+        run: Dict[str, Any],
+        errors: List[Dict[str, Any]],
+        delivery_status: Dict[str, Any],
+        action_ids: List[str],
+    ) -> List[Dict[str, Any]]:
+        actions = []
+        if errors:
+            actions.append(
+                {
+                    "code": "review_agent_run_errors",
+                    "label": "Review failed agent steps and OpenClaw timeline events.",
+                    "target": f"/api/agent-runs/{run.get('id')}/support-export",
+                }
+            )
+        if str(delivery_status.get("state") or "") == "delivery_attention":
+            actions.append(
+                {
+                    "code": "replay_or_inspect_callback_outbox",
+                    "label": "Inspect callback delivery attempts and replay DLQ/retry items from the support boundary.",
+                    "target": "/api/capabilities/callbacks/outbox/replay",
+                }
+            )
+        if action_ids:
+            actions.append(
+                {
+                    "code": "export_openclaw_support_bundle",
+                    "label": "Export the linked OpenClaw support bundle from this agent run.",
+                    "target": f"/api/agent-runs/{run.get('id')}/support-export?format=markdown",
+                }
+            )
+        if str(run.get("status") or "") in {"failed", "rejected"}:
+            actions.append(
+                {
+                    "code": "create_fixed_agent_version",
+                    "label": "Use run feedback to create a corrected blueprint version.",
+                    "target": f"/api/agent-runs/{run.get('id')}/feedback",
+                }
+            )
+        return actions
 
     def _load_run_header(self, run_id: str) -> Optional[Dict[str, Any]]:
         self.cursor.execute("SELECT * FROM agent_runs WHERE id = %s", (run_id,))

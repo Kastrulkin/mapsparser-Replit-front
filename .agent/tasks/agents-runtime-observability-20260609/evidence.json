@@ -1,0 +1,41 @@
+{
+  "task_id": "agents-runtime-observability-20260609",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Agent run detail exposes runtime observability and embeds OpenClaw support/audit/outbox outputs into the agent run surface.",
+      "status": "PASS",
+      "proof": [
+        "AgentBlueprintRunner.load_run returns run.observability.",
+        "run.observability contains run_history, step_history, artifacts, approvals, action_ledger, delivery_status, cost_tokens, errors, recovery_actions, support_export.",
+        "GET /api/agent-runs/<run_id>/support-export is registered.",
+        "AgentBlueprintsPage renders AgentRunObservabilityPanel inside technical journal.",
+        "Docs updated in LOCALOS_AGENT_ARCHITECTURE_V1 and LocalOS OpenClaw contract.",
+        "py_compile passed.",
+        "tests/test_agent_blueprint_layer.py passed with 42 tests.",
+        "npm run build passed."
+      ],
+      "gaps": [
+        "Production deploy verification pending."
+      ]
+    }
+  ],
+  "changed_files": [
+    "src/services/agent_blueprint_runner.py",
+    "src/api/agent_blueprints_api.py",
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
+    "tests/test_agent_blueprint_layer.py",
+    "docs/LOCALOS_AGENT_ARCHITECTURE_V1.md",
+    "docs/contracts/localos-openclaw/PHASE1.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "PYTHONPATH=src python3 -m py_compile src/api/agent_blueprints_api.py src/services/agent_blueprint_runner.py",
+    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "cd frontend && npm run build",
+    "scripts/proof_loop.sh validate agents-runtime-observability-20260609"
+  ],
+  "known_gaps": [
+    "Production deploy verification pending."
+  ]
+}

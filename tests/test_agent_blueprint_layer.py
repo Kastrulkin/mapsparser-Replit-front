@@ -61,6 +61,9 @@ def test_agent_blueprint_routes_are_owned_by_blueprint():
         "/api/agent-runs/<run_id>": {
             "GET": "agent_blueprints_api.get_agent_run",
         },
+        "/api/agent-runs/<run_id>/support-export": {
+            "GET": "agent_blueprints_api.get_agent_run_support_export",
+        },
         "/api/agent-runs/<run_id>/feedback": {
             "POST": "agent_blueprints_api.create_agent_run_feedback",
         },
@@ -507,6 +510,8 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "build_agent_datahub_catalog" in api_source
     assert "build_agent_source_from_upload" in api_source
     assert "/api/agent-runs/<run_id>/feedback" in api_source
+    assert "/api/agent-runs/<run_id>/support-export" in api_source
+    assert "build_run_support_export" in api_source
     assert "/api/agent-blueprints/<blueprint_id>/versions/<version_id>/diff" in api_source
     assert "/api/agent-blueprints/<blueprint_id>/versions/<version_id>/activate" in api_source
     assert "/api/agent-blueprints/<blueprint_id>/versions/<version_id>/rollback" in api_source
@@ -548,6 +553,10 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "AIAgents legacy wrapper" in agents_page_source
     assert "Путь {humanizeCategory(category).toLowerCase()}-агента" in agents_page_source
     assert "Технический журнал" in agents_page_source
+    assert "AgentRunObservabilityPanel" in agents_page_source
+    assert "Action ledger" in agents_page_source
+    assert "Support export" in agents_page_source
+    assert "agent_run_observability_v1" in Path("src/services/agent_blueprint_runner.py").read_text(encoding="utf-8")
     assert "Использовано в последнем запуске" in agents_page_source
     assert "used_sources" in workspace_source
     assert "resultFieldLabels" in agents_page_source
@@ -1676,6 +1685,75 @@ def test_risk_policy_requires_human_for_dangerous_capabilities():
         risk = evaluate_risk_policy(capability, {}, {})
         assert risk["requires_human"] is True
         assert risk["reason"] == "dangerous capability requires review"
+
+
+def test_runner_load_run_includes_observability_envelope_for_openclaw_actions():
+    from services.agent_blueprint_runner import AgentBlueprintRunner
+
+    class FakeObservabilityOrchestrator:
+        def execute(self, envelope, user_data, *, allow_execute_when_approved=False):
+            return {"success": True, "status": "completed", "action_id": "action-1", "result": {}, "billing": {}}
+
+        def get_action_support_package(self, action_id, user_data, **kwargs):
+            return {
+                "success": True,
+                "action_id": action_id,
+                "tenant_id": "biz1",
+                "capability": "communications.send_reminder",
+                "trace_id": "agent-run:run1:send",
+                "status": "completed",
+                "delivery_stats": {
+                    "attempts_total": 1,
+                    "attempts_success": 1,
+                    "attempts_failed": 0,
+                },
+                "billing": {
+                    "summary": {
+                        "reserved_tokens": 2000,
+                        "settled_tokens": 42,
+                        "released_tokens": 1958,
+                        "total_cost": 0.012,
+                    },
+                    "entries": [{"entry_type": "settle", "tokens_out": 42, "cost": 0.012}],
+                },
+                "timeline": {
+                    "events": [
+                        {"source": "action_transition", "event_type": "completed", "status": "completed", "details": {}},
+                    ],
+                },
+            }
+
+    cursor = FakeCursor()
+    cursor.tables["agent_runs"]["run1"] = {
+        "id": "run1",
+        "blueprint_id": "bp1",
+        "blueprint_version_id": "ver1",
+        "business_id": "biz1",
+        "status": "completed",
+        "input_json": {},
+        "output_json": {},
+        "created_by_user_id": "user1",
+    }
+    cursor.tables["agent_run_steps"]["step1"] = {
+        "id": "step1",
+        "run_id": "run1",
+        "step_index": 0,
+        "step_key": "send",
+        "step_type": "capability",
+        "status": "completed",
+        "input_json": {},
+        "output_json": {"orchestrator": {"action_id": "action-1"}},
+    }
+
+    run = AgentBlueprintRunner(cursor, FakeObservabilityOrchestrator()).load_run("run1", {"user_id": "user1"})
+    observability = run["observability"]
+
+    assert observability["schema"] == "agent_run_observability_v1"
+    assert observability["action_ids"] == ["action-1"]
+    assert observability["action_ledger"]["items"][0]["billing_summary"]["settled_tokens"] == 42
+    assert observability["delivery_status"]["state"] == "delivered"
+    assert observability["cost_tokens"]["total_cost"] == 0.012
+    assert observability["support_export"]["endpoint"] == "/api/agent-runs/run1/support-export"
 
 
 class FakeCursor:

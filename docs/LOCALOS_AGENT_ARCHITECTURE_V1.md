@@ -229,6 +229,31 @@ third-party systems напрямую.
 - Удаление разрешено только после Alembic migration script, backup policy и proof,
   что UI/API больше не читают deprecated field/endpoint.
 
+## Stage 8 Runtime Observability Canon
+
+Каждый agent run должен открываться как operational detail, а не только как
+результат workflow. Каноничный envelope:
+
+- `run.observability.schema = agent_run_observability_v1`;
+- `run_history`: run id, blueprint, business, status, timestamps;
+- `step_history`: все `agent_run_steps` и агрегаты completed/failed;
+- `artifacts`: все `agent_artifacts`;
+- `approvals`: все `agent_approvals`, включая pending count;
+- `action_ledger`: связанные OpenClaw/ActionOrchestrator actions, billing entries
+  и timeline;
+- `delivery_status`: queue state, callback attempts, success/failure counts;
+- `cost_tokens`: reserved/settled/released tokens and total cost;
+- `errors`: ошибки run, step, OpenClaw timeline/callback delivery;
+- `recovery_actions`: безопасные next actions вроде support export, replay
+  outbox, feedback-based version fix;
+- `support_export`: `/api/agent-runs/<run_id>/support-export`, JSON или markdown.
+
+OpenClaw support/audit/outbox остаются execution-boundary сервисами, но UI больше
+не должен держать их только отдельной "панелью интеграции". Основная точка
+оператора — agent run detail во вкладке `Журнал`: там видны run/step/artifact/
+approval state, action ledger, delivery, cost/tokens, errors, recovery и support
+export для конкретного запуска.
+
 ## Category Canon
 
 Разрешенные категории agent blueprint должны описывать тип workflow, а не отдельный

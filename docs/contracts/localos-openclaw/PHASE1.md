@@ -76,6 +76,7 @@
 38. `GET /api/capabilities/support-export/send-history?tenant_id=&limit=` (user audit trail for manual support bundle sends)
 39. `GET /api/capabilities/support-export/send-history/export?tenant_id=&limit=&format=` (user canonical support-send history export)
 40. `GET /api/agent-blueprints/legacy-migration-plan?business_id=` (user/superadmin read-only migration preview for legacy `AIAgents` and business AI settings)
+41. `GET /api/agent-runs/{run_id}/support-export?format=json|markdown` (user support export for a concrete agent run, including linked OpenClaw action diagnostics when present)
 
 ## Agent Blueprint Runtime Model
 
@@ -102,6 +103,12 @@ Legacy `AIAgents` sandbox/OpenClaw previews are bridged to the common run previe
 contract: preview is dry-run only, external dispatch is false, and real execution
 must go through `/api/agent-blueprints/<blueprint_id>/runs` and then the standard
 OpenClaw/ActionOrchestrator capability path.
+
+Agent run detail is the primary user-facing observability surface. OpenClaw
+action support packages, billing ledger, callback delivery, audit timeline,
+recovery hints, and support export are embedded into `run.observability` for
+the concrete agent run. The standalone OpenClaw integration panel can remain an
+ops/admin surface, but it is not the product-level run detail.
 
 ## Обязательные поля envelope (`execute`)
 
