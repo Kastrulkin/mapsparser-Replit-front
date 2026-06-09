@@ -376,6 +376,79 @@ def _safe_int(value, fallback: int, minimum: int, maximum: int) -> int:
     return max(minimum, min(parsed, maximum))
 
 
+def _normalize_custom_process_payload(payload: dict, current_process: dict) -> dict:
+    google_sheets = current_process.get("google_sheets") if isinstance(current_process.get("google_sheets"), dict) else {}
+    row_values_raw = payload.get("row_values")
+    if isinstance(row_values_raw, str):
+        row_values = [item.strip() for item in row_values_raw.split(",") if item.strip()]
+    elif isinstance(row_values_raw, list):
+        row_values = [str(item or "").strip() for item in row_values_raw if str(item or "").strip()]
+    else:
+        row_values = current_process.get("row_values") if isinstance(current_process.get("row_values"), list) else []
+    if not row_values:
+        row_values = ["{{received_at}}", "{{telegram_username}}", "{{message_text}}"]
+    sheet_name = str(payload.get("sheet_name") or google_sheets.get("sheet_name") or "Leads").strip() or "Leads"
+    spreadsheet_id = str(payload.get("spreadsheet_id") or google_sheets.get("spreadsheet_id") or "").strip()
+    integration_id = str(payload.get("integration_id") or google_sheets.get("integration_id") or "").strip()
+    return {
+        "kind": "integration_workflow",
+        "trigger": str(payload.get("trigger") or current_process.get("trigger") or "telegram.message.received").strip(),
+        "target": str(payload.get("target") or current_process.get("target") or "google_sheets.append_row").strip(),
+        "runtime": "agent_blueprints",
+        "showcase": str(current_process.get("showcase") or "telegram_to_google_sheets"),
+        "binding_status": str(current_process.get("binding_status") or "requires_user_connection"),
+        "row_values": row_values,
+        "columns": [str(item).replace("{{", "").replace("}}", "") for item in row_values],
+        "daily_append_cap": _safe_int(payload.get("daily_append_cap"), int(current_process.get("daily_append_cap") or 50), 1, 500),
+        "google_sheets": {
+            "integration_id": integration_id,
+            "spreadsheet_id": spreadsheet_id,
+            "sheet_name": sheet_name,
+            "operation": "append_row",
+        },
+    }
+
+
+def _apply_custom_process_to_version_payload(version_payload: dict, custom_process: dict) -> dict:
+    payload = dict(version_payload)
+    row_values = custom_process.get("row_values") if isinstance(custom_process.get("row_values"), list) else []
+    columns = custom_process.get("columns") if isinstance(custom_process.get("columns"), list) else []
+    google_sheets = custom_process.get("google_sheets") if isinstance(custom_process.get("google_sheets"), dict) else {}
+    sheet_name = str(google_sheets.get("sheet_name") or "Leads").strip() or "Leads"
+    daily_append_cap = _safe_int(custom_process.get("daily_append_cap"), 50, 1, 500)
+    steps = payload.get("steps") if isinstance(payload.get("steps"), list) else []
+    next_steps = []
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        next_step = dict(step)
+        step_payload = next_step.get("payload") if isinstance(next_step.get("payload"), dict) else {}
+        if next_step.get("key") == "prepare_sheet_row":
+            step_payload = {
+                **step_payload,
+                "columns": columns,
+                "row_values": row_values,
+            }
+        if next_step.get("key") == "request_sheet_append":
+            step_payload = {
+                **step_payload,
+                "sheet_name": sheet_name,
+                "row_values": row_values,
+                "daily_append_cap": daily_append_cap,
+            }
+        next_step["payload"] = step_payload
+        next_steps.append(next_step)
+    payload["steps"] = next_steps
+    output_schema = payload.get("output_schema") if isinstance(payload.get("output_schema"), dict) else {}
+    output_schema["sheet_name"] = sheet_name
+    output_schema["row_values"] = row_values
+    payload["output_schema"] = output_schema
+    limits = payload.get("limits") if isinstance(payload.get("limits"), dict) else {}
+    limits["daily_append_cap"] = daily_append_cap
+    payload["limits"] = limits
+    return payload
+
+
 def _sync_blueprint_integration_metadata(cursor, blueprint: dict, integration: dict) -> dict:
     blueprint_id = str(blueprint.get("id") or "")
     metadata = _blueprint_metadata(_load_blueprint(cursor, blueprint_id) or blueprint)
@@ -1201,6 +1274,52 @@ def save_agent_blueprint_integration(blueprint_id: str):
                 "binding_status": _agent_integration_binding_status(metadata, [integration]),
             }
         ), 201
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/custom-process", methods=["POST"])
+def save_agent_blueprint_custom_process(blueprint_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    payload = request.get_json(silent=True) or {}
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        metadata = _blueprint_metadata(blueprint)
+        current_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+        custom_process = _normalize_custom_process_payload(payload, current_process)
+        metadata["custom_process"] = custom_process
+        compiled_process = metadata.get("compiled_process") if isinstance(metadata.get("compiled_process"), dict) else {}
+        compiled_process["schema"] = str(compiled_process.get("schema") or "compiled_integration_workflow_v1")
+        compiled_process["last_edited_by_user_id"] = _user_id(user_data)
+        compiled_process["last_edited_at"] = _utc_now_text()
+        metadata["compiled_process"] = compiled_process
+        _save_blueprint_metadata(cursor, blueprint_id, metadata)
+        latest_version = _load_latest_blueprint_version(cursor, blueprint_id)
+        version = None
+        event = None
+        if latest_version:
+            version_payload = build_version_payload_from_row(latest_version)
+            version_payload = _apply_custom_process_to_version_payload(version_payload, custom_process)
+            version = _insert_version(cursor, blueprint_id, version_payload, user_data)
+            event = _remember_active_version(cursor, blueprint, version, user_data, "custom_process_updated")
+        db.conn.commit()
+        return jsonify(
+            {
+                "success": True,
+                "custom_process": custom_process,
+                "version": version,
+                "version_event": event,
+            }
+        )
     except Exception:
         db.conn.rollback()
         raise

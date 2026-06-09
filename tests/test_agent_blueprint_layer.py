@@ -50,6 +50,9 @@ def test_agent_blueprint_routes_are_owned_by_blueprint():
             "GET": "agent_blueprints_api.list_agent_blueprint_integrations",
             "POST": "agent_blueprints_api.save_agent_blueprint_integration",
         },
+        "/api/agent-blueprints/<blueprint_id>/custom-process": {
+            "POST": "agent_blueprints_api.save_agent_blueprint_custom_process",
+        },
         "/api/agent-blueprints/<blueprint_id>/sources": {
             "POST": "agent_blueprints_api.add_agent_blueprint_source",
         },
@@ -1378,6 +1381,31 @@ def test_agent_integration_binding_status_tracks_required_compiled_bindings():
     assert [item["status"] for item in status] == ["connected", "connected"]
     assert status[1]["integration_id"] == "sheets-1"
     assert status[1]["missing_config"] == []
+
+
+def test_custom_process_mapping_updates_compiled_version_steps():
+    from api import agent_blueprints_api
+    from services.agent_blueprint_draft_builder import compile_agent_blueprint
+
+    draft = compile_agent_blueprint("Когда пользователь пишет в Telegram бота, добавь строку в Google таблицу")
+    version_payload = agent_blueprints_api._apply_custom_process_to_version_payload(
+        draft["version_payload"],
+        {
+            "row_values": ["{{received_at}}", "{{message_text}}", "{{telegram_user_id}}"],
+            "columns": ["received_at", "message_text", "telegram_user_id"],
+            "daily_append_cap": 12,
+            "google_sheets": {"sheet_name": "Requests"},
+        },
+    )
+
+    request_step = [step for step in version_payload["steps"] if step["key"] == "request_sheet_append"][0]
+    draft_step = [step for step in version_payload["steps"] if step["key"] == "prepare_sheet_row"][0]
+    assert request_step["payload"]["sheet_name"] == "Requests"
+    assert request_step["payload"]["daily_append_cap"] == 12
+    assert request_step["payload"]["row_values"] == ["{{received_at}}", "{{message_text}}", "{{telegram_user_id}}"]
+    assert draft_step["payload"]["columns"] == ["received_at", "message_text", "telegram_user_id"]
+    assert version_payload["output_schema"]["sheet_name"] == "Requests"
+    assert version_payload["limits"]["daily_append_cap"] == 12
 
 
 def test_agent_blueprint_api_guards_version_blueprint_mismatch():

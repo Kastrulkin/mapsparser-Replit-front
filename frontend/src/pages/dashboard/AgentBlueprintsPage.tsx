@@ -1110,6 +1110,7 @@ export const AgentBlueprintsPage = () => {
   const [sheetDailyCap, setSheetDailyCap] = useState('50');
   const [telegramBotMode, setTelegramBotMode] = useState('business_bot');
   const [telegramDailyCap, setTelegramDailyCap] = useState('50');
+  const [processRowValues, setProcessRowValues] = useState('{{received_at}}, {{telegram_username}}, {{message_text}}');
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackTrigger, setFeedbackTrigger] = useState('manual_edit');
   const [feedbackVersionNotice, setFeedbackVersionNotice] = useState<FeedbackVersionNotice | null>(null);
@@ -1417,11 +1418,15 @@ export const AgentBlueprintsPage = () => {
       const providerCatalog = Array.isArray(response.data?.provider_catalog) ? response.data.provider_catalog : [];
       const authOptions = Array.isArray(response.data?.external_auth_options) ? response.data.external_auth_options : [];
       const bindingStatus = Array.isArray(response.data?.binding_status) ? response.data.binding_status : [];
+      const customProcess = response.data?.custom_process && typeof response.data.custom_process === 'object' ? response.data.custom_process : {};
       setAgentIntegrations(integrations);
       setAvailableAgentIntegrations(available);
       setAgentIntegrationCatalog(providerCatalog);
       setAgentExternalAuthOptions(authOptions);
       setAgentBindingStatus(bindingStatus);
+      if (Array.isArray(customProcess.row_values)) {
+        setProcessRowValues(customProcess.row_values.map((item) => String(item || '').trim()).filter(Boolean).join(', '));
+      }
       const sheet = integrations.find((item) => item.provider === 'google_sheets') || available.find((item) => item.provider === 'google_sheets');
       if (sheet) {
         setSheetSpreadsheetId(String(sheet.config?.spreadsheet_id || ''));
@@ -1906,6 +1911,33 @@ export const AgentBlueprintsPage = () => {
     }
   };
 
+  const saveCustomProcess = async () => {
+    if (!selectedBlueprint) {
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    try {
+      await api.post(`/agent-blueprints/${selectedBlueprint.id}/custom-process`, {
+        trigger: 'telegram.message.received',
+        target: 'google_sheets.append_row',
+        row_values: processRowValues,
+        integration_id: agentIntegrations.find((item) => item.provider === 'google_sheets')?.id || '',
+        spreadsheet_id: sheetSpreadsheetId.trim(),
+        sheet_name: sheetName.trim() || 'Leads',
+        daily_append_cap: Number(sheetDailyCap) > 0 ? Number(sheetDailyCap) : 50,
+      });
+      await loadAgentIntegrations(selectedBlueprint.id);
+      await loadBlueprintDetails(selectedBlueprint.id);
+      await loadBlueprintReview(selectedBlueprint.id);
+    } catch (requestError) {
+      console.error(requestError);
+      setError(getRequestErrorMessage(requestError, 'Не удалось сохранить процесс агента.'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const applyLegacyMigration = async () => {
     if (!currentBusinessId) {
       return;
@@ -2196,6 +2228,7 @@ export const AgentBlueprintsPage = () => {
           sheetDailyCap={sheetDailyCap}
           telegramBotMode={telegramBotMode}
           telegramDailyCap={telegramDailyCap}
+          processRowValues={processRowValues}
           runSource={runSource}
           runCity={runCity}
           runCategory={runCategory}
@@ -2231,8 +2264,10 @@ export const AgentBlueprintsPage = () => {
           onSheetDailyCapChange={setSheetDailyCap}
           onTelegramBotModeChange={setTelegramBotMode}
           onTelegramDailyCapChange={setTelegramDailyCap}
+          onProcessRowValuesChange={setProcessRowValues}
           onSaveSheetIntegration={saveSheetIntegration}
           onSaveTelegramIntegration={saveTelegramIntegration}
+          onSaveCustomProcess={saveCustomProcess}
           onRunSourceChange={setRunSource}
           onRunCityChange={setRunCity}
           onRunCategoryChange={setRunCategory}
@@ -3018,6 +3053,7 @@ const AgentDetailPanel = ({
   sheetDailyCap,
   telegramBotMode,
   telegramDailyCap,
+  processRowValues,
   runSource,
   runCity,
   runCategory,
@@ -3053,8 +3089,10 @@ const AgentDetailPanel = ({
   onSheetDailyCapChange,
   onTelegramBotModeChange,
   onTelegramDailyCapChange,
+  onProcessRowValuesChange,
   onSaveSheetIntegration,
   onSaveTelegramIntegration,
+  onSaveCustomProcess,
   onRunSourceChange,
   onRunCityChange,
   onRunCategoryChange,
@@ -3092,6 +3130,7 @@ const AgentDetailPanel = ({
   sheetDailyCap: string;
   telegramBotMode: string;
   telegramDailyCap: string;
+  processRowValues: string;
   runSource: string;
   runCity: string;
   runCategory: string;
@@ -3127,8 +3166,10 @@ const AgentDetailPanel = ({
   onSheetDailyCapChange: (value: string) => void;
   onTelegramBotModeChange: (value: string) => void;
   onTelegramDailyCapChange: (value: string) => void;
+  onProcessRowValuesChange: (value: string) => void;
   onSaveSheetIntegration: () => void;
   onSaveTelegramIntegration: () => void;
+  onSaveCustomProcess: () => void;
   onRunSourceChange: (value: string) => void;
   onRunCityChange: (value: string) => void;
   onRunCategoryChange: (value: string) => void;
@@ -3179,6 +3220,7 @@ const AgentDetailPanel = ({
         sheetDailyCap={sheetDailyCap}
         telegramBotMode={telegramBotMode}
         telegramDailyCap={telegramDailyCap}
+        processRowValues={processRowValues}
         review={agentReview}
         actionLoading={actionLoading}
         onSetupDataSourcesChange={onSetupDataSourcesChange}
@@ -3203,8 +3245,10 @@ const AgentDetailPanel = ({
         onSheetDailyCapChange={onSheetDailyCapChange}
         onTelegramBotModeChange={onTelegramBotModeChange}
         onTelegramDailyCapChange={onTelegramDailyCapChange}
+        onProcessRowValuesChange={onProcessRowValuesChange}
         onSaveSheetIntegration={onSaveSheetIntegration}
         onSaveTelegramIntegration={onSaveTelegramIntegration}
+        onSaveCustomProcess={onSaveCustomProcess}
       />
     ) : null}
 
@@ -3436,8 +3480,10 @@ const AgentWorkspacePanel = ({
   onSheetDailyCapChange,
   onTelegramBotModeChange,
   onTelegramDailyCapChange,
+  onProcessRowValuesChange,
   onSaveSheetIntegration,
   onSaveTelegramIntegration,
+  onSaveCustomProcess,
 }: {
   versions: Array<Record<string, unknown>>;
   learningEvents: AgentLearningEvent[];
@@ -3465,6 +3511,7 @@ const AgentWorkspacePanel = ({
   sheetDailyCap: string;
   telegramBotMode: string;
   telegramDailyCap: string;
+  processRowValues: string;
   review: AgentReview | null;
   actionLoading: boolean;
   onSetupDataSourcesChange: (value: string) => void;
@@ -3489,8 +3536,10 @@ const AgentWorkspacePanel = ({
   onSheetDailyCapChange: (value: string) => void;
   onTelegramBotModeChange: (value: string) => void;
   onTelegramDailyCapChange: (value: string) => void;
+  onProcessRowValuesChange: (value: string) => void;
   onSaveSheetIntegration: () => void;
   onSaveTelegramIntegration: () => void;
+  onSaveCustomProcess: () => void;
 }) => (
   <DashboardSection
     title="Настройка агента"
@@ -3593,6 +3642,7 @@ const AgentWorkspacePanel = ({
             sheetDailyCap={sheetDailyCap}
             telegramBotMode={telegramBotMode}
             telegramDailyCap={telegramDailyCap}
+            processRowValues={processRowValues}
             actionLoading={actionLoading}
             onSheetSpreadsheetIdChange={onSheetSpreadsheetIdChange}
             onSheetNameChange={onSheetNameChange}
@@ -3600,8 +3650,10 @@ const AgentWorkspacePanel = ({
             onSheetDailyCapChange={onSheetDailyCapChange}
             onTelegramBotModeChange={onTelegramBotModeChange}
             onTelegramDailyCapChange={onTelegramDailyCapChange}
+            onProcessRowValuesChange={onProcessRowValuesChange}
             onSaveSheetIntegration={onSaveSheetIntegration}
             onSaveTelegramIntegration={onSaveTelegramIntegration}
+            onSaveCustomProcess={onSaveCustomProcess}
           />
         </div>
       </div>
@@ -3783,6 +3835,7 @@ const AgentIntegrationsPanel = ({
   sheetDailyCap,
   telegramBotMode,
   telegramDailyCap,
+  processRowValues,
   actionLoading,
   onSheetSpreadsheetIdChange,
   onSheetNameChange,
@@ -3790,8 +3843,10 @@ const AgentIntegrationsPanel = ({
   onSheetDailyCapChange,
   onTelegramBotModeChange,
   onTelegramDailyCapChange,
+  onProcessRowValuesChange,
   onSaveSheetIntegration,
   onSaveTelegramIntegration,
+  onSaveCustomProcess,
 }: {
   integrations: AgentIntegration[];
   availableIntegrations: AgentIntegration[];
@@ -3804,6 +3859,7 @@ const AgentIntegrationsPanel = ({
   sheetDailyCap: string;
   telegramBotMode: string;
   telegramDailyCap: string;
+  processRowValues: string;
   actionLoading: boolean;
   onSheetSpreadsheetIdChange: (value: string) => void;
   onSheetNameChange: (value: string) => void;
@@ -3811,8 +3867,10 @@ const AgentIntegrationsPanel = ({
   onSheetDailyCapChange: (value: string) => void;
   onTelegramBotModeChange: (value: string) => void;
   onTelegramDailyCapChange: (value: string) => void;
+  onProcessRowValuesChange: (value: string) => void;
   onSaveSheetIntegration: () => void;
   onSaveTelegramIntegration: () => void;
+  onSaveCustomProcess: () => void;
 }) => {
   const sheetIntegration = integrations.find((item) => item.provider === 'google_sheets');
   const telegramIntegration = integrations.find((item) => item.provider === 'telegram');
@@ -3855,6 +3913,25 @@ const AgentIntegrationsPanel = ({
           ))}
         </div>
       ) : null}
+
+      <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
+          <Workflow className="h-4 w-4" />
+          Процесс Telegram → Google Sheets
+        </div>
+        <textarea
+          className="min-h-20 w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+          value={processRowValues}
+          onChange={(event) => onProcessRowValuesChange(event.target.value)}
+          placeholder="{{received_at}}, {{telegram_username}}, {{message_text}}"
+        />
+        <div className="text-xs leading-5 text-slate-500">
+          Значения идут в строку таблицы по порядку. Сохранение создаёт новую active version агента.
+        </div>
+        <Button type="button" size="sm" onClick={onSaveCustomProcess} disabled={actionLoading}>
+          Сохранить процесс
+        </Button>
+      </div>
 
       <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
         <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
