@@ -14,11 +14,14 @@
         "Docs updated in LOCALOS_AGENT_ARCHITECTURE_V1 and LocalOS OpenClaw contract.",
         "py_compile passed.",
         "tests/test_agent_blueprint_layer.py passed with 42 tests.",
-        "npm run build passed."
+        "npm run build passed.",
+        "Backend deployed to /opt/seo-app/src and app/worker restarted.",
+        "Frontend dist deployed to /opt/seo-app/frontend/dist and /opt/seo-app/frontend/public-dist.",
+        "Production checks passed: docker compose ps, app logs, curl -I http://localhost:8000, live frontend asset smoke.",
+        "Production route smoke passed for /api/agent-runs/<run_id> and /api/agent-runs/<run_id>/support-export.",
+        "Container source contains agent_run_observability_v1."
       ],
-      "gaps": [
-        "Production deploy verification pending."
-      ]
+      "gaps": []
     }
   ],
   "changed_files": [
@@ -33,9 +36,14 @@
     "PYTHONPATH=src python3 -m py_compile src/api/agent_blueprints_api.py src/services/agent_blueprint_runner.py",
     "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py",
     "cd frontend && npm run build",
+    "ssh ... \"cd /opt/seo-app && docker compose restart app worker\"",
+    "bash scripts/deploy_frontend_dist.sh --build",
+    "ssh ... \"cd /opt/seo-app && docker compose exec -T app python3 - <<'PY' ...\"",
     "scripts/proof_loop.sh validate agents-runtime-observability-20260609"
   ],
-  "known_gaps": [
-    "Production deploy verification pending."
+  "known_gaps": [],
+  "deployment_notes": [
+    "Frontend deploy emitted transient tar file-changed warnings during archive streaming, but final verification passed.",
+    "frontend/public/yandex_9f7f92ca02ef161c.html was included in generated dist because it exists in Vite public, but it remains untracked and uncommitted."
   ]
 }

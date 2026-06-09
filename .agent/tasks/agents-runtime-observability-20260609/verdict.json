@@ -5,13 +5,16 @@
     {
       "id": "AC1",
       "status": "PASS",
-      "reason": "Runtime observability envelope, support export route, UI embedding, docs, py_compile, unit tests, and frontend build are complete."
+      "reason": "Runtime observability envelope, support export route, UI embedding, docs, py_compile, unit tests, frontend build, production deploy, and live route/frontend smoke checks are complete."
     }
   ],
   "commands_run": [
     "PYTHONPATH=src python3 -m py_compile src/api/agent_blueprints_api.py src/services/agent_blueprint_runner.py",
     "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py",
-    "npm run build"
+    "npm run build",
+    "ssh ... \"cd /opt/seo-app && docker compose restart app worker\"",
+    "bash scripts/deploy_frontend_dist.sh --build",
+    "ssh ... \"cd /opt/seo-app && docker compose exec -T app python3 - <<'PY' ...\""
   ],
   "artifacts_used": [
     ".agent/tasks/agents-runtime-observability-20260609/evidence.md",
