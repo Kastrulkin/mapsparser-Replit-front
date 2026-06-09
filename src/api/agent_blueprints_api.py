@@ -18,6 +18,7 @@ from services.agent_blueprint_workspace import (
     build_agent_version_diff,
     build_blueprint_review,
     build_feedback_version_payload,
+    build_learning_loop_summary,
     build_version_payload_from_row,
     normalize_agent_setup,
     normalize_agent_source,
@@ -926,6 +927,10 @@ def create_agent_run_feedback(run_id: str):
     feedback_text = str(payload.get("feedback") or "").strip()
     if not feedback_text:
         return _json_error("feedback is required", 400, "VALIDATION_ERROR")
+    trigger_type = str(payload.get("trigger_type") or payload.get("feedback_type") or "manual_feedback").strip().lower()
+    if trigger_type not in {"manual_edit", "approval_rejected", "bad_outcome", "runtime_error", "manual_feedback", "run_review"}:
+        trigger_type = "manual_feedback"
+    auto_activate = bool(payload.get("auto_activate") is True)
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
@@ -943,20 +948,57 @@ def create_agent_run_feedback(run_id: str):
         feedback = {
             "run_id": run_id,
             "feedback": feedback_text,
+            "trigger_type": trigger_type,
+            "manual_edit": payload.get("manual_edit") if isinstance(payload.get("manual_edit"), dict) else {},
+            "outcome": payload.get("outcome") if isinstance(payload.get("outcome"), dict) else {},
+            "error": payload.get("error") if isinstance(payload.get("error"), dict) else {},
             "created_by_user_id": _user_id(user_data),
-            "source": "run_review",
+            "source": "learning_loop",
+            "created_at": _utc_now_text(),
         }
         metadata = _blueprint_metadata(blueprint)
         history = metadata.get("feedback_history") if isinstance(metadata.get("feedback_history"), list) else []
         history.append(feedback)
         metadata["feedback_history"] = history[-20:]
+        learning_events = metadata.get("learning_events") if isinstance(metadata.get("learning_events"), list) else []
         _save_blueprint_metadata(cursor, str(blueprint.get("id") or ""), metadata)
         version_payload = build_feedback_version_payload(version, feedback)
         new_version = _insert_version(cursor, str(blueprint.get("id") or ""), version_payload, user_data)
         diff = build_agent_version_diff(version, new_version)
-        event = _remember_active_version(cursor, blueprint, new_version, user_data, "feedback_applied", feedback_text)
+        event = None
+        if auto_activate:
+            event = _remember_active_version(cursor, blueprint, new_version, user_data, "feedback_applied", feedback_text)
+        refreshed_blueprint = _load_blueprint(cursor, str(blueprint.get("id") or ""))
+        refreshed_metadata = _blueprint_metadata(refreshed_blueprint or blueprint)
+        learning_summary = build_learning_loop_summary(feedback, version, new_version, diff, auto_activate)
+        learning_events = refreshed_metadata.get("learning_events") if isinstance(refreshed_metadata.get("learning_events"), list) else learning_events
+        learning_events.append(
+            {
+                "run_id": run_id,
+                "trigger_type": trigger_type,
+                "feedback": feedback_text,
+                "previous_version_id": str(version.get("id") or ""),
+                "candidate_version_id": str(new_version.get("id") or ""),
+                "candidate_version_number": _version_number(new_version),
+                "activation_state": learning_summary["activation_state"],
+                "created_by_user_id": _user_id(user_data),
+                "created_at": feedback["created_at"],
+            }
+        )
+        refreshed_metadata["learning_events"] = learning_events[-50:]
+        _save_blueprint_metadata(cursor, str(blueprint.get("id") or ""), refreshed_metadata)
         db.conn.commit()
-        return jsonify({"success": True, "feedback": feedback, "version": new_version, "diff": diff, "version_event": event}), 201
+        return jsonify(
+            {
+                "success": True,
+                "feedback": feedback,
+                "version": new_version,
+                "candidate_version": new_version,
+                "diff": diff,
+                "learning": learning_summary,
+                "version_event": event,
+            }
+        ), 201
     except Exception:
         db.conn.rollback()
         raise

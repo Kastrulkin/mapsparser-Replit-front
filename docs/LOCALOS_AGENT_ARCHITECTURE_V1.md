@@ -1,7 +1,7 @@
 # LocalOS Agent Architecture v1
 
 Дата: 9 июня 2026
-Статус: canonical architecture document; этапы 1-6 частично реализованы в backend/frontend
+Статус: canonical architecture document; этапы 1-9 частично реализованы в backend/frontend
 
 ## Цель
 
@@ -311,6 +311,32 @@ product objects.
 отдельный продуктовый мир. До полной миграции они остаются legacy wrapper внутри
 вкладки `Голос и стиль`; `AIAgents` используются как `Persona`/`Voice`, а не как
 runtime workflow source of truth.
+
+## Learning Loop v1
+
+Агент LocalOS не "самообучается в тумане". Любое улучшение проходит через
+версионируемый и проверяемый цикл:
+
+1. Человек правит текст, отклоняет результат, отмечает плохой outcome или видит
+   ошибку запуска.
+2. UI сохраняет это как `feedback` с `trigger_type`:
+   `manual_edit`, `approval_rejected`, `bad_outcome`, `runtime_error` или
+   `manual_feedback`.
+3. Backend создает новую `agent_blueprint_versions` на основе текущей версии и
+   feedback history.
+4. API возвращает `learning.schema = agent_learning_loop_v1`, candidate version
+   и `diff` через `build_agent_version_diff()`.
+5. Candidate version не становится runtime truth автоматически. Человек видит
+   diff и отдельно нажимает `activate`.
+6. Rollback остается обычным переводом `active_version_id` на предыдущую
+   blueprint version; старые runs остаются привязаны к тем версиям, на которых
+   были созданы.
+
+Текущий endpoint: `POST /api/agent-runs/{run_id}/feedback`.
+
+По умолчанию он работает в безопасном режиме `auto_activate=false`: создает
+candidate version и human gate. Backward-compatible автоактивация возможна
+только через явный `auto_activate=true`; продуктовый UI ее не использует.
 
 ## Approval And Risk Policy
 

@@ -253,6 +253,33 @@ type AgentBlueprintDetails = {
   active_version_number?: number;
 };
 
+type AgentVersionDiff = {
+  summary?: string;
+  changed_fields?: string[];
+  changes?: Array<{
+    field?: string;
+    label?: string;
+    change_type?: string;
+    before?: string;
+    after?: string;
+  }>;
+};
+
+type AgentLearningLoop = {
+  schema?: string;
+  mode?: string;
+  trigger_type?: string;
+  trigger_label?: string;
+  activation_state?: string;
+  human_gate_required?: boolean;
+  candidate_version_id?: string;
+  candidate_version_number?: number;
+  previous_version_id?: string;
+  previous_version_number?: number;
+  diff?: AgentVersionDiff;
+  explanation?: string;
+};
+
 type AgentSource = {
   id?: string;
   source_type?: string;
@@ -333,9 +360,14 @@ type PersonaAgent = {
 type AgentWorkspaceMode = 'settings' | 'run' | 'results' | 'voice';
 
 type FeedbackVersionNotice = {
+  version_id?: string;
+  previous_version_id?: string;
   version_number?: number;
   feedback?: string;
   next_run_note?: string;
+  activation_state?: string;
+  trigger_label?: string;
+  diff?: AgentVersionDiff;
 };
 
 type AgentBuilderMessage = {
@@ -445,6 +477,14 @@ const runStatusFilters = [
   { value: 'waiting_approval', label: 'Ждёт решения' },
   { value: 'completed', label: 'Готово' },
   { value: 'failed', label: 'Ошибка' },
+];
+
+const learningTriggerOptions = [
+  { value: 'manual_edit', label: 'Ручная правка текста' },
+  { value: 'approval_rejected', label: 'Отклонение' },
+  { value: 'bad_outcome', label: 'Плохой outcome' },
+  { value: 'runtime_error', label: 'Ошибка' },
+  { value: 'manual_feedback', label: 'Комментарий' },
 ];
 
 const agentPromptExamples = [
@@ -870,6 +910,7 @@ export const AgentBlueprintsPage = () => {
   const [sourceText, setSourceText] = useState('');
   const [internalSource, setInternalSource] = useState('business_profile');
   const [feedbackText, setFeedbackText] = useState('');
+  const [feedbackTrigger, setFeedbackTrigger] = useState('manual_edit');
   const [feedbackVersionNotice, setFeedbackVersionNotice] = useState<FeedbackVersionNotice | null>(null);
   const [systemAgentConfig, setSystemAgentConfig] = useState<Record<string, { enabled?: boolean }>>({});
   const [recentCreatedAgentName, setRecentCreatedAgentName] = useState('');
@@ -1359,6 +1400,15 @@ export const AgentBlueprintsPage = () => {
       await api.post(`/agent-blueprints/${selectedBlueprint.id}/versions/${versionId}/${action}`, {
         reason: action === 'rollback' ? 'Rollback from dashboard' : 'Activated from dashboard',
       });
+      if (feedbackVersionNotice?.version_id === versionId) {
+        setFeedbackVersionNotice({
+          ...feedbackVersionNotice,
+          activation_state: action === 'rollback' ? 'rolled_back' : 'active',
+          next_run_note: action === 'rollback'
+            ? 'Активная версия возвращена к выбранной версии. История feedback сохранена.'
+            : 'Candidate-версия активирована. Следующие запуски будут использовать её.',
+        });
+      }
       await loadBlueprints();
       await loadBlueprintDetails(selectedBlueprint.id);
       await loadBlueprintReview(selectedBlueprint.id);
@@ -1514,12 +1564,22 @@ export const AgentBlueprintsPage = () => {
     setActionLoading(true);
     setError(null);
     try {
-      const response = await api.post(`/agent-runs/${activeRun.id}/feedback`, { feedback: feedbackText });
+      const response = await api.post(`/agent-runs/${activeRun.id}/feedback`, {
+        feedback: feedbackText,
+        trigger_type: feedbackTrigger,
+        auto_activate: false,
+      });
       const version = response.data?.version || {};
+      const learning: AgentLearningLoop = response.data?.learning || {};
       setFeedbackVersionNotice({
+        version_id: typeof version.id === 'string' ? version.id : learning.candidate_version_id,
+        previous_version_id: learning.previous_version_id,
         version_number: typeof version.version_number === 'number' ? version.version_number : undefined,
         feedback: feedbackText,
-        next_run_note: 'Эта версия стала активной для следующих запусков; старые запуски остаются привязаны к версии, на которой были созданы.',
+        activation_state: learning.activation_state || 'candidate',
+        trigger_label: learning.trigger_label || learningTriggerOptions.find((item) => item.value === feedbackTrigger)?.label || 'Feedback',
+        diff: learning.diff || response.data?.diff || undefined,
+        next_run_note: 'Это candidate-версия. Она сохранена с diff, но не станет runtime truth, пока человек не активирует её.',
       });
       setFeedbackText('');
       if (selectedBlueprint?.id) {
@@ -1756,6 +1816,7 @@ export const AgentBlueprintsPage = () => {
           queuedButNotDispatched={queuedButNotDispatched}
           agentReview={agentReview}
           feedbackText={feedbackText}
+          feedbackTrigger={feedbackTrigger}
           feedbackVersionNotice={feedbackVersionNotice}
           actionLoading={actionLoading}
           setupDataSources={setupDataSources}
@@ -1779,7 +1840,10 @@ export const AgentBlueprintsPage = () => {
           onApprove={() => decideApproval('approve')}
           onReject={() => decideApproval('reject')}
           onFeedbackTextChange={setFeedbackText}
+          onFeedbackTriggerChange={setFeedbackTrigger}
           onSubmitFeedback={sendRunFeedback}
+          onActivateFeedbackVersion={(versionId) => activateVersion(versionId, 'activate')}
+          onRollbackFeedbackVersion={(versionId) => activateVersion(versionId, 'rollback')}
           onSetupDataSourcesChange={setSetupDataSources}
           onSetupExtractionRulesChange={setSetupExtractionRules}
           onSetupProcessingRulesChange={setSetupProcessingRules}
@@ -2421,6 +2485,7 @@ const AgentDetailPanel = ({
   queuedButNotDispatched,
   agentReview,
   feedbackText,
+  feedbackTrigger,
   feedbackVersionNotice,
   actionLoading,
   setupDataSources,
@@ -2444,7 +2509,10 @@ const AgentDetailPanel = ({
   onApprove,
   onReject,
   onFeedbackTextChange,
+  onFeedbackTriggerChange,
   onSubmitFeedback,
+  onActivateFeedbackVersion,
+  onRollbackFeedbackVersion,
   onSetupDataSourcesChange,
   onSetupExtractionRulesChange,
   onSetupProcessingRulesChange,
@@ -2474,6 +2542,7 @@ const AgentDetailPanel = ({
   queuedButNotDispatched: AgentArtifact['payload_json'] | AgentRunStep['output_json'] | null;
   agentReview: AgentReview | null;
   feedbackText: string;
+  feedbackTrigger: string;
   feedbackVersionNotice: FeedbackVersionNotice | null;
   actionLoading: boolean;
   setupDataSources: string;
@@ -2497,7 +2566,10 @@ const AgentDetailPanel = ({
   onApprove: () => void;
   onReject: () => void;
   onFeedbackTextChange: (value: string) => void;
+  onFeedbackTriggerChange: (value: string) => void;
   onSubmitFeedback: () => void;
+  onActivateFeedbackVersion: (versionId: string) => void;
+  onRollbackFeedbackVersion: (versionId: string) => void;
   onSetupDataSourcesChange: (value: string) => void;
   onSetupExtractionRulesChange: (value: string) => void;
   onSetupProcessingRulesChange: (value: string) => void;
@@ -2633,10 +2705,14 @@ const AgentDetailPanel = ({
           review={agentReview}
           latestVersionNumber={latestVersionNumber}
           feedbackText={feedbackText}
+          feedbackTrigger={feedbackTrigger}
           feedbackVersionNotice={feedbackVersionNotice}
           actionLoading={actionLoading}
           onFeedbackTextChange={onFeedbackTextChange}
+          onFeedbackTriggerChange={onFeedbackTriggerChange}
           onSubmitFeedback={onSubmitFeedback}
+          onActivateFeedbackVersion={onActivateFeedbackVersion}
+          onRollbackFeedbackVersion={onRollbackFeedbackVersion}
         />
         {activeRun ? (
           <details className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -3151,20 +3227,31 @@ const AgentRunReviewPanel = ({
   review,
   latestVersionNumber,
   feedbackText,
+  feedbackTrigger,
   feedbackVersionNotice,
   actionLoading,
   onFeedbackTextChange,
+  onFeedbackTriggerChange,
   onSubmitFeedback,
+  onActivateFeedbackVersion,
+  onRollbackFeedbackVersion,
 }: {
   review: AgentReview | null;
   latestVersionNumber: number | null;
   feedbackText: string;
+  feedbackTrigger: string;
   feedbackVersionNotice: FeedbackVersionNotice | null;
   actionLoading: boolean;
   onFeedbackTextChange: (value: string) => void;
+  onFeedbackTriggerChange: (value: string) => void;
   onSubmitFeedback: () => void;
+  onActivateFeedbackVersion: (versionId: string) => void;
+  onRollbackFeedbackVersion: (versionId: string) => void;
 }) => {
   const journal = review?.journal && review.journal.length ? review.journal : buildJournalFromSections(review?.sections || []);
+  const noticeVersionId = feedbackVersionNotice?.version_id || '';
+  const previousVersionId = feedbackVersionNotice?.previous_version_id || '';
+  const noticeState = feedbackVersionNotice?.activation_state || 'candidate';
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -3206,25 +3293,84 @@ const AgentRunReviewPanel = ({
       ) : (
         <DashboardEmptyState title="Журнал появится после запуска" description="Запустите агента, чтобы увидеть extraction, processing и output." />
       )}
-      <div className="mt-4 grid gap-2 md:grid-cols-[1fr_auto]">
-        <textarea
-          className="min-h-20 resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
-          value={feedbackText}
-          onChange={(event) => onFeedbackTextChange(event.target.value)}
-          placeholder="Что исправить в логике агента для следующей версии?"
-        />
-        <Button type="button" onClick={onSubmitFeedback} disabled={actionLoading || !feedbackText.trim()}>
-          Создать новую версию
-        </Button>
+      <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-slate-950">Learning Loop</div>
+            <div className="mt-1 text-xs leading-5 text-slate-500">
+              Правка, отклонение, плохой outcome или ошибка сохраняются как feedback и создают candidate-версию с diff. Активирует её человек.
+            </div>
+          </div>
+          <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+            versioned learning
+          </span>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {learningTriggerOptions.map((option) => (
+            <Button
+              key={option.value}
+              type="button"
+              size="sm"
+              variant={feedbackTrigger === option.value ? 'default' : 'outline'}
+              onClick={() => onFeedbackTriggerChange(option.value)}
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
+        <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto]">
+          <textarea
+            className="min-h-20 resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+            value={feedbackText}
+            onChange={(event) => onFeedbackTextChange(event.target.value)}
+            placeholder="Что исправить в логике агента для следующей версии?"
+          />
+          <Button type="button" onClick={onSubmitFeedback} disabled={actionLoading || !feedbackText.trim()}>
+            Зафиксировать улучшение
+          </Button>
+        </div>
       </div>
       {feedbackVersionNotice ? (
-        <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm leading-6 text-emerald-900">
-          <div className="font-semibold">
-            Новая активная версия {feedbackVersionNotice.version_number ? `v${feedbackVersionNotice.version_number}` : 'агента'} готова
+        <div className={cn('mt-3 rounded-xl border px-3 py-3 text-sm leading-6', noticeState === 'active' ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-amber-200 bg-amber-50 text-amber-950')}>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="font-semibold">
+                Candidate-версия {feedbackVersionNotice.version_number ? `v${feedbackVersionNotice.version_number}` : 'агента'} готова
+              </div>
+              <div className="mt-1 text-xs">
+                {feedbackVersionNotice.trigger_label || 'Feedback'} · {noticeState === 'active' ? 'активирована' : noticeState === 'rolled_back' ? 'откат выполнен' : 'ждёт решения'}
+              </div>
+            </div>
+            <StatusBadge status={noticeState === 'active' ? 'active' : noticeState === 'rolled_back' ? 'paused' : 'needs_approval'} />
           </div>
           <div className="mt-1">Правка: {feedbackVersionNotice.feedback}</div>
-          <div className="mt-1">Что изменится: следующие запуски будут учитывать эту правку в правилах результата.</div>
+          {feedbackVersionNotice.diff?.summary ? (
+            <div className="mt-1">Diff: {feedbackVersionNotice.diff.summary}</div>
+          ) : null}
+          {feedbackVersionNotice.diff?.changed_fields?.length ? (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {feedbackVersionNotice.diff.changed_fields.slice(0, 5).map((field) => (
+                <span key={`${noticeVersionId}-${field}`} className="rounded-full bg-white px-2 py-0.5 text-[11px] text-slate-700 ring-1 ring-slate-200">
+                  {humanizeMeta(field)}
+                </span>
+              ))}
+            </div>
+          ) : null}
           <div className="mt-1 text-xs">{feedbackVersionNotice.next_run_note}</div>
+          {noticeVersionId && noticeState === 'candidate' ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button type="button" size="sm" onClick={() => onActivateFeedbackVersion(noticeVersionId)} disabled={actionLoading}>
+                Активировать версию
+              </Button>
+            </div>
+          ) : null}
+          {noticeState === 'active' && previousVersionId ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button type="button" size="sm" variant="outline" onClick={() => onRollbackFeedbackVersion(previousVersionId)} disabled={actionLoading}>
+                Откатиться к прошлой версии
+              </Button>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

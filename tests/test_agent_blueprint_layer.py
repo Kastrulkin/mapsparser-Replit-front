@@ -510,6 +510,9 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "build_agent_datahub_catalog" in api_source
     assert "build_agent_source_from_upload" in api_source
     assert "/api/agent-runs/<run_id>/feedback" in api_source
+    assert "trigger_type" in api_source
+    assert "auto_activate" in api_source
+    assert "build_learning_loop_summary" in api_source
     assert "/api/agent-runs/<run_id>/support-export" in api_source
     assert "build_run_support_export" in api_source
     assert "/api/agent-blueprints/<blueprint_id>/versions/<version_id>/diff" in api_source
@@ -518,6 +521,8 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "_resolve_active_version" in api_source
     assert "_remember_active_version" in api_source
     assert "build_agent_version_diff" in workspace_source
+    assert "agent_learning_loop_v1" in workspace_source
+    assert "versioned_review" in workspace_source
     assert "_review_journal" in workspace_source
     assert "journal" in workspace_source
     assert "analyze_document_sources_with_llm" in workspace_source
@@ -533,6 +538,10 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "external_dispatch_performed" in review_analysis_source
     assert "publish_state" in review_analysis_source
     assert "external_dispatch_performed" in table_analysis_source
+    assert "Learning Loop" in agents_page_source
+    assert "Candidate-версия" in agents_page_source
+    assert "Зафиксировать улучшение" in agents_page_source
+    assert "auto_activate: false" in agents_page_source
     assert "provenance" in document_llm_source
     assert "provenance" in email_llm_source
     assert "provenance" in review_analysis_source
@@ -1275,6 +1284,52 @@ def test_agent_version_diff_shows_readable_changes():
     assert "inputs_schema" in diff["changed_fields"]
     assert "output_schema" in diff["changed_fields"]
     assert diff["summary"].startswith("Изменено:")
+
+
+def test_agent_learning_loop_summary_requires_human_activation():
+    from services.agent_blueprint_workspace import build_agent_version_diff, build_learning_loop_summary
+
+    previous_version = {
+        "id": "ver1",
+        "version_number": 1,
+        "goal": "Напоминать клиентам о записи",
+        "inputs_schema_json": {},
+        "steps_json": [{"key": "draft", "type": "artifact"}],
+        "capability_allowlist_json": ["communications.draft"],
+        "approval_policy_json": {"required_for": ["final_output"]},
+        "output_schema_json": {"format": "drafts"},
+    }
+    candidate_version = {
+        "id": "ver2",
+        "version_number": 2,
+        "goal": "Напоминать клиентам о записи",
+        "inputs_schema_json": {},
+        "steps_json": [{"key": "draft", "type": "artifact"}],
+        "capability_allowlist_json": ["communications.draft"],
+        "approval_policy_json": {"required_for": ["final_output"], "last_feedback_requires_review": True},
+        "output_schema_json": {
+            "format": "drafts",
+            "feedback_history": [{"feedback": "Не обещать скидку без пакета"}],
+        },
+    }
+    feedback = {
+        "run_id": "run1",
+        "trigger_type": "manual_edit",
+        "feedback": "Не обещать скидку без пакета",
+    }
+
+    diff = build_agent_version_diff(previous_version, candidate_version)
+    learning = build_learning_loop_summary(feedback, previous_version, candidate_version, diff)
+
+    assert learning["schema"] == "agent_learning_loop_v1"
+    assert learning["mode"] == "versioned_review"
+    assert learning["trigger_label"] == "Ручная правка текста"
+    assert learning["activation_state"] == "candidate"
+    assert learning["human_gate_required"] is True
+    assert learning["candidate_version_id"] == "ver2"
+    assert "activate" in learning["available_actions"]
+    assert "rollback" in learning["available_actions"]
+    assert learning["diff"]["change_type"] == "changed"
 
 
 def test_agent_run_review_journal_is_human_readable():

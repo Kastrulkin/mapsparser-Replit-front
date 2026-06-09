@@ -1,0 +1,7 @@
+No lint output captured yet.
+No separate lint command is configured for this task.
+
+Executed instead:
+- py_compile for changed backend modules;
+- pytest for agent blueprint layer;
+- Vite production build for frontend TypeScript.

@@ -1,0 +1,10 @@
+No build output captured yet.
+PYTHONPATH=src python3 -m py_compile src/api/agent_blueprints_api.py src/services/agent_blueprint_workspace.py
+Result: passed.
+
+npm run build
+Result: passed.
+
+Notes:
+- Vite emitted existing Browserslist staleness and Rollup pure annotation warnings from dependencies.
+- AgentBlueprintsPage bundle generated successfully.

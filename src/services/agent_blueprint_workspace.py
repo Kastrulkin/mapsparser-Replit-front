@@ -146,6 +146,44 @@ def build_feedback_version_payload(version: Dict[str, Any], feedback: Dict[str, 
     return payload
 
 
+def build_learning_loop_summary(
+    feedback: Dict[str, Any],
+    previous_version: Dict[str, Any],
+    candidate_version: Dict[str, Any],
+    diff: Dict[str, Any],
+    activated: bool = False,
+) -> Dict[str, Any]:
+    trigger_type = _clean_text(feedback.get("trigger_type") or feedback.get("source") or "manual_feedback")
+    return {
+        "schema": "agent_learning_loop_v1",
+        "mode": "versioned_review",
+        "trigger_type": trigger_type,
+        "trigger_label": _learning_trigger_label(trigger_type),
+        "feedback": _clean_text(feedback.get("feedback")),
+        "run_id": _clean_text(feedback.get("run_id")),
+        "previous_version_id": _clean_text(previous_version.get("id")),
+        "previous_version_number": _safe_int(previous_version.get("version_number")),
+        "candidate_version_id": _clean_text(candidate_version.get("id")),
+        "candidate_version_number": _safe_int(candidate_version.get("version_number")),
+        "activation_state": "active" if activated else "candidate",
+        "human_gate_required": not activated,
+        "diff": diff,
+        "available_actions": ["activate", "rollback"] if not activated else ["rollback"],
+        "explanation": "Агент не меняет поведение скрыто: feedback сохранён как новая версия blueprint, diff доступен перед активацией.",
+    }
+
+
+def _learning_trigger_label(trigger_type: str) -> str:
+    return {
+        "manual_edit": "Ручная правка текста",
+        "approval_rejected": "Отклонение результата",
+        "bad_outcome": "Плохой outcome",
+        "runtime_error": "Ошибка запуска",
+        "manual_feedback": "Ручной feedback",
+        "run_review": "Проверка запуска",
+    }.get(trigger_type, trigger_type or "Ручной feedback")
+
+
 def build_generic_artifact_payload(cursor: Any, run: Dict[str, Any], step: Dict[str, Any], base_payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     artifact_type = _clean_text(step.get("artifact_type"))
     if artifact_type not in {"agent_input_plan", "agent_extracted_context", "agent_output_draft", "agent_final_result"}:

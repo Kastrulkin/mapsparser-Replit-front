@@ -1,0 +1,9 @@
+No integration test output captured yet.
+Integration smoke is deferred until production deploy.
+
+Planned checks:
+- cd /opt/seo-app && docker compose ps
+- cd /opt/seo-app && docker compose logs --since 15m app
+- cd /opt/seo-app && curl -I http://localhost:8000
+- live route/source smoke for /api/agent-runs/<run_id>/feedback
+- frontend asset smoke for AgentBlueprintsPage bundle
