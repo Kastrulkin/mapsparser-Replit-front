@@ -1110,7 +1110,7 @@ class AgentBlueprintRunner:
         rows = self._select_domain_request_rows(
             "agent_communication_requests",
             """
-            SELECT id, action_id, capability, message_type, status, channel, recipient_count,
+            SELECT id, action_id, business_id, capability, message_type, status, channel, recipient_count,
                    recipients_json, limits_json, consent_json, delivery_state, created_at
             FROM agent_communication_requests
             WHERE business_id = %s AND (id = ANY(%s) OR action_id = ANY(%s))
@@ -1129,6 +1129,11 @@ class AgentBlueprintRunner:
             waiting_reason = "External customer message requires approval, consent validation, and send limits."
             if approval_state == "approved":
                 waiting_reason = "Human approved; waiting for controlled channel dispatch. No external send has run yet."
+            delivery_journal = self._load_communication_delivery_journal(
+                str(row.get("id") or ""),
+                str(row.get("action_id") or ""),
+                str(row.get("business_id") or ""),
+            )
             result.append(
                 {
                     "kind": "communication_request",
@@ -1144,7 +1149,46 @@ class AgentBlueprintRunner:
                     "recipient_count": recipient_count,
                     "limits": parse_json_field(row.get("limits_json"), {}),
                     "consent": parse_json_field(row.get("consent_json"), {}),
+                    "delivery_journal": {
+                        "count": len(delivery_journal),
+                        "queued": len([item for item in delivery_journal if str(item.get("delivery_state") or "") == "queued_for_dispatch"]),
+                        "blocked": len([item for item in delivery_journal if str(item.get("delivery_state") or "").startswith("blocked")]),
+                        "items": delivery_journal[:10],
+                    },
                     "provider_write_performed": False,
+                    "created_at": row.get("created_at"),
+                }
+            )
+        return result
+
+    def _load_communication_delivery_journal(self, request_id: str, action_id: str, business_id: str) -> List[Dict[str, Any]]:
+        rows = self._select_domain_request_rows(
+            "agent_communication_delivery_journal",
+            """
+            SELECT id, request_id, action_id, recipient_key, channel, status,
+                   delivery_state, consent_json, limits_json, router_handoff_json,
+                   provider_write_performed, created_at
+            FROM agent_communication_delivery_journal
+            WHERE business_id = %s AND (request_id = %s OR action_id = %s)
+            ORDER BY created_at DESC
+            LIMIT 50
+            """,
+            (business_id, request_id, action_id),
+            bool((request_id or action_id) and business_id),
+        )
+        result = []
+        for row in rows:
+            result.append(
+                {
+                    "id": row.get("id"),
+                    "recipient_key": row.get("recipient_key"),
+                    "channel": row.get("channel"),
+                    "status": row.get("status"),
+                    "delivery_state": row.get("delivery_state"),
+                    "consent": parse_json_field(row.get("consent_json"), {}),
+                    "limits": parse_json_field(row.get("limits_json"), {}),
+                    "router_handoff": parse_json_field(row.get("router_handoff_json"), {}),
+                    "provider_write_performed": bool(row.get("provider_write_performed")),
                     "created_at": row.get("created_at"),
                 }
             )

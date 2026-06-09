@@ -54,11 +54,16 @@
 - Status: PASS
 - Proof: `services.optimize` stores `diff_json`; `AgentBlueprintRunner` exposes `visual_diff`; `execute_approved_domain_requests()` applies approved suggestions to `userservices.optimized_name/optimized_description`; tests verify diff generation and approved internal apply.
 
+### AC13
+- Status: PASS
+- Proof: `agent_communication_delivery_journal` migration exists; approved communication executor writes queued/blocked journal rows with limits/consent/router handoff metadata; `AgentRunObservabilityPanel` can display `delivery_journal`; tests verify one queued and one consent-blocked item with `provider_write_performed=false`.
+
 ## Commands Run
 - `PYTHONPATH=src python3 -m py_compile src/services/agent_capability_handlers.py src/services/agent_blueprint_draft_builder.py src/services/agent_trigger_runtime.py src/ai_agent_webhooks.py src/core/action_policy.py alembic_migrations/versions/20260609_add_custom_agent_integration_tables.py`
 - `PYTHONPATH=src python3 -m py_compile src/services/agent_blueprint_runner.py`
 - `PYTHONPATH=src python3 -m py_compile src/services/agent_domain_request_executors.py src/services/agent_blueprint_runner.py`
 - `PYTHONPATH=src python3 -m py_compile src/services/agent_capability_handlers.py src/services/agent_domain_request_executors.py src/services/agent_blueprint_runner.py alembic_migrations/versions/20260609_add_agent_service_optimization_diff.py`
+- `PYTHONPATH=src python3 -m py_compile src/services/agent_domain_request_executors.py src/services/agent_blueprint_runner.py alembic_migrations/versions/20260609_add_agent_communication_delivery_journal.py`
 - `PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py`
 - `PYTHONPATH=src python3 -m pytest -q tests/test_capabilities_api_phase1.py`
 - `npm --prefix frontend run build`

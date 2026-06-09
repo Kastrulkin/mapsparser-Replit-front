@@ -149,6 +149,16 @@ def test_agent_service_optimization_diff_migration_adds_visual_diff_column():
     assert "20260609_002" in migration
 
 
+def test_agent_communication_delivery_journal_migration_creates_handoff_table():
+    migration = Path("alembic_migrations/versions/20260609_add_agent_communication_delivery_journal.py").read_text(encoding="utf-8")
+
+    assert "CREATE TABLE IF NOT EXISTS agent_communication_delivery_journal" in migration
+    assert "router_handoff_json JSONB" in migration
+    assert "provider_write_performed BOOLEAN NOT NULL DEFAULT FALSE" in migration
+    assert "20260609_004" in migration
+    assert "20260609_003" in migration
+
+
 def test_default_supervised_outreach_template_has_approval_gates():
     from services.agent_blueprint_runner import default_supervised_outreach_version_payload
 
@@ -858,6 +868,55 @@ def test_approved_domain_executor_applies_service_optimization_to_localos_data()
     assert service["optimized_name"] == "Стрижка · Парикмахерские услуги"
     assert service["optimized_description"].startswith("Стрижка:")
     assert cursor.ledger_entries[0]["capability"] == "services.optimize"
+    assert cursor.ledger_entries[0]["metadata"]["provider_write_performed"] is False
+
+
+def test_approved_domain_executor_creates_communication_delivery_journal_with_consent_gate():
+    from services.agent_domain_request_executors import execute_approved_domain_requests
+
+    cursor = FakeApprovedDomainExecutorCursor()
+    cursor.tables["agent_communication_requests"]["comm-request-1"] = {
+        "id": "comm-request-1",
+        "business_id": "biz1",
+        "action_id": "action-comm",
+        "capability": "communications.send_offer",
+        "message_type": "package_offer",
+        "status": "approved_request",
+        "channel": "telegram",
+        "recipient_count": 2,
+        "recipients_json": [
+            {"client_id": "client-1", "client_name": "Anna", "consent": {"marketing": True}},
+            {"client_id": "client-2", "client_name": "Boris", "consent": {"marketing": False}},
+        ],
+        "message_template": "Пакетное предложение",
+        "limits_json": {"daily_cap": 10, "frequency_cap": "one_per_trigger"},
+        "consent_json": {"required": True},
+        "delivery_state": "not_dispatched",
+    }
+
+    result = execute_approved_domain_requests(
+        cursor,
+        run={"id": "run1", "business_id": "biz1"},
+        step={"key": "send_offer"},
+        orchestrator_result={
+            "action_id": "action-comm",
+            "result": {"request_id": "comm-request-1"},
+        },
+        user_data={"user_id": "user1"},
+    )
+
+    request = cursor.tables["agent_communication_requests"]["comm-request-1"]
+    journal_rows = list(cursor.tables["agent_communication_delivery_journal"].values())
+    assert result["executed"] == 1
+    assert result["items"][0]["kind"] == "communication_request"
+    assert result["items"][0]["queued_count"] == 1
+    assert result["items"][0]["blocked_count"] == 1
+    assert request["status"] == "approved_for_dispatch"
+    assert request["delivery_state"] == "queued_for_dispatch"
+    assert len(journal_rows) == 2
+    assert {row["delivery_state"] for row in journal_rows} == {"queued_for_dispatch", "blocked_by_consent"}
+    assert all(row["provider_write_performed"] is False for row in journal_rows)
+    assert cursor.ledger_entries[0]["capability"] == "communications.send_offer"
     assert cursor.ledger_entries[0]["metadata"]["provider_write_performed"] is False
 
 
@@ -2894,6 +2953,7 @@ class FakeApprovedDomainExecutorCursor:
             "agent_communication_requests": {},
             "reviewreplydrafts": {},
             "agent_service_optimization_requests": {},
+            "agent_communication_delivery_journal": {},
             "agent_action_ledger": {},
             "userservices": {},
         }
@@ -2926,7 +2986,14 @@ class FakeApprovedDomainExecutorCursor:
             ]
             return None
         if "from agent_communication_requests" in normalized_query:
-            self.last_results = []
+            business_id = params[0]
+            request_ids = set(params[1])
+            action_ids = set(params[2])
+            self.last_results = [
+                row
+                for row in self.tables["agent_communication_requests"].values()
+                if row.get("business_id") == business_id and (row.get("id") in request_ids or row.get("action_id") in action_ids)
+            ]
             return None
         if "from reviewreplydrafts" in normalized_query:
             self.last_results = []
@@ -2955,6 +3022,32 @@ class FakeApprovedDomainExecutorCursor:
                     service["optimized_name"] = params[0]
                 if params[1]:
                     service["optimized_description"] = params[1]
+            return None
+        if normalized_query.startswith("insert into agent_communication_delivery_journal"):
+            row = {
+                "id": params[0],
+                "request_id": params[1],
+                "action_id": params[2],
+                "business_id": params[3],
+                "run_id": params[4],
+                "user_id": params[5],
+                "recipient_key": params[6],
+                "channel": params[7],
+                "message_template": params[8],
+                "status": params[9],
+                "delivery_state": params[10],
+                "consent_json": json.loads(params[11]),
+                "limits_json": json.loads(params[12]),
+                "router_handoff_json": json.loads(params[13]),
+                "provider_write_performed": False,
+            }
+            self.tables["agent_communication_delivery_journal"][params[0]] = row
+            return None
+        if normalized_query.startswith("update agent_communication_requests"):
+            request = self.tables["agent_communication_requests"].get(params[1])
+            if request and request.get("business_id") == params[2] and request.get("delivery_state") != "dispatched":
+                request["status"] = "approved_for_dispatch"
+                request["delivery_state"] = params[0]
             return None
         if normalized_query.startswith("update agent_service_optimization_requests"):
             request = self.tables["agent_service_optimization_requests"].get(params[2])

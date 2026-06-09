@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from typing import Any, Dict, List
 
 from core.agent_api_security import log_agent_action
@@ -159,24 +160,30 @@ def _approve_communication_requests(cursor: Any, business_id: str, user_id: str,
         cursor,
         "agent_communication_requests",
         """
-        SELECT id, action_id, capability, status, channel, recipient_count, delivery_state
+        SELECT id, action_id, capability, message_type, status, channel, recipient_count,
+               recipients_json, message_template, limits_json, consent_json, delivery_state
         FROM agent_communication_requests
         WHERE business_id = %s AND (id = ANY(%s) OR action_id = ANY(%s))
         """,
         (business_id, refs.get("request_ids") or [], refs.get("action_ids") or []),
         bool(refs.get("request_ids") or refs.get("action_ids")),
     )
+    if not rows:
+        return []
+    _ensure_communication_delivery_journal(cursor)
     items = []
     for row in rows:
+        handoff = _create_communication_delivery_journal_rows(cursor, business_id, user_id, run_id, row)
+        delivery_state = "queued_for_dispatch" if handoff.get("queued_count") else "blocked_by_consent"
         cursor.execute(
             """
             UPDATE agent_communication_requests
             SET status = 'approved_for_dispatch',
-                delivery_state = 'queued_for_dispatch',
+                delivery_state = %s,
                 updated_at = NOW()
             WHERE id = %s AND business_id = %s AND delivery_state <> 'dispatched'
             """,
-            (row.get("id"), business_id),
+            (delivery_state, row.get("id"), business_id),
         )
         capability = str(row.get("capability") or "communications.send_reminder")
         ledger_id = _record_executor_ledger(
@@ -188,8 +195,13 @@ def _approve_communication_requests(cursor: Any, business_id: str, user_id: str,
             request_id=str(row.get("id") or ""),
             action_id=str(row.get("action_id") or ""),
             capability=capability,
-            output_state="queued_for_dispatch",
-            summary={"channel": row.get("channel"), "recipient_count": row.get("recipient_count")},
+            output_state=delivery_state,
+            summary={
+                "channel": row.get("channel"),
+                "recipient_count": row.get("recipient_count"),
+                "queued_count": handoff.get("queued_count"),
+                "blocked_count": handoff.get("blocked_count"),
+            },
         )
         items.append(
             {
@@ -197,12 +209,161 @@ def _approve_communication_requests(cursor: Any, business_id: str, user_id: str,
                 "id": row.get("id"),
                 "action_id": row.get("action_id"),
                 "status": "approved_for_dispatch",
-                "delivery_state": "queued_for_dispatch",
+                "delivery_state": delivery_state,
+                "queued_count": handoff.get("queued_count"),
+                "blocked_count": handoff.get("blocked_count"),
                 "ledger_id": ledger_id,
                 "provider_write_performed": False,
             }
         )
     return items
+
+
+def _ensure_communication_delivery_journal(cursor: Any) -> None:
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS agent_communication_delivery_journal (
+            id TEXT PRIMARY KEY,
+            request_id TEXT NOT NULL,
+            action_id TEXT,
+            business_id TEXT NOT NULL,
+            run_id TEXT,
+            user_id TEXT,
+            recipient_key TEXT NOT NULL,
+            channel TEXT,
+            message_template TEXT,
+            status TEXT NOT NULL,
+            delivery_state TEXT NOT NULL,
+            consent_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+            limits_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+            router_handoff_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+            provider_write_performed BOOLEAN NOT NULL DEFAULT FALSE,
+            error_text TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_agent_communication_delivery_request_recipient
+        ON agent_communication_delivery_journal(request_id, recipient_key)
+        """
+    )
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_agent_communication_delivery_business_state
+        ON agent_communication_delivery_journal(business_id, delivery_state, created_at DESC)
+        """
+    )
+
+
+def _create_communication_delivery_journal_rows(
+    cursor: Any,
+    business_id: str,
+    user_id: str,
+    run_id: str,
+    row: Dict[str, Any],
+) -> Dict[str, Any]:
+    request_id = str(row.get("id") or "").strip()
+    action_id = str(row.get("action_id") or "").strip()
+    channel = str(row.get("channel") or "manual").strip()
+    message_template = str(row.get("message_template") or "").strip()
+    message_type = str(row.get("message_type") or "").strip()
+    recipients = _decode_json(row.get("recipients_json"), [])
+    limits = _decode_json(row.get("limits_json"), {})
+    consent_policy = _decode_json(row.get("consent_json"), {})
+    if not isinstance(recipients, list):
+        recipients = []
+    daily_cap = _positive_int(limits.get("daily_cap"), 10)
+    queued_count = 0
+    blocked_count = 0
+    for recipient in recipients[:daily_cap]:
+        recipient_payload = recipient if isinstance(recipient, dict) else {"value": recipient}
+        recipient_key = _communication_recipient_key(recipient_payload)
+        if not recipient_key:
+            blocked_count += 1
+            continue
+        recipient_consent = recipient_payload.get("consent") if isinstance(recipient_payload.get("consent"), dict) else {}
+        requires_marketing = bool(consent_policy.get("required")) or message_type == "package_offer"
+        consent_ok = bool(recipient_consent.get("marketing")) if requires_marketing else bool(recipient_consent.get("transactional") is not False)
+        delivery_state = "queued_for_dispatch" if consent_ok else "blocked_by_consent"
+        status = "queued" if consent_ok else "blocked"
+        if consent_ok:
+            queued_count += 1
+        else:
+            blocked_count += 1
+        cursor.execute(
+            """
+            INSERT INTO agent_communication_delivery_journal (
+                id, request_id, action_id, business_id, run_id, user_id, recipient_key,
+                channel, message_template, status, delivery_state, consent_json,
+                limits_json, router_handoff_json, provider_write_performed
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FALSE)
+            ON CONFLICT (request_id, recipient_key) DO UPDATE SET
+                status = EXCLUDED.status,
+                delivery_state = EXCLUDED.delivery_state,
+                consent_json = EXCLUDED.consent_json,
+                limits_json = EXCLUDED.limits_json,
+                router_handoff_json = EXCLUDED.router_handoff_json,
+                provider_write_performed = FALSE,
+                updated_at = NOW()
+            """,
+            (
+                _stable_delivery_id(request_id, recipient_key),
+                request_id,
+                action_id,
+                business_id,
+                run_id,
+                user_id,
+                recipient_key,
+                channel,
+                message_template,
+                status,
+                delivery_state,
+                json.dumps(recipient_consent or {}, ensure_ascii=False),
+                json.dumps(limits or {}, ensure_ascii=False),
+                json.dumps(
+                    {
+                        "router": "localos_channel_router",
+                        "handoff_state": delivery_state,
+                        "channel": channel,
+                        "recipient": recipient_payload,
+                        "external_dispatch_performed": False,
+                    },
+                    ensure_ascii=False,
+                ),
+            ),
+        )
+    if len(recipients) > daily_cap:
+        blocked_count += len(recipients) - daily_cap
+    return {
+        "queued_count": queued_count,
+        "blocked_count": blocked_count,
+        "daily_cap": daily_cap,
+    }
+
+
+def _communication_recipient_key(recipient: Dict[str, Any]) -> str:
+    for key in ("client_id", "client_phone", "phone", "telegram_user_id", "email", "value"):
+        value = str(recipient.get(key) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _stable_delivery_id(request_id: str, recipient_key: str) -> str:
+    raw = f"{request_id}|{recipient_key}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+
+
+def _positive_int(value: Any, default: int) -> int:
+    try:
+        parsed = int(value or default)
+    except Exception:
+        parsed = default
+    return max(1, min(parsed, 100))
 
 
 def _approve_review_publish_requests(cursor: Any, business_id: str, user_id: str, run_id: str, step_key: str, refs: Dict[str, List[str]]) -> List[Dict[str, Any]]:

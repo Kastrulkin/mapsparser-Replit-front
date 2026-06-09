@@ -30,6 +30,7 @@ track.
 - AC10: Agent run observability surfaces domain requests, approval state, apply state and plain-language waiting reasons for compiled workflows.
 - AC11: Approved executor boundary moves domain requests forward only after a human gate, records audit ledger evidence, and still performs no provider writes.
 - AC12: Services optimization requests include a visual before/after diff and can apply approved drafts to LocalOS service optimization fields after human approval.
+- AC13: Approved communication requests create a delivery journal with caps, consent gates, router handoff metadata, and no provider write.
 
 ## Constraints
 - No direct Google Sheets API write in this iteration.
