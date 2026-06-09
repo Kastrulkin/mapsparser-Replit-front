@@ -53,6 +53,9 @@ def test_agent_blueprint_routes_are_owned_by_blueprint():
         "/api/agent-blueprints/<blueprint_id>/custom-process": {
             "POST": "agent_blueprints_api.save_agent_blueprint_custom_process",
         },
+        "/api/agent-blueprints/<blueprint_id>/custom-process/preview": {
+            "POST": "agent_blueprints_api.preview_agent_blueprint_custom_process",
+        },
         "/api/agent-blueprints/<blueprint_id>/sources": {
             "POST": "agent_blueprints_api.add_agent_blueprint_source",
         },
@@ -234,6 +237,39 @@ def test_agent_blueprint_orchestrator_exposes_stage4_capability_map():
     assert expected.issubset(set(catalog["capabilities"]))
     assert catalog["capabilities"]["reviews.reply"]["alias_for"] == "reviews.reply.draft"
     assert catalog["capabilities"]["google_sheets.append_row"]["alias_for"] == "sheets.append_row_request"
+
+
+def test_custom_process_preview_input_uses_bound_integrations_and_safe_telegram_payload():
+    from api import agent_blueprints_api
+
+    blueprint = {
+        "metadata_json": {
+            "custom_process": {
+                "google_sheets": {
+                    "integration_id": "sheet-integration-1",
+                    "spreadsheet_id": "spreadsheet-1",
+                    "sheet_name": "Leads",
+                }
+            }
+        }
+    }
+
+    preview = agent_blueprints_api._build_custom_process_preview_input(
+        blueprint,
+        {
+            "message_text": "Новая заявка: Анна",
+            "telegram_username": "anna",
+        },
+    )
+
+    assert preview["preview_mode"] is True
+    assert preview["source_event"]["preview"] is True
+    assert preview["source_event"]["source"] == "telegram_preview"
+    assert preview["integration_id"] == "sheet-integration-1"
+    assert preview["spreadsheet_id"] == "spreadsheet-1"
+    assert preview["sheet_name"] == "Leads"
+    assert preview["telegram"]["message_text"] == "Новая заявка: Анна"
+    assert preview["telegram"]["username"] == "anna"
 
 
 def test_openclaw_and_capability_routes_are_registered():

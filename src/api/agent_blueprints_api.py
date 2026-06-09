@@ -449,6 +449,52 @@ def _apply_custom_process_to_version_payload(version_payload: dict, custom_proce
     return payload
 
 
+def _build_custom_process_preview_input(blueprint: dict, payload: dict) -> dict:
+    metadata = _blueprint_metadata(blueprint)
+    custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+    google_sheets = custom_process.get("google_sheets") if isinstance(custom_process.get("google_sheets"), dict) else {}
+    source_event_id = f"preview-{uuid.uuid4()}"
+    message_text = str(payload.get("message_text") or "Новая заявка из preview").strip() or "Новая заявка из preview"
+    telegram_user_id = str(payload.get("telegram_user_id") or "preview-user").strip() or "preview-user"
+    telegram_username = str(payload.get("telegram_username") or "preview_user").strip() or "preview_user"
+    telegram_first_name = str(payload.get("telegram_first_name") or "Preview").strip() or "Preview"
+    chat_id = str(payload.get("chat_id") or "preview-chat").strip() or "preview-chat"
+    message_id = str(payload.get("message_id") or "preview-message").strip() or "preview-message"
+    received_at = _utc_now_text()
+    telegram = {
+        "message_text": message_text,
+        "user_id": telegram_user_id,
+        "username": telegram_username,
+        "first_name": telegram_first_name,
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "received_at": received_at,
+        "preview": True,
+    }
+    return {
+        "message_text": message_text,
+        "telegram_user_id": telegram_user_id,
+        "telegram_username": telegram_username,
+        "telegram_first_name": telegram_first_name,
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "received_at": received_at,
+        "telegram": telegram,
+        "trigger_event_id": source_event_id,
+        "source_event": {
+            "id": source_event_id,
+            "source": "telegram_preview",
+            "event_type": "telegram.message.received",
+            "preview": True,
+            "received_at": received_at,
+        },
+        "preview_mode": True,
+        "integration_id": str(google_sheets.get("integration_id") or "").strip(),
+        "spreadsheet_id": str(google_sheets.get("spreadsheet_id") or "").strip(),
+        "sheet_name": str(google_sheets.get("sheet_name") or "Leads").strip() or "Leads",
+    }
+
+
 def _sync_blueprint_integration_metadata(cursor, blueprint: dict, integration: dict) -> dict:
     blueprint_id = str(blueprint.get("id") or "")
     metadata = _blueprint_metadata(_load_blueprint(cursor, blueprint_id) or blueprint)
@@ -1320,6 +1366,36 @@ def save_agent_blueprint_custom_process(blueprint_id: str):
                 "version_event": event,
             }
         )
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/custom-process/preview", methods=["POST"])
+def preview_agent_blueprint_custom_process(blueprint_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    payload = request.get_json(silent=True) or {}
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        active_version = _resolve_active_version(cursor, blueprint)
+        version_id = str((active_version or {}).get("id") or "").strip()
+        if not version_id:
+            return _json_error("Blueprint has no version", 400, "NO_VERSION")
+        preview_input = _build_custom_process_preview_input(blueprint, payload)
+        runner = AgentBlueprintRunner(cursor, build_agent_blueprint_orchestrator())
+        result = runner.start_run(version_id, preview_input, user_data)
+        db.conn.commit()
+        if not result.get("success"):
+            return _json_error(str(result.get("error") or "preview run failed"), 400, "PREVIEW_RUN_FAILED")
+        return jsonify({**result, "preview_input": preview_input}), 201
     except Exception:
         db.conn.rollback()
         raise
