@@ -116,6 +116,19 @@ def test_agent_builder_session_migration_creates_expected_table():
     assert "20260523_001" in migration
 
 
+def test_agent_domain_request_migration_creates_expected_tables():
+    migration = Path("alembic_migrations/versions/20260609_add_agent_domain_request_tables.py").read_text(encoding="utf-8")
+
+    assert "CREATE TABLE IF NOT EXISTS agent_communication_requests" in migration
+    assert "CREATE TABLE IF NOT EXISTS agent_service_optimization_requests" in migration
+    assert "recipients_json JSONB" in migration
+    assert "suggestions_json JSONB" in migration
+    assert "delivery_state TEXT NOT NULL DEFAULT 'not_dispatched'" in migration
+    assert "apply_state TEXT NOT NULL DEFAULT 'not_applied'" in migration
+    assert "20260609_001" in migration
+    assert "20260525_001" in migration
+
+
 def test_default_supervised_outreach_template_has_approval_gates():
     from services.agent_blueprint_runner import default_supervised_outreach_version_payload
 
@@ -484,6 +497,150 @@ def test_agent_datahub_catalog_includes_connected_text_and_file_sources():
     assert "DOCX text" in connected[1]["preview"][0]
 
 
+def test_domain_capability_handlers_read_and_create_internal_requests(monkeypatch):
+    from services import agent_capability_handlers
+
+    db = FakeCapabilityDatabase()
+    monkeypatch.setattr(agent_capability_handlers, "DatabaseManager", lambda: db)
+    handlers = agent_capability_handlers.build_capability_handlers()
+    user_data = {"user_id": "user-1"}
+
+    appointments = handlers["appointments.read"](
+        {
+            "tenant_id": "biz1",
+            "actor": {"id": "user-1"},
+            "capability": "appointments.read",
+            "payload": {"limit": 5, "status": "confirmed"},
+        },
+        user_data,
+    )
+    assert appointments["result"]["status"] == "read_completed"
+    assert appointments["result"]["source"] == "Bookings"
+    assert appointments["result"]["count"] == 1
+    assert appointments["result"]["appointments"][0]["client_phone"] == "+79990000000"
+
+    reminder = handlers["communications.send_reminder"](
+        {
+            "tenant_id": "biz1",
+            "action_id": "act-reminder",
+            "actor": {"id": "user-1"},
+            "capability": "communications.send_reminder",
+            "payload": {"limit": 10, "message": "Ждём вас завтра", "channel": "whatsapp"},
+        },
+        user_data,
+    )
+    assert reminder["result"]["status"] == "send_request_created"
+    assert reminder["result"]["dispatch_state"] == "pending_human"
+    assert reminder["result"]["delivery_state"] == "not_dispatched"
+    assert reminder["result"]["provider_write_performed"] is False
+    assert reminder["result"]["external_dispatch_performed"] is False
+    assert reminder["result"]["recipient_count"] == 1
+    assert db.cursor_instance.inserted["agent_communication_requests"]["capability"] == "communications.send_reminder"
+
+
+def test_review_publish_and_service_optimize_capabilities_create_safe_local_records(monkeypatch):
+    from services import agent_capability_handlers
+
+    db = FakeCapabilityDatabase()
+    monkeypatch.setattr(agent_capability_handlers, "DatabaseManager", lambda: db)
+    handlers = agent_capability_handlers.build_capability_handlers()
+    user_data = {"user_id": "user-1"}
+
+    publish_request = handlers["reviews.reply.publish_request"](
+        {
+            "tenant_id": "biz1",
+            "action_id": "act-review",
+            "actor": {"id": "user-1"},
+            "capability": "reviews.reply.publish_request",
+            "payload": {"review_id": "rev1", "reply": "Спасибо за отзыв!"},
+        },
+        user_data,
+    )
+    assert publish_request["result"]["status"] == "publish_request_created"
+    assert publish_request["result"]["dispatch_state"] == "pending_human"
+    assert publish_request["result"]["manual_publish_required"] is True
+    assert publish_request["result"]["provider_write_performed"] is False
+    assert db.cursor_instance.inserted["reviewreplydrafts"]["status"] == "publish_requested"
+
+    optimize = handlers["services.optimize"](
+        {
+            "tenant_id": "biz1",
+            "action_id": "act-services",
+            "actor": {"id": "user-1"},
+            "capability": "services.optimize",
+            "payload": {"limit": 5},
+        },
+        user_data,
+    )
+    assert optimize["result"]["status"] == "optimized_draft"
+    assert optimize["result"]["apply_performed"] is False
+    assert optimize["result"]["manual_apply_required"] is True
+    assert optimize["result"]["provider_write_performed"] is False
+    assert optimize["result"]["suggestions"][0]["requires_manual_approval"] is True
+    assert db.cursor_instance.inserted["agent_service_optimization_requests"]["apply_state"] == "not_applied"
+
+
+def test_billing_capabilities_delegate_to_credit_reservation_layer(monkeypatch):
+    from services import agent_capability_handlers
+
+    db = FakeCapabilityDatabase()
+    calls = {"reserve": None, "settle": None}
+
+    def fake_reserve(cursor, **kwargs):
+        calls["reserve"] = kwargs
+        return {
+            "reservation_id": "res-1",
+            "status": "reserved",
+            "credit_reserved": True,
+            "side_effects": {"credit_reserved": True},
+        }
+
+    def fake_settle(cursor, **kwargs):
+        calls["settle"] = kwargs
+        return {
+            "reservation_id": "res-1",
+            "status": "settled",
+            "side_effects": {"credit_charged": True, "credit_released": False},
+        }
+
+    monkeypatch.setattr(agent_capability_handlers, "DatabaseManager", lambda: db)
+    monkeypatch.setattr(agent_capability_handlers, "reserve_paid_action_credits", fake_reserve)
+    monkeypatch.setattr(agent_capability_handlers, "finalize_reserved_action_credits", fake_settle)
+    handlers = agent_capability_handlers.build_capability_handlers()
+
+    reserve = handlers["billing.reserve"](
+        {
+            "tenant_id": "biz1",
+            "actor": {"id": "user-1"},
+            "idempotency_key": "idem-reserve",
+            "capability": "billing.reserve",
+            "payload": {"estimated_credits": 3, "action_key": "agent.test"},
+        },
+        {"user_id": "user-1"},
+    )
+    assert reserve["result"]["status"] == "reserved"
+    assert reserve["result"]["credit_reserved"] is True
+    assert calls["reserve"]["business_id"] == "biz1"
+    assert calls["reserve"]["estimated_credits"] == 3
+    assert calls["reserve"]["idempotency_key"] == "idem-reserve"
+
+    settle = handlers["billing.settle"](
+        {
+            "tenant_id": "biz1",
+            "action_id": "action-settle",
+            "actor": {"id": "user-1"},
+            "capability": "billing.settle",
+            "payload": {"reservation_id": "res-1"},
+        },
+        {"user_id": "user-1"},
+    )
+    assert settle["result"]["status"] == "settled"
+    assert settle["result"]["credit_charged"] is True
+    assert settle["result"]["credit_released"] is False
+    assert calls["settle"]["reservation_id"] == "res-1"
+    assert calls["settle"]["external_id"] == "action-settle"
+
+
 def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     api_source = Path("src/api/agent_blueprints_api.py").read_text(encoding="utf-8")
     workspace_source = Path("src/services/agent_blueprint_workspace.py").read_text(encoding="utf-8")
@@ -495,6 +652,7 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     email_llm_source = Path("src/services/agent_email_llm.py").read_text(encoding="utf-8")
     review_analysis_source = Path("src/services/agent_review_reply_analysis.py").read_text(encoding="utf-8")
     table_analysis_source = Path("src/services/agent_table_analysis.py").read_text(encoding="utf-8")
+    capability_handlers_source = Path("src/services/agent_capability_handlers.py").read_text(encoding="utf-8")
     builder_api_source = Path("src/api/agent_builder_api.py").read_text(encoding="utf-8")
     agents_page_source = Path("frontend/src/pages/dashboard/AgentBlueprintsPage.tsx").read_text(encoding="utf-8")
     admin_page_source = Path("frontend/src/pages/dashboard/AdminPage.tsx").read_text(encoding="utf-8")
@@ -605,6 +763,15 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "Использовано в последнем запуске" in agents_page_source
     assert "used_sources" in workspace_source
     assert "resultFieldLabels" in agents_page_source
+    assert "Bookings" in capability_handlers_source
+    assert "agent_communication_requests" in capability_handlers_source
+    assert "reviewreplydrafts" in capability_handlers_source
+    assert "agent_service_optimization_requests" in capability_handlers_source
+    assert "provider_write_performed=False" in capability_handlers_source
+    assert "manual_publish_required=True" in capability_handlers_source
+    assert "manual_apply_required=True" in capability_handlers_source
+    assert "reserve_paid_action_credits" in capability_handlers_source
+    assert "finalize_reserved_action_credits" in capability_handlers_source
 
 
 def test_generic_document_runner_uses_sources_and_stops_for_final_approval():
@@ -2172,6 +2339,189 @@ class FakeDatahubCursor:
             self.last_results = [{"id": "draft1", "channel": "email", "status": "generated", "generated_text": "Hello"}]
             return None
         raise AssertionError(f"Unhandled Datahub SQL: {query}")
+
+    def fetchall(self):
+        return self.last_results
+
+
+class FakeCapabilityDatabase:
+    def __init__(self):
+        self.cursor_instance = FakeCapabilityCursor()
+        self.conn = self
+        self.committed = False
+        self.rolled_back = False
+        self.closed = False
+
+    def cursor(self):
+        return self.cursor_instance
+
+    def commit(self):
+        self.committed = True
+
+    def rollback(self):
+        self.rolled_back = True
+
+    def close(self):
+        self.closed = True
+
+
+class FakeCapabilityCursor:
+    def __init__(self):
+        self.last_result = None
+        self.last_results = []
+        self.description = []
+        self.inserted = {}
+
+    def execute(self, query, params=None):
+        normalized_query = " ".join(query.split()).lower()
+        params = params or ()
+        if (
+            normalized_query.startswith("create table")
+            or normalized_query.startswith("create index")
+            or normalized_query.startswith("create unique index")
+        ):
+            return None
+        if normalized_query.startswith("select to_regclass"):
+            table_name = str(params[0])
+            self.description = [("to_regclass",)]
+            self.last_result = (table_name if table_name in {"bookings", "externalbusinessreviews", "userservices"} else None,)
+            return None
+        if "from information_schema.columns" in normalized_query:
+            table_name = str(params[0])
+            column_map = {
+                "userservices": [
+                    "id",
+                    "business_id",
+                    "name",
+                    "description",
+                    "category",
+                    "price",
+                    "is_active",
+                    "updated_at",
+                    "created_at",
+                    "optimized_name",
+                    "optimized_description",
+                ],
+            }
+            self.description = [("column_name",)]
+            self.last_results = [(column,) for column in column_map.get(table_name, [])]
+            return None
+        if "from bookings" in normalized_query:
+            columns = [
+                "id",
+                "business_id",
+                "client_phone",
+                "client_name",
+                "service_id",
+                "service_name",
+                "booking_date",
+                "booking_time",
+                "status",
+                "notes",
+                "created_at",
+                "updated_at",
+            ]
+            self.description = [(column,) for column in columns]
+            self.last_results = [
+                (
+                    "booking-1",
+                    "biz1",
+                    "+79990000000",
+                    "Анна",
+                    "svc1",
+                    "Стрижка",
+                    "2026-06-10",
+                    "12:00",
+                    "confirmed",
+                    "",
+                    None,
+                    None,
+                )
+            ]
+            return None
+        if normalized_query.startswith("insert into agent_communication_requests"):
+            self.inserted["agent_communication_requests"] = {
+                "id": params[0],
+                "action_id": params[1],
+                "business_id": params[2],
+                "user_id": params[3],
+                "capability": params[4],
+                "message_type": params[5],
+                "channel": params[6],
+                "recipient_count": params[7],
+                "recipients_json": json.loads(params[8]),
+                "message_template": params[9],
+                "limits_json": json.loads(params[10]),
+                "consent_json": json.loads(params[11]),
+            }
+            self.description = [("id",)]
+            self.last_result = (params[0],)
+            return None
+        if "from externalbusinessreviews" in normalized_query:
+            columns = [
+                "id",
+                "business_id",
+                "source",
+                "external_review_id",
+                "rating",
+                "author_name",
+                "text",
+                "response_text",
+                "response_at",
+            ]
+            self.description = [(column,) for column in columns]
+            self.last_result = ("rev1", "biz1", "yandex", "ext-rev1", 5, "Anna", "Great", None, None)
+            return None
+        if normalized_query.startswith("insert into reviewreplydrafts"):
+            self.inserted["reviewreplydrafts"] = {
+                "id": params[0],
+                "business_id": params[1],
+                "review_id": params[2],
+                "user_id": params[3],
+                "source": params[4],
+                "rating": params[5],
+                "author_name": params[6],
+                "review_text": params[7],
+                "generated_text": params[8],
+                "status": "publish_requested",
+            }
+            self.description = [("id",)]
+            self.last_result = (params[0],)
+            return None
+        if "from userservices" in normalized_query:
+            columns = [
+                "id",
+                "business_id",
+                "name",
+                "description",
+                "category",
+                "price",
+                "optimized_name",
+                "optimized_description",
+            ]
+            self.description = [(column,) for column in columns]
+            self.last_results = [
+                ("svc1", "biz1", "Стрижка", "Классическая стрижка", "Парикмахерские услуги", 1500, "", "")
+            ]
+            return None
+        if normalized_query.startswith("insert into agent_service_optimization_requests"):
+            self.inserted["agent_service_optimization_requests"] = {
+                "id": params[0],
+                "action_id": params[1],
+                "business_id": params[2],
+                "user_id": params[3],
+                "status": "draft_ready",
+                "service_count": params[4],
+                "suggestions_json": json.loads(params[5]),
+                "apply_state": "not_applied",
+            }
+            self.description = [("id",)]
+            self.last_result = (params[0],)
+            return None
+        raise AssertionError(f"Unhandled capability SQL: {query}")
+
+    def fetchone(self):
+        return self.last_result
 
     def fetchall(self):
         return self.last_results

@@ -1,0 +1,55 @@
+{
+  "task_id": "capability-domain-integrations-20260609",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "appointments.read reads Bookings through the capability handler."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "communication capabilities create internal requests and return no-dispatch markers."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "review publish request creates reviewreplydrafts records only."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "service optimize creates local suggestions and not-applied request records."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "billing handlers call the existing credit reservation/finalization layer."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "architecture doc describes the invariant and domain records."
+    },
+    {
+      "id": "AC7",
+      "status": "PASS",
+      "reason": "Alembic migration creates the new domain request tables."
+    },
+    {
+      "id": "AC8",
+      "status": "PASS",
+      "reason": "targeted regression tests pass."
+    }
+  ],
+  "commands_run": [
+    "PYTHONPATH=src python3 -m py_compile src/services/agent_capability_handlers.py",
+    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "PYTHONPATH=src python3 -m pytest -q tests/test_operator_credit_reservation.py"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/capability-domain-integrations-20260609/evidence.md",
+    ".agent/tasks/capability-domain-integrations-20260609/evidence.json"
+  ]
+}

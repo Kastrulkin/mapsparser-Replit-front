@@ -1,0 +1,103 @@
+{
+  "task_id": "capability-domain-integrations-20260609",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "appointments.read reads real LocalOS appointment records with tenant filters and limits.",
+      "status": "PASS",
+      "proof": [
+        "src/services/agent_capability_handlers.py::_load_appointments",
+        "tests/test_agent_blueprint_layer.py::test_domain_capability_handlers_read_and_create_internal_requests"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "communication send capabilities create internal send requests without external dispatch.",
+      "status": "PASS",
+      "proof": [
+        "agent_communication_requests",
+        "delivery_state=not_dispatched",
+        "provider_write_performed=False"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "review publish requests create local draft/request records without provider publish.",
+      "status": "PASS",
+      "proof": [
+        "reviewreplydrafts status=publish_requested",
+        "manual_publish_required=True"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "service optimization reads services and stores local optimization requests without applying changes.",
+      "status": "PASS",
+      "proof": [
+        "userservices",
+        "agent_service_optimization_requests",
+        "apply_state=not_applied"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "billing reserve/settle delegate to existing reservation/finalization layer.",
+      "status": "PASS",
+      "proof": [
+        "reserve_paid_action_credits",
+        "finalize_reserved_action_credits",
+        "tests/test_operator_credit_reservation.py"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC6",
+      "text": "architecture docs describe the domain integration boundary.",
+      "status": "PASS",
+      "proof": [
+        "docs/LOCALOS_AGENT_ARCHITECTURE_V1.md"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC7",
+      "text": "new domain request tables are represented by Alembic.",
+      "status": "PASS",
+      "proof": [
+        "alembic_migrations/versions/20260609_add_agent_domain_request_tables.py"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC8",
+      "text": "regression tests prove safe domain integrations.",
+      "status": "PASS",
+      "proof": [
+        "47 passed in tests/test_agent_blueprint_layer.py",
+        "15 passed in tests/test_operator_credit_reservation.py"
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/services/agent_capability_handlers.py",
+    "tests/test_agent_blueprint_layer.py",
+    "docs/LOCALOS_AGENT_ARCHITECTURE_V1.md",
+    "alembic_migrations/versions/20260609_add_agent_domain_request_tables.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "PYTHONPATH=src python3 -m py_compile src/services/agent_capability_handlers.py",
+    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "PYTHONPATH=src python3 -m pytest -q tests/test_operator_credit_reservation.py",
+    "scripts/proof_loop.sh validate capability-domain-integrations-20260609"
+  ],
+  "known_gaps": [
+    "No production handler execution was run because that would create production domain records.",
+    "External provider send/publish/apply behavior remains intentionally gated outside these handlers."
+  ]
+}

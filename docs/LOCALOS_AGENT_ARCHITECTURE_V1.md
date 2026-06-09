@@ -124,6 +124,31 @@ Legacy aliases (`reviews.reply`, `appointments.create`,
 `appointments.update`, `appointments.cancel`, `reminders.send`,
 `communications.send`) остаются подключенными как compatibility wrappers.
 
+### Domain Integrations Behind Capability Map
+
+Capability handlers v1 больше не являются только безопасными заглушками: они
+читают и создают доменные LocalOS records за общей OpenClaw/ActionOrchestrator
+границей. При этом они не расширяют автономность:
+
+- `appointments.read` читает реальные `Bookings` с tenant-фильтром и лимитом.
+- `communications.send_reminder` и `communications.send_offer` собирают
+  recipients из явного payload или `Bookings`, применяют daily cap и создают
+  `agent_communication_requests` со статусом approved request / pending human.
+  Handler не делает provider send; delivery state остается `not_dispatched`.
+- `reviews.reply.publish_request` создает/обновляет локальный
+  `reviewreplydrafts` record со статусом `publish_requested`. Это request на
+  публикацию, а не write в Yandex/Google/2GIS.
+- `services.optimize` читает `userservices`, формирует suggestions и сохраняет
+  `agent_service_optimization_requests` с `apply_state=not_applied`. Применение
+  к карточке услуги остается отдельным approved flow.
+- `billing.reserve` и `billing.settle` делегируют реальные credit reservation /
+  finalization в `operator_credit_reservation`, а обычный action billing ledger
+  по-прежнему проходит через `ActionOrchestrator`.
+
+Обязательный invariant для этих handlers: publish/send/apply/payment effects не
+пишутся во внешние системы из capability handler напрямую. Внешнее действие
+должно проходить через policy, approval, ledger, limits и audit trail.
+
 ## Communication Showcase v1
 
 Этап 5 реализует первые коммуникационные агенты как `AgentBlueprint.category =

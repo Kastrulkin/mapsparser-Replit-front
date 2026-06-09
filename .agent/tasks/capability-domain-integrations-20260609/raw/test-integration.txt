@@ -1,0 +1,5 @@
+Command: PYTHONPATH=src python3 -m pytest -q tests/test_operator_credit_reservation.py
+Result: PASS
+Output:
+...............                                                          [100%]
+15 passed in 0.03s
