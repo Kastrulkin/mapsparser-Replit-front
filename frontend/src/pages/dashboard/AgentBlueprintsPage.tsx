@@ -46,7 +46,6 @@ import {
   DashboardPageHeader,
   DashboardSection,
 } from '@/components/dashboard/DashboardPrimitives';
-import { AIAgentSettings } from '@/components/AIAgentSettings';
 import { newAuth } from '@/lib/auth_new';
 import { api } from '@/services/api';
 import { cn } from '@/lib/utils';
@@ -121,6 +120,7 @@ type AgentApproval = {
   decision_reason?: string | null;
   requested_at?: string | null;
   run_status?: string | null;
+  run_started_at?: string | null;
 };
 
 type AgentArtifact = {
@@ -251,6 +251,10 @@ type AgentBlueprintDetails = {
   active_version?: Record<string, unknown> | null;
   active_version_id?: string;
   active_version_number?: number;
+  learning_events?: AgentLearningEvent[];
+  version_events?: AgentVersionEvent[];
+  feedback_history?: Array<Record<string, unknown>>;
+  legacy_migration?: Record<string, unknown>;
 };
 
 type AgentVersionDiff = {
@@ -278,6 +282,26 @@ type AgentLearningLoop = {
   previous_version_number?: number;
   diff?: AgentVersionDiff;
   explanation?: string;
+};
+
+type AgentLearningEvent = {
+  run_id?: string;
+  trigger_type?: string;
+  feedback?: string;
+  previous_version_id?: string;
+  candidate_version_id?: string;
+  candidate_version_number?: number;
+  activation_state?: string;
+  created_at?: string;
+};
+
+type AgentVersionEvent = {
+  action?: string;
+  reason?: string;
+  previous_active_version_id?: string;
+  active_version_id?: string;
+  active_version_number?: number;
+  created_at?: string;
 };
 
 type AgentSource = {
@@ -355,6 +379,30 @@ type PersonaAgent = {
   task?: string;
   identity?: string;
   is_active?: boolean;
+};
+
+type LegacyMigrationPlan = {
+  mode?: string;
+  legacy_agents?: Array<{
+    agent_id?: string;
+    name?: string;
+    action?: string;
+    reason?: string;
+    linked_to_blueprint?: boolean;
+    legacy_workflow?: {
+      present?: boolean;
+      status?: string;
+    };
+  }>;
+  business_settings?: {
+    fields?: Record<string, { present?: boolean; status?: string; target?: string; current_value_preview?: unknown }>;
+    rule?: string;
+  };
+  runtime_truth?: Record<string, string>;
+  deletion_rule?: {
+    allowed?: boolean;
+    required_before_delete?: string[];
+  };
 };
 
 type AgentWorkspaceMode = 'settings' | 'run' | 'results' | 'voice';
@@ -750,6 +798,27 @@ const humanizeCategory = (category?: string) => ({
   custom: 'Кастомная задача',
 }[category || 'custom'] || category || 'Кастомная задача');
 
+const explainApproval = (approval?: AgentApproval | null) => {
+  const approvalType = approval?.approval_type || '';
+  const payload = approval?.payload_json || {};
+  const draftCount = Array.isArray(payload.draft_ids) ? payload.draft_ids.length : typeof payload.count === 'number' ? payload.count : 0;
+  if (approvalType === 'external_delivery' || approvalType === 'send_batch') {
+    return draftCount
+      ? `Агент подготовил ${draftCount} внешних отправок. Нужно подтвердить batch перед любым сообщением клиентам.`
+      : 'Агент дошёл до внешнего действия. Нужен human gate перед отправкой.';
+  }
+  if (approvalType === 'final_output') {
+    return 'Агент подготовил результат, но не использует его дальше без проверки человеком.';
+  }
+  if (approvalType === 'shortlist') {
+    return 'Агент собрал shortlist. Нужно проверить, кого брать в работу дальше.';
+  }
+  if (approvalType === 'drafts') {
+    return 'Агент подготовил черновики. Нужно проверить текст, тон и ограничения перед следующим шагом.';
+  }
+  return 'Агент остановился на безопасной границе и ждёт решение человека.';
+};
+
 const getAgentListStatus = (blueprint: AgentBlueprint) => {
   if (Number(blueprint.pending_approvals_count || 0) > 0 || blueprint.last_run_status === 'waiting_approval') {
     return 'needs_approval';
@@ -882,7 +951,6 @@ export const AgentBlueprintsPage = () => {
   const [runLimit, setRunLimit] = useState('30');
   const [createWizardOpen, setCreateWizardOpen] = useState(false);
   const [createWizardStep, setCreateWizardStep] = useState(0);
-  const [systemSettingsOpen, setSystemSettingsOpen] = useState(false);
   const [workspaceMode, setWorkspaceMode] = useState<AgentWorkspaceMode>('run');
   const [availablePersonaAgents, setAvailablePersonaAgents] = useState<PersonaAgent[]>([]);
   const [agentPrompt, setAgentPrompt] = useState('');
@@ -913,6 +981,8 @@ export const AgentBlueprintsPage = () => {
   const [feedbackTrigger, setFeedbackTrigger] = useState('manual_edit');
   const [feedbackVersionNotice, setFeedbackVersionNotice] = useState<FeedbackVersionNotice | null>(null);
   const [systemAgentConfig, setSystemAgentConfig] = useState<Record<string, { enabled?: boolean }>>({});
+  const [legacyMigrationPlan, setLegacyMigrationPlan] = useState<LegacyMigrationPlan | null>(null);
+  const [legacyMigrationNotice, setLegacyMigrationNotice] = useState('');
   const [recentCreatedAgentName, setRecentCreatedAgentName] = useState('');
 
   useEffect(() => {
@@ -992,6 +1062,19 @@ export const AgentBlueprintsPage = () => {
 
   const lastArtifactsCount = activeRun?.artifacts?.length || 0;
 
+  const migrationStats = useMemo(() => {
+    const legacyAgents = legacyMigrationPlan?.legacy_agents || [];
+    const businessFields = legacyMigrationPlan?.business_settings?.fields || {};
+    return {
+      totalLegacyAgents: legacyAgents.length,
+      linkedVoices: legacyAgents.filter((item) => item.action === 'use_as_persona').length,
+      needsBlueprint: legacyAgents.filter((item) => item.action === 'create_blueprint_candidate').length,
+      archiveCandidates: legacyAgents.filter((item) => item.action === 'archive_candidate').length,
+      deprecatedFieldsPresent: Object.values(businessFields).filter((item) => item.present).length,
+      legacyWorkflowPresent: legacyAgents.filter((item) => item.legacy_workflow?.present).length,
+    };
+  }, [legacyMigrationPlan]);
+
   const applyBuilderScenario = (scenario: AgentBuilderScenario) => {
     setBuilderCategory(scenario.category);
     setAgentPrompt(scenario.prompt);
@@ -1025,8 +1108,14 @@ export const AgentBlueprintsPage = () => {
         value: blueprints.length + availablePersonaAgents.length,
         hint: currentBusiness?.name || 'Текущий бизнес',
       },
+      {
+        label: 'Legacy к миграции',
+        value: migrationStats.needsBlueprint,
+        hint: migrationStats.deprecatedFieldsPresent ? `${migrationStats.deprecatedFieldsPresent} deprecated fields` : 'runtime truth: blueprints',
+        tone: migrationStats.needsBlueprint || migrationStats.deprecatedFieldsPresent ? 'warning' : 'positive',
+      },
     ],
-    [activeAgentsCount, activeRun, activeRunPendingApprovals.length, availablePersonaAgents.length, blueprints.length, currentBusiness?.name, lastArtifactsCount, pendingApproval, pendingApprovals.length, systemAgents.length, totalPendingApprovals],
+    [activeAgentsCount, activeRun, activeRunPendingApprovals.length, availablePersonaAgents.length, blueprints.length, currentBusiness?.name, lastArtifactsCount, migrationStats.deprecatedFieldsPresent, migrationStats.needsBlueprint, pendingApproval, pendingApprovals.length, systemAgents.length, totalPendingApprovals],
   );
 
   const loadBlueprints = useCallback(async () => {
@@ -1053,6 +1142,24 @@ export const AgentBlueprintsPage = () => {
   useEffect(() => {
     void loadBlueprints();
   }, [loadBlueprints]);
+
+  const loadLegacyMigrationPlan = useCallback(async () => {
+    if (!currentBusinessId) {
+      setLegacyMigrationPlan(null);
+      return;
+    }
+    try {
+      const response = await api.get('/agent-blueprints/legacy-migration-plan', { params: { business_id: currentBusinessId } });
+      setLegacyMigrationPlan(response.data?.migration_plan || null);
+    } catch (requestError) {
+      console.error(requestError);
+      setLegacyMigrationPlan(null);
+    }
+  }, [currentBusinessId]);
+
+  useEffect(() => {
+    void loadLegacyMigrationPlan();
+  }, [loadLegacyMigrationPlan]);
 
   const loadPersonaAgents = useCallback(async () => {
     if (!currentBusinessId) {
@@ -1109,6 +1216,10 @@ export const AgentBlueprintsPage = () => {
         active_version: response.data?.active_version || null,
         active_version_id: typeof response.data?.active_version_id === 'string' ? response.data.active_version_id : '',
         active_version_number: typeof response.data?.active_version_number === 'number' ? response.data.active_version_number : 0,
+        learning_events: Array.isArray(response.data?.learning_events) ? response.data.learning_events : [],
+        version_events: Array.isArray(response.data?.version_events) ? response.data.version_events : [],
+        feedback_history: Array.isArray(response.data?.feedback_history) ? response.data.feedback_history : [],
+        legacy_migration: response.data?.legacy_migration || {},
       };
       setBlueprintDetails(details);
     } catch (requestError) {
@@ -1557,6 +1668,33 @@ export const AgentBlueprintsPage = () => {
     }
   };
 
+  const applyLegacyMigration = async () => {
+    if (!currentBusinessId) {
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    try {
+      const response = await api.post('/agent-blueprints/legacy-migration/apply', {
+        business_id: currentBusinessId,
+      });
+      const migration = response.data?.migration || {};
+      const appliedCount = typeof migration.applied_count === 'number' ? migration.applied_count : 0;
+      const skippedCount = typeof migration.skipped_count === 'number' ? migration.skipped_count : 0;
+      setLegacyMigrationNotice(`Миграция выполнена: создано ${appliedCount}, пропущено ${skippedCount}. Legacy поля не удалялись.`);
+      await loadBlueprints();
+      await loadLegacyMigrationPlan();
+      if (selectedBlueprint?.id) {
+        await loadBlueprintDetails(selectedBlueprint.id);
+      }
+    } catch (requestError) {
+      console.error(requestError);
+      setError(getRequestErrorMessage(requestError, 'Не удалось применить legacy migration.'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const sendRunFeedback = async () => {
     if (!activeRun || !feedbackText.trim()) {
       return;
@@ -1707,42 +1845,25 @@ export const AgentBlueprintsPage = () => {
 
       {currentBusinessId ? (
         <DashboardSection
-          title="Legacy голоса и чат-настройки"
-          description="Старые AIAgents больше не являются отдельным миром workflow. Они используются как голос, стиль и channel-настройки внутри агента."
-          actions={(
-            <Button type="button" variant="outline" onClick={() => setSystemSettingsOpen(true)}>
-              Открыть legacy-настройки
-            </Button>
-          )}
+          title="Agent cockpit"
+          description="Единый контур: product agents, legacy migration, approvals, версии, learning loop и runtime truth."
         >
-          <div className="grid gap-4 md:grid-cols-2">
-            {systemAgents.map((agent) => (
-              <SystemAgentCard
-                key={agent.key}
-                title={agent.title}
-                description={agent.description}
-                icon={agent.icon}
-                enabled={agent.enabled}
-                onConfigure={() => setSystemSettingsOpen(true)}
-              />
-            ))}
-          </div>
+          <AgentCockpitPanel
+            blueprints={blueprints}
+            systemAgents={systemAgents}
+            migrationPlan={legacyMigrationPlan}
+            migrationStats={migrationStats}
+            migrationNotice={legacyMigrationNotice}
+            actionLoading={actionLoading}
+            onApplyMigration={applyLegacyMigration}
+            onOpenLegacySettings={() => setWorkspaceMode('voice')}
+          />
         </DashboardSection>
       ) : null}
 
-      <Dialog open={systemSettingsOpen} onOpenChange={setSystemSettingsOpen}>
-        <DialogContent className="max-h-[88vh] max-w-6xl overflow-y-auto rounded-2xl p-0">
-          <DialogHeader className="px-6 pt-6">
-            <DialogTitle>Системные агенты</DialogTitle>
-            <DialogDescription>Настройки агента записи, маркетингового агента и persona/chat поведения.</DialogDescription>
-          </DialogHeader>
-          <AIAgentSettings businessId={currentBusinessId} business={currentBusiness} />
-        </DialogContent>
-      </Dialog>
-
       <DashboardSection
         title="Мои агенты"
-        description="Главный список LocalOS agents: логика, статус, тип, запуски, approvals, источники, журнал и версии."
+        description="Центральный cockpit LocalOS agents: логика, статус, версии, learning history, approvals, источники и журнал запусков."
       >
         <div className="space-y-6">
           {loading ? (
@@ -1796,7 +1917,7 @@ export const AgentBlueprintsPage = () => {
           {availablePersonaAgents.length ? (
             <DashboardActionPanel
               title="Голоса и стиль перенесены внутрь агента"
-              description={`${availablePersonaAgents.length} legacy persona доступны во вкладке “Голос и стиль” выбранного агента. После миграции отдельный экран AIAgentsManagement можно будет убрать.`}
+              description={`${availablePersonaAgents.length} legacy persona доступны во вкладке “Голос и стиль” выбранного агента. Отдельный legacy workflow editor больше не является runtime entrypoint.`}
               tone="sky"
             />
           ) : null}
@@ -1809,8 +1930,6 @@ export const AgentBlueprintsPage = () => {
           blueprint={selectedBlueprint}
           blueprintDetails={blueprintDetails}
           activeRun={activeRun}
-          currentBusinessId={currentBusinessId}
-          currentBusiness={currentBusiness}
           availablePersonaAgents={availablePersonaAgents}
           pendingApproval={pendingApproval}
           queuedButNotDispatched={queuedButNotDispatched}
@@ -1942,6 +2061,9 @@ export const AgentBlueprintsPage = () => {
                     <StatusBadge status={approval.status} />
                   </div>
                   <div className="mt-2 text-xs text-slate-500">{approval.requested_at || humanizeStatus(approval.run_status || 'pending')}</div>
+                  <div className="mt-2 rounded-lg bg-white/70 px-2 py-2 text-xs leading-5 text-amber-900 ring-1 ring-amber-100">
+                    {explainApproval(approval)}
+                  </div>
                   <ApprovalPayloadSummary approval={approval} />
                 </button>
               ))}
@@ -2444,6 +2566,139 @@ const BlueprintAgentCard = ({
   );
 };
 
+const AgentCockpitPanel = ({
+  blueprints,
+  systemAgents,
+  migrationPlan,
+  migrationStats,
+  migrationNotice,
+  actionLoading,
+  onApplyMigration,
+  onOpenLegacySettings,
+}: {
+  blueprints: AgentBlueprint[];
+  systemAgents: Array<{ key: string; title: string; description: string; icon: typeof Bot; enabled: boolean }>;
+  migrationPlan: LegacyMigrationPlan | null;
+  migrationStats: {
+    totalLegacyAgents: number;
+    linkedVoices: number;
+    needsBlueprint: number;
+    archiveCandidates: number;
+    deprecatedFieldsPresent: number;
+    legacyWorkflowPresent: number;
+  };
+  migrationNotice: string;
+  actionLoading: boolean;
+  onApplyMigration: () => void;
+  onOpenLegacySettings: () => void;
+}) => {
+  const activeBlueprints = blueprints.filter((item) => getAgentListStatus(item) === 'active').length;
+  const pendingBlueprints = blueprints.filter((item) => getAgentListStatus(item) === 'needs_approval').length;
+  const deprecatedFields = migrationPlan?.business_settings?.fields || {};
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <CockpitTile icon={Bot} label="Product agents" value={`${activeBlueprints}/${blueprints.length}`} hint="active / total blueprints" />
+        <CockpitTile icon={ShieldCheck} label="Approvals" value={String(pendingBlueprints)} hint="agents waiting for human gate" tone={pendingBlueprints ? 'warning' : 'default'} />
+        <CockpitTile icon={RefreshCw} label="Legacy wrappers" value={String(migrationStats.needsBlueprint)} hint={`${migrationStats.linkedVoices} voices linked`} tone={migrationStats.needsBlueprint ? 'warning' : 'default'} />
+        <CockpitTile icon={AlertTriangle} label="Deprecated fields" value={String(migrationStats.deprecatedFieldsPresent)} hint="business ai_agent_* fields" tone={migrationStats.deprecatedFieldsPresent ? 'warning' : 'default'} />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.75fr)]">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-slate-950">Migration health</div>
+              <div className="mt-1 text-sm leading-6 text-slate-600">
+                AIAgents остаются voice/persona. Runtime truth для логики: `agent_blueprint_versions.steps_json`.
+              </div>
+            </div>
+            <Button type="button" onClick={onApplyMigration} disabled={actionLoading || !migrationStats.needsBlueprint}>
+              {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+              Применить migration
+            </Button>
+          </div>
+          {migrationNotice ? (
+            <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+              {migrationNotice}
+            </div>
+          ) : null}
+          <div className="mt-4 grid gap-2 md:grid-cols-2">
+            {(migrationPlan?.legacy_agents || []).slice(0, 6).map((agent) => (
+              <div key={agent.agent_id || agent.name} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate font-medium text-slate-950">{agent.name || 'Legacy persona'}</div>
+                    <div className="mt-1 text-xs text-slate-500">{agent.reason || 'migration decision'}</div>
+                  </div>
+                  <StatusBadge status={agent.action === 'use_as_persona' ? 'active' : agent.action === 'create_blueprint_candidate' ? 'needs_approval' : 'paused'} />
+                </div>
+                {agent.legacy_workflow?.present ? (
+                  <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900">
+                    AIAgents.workflow: {agent.legacy_workflow.status || 'deprecated'}
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <div className="text-sm font-semibold text-slate-950">Deprecated business settings</div>
+            <div className="mt-3 space-y-2">
+              {Object.entries(deprecatedFields).map(([field, info]) => (
+                <div key={field} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-xs">
+                  <div>
+                    <div className="font-medium text-slate-800">{field}</div>
+                    <div className="text-slate-500">{info.target || 'agent_blueprints'}</div>
+                  </div>
+                  <StatusBadge status={info.present ? 'needs_approval' : 'completed'} />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="grid gap-3">
+            {systemAgents.map((agent) => (
+              <SystemAgentCard
+                key={agent.key}
+                title={agent.title}
+                description={agent.description}
+                icon={agent.icon}
+                enabled={agent.enabled}
+                onConfigure={onOpenLegacySettings}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const CockpitTile = ({
+  icon: Icon,
+  label,
+  value,
+  hint,
+  tone = 'default',
+}: {
+  icon: typeof Bot;
+  label: string;
+  value: string;
+  hint: string;
+  tone?: 'default' | 'warning';
+}) => (
+  <div className={cn('rounded-2xl border p-4', tone === 'warning' ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-white')}>
+    <div className="flex items-center justify-between gap-3">
+      <div className="text-xs font-semibold uppercase text-slate-500">{label}</div>
+      <Icon className={cn('h-4 w-4', tone === 'warning' ? 'text-amber-700' : 'text-slate-500')} />
+    </div>
+    <div className="mt-2 text-2xl font-semibold text-slate-950">{value}</div>
+    <div className="mt-1 text-xs text-slate-500">{hint}</div>
+  </div>
+);
+
 const AgentSummaryPill = ({ label, value, tone = 'default' }: { label: string; value: string; tone?: 'default' | 'warning' }) => (
   <div className={cn('rounded-lg px-3 py-2 ring-1', tone === 'warning' ? 'bg-amber-50 text-amber-900 ring-amber-200' : 'bg-slate-50 text-slate-700 ring-slate-200')}>
     <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</div>
@@ -2478,8 +2733,6 @@ const AgentDetailPanel = ({
   blueprint,
   blueprintDetails,
   activeRun,
-  currentBusinessId,
-  currentBusiness,
   availablePersonaAgents,
   pendingApproval,
   queuedButNotDispatched,
@@ -2535,8 +2788,6 @@ const AgentDetailPanel = ({
   blueprint: AgentBlueprint;
   blueprintDetails: AgentBlueprintDetails | null;
   activeRun: AgentRun | null;
-  currentBusinessId: string | null;
-  currentBusiness?: DashboardContext['currentBusiness'];
   availablePersonaAgents: PersonaAgent[];
   pendingApproval: AgentApproval | null;
   queuedButNotDispatched: AgentArtifact['payload_json'] | AgentRunStep['output_json'] | null;
@@ -2608,6 +2859,9 @@ const AgentDetailPanel = ({
     {mode === 'settings' ? (
         <AgentWorkspacePanel
         versions={versions}
+        learningEvents={blueprintDetails?.learning_events || []}
+        versionEvents={blueprintDetails?.version_events || []}
+        legacyMigration={blueprintDetails?.legacy_migration || {}}
         latestVersionNumber={latestVersionNumber}
         activeVersionId={activeVersionId}
         setupDataSources={setupDataSources}
@@ -2691,7 +2945,7 @@ const AgentDetailPanel = ({
         {pendingApproval ? (
           <DashboardActionPanel
             title="Ждёт решения"
-            description={pendingApproval.title}
+            description={`${pendingApproval.title}. ${explainApproval(pendingApproval)}`}
             tone="amber"
             actions={(
               <div className="flex flex-wrap gap-2">
@@ -2744,8 +2998,6 @@ const AgentDetailPanel = ({
     {mode === 'voice' ? (
       <AgentVoiceStylePanel
         blueprint={blueprint}
-        currentBusinessId={currentBusinessId}
-        currentBusiness={currentBusiness}
         availablePersonaAgents={availablePersonaAgents}
       />
     ) : null}
@@ -2755,13 +3007,9 @@ const AgentDetailPanel = ({
 
 const AgentVoiceStylePanel = ({
   blueprint,
-  currentBusinessId,
-  currentBusiness,
   availablePersonaAgents,
 }: {
   blueprint: AgentBlueprint;
-  currentBusinessId: string | null;
-  currentBusiness?: DashboardContext['currentBusiness'];
   availablePersonaAgents: PersonaAgent[];
 }) => {
   const voiceName = getAgentVoiceName(blueprint);
@@ -2814,13 +3062,10 @@ const AgentVoiceStylePanel = ({
         </div>
       </div>
       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-        <div className="text-sm font-semibold text-amber-950">Legacy wrapper: AIAgentSettings / AIAgentsManagement</div>
+        <div className="text-sm font-semibold text-amber-950">Legacy workflow editor removed from runtime UI</div>
         <div className="mt-1 text-sm leading-6 text-amber-900">
-          Этот блок встроен во вкладку агента на время миграции. После переноса persona-связей в blueprint-версии отдельный entrypoint можно удалить.
+          AIAgents показываются как voice/persona cards. Редактирование runtime-логики идёт через blueprint versions, diff, activation и rollback.
         </div>
-      </div>
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-        <AIAgentSettings businessId={currentBusinessId} business={currentBusiness} />
       </div>
     </div>
   );
@@ -2828,6 +3073,9 @@ const AgentVoiceStylePanel = ({
 
 const AgentWorkspacePanel = ({
   versions,
+  learningEvents,
+  versionEvents,
+  legacyMigration,
   latestVersionNumber,
   activeVersionId,
   setupDataSources,
@@ -2859,6 +3107,9 @@ const AgentWorkspacePanel = ({
   onAddFileSource,
 }: {
   versions: Array<Record<string, unknown>>;
+  learningEvents: AgentLearningEvent[];
+  versionEvents: AgentVersionEvent[];
+  legacyMigration: Record<string, unknown>;
   latestVersionNumber: number | null;
   activeVersionId: string;
   setupDataSources: string;
@@ -2902,6 +3153,11 @@ const AgentWorkspacePanel = ({
           onStartVersionRun={onStartVersionRun}
           onActivateVersion={onActivateVersion}
           onRollbackVersion={onRollbackVersion}
+        />
+        <LearningHistoryPanel
+          learningEvents={learningEvents}
+          versionEvents={versionEvents}
+          legacyMigration={legacyMigration}
         />
         <WizardTextArea label="Какие данные использовать" value={setupDataSources} onChange={onSetupDataSourcesChange} placeholder="Например: профиль бизнеса, отзывы, файл с договором" />
         <WizardTextArea label="Что извлечь или понять" value={setupExtractionRules} onChange={onSetupExtractionRulesChange} placeholder="Например: риски, сроки, суммы, обязательства сторон" />
@@ -3183,10 +3439,10 @@ const VersionSummary = ({
             const changedFields = Array.isArray(changedFieldsValue) ? changedFieldsValue.map((item) => humanizeMeta(String(item))) : [];
             const createdAt = typeof version.created_at === 'string' ? version.created_at : '';
             return (
-              <div key={String(version.id || versionNumber || 'version')} className="rounded-lg bg-slate-50 px-2 py-2 text-xs text-slate-600">
+              <div key={String(version.id || versionNumber || 'version')} className={cn('rounded-lg px-2 py-2 text-xs text-slate-600 ring-1', isActive ? 'bg-emerald-50 ring-emerald-200' : 'bg-slate-50 ring-slate-200')}>
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-medium text-slate-900">{versionNumber ? `v${versionNumber}` : 'версия'}</span>
-                  <span>{isActive ? 'используется сейчас' : 'не активна'}</span>
+                  <span>{isActive ? 'runtime truth сейчас' : 'candidate / archived'}</span>
                 </div>
                 {summary ? <div className="mt-1 text-slate-500">{summary}</div> : null}
                 {changedFields.length ? (
@@ -3201,16 +3457,16 @@ const VersionSummary = ({
                 {createdAt ? <div className="mt-1 text-[11px] text-slate-400">Создана: {createdAt}</div> : null}
                 <div className="mt-2 flex flex-wrap gap-2">
                   <Button type="button" size="sm" variant="outline" onClick={() => onStartVersionRun(versionId)} disabled={!versionId}>
-                    Запустить эту версию
+                    Preview run
                   </Button>
                   {!isActive ? (
-                    <Button type="button" size="sm" variant="outline" onClick={() => onActivateVersion(versionId)} disabled={!versionId}>
-                      Сделать активной
+                    <Button type="button" size="sm" onClick={() => onActivateVersion(versionId)} disabled={!versionId}>
+                      Сделать runtime truth
                     </Button>
                   ) : null}
                   {!isActive && versionNumber && latestVersionNumber && versionNumber < latestVersionNumber ? (
                     <Button type="button" size="sm" variant="outline" onClick={() => onRollbackVersion(versionId)} disabled={!versionId}>
-                      Откатиться
+                      Rollback сюда
                     </Button>
                   ) : null}
                 </div>
@@ -3222,6 +3478,89 @@ const VersionSummary = ({
     </div>
   );
 };
+
+const LearningHistoryPanel = ({
+  learningEvents,
+  versionEvents,
+  legacyMigration,
+}: {
+  learningEvents: AgentLearningEvent[];
+  versionEvents: AgentVersionEvent[];
+  legacyMigration: Record<string, unknown>;
+}) => {
+  const legacySource = typeof legacyMigration.source === 'string' ? legacyMigration.source : '';
+  const latestLearning = learningEvents.slice(-5).reverse();
+  const latestVersionEvents = versionEvents.slice(-5).reverse();
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-700">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="font-semibold text-slate-950">Learning и версии</div>
+        <span className="rounded-full bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
+          {learningEvents.length} learning events
+        </span>
+      </div>
+      {legacySource ? (
+        <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-2 text-xs text-amber-900">
+          Мигрировано из {legacySource}. Legacy workflow не является runtime truth.
+        </div>
+      ) : null}
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <div className="space-y-2">
+          <div className="text-xs font-semibold uppercase text-slate-500">Learning history</div>
+          {latestLearning.length ? latestLearning.map((event) => (
+            <div key={`${event.run_id || 'run'}-${event.candidate_version_id || event.created_at}`} className="rounded-lg bg-slate-50 px-3 py-2 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium text-slate-900">{humanizeLearningTrigger(event.trigger_type)}</span>
+                <span className="text-slate-500">{event.candidate_version_number ? `v${event.candidate_version_number}` : event.activation_state || 'candidate'}</span>
+              </div>
+              <div className="mt-1 line-clamp-2 text-slate-600">{event.feedback || 'feedback сохранён'}</div>
+              <div className="mt-1 text-[11px] text-slate-400">{event.created_at || ''}</div>
+            </div>
+          )) : (
+            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-500">
+              Learning events появятся после правки, отклонения, плохого outcome или ошибки.
+            </div>
+          )}
+        </div>
+        <div className="space-y-2">
+          <div className="text-xs font-semibold uppercase text-slate-500">Activate / rollback history</div>
+          {latestVersionEvents.length ? latestVersionEvents.map((event) => (
+            <div key={`${event.action || 'event'}-${event.created_at || event.active_version_id}`} className="rounded-lg bg-slate-50 px-3 py-2 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium text-slate-900">{humanizeVersionAction(event.action)}</span>
+                <span className="text-slate-500">{event.active_version_number ? `v${event.active_version_number}` : ''}</span>
+              </div>
+              <div className="mt-1 line-clamp-2 text-slate-600">{event.reason || 'version event'}</div>
+              <div className="mt-1 text-[11px] text-slate-400">{event.created_at || ''}</div>
+            </div>
+          )) : (
+            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-500">
+              История activation/rollback появится после смены runtime truth.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const humanizeLearningTrigger = (trigger?: string) => ({
+  manual_edit: 'Ручная правка',
+  approval_rejected: 'Отклонение',
+  bad_outcome: 'Плохой outcome',
+  runtime_error: 'Ошибка',
+  manual_feedback: 'Комментарий',
+  run_review: 'Проверка запуска',
+}[trigger || ''] || trigger || 'Learning event');
+
+const humanizeVersionAction = (action?: string) => ({
+  created: 'Создана версия',
+  setup_updated: 'Обновлена логика',
+  activated: 'Активирована',
+  rollback: 'Rollback',
+  feedback_applied: 'Feedback применён',
+  legacy_migration_created: 'Создано миграцией',
+}[action || ''] || action || 'Version event');
 
 const AgentRunReviewPanel = ({
   review,
@@ -3523,7 +3862,7 @@ const getGenericStageDetail = (
   }
   if (kind === 'approval') {
     if (pendingApproval) {
-      return pendingApproval.title || 'Нужно решение перед продолжением.';
+      return explainApproval(pendingApproval);
     }
     return findJournalDetailValue(entry, 'Статус') || entry?.summary || 'Решения сохранены в журнале.';
   }

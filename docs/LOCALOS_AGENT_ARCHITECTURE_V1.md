@@ -19,7 +19,7 @@ blueprints**. Коммуникационный агент, агент напом
 | Термин | Каноничное значение | Текущая опора в коде |
 | --- | --- | --- |
 | `Agent` | Пользовательский продуктовый объект: "агент, который делает работу для бизнеса". Внутри он собирается из persona, blueprint, permissions, run history и approval policy. | Product/UI layer: `frontend/src/pages/dashboard/AgentBlueprintsPage.tsx`; backend layer: `agent_blueprints` плюс optional `AIAgents`; serializer: `src/services/agent_product_layer.py`. |
-| `Persona` | Голос, стиль общения, роль, ограничения речи и channel behavior. Persona не является runtime workflow. | `AIAgents`, `AIAgentSettings`, `AIAgentsManagement`, `AIAgentConversations`, `AIAgentMessages`. |
+| `Persona` | Голос, стиль общения, роль, ограничения речи и channel behavior. Persona не является runtime workflow. | `AIAgents`, `AIAgentConversations`, `AIAgentMessages`; продуктовый UI показывает persona внутри `Мои агенты`, а не через отдельный legacy workflow editor. |
 | `Blueprint` | Версионируемый workflow: цель, inputs, источники, шаги, allowed capabilities, approvals, output schema. | `agent_blueprints`, `agent_blueprint_versions`, `src/api/agent_blueprints_api.py`. |
 | `Compiled Workflow` | Проверенный исполняемый план, полученный из человеческого описания или диалога. Он отделяет deterministic steps от LLM steps и фиксирует validation/approval boundaries. | Представлен как `version_payload`/`steps_json`; compiler v1 живет в `agent_blueprint_draft_builder.py` как `compile_agent_blueprint()`, а old draft builder name сохранен как compatibility wrapper. |
 | `Capability` | Узкое разрешенное действие с контрактом input/output, risk class, side effects, permission policy, timeout/retry и audit event. Модель может предложить capability, но не исполняет side effects напрямую. | `ActionOrchestrator`, `services/agent_blueprint_orchestrator.py`, OpenClaw contract docs. |
@@ -175,8 +175,8 @@ third-party systems напрямую.
 | --- | --- | --- | --- |
 | `AIAgents` table and `src/ai_agents_api.py` | Старые пользовательские/админские агенты: name/type/description/prompt/workflow/task/identity/speech style/restrictions/tools. | Используется после адаптации. | Становится `Persona` и legacy chat config. Backend serializer уже возвращает `persona`/`voice` для `persona_agent_id`. `workflow` внутри `AIAgents` не должен быть source of truth для runtime после миграции в blueprints. |
 | `AIAgentConversations`, `AIAgentMessages`, `src/chats_api.py` | История чатов и sandbox/test для коммуникационных агентов. | Используется после адаптации. | Сохраняем как conversation memory/channel history для persona/chat agents. Run-level side effects должны идти через blueprint + orchestrator. |
-| `AIAgentSettings`, `AIAgentsManagement` | Отдельный UI управления чат-агентами и их persona/workflow fields. | Legacy wrapper. | Встроить в `Мои агенты` как вкладку "Голос и стиль". После миграции убрать отдельный параллельный entrypoint. |
-| `Businesses.ai_agent_enabled`, `ai_agent_tone`, `ai_agent_restrictions`, `ai_agents_config`, `ai_agent_id` | Legacy business-level settings для включения/настроек агента. | Legacy wrapper. | Использовать как migration source и backward compatibility. После переноса в persona/blueprint пометить deprecated, затем удалить отдельной миграцией. |
+| `AIAgentSettings`, `AIAgentsManagement` | Старые отдельные UI entrypoints для чат-агентов и workflow/persona fields. | Удалить после миграции. | Отдельный runtime/editor entrypoint закрыт для продукта. `Мои агенты` показывает voice/persona cards и ведет настройку логики только через blueprint versions. Старые компоненты можно удалить после проверки отсутствия импортов/роутов. |
+| `Businesses.ai_agent_enabled`, `ai_agent_tone`, `ai_agent_restrictions`, `ai_agents_config`, `ai_agent_id` | Legacy business-level settings для включения/настроек агента. | Legacy wrapper. | Использовать только как migration source и backward compatibility. Webhooks сначала проверяют активные `agent_blueprints`; legacy enabled остается fallback до Alembic cleanup. |
 | `agent_blueprints` | Product/workflow object. | Используется как есть. | Главная runtime-сущность пользовательского агента. Добавление новых типов агентов идет через `category`, а не через новые параллельные таблицы. |
 | `agent_blueprint_versions` | Versioned workflow payload: goal, schemas, steps, persona, allowlist, approvals. | Используется как есть. | Source of truth для compiled workflow. `persona_agent_id` используется как связь с `AIAgents` и декорируется в API как `persona`/`voice`. |
 | `agent_runs`, `agent_run_steps`, `agent_artifacts`, `agent_approvals` | Запуски, шаги, результаты, human gates. | Используется как есть. | История выполнения и proof/audit surface для всех blueprint categories, включая communications. |
@@ -209,18 +209,28 @@ third-party systems напрямую.
 ручное удаление старых полей.
 
 - Read-only migration preview: `GET /api/agent-blueprints/legacy-migration-plan?business_id=<id>`.
+- Non-destructive migration apply: `POST /api/agent-blueprints/legacy-migration/apply`.
+  Endpoint idempotently creates `communications` blueprint wrappers for active
+  legacy voices that are not yet referenced by
+  `agent_blueprint_versions.persona_agent_id`. Existing `AIAgents` rows and
+  `Businesses.ai_agent_*` fields are not deleted by this endpoint.
 - Старые `AIAgents` без blueprint получают одно из решений:
   - `use_as_persona`, если они уже связаны через `agent_blueprint_versions.persona_agent_id`;
   - `create_blueprint_candidate`, если это активный голос/чат-конфиг без blueprint;
   - `archive_candidate`, если строка неактивна или не содержит полезной persona-конфигурации.
 - `AIAgents.workflow` больше не считается runtime truth. Статус поля:
   `deprecated_not_runtime_truth`; целевой runtime — `agent_blueprint_versions.steps_json`.
+- Мигрированный wrapper пишет `metadata_json.legacy_migration` и
+  `version_payload.metadata.runtime_truth = agent_blueprint_versions.steps_json`,
+  чтобы UI/API явно показывали, где теперь исполняемая логика.
 - Старый sandbox/OpenClaw bridge для `AIAgents` переносится в общий run preview
   contract: preview создается без side effects, а выполнение идет через
   `/api/agent-blueprints/<blueprint_id>/runs` и `/api/agent-runs/<run_id>`.
 - `Businesses.ai_agent_enabled`, `ai_agent_tone`, `ai_agent_restrictions`,
   `ai_agents_config`, `ai_agent_id` остаются backward-compatible reads и
-  migration source. Цели миграции:
+  migration source. В runtime-gate сначала используется product-agent layer
+  (`agent_blueprints.status = active`); `ai_agent_enabled` допускается только как
+  deprecated fallback для старых Telegram/WhatsApp бизнесов. Цели миграции:
   - `ai_agent_enabled` -> `agent_blueprints.status`;
   - `ai_agent_tone` -> persona speech style / version persona;
   - `ai_agent_restrictions` -> persona restrictions / approval policy;
@@ -228,6 +238,10 @@ third-party systems напрямую.
   - `ai_agent_id` -> `agent_blueprint_versions.persona_agent_id`.
 - Удаление разрешено только после Alembic migration script, backup policy и proof,
   что UI/API больше не читают deprecated field/endpoint.
+- Старые admin/UI entrypoints `AIAgentSettings` и `AIAgentsManagement` не должны
+  импортироваться на продуктовых страницах. Admin tab `agents` направляет в
+  `/dashboard/agents`, а вкладка `Голос и стиль` показывает persona/voice state
+  без редактирования legacy workflow как runtime.
 
 ## Stage 8 Runtime Observability Canon
 
@@ -307,10 +321,11 @@ product objects.
   version;
 - `Голос и стиль`: persona/chat settings.
 
-`AIAgentSettings` и `AIAgentsManagement` больше не должны восприниматься как
-отдельный продуктовый мир. До полной миграции они остаются legacy wrapper внутри
-вкладки `Голос и стиль`; `AIAgents` используются как `Persona`/`Voice`, а не как
-runtime workflow source of truth.
+`AIAgentSettings` и `AIAgentsManagement` больше не являются отдельным продуктовым
+миром и не импортируются в cockpit. До физического удаления legacy кода
+`AIAgents` показываются как `Persona`/`Voice` cards, а изменение исполняемой
+логики идет только через `AgentBlueprint` versions. `AIAgents.workflow` остается
+видимым лишь как deprecated migration context.
 
 ## Learning Loop v1
 
@@ -387,10 +402,9 @@ Every existing agent-related block must end in one of four states:
 
 ## Next Implementation Checkpoints
 
-1. Wire `persona_agent_id` from blueprint versions into UI controls and runner
-   context. Backend API decoration is already implemented.
-2. Replace safe request/draft handlers for selected capabilities with deeper
+1. Replace safe request/draft handlers for selected capabilities with deeper
    domain integrations only where approval, scopes and audit are already covered.
-3. Move OpenClaw diagnostics from integration-only UI into agent run detail.
-4. Mark legacy `AIAgents.workflow` and business-level `ai_agent_*` settings as
-   migration sources, not future source of truth.
+2. Physically delete legacy UI components/endpoints only after route/import
+   proof and an Alembic-backed field cleanup plan.
+3. Replace deprecated business `ai_agent_*` fallback in Telegram/WhatsApp gates
+   after production businesses have active blueprint wrappers.

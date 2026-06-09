@@ -30,7 +30,7 @@ from services.agent_product_layer import (
     collect_persona_agent_ids,
     parse_persona_row,
 )
-from services.agent_legacy_migration import build_legacy_ai_agent_migration_plan
+from services.agent_legacy_migration import apply_legacy_ai_agent_migration, build_legacy_ai_agent_migration_plan
 from services.agent_source_ingestion import build_agent_source_from_upload
 from services.agent_datahub import build_agent_datahub_catalog
 
@@ -495,6 +495,31 @@ def get_agent_blueprint_legacy_migration_plan():
         db.close()
 
 
+@agent_blueprints_bp.route("/api/agent-blueprints/legacy-migration/apply", methods=["POST"])
+def apply_agent_blueprint_legacy_migration():
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    payload = request.get_json(silent=True) or {}
+    business_id = str(payload.get("business_id") or "").strip()
+    if not business_id:
+        return _json_error("business_id is required", 400, "VALIDATION_ERROR")
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        allowed, access_error = _require_business_access(cursor, business_id, user_data)
+        if not allowed:
+            return access_error
+        result = apply_legacy_ai_agent_migration(cursor, business_id, _user_id(user_data))
+        db.conn.commit()
+        return jsonify({"success": True, "migration": result})
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
 @agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>", methods=["GET"])
 def get_agent_blueprint(blueprint_id: str):
     user_data, error_response = _require_auth()
@@ -554,6 +579,11 @@ def get_agent_blueprint(blueprint_id: str):
             (blueprint_id,),
         )
         approval_queue = [_normalize_json_row(dict(row)) for row in (cursor.fetchall() or [])]
+        metadata = _blueprint_metadata(blueprint)
+        learning_events = metadata.get("learning_events") if isinstance(metadata.get("learning_events"), list) else []
+        version_events = metadata.get("version_events") if isinstance(metadata.get("version_events"), list) else []
+        feedback_history = metadata.get("feedback_history") if isinstance(metadata.get("feedback_history"), list) else []
+        legacy_migration = metadata.get("legacy_migration") if isinstance(metadata.get("legacy_migration"), dict) else {}
         return jsonify(
             {
                 "success": True,
@@ -564,6 +594,10 @@ def get_agent_blueprint(blueprint_id: str):
                 "versions": versions,
                 "runs": runs,
                 "approval_queue": approval_queue,
+                "learning_events": learning_events[-50:],
+                "version_events": version_events[-50:],
+                "feedback_history": feedback_history[-20:],
+                "legacy_migration": legacy_migration,
             }
         )
     finally:

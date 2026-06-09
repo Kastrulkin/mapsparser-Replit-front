@@ -1,0 +1,51 @@
+{
+  "task_id": "agents-migration-cockpit-20260609",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Non-destructive migration apply path and UI/API contract are implemented and tested."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Runtime gates prefer product agents and old business fields are deprecated fallback/migration sources."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Legacy workflow is no longer prompt/state runtime truth."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Legacy product/admin UI entrypoints are removed from the cockpit path."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Agent cockpit, learning history, version actions, and approval explanations are implemented."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "Architecture and OpenClaw contract docs are updated."
+    },
+    {
+      "id": "AC7",
+      "status": "PASS",
+      "reason": "Focused compile, test, and frontend build checks pass."
+    }
+  ],
+  "commands_run": [
+    "PYTHONPATH=src python3 -m py_compile src/api/agent_blueprints_api.py src/services/agent_legacy_migration.py src/ai_agent_webhooks.py src/chats_api.py src/ai_agent.py",
+    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "cd frontend && npm run build"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/agents-migration-cockpit-20260609/raw/lint.txt",
+    ".agent/tasks/agents-migration-cockpit-20260609/raw/test-unit.txt",
+    ".agent/tasks/agents-migration-cockpit-20260609/raw/build.txt"
+  ]
+}

@@ -25,6 +25,9 @@ def test_agent_blueprint_routes_are_owned_by_blueprint():
         "/api/agent-blueprints/legacy-migration-plan": {
             "GET": "agent_blueprints_api.get_agent_blueprint_legacy_migration_plan",
         },
+        "/api/agent-blueprints/legacy-migration/apply": {
+            "POST": "agent_blueprints_api.apply_agent_blueprint_legacy_migration",
+        },
         "/api/agent-blueprints/<blueprint_id>": {
             "GET": "agent_blueprints_api.get_agent_blueprint",
         },
@@ -484,12 +487,17 @@ def test_agent_datahub_catalog_includes_connected_text_and_file_sources():
 def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     api_source = Path("src/api/agent_blueprints_api.py").read_text(encoding="utf-8")
     workspace_source = Path("src/services/agent_blueprint_workspace.py").read_text(encoding="utf-8")
+    legacy_migration_source = Path("src/services/agent_legacy_migration.py").read_text(encoding="utf-8")
+    webhooks_source = Path("src/ai_agent_webhooks.py").read_text(encoding="utf-8")
+    ai_agent_source = Path("src/ai_agent.py").read_text(encoding="utf-8")
+    chats_api_source = Path("src/chats_api.py").read_text(encoding="utf-8")
     document_llm_source = Path("src/services/agent_document_llm.py").read_text(encoding="utf-8")
     email_llm_source = Path("src/services/agent_email_llm.py").read_text(encoding="utf-8")
     review_analysis_source = Path("src/services/agent_review_reply_analysis.py").read_text(encoding="utf-8")
     table_analysis_source = Path("src/services/agent_table_analysis.py").read_text(encoding="utf-8")
     builder_api_source = Path("src/api/agent_builder_api.py").read_text(encoding="utf-8")
     agents_page_source = Path("frontend/src/pages/dashboard/AgentBlueprintsPage.tsx").read_text(encoding="utf-8")
+    admin_page_source = Path("frontend/src/pages/dashboard/AdminPage.tsx").read_text(encoding="utf-8")
 
     assert "VERSION_BLUEPRINT_MISMATCH" in api_source
     assert "_load_blueprint_version_for_blueprint" in api_source
@@ -501,6 +509,11 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "sources_count" in api_source
     assert "versions_count" in api_source
     assert "/api/agent-blueprints/draft" in api_source
+    assert "/api/agent-blueprints/legacy-migration/apply" in api_source
+    assert "apply_legacy_ai_agent_migration" in api_source
+    assert "learning_events" in api_source
+    assert "version_events" in api_source
+    assert "legacy_migration" in api_source
     assert "build_agent_blueprint_draft" in api_source
     assert "_insert_version(cursor, blueprint_id, version_payload, user_data)" in api_source
     assert "/api/agent-blueprints/<blueprint_id>/setup" in api_source
@@ -542,6 +555,29 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "Candidate-версия" in agents_page_source
     assert "Зафиксировать улучшение" in agents_page_source
     assert "auto_activate: false" in agents_page_source
+    assert "Agent cockpit" in agents_page_source
+    assert "Migration health" in agents_page_source
+    assert "Learning и версии" in agents_page_source
+    assert "runtime truth" in agents_page_source
+    assert "explainApproval" in agents_page_source
+    assert "Применить migration" in agents_page_source
+    assert "Открыть Мои агенты" in admin_page_source
+    assert "AIAgentsManagement" not in admin_page_source
+    assert "AIAgentSettings" not in agents_page_source
+    assert "AIAgentsManagement" not in agents_page_source
+    assert "business_has_product_agent_runtime" in legacy_migration_source
+    assert "business_agent_enabled_for_channel" in legacy_migration_source
+    assert "apply_legacy_ai_agent_migration" in legacy_migration_source
+    assert "legacy_ai_agent_migration_v1" in legacy_migration_source
+    assert "business_agent_enabled_for_channel" in webhooks_source
+    assert "WHERE ai_agent_enabled = 1" not in webhooks_source
+    assert "legacy_workflow_context" in ai_agent_source
+    assert "deprecated_not_runtime_truth" in ai_agent_source
+    assert "Legacy AIAgents.workflow no longer drives runtime state transitions" in ai_agent_source
+    assert "Ответь на сообщение клиента, учитывая workflow" not in ai_agent_source
+    assert "state.get('init_state')" not in ai_agent_source
+    assert "legacy_workflow_context" in chats_api_source
+    assert "state.get('init_state')" not in chats_api_source
     assert "provenance" in document_llm_source
     assert "provenance" in email_llm_source
     assert "provenance" in review_analysis_source

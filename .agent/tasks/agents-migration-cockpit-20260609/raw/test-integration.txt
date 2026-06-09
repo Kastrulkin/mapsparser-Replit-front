@@ -1,0 +1,12 @@
+Pending deploy smoke.
+
+Local integration evidence:
+- Python backend compile passed.
+- Agent blueprint layer tests passed.
+- Frontend production build passed.
+
+Production smoke should run after commit/push/deploy:
+- docker compose ps
+- docker compose logs --since ... app
+- curl -I http://localhost:8000
+- registered route check for /api/agent-blueprints/legacy-migration/apply

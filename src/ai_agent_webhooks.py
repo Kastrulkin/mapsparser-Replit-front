@@ -13,6 +13,7 @@ from core.telegram_network import build_requests_proxy_kwargs
 from core.telegram_agent_transport import (
     evaluate_and_record_telegram_agent_transport,
 )
+from services.agent_legacy_migration import business_agent_enabled_for_channel
 
 ai_webhooks_bp = Blueprint('ai_webhooks', __name__)
 
@@ -65,20 +66,23 @@ def find_business_by_waba_phone_id(phone_id: str) -> dict:
     try:
         cursor = db.conn.cursor()
         cursor.execute("""
-            SELECT id, waba_phone_id, waba_access_token, ai_agent_enabled
+            SELECT id, waba_phone_id, waba_access_token
             FROM Businesses
             WHERE waba_phone_id = %s
-            AND ai_agent_enabled = 1
             LIMIT 1
         """, (phone_id,))
         
         row = cursor.fetchone()
         if row:
+            row_dict = dict(row)
+            runtime_gate = business_agent_enabled_for_channel(cursor, str(row_dict.get("id") or ""))
             return {
-                'id': row[0],
-                'waba_phone_id': row[1],
-                'waba_access_token': row[2],
-                'ai_agent_enabled': row[3] == 1
+                'id': row_dict.get("id"),
+                'waba_phone_id': row_dict.get("waba_phone_id"),
+                'waba_access_token': row_dict.get("waba_access_token"),
+                'ai_agent_enabled': bool(runtime_gate.get("enabled")),
+                'agent_runtime_source': runtime_gate.get("source"),
+                'legacy_field_status': runtime_gate.get("legacy_field_status"),
             }
         return None
     finally:
@@ -94,21 +98,20 @@ def find_business_by_telegram_token(bot_token: str) -> dict | None:
         cursor = db.conn.cursor()
         cursor.execute(
             """
-            SELECT id, telegram_bot_token, ai_agent_enabled
+            SELECT id, telegram_bot_token
             FROM Businesses
-            WHERE ai_agent_enabled = 1
-              AND telegram_bot_token IS NOT NULL
+            WHERE telegram_bot_token IS NOT NULL
               AND NULLIF(TRIM(telegram_bot_token), '') IS NOT NULL
             """
         )
         for row in cursor.fetchall() or []:
-            row_dict = dict(row) if hasattr(row, "keys") else {
-                "id": row[0] if len(row) > 0 else None,
-                "telegram_bot_token": row[1] if len(row) > 1 else None,
-                "ai_agent_enabled": row[2] if len(row) > 2 else None,
-            }
+            row_dict = dict(row)
             candidate = decode_telegram_bot_token(row_dict.get("telegram_bot_token"))
             if candidate and candidate == token:
+                runtime_gate = business_agent_enabled_for_channel(cursor, str(row_dict.get("id") or ""))
+                row_dict["ai_agent_enabled"] = bool(runtime_gate.get("enabled"))
+                row_dict["agent_runtime_source"] = runtime_gate.get("source")
+                row_dict["legacy_field_status"] = runtime_gate.get("legacy_field_status")
                 return row_dict
         return None
     finally:
@@ -265,8 +268,8 @@ def telegram_webhook():
             return jsonify({"status": "ok"}), 200
         
         business_id = row.get("id") if isinstance(row, dict) else row[0]
-        raw_enabled = row.get("ai_agent_enabled") if isinstance(row, dict) else row[2]
-        ai_agent_enabled = bool(raw_enabled in (1, True, "1", "t", "true", "TRUE"))
+        raw_enabled = row.get("ai_agent_enabled") if isinstance(row, dict) else False
+        ai_agent_enabled = bool(raw_enabled)
         
         if not ai_agent_enabled:
             print(f"⚠️ ИИ агент отключен для бизнеса {business_id}")

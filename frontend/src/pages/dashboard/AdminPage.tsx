@@ -15,9 +15,6 @@ import {
   DashboardSection,
 } from '../../components/dashboard/DashboardPrimitives';
 
-const AIAgentsManagement = lazy(() =>
-  import('../../components/AIAgentsManagement').then((module) => ({ default: module.AIAgentsManagement })),
-);
 const AgentApiManagement = lazy(() =>
   import('../../components/AgentApiManagement').then((module) => ({ default: module.AgentApiManagement })),
 );
@@ -682,10 +679,19 @@ export const AdminPage: React.FC = () => {
         {activeTab === 'agents' ? (
           <DashboardSection
             title={activeTabConfig.label}
-            description="Настройки и контроль ИИ-агентов без лишнего административного шума."
-            contentClassName="p-0"
+            description="Legacy AIAgents больше не редактируются как отдельный runtime. Главный cockpit находится в Мои агенты."
           >
-            <AIAgentsManagement />
+            <div className="flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <div className="max-w-2xl">
+                <div className="text-sm font-semibold text-amber-950">Legacy entrypoint закрыт для workflow-редактирования</div>
+                <div className="mt-1 text-sm leading-6 text-amber-900">
+                  AIAgents используются как голос и стиль внутри blueprint-агента. Логика, версии, approvals, learning history и runtime-наблюдаемость живут в едином экране.
+                </div>
+              </div>
+              <Button type="button" onClick={() => navigate('/dashboard/agents')}>
+                Открыть Мои агенты
+              </Button>
+            </div>
           </DashboardSection>
         ) : activeTab === 'agentApi' ? (
           <DashboardSection

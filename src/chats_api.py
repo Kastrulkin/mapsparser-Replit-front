@@ -622,24 +622,16 @@ def test_ai_agent(agent_id):
                 {'name': 'Окрашивание', 'price': 3000, 'duration': 120}
             ]
         
-        # Формируем конфигурацию агента
         workflow_data = agent_row[3]
-        # Workflow может быть строкой (YAML) или JSON
-        # Если это валидный JSON массив, парсим его, иначе оставляем как строку
-        workflow = workflow_data if workflow_data else ''
-        if isinstance(workflow_data, str) and workflow_data.strip():
-            try:
-                # Пытаемся распарсить как JSON
-                parsed = json.loads(workflow_data)
-                if isinstance(parsed, list):
-                    workflow = parsed  # Это JSON массив
-                # Иначе оставляем как строку (YAML)
-            except:
-                # Не валидный JSON - оставляем как строку (YAML)
-                pass
         
         agent_config = {
-            'workflow': workflow,
+            'workflow': [],
+            'legacy_workflow_context': {
+                'present': bool(str(workflow_data or '').strip()),
+                'status': 'deprecated_not_runtime_truth',
+                'runtime_truth': 'agent_blueprint_versions.steps_json',
+                'preview': str(workflow_data or '').strip()[:1000],
+            },
             'task': agent_row[4] or '',
             'identity': agent_row[5] or '',
             'speech_style': agent_row[6] or '',
@@ -650,24 +642,7 @@ def test_ai_agent(agent_id):
         # Тестовая история разговора
         conversation_history = []
         
-        # Определяем начальный стейт
         default_state = 'greeting'
-        # Если workflow это строка (YAML), используем дефолтный стейт
-        # Если это список, ищем init_state
-        if isinstance(workflow, list) and len(workflow) > 0:
-            for state in workflow:
-                if isinstance(state, dict) and state.get('init_state'):
-                    default_state = state.get('name', 'greeting')
-                    break
-        elif isinstance(workflow, str) and workflow.strip():
-            # Если workflow это YAML текст, пытаемся найти init_state в тексте
-            # Или просто используем дефолтный 'greeting'
-            if 'init_state: true' in workflow or 'init_state: True' in workflow:
-                # Пытаемся извлечь имя стейта с init_state
-                import re
-                match = re.search(r'- name:\s*(\w+).*?init_state:\s*true', workflow, re.DOTALL | re.IGNORECASE)
-                if match:
-                    default_state = match.group(1)
         
         # Строим промпт
         prompt = build_prompt(
@@ -799,19 +774,16 @@ def test_business_ai_agent(business_id, agent_id):
         business_info = get_business_info(business_id)
         services = get_business_services(business_id)
         
-        # Формируем конфигурацию агента
         workflow_data = _row_get(agent_row, 'workflow', 3)
-        workflow = workflow_data if workflow_data else ''
-        if isinstance(workflow_data, str) and workflow_data.strip():
-            try:
-                parsed = json.loads(workflow_data)
-                if isinstance(parsed, list):
-                    workflow = parsed
-            except:
-                pass
         
         agent_config = {
-            'workflow': workflow,
+            'workflow': [],
+            'legacy_workflow_context': {
+                'present': bool(str(workflow_data or '').strip()),
+                'status': 'deprecated_not_runtime_truth',
+                'runtime_truth': 'agent_blueprint_versions.steps_json',
+                'preview': str(workflow_data or '').strip()[:1000],
+            },
             'task': _row_get(agent_row, 'task', 4) or '',
             'identity': _row_get(agent_row, 'identity', 5) or '',
             'speech_style': _row_get(agent_row, 'speech_style', 6) or '',
@@ -819,19 +791,7 @@ def test_business_ai_agent(business_id, agent_id):
             'variables': json.loads(_row_get(agent_row, 'variables_json', 8)) if _row_get(agent_row, 'variables_json', 8) else {}
         }
         
-        # Определяем начальный стейт
         default_state = 'greeting'
-        if isinstance(workflow, list) and len(workflow) > 0:
-            for state in workflow:
-                if isinstance(state, dict) and state.get('init_state'):
-                    default_state = state.get('name', 'greeting')
-                    break
-        elif isinstance(workflow, str) and workflow.strip():
-            if 'init_state: true' in workflow or 'init_state: True' in workflow:
-                import re
-                match = re.search(r'- name:\s*(\w+).*?init_state:\s*true', workflow, re.DOTALL | re.IGNORECASE)
-                if match:
-                    default_state = match.group(1)
         
         # Строим промпт
         prompt = build_prompt(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from typing import Any
 
 
@@ -88,6 +89,76 @@ def build_legacy_ai_agent_migration_plan(cursor, business_id: str) -> dict[str, 
     }
 
 
+def apply_legacy_ai_agent_migration(cursor, business_id: str, user_id: str) -> dict[str, Any]:
+    plan = build_legacy_ai_agent_migration_plan(cursor, business_id)
+    legacy_agents_by_id = {_clean_text(agent.get("id")): agent for agent in _load_legacy_ai_agents(cursor)}
+    applied = []
+    skipped = []
+    for item in plan.get("legacy_agents") or []:
+        agent_id = _clean_text(item.get("agent_id"))
+        action = _clean_text(item.get("action"))
+        if action == "use_as_persona":
+            skipped.append({"agent_id": agent_id, "reason": "already_linked_to_blueprint"})
+            continue
+        if action != "create_blueprint_candidate":
+            skipped.append({"agent_id": agent_id, "reason": action or "not_migratable"})
+            continue
+        agent = legacy_agents_by_id.get(agent_id)
+        if not agent:
+            skipped.append({"agent_id": agent_id, "reason": "legacy_agent_not_found"})
+            continue
+        existing = _find_existing_legacy_blueprint(cursor, business_id, agent_id)
+        if existing:
+            skipped.append({"agent_id": agent_id, "blueprint_id": existing.get("id"), "reason": "migration_already_applied"})
+            continue
+        migrated = _create_legacy_persona_blueprint(cursor, business_id, agent, user_id)
+        applied.append(migrated)
+    refreshed_plan = build_legacy_ai_agent_migration_plan(cursor, business_id)
+    return {
+        "business_id": business_id,
+        "mode": "applied_non_destructive",
+        "applied_count": len(applied),
+        "skipped_count": len(skipped),
+        "applied": applied,
+        "skipped": skipped,
+        "migration_plan": refreshed_plan,
+        "deletion_ready": False,
+        "deletion_note": "Legacy tables/fields are not deleted by apply. Remove only after schema migration, backup, and proof that UI/API no longer read them.",
+    }
+
+
+def business_has_product_agent_runtime(cursor, business_id: str) -> bool:
+    if not _table_exists(cursor, "agent_blueprints"):
+        return False
+    cursor.execute(
+        """
+        SELECT 1
+        FROM agent_blueprints
+        WHERE business_id = %s
+          AND status IN ('active', 'needs_approval')
+        LIMIT 1
+        """,
+        (business_id,),
+    )
+    return cursor.fetchone() is not None
+
+
+def business_agent_enabled_for_channel(cursor, business_id: str) -> dict[str, Any]:
+    if business_has_product_agent_runtime(cursor, business_id):
+        return {
+            "enabled": True,
+            "source": "agent_blueprints",
+            "legacy_field_status": "deprecated_not_runtime_truth",
+        }
+    settings = _load_business_ai_settings(cursor, business_id)
+    legacy_enabled = _truthy(settings.get("ai_agent_enabled"))
+    return {
+        "enabled": legacy_enabled,
+        "source": "businesses.ai_agent_enabled_legacy_fallback" if legacy_enabled else "none",
+        "legacy_field_status": "deprecated_migration_source",
+    }
+
+
 def build_business_ai_settings_deprecation_plan(settings: dict[str, Any]) -> dict[str, Any]:
     mapped = {}
     for field_name in LEGACY_BUSINESS_AI_SETTINGS:
@@ -100,7 +171,7 @@ def build_business_ai_settings_deprecation_plan(settings: dict[str, Any]) -> dic
         }
     return {
         "fields": mapped,
-        "rule": "Legacy business-level AI settings remain backward-compatible reads until persona/blueprint migration is proven complete.",
+        "rule": "Legacy business-level AI settings are migration sources only. Runtime should prefer agent_blueprints; channel webhooks may use deprecated fallback until migration is applied.",
     }
 
 
@@ -172,6 +243,217 @@ def _load_business_ai_settings(cursor, business_id: str) -> dict[str, Any]:
     )
     row = cursor.fetchone()
     return dict(row) if row else {}
+
+
+def _find_existing_legacy_blueprint(cursor, business_id: str, agent_id: str) -> dict[str, Any] | None:
+    cursor.execute(
+        """
+        SELECT *
+        FROM agent_blueprints
+        WHERE business_id = %s
+          AND metadata_json->'legacy_migration'->>'source_agent_id' = %s
+        LIMIT 1
+        """,
+        (business_id, agent_id),
+    )
+    row = cursor.fetchone()
+    return dict(row) if row else None
+
+
+def _create_legacy_persona_blueprint(cursor, business_id: str, agent: dict[str, Any], user_id: str) -> dict[str, Any]:
+    agent_id = _clean_text(agent.get("id"))
+    blueprint_id = str(uuid.uuid4())
+    version_id = str(uuid.uuid4())
+    agent_name = _clean_text(agent.get("name")) or "Legacy voice"
+    workflow_text = _clean_text(agent.get("workflow"))
+    metadata = {
+        "builder": "legacy_ai_agent_migration_v1",
+        "compiler": "legacy_persona_wrapper_v1",
+        "compiled_workflow_status": "migrated_candidate",
+        "draft_category": "communications",
+        "legacy_migration": {
+            "source": "AIAgents",
+            "source_agent_id": agent_id,
+            "source_agent_name": agent_name,
+            "applied_at": _utc_now_text(),
+            "legacy_workflow_status": LEGACY_WORKFLOW_STATUS,
+            "legacy_business_fields_status": "deprecated_migration_source",
+            "runtime_truth": "agent_blueprint_versions.steps_json",
+        },
+        "agent_setup": {
+            "workflow_description": _clean_text(agent.get("task"))
+            or _clean_text(agent.get("description"))
+            or f"Коммуникационный агент с голосом {agent_name}",
+            "data_sources": ["business_profile", "manual_context"],
+            "extraction_rules": "Определить намерение клиента, нужный канал и факты, которые можно безопасно использовать.",
+            "processing_rules": "Использовать persona как голос и стиль. Не исполнять legacy AIAgents.workflow как runtime.",
+            "output_format": "Черновик ответа или коммуникационного действия для ручной проверки.",
+            "approval_boundaries": ["final_output", "external_delivery"],
+            "manual_control": "Любая внешняя отправка, запись, публикация или изменение данных требует approval.",
+            "legacy_workflow_preview": workflow_text[:1000],
+        },
+        "agent_sources": [
+            {
+                "id": f"legacy-persona-{agent_id}",
+                "source_type": "internal",
+                "name": "Legacy persona voice",
+                "internal_source": "legacy_ai_agent_persona",
+                "content_text": _legacy_persona_summary(agent),
+                "content_length": len(_legacy_persona_summary(agent)),
+                "extraction_state": "ready",
+                "extraction_method": "legacy_migration_v1",
+            }
+        ],
+    }
+    cursor.execute(
+        """
+        INSERT INTO agent_blueprints (
+            id, business_id, name, category, description, status, created_by_user_id, metadata_json
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+        """,
+        (
+            blueprint_id,
+            business_id,
+            f"{agent_name} · коммуникационный агент",
+            "communications",
+            "Migrated non-destructive wrapper for legacy AIAgents persona.",
+            "draft",
+            user_id,
+            json.dumps(metadata, ensure_ascii=False),
+        ),
+    )
+    version_payload = _legacy_persona_version_payload(agent, metadata)
+    cursor.execute(
+        """
+        INSERT INTO agent_blueprint_versions (
+            id, blueprint_id, version_number, goal, inputs_schema_json, steps_json,
+            persona_agent_id, capability_allowlist_json, approval_policy_json,
+            output_schema_json, created_by_user_id
+        )
+        VALUES (%s, %s, 1, %s, %s::jsonb, %s::jsonb, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s)
+        """,
+        (
+            version_id,
+            blueprint_id,
+            version_payload["goal"],
+            json.dumps(version_payload["inputs_schema"], ensure_ascii=False),
+            json.dumps(version_payload["steps"], ensure_ascii=False),
+            agent_id or None,
+            json.dumps(version_payload["capability_allowlist"], ensure_ascii=False),
+            json.dumps(version_payload["approval_policy"], ensure_ascii=False),
+            json.dumps(version_payload["output_schema"], ensure_ascii=False),
+            user_id,
+        ),
+    )
+    metadata["active_version_id"] = version_id
+    metadata["active_version_number"] = 1
+    metadata["version_events"] = [
+        {
+            "action": "legacy_migration_created",
+            "previous_active_version_id": "",
+            "active_version_id": version_id,
+            "active_version_number": 1,
+            "reason": "Created from legacy AIAgents persona as blueprint runtime wrapper.",
+            "created_by_user_id": user_id,
+            "created_at": _utc_now_text(),
+        }
+    ]
+    cursor.execute(
+        """
+        UPDATE agent_blueprints
+        SET metadata_json = %s::jsonb,
+            updated_at = NOW()
+        WHERE id = %s
+        """,
+        (json.dumps(metadata, ensure_ascii=False), blueprint_id),
+    )
+    return {
+        "agent_id": agent_id,
+        "blueprint_id": blueprint_id,
+        "version_id": version_id,
+        "status": "created_draft_blueprint",
+    }
+
+
+def _legacy_persona_version_payload(agent: dict[str, Any], metadata: dict[str, Any]) -> dict[str, Any]:
+    setup = metadata.get("agent_setup") if isinstance(metadata.get("agent_setup"), dict) else {}
+    return {
+        "goal": _clean_text(setup.get("workflow_description")) or "Коммуникационный агент из legacy persona",
+        "inputs_schema": {
+            "agent_setup": setup,
+            "legacy_migration": metadata.get("legacy_migration"),
+        },
+        "steps": [
+            {
+                "key": "collect_inputs",
+                "type": "artifact",
+                "title": "Собрать входные данные",
+                "artifact_type": "agent_input_plan",
+                "payload": {"status": "migrated", "category": "communications"},
+            },
+            {
+                "key": "prepare_draft",
+                "type": "artifact",
+                "title": "Подготовить черновик",
+                "artifact_type": "agent_output_draft",
+                "payload": {
+                    "status": "draft",
+                    "category": "communications",
+                    "external_dispatch_performed": False,
+                    "legacy_workflow_status": LEGACY_WORKFLOW_STATUS,
+                },
+            },
+            {
+                "key": "approve_output",
+                "type": "approval",
+                "title": "Подтвердить результат",
+                "approval_type": "final_output",
+            },
+            {
+                "key": "save_result",
+                "type": "artifact",
+                "title": "Сохранить итог",
+                "artifact_type": "agent_final_result",
+                "payload": {
+                    "status": "pending_approval",
+                    "external_dispatch_performed": False,
+                    "delivery_state": "not_dispatched",
+                },
+            },
+        ],
+        "persona_agent_id": _clean_text(agent.get("id")) or None,
+        "capability_allowlist": ["communications.draft"],
+        "approval_policy": {
+            "required_for": ["final_output", "external_delivery"],
+            "legacy_workflow_runtime_truth": LEGACY_WORKFLOW_STATUS,
+        },
+        "output_schema": {
+            "format": "communications_draft",
+            "external_dispatch_performed": False,
+            "legacy_workflow_runtime_truth": LEGACY_WORKFLOW_STATUS,
+        },
+    }
+
+
+def _legacy_persona_summary(agent: dict[str, Any]) -> str:
+    parts = [
+        f"name: {_clean_text(agent.get('name'))}",
+        f"type: {_clean_text(agent.get('type'))}",
+        f"description: {_clean_text(agent.get('description'))}",
+        f"personality: {_clean_text(agent.get('personality'))}",
+        f"task: {_clean_text(agent.get('task'))}",
+        f"identity: {_clean_text(agent.get('identity'))}",
+        f"speech_style: {_clean_text(agent.get('speech_style'))}",
+        f"restrictions: {_value_preview(agent.get('restrictions_json'))}",
+    ]
+    return "\n".join(item for item in parts if not item.endswith(": "))
+
+
+def _utc_now_text() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _business_setting_target(field_name: str) -> str:

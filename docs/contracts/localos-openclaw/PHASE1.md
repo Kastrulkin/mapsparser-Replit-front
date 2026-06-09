@@ -76,7 +76,8 @@
 38. `GET /api/capabilities/support-export/send-history?tenant_id=&limit=` (user audit trail for manual support bundle sends)
 39. `GET /api/capabilities/support-export/send-history/export?tenant_id=&limit=&format=` (user canonical support-send history export)
 40. `GET /api/agent-blueprints/legacy-migration-plan?business_id=` (user/superadmin read-only migration preview for legacy `AIAgents` and business AI settings)
-41. `GET /api/agent-runs/{run_id}/support-export?format=json|markdown` (user support export for a concrete agent run, including linked OpenClaw action diagnostics when present)
+41. `POST /api/agent-blueprints/legacy-migration/apply` (user/superadmin non-destructive, idempotent migration apply that creates blueprint wrappers for legacy voices without deleting old rows/fields)
+42. `GET /api/agent-runs/{run_id}/support-export?format=json|markdown` (user support export for a concrete agent run, including linked OpenClaw action diagnostics when present)
 
 ## Agent Blueprint Runtime Model
 
@@ -98,6 +99,22 @@ blueprint version is being created. Legacy business fields
 `ai_agent_enabled`, `ai_agent_tone`, `ai_agent_restrictions`,
 `ai_agents_config`, and `ai_agent_id` remain backward-compatible reads until a
 dedicated Alembic migration and UI/API no-read proof make deletion safe.
+
+Legacy migration has a two-step contract:
+
+- preview: `GET /api/agent-blueprints/legacy-migration-plan?business_id=`;
+- apply: `POST /api/agent-blueprints/legacy-migration/apply`.
+
+Apply creates `communications` blueprint wrappers with
+`persona_agent_id = AIAgents.id`, `metadata_json.legacy_migration`, and
+`runtime_truth = agent_blueprint_versions.steps_json`. It does not delete
+`AIAgents`, does not mutate historical conversations, and does not drop
+`Businesses.ai_agent_*` fields.
+
+Telegram/WhatsApp webhook gates must prefer active product agents
+(`agent_blueprints.status = active`). `Businesses.ai_agent_enabled` is allowed
+only as a deprecated fallback for old businesses until production wrappers are
+created and a later Alembic cleanup removes the fallback safely.
 
 Legacy `AIAgents` sandbox/OpenClaw previews are bridged to the common run preview
 contract: preview is dry-run only, external dispatch is false, and real execution
