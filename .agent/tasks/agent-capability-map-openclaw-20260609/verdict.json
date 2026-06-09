@@ -1,0 +1,46 @@
+{
+  "task_id": "agent-capability-map-openclaw-20260609",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Blueprint orchestrator uses the shared Stage 4 capability map."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Requested capabilities and compatibility aliases are registered."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "User and OpenClaw capability routes are registered in Flask."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "M2M catalog token smoke passes and routes use the shared orchestrator."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Communications compiler uses send_reminder and send_offer."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "Architecture doc reflects Stage 4 implementation."
+    }
+  ],
+  "commands_run": [
+    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "PYTHONPATH=src OPENCLAW_LOCALOS_TOKEN=test-token python3 - <<'PY' ...",
+    "git diff --check"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/agent-capability-map-openclaw-20260609/raw/test-unit.txt",
+    ".agent/tasks/agent-capability-map-openclaw-20260609/raw/test-integration.txt",
+    ".agent/tasks/agent-capability-map-openclaw-20260609/raw/lint.txt"
+  ]
+}

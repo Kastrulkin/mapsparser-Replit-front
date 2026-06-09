@@ -1,0 +1,8 @@
+PYTHONPATH=src OPENCLAW_LOCALOS_TOKEN=test-token python3 - <<'PY'
+import main
+client = main.app.test_client()
+print(client.get('/api/openclaw/capabilities/catalog').status_code)
+print(client.get('/api/openclaw/capabilities/catalog', headers={'X-OpenClaw-Token': 'test-token'}).status_code)
+PY
+Result: PASS
+Output: no token -> 401; valid token -> 200.

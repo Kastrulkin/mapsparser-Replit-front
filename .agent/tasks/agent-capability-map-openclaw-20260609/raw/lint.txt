@@ -1,0 +1,3 @@
+git diff --check
+rg -n "\\bas\\b" src/api/capabilities_api.py src/services/agent_capability_handlers.py src/services/agent_blueprint_orchestrator.py src/core/action_policy.py
+Result: PASS

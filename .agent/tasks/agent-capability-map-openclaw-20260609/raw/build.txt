@@ -1,0 +1,6 @@
+PYTHONPATH=src python3 - <<'PY'
+import main
+print(len([rule for rule in main.app.url_map.iter_rules() if '/api/openclaw' in rule.rule or '/api/capabilities' in rule.rule]))
+PY
+Result: PASS
+Output: registered capability/openclaw route map imports successfully.

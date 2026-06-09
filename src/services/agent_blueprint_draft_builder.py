@@ -335,7 +335,8 @@ def _communications_compilation(request_text: str) -> Dict[str, Any]:
         "capability_allowlist": [
             "appointments.read",
             "communications.draft",
-            "communications.send",
+            "communications.send_reminder",
+            "communications.send_offer",
         ],
         "approval_policy": {
             "required_for": ["first_run", "template", "mass_send", "external_delivery"],

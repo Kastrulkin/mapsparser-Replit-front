@@ -1,13 +1,6 @@
 from core.action_orchestrator import ActionOrchestrator
-from services.outreach_send_capability import (
-    OUTREACH_SEND_BATCH_CAPABILITY,
-    handle_outreach_send_batch,
-)
+from services.agent_capability_handlers import build_capability_handlers
 
 
 def build_agent_blueprint_orchestrator() -> ActionOrchestrator:
-    return ActionOrchestrator(
-        {
-            OUTREACH_SEND_BATCH_CAPABILITY: handle_outreach_send_batch,
-        }
-    )
+    return ActionOrchestrator(build_capability_handlers())

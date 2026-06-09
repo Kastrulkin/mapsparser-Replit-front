@@ -70,13 +70,18 @@ def evaluate_risk_policy(capability: str, payload: Dict[str, Any], approval: Dic
         if bool(payload.get("bulk")) or str(payload.get("source") or "").lower() == "file":
             return {"ok": True, "requires_human": True, "reason": "bulk optimization requires review"}
 
-    if capability == "reviews.reply":
+    if capability in {"reviews.reply", "reviews.reply.draft", "reviews.reply.publish_request"}:
         if bool(payload.get("publish")):
             return {"ok": True, "requires_human": True, "reason": "publishing replies requires review"}
+        if capability == "reviews.reply.publish_request":
+            return {"ok": True, "requires_human": True, "reason": "dangerous capability requires review"}
 
     if capability == "news.generate":
         if bool(payload.get("publish")):
             return {"ok": True, "requires_human": True, "reason": "publishing news requires review"}
+
+    if capability in {"appointments.create_request", "communications.send_reminder", "communications.send_offer"}:
+        return {"ok": True, "requires_human": True, "reason": "dangerous capability requires review"}
 
     if capability == "sales.ingest":
         transactions = payload.get("transactions")

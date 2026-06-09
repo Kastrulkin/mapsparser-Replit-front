@@ -97,6 +97,33 @@ Compiler v1 доступен через `compile_agent_blueprint(description, ca
 и UI. В metadata новое поле `compiler = agent_compiler_v1`, а
 `builder = description_builder_v1` оставлено как backward-compatible marker.
 
+Capability map v1 подключена через `build_agent_blueprint_orchestrator()` и
+зарегистрированный Flask API:
+
+- user/session surface: `/api/capabilities/*`;
+- OpenClaw/M2M surface: `/api/openclaw/capabilities/*`,
+  `/api/openclaw/callbacks/*`, `/api/openclaw/audit-timeline*`.
+
+Каноничные capability names:
+
+- `outreach.send_batch`;
+- `reviews.reply.draft`;
+- `reviews.reply.publish_request`;
+- `services.optimize`;
+- `news.generate`;
+- `appointments.read`;
+- `appointments.create_request`;
+- `communications.draft`;
+- `communications.send_reminder`;
+- `communications.send_offer`;
+- `support.export`;
+- `billing.reserve`;
+- `billing.settle`.
+
+Legacy aliases (`reviews.reply`, `appointments.create`,
+`appointments.update`, `appointments.cancel`, `reminders.send`,
+`communications.send`) остаются подключенными как compatibility wrappers.
+
 ## Canonical Runtime Loop
 
 ```text
@@ -135,9 +162,9 @@ third-party systems напрямую.
 | `agent_blueprint_workspace.py` | DataHub catalog, source normalization, generic artifacts, review/journal/diff. | Используется как есть. | Рабочее пространство blueprint: sources, result review, used sources, version diff, human journal. |
 | `agent_source_ingestion.py`, `agent_datahub.py` | Загрузка файлов/текста и catalog источников. | Используется как есть. | Data sources layer для compiled workflow. |
 | `AgentBlueprintRunner` | Выполнение steps, artifact generation, approvals, capability calls. | Используется после адаптации. | Единый runner для blueprint categories. Нужно расширять step types и capability map, но не плодить отдельные runners для communications. |
-| `agent_blueprint_orchestrator.py` | Сейчас подключает `outreach.send_batch`. | Используется после адаптации. | Должен стать bridge к общей capability map OpenClaw/ActionOrchestrator. |
+| `agent_blueprint_orchestrator.py` | Подключает handler map для blueprint capability steps. | Используется как есть. | Bridge к общей capability map OpenClaw/ActionOrchestrator. `outreach.send_batch` и Stage 4 capabilities подключены через `services/agent_capability_handlers.py`. |
 | `ActionOrchestrator` | Policy/approval/billing/idempotency/callback/outbox/audit execution boundary. | Используется как есть. | Каноничный execution boundary для side effects из blueprint runs и внешних agent APIs. |
-| OpenClaw contract docs and smoke scripts | M2M capabilities, callbacks, health, support export, billing reconciliation. | Используется после адаптации. | Должны быть связаны с blueprint runtime. Если endpoint registration отсутствует в текущем app, это P0 gap, а не новый параллельный runtime. |
+| OpenClaw contract docs and smoke scripts | M2M capabilities, callbacks, health, support export, billing reconciliation. | Используется после адаптации. | Endpoint registration P0 закрыт минимальным registered API в `api/capabilities_api.py`; глубокие ops/export flows расширяются поверх того же `ActionOrchestrator`, без нового runtime. |
 | `OpenClawOutboxMetrics` / External Integrations panel | UI диагностики OpenClaw callbacks/actions/support. | Используется после адаптации. | Встроить ключевые части в agent run detail. Отдельная ops panel может остаться для суперадмина/support. |
 | `agent_clients`, `agent_action_ledger`, `agent_security_api.py` | Security foundation для внешних агентов/API keys/scopes/self-test/ledger. | Используется как есть. | External Agent API boundary. Не заменяет user-created agents; может запускать approved capabilities/blueprints через тот же orchestrator. |
 | `operator_api.py` and operator services | Chat/operator control surface для карточки, отзывов, новостей, услуг, paid actions. | Используется после адаптации. | Operator становится одним из control surfaces для запуска/управления blueprints и approvals. |
@@ -227,12 +254,10 @@ Every existing agent-related block must end in one of four states:
 
 ## Next Implementation Checkpoints
 
-1. Verify whether `/api/capabilities/*` and `/api/openclaw/*` are registered in
-   the current Flask runtime; if not, treat this as a P0 integration gap.
-2. Wire `persona_agent_id` from blueprint versions into UI controls and runner
+1. Wire `persona_agent_id` from blueprint versions into UI controls and runner
    context. Backend API decoration is already implemented.
-3. Extend `build_agent_blueprint_orchestrator()` beyond `outreach.send_batch`
-   with narrow typed communications capabilities.
-4. Move OpenClaw diagnostics from integration-only UI into agent run detail.
-5. Mark legacy `AIAgents.workflow` and business-level `ai_agent_*` settings as
+2. Replace safe request/draft handlers for selected capabilities with deeper
+   domain integrations only where approval, scopes and audit are already covered.
+3. Move OpenClaw diagnostics from integration-only UI into agent run detail.
+4. Mark legacy `AIAgents.workflow` and business-level `ai_agent_*` settings as
    migration sources, not future source of truth.

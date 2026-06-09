@@ -130,6 +130,67 @@ def test_default_supervised_outreach_template_has_approval_gates():
     assert steps[5]["required_approval_type"] == "drafts"
 
 
+def test_agent_blueprint_orchestrator_exposes_stage4_capability_map():
+    from services.agent_blueprint_orchestrator import build_agent_blueprint_orchestrator
+    from services.agent_capability_handlers import build_capability_catalog
+
+    orchestrator = build_agent_blueprint_orchestrator()
+    expected = {
+        "outreach.send_batch",
+        "reviews.reply.draft",
+        "reviews.reply.publish_request",
+        "services.optimize",
+        "news.generate",
+        "appointments.read",
+        "appointments.create_request",
+        "communications.draft",
+        "communications.send_reminder",
+        "communications.send_offer",
+        "support.export",
+        "billing.reserve",
+        "billing.settle",
+    }
+
+    for capability in expected:
+        assert capability in orchestrator.handlers
+
+    assert "reviews.reply" in orchestrator.handlers
+    assert "appointments.create" in orchestrator.handlers
+    assert "communications.send" in orchestrator.handlers
+    catalog = build_capability_catalog()
+    assert expected.issubset(set(catalog["capabilities"]))
+    assert catalog["capabilities"]["reviews.reply"]["alias_for"] == "reviews.reply.draft"
+
+
+def test_openclaw_and_capability_routes_are_registered():
+    import main
+
+    actual = {}
+    for rule in main.app.url_map.iter_rules():
+        methods = rule.methods - {"HEAD", "OPTIONS"}
+        actual.setdefault(rule.rule, set()).update(methods)
+
+    expected = {
+        "/api/capabilities/execute": "POST",
+        "/api/capabilities/catalog": "GET",
+        "/api/capabilities/actions/<action_id>": "GET",
+        "/api/capabilities/actions/<action_id>/decision": "POST",
+        "/api/capabilities/actions/<action_id>/billing": "GET",
+        "/api/capabilities/health": "GET",
+        "/api/capabilities/support-export": "GET",
+        "/api/openclaw/capabilities/execute": "POST",
+        "/api/openclaw/capabilities/catalog": "GET",
+        "/api/openclaw/capabilities/actions/<action_id>": "GET",
+        "/api/openclaw/capabilities/actions/<action_id>/decision": "POST",
+        "/api/openclaw/capabilities/health": "GET",
+        "/api/openclaw/callbacks/outbox": "GET",
+        "/api/openclaw/audit-timeline": "GET",
+    }
+
+    for route, method in expected.items():
+        assert method in actual.get(route, set())
+
+
 def test_agent_blueprint_draft_builder_creates_safe_document_agent():
     from services.agent_blueprint_draft_builder import build_agent_blueprint_draft
 
@@ -180,7 +241,8 @@ def test_agent_compiler_creates_communications_reminder_blueprint():
     assert payload["capability_allowlist"] == [
         "appointments.read",
         "communications.draft",
-        "communications.send",
+        "communications.send_reminder",
+        "communications.send_offer",
     ]
     assert payload["approval_policy"]["first_run"] == "manual_approval_required"
     assert payload["approval_policy"]["mass_send"] == "manual_approval_required"
