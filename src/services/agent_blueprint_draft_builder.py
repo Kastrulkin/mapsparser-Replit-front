@@ -21,6 +21,8 @@ def _contains_any(text: str, words: List[str]) -> bool:
 
 def infer_blueprint_category(description: str) -> str:
     text = description.lower()
+    if _looks_like_integration_workflow(text):
+        return "custom"
     if _contains_any(
         text,
         [
@@ -69,6 +71,8 @@ def compile_agent_blueprint(description: str, preferred_category: str = "") -> D
     category = _normalized_category(preferred_category) or infer_blueprint_category(request_text)
     if category == "communications":
         return _communications_compilation(request_text)
+    if _looks_like_integration_workflow(request_text):
+        return _custom_integration_compilation(request_text)
     if category == "outreach":
         version_payload = default_supervised_outreach_version_payload()
         version_payload["goal"] = request_text or version_payload["goal"]
@@ -196,6 +200,135 @@ def _metadata(description: str, category: str, sources: List[str]) -> Dict[str, 
         "approval_boundaries": ["final_output", "external_delivery"],
         "external_delivery": "approval_required",
         "side_effects": "none_in_draft_builder",
+    }
+
+
+def _looks_like_integration_workflow(text: str) -> bool:
+    lowered = text.lower()
+    trigger_words = ["telegram", "телеграм", "бот", "сообщени", "webhook"]
+    target_words = ["таблиц", "sheet", "sheets", "spreadsheet", "google sheets", "google таблиц"]
+    process_words = ["связ", "процесс", "workflow", "автомат", "редакт", "добав", "строк", "append"]
+    return _contains_any(lowered, trigger_words) and _contains_any(lowered, target_words) and _contains_any(lowered, process_words)
+
+
+def _custom_integration_compilation(description: str) -> Dict[str, Any]:
+    sources = ["telegram_messages", "google_sheets", "business_profile"]
+    steps = [
+        {
+            "key": "capture_telegram_trigger",
+            "type": "artifact",
+            "title": "Принять Telegram-событие",
+            "artifact_type": "integration_trigger_event",
+            "payload": {
+                "trigger": "telegram.message.received",
+                "source": "telegram",
+                "status": "captured",
+                "external_dispatch_performed": False,
+            },
+        },
+        {
+            "key": "prepare_sheet_row",
+            "type": "artifact",
+            "title": "Подготовить строку таблицы",
+            "artifact_type": "sheet_row_draft",
+            "payload": {
+                "status": "draft",
+                "operation": "append_row",
+                "columns": ["received_at", "telegram_username", "message_text"],
+                "row_values": ["{{received_at}}", "{{telegram_username}}", "{{message_text}}"],
+                "provider_write_performed": False,
+            },
+        },
+        {
+            "key": "approve_sheet_update",
+            "type": "approval",
+            "title": "Подтвердить изменение Google Sheets",
+            "approval_type": "sheet_update",
+            "payload": {
+                "reason": "Внешняя запись в Google Sheets требует подтверждения.",
+                "provider_write_performed": False,
+            },
+        },
+        {
+            "key": "request_sheet_append",
+            "type": "capability",
+            "title": "Создать заявку на добавление строки",
+            "capability": "sheets.append_row_request",
+            "requires_approval": True,
+            "required_approval_type": "sheet_update",
+            "payload": {
+                "operation": "append_row",
+                "sheet_name": "Leads",
+                "row_values": ["{{received_at}}", "{{telegram_username}}", "{{message_text}}"],
+                "daily_append_cap": 50,
+                "provider_write_performed": False,
+            },
+        },
+        {
+            "key": "record_sheet_request",
+            "type": "artifact",
+            "title": "Записать результат заявки",
+            "artifact_type": "sheet_operation_outcome",
+            "payload": {
+                "status": "request_created",
+                "apply_state": "not_applied",
+                "provider_write_performed": False,
+            },
+        },
+    ]
+    version_payload = {
+        "goal": description,
+        "trigger": "telegram.message.received",
+        "mode": "approved_external_write_request",
+        "inputs_schema": {
+            "type": "object",
+            "properties": {
+                "message_text": {"type": "string"},
+                "telegram_user_id": {"type": "string"},
+                "telegram_username": {"type": "string"},
+                "chat_id": {"type": "string"},
+                "received_at": {"type": "string"},
+                "integration_id": {"type": "string"},
+                "spreadsheet_id": {"type": "string"},
+                "sheet_name": {"type": "string"},
+            },
+        },
+        "steps": steps,
+        "capability_allowlist": ["sheets.append_row_request"],
+        "approval_policy": {
+            "required_for": ["sheet_update", "external_spreadsheet_write"],
+            "external_spreadsheet_write": "manual_approval_required",
+            "mode": "approved_request_only",
+        },
+        "limits": {
+            "daily_append_cap": 50,
+            "autonomous_external_write_allowed": False,
+        },
+        "output_schema": {
+            "type": "object",
+            "properties": {
+                "trigger_event": {"type": "object"},
+                "sheet_operation_request": {"type": "object"},
+                "approval_required": {"type": "boolean"},
+            },
+        },
+        "external_dispatch_performed": False,
+    }
+    metadata = _metadata(description, "custom", sources)
+    metadata["custom_process"] = {
+        "kind": "integration_workflow",
+        "trigger": "telegram.message.received",
+        "target": "google_sheets.append_row",
+        "runtime": "agent_blueprints",
+        "showcase": "telegram_to_google_sheets",
+    }
+    return {
+        "name": _draft_name(description, "Кастомный агент интеграций"),
+        "category": "custom",
+        "description": description,
+        "metadata": metadata,
+        "version_payload": version_payload,
+        "summary": _summary("custom", sources, steps),
     }
 
 

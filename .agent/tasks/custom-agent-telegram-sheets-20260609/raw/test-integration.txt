@@ -1,0 +1,5 @@
+Command: PYTHONPATH=src python3 -m pytest -q tests/test_capabilities_api_phase1.py
+Result: PASS
+Output:
+ssssssssssssssssssssssssssssssssssssssssssssssssssssssss.                [100%]
+1 passed, 56 skipped in 0.12s

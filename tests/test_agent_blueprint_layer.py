@@ -129,6 +129,18 @@ def test_agent_domain_request_migration_creates_expected_tables():
     assert "20260525_001" in migration
 
 
+def test_custom_agent_integration_migration_creates_expected_tables():
+    migration = Path("alembic_migrations/versions/20260609_add_custom_agent_integration_tables.py").read_text(encoding="utf-8")
+
+    assert "CREATE TABLE IF NOT EXISTS agent_integrations" in migration
+    assert "CREATE TABLE IF NOT EXISTS agent_trigger_events" in migration
+    assert "CREATE TABLE IF NOT EXISTS agent_sheet_operation_requests" in migration
+    assert "provider_write_performed BOOLEAN NOT NULL DEFAULT FALSE" in migration
+    assert "apply_state TEXT NOT NULL DEFAULT 'not_applied'" in migration
+    assert "20260609_002" in migration
+    assert "20260609_001" in migration
+
+
 def test_default_supervised_outreach_template_has_approval_gates():
     from services.agent_blueprint_runner import default_supervised_outreach_version_payload
 
@@ -169,6 +181,7 @@ def test_agent_blueprint_orchestrator_exposes_stage4_capability_map():
         "communications.send_reminder",
         "communications.send_offer",
         "support.export",
+        "sheets.append_row_request",
         "billing.reserve",
         "billing.settle",
     }
@@ -179,9 +192,11 @@ def test_agent_blueprint_orchestrator_exposes_stage4_capability_map():
     assert "reviews.reply" in orchestrator.handlers
     assert "appointments.create" in orchestrator.handlers
     assert "communications.send" in orchestrator.handlers
+    assert "google_sheets.append_row" in orchestrator.handlers
     catalog = build_capability_catalog()
     assert expected.issubset(set(catalog["capabilities"]))
     assert catalog["capabilities"]["reviews.reply"]["alias_for"] == "reviews.reply.draft"
+    assert catalog["capabilities"]["google_sheets.append_row"]["alias_for"] == "sheets.append_row_request"
 
 
 def test_openclaw_and_capability_routes_are_registered():
@@ -308,6 +323,33 @@ def test_agent_compiler_creates_communications_reminder_blueprint():
     assert "delivery_report" in payload["output_schema"]["properties"]
     assert "outcomes" in payload["output_schema"]["properties"]
     assert "delivery_outcome_journal" in payload["output_schema"]["properties"]
+
+
+def test_agent_compiler_creates_custom_telegram_to_sheets_blueprint():
+    from services.agent_blueprint_draft_builder import compile_agent_blueprint
+
+    draft = compile_agent_blueprint("Когда пользователь пишет в Telegram бота, добавь строку в Google таблицу")
+    payload = draft["version_payload"]
+
+    assert draft["category"] == "custom"
+    assert draft["metadata"]["custom_process"]["kind"] == "integration_workflow"
+    assert draft["metadata"]["custom_process"]["trigger"] == "telegram.message.received"
+    assert draft["metadata"]["custom_process"]["target"] == "google_sheets.append_row"
+    assert payload["trigger"] == "telegram.message.received"
+    assert payload["mode"] == "approved_external_write_request"
+    assert payload["capability_allowlist"] == ["sheets.append_row_request"]
+    assert payload["approval_policy"]["external_spreadsheet_write"] == "manual_approval_required"
+    assert payload["limits"]["autonomous_external_write_allowed"] is False
+    assert [step["key"] for step in payload["steps"]] == [
+        "capture_telegram_trigger",
+        "prepare_sheet_row",
+        "approve_sheet_update",
+        "request_sheet_append",
+        "record_sheet_request",
+    ]
+    assert payload["steps"][3]["requires_approval"] is True
+    assert payload["steps"][3]["required_approval_type"] == "sheet_update"
+    assert payload["external_dispatch_performed"] is False
 
 
 def test_communication_agent_showcase_has_five_safe_mvp_blueprints():
@@ -641,6 +683,100 @@ def test_billing_capabilities_delegate_to_credit_reservation_layer(monkeypatch):
     assert calls["settle"]["external_id"] == "action-settle"
 
 
+def test_sheets_append_row_capability_creates_local_request_without_provider_write(monkeypatch):
+    from services import agent_capability_handlers
+
+    db = FakeCapabilityDatabase()
+    monkeypatch.setattr(agent_capability_handlers, "DatabaseManager", lambda: db)
+    handlers = agent_capability_handlers.build_capability_handlers()
+
+    result = handlers["sheets.append_row_request"](
+        {
+            "tenant_id": "biz1",
+            "action_id": "act-sheet",
+            "actor": {"id": "user-1"},
+            "capability": "sheets.append_row_request",
+            "payload": {
+                "spreadsheet_id": "spreadsheet-1",
+                "sheet_name": "Leads",
+                "row_values": ["{{received_at}}", "{{telegram_username}}", "{{message_text}}"],
+                "telegram": {
+                    "message_text": "Новая заявка",
+                    "telegram_username": "anna",
+                    "received_at": "2026-06-09T10:00:00Z",
+                },
+            },
+        },
+        {"user_id": "user-1"},
+    )
+
+    assert result["result"]["status"] == "sheet_append_request_created"
+    assert result["result"]["approval_state"] == "pending_human"
+    assert result["result"]["apply_state"] == "not_applied"
+    assert result["result"]["provider_write_performed"] is False
+    assert result["result"]["row_values"] == ["2026-06-09T10:00:00Z", "anna", "Новая заявка"]
+    assert db.cursor_instance.inserted["agent_sheet_operation_requests"]["provider_write_performed"] is False
+    assert db.cursor_instance.inserted["agent_sheet_operation_requests"]["row_values_json"] == [
+        "2026-06-09T10:00:00Z",
+        "anna",
+        "Новая заявка",
+    ]
+
+
+def test_sheets_append_row_capability_requires_sheet_connection(monkeypatch):
+    from services import agent_capability_handlers
+
+    db = FakeCapabilityDatabase()
+    monkeypatch.setattr(agent_capability_handlers, "DatabaseManager", lambda: db)
+    result = agent_capability_handlers.build_capability_handlers()["sheets.append_row_request"](
+        {
+            "tenant_id": "biz1",
+            "actor": {"id": "user-1"},
+            "capability": "sheets.append_row_request",
+            "payload": {"row_values": ["value"]},
+        },
+        {"user_id": "user-1"},
+    )
+
+    assert result["result"]["status"] == "validation_error"
+    assert result["result"]["error_code"] == "SHEET_CONNECTION_REQUIRED"
+    assert result["result"]["provider_write_performed"] is False
+
+
+def test_sheets_append_row_capability_requires_orchestrator_human_gate():
+    from core.action_policy import evaluate_risk_policy
+
+    decision = evaluate_risk_policy("sheets.append_row_request", {"spreadsheet_id": "sheet-1"}, {})
+
+    assert decision["ok"] is True
+    assert decision["requires_human"] is True
+    assert "spreadsheet" in decision["reason"]
+
+
+def test_telegram_trigger_runtime_records_ignored_event_when_no_custom_blueprint():
+    from services.agent_trigger_runtime import dispatch_telegram_message_to_agent_blueprints
+
+    cursor = FakeTelegramTriggerCursor()
+    result = dispatch_telegram_message_to_agent_blueprints(
+        cursor,
+        "biz1",
+        {
+            "message_text": "Добавь заявку в таблицу",
+            "telegram_user_id": "123",
+            "telegram_username": "anna",
+            "chat_id": "456",
+            "message_id": "789",
+            "received_at": "2026-06-09T10:00:00Z",
+        },
+    )
+
+    assert result["success"] is True
+    assert result["matched_count"] == 0
+    assert result["legacy_reply_should_continue"] is True
+    assert cursor.trigger_events[0]["status"] == "ignored"
+    assert cursor.trigger_events[0]["reason_code"] == "NO_MATCHING_ACTIVE_BLUEPRINT"
+
+
 def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     api_source = Path("src/api/agent_blueprints_api.py").read_text(encoding="utf-8")
     workspace_source = Path("src/services/agent_blueprint_workspace.py").read_text(encoding="utf-8")
@@ -653,6 +789,9 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     review_analysis_source = Path("src/services/agent_review_reply_analysis.py").read_text(encoding="utf-8")
     table_analysis_source = Path("src/services/agent_table_analysis.py").read_text(encoding="utf-8")
     capability_handlers_source = Path("src/services/agent_capability_handlers.py").read_text(encoding="utf-8")
+    action_policy_source = Path("src/core/action_policy.py").read_text(encoding="utf-8")
+    trigger_runtime_source = Path("src/services/agent_trigger_runtime.py").read_text(encoding="utf-8")
+    telegram_webhook_source = Path("src/ai_agent_webhooks.py").read_text(encoding="utf-8")
     builder_api_source = Path("src/api/agent_builder_api.py").read_text(encoding="utf-8")
     agents_page_source = Path("frontend/src/pages/dashboard/AgentBlueprintsPage.tsx").read_text(encoding="utf-8")
     admin_page_source = Path("frontend/src/pages/dashboard/AdminPage.tsx").read_text(encoding="utf-8")
@@ -767,7 +906,12 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "agent_communication_requests" in capability_handlers_source
     assert "reviewreplydrafts" in capability_handlers_source
     assert "agent_service_optimization_requests" in capability_handlers_source
+    assert "agent_sheet_operation_requests" in capability_handlers_source
     assert "provider_write_performed=False" in capability_handlers_source
+    assert "sheets.append_row_request" in action_policy_source
+    assert "dispatch_telegram_message_to_agent_blueprints" in telegram_webhook_source
+    assert "agent_trigger_events" in trigger_runtime_source
+    assert "telegram.message.received" in trigger_runtime_source
     assert "manual_publish_required=True" in capability_handlers_source
     assert "manual_apply_required=True" in capability_handlers_source
     assert "reserve_paid_action_credits" in capability_handlers_source
@@ -2518,7 +2662,71 @@ class FakeCapabilityCursor:
             self.description = [("id",)]
             self.last_result = (params[0],)
             return None
+        if normalized_query.startswith("insert into agent_sheet_operation_requests"):
+            self.inserted["agent_sheet_operation_requests"] = {
+                "id": params[0],
+                "action_id": params[1],
+                "business_id": params[2],
+                "user_id": params[3],
+                "integration_id": params[4],
+                "spreadsheet_id": params[5],
+                "sheet_name": params[6],
+                "operation": "append_row",
+                "status": "request_created",
+                "approval_state": "pending_human",
+                "apply_state": "not_applied",
+                "row_values_json": json.loads(params[7]),
+                "mapping_json": json.loads(params[8]),
+                "source_event_json": json.loads(params[9]),
+                "limits_json": json.loads(params[10]),
+                "provider_write_performed": False,
+            }
+            self.description = [("id",)]
+            self.last_result = (params[0],)
+            return None
         raise AssertionError(f"Unhandled capability SQL: {query}")
+
+    def fetchone(self):
+        return self.last_result
+
+    def fetchall(self):
+        return self.last_results
+
+
+class FakeTelegramTriggerCursor:
+    def __init__(self):
+        self.last_result = None
+        self.last_results = []
+        self.trigger_events = []
+
+    def execute(self, query, params=None):
+        normalized_query = " ".join(query.split()).lower()
+        params = params or ()
+        if normalized_query.startswith("create table") or normalized_query.startswith("create index"):
+            return None
+        if normalized_query.startswith("insert into agent_trigger_events"):
+            self.trigger_events.append(
+                {
+                    "id": params[0],
+                    "business_id": params[1],
+                    "source": "telegram",
+                    "event_type": "telegram.message.received",
+                    "status": "received",
+                    "payload_json": json.loads(params[2]),
+                    "reason_code": None,
+                }
+            )
+            return None
+        if "from agent_blueprints" in normalized_query:
+            self.last_results = []
+            return None
+        if normalized_query.startswith("update agent_trigger_events set status = 'ignored'"):
+            for item in self.trigger_events:
+                if item["id"] == params[1]:
+                    item["status"] = "ignored"
+                    item["reason_code"] = params[0]
+            return None
+        raise AssertionError(f"Unhandled trigger SQL: {query}")
 
     def fetchone(self):
         return self.last_result

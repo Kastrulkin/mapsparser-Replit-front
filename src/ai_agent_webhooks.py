@@ -14,6 +14,7 @@ from core.telegram_agent_transport import (
     evaluate_and_record_telegram_agent_transport,
 )
 from services.agent_legacy_migration import business_agent_enabled_for_channel
+from services.agent_trigger_runtime import dispatch_telegram_message_to_agent_blueprints
 
 ai_webhooks_bp = Blueprint('ai_webhooks', __name__)
 
@@ -274,6 +275,41 @@ def telegram_webhook():
         if not ai_agent_enabled:
             print(f"⚠️ ИИ агент отключен для бизнеса {business_id}")
             return jsonify({"status": "ok"}), 200
+
+        trigger_db = DatabaseManager()
+        try:
+            trigger_result = dispatch_telegram_message_to_agent_blueprints(
+                trigger_db.conn.cursor(),
+                str(business_id),
+                {
+                    "message_text": message_text,
+                    "telegram_user_id": user_id,
+                    "telegram_username": username,
+                    "telegram_first_name": first_name,
+                    "chat_id": chat_id,
+                    "message_id": str(message.get("message_id") or ""),
+                },
+            )
+            trigger_db.conn.commit()
+        except Exception:
+            trigger_db.conn.rollback()
+            raise
+        finally:
+            trigger_db.close()
+        if trigger_result.get("matched_count"):
+            print(
+                "✅ Telegram сообщение запустило agent blueprint workflow: "
+                f"{trigger_result.get('started_runs')}"
+            )
+            return jsonify(
+                {
+                    "status": "ok",
+                    "agent_workflow": {
+                        "trigger_event_id": trigger_result.get("trigger_event_id"),
+                        "started_runs": trigger_result.get("started_runs"),
+                    },
+                }
+            ), 200
         
         # Обрабатываем сообщение через ИИ агента
         client_phone = f"tg_{user_id}"  # Используем формат tg_ для Telegram

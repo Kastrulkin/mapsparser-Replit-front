@@ -72,6 +72,11 @@ CANONICAL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
         "side_effects": "none",
         "approval_required": False,
     },
+    "sheets.append_row_request": {
+        "risk": "external_spreadsheet_write_request",
+        "side_effects": "creates a Google Sheets append-row request only",
+        "approval_required": True,
+    },
     "billing.reserve": {
         "risk": "billing",
         "side_effects": "ledger reservation is controlled by ActionOrchestrator",
@@ -92,6 +97,8 @@ LEGACY_CAPABILITY_ALIASES = {
     "appointments.cancel": "appointments.create_request",
     "reminders.send": "communications.send_reminder",
     "communications.send": "communications.send_reminder",
+    "google_sheets.append_row": "sheets.append_row_request",
+    "sheets.append_row": "sheets.append_row_request",
     "billing.reserve/settle": "billing.reserve",
 }
 
@@ -133,6 +140,7 @@ def build_capability_handlers() -> Dict[str, CapabilityHandler]:
         "communications.send_reminder": _handle_communications_send_reminder,
         "communications.send_offer": _handle_communications_send_offer,
         "support.export": _handle_support_export,
+        "sheets.append_row_request": _handle_sheets_append_row_request,
         "billing.reserve": _handle_billing_reserve,
         "billing.settle": _handle_billing_settle,
     }
@@ -322,6 +330,79 @@ def _ensure_review_reply_draft_table(cursor: Any) -> None:
     cursor.execute(
         "CREATE INDEX IF NOT EXISTS idx_reviewreplydrafts_business_status ON reviewreplydrafts(business_id, status, created_at DESC)"
     )
+
+
+def _ensure_sheet_operation_request_table(cursor: Any) -> None:
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS agent_sheet_operation_requests (
+            id TEXT PRIMARY KEY,
+            action_id TEXT NOT NULL UNIQUE,
+            business_id TEXT NOT NULL,
+            user_id TEXT,
+            integration_id TEXT,
+            spreadsheet_id TEXT,
+            sheet_name TEXT,
+            operation TEXT NOT NULL,
+            status TEXT NOT NULL,
+            approval_state TEXT NOT NULL DEFAULT 'pending_human',
+            apply_state TEXT NOT NULL DEFAULT 'not_applied',
+            row_values_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+            mapping_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+            source_event_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+            limits_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+            provider_write_performed BOOLEAN NOT NULL DEFAULT FALSE,
+            error_text TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_agent_sheet_operation_requests_business_status ON agent_sheet_operation_requests(business_id, status, created_at DESC)"
+    )
+
+
+def _template_value(value: Any, context: Dict[str, Any]) -> Any:
+    if not isinstance(value, str):
+        return value
+    result = value
+    replacements = {
+        "{{message_text}}": context.get("message_text"),
+        "{{telegram.message_text}}": context.get("message_text"),
+        "{{telegram_user_id}}": context.get("telegram_user_id"),
+        "{{telegram.user_id}}": context.get("telegram_user_id"),
+        "{{telegram_username}}": context.get("telegram_username"),
+        "{{telegram.username}}": context.get("telegram_username"),
+        "{{chat_id}}": context.get("chat_id"),
+        "{{telegram.chat_id}}": context.get("chat_id"),
+        "{{received_at}}": context.get("received_at"),
+        "{{trigger_event_id}}": context.get("trigger_event_id"),
+    }
+    for token, replacement in replacements.items():
+        result = result.replace(token, str(replacement or ""))
+    return result
+
+
+def _resolve_sheet_row_values(payload: Dict[str, Any]) -> list[Any]:
+    context = payload.get("telegram") if isinstance(payload.get("telegram"), dict) else {}
+    context = {**payload, **context}
+    raw_values = payload.get("row_values")
+    if not isinstance(raw_values, list):
+        raw_values = payload.get("values") if isinstance(payload.get("values"), list) else []
+    if raw_values:
+        return [_template_value(item, context) for item in raw_values]
+    message_text = str(context.get("message_text") or "").strip()
+    received_at = str(context.get("received_at") or "").strip()
+    username = str(context.get("telegram_username") or context.get("username") or "").strip()
+    return [received_at, username, message_text]
+
+
+def _resolve_sheet_mapping(payload: Dict[str, Any]) -> Dict[str, Any]:
+    mapping = payload.get("mapping") if isinstance(payload.get("mapping"), dict) else {}
+    context = payload.get("telegram") if isinstance(payload.get("telegram"), dict) else {}
+    context = {**payload, **context}
+    return {str(key): _template_value(value, context) for key, value in mapping.items()}
 
 
 def _load_appointments(cursor: Any, tenant_id: str, payload: Dict[str, Any]) -> list[Dict[str, Any]]:
@@ -800,6 +881,101 @@ def _handle_support_export(envelope: Dict[str, Any], user_data: Dict[str, Any]) 
             "action_id": str(payload.get("action_id") or envelope.get("action_id") or ""),
             "format": str(payload.get("format") or "json"),
         },
+    )
+
+
+def _handle_sheets_append_row_request(envelope: Dict[str, Any], user_data: Dict[str, Any]) -> Dict[str, Any]:
+    payload = _payload(envelope)
+    tenant_id = str(envelope.get("tenant_id") or "").strip()
+    integration_id = str(payload.get("integration_id") or payload.get("google_sheets_integration_id") or "").strip()
+    spreadsheet_id = str(payload.get("spreadsheet_id") or payload.get("google_spreadsheet_id") or "").strip()
+    sheet_name = str(payload.get("sheet_name") or payload.get("tab") or "Sheet1").strip()
+    row_values = _resolve_sheet_row_values(payload)
+    mapping = _resolve_sheet_mapping(payload)
+    if not integration_id and not spreadsheet_id:
+        return _result(
+            "validation_error",
+            error_code="SHEET_CONNECTION_REQUIRED",
+            dispatch_state="not_created",
+            apply_state="not_applied",
+            provider_write_performed=False,
+        )
+    if not row_values and not mapping:
+        return _result(
+            "validation_error",
+            error_code="ROW_VALUES_REQUIRED",
+            dispatch_state="not_created",
+            apply_state="not_applied",
+            provider_write_performed=False,
+        )
+    action_id = str(envelope.get("action_id") or _stable_id("sheets.append_row_request", tenant_id, payload))
+    request_id = _stable_id("agent_sheet_operation_request", action_id)
+    user_id = _actor_user_id(envelope, user_data)
+    source_event = payload.get("source_event") if isinstance(payload.get("source_event"), dict) else {}
+    if not source_event and payload.get("trigger_event_id"):
+        source_event = {"trigger_event_id": str(payload.get("trigger_event_id") or "")}
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        _ensure_sheet_operation_request_table(cursor)
+        cursor.execute(
+            """
+            INSERT INTO agent_sheet_operation_requests (
+                id, action_id, business_id, user_id, integration_id, spreadsheet_id,
+                sheet_name, operation, status, approval_state, apply_state,
+                row_values_json, mapping_json, source_event_json, limits_json,
+                provider_write_performed
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 'append_row', 'request_created',
+                    'pending_human', 'not_applied', %s, %s, %s, %s, FALSE)
+            ON CONFLICT (action_id) DO UPDATE SET
+                row_values_json = EXCLUDED.row_values_json,
+                mapping_json = EXCLUDED.mapping_json,
+                source_event_json = EXCLUDED.source_event_json,
+                limits_json = EXCLUDED.limits_json,
+                updated_at = CURRENT_TIMESTAMP
+            RETURNING id
+            """,
+            (
+                request_id,
+                action_id,
+                tenant_id,
+                user_id,
+                integration_id or None,
+                spreadsheet_id or None,
+                sheet_name,
+                _json_dumps(row_values),
+                _json_dumps(mapping),
+                _json_dumps(source_event),
+                _json_dumps(
+                    {
+                        "approval_required": True,
+                        "daily_append_cap": max(1, min(int(payload.get("daily_append_cap") or 50), 500)),
+                    }
+                ),
+            ),
+        )
+        row = cursor.fetchone()
+        request_id = str((row.get("id") if isinstance(row, dict) else row[0]) or request_id)
+        db.conn.commit()
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+    return _result(
+        "sheet_append_request_created",
+        request_id=request_id,
+        operation="append_row",
+        integration_id=integration_id,
+        spreadsheet_id=spreadsheet_id,
+        sheet_name=sheet_name,
+        row_values=row_values,
+        mapping=mapping,
+        approval_state="pending_human",
+        apply_state="not_applied",
+        provider_write_performed=False,
+        manual_apply_required=True,
     )
 
 

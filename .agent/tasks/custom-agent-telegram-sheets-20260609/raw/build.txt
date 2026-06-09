@@ -1,0 +1,3 @@
+Command: PYTHONPATH=src python3 -m py_compile src/services/agent_capability_handlers.py src/services/agent_blueprint_draft_builder.py src/services/agent_trigger_runtime.py src/ai_agent_webhooks.py src/core/action_policy.py alembic_migrations/versions/20260609_add_custom_agent_integration_tables.py
+Result: PASS
+Output: no output
