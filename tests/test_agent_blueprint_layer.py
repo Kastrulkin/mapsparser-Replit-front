@@ -799,6 +799,8 @@ def test_approved_domain_executor_moves_sheet_request_after_human_gate():
         "approval_state": "pending_human",
         "apply_state": "not_applied",
         "operation": "append_row",
+        "integration_id": "integration-1",
+        "spreadsheet_id": "spreadsheet-1",
         "sheet_name": "Leads",
         "provider_write_performed": False,
     }
@@ -820,11 +822,15 @@ def test_approved_domain_executor_moves_sheet_request_after_human_gate():
     assert result["items"][0]["kind"] == "sheet_operation_request"
     assert request["status"] == "approved_for_execution"
     assert request["approval_state"] == "approved"
-    assert request["apply_state"] == "approved_not_applied"
+    assert request["apply_state"] == "provider_request_queued"
     assert request["provider_write_performed"] is False
+    assert result["items"][0]["apply_state"] == "provider_request_queued"
+    assert result["items"][0]["provider_handoff"]["provider_executor"] == "manual_controlled_google_sheets_append"
+    assert result["items"][0]["provider_handoff"]["spreadsheet_id"] == "spreadsheet-1"
     assert cursor.ledger_entries[0]["action_type"] == "agent_domain_request_approved"
     assert cursor.ledger_entries[0]["status"] == "approved_pending_provider_executor"
     assert cursor.ledger_entries[0]["metadata"]["run_id"] == "run1"
+    assert cursor.ledger_entries[0]["output_summary"]["state"] == "provider_request_queued"
 
 
 def test_approved_domain_executor_applies_service_optimization_to_localos_data():
@@ -1227,6 +1233,8 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "domain_requests" in Path("src/services/agent_blueprint_runner.py").read_text(encoding="utf-8")
     assert "agent_sheet_operation_requests" in Path("src/services/agent_blueprint_runner.py").read_text(encoding="utf-8")
     assert "agent_communication_requests" in Path("src/services/agent_blueprint_runner.py").read_text(encoding="utf-8")
+    assert "provider_handoff" in Path("src/services/agent_blueprint_runner.py").read_text(encoding="utf-8")
+    assert "provider_handoff" in agents_page_source
     assert "Ожидают approval" in agents_page_source
     assert "why_waiting" in agents_page_source
     assert "agent_review_publish_requests" in Path("src/services/agent_blueprint_runner.py").read_text(encoding="utf-8")
@@ -2529,6 +2537,8 @@ def test_runner_load_run_includes_observability_envelope_for_openclaw_actions():
     assert domain_request["kind"] == "sheet_operation_request"
     assert domain_request["approval_state"] == "pending_human"
     assert domain_request["apply_state"] == "not_applied"
+    assert domain_request["provider_handoff"]["provider_executor"] == "manual_controlled_google_sheets_append"
+    assert domain_request["provider_handoff"]["spreadsheet_id"] == "spreadsheet-1"
     assert domain_request["provider_write_performed"] is False
     assert "External spreadsheet write requires human approval" in domain_request["why_waiting"]
     assert observability["support_export"]["endpoint"] == "/api/agent-runs/run1/support-export"
@@ -3215,7 +3225,7 @@ class FakeApprovedDomainExecutorCursor:
             if request and request.get("business_id") == params[1] and request.get("provider_write_performed") is False:
                 request["status"] = "approved_for_execution"
                 request["approval_state"] = "approved"
-                request["apply_state"] = "approved_not_applied"
+                request["apply_state"] = "provider_request_queued"
             return None
         if normalized_query.startswith("update userservices"):
             service = self.tables["userservices"].get(params[2])
@@ -3293,6 +3303,7 @@ class FakeApprovedDomainExecutorCursor:
                 "action_type": params[3],
                 "capability": params[4],
                 "risk_level": params[6],
+                "output_summary": json.loads(params[8]),
                 "status": params[10],
                 "reason_code": params[11],
                 "metadata": metadata,

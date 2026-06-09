@@ -106,7 +106,7 @@ def _approve_sheet_requests(cursor: Any, business_id: str, user_id: str, run_id:
         "agent_sheet_operation_requests",
         """
         SELECT id, action_id, status, approval_state, apply_state, operation, sheet_name,
-               provider_write_performed
+               integration_id, spreadsheet_id, provider_write_performed
         FROM agent_sheet_operation_requests
         WHERE business_id = %s AND (id = ANY(%s) OR action_id = ANY(%s))
         """,
@@ -122,12 +122,13 @@ def _approve_sheet_requests(cursor: Any, business_id: str, user_id: str, run_id:
             UPDATE agent_sheet_operation_requests
             SET status = 'approved_for_execution',
                 approval_state = 'approved',
-                apply_state = 'approved_not_applied',
+                apply_state = 'provider_request_queued',
                 updated_at = NOW()
             WHERE id = %s AND business_id = %s AND provider_write_performed = FALSE
             """,
             (row.get("id"), business_id),
         )
+        provider_handoff = _build_sheet_provider_handoff(row)
         ledger_id = _record_executor_ledger(
             cursor,
             business_id=business_id,
@@ -137,8 +138,12 @@ def _approve_sheet_requests(cursor: Any, business_id: str, user_id: str, run_id:
             request_id=str(row.get("id") or ""),
             action_id=str(row.get("action_id") or ""),
             capability="sheets.append_row_request",
-            output_state="approved_not_applied",
-            summary={"operation": row.get("operation"), "sheet_name": row.get("sheet_name")},
+            output_state="provider_request_queued",
+            summary={
+                "operation": row.get("operation"),
+                "sheet_name": row.get("sheet_name"),
+                "provider_handoff": provider_handoff,
+            },
         )
         items.append(
             {
@@ -147,12 +152,25 @@ def _approve_sheet_requests(cursor: Any, business_id: str, user_id: str, run_id:
                 "action_id": row.get("action_id"),
                 "status": "approved_for_execution",
                 "approval_state": "approved",
-                "apply_state": "approved_not_applied",
+                "apply_state": "provider_request_queued",
+                "provider_handoff": provider_handoff,
                 "ledger_id": ledger_id,
                 "provider_write_performed": False,
             }
         )
     return items
+
+
+def _build_sheet_provider_handoff(row: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "provider_executor": "manual_controlled_google_sheets_append",
+        "handoff_state": "provider_request_queued",
+        "operation": row.get("operation") or "append_row",
+        "integration_id": row.get("integration_id"),
+        "spreadsheet_id": row.get("spreadsheet_id"),
+        "sheet_name": row.get("sheet_name"),
+        "provider_write_performed": False,
+    }
 
 
 def _approve_communication_requests(cursor: Any, business_id: str, user_id: str, run_id: str, step_key: str, refs: Dict[str, List[str]]) -> List[Dict[str, Any]]:

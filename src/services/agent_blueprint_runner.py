@@ -1024,7 +1024,14 @@ class AgentBlueprintRunner:
                         item
                         for item in domain_requests
                         if str(item.get("approval_state") or item.get("apply_state") or item.get("status") or "")
-                        in {"pending", "pending_human", "not_applied", "publish_requested", "request_created"}
+                        in {
+                            "pending",
+                            "pending_human",
+                            "not_applied",
+                            "publish_requested",
+                            "request_created",
+                            "provider_request_queued",
+                        }
                     ]
                 ),
                 "items": domain_requests,
@@ -1103,7 +1110,16 @@ class AgentBlueprintRunner:
             apply_state = str(row.get("apply_state") or "").strip()
             waiting_reason = "External spreadsheet write requires human approval before provider write."
             if approval_state == "approved":
-                waiting_reason = "Human approved; waiting for the controlled provider executor. No spreadsheet write has run yet."
+                waiting_reason = "Human approved; controlled Google Sheets provider request is queued. No spreadsheet write has run yet."
+            provider_handoff = {
+                "provider_executor": "manual_controlled_google_sheets_append",
+                "handoff_state": apply_state or row.get("apply_state"),
+                "operation": row.get("operation") or "append_row",
+                "integration_id": row.get("integration_id"),
+                "spreadsheet_id": row.get("spreadsheet_id"),
+                "sheet_name": row.get("sheet_name"),
+                "provider_write_performed": bool(row.get("provider_write_performed")),
+            }
             result.append(
                 {
                     "kind": "sheet_operation_request",
@@ -1118,6 +1134,7 @@ class AgentBlueprintRunner:
                     "row_values": parse_json_field(row.get("row_values_json"), []),
                     "mapping": parse_json_field(row.get("mapping_json"), {}),
                     "limits": parse_json_field(row.get("limits_json"), {}),
+                    "provider_handoff": provider_handoff,
                     "provider_write_performed": bool(row.get("provider_write_performed")),
                     "created_at": row.get("created_at"),
                 }
