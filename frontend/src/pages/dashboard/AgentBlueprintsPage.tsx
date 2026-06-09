@@ -373,6 +373,7 @@ const runStatusFilters = [
 ];
 
 const agentPromptExamples = [
+  'Напомни клиентам о записи и подготовь пакетное предложение',
   'Подготовь письмо клиентам по шаблону',
   'Обработай документ и найди риски',
   'Найди клиентов и покажи черновики сообщений',
@@ -380,6 +381,18 @@ const agentPromptExamples = [
 ];
 
 const agentScenarios: AgentBuilderScenario[] = [
+  {
+    category: 'communications',
+    title: 'Коммуникации',
+    description: 'Напоминания, follow-up, возврат клиентов, пакетные предложения и ответы на входящие.',
+    prompt: 'Сделай агента, который напоминает клиентам о записи и сообщает про пакетное предложение',
+    dataSources: 'записи, услуги, пакеты, профиль бизнеса, история коммуникаций',
+    extraction: 'триггер, аудитория, согласие, релевантная услуга, канал и лимиты частоты',
+    processing: 'подготовить черновики, проверить согласие, поставить отправку только после approval',
+    output: 'черновики, отчёт доставки и журнал outcomes',
+    manualControl: 'первый запуск, шаблон и каждая массовая отправка подтверждаются человеком',
+    icon: MessageSquareText,
+  },
   {
     category: 'documents',
     title: 'Документы',
@@ -528,6 +541,8 @@ const metaLabels: Record<string, string> = {
   drafts: 'черновики сообщений',
   queue: 'очередь',
   business_profile: 'профиль бизнеса',
+  appointments: 'записи',
+  packages: 'пакеты',
   services: 'услуги',
   reviews: 'отзывы',
   external_reviews: 'отзывы',

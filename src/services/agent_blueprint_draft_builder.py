@@ -3,6 +3,11 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from services.agent_blueprint_runner import default_supervised_outreach_version_payload
+from services.communication_agent_templates import (
+    get_communication_agent_template,
+    infer_communication_agent_template_key,
+    list_communication_agent_templates,
+)
 
 
 def _normalized_text(value: Any) -> str:
@@ -16,7 +21,25 @@ def _contains_any(text: str, words: List[str]) -> bool:
 
 def infer_blueprint_category(description: str) -> str:
     text = description.lower()
-    if _contains_any(text, ["напом", "запис", "appointment", "reminder", "клиентам о записи", "пакет"]):
+    if _contains_any(
+        text,
+        [
+            "напом",
+            "запис",
+            "appointment",
+            "reminder",
+            "клиентам о записи",
+            "пакет",
+            "после визита",
+            "после посещения",
+            "давно не был",
+            "давно не были",
+            "возврат клиента",
+            "вернуть клиента",
+            "входящий запрос",
+            "входящее сообщение",
+        ],
+    ):
         return "communications"
     if _contains_any(text, ["документ", "договор", "pdf", "docx", "акт", "счёт", "счет"]):
         return "documents"
@@ -35,6 +58,10 @@ def infer_blueprint_category(description: str) -> str:
 
 def build_agent_blueprint_draft(description: str, preferred_category: str = "") -> Dict[str, Any]:
     return compile_agent_blueprint(description, preferred_category)
+
+
+def build_communication_agent_showcase_blueprints() -> List[Dict[str, Any]]:
+    return [_communications_compilation(str(template["goal"] or ""), str(template["key"] or "")) for template in list_communication_agent_templates()]
 
 
 def compile_agent_blueprint(description: str, preferred_category: str = "") -> Dict[str, Any]:
@@ -254,18 +281,57 @@ def _summary(category: str, sources: List[str], steps: List[Dict[str, Any]]) -> 
     }
 
 
-def _communications_compilation(request_text: str) -> Dict[str, Any]:
-    sources = ["appointments", "services", "packages", "business_profile"]
+def _communications_compilation(request_text: str, preferred_template_key: str = "") -> Dict[str, Any]:
+    template_key = preferred_template_key or infer_communication_agent_template_key(request_text)
+    template = get_communication_agent_template(template_key)
+    sources = template["data_sources"]
+    draft_step = {
+        "key": "send_message",
+        "type": "capability",
+        "title": "Поставить в подтверждаемую очередь",
+        "capability": template["send_capability"],
+        "requires_approval": True,
+        "required_approval_type": template["approval_type"],
+        "payload": {
+            "status": "pending_human",
+            "mode": template["mode"],
+            "trigger": template["trigger"],
+            "audience": template["audience"],
+            "audience_rules": template["audience_rules"],
+            "message_template": template["message_template"],
+            "persona": template["persona"],
+            "delivery_outcome_journal": template["delivery_outcome_journal"],
+            "external_dispatch_performed": False,
+            "delivery_state": "queued_not_dispatched",
+        },
+    }
+    if template["mode"] == "draft_only":
+        draft_step = {
+            "key": "send_message",
+            "type": "artifact",
+            "title": "Оставить как черновик",
+            "artifact_type": "communications_drafts",
+            "payload": {
+                "status": "draft_only",
+                "capability": template["send_capability"],
+                "mode": template["mode"],
+                "message_template": template["message_template"],
+                "persona": template["persona"],
+                "external_dispatch_performed": False,
+                "delivery_state": "not_dispatched",
+            },
+        }
     steps = [
         {
             "key": "collect_audience",
             "type": "artifact",
-            "title": "Собрать клиентов с записью",
+            "title": "Собрать аудиторию",
             "artifact_type": "communications_audience",
             "payload": {
                 "status": "draft",
-                "trigger": "appointment.reminder.before",
-                "audience": "clients_with_upcoming_appointments",
+                "trigger": template["trigger"],
+                "audience": template["audience"],
+                "audience_rules": template["audience_rules"],
                 "sources": sources,
             },
         },
@@ -276,7 +342,9 @@ def _communications_compilation(request_text: str) -> Dict[str, Any]:
             "artifact_type": "communications_drafts",
             "payload": {
                 "status": "draft",
-                "message_goal": "appointment_reminder_with_package_offer",
+                "message_goal": template["key"],
+                "message_template": template["message_template"],
+                "persona": template["persona"],
                 "external_dispatch_performed": False,
             },
         },
@@ -288,27 +356,17 @@ def _communications_compilation(request_text: str) -> Dict[str, Any]:
             "payload": {
                 "status": "draft",
                 "consent_required": True,
+                "consent_rules": template["consent_rules"],
                 "frequency_cap_required": True,
             },
         },
         {
             "key": "approve_message",
             "type": "approval",
-            "title": "Подтвердить шаблон и отправку",
-            "approval_type": "communications_send",
+            "title": "Подтвердить результат",
+            "approval_type": template["approval_type"],
         },
-        {
-            "key": "send_message",
-            "type": "artifact",
-            "title": "Отправить через разрешённый канал",
-            "artifact_type": "communications_send_queue",
-            "payload": {
-                "status": "pending_approval",
-                "capability": "communications.send",
-                "external_dispatch_performed": False,
-                "delivery_state": "not_dispatched",
-            },
-        },
+        draft_step,
         {
             "key": "record_outcome",
             "type": "artifact",
@@ -316,7 +374,9 @@ def _communications_compilation(request_text: str) -> Dict[str, Any]:
             "artifact_type": "communications_outcomes",
             "payload": {
                 "status": "pending_delivery",
+                "journal": template["delivery_outcome_journal"],
                 "outcomes": [],
+                "external_dispatch_performed": False,
             },
         },
     ]
@@ -325,25 +385,22 @@ def _communications_compilation(request_text: str) -> Dict[str, Any]:
         "inputs_schema": {
             "type": "object",
             "properties": {
-                "trigger": {"type": "string", "default": "appointment.reminder.before"},
-                "audience": {"type": "string", "default": "clients_with_upcoming_appointments"},
-                "frequency_cap": {"type": "string", "default": "one_message_per_client_per_appointment"},
-                "daily_cap": {"type": "integer", "default": 10},
+                "trigger": {"type": "string", "default": template["trigger"]},
+                "audience": {"type": "string", "default": template["audience"]},
+                "frequency_cap": {"type": "string", "default": template["frequency_cap"]},
+                "daily_cap": {"type": "integer", "default": template["daily_cap"]},
             },
         },
         "steps": steps,
-        "capability_allowlist": [
-            "appointments.read",
-            "communications.draft",
-            "communications.send_reminder",
-            "communications.send_offer",
-        ],
+        "capability_allowlist": _communication_capability_allowlist(template["send_capability"]),
         "approval_policy": {
             "required_for": ["first_run", "template", "mass_send", "external_delivery"],
             "first_run": "manual_approval_required",
             "template": "manual_approval_required",
             "mass_send": "manual_approval_required",
             "external_delivery": "manual_approval_required",
+            "mode": template["mode"],
+            "send_capability": template["send_capability"],
         },
         "output_schema": {
             "type": "object",
@@ -351,34 +408,67 @@ def _communications_compilation(request_text: str) -> Dict[str, Any]:
                 "drafts": {"type": "array"},
                 "delivery_report": {"type": "object"},
                 "outcomes": {"type": "array"},
+                "delivery_outcome_journal": {"type": "object"},
             },
         },
         "limits": {
-            "frequency_cap": "one_message_per_client_per_appointment",
-            "daily_cap": 10,
+            "frequency_cap": template["frequency_cap"],
+            "daily_cap": template["daily_cap"],
             "external_send_requires_approval": True,
+            "autonomous_send_allowed": False,
         },
-        "trigger": "appointment.reminder.before",
-        "audience": "clients_with_upcoming_appointments",
+        "trigger": template["trigger"],
+        "audience": template["audience"],
+        "audience_rules": template["audience_rules"],
+        "consent_rules": template["consent_rules"],
+        "message_template": template["message_template"],
+        "persona": template["persona"],
+        "send_capability": template["send_capability"],
+        "delivery_outcome_journal": template["delivery_outcome_journal"],
+        "mode": template["mode"],
+        "external_dispatch_performed": False,
         "data_sources": sources,
     }
     metadata = _metadata(request_text, "communications", sources)
-    metadata["trigger"] = "appointment.reminder.before"
-    metadata["audience"] = "clients_with_upcoming_appointments"
+    metadata["communication_template_key"] = template["key"]
+    metadata["trigger"] = template["trigger"]
+    metadata["audience"] = template["audience"]
+    metadata["audience_rules"] = template["audience_rules"]
+    metadata["consent_rules"] = template["consent_rules"]
+    metadata["message_template"] = template["message_template"]
+    metadata["persona"] = template["persona"]
+    metadata["send_capability"] = template["send_capability"]
+    metadata["delivery_outcome_journal"] = template["delivery_outcome_journal"]
     metadata["limits"] = version_payload["limits"]
     metadata["communication_agent_is_blueprint_category"] = True
+    metadata["autonomous_send_allowed"] = False
     return {
-        "name": _draft_name(request_text, "Агент напоминаний о записи"),
+        "name": _draft_name(request_text, str(template["name"] or "Агент коммуникаций")),
         "category": "communications",
         "description": request_text,
         "metadata": metadata,
         "version_payload": version_payload,
         "summary": _summary("communications", sources, steps)
         | {
-            "trigger": "appointment.reminder.before",
-            "audience": "clients_with_upcoming_appointments",
+            "communication_template_key": template["key"],
+            "trigger": template["trigger"],
+            "audience": template["audience"],
+            "audience_rules": template["audience_rules"],
+            "consent_rules": template["consent_rules"],
+            "message_template": template["message_template"],
+            "persona": template["persona"],
+            "send_capability": template["send_capability"],
+            "delivery_outcome_journal": template["delivery_outcome_journal"],
+            "mode": template["mode"],
             "capability_allowlist": version_payload["capability_allowlist"],
             "limits": version_payload["limits"],
             "output_schema": version_payload["output_schema"],
         },
     }
+
+
+def _communication_capability_allowlist(send_capability: str) -> List[str]:
+    allowlist = ["appointments.read", "communications.draft"]
+    if send_capability and send_capability not in allowlist:
+        allowlist.append(send_capability)
+    return allowlist

@@ -1,0 +1,8 @@
+No integration test output captured yet.
+No separate integration suite was required for Stage 5.
+
+Covered by agent layer tests:
+- compiler creates communications blueprint payloads
+- showcase returns all five MVP templates
+- text prompts select expected communication template
+- OpenClaw capability map remains covered by existing route/capability tests in tests/test_agent_blueprint_layer.py

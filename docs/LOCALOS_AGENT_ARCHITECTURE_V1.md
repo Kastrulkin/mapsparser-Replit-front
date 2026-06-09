@@ -1,7 +1,7 @@
 # LocalOS Agent Architecture v1
 
 Дата: 9 июня 2026
-Статус: canonical architecture document; этапы 1-3 частично реализованы в backend
+Статус: canonical architecture document; этапы 1-5 частично реализованы в backend/frontend
 
 ## Цель
 
@@ -63,7 +63,7 @@ Compiler:
   capabilities =
     appointments.read
     communications.draft
-    communications.send
+    communications.send_reminder
   approvals =
     first_run
     template
@@ -123,6 +123,29 @@ Capability map v1 подключена через `build_agent_blueprint_orchest
 Legacy aliases (`reviews.reply`, `appointments.create`,
 `appointments.update`, `appointments.cancel`, `reminders.send`,
 `communications.send`) остаются подключенными как compatibility wrappers.
+
+## Communication Showcase v1
+
+Этап 5 реализует первые коммуникационные агенты как `AgentBlueprint.category =
+communications`. Это не новая таблица и не отдельный runtime. Compiler выбирает
+один из canonical templates, а `AgentBlueprintRunner` исполняет те же steps,
+approvals и capability boundaries, что и остальные blueprints.
+
+| MVP blueprint | Trigger | Audience rules | Consent rules | Persona/template | Approval | Capability | Journal |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Напоминание о записи | `appointment.reminder.before` | Ближайшие подтвержденные/ожидающие записи, доступный канал, один reminder на запись. | Transactional reminder allowed; marketing block only with marketing consent; opt-out/suppressed channel skipped. | Вежливый администратор, короткое напоминание и мягкий optional package block. | Первый запуск, шаблон, batch/external delivery. | `communications.send_reminder` через approved batch only. | `communications_delivery_outcome`: draft, approval, send request, delivery state, outcome. |
+| Сообщение после визита | `visit.completed.after` | Завершенные визиты в follow-up window, без complaint block, один follow-up на визит. | Service follow-up allowed; opt-out skipped; offer excluded without marketing consent. | Заботливый администратор, вопрос "все ли прошло хорошо". | Первый запуск, шаблон, batch/external delivery. | `communications.send_reminder` через approved batch only. | Тот же delivery/outcome journal. |
+| Возврат клиента, который давно не был | `client.inactive.since` | Последний визит старше порога, нет будущей записи, нет активной winback sequence. | Marketing consent required; opt-out skipped; promo frequency cap. | Тактичный администратор, без давления. | Шаблон и каждый batch. | `communications.send_offer` через approved batch only. | Тот же delivery/outcome journal. |
+| Пакетное предложение после релевантной услуги | `service.completed.relevant` | Завершенная услуга подходит под активный пакет, нет duplicate offer in cooldown. | Marketing consent required; only available packages; opt-out skipped. | Консультирующий администратор, конкретная польза без неподтвержденных скидок. | Шаблон и каждый batch. | `communications.send_offer` через approved batch only. | Тот же delivery/outcome journal. |
+| Черновик ответа на входящий запрос | `inbound.message.received` | Открытый входящий запрос, привязан к бизнесу, еще не отвечен. | Reply allowed in active conversation; no promo without marketing consent; sensitive cases escalate to human. | Аккуратный администратор, отмечает неизвестные факты. | Финальный черновик перед использованием. | `communications.draft`; draft only, no send step. | Тот же journal, но dispatch state stays `not_dispatched`. |
+
+Общий safety contract для всех пяти шаблонов:
+
+- `autonomous_send_allowed=false`;
+- `external_dispatch_performed=false` в compiler metadata, output schema и journal;
+- первые версии работают только как `draft_only` или `approved_batch_only`;
+- send-capabilities создают request/queue state под human gate, а не прямую
+  внешнюю отправку из prompt/compiler.
 
 ## Canonical Runtime Loop
 

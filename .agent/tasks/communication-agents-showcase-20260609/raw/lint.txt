@@ -1,0 +1,10 @@
+No lint output captured yet.
+rg -n "\bas\b" src/services/communication_agent_templates.py src/services/agent_blueprint_draft_builder.py tests/test_agent_blueprint_layer.py frontend/src/pages/dashboard/AgentBlueprintsPage.tsx docs/LOCALOS_AGENT_ARCHITECTURE_V1.md
+
+Result: PASS for Stage 5 changes.
+
+Matches are pre-existing SQL/doc text outside new Stage 5 implementation logic:
+- docs/LOCALOS_AGENT_ARCHITECTURE_V1.md:285
+- tests/test_agent_blueprint_layer.py:1921
+- tests/test_agent_blueprint_layer.py:1925
+- tests/test_agent_blueprint_layer.py:2028

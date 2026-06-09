@@ -229,6 +229,14 @@ def test_agent_compiler_creates_communications_reminder_blueprint():
     assert draft["metadata"]["compiler"] == "agent_compiler_v1"
     assert payload["trigger"] == "appointment.reminder.before"
     assert payload["audience"] == "clients_with_upcoming_appointments"
+    assert payload["audience_rules"]
+    assert payload["consent_rules"]
+    assert payload["message_template"]
+    assert payload["persona"]
+    assert payload["send_capability"] == "communications.send_reminder"
+    assert payload["delivery_outcome_journal"]["journal_type"] == "communications_delivery_outcome"
+    assert payload["mode"] == "approved_batch_only"
+    assert payload["external_dispatch_performed"] is False
     assert payload["data_sources"] == ["appointments", "services", "packages", "business_profile"]
     assert [step["key"] for step in payload["steps"]] == [
         "collect_audience",
@@ -242,14 +250,80 @@ def test_agent_compiler_creates_communications_reminder_blueprint():
         "appointments.read",
         "communications.draft",
         "communications.send_reminder",
-        "communications.send_offer",
     ]
     assert payload["approval_policy"]["first_run"] == "manual_approval_required"
     assert payload["approval_policy"]["mass_send"] == "manual_approval_required"
+    assert payload["approval_policy"]["mode"] == "approved_batch_only"
     assert payload["limits"]["daily_cap"] == 10
+    assert payload["limits"]["autonomous_send_allowed"] is False
     assert "drafts" in payload["output_schema"]["properties"]
     assert "delivery_report" in payload["output_schema"]["properties"]
     assert "outcomes" in payload["output_schema"]["properties"]
+    assert "delivery_outcome_journal" in payload["output_schema"]["properties"]
+
+
+def test_communication_agent_showcase_has_five_safe_mvp_blueprints():
+    from services.agent_blueprint_draft_builder import build_communication_agent_showcase_blueprints
+
+    drafts = build_communication_agent_showcase_blueprints()
+    expected = {
+        "appointment_reminder": ("appointment.reminder.before", "communications.send_reminder", "approved_batch_only"),
+        "post_visit_followup": ("visit.completed.after", "communications.send_reminder", "approved_batch_only"),
+        "inactive_client_winback": ("client.inactive.since", "communications.send_offer", "approved_batch_only"),
+        "package_offer_after_service": ("service.completed.relevant", "communications.send_offer", "approved_batch_only"),
+        "inbound_request_reply_draft": ("inbound.message.received", "communications.draft", "draft_only"),
+    }
+
+    assert len(drafts) == 5
+    by_key = {draft["metadata"]["communication_template_key"]: draft for draft in drafts}
+    assert set(by_key) == set(expected)
+
+    for key, values in expected.items():
+        trigger, capability, mode = values
+        draft = by_key[key]
+        payload = draft["version_payload"]
+        steps = payload["steps"]
+
+        assert draft["category"] == "communications"
+        assert payload["trigger"] == trigger
+        assert payload["send_capability"] == capability
+        assert payload["mode"] == mode
+        assert payload["audience_rules"]
+        assert payload["consent_rules"]
+        assert payload["message_template"]
+        assert payload["persona"]
+        assert payload["delivery_outcome_journal"]["external_dispatch_performed"] is False
+        assert payload["limits"]["external_send_requires_approval"] is True
+        assert payload["limits"]["autonomous_send_allowed"] is False
+        assert payload["external_dispatch_performed"] is False
+        assert "communications.draft" in payload["capability_allowlist"]
+        if capability != "communications.draft":
+            assert capability in payload["capability_allowlist"]
+            send_step = [step for step in steps if step["key"] == "send_message"][0]
+            assert send_step["type"] == "capability"
+            assert send_step["requires_approval"] is True
+            assert send_step["payload"]["external_dispatch_performed"] is False
+        else:
+            assert payload["capability_allowlist"] == ["appointments.read", "communications.draft"]
+            send_step = [step for step in steps if step["key"] == "send_message"][0]
+            assert send_step["type"] == "artifact"
+            assert send_step["payload"]["delivery_state"] == "not_dispatched"
+
+
+def test_communication_agent_compiler_selects_mvp_templates_from_text():
+    from services.agent_blueprint_draft_builder import compile_agent_blueprint
+
+    examples = [
+        ("Сделай сообщение после визита", "post_visit_followup"),
+        ("Вернуть клиента, который давно не был", "inactive_client_winback"),
+        ("Пакетное предложение после релевантной услуги", "package_offer_after_service"),
+        ("Черновик ответа на входящий запрос", "inbound_request_reply_draft"),
+    ]
+
+    for prompt, expected_key in examples:
+        draft = compile_agent_blueprint(prompt)
+        assert draft["category"] == "communications"
+        assert draft["metadata"]["communication_template_key"] == expected_key
 
 
 def test_agent_product_view_uses_aiagent_as_voice_persona():

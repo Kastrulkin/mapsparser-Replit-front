@@ -1,0 +1,14 @@
+No build output captured yet.
+cd frontend && npm run build
+
+Result: PASS
+
+Key output:
+- vite v7.3.1 building client environment for production...
+- 3356 modules transformed.
+- AgentBlueprintsPage bundle generated.
+- built in 5.57s
+
+Notes:
+- Existing Browserslist/caniuse-lite age warning.
+- Existing Rollup PURE annotation warnings from @pbe/react-yandex-maps.

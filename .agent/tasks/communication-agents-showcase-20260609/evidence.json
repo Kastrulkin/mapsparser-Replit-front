@@ -1,0 +1,69 @@
+{
+  "task_id": "communication-agents-showcase-20260609",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Communication agent showcase exposes five MVP blueprint templates.",
+      "status": "PASS",
+      "proof": [
+        "src/services/communication_agent_templates.py",
+        "tests/test_agent_blueprint_layer.py::test_communication_agent_showcase_has_five_safe_mvp_blueprints"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Each MVP blueprint has trigger, audience rules, consent rules, template/persona, approval, capability, and journal.",
+      "status": "PASS",
+      "proof": [
+        "tests/test_agent_blueprint_layer.py::test_communication_agent_showcase_has_five_safe_mvp_blueprints",
+        "docs/LOCALOS_AGENT_ARCHITECTURE_V1.md"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "No autonomous sends; only draft-only or approved-batch-only.",
+      "status": "PASS",
+      "proof": [
+        "tests/test_agent_blueprint_layer.py::test_communication_agent_showcase_has_five_safe_mvp_blueprints"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Reuse AgentBlueprint/Compiler/Runner/ActionOrchestrator architecture with no standalone communication-agent entity.",
+      "status": "PASS",
+      "proof": [
+        "src/services/agent_blueprint_draft_builder.py",
+        "docs/LOCALOS_AGENT_ARCHITECTURE_V1.md"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Surface communications as an Agent Studio scenario.",
+      "status": "PASS",
+      "proof": [
+        "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx"
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/services/communication_agent_templates.py",
+    "src/services/agent_blueprint_draft_builder.py",
+    "tests/test_agent_blueprint_layer.py",
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
+    "docs/LOCALOS_AGENT_ARCHITECTURE_V1.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "cd frontend && npm run build",
+    "scripts/proof_loop.sh validate communication-agents-showcase-20260609"
+  ],
+  "known_gaps": [
+    "Not deployed in this turn."
+  ]
+}
