@@ -46,6 +46,10 @@ def test_agent_blueprint_routes_are_owned_by_blueprint():
         "/api/agent-blueprints/<blueprint_id>/setup": {
             "POST": "agent_blueprints_api.setup_agent_blueprint",
         },
+        "/api/agent-blueprints/<blueprint_id>/integrations": {
+            "GET": "agent_blueprints_api.list_agent_blueprint_integrations",
+            "POST": "agent_blueprints_api.save_agent_blueprint_integration",
+        },
         "/api/agent-blueprints/<blueprint_id>/sources": {
             "POST": "agent_blueprints_api.add_agent_blueprint_source",
         },

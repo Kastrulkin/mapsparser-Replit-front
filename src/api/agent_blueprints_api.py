@@ -150,6 +150,227 @@ def _save_blueprint_metadata(cursor, blueprint_id: str, metadata: dict) -> None:
     )
 
 
+def _normalize_agent_integration(row: dict, *, attached: bool = True) -> dict:
+    config = workspace_parse_json_field(row.get("config_json"), {})
+    limits = workspace_parse_json_field(row.get("limits_json"), {})
+    if not isinstance(config, dict):
+        config = {}
+    if not isinstance(limits, dict):
+        limits = {}
+    provider = str(row.get("provider") or "").strip()
+    return {
+        "id": str(row.get("id") or ""),
+        "business_id": str(row.get("business_id") or ""),
+        "provider": provider,
+        "provider_label": _agent_integration_provider_label(provider),
+        "status": str(row.get("status") or "draft"),
+        "display_name": str(row.get("display_name") or ""),
+        "auth_ref": str(row.get("auth_ref") or ""),
+        "has_auth_ref": bool(str(row.get("auth_ref") or "").strip()),
+        "config": config,
+        "limits": limits,
+        "attached": attached,
+        "connected_by_user_id": str(row.get("connected_by_user_id") or ""),
+        "created_at": row.get("created_at"),
+        "updated_at": row.get("updated_at"),
+        "execution_boundary": _agent_integration_execution_boundary(provider),
+    }
+
+
+def _agent_integration_provider_label(provider: str) -> str:
+    labels = {
+        "google_sheets": "Google Sheets",
+        "telegram": "Telegram",
+    }
+    return labels.get(provider, provider or "integration")
+
+
+def _agent_integration_execution_boundary(provider: str) -> dict:
+    if provider == "google_sheets":
+        return {
+            "capabilities": ["sheets.append_row_request", "google_sheets.append_row"],
+            "approval_required": True,
+            "executor": "agent_sheet_provider_executor_v1",
+            "external_write": "approved_append_row",
+        }
+    if provider == "telegram":
+        return {
+            "triggers": ["telegram.message.received"],
+            "capabilities": ["communications.draft", "communications.send_reminder", "communications.send_offer"],
+            "approval_required": True,
+            "executor": "channel_router",
+            "external_write": "approved_delivery_only",
+        }
+    return {
+        "capabilities": [],
+        "approval_required": True,
+        "executor": "action_orchestrator",
+        "external_write": "approval_required",
+    }
+
+
+def _agent_integration_provider_catalog() -> list[dict]:
+    return [
+        {
+            "provider": "google_sheets",
+            "title": "Google Sheets",
+            "description": "Controlled append/write boundary для compiled workflows: approval -> provider executor -> ledger.",
+            "required_config": ["spreadsheet_id", "sheet_name"],
+            "default_limits": {"daily_append_cap": 50, "frequency_cap_minutes": 0},
+            "status": "available",
+        },
+        {
+            "provider": "telegram",
+            "title": "Telegram",
+            "description": "Trigger boundary для сообщений в бота и supervised delivery через router.",
+            "required_config": ["bot_mode"],
+            "default_limits": {"daily_message_cap": 50, "frequency_cap_minutes": 30},
+            "status": "available",
+        },
+    ]
+
+
+def _agent_integration_ids(metadata: dict) -> list[str]:
+    raw_ids = metadata.get("agent_integration_ids") if isinstance(metadata.get("agent_integration_ids"), list) else []
+    result = []
+    for item in raw_ids:
+        item_id = str(item or "").strip()
+        if item_id and item_id not in result:
+            result.append(item_id)
+    return result
+
+
+def _load_agent_integrations(cursor, business_id: str, integration_ids: list[str] | None = None) -> list[dict]:
+    if integration_ids:
+        cursor.execute(
+            """
+            SELECT id, business_id, provider, status, display_name, auth_ref,
+                   config_json, limits_json, connected_by_user_id, created_at, updated_at
+            FROM agent_integrations
+            WHERE business_id = %s
+              AND id = ANY(%s)
+            ORDER BY updated_at DESC, created_at DESC
+            """,
+            (business_id, integration_ids),
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT id, business_id, provider, status, display_name, auth_ref,
+                   config_json, limits_json, connected_by_user_id, created_at, updated_at
+            FROM agent_integrations
+            WHERE business_id = %s
+            ORDER BY updated_at DESC, created_at DESC
+            LIMIT 100
+            """,
+            (business_id,),
+        )
+    return [dict(row) for row in cursor.fetchall() or []]
+
+
+def _load_agent_external_auth_options(cursor, business_id: str) -> list[dict]:
+    try:
+        cursor.execute(
+            """
+            SELECT id, source, external_id, display_name, is_active, updated_at
+            FROM externalbusinessaccounts
+            WHERE business_id = %s
+              AND is_active = TRUE
+              AND source IN ('google_business', 'telegram_app')
+            ORDER BY updated_at DESC
+            LIMIT 50
+            """,
+            (business_id,),
+        )
+    except Exception:
+        return []
+    return [
+        {
+            "id": str(row.get("id") or ""),
+            "source": str(row.get("source") or ""),
+            "display_name": str(row.get("display_name") or row.get("external_id") or row.get("source") or ""),
+            "updated_at": row.get("updated_at"),
+        }
+        for row in cursor.fetchall() or []
+    ]
+
+
+def _sanitize_agent_integration_config(provider: str, payload: dict) -> dict:
+    source = payload.get("config") if isinstance(payload.get("config"), dict) else payload
+    if provider == "google_sheets":
+        return {
+            "spreadsheet_id": str(source.get("spreadsheet_id") or source.get("google_spreadsheet_id") or "").strip(),
+            "sheet_name": str(source.get("sheet_name") or source.get("tab") or "Sheet1").strip() or "Sheet1",
+            "operation": "append_row",
+            "mode": "approved_executor",
+        }
+    if provider == "telegram":
+        return {
+            "bot_mode": str(source.get("bot_mode") or "business_bot").strip() or "business_bot",
+            "trigger": "telegram.message.received",
+            "mode": "trigger_boundary",
+        }
+    return {}
+
+
+def _sanitize_agent_integration_limits(provider: str, payload: dict) -> dict:
+    source = payload.get("limits") if isinstance(payload.get("limits"), dict) else payload
+    if provider == "google_sheets":
+        return {
+            "daily_append_cap": _safe_int(source.get("daily_append_cap"), 50, 1, 500),
+            "frequency_cap_minutes": _safe_int(source.get("frequency_cap_minutes"), 0, 0, 1440),
+        }
+    if provider == "telegram":
+        return {
+            "daily_message_cap": _safe_int(source.get("daily_message_cap"), 50, 1, 500),
+            "frequency_cap_minutes": _safe_int(source.get("frequency_cap_minutes"), 30, 0, 1440),
+        }
+    return {}
+
+
+def _safe_int(value, fallback: int, minimum: int, maximum: int) -> int:
+    try:
+        parsed = int(value)
+    except Exception:
+        parsed = fallback
+    return max(minimum, min(parsed, maximum))
+
+
+def _sync_blueprint_integration_metadata(cursor, blueprint: dict, integration: dict) -> dict:
+    blueprint_id = str(blueprint.get("id") or "")
+    metadata = _blueprint_metadata(_load_blueprint(cursor, blueprint_id) or blueprint)
+    integration_ids = _agent_integration_ids(metadata)
+    integration_id = str(integration.get("id") or "").strip()
+    if integration_id and integration_id not in integration_ids:
+        integration_ids.append(integration_id)
+    metadata["agent_integration_ids"] = integration_ids[-25:]
+    capability_integrations = metadata.get("capability_integrations") if isinstance(metadata.get("capability_integrations"), dict) else {}
+    provider = str(integration.get("provider") or "").strip()
+    if provider:
+        capability_integrations[provider] = integration_id
+    metadata["capability_integrations"] = capability_integrations
+    if provider == "google_sheets":
+        custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+        custom_process["trigger"] = str(custom_process.get("trigger") or "telegram.message.received")
+        config = workspace_parse_json_field(integration.get("config_json"), {})
+        if not isinstance(config, dict):
+            config = {}
+        custom_process["google_sheets"] = {
+            "integration_id": integration_id,
+            "spreadsheet_id": str(config.get("spreadsheet_id") or "").strip(),
+            "sheet_name": str(config.get("sheet_name") or "Sheet1").strip() or "Sheet1",
+            "operation": "append_row",
+        }
+        metadata["custom_process"] = custom_process
+    if provider == "telegram":
+        triggers = metadata.get("triggers") if isinstance(metadata.get("triggers"), list) else []
+        if "telegram.message.received" not in triggers:
+            triggers.append("telegram.message.received")
+        metadata["triggers"] = triggers[-10:]
+    _save_blueprint_metadata(cursor, blueprint_id, metadata)
+    return metadata
+
+
 def _utc_now_text() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -782,6 +1003,159 @@ def setup_agent_blueprint(blueprint_id: str):
         db.conn.commit()
         refreshed = _load_blueprint(cursor, blueprint_id)
         return jsonify({"success": True, "blueprint": _normalize_json_row(refreshed), "setup": setup, "version": version})
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/integrations", methods=["GET"])
+def list_agent_blueprint_integrations(blueprint_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        business_id = str(blueprint.get("business_id") or "")
+        metadata = _blueprint_metadata(blueprint)
+        attached_ids = _agent_integration_ids(metadata)
+        attached_rows = _load_agent_integrations(cursor, business_id, attached_ids) if attached_ids else []
+        all_rows = _load_agent_integrations(cursor, business_id)
+        attached_lookup = {str(row.get("id") or "") for row in attached_rows}
+        integrations = [_normalize_agent_integration(row, attached=True) for row in attached_rows]
+        available = [
+            _normalize_agent_integration(row, attached=False)
+            for row in all_rows
+            if str(row.get("id") or "") not in attached_lookup
+        ]
+        return jsonify(
+            {
+                "success": True,
+                "integrations": integrations,
+                "available_integrations": available,
+                "provider_catalog": _agent_integration_provider_catalog(),
+                "external_auth_options": _load_agent_external_auth_options(cursor, business_id),
+                "capability_integrations": metadata.get("capability_integrations") if isinstance(metadata.get("capability_integrations"), dict) else {},
+                "custom_process": metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {},
+            }
+        )
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/integrations", methods=["POST"])
+def save_agent_blueprint_integration(blueprint_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    payload = request.get_json(silent=True) or {}
+    provider = str(payload.get("provider") or "").strip().lower()
+    if provider not in {"google_sheets", "telegram"}:
+        return _json_error("Unsupported integration provider", 400, "UNSUPPORTED_PROVIDER")
+    status = str(payload.get("status") or "active").strip().lower()
+    if status not in {"draft", "active", "paused"}:
+        return _json_error("Unsupported integration status", 400, "UNSUPPORTED_STATUS")
+    config = _sanitize_agent_integration_config(provider, payload)
+    if provider == "google_sheets" and not str(config.get("spreadsheet_id") or "").strip():
+        return _json_error("spreadsheet_id is required for Google Sheets integration", 400, "SPREADSHEET_REQUIRED")
+    limits = _sanitize_agent_integration_limits(provider, payload)
+    integration_id = str(payload.get("integration_id") or payload.get("id") or "").strip()
+    if not integration_id:
+        integration_id = str(uuid.uuid4())
+    display_name = str(payload.get("display_name") or _agent_integration_provider_label(provider)).strip()
+    auth_ref = str(payload.get("auth_ref") or "").strip() or None
+
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        business_id = str(blueprint.get("business_id") or "")
+        cursor.execute(
+            """
+            SELECT id
+            FROM agent_integrations
+            WHERE id = %s
+              AND business_id = %s
+            """,
+            (integration_id, business_id),
+        )
+        existing = cursor.fetchone()
+        if existing:
+            cursor.execute(
+                """
+                UPDATE agent_integrations
+                SET provider = %s,
+                    status = %s,
+                    display_name = %s,
+                    auth_ref = %s,
+                    config_json = %s::jsonb,
+                    limits_json = %s::jsonb,
+                    connected_by_user_id = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                  AND business_id = %s
+                """,
+                (
+                    provider,
+                    status,
+                    display_name,
+                    auth_ref,
+                    json.dumps(config, ensure_ascii=False),
+                    json.dumps(limits, ensure_ascii=False),
+                    _user_id(user_data),
+                    integration_id,
+                    business_id,
+                ),
+            )
+        else:
+            cursor.execute(
+                """
+                INSERT INTO agent_integrations (
+                    id, business_id, provider, status, display_name, auth_ref,
+                    config_json, limits_json, connected_by_user_id
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s)
+                """,
+                (
+                    integration_id,
+                    business_id,
+                    provider,
+                    status,
+                    display_name,
+                    auth_ref,
+                    json.dumps(config, ensure_ascii=False),
+                    json.dumps(limits, ensure_ascii=False),
+                    _user_id(user_data),
+                ),
+            )
+        cursor.execute(
+            """
+            SELECT id, business_id, provider, status, display_name, auth_ref,
+                   config_json, limits_json, connected_by_user_id, created_at, updated_at
+            FROM agent_integrations
+            WHERE id = %s
+              AND business_id = %s
+            """,
+            (integration_id, business_id),
+        )
+        integration = dict(cursor.fetchone())
+        metadata = _sync_blueprint_integration_metadata(cursor, blueprint, integration)
+        db.conn.commit()
+        return jsonify(
+            {
+                "success": True,
+                "integration": _normalize_agent_integration(integration, attached=True),
+                "capability_integrations": metadata.get("capability_integrations") if isinstance(metadata.get("capability_integrations"), dict) else {},
+                "custom_process": metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {},
+            }
+        ), 201
     except Exception:
         db.conn.rollback()
         raise

@@ -402,6 +402,42 @@ type AgentSourceCatalogItem = {
   error?: string;
 };
 
+type AgentIntegration = {
+  id: string;
+  provider: string;
+  provider_label?: string;
+  status: string;
+  display_name?: string;
+  auth_ref?: string;
+  has_auth_ref?: boolean;
+  attached?: boolean;
+  config?: Record<string, unknown>;
+  limits?: Record<string, unknown>;
+  execution_boundary?: {
+    capabilities?: string[];
+    triggers?: string[];
+    approval_required?: boolean;
+    executor?: string;
+    external_write?: string;
+  };
+};
+
+type AgentExternalAuthOption = {
+  id: string;
+  source: string;
+  display_name?: string;
+  updated_at?: string;
+};
+
+type AgentIntegrationCatalogItem = {
+  provider: string;
+  title: string;
+  description?: string;
+  required_config?: string[];
+  default_limits?: Record<string, unknown>;
+  status?: string;
+};
+
 type AgentReviewSection = {
   title?: string;
   artifact_type?: string;
@@ -1050,6 +1086,16 @@ export const AgentBlueprintsPage = () => {
   const [sourceName, setSourceName] = useState('');
   const [sourceText, setSourceText] = useState('');
   const [internalSource, setInternalSource] = useState('business_profile');
+  const [agentIntegrations, setAgentIntegrations] = useState<AgentIntegration[]>([]);
+  const [availableAgentIntegrations, setAvailableAgentIntegrations] = useState<AgentIntegration[]>([]);
+  const [agentIntegrationCatalog, setAgentIntegrationCatalog] = useState<AgentIntegrationCatalogItem[]>([]);
+  const [agentExternalAuthOptions, setAgentExternalAuthOptions] = useState<AgentExternalAuthOption[]>([]);
+  const [sheetSpreadsheetId, setSheetSpreadsheetId] = useState('');
+  const [sheetName, setSheetName] = useState('Sheet1');
+  const [sheetAuthRef, setSheetAuthRef] = useState('');
+  const [sheetDailyCap, setSheetDailyCap] = useState('50');
+  const [telegramBotMode, setTelegramBotMode] = useState('business_bot');
+  const [telegramDailyCap, setTelegramDailyCap] = useState('50');
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackTrigger, setFeedbackTrigger] = useState('manual_edit');
   const [feedbackVersionNotice, setFeedbackVersionNotice] = useState<FeedbackVersionNotice | null>(null);
@@ -1349,15 +1395,52 @@ export const AgentBlueprintsPage = () => {
     }
   }, []);
 
+  const loadAgentIntegrations = useCallback(async (blueprintId: string) => {
+    try {
+      const response = await api.get(`/agent-blueprints/${blueprintId}/integrations`);
+      const integrations = Array.isArray(response.data?.integrations) ? response.data.integrations : [];
+      const available = Array.isArray(response.data?.available_integrations) ? response.data.available_integrations : [];
+      const providerCatalog = Array.isArray(response.data?.provider_catalog) ? response.data.provider_catalog : [];
+      const authOptions = Array.isArray(response.data?.external_auth_options) ? response.data.external_auth_options : [];
+      setAgentIntegrations(integrations);
+      setAvailableAgentIntegrations(available);
+      setAgentIntegrationCatalog(providerCatalog);
+      setAgentExternalAuthOptions(authOptions);
+      const sheet = integrations.find((item) => item.provider === 'google_sheets') || available.find((item) => item.provider === 'google_sheets');
+      if (sheet) {
+        setSheetSpreadsheetId(String(sheet.config?.spreadsheet_id || ''));
+        setSheetName(String(sheet.config?.sheet_name || 'Sheet1'));
+        setSheetAuthRef(String(sheet.auth_ref || ''));
+        setSheetDailyCap(String(sheet.limits?.daily_append_cap || 50));
+      }
+      const telegram = integrations.find((item) => item.provider === 'telegram') || available.find((item) => item.provider === 'telegram');
+      if (telegram) {
+        setTelegramBotMode(String(telegram.config?.bot_mode || 'business_bot'));
+        setTelegramDailyCap(String(telegram.limits?.daily_message_cap || 50));
+      }
+    } catch (requestError) {
+      console.error(requestError);
+      setAgentIntegrations([]);
+      setAvailableAgentIntegrations([]);
+      setAgentIntegrationCatalog([]);
+      setAgentExternalAuthOptions([]);
+    }
+  }, []);
+
   useEffect(() => {
     if (selectedBlueprint?.id) {
       void loadBlueprintReview(selectedBlueprint.id);
       void loadSourceCatalog(selectedBlueprint.id);
+      void loadAgentIntegrations(selectedBlueprint.id);
     } else {
       setAgentReview(null);
       setSourceCatalog([]);
+      setAgentIntegrations([]);
+      setAvailableAgentIntegrations([]);
+      setAgentIntegrationCatalog([]);
+      setAgentExternalAuthOptions([]);
     }
-  }, [loadBlueprintReview, loadSourceCatalog, selectedBlueprint?.id]);
+  }, [loadAgentIntegrations, loadBlueprintReview, loadSourceCatalog, selectedBlueprint?.id]);
 
   const createDefaultBlueprint = async (requestText = '') => {
     if (!currentBusinessId) {
@@ -1741,6 +1824,70 @@ export const AgentBlueprintsPage = () => {
     }
   };
 
+  const saveSheetIntegration = async () => {
+    if (!selectedBlueprint || !sheetSpreadsheetId.trim()) {
+      return;
+    }
+    const existing = [...agentIntegrations, ...availableAgentIntegrations].find((item) => item.provider === 'google_sheets');
+    setActionLoading(true);
+    setError(null);
+    try {
+      await api.post(`/agent-blueprints/${selectedBlueprint.id}/integrations`, {
+        integration_id: existing?.id,
+        provider: 'google_sheets',
+        status: 'active',
+        display_name: 'Google Sheets',
+        auth_ref: sheetAuthRef.trim(),
+        config: {
+          spreadsheet_id: sheetSpreadsheetId.trim(),
+          sheet_name: sheetName.trim() || 'Sheet1',
+        },
+        limits: {
+          daily_append_cap: Number(sheetDailyCap) > 0 ? Number(sheetDailyCap) : 50,
+          frequency_cap_minutes: 0,
+        },
+      });
+      await loadAgentIntegrations(selectedBlueprint.id);
+      await loadBlueprintDetails(selectedBlueprint.id);
+    } catch (requestError) {
+      console.error(requestError);
+      setError(getRequestErrorMessage(requestError, 'Не удалось подключить Google Sheets.'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const saveTelegramIntegration = async () => {
+    if (!selectedBlueprint) {
+      return;
+    }
+    const existing = [...agentIntegrations, ...availableAgentIntegrations].find((item) => item.provider === 'telegram');
+    setActionLoading(true);
+    setError(null);
+    try {
+      await api.post(`/agent-blueprints/${selectedBlueprint.id}/integrations`, {
+        integration_id: existing?.id,
+        provider: 'telegram',
+        status: 'active',
+        display_name: 'Telegram',
+        config: {
+          bot_mode: telegramBotMode,
+        },
+        limits: {
+          daily_message_cap: Number(telegramDailyCap) > 0 ? Number(telegramDailyCap) : 50,
+          frequency_cap_minutes: 30,
+        },
+      });
+      await loadAgentIntegrations(selectedBlueprint.id);
+      await loadBlueprintDetails(selectedBlueprint.id);
+    } catch (requestError) {
+      console.error(requestError);
+      setError(getRequestErrorMessage(requestError, 'Не удалось подключить Telegram.'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const applyLegacyMigration = async () => {
     if (!currentBusinessId) {
       return;
@@ -2020,6 +2167,16 @@ export const AgentBlueprintsPage = () => {
           sourceText={sourceText}
           internalSource={internalSource}
           sourceCatalog={sourceCatalog}
+          agentIntegrations={agentIntegrations}
+          availableAgentIntegrations={availableAgentIntegrations}
+          agentIntegrationCatalog={agentIntegrationCatalog}
+          agentExternalAuthOptions={agentExternalAuthOptions}
+          sheetSpreadsheetId={sheetSpreadsheetId}
+          sheetName={sheetName}
+          sheetAuthRef={sheetAuthRef}
+          sheetDailyCap={sheetDailyCap}
+          telegramBotMode={telegramBotMode}
+          telegramDailyCap={telegramDailyCap}
           runSource={runSource}
           runCity={runCity}
           runCategory={runCategory}
@@ -2049,6 +2206,14 @@ export const AgentBlueprintsPage = () => {
           onAddInternalSource={addInternalSource}
           onAddCatalogSource={addInternalSourceByKey}
           onAddFileSource={addFileSource}
+          onSheetSpreadsheetIdChange={setSheetSpreadsheetId}
+          onSheetNameChange={setSheetName}
+          onSheetAuthRefChange={setSheetAuthRef}
+          onSheetDailyCapChange={setSheetDailyCap}
+          onTelegramBotModeChange={setTelegramBotMode}
+          onTelegramDailyCapChange={setTelegramDailyCap}
+          onSaveSheetIntegration={saveSheetIntegration}
+          onSaveTelegramIntegration={saveTelegramIntegration}
           onRunSourceChange={setRunSource}
           onRunCityChange={setRunCity}
           onRunCategoryChange={setRunCategory}
@@ -2823,6 +2988,16 @@ const AgentDetailPanel = ({
   sourceText,
   internalSource,
   sourceCatalog,
+  agentIntegrations,
+  availableAgentIntegrations,
+  agentIntegrationCatalog,
+  agentExternalAuthOptions,
+  sheetSpreadsheetId,
+  sheetName,
+  sheetAuthRef,
+  sheetDailyCap,
+  telegramBotMode,
+  telegramDailyCap,
   runSource,
   runCity,
   runCategory,
@@ -2852,6 +3027,14 @@ const AgentDetailPanel = ({
   onAddInternalSource,
   onAddCatalogSource,
   onAddFileSource,
+  onSheetSpreadsheetIdChange,
+  onSheetNameChange,
+  onSheetAuthRefChange,
+  onSheetDailyCapChange,
+  onTelegramBotModeChange,
+  onTelegramDailyCapChange,
+  onSaveSheetIntegration,
+  onSaveTelegramIntegration,
   onRunSourceChange,
   onRunCityChange,
   onRunCategoryChange,
@@ -2878,6 +3061,16 @@ const AgentDetailPanel = ({
   sourceText: string;
   internalSource: string;
   sourceCatalog: AgentSourceCatalogItem[];
+  agentIntegrations: AgentIntegration[];
+  availableAgentIntegrations: AgentIntegration[];
+  agentIntegrationCatalog: AgentIntegrationCatalogItem[];
+  agentExternalAuthOptions: AgentExternalAuthOption[];
+  sheetSpreadsheetId: string;
+  sheetName: string;
+  sheetAuthRef: string;
+  sheetDailyCap: string;
+  telegramBotMode: string;
+  telegramDailyCap: string;
   runSource: string;
   runCity: string;
   runCategory: string;
@@ -2907,6 +3100,14 @@ const AgentDetailPanel = ({
   onAddInternalSource: () => void;
   onAddCatalogSource: (sourceKey: string) => void;
   onAddFileSource: (file?: File | null) => void;
+  onSheetSpreadsheetIdChange: (value: string) => void;
+  onSheetNameChange: (value: string) => void;
+  onSheetAuthRefChange: (value: string) => void;
+  onSheetDailyCapChange: (value: string) => void;
+  onTelegramBotModeChange: (value: string) => void;
+  onTelegramDailyCapChange: (value: string) => void;
+  onSaveSheetIntegration: () => void;
+  onSaveTelegramIntegration: () => void;
   onRunSourceChange: (value: string) => void;
   onRunCityChange: (value: string) => void;
   onRunCategoryChange: (value: string) => void;
@@ -2946,6 +3147,16 @@ const AgentDetailPanel = ({
         sourceText={sourceText}
         internalSource={internalSource}
         sourceCatalog={sourceCatalog}
+        agentIntegrations={agentIntegrations}
+        availableAgentIntegrations={availableAgentIntegrations}
+        agentIntegrationCatalog={agentIntegrationCatalog}
+        agentExternalAuthOptions={agentExternalAuthOptions}
+        sheetSpreadsheetId={sheetSpreadsheetId}
+        sheetName={sheetName}
+        sheetAuthRef={sheetAuthRef}
+        sheetDailyCap={sheetDailyCap}
+        telegramBotMode={telegramBotMode}
+        telegramDailyCap={telegramDailyCap}
         review={agentReview}
         actionLoading={actionLoading}
         onSetupDataSourcesChange={onSetupDataSourcesChange}
@@ -2964,6 +3175,14 @@ const AgentDetailPanel = ({
         onAddInternalSource={onAddInternalSource}
         onAddCatalogSource={onAddCatalogSource}
         onAddFileSource={onAddFileSource}
+        onSheetSpreadsheetIdChange={onSheetSpreadsheetIdChange}
+        onSheetNameChange={onSheetNameChange}
+        onSheetAuthRefChange={onSheetAuthRefChange}
+        onSheetDailyCapChange={onSheetDailyCapChange}
+        onTelegramBotModeChange={onTelegramBotModeChange}
+        onTelegramDailyCapChange={onTelegramDailyCapChange}
+        onSaveSheetIntegration={onSaveSheetIntegration}
+        onSaveTelegramIntegration={onSaveTelegramIntegration}
       />
     ) : null}
 
@@ -3160,6 +3379,16 @@ const AgentWorkspacePanel = ({
   sourceText,
   internalSource,
   sourceCatalog,
+  agentIntegrations,
+  availableAgentIntegrations,
+  agentIntegrationCatalog,
+  agentExternalAuthOptions,
+  sheetSpreadsheetId,
+  sheetName,
+  sheetAuthRef,
+  sheetDailyCap,
+  telegramBotMode,
+  telegramDailyCap,
   review,
   actionLoading,
   onSetupDataSourcesChange,
@@ -3178,6 +3407,14 @@ const AgentWorkspacePanel = ({
   onAddInternalSource,
   onAddCatalogSource,
   onAddFileSource,
+  onSheetSpreadsheetIdChange,
+  onSheetNameChange,
+  onSheetAuthRefChange,
+  onSheetDailyCapChange,
+  onTelegramBotModeChange,
+  onTelegramDailyCapChange,
+  onSaveSheetIntegration,
+  onSaveTelegramIntegration,
 }: {
   versions: Array<Record<string, unknown>>;
   learningEvents: AgentLearningEvent[];
@@ -3194,6 +3431,16 @@ const AgentWorkspacePanel = ({
   sourceText: string;
   internalSource: string;
   sourceCatalog: AgentSourceCatalogItem[];
+  agentIntegrations: AgentIntegration[];
+  availableAgentIntegrations: AgentIntegration[];
+  agentIntegrationCatalog: AgentIntegrationCatalogItem[];
+  agentExternalAuthOptions: AgentExternalAuthOption[];
+  sheetSpreadsheetId: string;
+  sheetName: string;
+  sheetAuthRef: string;
+  sheetDailyCap: string;
+  telegramBotMode: string;
+  telegramDailyCap: string;
   review: AgentReview | null;
   actionLoading: boolean;
   onSetupDataSourcesChange: (value: string) => void;
@@ -3212,6 +3459,14 @@ const AgentWorkspacePanel = ({
   onAddInternalSource: () => void;
   onAddCatalogSource: (sourceKey: string) => void;
   onAddFileSource: (file?: File | null) => void;
+  onSheetSpreadsheetIdChange: (value: string) => void;
+  onSheetNameChange: (value: string) => void;
+  onSheetAuthRefChange: (value: string) => void;
+  onSheetDailyCapChange: (value: string) => void;
+  onTelegramBotModeChange: (value: string) => void;
+  onTelegramDailyCapChange: (value: string) => void;
+  onSaveSheetIntegration: () => void;
+  onSaveTelegramIntegration: () => void;
 }) => (
   <DashboardSection
     title="Настройка агента"
@@ -3302,6 +3557,27 @@ const AgentWorkspacePanel = ({
             onConnect={onAddCatalogSource}
           />
           <AgentSourcesList sources={review?.sources || []} />
+          <AgentIntegrationsPanel
+            integrations={agentIntegrations}
+            availableIntegrations={availableAgentIntegrations}
+            providerCatalog={agentIntegrationCatalog}
+            authOptions={agentExternalAuthOptions}
+            sheetSpreadsheetId={sheetSpreadsheetId}
+            sheetName={sheetName}
+            sheetAuthRef={sheetAuthRef}
+            sheetDailyCap={sheetDailyCap}
+            telegramBotMode={telegramBotMode}
+            telegramDailyCap={telegramDailyCap}
+            actionLoading={actionLoading}
+            onSheetSpreadsheetIdChange={onSheetSpreadsheetIdChange}
+            onSheetNameChange={onSheetNameChange}
+            onSheetAuthRefChange={onSheetAuthRefChange}
+            onSheetDailyCapChange={onSheetDailyCapChange}
+            onTelegramBotModeChange={onTelegramBotModeChange}
+            onTelegramDailyCapChange={onTelegramDailyCapChange}
+            onSaveSheetIntegration={onSaveSheetIntegration}
+            onSaveTelegramIntegration={onSaveTelegramIntegration}
+          />
         </div>
       </div>
     </div>
@@ -3469,6 +3745,179 @@ const AgentSourcesList = ({ sources, compact = false }: { sources: AgentSource[]
     )}
   </div>
 );
+
+const AgentIntegrationsPanel = ({
+  integrations,
+  availableIntegrations,
+  providerCatalog,
+  authOptions,
+  sheetSpreadsheetId,
+  sheetName,
+  sheetAuthRef,
+  sheetDailyCap,
+  telegramBotMode,
+  telegramDailyCap,
+  actionLoading,
+  onSheetSpreadsheetIdChange,
+  onSheetNameChange,
+  onSheetAuthRefChange,
+  onSheetDailyCapChange,
+  onTelegramBotModeChange,
+  onTelegramDailyCapChange,
+  onSaveSheetIntegration,
+  onSaveTelegramIntegration,
+}: {
+  integrations: AgentIntegration[];
+  availableIntegrations: AgentIntegration[];
+  providerCatalog: AgentIntegrationCatalogItem[];
+  authOptions: AgentExternalAuthOption[];
+  sheetSpreadsheetId: string;
+  sheetName: string;
+  sheetAuthRef: string;
+  sheetDailyCap: string;
+  telegramBotMode: string;
+  telegramDailyCap: string;
+  actionLoading: boolean;
+  onSheetSpreadsheetIdChange: (value: string) => void;
+  onSheetNameChange: (value: string) => void;
+  onSheetAuthRefChange: (value: string) => void;
+  onSheetDailyCapChange: (value: string) => void;
+  onTelegramBotModeChange: (value: string) => void;
+  onTelegramDailyCapChange: (value: string) => void;
+  onSaveSheetIntegration: () => void;
+  onSaveTelegramIntegration: () => void;
+}) => {
+  const sheetIntegration = integrations.find((item) => item.provider === 'google_sheets');
+  const telegramIntegration = integrations.find((item) => item.provider === 'telegram');
+  return (
+    <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Внешние границы</div>
+          <div className="mt-1 text-xs leading-5 text-slate-500">Trigger и write capabilities, которые compiled workflow может использовать только через approval/audit.</div>
+        </div>
+        <span className="shrink-0 text-xs text-slate-400">{integrations.length}/{providerCatalog.length || 2}</span>
+      </div>
+
+      <div className="grid gap-2">
+        <AgentIntegrationStatusItem integration={telegramIntegration} provider="telegram" fallbackTitle="Telegram trigger" />
+        <AgentIntegrationStatusItem integration={sheetIntegration} provider="google_sheets" fallbackTitle="Google Sheets append" />
+      </div>
+
+      <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
+          <MessageSquareText className="h-4 w-4" />
+          Telegram
+        </div>
+        <select
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+          value={telegramBotMode}
+          onChange={(event) => onTelegramBotModeChange(event.target.value)}
+        >
+          <option value="business_bot">Бот бизнеса</option>
+          <option value="global_control_bot">Глобальный control bot</option>
+        </select>
+        <input
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+          value={telegramDailyCap}
+          onChange={(event) => onTelegramDailyCapChange(event.target.value)}
+          placeholder="Лимит сообщений в день"
+          inputMode="numeric"
+        />
+        <Button type="button" size="sm" variant="outline" onClick={onSaveTelegramIntegration} disabled={actionLoading}>
+          Подключить Telegram
+        </Button>
+      </div>
+
+      <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
+          <Database className="h-4 w-4" />
+          Google Sheets
+        </div>
+        <input
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+          value={sheetSpreadsheetId}
+          onChange={(event) => onSheetSpreadsheetIdChange(event.target.value)}
+          placeholder="Spreadsheet ID"
+        />
+        <div className="grid gap-2 sm:grid-cols-2">
+          <input
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+            value={sheetName}
+            onChange={(event) => onSheetNameChange(event.target.value)}
+            placeholder="Sheet1"
+          />
+          <input
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+            value={sheetDailyCap}
+            onChange={(event) => onSheetDailyCapChange(event.target.value)}
+            placeholder="Лимит append в день"
+            inputMode="numeric"
+          />
+        </div>
+        <select
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+          value={sheetAuthRef}
+          onChange={(event) => onSheetAuthRefChange(event.target.value)}
+        >
+          <option value="">Credentials позже / manual auth_ref</option>
+          {authOptions.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.display_name || humanizeMeta(option.source)} · {option.id.slice(0, 8)}
+            </option>
+          ))}
+        </select>
+        <Button type="button" size="sm" onClick={onSaveSheetIntegration} disabled={actionLoading || !sheetSpreadsheetId.trim()}>
+          Подключить Google Sheets
+        </Button>
+      </div>
+
+      {availableIntegrations.length ? (
+        <div className="space-y-1">
+          <div className="text-xs font-semibold text-slate-700">Доступны в бизнесе</div>
+          {availableIntegrations.slice(0, 3).map((integration) => (
+            <AgentIntegrationStatusItem key={integration.id} integration={integration} provider={integration.provider} fallbackTitle={integration.display_name || integration.provider_label || integration.provider} />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+const AgentIntegrationStatusItem = ({
+  integration,
+  provider,
+  fallbackTitle,
+}: {
+  integration?: AgentIntegration;
+  provider: string;
+  fallbackTitle: string;
+}) => {
+  const boundary = integration?.execution_boundary || {};
+  const boundaryItems = [
+    ...(boundary.triggers || []),
+    ...(boundary.capabilities || []),
+  ];
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-medium text-slate-950">{integration?.display_name || integration?.provider_label || fallbackTitle}</div>
+          <div className="mt-1 text-xs text-slate-500">{provider === 'google_sheets' ? 'approved external write' : 'trigger / delivery boundary'}</div>
+        </div>
+        <StatusBadge status={integration?.status || 'draft'} />
+      </div>
+      <div className="mt-2 text-xs leading-5 text-slate-600">
+        {boundaryItems.length ? boundaryItems.slice(0, 3).join(', ') : 'capability не подключена'}
+      </div>
+      {integration?.has_auth_ref ? (
+        <div className="mt-1 text-xs text-emerald-700">credentials linked</div>
+      ) : provider === 'google_sheets' ? (
+        <div className="mt-1 text-xs text-amber-700">credentials required before provider executor can write</div>
+      ) : null}
+    </div>
+  );
+};
 
 const VersionSummary = ({
   versions,
