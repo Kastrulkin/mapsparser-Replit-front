@@ -461,10 +461,14 @@ class ProspectingService:
         return cls._extract_services_list(item, limit=limit)
 
     @classmethod
-    def _extract_reviews_preview(cls, item: Dict[str, Any], limit: int = 30) -> List[Dict[str, Any]]:
+    def _extract_reviews_preview(cls, item: Dict[str, Any], limit: Optional[int] = None) -> List[Dict[str, Any]]:
         raw_reviews = item.get("reviews")
         if not isinstance(raw_reviews, list):
             return []
+
+        clean_limit = limit
+        if clean_limit is None:
+            clean_limit = max(1, int(os.environ.get("APIFY_REVIEWS_PREVIEW_LIMIT", "100") or 100))
 
         reviews: List[Dict[str, Any]] = []
         for entry in raw_reviews:
@@ -485,7 +489,7 @@ class ProspectingService:
                     ),
                 }
             )
-            if len(reviews) >= max(1, limit):
+            if len(reviews) >= max(1, clean_limit):
                 break
         return reviews
 
