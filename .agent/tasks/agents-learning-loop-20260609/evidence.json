@@ -15,11 +15,13 @@
         "Architecture docs define Learning Loop v1.",
         "py_compile passed.",
         "tests/test_agent_blueprint_layer.py passed with 43 tests.",
-        "npm run build passed."
+        "npm run build passed.",
+        "Backend deployed to /opt/seo-app/src and app/worker restarted.",
+        "Frontend dist deployed with live asset /assets/index-DrgkSUe8.js.",
+        "Production checks passed: docker compose ps, app logs, curl -I http://localhost:8000, live frontend asset smoke.",
+        "Production route/source smoke passed: feedback route is registered as POST; container source contains agent_learning_loop_v1 and auto_activate."
       ],
-      "gaps": [
-        "Production deploy verification pending."
-      ]
+      "gaps": []
     }
   ],
   "changed_files": [
@@ -33,9 +35,14 @@
     "PYTHONPATH=src python3 -m py_compile src/api/agent_blueprints_api.py src/services/agent_blueprint_workspace.py",
     "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py",
     "cd frontend && npm run build",
+    "ssh ... \"cd /opt/seo-app && docker compose restart app worker\"",
+    "bash scripts/deploy_frontend_dist.sh --build",
+    "ssh ... \"cd /opt/seo-app && docker compose ps && curl -I http://localhost:8000 && docker compose exec -T app python3 - <<'PY' ...\"",
     "scripts/proof_loop.sh validate agents-learning-loop-20260609"
   ],
-  "known_gaps": [
-    "Production deploy verification pending."
+  "known_gaps": [],
+  "deployment_notes": [
+    "Frontend deploy emitted transient tar file-changed warnings during archive streaming, but final verification passed.",
+    "frontend/public/yandex_9f7f92ca02ef161c.html was included in generated dist because it exists in Vite public, but it remains untracked and uncommitted."
   ]
 }

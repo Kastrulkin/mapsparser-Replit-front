@@ -1,9 +1,25 @@
 No integration test output captured yet.
-Integration smoke is deferred until production deploy.
+Production integration smoke passed on 2026-06-09.
 
-Planned checks:
+Commands:
+- cd /opt/seo-app && docker compose restart app worker
+- bash scripts/deploy_frontend_dist.sh --build
 - cd /opt/seo-app && docker compose ps
-- cd /opt/seo-app && docker compose logs --since 15m app
+- cd /opt/seo-app && docker compose logs --since 10m app
 - cd /opt/seo-app && curl -I http://localhost:8000
-- live route/source smoke for /api/agent-runs/<run_id>/feedback
-- frontend asset smoke for AgentBlueprintsPage bundle
+- cd /opt/seo-app && docker compose exec -T app python3 route/source smoke
+- cd /opt/seo-app && curl live frontend asset checks
+
+Results:
+- app and worker restarted successfully.
+- app/postgres/worker are running; postgres is healthy.
+- app logs show Postgres ready, migrations done, Flask serving on port 8000.
+- curl -I http://localhost:8000 returned HTTP/1.1 200 OK.
+- live local and public HTML reference /assets/index-DrgkSUe8.js and /assets/index-DFXO9Mj7.css.
+- route/source smoke returned:
+  - AGENT_RUN_FEEDBACK_ROUTE ['POST']
+  - LEARNING_LOOP_SOURCE_PRESENT True
+  - AUTO_ACTIVATE_SOURCE_PRESENT True
+
+Notes:
+- Frontend deploy emitted transient tar file-changed warnings, but final verification passed.
