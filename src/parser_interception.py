@@ -521,6 +521,8 @@ class YandexMapsInterceptionParser:
                                     "data": json_data,
                                     "status": response.status,
                                     "headers": dict(response.headers),
+                                    "request_headers": dict(response.request.headers),
+                                    "request_method": response.request.method,
                                 }
                                 # Показываем только важные запросы
                                 if any(
@@ -719,14 +721,52 @@ class YandexMapsInterceptionParser:
             if reviews_tab:
                 print("💬 Переходим во вкладку Отзывы...")
                 _human_click(reviews_tab)
+                _human_pause(900, 1800)
+
+                # Yandex signs each fetchReviews page request with a per-query `s`
+                # parameter. The reliable way to get all pages is to let the UI
+                # generate requests while scrolling the sidebar container.
+                try:
+                    try:
+                        page.wait_for_selector(".rating-ranking-view", timeout=6000)
+                    except Exception:
+                        page.mouse.wheel(0, 1200)
+                        _human_pause(700, 1400)
+                    ranking_button = page.query_selector(".rating-ranking-view") or page.query_selector("text=По умолчанию")
+                    if ranking_button:
+                        _human_click(ranking_button)
+                        _human_pause(500, 1200)
+                        by_time_button = page.query_selector("text=По новизне")
+                        if by_time_button:
+                            print("↕️ Сортируем отзывы по новизне для полной догрузки...")
+                            _human_click(by_time_button)
+                            _human_pause(1200, 2600)
+                except Exception:
+                    pass
 
                 # Скроллим отзывы (очень агрессивно)
                 print("📜 Скроллим отзывы (глубокий скролл - загрузка всех)...")
                 for i in range(80):  # Increased to 80
                     # Random scroll amount
                     delta = random.randint(2000, 4000)
+                    try:
+                        page.mouse.move(random.randint(260, 440), random.randint(720, 860))
+                    except Exception:
+                        pass
                     page.mouse.wheel(0, delta)
-                    page.evaluate(f"window.scrollBy(0, {delta//2})")  # JS scroll helper
+                    try:
+                        page.evaluate(
+                            """(delta) => {
+                                const container = document.querySelector(".scroll__container");
+                                if (container) {
+                                    container.scrollTop += delta;
+                                }
+                                window.scrollBy(0, Math.floor(delta / 2));
+                            }""",
+                            delta,
+                        )
+                    except Exception:
+                        pass
 
                     _human_pause(320, 1200)
 
@@ -737,7 +777,7 @@ class YandexMapsInterceptionParser:
                         page.mouse.wheel(0, 500)
 
                     # Move mouse to trigger hover events
-                    page.mouse.move(random.randint(100, 800), random.randint(100, 800))
+                    page.mouse.move(random.randint(180, 620), random.randint(240, 860))
 
                     # Пытаемся кликнуть "Показать еще" если есть
                     try:
@@ -748,6 +788,7 @@ class YandexMapsInterceptionParser:
                             _human_click(more_btn)
                     except Exception:
                         pass
+
             else:
                 print("ℹ️ Вкладка Отзывы не найдена (селектор)")
         except Exception as e:
@@ -1321,8 +1362,22 @@ class YandexMapsInterceptionParser:
                 reviews = self._extract_reviews_from_api(json_data, url)
                 if reviews:
                     print(f"✅ Извлечено {len(reviews)} отзывов из API запроса")
-                    data['reviews'] = reviews
-                    data['reviews_count'] = len(reviews)
+                    merged_reviews = data.get('reviews') if isinstance(data.get('reviews'), list) else []
+                    seen_reviews = {
+                        f"{item.get('id') or ''}|{item.get('author') or ''}|{item.get('text') or ''}"
+                        for item in merged_reviews
+                        if isinstance(item, dict)
+                    }
+                    for review in reviews:
+                        if not isinstance(review, dict):
+                            continue
+                        review_key = f"{review.get('id') or ''}|{review.get('author') or ''}|{review.get('text') or ''}"
+                        if review_key in seen_reviews:
+                            continue
+                        seen_reviews.add(review_key)
+                        merged_reviews.append(review)
+                    data['reviews'] = merged_reviews
+                    data['reviews_count'] = len(merged_reviews)
             
             # Специальная обработка для location-info API
             elif 'location-info' in url:
@@ -2012,6 +2067,7 @@ class YandexMapsInterceptionParser:
             
             if text:
                 review_data = {
+                    'id': item.get('reviewId') or item.get('id'),
                     'author': author_name or 'Анонимный пользователь',
                     'rating': rating,
                     'text': text,
@@ -2076,7 +2132,7 @@ class YandexMapsInterceptionParser:
                     reviews.append(review)
         
         return reviews
-    
+
     def _extract_reviews(self, json_data: Any) -> List[Dict[str, Any]]:
         """Извлекает отзывы из JSON (общий метод)"""
         reviews = []
