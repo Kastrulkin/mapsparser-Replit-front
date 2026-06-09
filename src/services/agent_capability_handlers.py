@@ -292,6 +292,7 @@ def _ensure_service_optimization_request_table(cursor: Any) -> None:
             status TEXT NOT NULL,
             service_count INTEGER NOT NULL DEFAULT 0,
             suggestions_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+            diff_json JSONB NOT NULL DEFAULT '[]'::jsonb,
             apply_state TEXT NOT NULL DEFAULT 'not_applied',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -300,6 +301,12 @@ def _ensure_service_optimization_request_table(cursor: Any) -> None:
     )
     cursor.execute(
         "CREATE INDEX IF NOT EXISTS idx_agent_service_optimization_requests_business_status ON agent_service_optimization_requests(business_id, status, created_at DESC)"
+    )
+    cursor.execute(
+        """
+        ALTER TABLE agent_service_optimization_requests
+        ADD COLUMN IF NOT EXISTS diff_json JSONB NOT NULL DEFAULT '[]'::jsonb
+        """
     )
 
 
@@ -662,6 +669,37 @@ def _service_suggestion(service: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _service_visual_diff(suggestions: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
+    diff = []
+    for suggestion in suggestions:
+        changed_fields = []
+        current_name = str(suggestion.get("current_name") or "").strip()
+        proposed_name = str(suggestion.get("proposed_name") or "").strip()
+        current_description = str(suggestion.get("current_description") or "").strip()
+        proposed_description = str(suggestion.get("proposed_description") or "").strip()
+        if current_name != proposed_name:
+            changed_fields.append("name")
+        if current_description != proposed_description:
+            changed_fields.append("description")
+        diff.append(
+            {
+                "service_id": str(suggestion.get("service_id") or "").strip(),
+                "changed_fields": changed_fields,
+                "before": {
+                    "name": current_name,
+                    "description": current_description,
+                },
+                "after": {
+                    "name": proposed_name,
+                    "description": proposed_description,
+                },
+                "apply_state": str(suggestion.get("apply_state") or "not_applied"),
+                "requires_manual_approval": True,
+            }
+        )
+    return diff
+
+
 def _handle_reviews_reply_draft(envelope: Dict[str, Any], user_data: Dict[str, Any]) -> Dict[str, Any]:
     payload = _payload(envelope)
     review_text = str(payload.get("review") or payload.get("review_text") or "").strip()
@@ -765,21 +803,23 @@ def _handle_services_optimize(envelope: Dict[str, Any], user_data: Dict[str, Any
             if inline_name:
                 services = [{"id": "", "name": inline_name, "description": inline_description, "category": "", "price": ""}]
         suggestions = [_service_suggestion(service) for service in services]
+        visual_diff = _service_visual_diff(suggestions)
         request_id = _stable_id("agent_service_optimization_request", action_id)
         cursor.execute(
             """
             INSERT INTO agent_service_optimization_requests (
                 id, action_id, business_id, user_id, status, service_count,
-                suggestions_json, apply_state
+                suggestions_json, diff_json, apply_state
             )
-            VALUES (%s, %s, %s, %s, 'draft_ready', %s, %s, 'not_applied')
+            VALUES (%s, %s, %s, %s, 'draft_ready', %s, %s, %s, 'not_applied')
             ON CONFLICT (action_id) DO UPDATE SET
                 service_count = EXCLUDED.service_count,
                 suggestions_json = EXCLUDED.suggestions_json,
+                diff_json = EXCLUDED.diff_json,
                 updated_at = CURRENT_TIMESTAMP
             RETURNING id
             """,
-            (request_id, action_id, tenant_id, user_id, len(suggestions), _json_dumps(suggestions)),
+            (request_id, action_id, tenant_id, user_id, len(suggestions), _json_dumps(suggestions), _json_dumps(visual_diff)),
         )
         row = cursor.fetchone()
         request_id = str((row.get("id") if isinstance(row, dict) else row[0]) or request_id)
@@ -794,6 +834,7 @@ def _handle_services_optimize(envelope: Dict[str, Any], user_data: Dict[str, Any
         request_id=request_id,
         service_count=len(suggestions),
         suggestions=suggestions,
+        visual_diff=visual_diff,
         apply_performed=False,
         provider_write_performed=False,
         manual_apply_required=True,

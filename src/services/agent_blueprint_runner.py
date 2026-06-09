@@ -1195,7 +1195,7 @@ class AgentBlueprintRunner:
         rows = self._select_domain_request_rows(
             "agent_service_optimization_requests",
             """
-            SELECT id, action_id, status, service_count, suggestions_json,
+            SELECT id, action_id, status, service_count, suggestions_json, diff_json,
                    apply_state, created_at
             FROM agent_service_optimization_requests
             WHERE business_id = %s AND (id = ANY(%s) OR action_id = ANY(%s))
@@ -1225,6 +1225,7 @@ class AgentBlueprintRunner:
                     "apply_state": apply_state or row.get("apply_state"),
                     "why_waiting": waiting_reason,
                     "suggestions": parse_json_field(row.get("suggestions_json"), []),
+                    "visual_diff": parse_json_field(row.get("diff_json"), []),
                     "provider_write_performed": False,
                     "created_at": row.get("created_at"),
                 }

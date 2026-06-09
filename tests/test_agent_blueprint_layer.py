@@ -141,6 +141,14 @@ def test_custom_agent_integration_migration_creates_expected_tables():
     assert "20260609_001" in migration
 
 
+def test_agent_service_optimization_diff_migration_adds_visual_diff_column():
+    migration = Path("alembic_migrations/versions/20260609_add_agent_service_optimization_diff.py").read_text(encoding="utf-8")
+
+    assert "ADD COLUMN IF NOT EXISTS diff_json JSONB" in migration
+    assert "20260609_003" in migration
+    assert "20260609_002" in migration
+
+
 def test_default_supervised_outreach_template_has_approval_gates():
     from services.agent_blueprint_runner import default_supervised_outreach_version_payload
 
@@ -619,7 +627,11 @@ def test_review_publish_and_service_optimize_capabilities_create_safe_local_reco
     assert optimize["result"]["manual_apply_required"] is True
     assert optimize["result"]["provider_write_performed"] is False
     assert optimize["result"]["suggestions"][0]["requires_manual_approval"] is True
+    assert optimize["result"]["visual_diff"][0]["changed_fields"]
+    assert optimize["result"]["visual_diff"][0]["before"]["name"] == "Стрижка"
+    assert optimize["result"]["visual_diff"][0]["after"]["name"]
     assert db.cursor_instance.inserted["agent_service_optimization_requests"]["apply_state"] == "not_applied"
+    assert db.cursor_instance.inserted["agent_service_optimization_requests"]["diff_json"][0]["changed_fields"]
 
 
 def test_billing_capabilities_delegate_to_credit_reservation_layer(monkeypatch):
@@ -791,6 +803,62 @@ def test_approved_domain_executor_moves_sheet_request_after_human_gate():
     assert cursor.ledger_entries[0]["action_type"] == "agent_domain_request_approved"
     assert cursor.ledger_entries[0]["status"] == "approved_pending_provider_executor"
     assert cursor.ledger_entries[0]["metadata"]["run_id"] == "run1"
+
+
+def test_approved_domain_executor_applies_service_optimization_to_localos_data():
+    from services.agent_domain_request_executors import execute_approved_domain_requests
+
+    cursor = FakeApprovedDomainExecutorCursor()
+    cursor.tables["agent_service_optimization_requests"]["service-request-1"] = {
+        "id": "service-request-1",
+        "business_id": "biz1",
+        "action_id": "action-services",
+        "status": "approved_for_apply",
+        "service_count": 1,
+        "suggestions_json": [
+            {
+                "service_id": "svc1",
+                "current_name": "Стрижка",
+                "current_description": "Классическая стрижка",
+                "proposed_name": "Стрижка · Парикмахерские услуги",
+                "proposed_description": "Стрижка: кратко опишите результат услуги, длительность и кому она подходит.",
+            }
+        ],
+        "diff_json": [],
+        "apply_state": "apply_ready",
+    }
+    cursor.tables["userservices"]["svc1"] = {
+        "id": "svc1",
+        "business_id": "biz1",
+        "name": "Стрижка",
+        "description": "Классическая стрижка",
+        "optimized_name": "",
+        "optimized_description": "",
+    }
+
+    result = execute_approved_domain_requests(
+        cursor,
+        run={"id": "run1", "business_id": "biz1"},
+        step={"key": "apply_services"},
+        orchestrator_result={
+            "action_id": "action-services",
+            "result": {"request_id": "service-request-1"},
+        },
+        user_data={"user_id": "user1"},
+    )
+
+    request = cursor.tables["agent_service_optimization_requests"]["service-request-1"]
+    service = cursor.tables["userservices"]["svc1"]
+    assert result["executed"] == 1
+    assert result["items"][0]["kind"] == "service_optimization_request"
+    assert result["items"][0]["apply_state"] == "applied"
+    assert result["items"][0]["applied_count"] == 1
+    assert request["status"] == "applied"
+    assert request["apply_state"] == "applied"
+    assert service["optimized_name"] == "Стрижка · Парикмахерские услуги"
+    assert service["optimized_description"].startswith("Стрижка:")
+    assert cursor.ledger_entries[0]["capability"] == "services.optimize"
+    assert cursor.ledger_entries[0]["metadata"]["provider_write_performed"] is False
 
 
 def test_telegram_trigger_runtime_records_ignored_event_when_no_custom_blueprint():
@@ -2647,6 +2715,7 @@ class FakeCapabilityCursor:
             normalized_query.startswith("create table")
             or normalized_query.startswith("create index")
             or normalized_query.startswith("create unique index")
+            or normalized_query.startswith("alter table")
         ):
             return None
         if normalized_query.startswith("select to_regclass"):
@@ -2781,6 +2850,7 @@ class FakeCapabilityCursor:
                 "status": "draft_ready",
                 "service_count": params[4],
                 "suggestions_json": json.loads(params[5]),
+                "diff_json": json.loads(params[6]),
                 "apply_state": "not_applied",
             }
             self.description = [("id",)]
@@ -2825,6 +2895,7 @@ class FakeApprovedDomainExecutorCursor:
             "reviewreplydrafts": {},
             "agent_service_optimization_requests": {},
             "agent_action_ledger": {},
+            "userservices": {},
         }
         self.last_result = None
         self.last_results = []
@@ -2836,6 +2907,13 @@ class FakeApprovedDomainExecutorCursor:
         if normalized_query.startswith("select to_regclass"):
             table_name = str(params[0])
             self.last_result = (table_name if table_name in self.tables else None,)
+            return None
+        if "from information_schema.columns" in normalized_query:
+            table_name = str(params[0])
+            columns = {
+                "userservices": ["id", "business_id", "optimized_name", "optimized_description", "updated_at"],
+            }.get(table_name, [])
+            self.last_results = [(column,) for column in columns]
             return None
         if normalized_query.startswith("select id, action_id, status, approval_state"):
             business_id = params[0]
@@ -2854,7 +2932,14 @@ class FakeApprovedDomainExecutorCursor:
             self.last_results = []
             return None
         if "from agent_service_optimization_requests" in normalized_query:
-            self.last_results = []
+            business_id = params[0]
+            request_ids = set(params[1])
+            action_ids = set(params[2])
+            self.last_results = [
+                row
+                for row in self.tables["agent_service_optimization_requests"].values()
+                if row.get("business_id") == business_id and (row.get("id") in request_ids or row.get("action_id") in action_ids)
+            ]
             return None
         if normalized_query.startswith("update agent_sheet_operation_requests"):
             request = self.tables["agent_sheet_operation_requests"].get(params[0])
@@ -2862,6 +2947,20 @@ class FakeApprovedDomainExecutorCursor:
                 request["status"] = "approved_for_execution"
                 request["approval_state"] = "approved"
                 request["apply_state"] = "approved_not_applied"
+            return None
+        if normalized_query.startswith("update userservices"):
+            service = self.tables["userservices"].get(params[2])
+            if service and service.get("business_id") == params[3]:
+                if params[0]:
+                    service["optimized_name"] = params[0]
+                if params[1]:
+                    service["optimized_description"] = params[1]
+            return None
+        if normalized_query.startswith("update agent_service_optimization_requests"):
+            request = self.tables["agent_service_optimization_requests"].get(params[2])
+            if request and request.get("business_id") == params[3] and request.get("apply_state") != "applied":
+                request["status"] = params[0]
+                request["apply_state"] = params[1]
             return None
         if (
             normalized_query.startswith("create table")

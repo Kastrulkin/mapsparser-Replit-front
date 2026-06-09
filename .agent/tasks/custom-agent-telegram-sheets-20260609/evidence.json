@@ -86,6 +86,18 @@
         "tests/test_agent_blueprint_layer.py::test_approved_domain_executor_moves_sheet_request_after_human_gate"
       ],
       "gaps": []
+    },
+    {
+      "id": "AC12",
+      "text": "Services optimization requests include visual diff and apply approved drafts to LocalOS service optimization fields.",
+      "status": "PASS",
+      "proof": [
+        "alembic_migrations/versions/20260609_add_agent_service_optimization_diff.py",
+        "src/services/agent_capability_handlers.py::_service_visual_diff",
+        "src/services/agent_domain_request_executors.py::_apply_service_suggestions",
+        "tests/test_agent_blueprint_layer.py::test_approved_domain_executor_applies_service_optimization_to_localos_data"
+      ],
+      "gaps": []
     }
   ],
   "changed_files": [
@@ -97,6 +109,7 @@
     "src/services/agent_capability_handlers.py",
     "src/services/agent_blueprint_runner.py",
     "src/services/agent_domain_request_executors.py",
+    "alembic_migrations/versions/20260609_add_agent_service_optimization_diff.py",
     "src/services/agent_trigger_runtime.py",
     "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
     "tests/test_agent_blueprint_layer.py"
@@ -105,6 +118,7 @@
     "PYTHONPATH=src python3 -m py_compile src/services/agent_capability_handlers.py src/services/agent_blueprint_draft_builder.py src/services/agent_trigger_runtime.py src/ai_agent_webhooks.py src/core/action_policy.py alembic_migrations/versions/20260609_add_custom_agent_integration_tables.py",
     "PYTHONPATH=src python3 -m py_compile src/services/agent_blueprint_runner.py",
     "PYTHONPATH=src python3 -m py_compile src/services/agent_domain_request_executors.py src/services/agent_blueprint_runner.py",
+    "PYTHONPATH=src python3 -m py_compile src/services/agent_capability_handlers.py src/services/agent_domain_request_executors.py src/services/agent_blueprint_runner.py alembic_migrations/versions/20260609_add_agent_service_optimization_diff.py",
     "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py",
     "npm --prefix frontend run build",
     "scripts/proof_loop.sh validate custom-agent-telegram-sheets-20260609"

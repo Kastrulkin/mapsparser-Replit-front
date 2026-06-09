@@ -258,7 +258,7 @@ def _approve_service_optimization_requests(cursor: Any, business_id: str, user_i
         cursor,
         "agent_service_optimization_requests",
         """
-        SELECT id, action_id, status, service_count, apply_state
+        SELECT id, action_id, status, service_count, suggestions_json, diff_json, apply_state
         FROM agent_service_optimization_requests
         WHERE business_id = %s AND (id = ANY(%s) OR action_id = ANY(%s))
         """,
@@ -267,15 +267,19 @@ def _approve_service_optimization_requests(cursor: Any, business_id: str, user_i
     )
     items = []
     for row in rows:
+        suggestions = _decode_json(row.get("suggestions_json"), [])
+        apply_result = _apply_service_suggestions(cursor, business_id, suggestions)
+        apply_state = "applied" if apply_result.get("applied_count") else "apply_ready"
+        status = "applied" if apply_result.get("applied_count") else "approved_for_apply"
         cursor.execute(
             """
             UPDATE agent_service_optimization_requests
-            SET status = 'approved_for_apply',
-                apply_state = 'apply_ready',
+            SET status = %s,
+                apply_state = %s,
                 updated_at = NOW()
             WHERE id = %s AND business_id = %s AND apply_state <> 'applied'
             """,
-            (row.get("id"), business_id),
+            (status, apply_state, row.get("id"), business_id),
         )
         ledger_id = _record_executor_ledger(
             cursor,
@@ -286,21 +290,96 @@ def _approve_service_optimization_requests(cursor: Any, business_id: str, user_i
             request_id=str(row.get("id") or ""),
             action_id=str(row.get("action_id") or ""),
             capability="services.optimize",
-            output_state="apply_ready",
-            summary={"service_count": row.get("service_count")},
+            output_state=apply_state,
+            summary={
+                "service_count": row.get("service_count"),
+                "applied_count": apply_result.get("applied_count"),
+                "skipped_count": apply_result.get("skipped_count"),
+            },
         )
         items.append(
             {
                 "kind": "service_optimization_request",
                 "id": row.get("id"),
                 "action_id": row.get("action_id"),
-                "status": "approved_for_apply",
-                "apply_state": "apply_ready",
+                "status": status,
+                "apply_state": apply_state,
+                "applied_count": apply_result.get("applied_count"),
+                "skipped_count": apply_result.get("skipped_count"),
                 "ledger_id": ledger_id,
                 "provider_write_performed": False,
             }
         )
     return items
+
+
+def _decode_json(value: Any, fallback: Any) -> Any:
+    if value is None:
+        return fallback
+    if isinstance(value, (dict, list)):
+        return value
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except Exception:
+            return fallback
+    return fallback
+
+
+def _table_columns(cursor: Any, table_name: str) -> set[str]:
+    cursor.execute(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND lower(table_name) = %s
+        """,
+        (str(table_name).lower(),),
+    )
+    columns = set()
+    for row in cursor.fetchall() or []:
+        value = row.get("column_name") if isinstance(row, dict) else row[0]
+        if value:
+            columns.add(str(value).lower())
+    return columns
+
+
+def _apply_service_suggestions(cursor: Any, business_id: str, suggestions: Any) -> Dict[str, Any]:
+    if not isinstance(suggestions, list) or not _table_exists(cursor, "userservices"):
+        return {"applied_count": 0, "skipped_count": 0, "applied_ids": [], "skipped_ids": []}
+    columns = _table_columns(cursor, "userservices")
+    required = {"optimized_name", "optimized_description"}
+    if not required.issubset(columns):
+        return {"applied_count": 0, "skipped_count": len(suggestions), "applied_ids": [], "skipped_ids": []}
+    applied_ids = []
+    skipped_ids = []
+    for suggestion in suggestions:
+        if not isinstance(suggestion, dict):
+            continue
+        service_id = str(suggestion.get("service_id") or "").strip()
+        proposed_name = str(suggestion.get("proposed_name") or "").strip()
+        proposed_description = str(suggestion.get("proposed_description") or "").strip()
+        if not service_id or not (proposed_name or proposed_description):
+            if service_id:
+                skipped_ids.append(service_id)
+            continue
+        cursor.execute(
+            """
+            UPDATE userservices
+            SET optimized_name = COALESCE(NULLIF(%s, ''), optimized_name),
+                optimized_description = COALESCE(NULLIF(%s, ''), optimized_description),
+                updated_at = NOW()
+            WHERE id = %s AND business_id = %s
+            """,
+            (proposed_name, proposed_description, service_id, business_id),
+        )
+        applied_ids.append(service_id)
+    return {
+        "applied_count": len(applied_ids),
+        "skipped_count": len(skipped_ids),
+        "applied_ids": applied_ids,
+        "skipped_ids": skipped_ids,
+    }
 
 
 def _record_executor_ledger(
