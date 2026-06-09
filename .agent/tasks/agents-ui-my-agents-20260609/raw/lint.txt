@@ -1,0 +1,5 @@
+git diff --check -- docs/LOCALOS_AGENT_ARCHITECTURE_V1.md frontend/src/pages/dashboard/AgentBlueprintsPage.tsx src/api/agent_blueprints_api.py tests/test_agent_blueprint_layer.py
+Result: PASS
+
+rg -n "\bas\b" frontend/src/pages/dashboard/AgentBlueprintsPage.tsx src/api/agent_blueprints_api.py tests/test_agent_blueprint_layer.py docs/LOCALOS_AGENT_ARCHITECTURE_V1.md
+Result: no new typecast usage in Stage 6 changes; matches are pre-existing SQL/doc text.

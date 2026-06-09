@@ -76,6 +76,14 @@ type AgentBlueprint = {
   persona?: AgentVoicePersona | null;
   voice?: AgentVoicePersona | null;
   product_agent?: ProductAgentView | null;
+  last_run_id?: string | null;
+  last_run_status?: string | null;
+  last_run_started_at?: string | null;
+  last_run_completed_at?: string | null;
+  pending_approvals_count?: number;
+  sources_count?: number;
+  journal_entries_count?: number;
+  versions_count?: number;
 };
 
 type AgentVoicePersona = {
@@ -255,7 +263,7 @@ type PersonaAgent = {
   is_active?: boolean;
 };
 
-type AgentWorkspaceMode = 'settings' | 'run' | 'results';
+type AgentWorkspaceMode = 'settings' | 'run' | 'results' | 'voice';
 
 type FeedbackVersionNotice = {
   version_number?: number;
@@ -496,9 +504,12 @@ const statusTone: Record<string, string> = {
   completed: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   running: 'bg-sky-50 text-sky-700 ring-sky-200',
   waiting_approval: 'bg-amber-50 text-amber-700 ring-amber-200',
+  needs_approval: 'bg-amber-50 text-amber-700 ring-amber-200',
   failed: 'bg-rose-50 text-rose-700 ring-rose-200',
+  error: 'bg-rose-50 text-rose-700 ring-rose-200',
   rejected: 'bg-slate-100 text-slate-700 ring-slate-200',
   draft: 'bg-slate-100 text-slate-700 ring-slate-200',
+  paused: 'bg-slate-100 text-slate-700 ring-slate-200',
   queued_for_dispatch: 'bg-amber-50 text-amber-700 ring-amber-200',
   pending: 'bg-amber-50 text-amber-700 ring-amber-200',
 };
@@ -508,9 +519,12 @@ const statusLabels: Record<string, string> = {
   completed: 'Готово',
   running: 'В работе',
   waiting_approval: 'Ждёт решения',
+  needs_approval: 'Нужно решение',
   failed: 'Ошибка',
+  error: 'Ошибка',
   rejected: 'Отклонён',
   draft: 'Черновик',
+  paused: 'Пауза',
   queued_for_dispatch: 'В очереди',
   queued_not_dispatched: 'В очереди',
   generated: 'Подготовлено',
@@ -571,6 +585,11 @@ const metaLabels: Record<string, string> = {
   missing_information: 'что уточнить',
   rules_applied: 'правила',
   feedback_notes: 'правки',
+  communications: 'коммуникации',
+  documents: 'документы',
+  tables: 'таблицы',
+  outreach: 'outreach',
+  services_optimize: 'услуги',
 };
 
 const resultFieldLabels: Record<string, string> = {
@@ -612,14 +631,51 @@ const humanizeStatus = (status: string) => statusLabels[status] || status;
 const humanizeStep = (step: string) => stepLabels[step] || step;
 const humanizeMeta = (meta: string) => metaLabels[meta] || meta;
 const humanizeCategory = (category?: string) => ({
+  communications: 'Коммуникации',
   outreach: 'Поиск клиентов',
   documents: 'Документы',
   email: 'Письма',
   tables: 'Таблицы',
   reviews: 'Отзывы',
   partnerships: 'Партнёрства',
+  services: 'Услуги',
+  booking: 'Бронирование',
   custom: 'Кастомная задача',
 }[category || 'custom'] || category || 'Кастомная задача');
+
+const getAgentListStatus = (blueprint: AgentBlueprint) => {
+  if (Number(blueprint.pending_approvals_count || 0) > 0 || blueprint.last_run_status === 'waiting_approval') {
+    return 'needs_approval';
+  }
+  if (blueprint.last_run_status === 'failed' || blueprint.status === 'error') {
+    return 'error';
+  }
+  return blueprint.status || 'draft';
+};
+
+const formatShortDate = (value?: string | null) => {
+  if (!value) {
+    return '';
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+};
+
+const formatLastRun = (blueprint: AgentBlueprint) => {
+  if (!blueprint.last_run_id) {
+    return 'запусков ещё не было';
+  }
+  const date = formatShortDate(blueprint.last_run_started_at || blueprint.last_run_completed_at);
+  return `${humanizeStatus(blueprint.last_run_status || 'running')}${date ? ` · ${date}` : ''}`;
+};
 
 const humanizeSourceType = (sourceType?: string) => ({
   text: 'Текст',
@@ -817,8 +873,13 @@ export const AgentBlueprintsPage = () => {
   ], [systemAgentConfig]);
 
   const activeAgentsCount = useMemo(
-    () => systemAgents.filter((item) => item.enabled).length + blueprints.filter((item) => item.status === 'active').length,
+    () => systemAgents.filter((item) => item.enabled).length + blueprints.filter((item) => getAgentListStatus(item) === 'active').length,
     [blueprints, systemAgents],
+  );
+
+  const totalPendingApprovals = useMemo(
+    () => blueprints.reduce((sum, item) => sum + Number(item.pending_approvals_count || 0), 0),
+    [blueprints],
   );
 
   const lastArtifactsCount = activeRun?.artifacts?.length || 0;
@@ -842,9 +903,9 @@ export const AgentBlueprintsPage = () => {
       },
       {
         label: 'Ждут решения',
-        value: pendingApprovals.length || activeRunPendingApprovals.length,
-        hint: pendingApprovals.length ? 'Есть ожидающие решения' : 'Нет ожидающих решений',
-        tone: pendingApprovals.length || pendingApproval ? 'warning' : 'default',
+        value: totalPendingApprovals || pendingApprovals.length || activeRunPendingApprovals.length,
+        hint: totalPendingApprovals || pendingApprovals.length ? 'Есть ожидающие решения' : 'Нет ожидающих решений',
+        tone: totalPendingApprovals || pendingApprovals.length || pendingApproval ? 'warning' : 'default',
       },
       {
         label: 'Последние результаты',
@@ -857,7 +918,7 @@ export const AgentBlueprintsPage = () => {
         hint: currentBusiness?.name || 'Текущий бизнес',
       },
     ],
-    [activeAgentsCount, activeRun, activeRunPendingApprovals.length, availablePersonaAgents.length, blueprints.length, currentBusiness?.name, lastArtifactsCount, pendingApproval, pendingApprovals.length, systemAgents.length],
+    [activeAgentsCount, activeRun, activeRunPendingApprovals.length, availablePersonaAgents.length, blueprints.length, currentBusiness?.name, lastArtifactsCount, pendingApproval, pendingApprovals.length, systemAgents.length, totalPendingApprovals],
   );
 
   const loadBlueprints = useCallback(async () => {
@@ -1519,11 +1580,11 @@ export const AgentBlueprintsPage = () => {
 
       {currentBusinessId ? (
         <DashboardSection
-          title="Системные агенты"
-          description="Предустановленные агенты LocalOS. Они включаются и настраиваются отдельно от workflow-запусков."
+          title="Legacy голоса и чат-настройки"
+          description="Старые AIAgents больше не являются отдельным миром workflow. Они используются как голос, стиль и channel-настройки внутри агента."
           actions={(
             <Button type="button" variant="outline" onClick={() => setSystemSettingsOpen(true)}>
-              Настроить системных
+              Открыть legacy-настройки
             </Button>
           )}
         >
@@ -1553,8 +1614,8 @@ export const AgentBlueprintsPage = () => {
       </Dialog>
 
       <DashboardSection
-        title="Пользовательские агенты"
-        description="Процессные агенты запускают задачи, агенты голоса задают стиль общения."
+        title="Мои агенты"
+        description="Главный список LocalOS agents: логика, статус, тип, запуски, approvals, источники, журнал и версии."
       >
         <div className="space-y-6">
           {loading ? (
@@ -1562,13 +1623,13 @@ export const AgentBlueprintsPage = () => {
               <Loader2 className="h-4 w-4 animate-spin" />
               Загружаем агентов...
             </div>
-          ) : blueprints.length === 0 && availablePersonaAgents.length === 0 ? (
+          ) : blueprints.length === 0 ? (
             <DashboardEmptyState
-              title="Пользовательских агентов пока нет"
-              description="Создайте агента через мастер или добавьте persona для голоса общения."
+              title="Агентов пока нет"
+              description="Создайте первого агента через мастер. Голос и стиль можно подключить внутри карточки агента."
             />
           ) : (
-            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-4 xl:grid-cols-2">
               {blueprints.map((blueprint) => {
                 const selected = selectedBlueprint?.id === blueprint.id;
                 return (
@@ -1595,14 +1656,23 @@ export const AgentBlueprintsPage = () => {
                       setSelectedBlueprintId(blueprint.id);
                       setWorkspaceMode('results');
                     }}
+                    onVoice={() => {
+                      setSelectedBlueprintId(blueprint.id);
+                      setActiveRun(null);
+                      setWorkspaceMode('voice');
+                    }}
                   />
                 );
               })}
-              {availablePersonaAgents.map((agent) => (
-                <PersonaAgentCard key={agent.id} agent={agent} onConfigure={() => setSystemSettingsOpen(true)} />
-              ))}
             </div>
           )}
+          {availablePersonaAgents.length ? (
+            <DashboardActionPanel
+              title="Голоса и стиль перенесены внутрь агента"
+              description={`${availablePersonaAgents.length} legacy persona доступны во вкладке “Голос и стиль” выбранного агента. После миграции отдельный экран AIAgentsManagement можно будет убрать.`}
+              tone="sky"
+            />
+          ) : null}
         </div>
       </DashboardSection>
 
@@ -1612,6 +1682,9 @@ export const AgentBlueprintsPage = () => {
           blueprint={selectedBlueprint}
           blueprintDetails={blueprintDetails}
           activeRun={activeRun}
+          currentBusinessId={currentBusinessId}
+          currentBusiness={currentBusiness}
+          availablePersonaAgents={availablePersonaAgents}
           pendingApproval={pendingApproval}
           queuedButNotDispatched={queuedButNotDispatched}
           agentReview={agentReview}
@@ -2178,6 +2251,7 @@ const BlueprintAgentCard = ({
   onConfigure,
   onRun,
   onResults,
+  onVoice,
 }: {
   blueprint: AgentBlueprint;
   latestVersionNumber: number | null;
@@ -2186,7 +2260,11 @@ const BlueprintAgentCard = ({
   onConfigure: () => void;
   onRun: () => void;
   onResults: () => void;
-}) => (
+  onVoice: () => void;
+}) => {
+  const listStatus = getAgentListStatus(blueprint);
+  const voiceName = getAgentVoiceName(blueprint);
+  return (
   <div className={cn('rounded-2xl border bg-white p-4 shadow-sm transition', selected ? 'border-slate-900' : 'border-slate-200 hover:border-slate-300')}>
     <button type="button" className="w-full text-left" onClick={onSelect}>
       <div className="flex items-start justify-between gap-3">
@@ -2196,29 +2274,49 @@ const BlueprintAgentCard = ({
             {humanizeCategory(blueprint.category)} · {latestVersionNumber ? `активная версия v${latestVersionNumber}` : 'версия ещё не создана'}
           </div>
         </div>
-        <StatusBadge status={blueprint.status || 'draft'} />
+        <StatusBadge status={listStatus} />
       </div>
       <div className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">
         {blueprint.description || blueprint.latest_goal || 'Пользовательский агент с настройками, запусками и результатами.'}
       </div>
-      {getAgentVoiceName(blueprint) ? (
-        <div className="mt-3 text-xs font-medium text-slate-500">
-          Голос агента: {getAgentVoiceName(blueprint)}
-        </div>
-      ) : null}
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+        <AgentSummaryPill label="Тип" value={humanizeCategory(blueprint.category)} />
+        <AgentSummaryPill label="Последний запуск" value={formatLastRun(blueprint)} />
+        <AgentSummaryPill label="Ожидающие approvals" value={String(blueprint.pending_approvals_count || 0)} tone={blueprint.pending_approvals_count ? 'warning' : 'default'} />
+        <AgentSummaryPill label="Источники данных" value={String(blueprint.sources_count || 0)} />
+        <AgentSummaryPill label="Журнал" value={`${blueprint.journal_entries_count || 0} записей`} />
+        <AgentSummaryPill label="Версии" value={String(blueprint.versions_count || latestVersionNumber || 0)} />
+      </div>
+      <div className="mt-3 text-xs font-medium text-slate-500">
+        Голос и стиль: {voiceName || 'не привязан'}
+      </div>
     </button>
     <div className="mt-4 flex flex-wrap gap-2">
       <Button type="button" size="sm" variant="outline" onClick={onConfigure}>
-        Настроить
+        Изменить логику
       </Button>
       <Button type="button" size="sm" onClick={onRun}>
         <Play className="mr-2 h-4 w-4" />
         Запустить
       </Button>
       <Button type="button" size="sm" variant="ghost" onClick={onResults}>
-        Результаты
+        Журнал
+      </Button>
+      <Button type="button" size="sm" variant="ghost" onClick={onConfigure}>
+        Версии
+      </Button>
+      <Button type="button" size="sm" variant="ghost" onClick={onVoice}>
+        Голос и стиль
       </Button>
     </div>
+  </div>
+  );
+};
+
+const AgentSummaryPill = ({ label, value, tone = 'default' }: { label: string; value: string; tone?: 'default' | 'warning' }) => (
+  <div className={cn('rounded-lg px-3 py-2 ring-1', tone === 'warning' ? 'bg-amber-50 text-amber-900 ring-amber-200' : 'bg-slate-50 text-slate-700 ring-slate-200')}>
+    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</div>
+    <div className="mt-1 truncate text-xs font-medium">{value}</div>
   </div>
 );
 
@@ -2249,6 +2347,9 @@ const AgentDetailPanel = ({
   blueprint,
   blueprintDetails,
   activeRun,
+  currentBusinessId,
+  currentBusiness,
+  availablePersonaAgents,
   pendingApproval,
   queuedButNotDispatched,
   agentReview,
@@ -2299,6 +2400,9 @@ const AgentDetailPanel = ({
   blueprint: AgentBlueprint;
   blueprintDetails: AgentBlueprintDetails | null;
   activeRun: AgentRun | null;
+  currentBusinessId: string | null;
+  currentBusiness?: DashboardContext['currentBusiness'];
+  availablePersonaAgents: PersonaAgent[];
   pendingApproval: AgentApproval | null;
   queuedButNotDispatched: AgentArtifact['payload_json'] | AgentRunStep['output_json'] | null;
   agentReview: AgentReview | null;
@@ -2352,12 +2456,13 @@ const AgentDetailPanel = ({
   return (
   <DashboardSection
     title={blueprint.name}
-    description={`${humanizeCategory(blueprint.category)} · ${latestVersionNumber ? `активная версия v${latestVersionNumber}` : 'нет активной версии'}${voiceName ? ` · голос: ${voiceName}` : ''} · ${mode === 'settings' ? 'настройка агента' : mode === 'run' ? 'запуск из карточки' : 'сохранённые результаты'}`}
+    description={`${humanizeCategory(blueprint.category)} · ${latestVersionNumber ? `активная версия v${latestVersionNumber}` : 'нет активной версии'}${voiceName ? ` · голос: ${voiceName}` : ''} · ${mode === 'settings' ? 'логика агента' : mode === 'run' ? 'запуск из карточки' : mode === 'voice' ? 'голос и стиль' : 'журнал и результаты'}`}
     actions={(
       <div className="flex flex-wrap gap-2">
-        <Button type="button" size="sm" variant={mode === 'settings' ? 'default' : 'outline'} onClick={() => onModeChange('settings')}>Настроить</Button>
+        <Button type="button" size="sm" variant={mode === 'settings' ? 'default' : 'outline'} onClick={() => onModeChange('settings')}>Логика</Button>
         <Button type="button" size="sm" variant={mode === 'run' ? 'default' : 'outline'} onClick={() => onModeChange('run')}>Запуск</Button>
-        <Button type="button" size="sm" variant={mode === 'results' ? 'default' : 'outline'} onClick={() => onModeChange('results')}>Сохранённые результаты</Button>
+        <Button type="button" size="sm" variant={mode === 'results' ? 'default' : 'outline'} onClick={() => onModeChange('results')}>Журнал</Button>
+        <Button type="button" size="sm" variant={mode === 'voice' ? 'default' : 'outline'} onClick={() => onModeChange('voice')}>Голос и стиль</Button>
       </div>
     )}
   >
@@ -2492,7 +2597,88 @@ const AgentDetailPanel = ({
         )}
       </div>
     ) : null}
+    {mode === 'voice' ? (
+      <AgentVoiceStylePanel
+        blueprint={blueprint}
+        currentBusinessId={currentBusinessId}
+        currentBusiness={currentBusiness}
+        availablePersonaAgents={availablePersonaAgents}
+      />
+    ) : null}
   </DashboardSection>
+  );
+};
+
+const AgentVoiceStylePanel = ({
+  blueprint,
+  currentBusinessId,
+  currentBusiness,
+  availablePersonaAgents,
+}: {
+  blueprint: AgentBlueprint;
+  currentBusinessId: string | null;
+  currentBusiness?: DashboardContext['currentBusiness'];
+  availablePersonaAgents: PersonaAgent[];
+}) => {
+  const voiceName = getAgentVoiceName(blueprint);
+  const productAgent = blueprint.product_agent || {};
+  const personaId = blueprint.active_persona_agent_id || blueprint.latest_persona_agent_id || productAgent.persona_agent_id || '';
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-slate-950">Голос выбранного агента</div>
+              <div className="mt-1 text-sm leading-6 text-slate-600">
+                Persona задаёт стиль общения, но не является workflow. Логика, approvals и capabilities остаются в blueprint.
+              </div>
+            </div>
+            <StatusBadge status={voiceName ? 'active' : 'draft'} />
+          </div>
+          <div className="mt-4 grid gap-2">
+            <AgentSummaryPill label="Текущий голос" value={voiceName || 'не привязан'} />
+            <AgentSummaryPill label="Persona ID" value={String(personaId || 'нет связи')} />
+            <AgentSummaryPill label="Источник" value="AIAgents legacy wrapper" />
+          </div>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="text-sm font-semibold text-slate-950">Доступные голоса</div>
+          <div className="mt-1 text-sm leading-6 text-slate-600">
+            Эти записи больше не отдельные пользовательские агенты. Они ждут привязки как “Голос агента”.
+          </div>
+          <div className="mt-4 grid gap-2 md:grid-cols-2">
+            {availablePersonaAgents.length ? availablePersonaAgents.map((agent) => (
+              <div key={agent.id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-slate-950">{agent.name || 'Голос агента'}</div>
+                    <div className="mt-1 text-xs text-slate-500">{agent.type || 'persona'} · {agent.is_active === false ? 'выключен' : 'доступен'}</div>
+                  </div>
+                  {agent.id === personaId ? <StatusBadge status="active" /> : null}
+                </div>
+                <div className="mt-2 line-clamp-2 text-xs leading-5 text-slate-600">
+                  {agent.description || agent.task || agent.identity || 'Стиль общения без отдельного workflow runtime.'}
+                </div>
+              </div>
+            )) : (
+              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500">
+                Legacy persona пока нет. Их можно создать в блоке ниже и потом привязать к версии blueprint.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+        <div className="text-sm font-semibold text-amber-950">Legacy wrapper: AIAgentSettings / AIAgentsManagement</div>
+        <div className="mt-1 text-sm leading-6 text-amber-900">
+          Этот блок встроен во вкладку агента на время миграции. После переноса persona-связей в blueprint-версии отдельный entrypoint можно удалить.
+        </div>
+      </div>
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <AIAgentSettings businessId={currentBusinessId} business={currentBusiness} />
+      </div>
+    </div>
   );
 };
 

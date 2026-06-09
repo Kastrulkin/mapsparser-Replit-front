@@ -1,7 +1,7 @@
 # LocalOS Agent Architecture v1
 
 Дата: 9 июня 2026
-Статус: canonical architecture document; этапы 1-5 частично реализованы в backend/frontend
+Статус: canonical architecture document; этапы 1-6 частично реализованы в backend/frontend
 
 ## Цель
 
@@ -194,7 +194,7 @@ third-party systems напрямую.
 | `telegram_bot.py` OpenClaw panel | Telegram owner control surface, approvals, quick actions, support/recovery. | Используется после адаптации. | Telegram control surface для agents/runs/approvals. Не отдельный agent runtime. |
 | `admin_prospecting.py` OpenClaw outreach/partnership calls | Prospecting/outreach интеграции, OpenClaw geo/enrich/send bridges. | Используется после адаптации. | Перенести в typed capabilities и вызывать из blueprints через orchestrator. Transitional code remains until capability migration. |
 | `prospectingleads` transitional outreach table | Shortlist/contact/draft/send status для supervised outreach. | Используется как есть. | Data source and transitional pipeline table for outreach/partnership/communications until full outreach schema is approved. |
-| `frontend/src/pages/dashboard/AgentBlueprintsPage.tsx` | Главный UI для создания/запуска/настройки blueprints. | Используется как есть. | Каноничный экран `Мои агенты`. Расширить communications category и persona tab. |
+| `frontend/src/pages/dashboard/AgentBlueprintsPage.tsx` | Главный UI для создания/запуска/настройки blueprints. | Используется как есть. | Каноничный экран `Мои агенты`: список, статус, тип, last run, approvals, sources, journal, versions, logic editing, voice/style tab. |
 | `frontend/src/pages/dashboard/ChatsPage.tsx` | Чаты по агентам. | Используется после адаптации. | Channel conversation view tied to persona and/or agent run context. |
 | `frontend/public/localos-agent-tools.json`, `localos-agent-policy.json`, `localos-agent-openapi.json`, `localos-agents.txt` | Public/static agent docs and machine-readable policy/tool hints. | Используется после адаптации. | Обновлять только с реально поддерживаемыми capabilities. Не обещать MCP/provider writes/autonomous sends, если нет runtime support. |
 | `docs/AGENT_REGISTRY_V1.md` | Реестр доменных агентов и capability rules. | Используется как есть. | Остается registry. Этот документ задает product architecture; registry перечисляет agent roles/capabilities. |
@@ -227,6 +227,38 @@ Adding a new category requires updating:
 5. UI labels/scenarios;
 6. tests for happy path and safety path;
 7. docs/static capability manifests when externally visible.
+
+## My Agents UI v1
+
+`/dashboard/agents` является главным экраном пользовательских агентов LocalOS.
+Он показывает не отдельные legacy blocks, а единый список `AgentBlueprint`
+product objects.
+
+Каждый агент в списке обязан показывать:
+
+- статус: `draft`, `active`, `paused`, `needs_approval`, `error`;
+- тип/category: communications, documents, tables, reviews, outreach,
+  services, etc.;
+- последний запуск;
+- ожидающие approvals;
+- количество источников данных;
+- наличие журнала;
+- версии;
+- действие `Изменить логику`.
+
+Карточка агента открывает единый detail panel с вкладками:
+
+- `Логика`: setup, data sources, rules, output format, manual control,
+  versions;
+- `Запуск`: manual run entrypoint;
+- `Журнал`: run progress, approvals, artifacts, review journal, feedback to new
+  version;
+- `Голос и стиль`: persona/chat settings.
+
+`AIAgentSettings` и `AIAgentsManagement` больше не должны восприниматься как
+отдельный продуктовый мир. До полной миграции они остаются legacy wrapper внутри
+вкладки `Голос и стиль`; `AIAgents` используются как `Persona`/`Voice`, а не как
+runtime workflow source of truth.
 
 ## Approval And Risk Policy
 

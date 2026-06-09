@@ -1,0 +1,5 @@
+python3 -m py_compile src/api/agent_blueprints_api.py
+Result: PASS
+
+curl -I http://127.0.0.1:3000/dashboard/agents
+Result: HTTP/1.1 200 OK

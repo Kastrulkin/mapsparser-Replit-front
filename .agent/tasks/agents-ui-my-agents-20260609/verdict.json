@@ -1,0 +1,47 @@
+{
+  "task_id": "agents-ui-my-agents-20260609",
+  "overall_verdict": "UNKNOWN",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Main section is now My Agents and route already targets AgentBlueprintsPage."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "List card renders all required summary fields."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Detail tabs cover logic, run, journal and versions."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "AIAgentSettings is embedded in Voice and Style legacy wrapper."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "List API provides summary fields without schema changes."
+    },
+    {
+      "id": "AC6",
+      "status": "UNKNOWN",
+      "reason": "Commit/push/deploy still pending."
+    }
+  ],
+  "commands_run": [
+    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "cd frontend && npm run build",
+    "python3 -m py_compile src/api/agent_blueprints_api.py",
+    "git diff --check",
+    "curl -I http://127.0.0.1:3000/dashboard/agents"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/agents-ui-my-agents-20260609/evidence.md",
+    ".agent/tasks/agents-ui-my-agents-20260609/evidence.json"
+  ]
+}

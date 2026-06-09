@@ -464,6 +464,10 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "build_agent_blueprint_orchestrator" in api_source
     assert "run_status" in api_source
     assert "approval_queue" in api_source
+    assert "last_run_status" in api_source
+    assert "pending_approvals_count" in api_source
+    assert "sources_count" in api_source
+    assert "versions_count" in api_source
     assert "/api/agent-blueprints/draft" in api_source
     assert "build_agent_blueprint_draft" in api_source
     assert "_insert_version(cursor, blueprint_id, version_payload, user_data)" in api_source
@@ -503,6 +507,16 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "build_agent_builder_state" in builder_api_source
     assert "create_blueprint_from_agent_builder_session" in builder_api_source
     assert "GenericRunProgress" in agents_page_source
+    assert "Мои агенты" in agents_page_source
+    assert "getAgentListStatus" in agents_page_source
+    assert "AgentSummaryPill" in agents_page_source
+    assert "Последний запуск" in agents_page_source
+    assert "Ожидающие approvals" in agents_page_source
+    assert "Источники данных" in agents_page_source
+    assert "Изменить логику" in agents_page_source
+    assert "Голос и стиль" in agents_page_source
+    assert "AgentVoiceStylePanel" in agents_page_source
+    assert "AIAgents legacy wrapper" in agents_page_source
     assert "Путь {humanizeCategory(category).toLowerCase()}-агента" in agents_page_source
     assert "Технический журнал" in agents_page_source
     assert "Использовано в последнем запуске" in agents_page_source

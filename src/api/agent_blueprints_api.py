@@ -288,7 +288,15 @@ def list_agent_blueprints():
                    av.id AS active_version_id,
                    av.version_number AS active_version_number,
                    av.goal AS active_goal,
-                   av.persona_agent_id active_persona_agent_id
+                   av.persona_agent_id active_persona_agent_id,
+                   lr.id last_run_id,
+                   lr.status last_run_status,
+                   lr.started_at last_run_started_at,
+                   lr.completed_at last_run_completed_at,
+                   COALESCE(pq.pending_approvals_count, 0) pending_approvals_count,
+                   COALESCE(vs.versions_count, 0) versions_count,
+                   COALESCE(jsonb_array_length(CASE WHEN jsonb_typeof(b.metadata_json->'agent_sources') = 'array' THEN b.metadata_json->'agent_sources' ELSE '[]'::jsonb END), 0) sources_count,
+                   COALESCE(jsonb_array_length(CASE WHEN jsonb_typeof(b.metadata_json->'agent_journal') = 'array' THEN b.metadata_json->'agent_journal' ELSE '[]'::jsonb END), 0) journal_entries_count
             FROM agent_blueprints b
             LEFT JOIN LATERAL (
                 SELECT id, version_number, goal, persona_agent_id
@@ -304,6 +312,25 @@ def list_agent_blueprints():
                   AND id = COALESCE(NULLIF(b.metadata_json->>'active_version_id', ''), v.id)
                 LIMIT 1
             ) av ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT id, status, started_at, completed_at
+                FROM agent_runs
+                WHERE blueprint_id = b.id
+                ORDER BY started_at DESC
+                LIMIT 1
+            ) lr ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT COUNT(*) pending_approvals_count
+                FROM agent_approvals a
+                JOIN agent_runs r ON r.id = a.run_id
+                WHERE r.blueprint_id = b.id
+                  AND a.status = 'pending'
+            ) pq ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT COUNT(*) versions_count
+                FROM agent_blueprint_versions
+                WHERE blueprint_id = b.id
+            ) vs ON TRUE
             {where_sql}
             ORDER BY b.created_at DESC
             LIMIT 200

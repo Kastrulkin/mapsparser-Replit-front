@@ -1,0 +1,64 @@
+{
+  "task_id": "agents-ui-my-agents-20260609",
+  "overall_status": "UNKNOWN",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "/dashboard/agents is the main My Agents screen.",
+      "status": "PASS",
+      "proof": ["frontend/src/pages/dashboard/AgentBlueprintsPage.tsx"],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Agent list shows status, type, last run, approvals, sources, journal and versions.",
+      "status": "PASS",
+      "proof": ["BlueprintAgentCard", "AgentSummaryPill", "getAgentListStatus"],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Agent detail exposes logic, run, journal/results, approvals, sources and version controls.",
+      "status": "PASS",
+      "proof": ["AgentDetailPanel", "AgentWorkspacePanel", "AgentRunReviewPanel", "VersionSummary"],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Legacy AIAgentSettings/AIAgentsManagement is integrated as Voice and Style.",
+      "status": "PASS",
+      "proof": ["AgentVoiceStylePanel", "AIAgentSettings"],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Backend list API provides summary fields without schema/data changes.",
+      "status": "PASS",
+      "proof": ["src/api/agent_blueprints_api.py"],
+      "gaps": ["journal_entries_count is metadata-backed"]
+    },
+    {
+      "id": "AC6",
+      "text": "Commit, push and deploy.",
+      "status": "UNKNOWN",
+      "proof": [],
+      "gaps": ["Commit/push/deploy pending"]
+    }
+  ],
+  "changed_files": [
+    "src/api/agent_blueprints_api.py",
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
+    "tests/test_agent_blueprint_layer.py",
+    "docs/LOCALOS_AGENT_ARCHITECTURE_V1.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "cd frontend && npm run build",
+    "python3 -m py_compile src/api/agent_blueprints_api.py",
+    "scripts/proof_loop.sh validate agents-ui-my-agents-20260609"
+  ],
+  "known_gaps": [
+    "Browser MCP did not expose js execution tool for authenticated screenshot.",
+    "Deployment pending before final sign-off."
+  ]
+}
