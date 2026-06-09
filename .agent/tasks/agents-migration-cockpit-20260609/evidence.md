@@ -2,7 +2,7 @@
 
 ## Summary
 - Overall status: PASS
-- Last updated: 2026-06-09T13:24:00+00:00
+- Last updated: 2026-06-09T13:31:00+00:00
 
 ## Acceptance criteria evidence
 
@@ -64,6 +64,7 @@
   - Python compile passed for touched backend modules.
   - `tests/test_agent_blueprint_layer.py`: 43 passed.
   - `cd frontend && npm run build`: passed.
+  - Production deploy smoke passed: `docker compose ps`, app logs, `curl -I http://localhost:8000`, route registration, and live frontend chunk checks.
 - Gaps:
   - Build includes existing Browserslist/Rollup warnings from dependencies.
 
@@ -72,6 +73,8 @@
 - `PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py`
 - `cd frontend && npm run build`
 - `rg -n "AIAgentSettings|AIAgentsManagement|WHERE ai_agent_enabled = 1|Ответь на сообщение клиента, учитывая workflow|state.get\\('init_state'\\)"`
+- Backend deploy: selective archive to `/opt/seo-app`, `docker compose restart app worker`, route/source smoke in app container.
+- Frontend deploy: `bash scripts/deploy_frontend_dist.sh --build`, followed by live chunk checks for `AgentBlueprintsPage-CgHSWjEZ.js`.
 
 ## Raw artifacts
 - .agent/tasks/agents-migration-cockpit-20260609/raw/build.txt
@@ -81,4 +84,5 @@
 - .agent/tasks/agents-migration-cockpit-20260609/raw/screenshot-1.png
 
 ## Known gaps
-- Production data apply/field deletion is not run inside this proof bundle because destructive or irreversible DB cleanup requires backup and a dedicated production apply step.
+- Production field deletion is not run inside this proof bundle because physical DB cleanup requires backup, Alembic migration, and a dedicated production removal step.
+- The non-destructive migration apply endpoint is deployed and available, but no bulk production data mutation was run from the deploy shell.

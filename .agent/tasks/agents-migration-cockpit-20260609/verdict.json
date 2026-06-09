@@ -35,13 +35,15 @@
     {
       "id": "AC7",
       "status": "PASS",
-      "reason": "Focused compile, test, and frontend build checks pass."
+      "reason": "Focused compile, test, frontend build, and production deploy smoke checks pass."
     }
   ],
   "commands_run": [
     "PYTHONPATH=src python3 -m py_compile src/api/agent_blueprints_api.py src/services/agent_legacy_migration.py src/ai_agent_webhooks.py src/chats_api.py src/ai_agent.py",
     "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py",
-    "cd frontend && npm run build"
+    "cd frontend && npm run build",
+    "selective backend deploy + docker compose restart app worker + route/source smoke",
+    "bash scripts/deploy_frontend_dist.sh --build + live frontend chunk smoke"
   ],
   "artifacts_used": [
     ".agent/tasks/agents-migration-cockpit-20260609/raw/lint.txt",

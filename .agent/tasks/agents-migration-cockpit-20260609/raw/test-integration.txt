@@ -1,12 +1,26 @@
-Pending deploy smoke.
+Backend deploy smoke:
+- Selective archive copied to `/opt/seo-app`.
+- `docker compose restart app worker`.
+- `docker compose ps`: app, worker, postgres running.
+- `curl -I http://localhost:8000`: HTTP 200.
+- App route check:
+  - `LEGACY_MIGRATION_APPLY_ROUTE ['POST']`
+  - `LEGACY_MIGRATION_PLAN_ROUTE ['GET']`
+  - `APPLY_SOURCE_PRESENT True`
+  - `LEGACY_WORKFLOW_CONTEXT_PRESENT True`
+  - `WEBHOOK_PRODUCT_GATE_PRESENT True`
 
-Local integration evidence:
-- Python backend compile passed.
-- Agent blueprint layer tests passed.
-- Frontend production build passed.
+Frontend deploy smoke:
+- `bash scripts/deploy_frontend_dist.sh --build`.
+- `frontend/dist` and `frontend/public-dist` integrity checks passed.
+- Script verified `docker compose ps`, app logs, `curl -I http://localhost:8000`, runtime index asset, public-audit index asset, and live HTML.
+- Current live index references `AgentBlueprintsPage-CgHSWjEZ.js`.
+- Current runtime chunk contains:
+  - `Agent cockpit`
+  - `Learning и версии`
+  - `Применить migration`
+- Current runtime chunk does not contain `AIAgentsManagement`.
 
-Production smoke should run after commit/push/deploy:
-- docker compose ps
-- docker compose logs --since ... app
-- curl -I http://localhost:8000
-- registered route check for /api/agent-blueprints/legacy-migration/apply
+Notes:
+- Deploy script keeps older lazy chunks by design, so stale old `AgentBlueprintsPage-*.js` files may still exist for already-open tabs.
+- `frontend/public/yandex_9f7f92ca02ef161c.html` was present locally and was copied into dist by the normal Vite public-file flow; it was not part of the committed task diff.

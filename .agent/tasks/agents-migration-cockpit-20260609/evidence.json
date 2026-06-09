@@ -76,7 +76,8 @@
       "proof": [
         "Python compile passed.",
         "tests/test_agent_blueprint_layer.py: 43 passed.",
-        "cd frontend && npm run build passed."
+        "cd frontend && npm run build passed.",
+        "Production deploy smoke passed for backend route/source checks and live frontend chunk checks."
       ],
       "gaps": []
     }
@@ -99,6 +100,7 @@
     "cd frontend && npm run build"
   ],
   "known_gaps": [
-    "Production data apply/physical field deletion requires backup and a dedicated production apply step."
+    "Physical field deletion requires backup, Alembic migration, and a dedicated production removal step.",
+    "Non-destructive migration apply endpoint is deployed, but no bulk production data mutation was run from the deploy shell."
   ]
 }
