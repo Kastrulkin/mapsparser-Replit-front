@@ -221,6 +221,7 @@ def _custom_integration_compilation(description: str) -> Dict[str, Any]:
             "artifact_type": "integration_trigger_event",
             "payload": {
                 "trigger": "telegram.message.received",
+                "integration_binding": "telegram_trigger",
                 "source": "telegram",
                 "status": "captured",
                 "external_dispatch_performed": False,
@@ -234,6 +235,7 @@ def _custom_integration_compilation(description: str) -> Dict[str, Any]:
             "payload": {
                 "status": "draft",
                 "operation": "append_row",
+                "integration_binding": "google_sheets_append",
                 "columns": ["received_at", "telegram_username", "message_text"],
                 "row_values": ["{{received_at}}", "{{telegram_username}}", "{{message_text}}"],
                 "provider_write_performed": False,
@@ -258,6 +260,7 @@ def _custom_integration_compilation(description: str) -> Dict[str, Any]:
             "required_approval_type": "sheet_update",
             "payload": {
                 "operation": "append_row",
+                "integration_binding": "google_sheets_append",
                 "sheet_name": "Leads",
                 "row_values": ["{{received_at}}", "{{telegram_username}}", "{{message_text}}"],
                 "daily_append_cap": 50,
@@ -300,6 +303,27 @@ def _custom_integration_compilation(description: str) -> Dict[str, Any]:
             "external_spreadsheet_write": "manual_approval_required",
             "mode": "approved_request_only",
         },
+        "required_integration_bindings": [
+            {
+                "key": "telegram_trigger",
+                "provider": "telegram",
+                "direction": "trigger",
+                "trigger": "telegram.message.received",
+                "required": True,
+                "approval_required": False,
+            },
+            {
+                "key": "google_sheets_append",
+                "provider": "google_sheets",
+                "direction": "external_write",
+                "capability": "sheets.append_row_request",
+                "required": True,
+                "approval_required": True,
+                "required_config": ["spreadsheet_id", "sheet_name"],
+                "default_config": {"sheet_name": "Leads"},
+                "default_limits": {"daily_append_cap": 50},
+            },
+        ],
         "limits": {
             "daily_append_cap": 50,
             "autonomous_external_write_allowed": False,
@@ -321,7 +345,16 @@ def _custom_integration_compilation(description: str) -> Dict[str, Any]:
         "target": "google_sheets.append_row",
         "runtime": "agent_blueprints",
         "showcase": "telegram_to_google_sheets",
+        "binding_status": "requires_user_connection",
     }
+    metadata["compiled_process"] = {
+        "schema": "compiled_integration_workflow_v1",
+        "trigger_binding": "telegram_trigger",
+        "write_binding": "google_sheets_append",
+        "runtime_truth": "agent_blueprint_versions.steps_json",
+        "approval_boundary": "sheet_update",
+    }
+    metadata["required_integration_bindings"] = version_payload["required_integration_bindings"]
     return {
         "name": _draft_name(description, "Кастомный агент интеграций"),
         "category": "custom",

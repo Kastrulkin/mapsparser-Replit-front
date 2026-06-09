@@ -438,6 +438,19 @@ type AgentIntegrationCatalogItem = {
   status?: string;
 };
 
+type AgentIntegrationBindingStatus = {
+  key: string;
+  provider: string;
+  direction?: string;
+  required?: boolean;
+  approval_required?: boolean;
+  capability?: string;
+  trigger?: string;
+  status: string;
+  integration_id?: string;
+  missing_config?: string[];
+};
+
 type AgentReviewSection = {
   title?: string;
   artifact_type?: string;
@@ -1090,6 +1103,7 @@ export const AgentBlueprintsPage = () => {
   const [availableAgentIntegrations, setAvailableAgentIntegrations] = useState<AgentIntegration[]>([]);
   const [agentIntegrationCatalog, setAgentIntegrationCatalog] = useState<AgentIntegrationCatalogItem[]>([]);
   const [agentExternalAuthOptions, setAgentExternalAuthOptions] = useState<AgentExternalAuthOption[]>([]);
+  const [agentBindingStatus, setAgentBindingStatus] = useState<AgentIntegrationBindingStatus[]>([]);
   const [sheetSpreadsheetId, setSheetSpreadsheetId] = useState('');
   const [sheetName, setSheetName] = useState('Sheet1');
   const [sheetAuthRef, setSheetAuthRef] = useState('');
@@ -1402,10 +1416,12 @@ export const AgentBlueprintsPage = () => {
       const available = Array.isArray(response.data?.available_integrations) ? response.data.available_integrations : [];
       const providerCatalog = Array.isArray(response.data?.provider_catalog) ? response.data.provider_catalog : [];
       const authOptions = Array.isArray(response.data?.external_auth_options) ? response.data.external_auth_options : [];
+      const bindingStatus = Array.isArray(response.data?.binding_status) ? response.data.binding_status : [];
       setAgentIntegrations(integrations);
       setAvailableAgentIntegrations(available);
       setAgentIntegrationCatalog(providerCatalog);
       setAgentExternalAuthOptions(authOptions);
+      setAgentBindingStatus(bindingStatus);
       const sheet = integrations.find((item) => item.provider === 'google_sheets') || available.find((item) => item.provider === 'google_sheets');
       if (sheet) {
         setSheetSpreadsheetId(String(sheet.config?.spreadsheet_id || ''));
@@ -1424,6 +1440,7 @@ export const AgentBlueprintsPage = () => {
       setAvailableAgentIntegrations([]);
       setAgentIntegrationCatalog([]);
       setAgentExternalAuthOptions([]);
+      setAgentBindingStatus([]);
     }
   }, []);
 
@@ -1439,6 +1456,7 @@ export const AgentBlueprintsPage = () => {
       setAvailableAgentIntegrations([]);
       setAgentIntegrationCatalog([]);
       setAgentExternalAuthOptions([]);
+      setAgentBindingStatus([]);
     }
   }, [loadAgentIntegrations, loadBlueprintReview, loadSourceCatalog, selectedBlueprint?.id]);
 
@@ -2171,6 +2189,7 @@ export const AgentBlueprintsPage = () => {
           availableAgentIntegrations={availableAgentIntegrations}
           agentIntegrationCatalog={agentIntegrationCatalog}
           agentExternalAuthOptions={agentExternalAuthOptions}
+          agentBindingStatus={agentBindingStatus}
           sheetSpreadsheetId={sheetSpreadsheetId}
           sheetName={sheetName}
           sheetAuthRef={sheetAuthRef}
@@ -2992,6 +3011,7 @@ const AgentDetailPanel = ({
   availableAgentIntegrations,
   agentIntegrationCatalog,
   agentExternalAuthOptions,
+  agentBindingStatus,
   sheetSpreadsheetId,
   sheetName,
   sheetAuthRef,
@@ -3065,6 +3085,7 @@ const AgentDetailPanel = ({
   availableAgentIntegrations: AgentIntegration[];
   agentIntegrationCatalog: AgentIntegrationCatalogItem[];
   agentExternalAuthOptions: AgentExternalAuthOption[];
+  agentBindingStatus: AgentIntegrationBindingStatus[];
   sheetSpreadsheetId: string;
   sheetName: string;
   sheetAuthRef: string;
@@ -3151,6 +3172,7 @@ const AgentDetailPanel = ({
         availableAgentIntegrations={availableAgentIntegrations}
         agentIntegrationCatalog={agentIntegrationCatalog}
         agentExternalAuthOptions={agentExternalAuthOptions}
+        agentBindingStatus={agentBindingStatus}
         sheetSpreadsheetId={sheetSpreadsheetId}
         sheetName={sheetName}
         sheetAuthRef={sheetAuthRef}
@@ -3383,6 +3405,7 @@ const AgentWorkspacePanel = ({
   availableAgentIntegrations,
   agentIntegrationCatalog,
   agentExternalAuthOptions,
+  agentBindingStatus,
   sheetSpreadsheetId,
   sheetName,
   sheetAuthRef,
@@ -3435,6 +3458,7 @@ const AgentWorkspacePanel = ({
   availableAgentIntegrations: AgentIntegration[];
   agentIntegrationCatalog: AgentIntegrationCatalogItem[];
   agentExternalAuthOptions: AgentExternalAuthOption[];
+  agentBindingStatus: AgentIntegrationBindingStatus[];
   sheetSpreadsheetId: string;
   sheetName: string;
   sheetAuthRef: string;
@@ -3562,6 +3586,7 @@ const AgentWorkspacePanel = ({
             availableIntegrations={availableAgentIntegrations}
             providerCatalog={agentIntegrationCatalog}
             authOptions={agentExternalAuthOptions}
+            bindingStatus={agentBindingStatus}
             sheetSpreadsheetId={sheetSpreadsheetId}
             sheetName={sheetName}
             sheetAuthRef={sheetAuthRef}
@@ -3751,6 +3776,7 @@ const AgentIntegrationsPanel = ({
   availableIntegrations,
   providerCatalog,
   authOptions,
+  bindingStatus,
   sheetSpreadsheetId,
   sheetName,
   sheetAuthRef,
@@ -3771,6 +3797,7 @@ const AgentIntegrationsPanel = ({
   availableIntegrations: AgentIntegration[];
   providerCatalog: AgentIntegrationCatalogItem[];
   authOptions: AgentExternalAuthOption[];
+  bindingStatus: AgentIntegrationBindingStatus[];
   sheetSpreadsheetId: string;
   sheetName: string;
   sheetAuthRef: string;
@@ -3803,6 +3830,31 @@ const AgentIntegrationsPanel = ({
         <AgentIntegrationStatusItem integration={telegramIntegration} provider="telegram" fallbackTitle="Telegram trigger" />
         <AgentIntegrationStatusItem integration={sheetIntegration} provider="google_sheets" fallbackTitle="Google Sheets append" />
       </div>
+
+      {bindingStatus.length ? (
+        <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Compiled workflow bindings</div>
+          {bindingStatus.map((binding) => (
+            <div key={binding.key || binding.provider} className="rounded-lg bg-white px-3 py-2 text-xs ring-1 ring-slate-200">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-medium text-slate-900">{humanizeMeta(binding.key || binding.provider)}</div>
+                  <div className="mt-1 text-slate-500">
+                    {binding.trigger || binding.capability || binding.direction || binding.provider}
+                  </div>
+                </div>
+                <StatusBadge status={binding.status} />
+              </div>
+              {binding.missing_config?.length ? (
+                <div className="mt-1 text-amber-700">Нужно заполнить: {binding.missing_config.join(', ')}</div>
+              ) : null}
+              {binding.approval_required ? (
+                <div className="mt-1 text-slate-500">human approval required before external action</div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
         <div className="flex items-center gap-2 text-sm font-medium text-slate-950">

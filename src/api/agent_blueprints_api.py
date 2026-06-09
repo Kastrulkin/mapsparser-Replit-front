@@ -240,6 +240,46 @@ def _agent_integration_ids(metadata: dict) -> list[str]:
     return result
 
 
+def _agent_integration_binding_status(metadata: dict, integrations: list[dict]) -> list[dict]:
+    required = metadata.get("required_integration_bindings") if isinstance(metadata.get("required_integration_bindings"), list) else []
+    by_provider = {}
+    for integration in integrations:
+        provider = str(integration.get("provider") or "").strip()
+        if provider and provider not in by_provider:
+            by_provider[provider] = integration
+    result = []
+    for item in required:
+        if not isinstance(item, dict):
+            continue
+        provider = str(item.get("provider") or "").strip()
+        integration = by_provider.get(provider)
+        config = workspace_parse_json_field((integration or {}).get("config_json"), {})
+        if not isinstance(config, dict):
+            config = {}
+        required_config = item.get("required_config") if isinstance(item.get("required_config"), list) else []
+        missing_config = [
+            str(config_key)
+            for config_key in required_config
+            if not str(config.get(str(config_key)) or "").strip()
+        ]
+        status = "connected" if integration and str(integration.get("status") or "") == "active" and not missing_config else "needs_connection"
+        result.append(
+            {
+                "key": str(item.get("key") or ""),
+                "provider": provider,
+                "direction": str(item.get("direction") or ""),
+                "required": bool(item.get("required", True)),
+                "approval_required": bool(item.get("approval_required", True)),
+                "capability": str(item.get("capability") or ""),
+                "trigger": str(item.get("trigger") or ""),
+                "status": status,
+                "integration_id": str((integration or {}).get("id") or ""),
+                "missing_config": missing_config,
+            }
+        )
+    return result
+
+
 def _load_agent_integrations(cursor, business_id: str, integration_ids: list[str] | None = None) -> list[dict]:
     if integration_ids:
         cursor.execute(
@@ -361,6 +401,7 @@ def _sync_blueprint_integration_metadata(cursor, blueprint: dict, integration: d
             "sheet_name": str(config.get("sheet_name") or "Sheet1").strip() or "Sheet1",
             "operation": "append_row",
         }
+        custom_process["binding_status"] = "connected"
         metadata["custom_process"] = custom_process
     if provider == "telegram":
         triggers = metadata.get("triggers") if isinstance(metadata.get("triggers"), list) else []
@@ -1028,6 +1069,7 @@ def list_agent_blueprint_integrations(blueprint_id: str):
         all_rows = _load_agent_integrations(cursor, business_id)
         attached_lookup = {str(row.get("id") or "") for row in attached_rows}
         integrations = [_normalize_agent_integration(row, attached=True) for row in attached_rows]
+        binding_status = _agent_integration_binding_status(metadata, attached_rows)
         available = [
             _normalize_agent_integration(row, attached=False)
             for row in all_rows
@@ -1042,6 +1084,8 @@ def list_agent_blueprint_integrations(blueprint_id: str):
                 "external_auth_options": _load_agent_external_auth_options(cursor, business_id),
                 "capability_integrations": metadata.get("capability_integrations") if isinstance(metadata.get("capability_integrations"), dict) else {},
                 "custom_process": metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {},
+                "required_integration_bindings": metadata.get("required_integration_bindings") if isinstance(metadata.get("required_integration_bindings"), list) else [],
+                "binding_status": binding_status,
             }
         )
     finally:
@@ -1154,6 +1198,7 @@ def save_agent_blueprint_integration(blueprint_id: str):
                 "integration": _normalize_agent_integration(integration, attached=True),
                 "capability_integrations": metadata.get("capability_integrations") if isinstance(metadata.get("capability_integrations"), dict) else {},
                 "custom_process": metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {},
+                "binding_status": _agent_integration_binding_status(metadata, [integration]),
             }
         ), 201
     except Exception:

@@ -373,6 +373,11 @@ def test_agent_compiler_creates_custom_telegram_to_sheets_blueprint():
     assert payload["mode"] == "approved_external_write_request"
     assert payload["capability_allowlist"] == ["sheets.append_row_request"]
     assert payload["approval_policy"]["external_spreadsheet_write"] == "manual_approval_required"
+    assert draft["metadata"]["compiled_process"]["schema"] == "compiled_integration_workflow_v1"
+    assert draft["metadata"]["required_integration_bindings"][0]["key"] == "telegram_trigger"
+    assert draft["metadata"]["required_integration_bindings"][1]["key"] == "google_sheets_append"
+    assert draft["metadata"]["required_integration_bindings"][1]["required_config"] == ["spreadsheet_id", "sheet_name"]
+    assert payload["required_integration_bindings"][1]["capability"] == "sheets.append_row_request"
     assert payload["limits"]["autonomous_external_write_allowed"] is False
     assert [step["key"] for step in payload["steps"]] == [
         "capture_telegram_trigger",
@@ -1252,6 +1257,7 @@ def test_telegram_trigger_runtime_starts_active_custom_agent_and_waits_for_sheet
             "custom_process": {
                 **draft["metadata"]["custom_process"],
                 "google_sheets": {
+                    "integration_id": "integration-1",
                     "spreadsheet_id": "spreadsheet-1",
                     "sheet_name": "Leads",
                 },
@@ -1292,6 +1298,7 @@ def test_telegram_trigger_runtime_starts_active_custom_agent_and_waits_for_sheet
     assert cursor.trigger_events[0]["status"] == "run_started"
     assert cursor.trigger_events[0]["run_id"] == run["id"]
     assert run["status"] == "waiting_approval"
+    assert run["input_json"]["integration_id"] == "integration-1"
     assert run["input_json"]["spreadsheet_id"] == "spreadsheet-1"
     assert run["input_json"]["sheet_name"] == "Leads"
     assert approval["approval_type"] == "sheet_update"
@@ -1334,6 +1341,43 @@ def test_activate_version_marks_blueprint_active_for_trigger_runtime(monkeypatch
     assert event["active_version_id"] == "ver1"
     assert cursor.metadata["active_version_id"] == "ver1"
     assert cursor.status == "active"
+
+
+def test_agent_integration_binding_status_tracks_required_compiled_bindings():
+    from api import agent_blueprints_api
+
+    metadata = {
+        "required_integration_bindings": [
+            {"key": "telegram_trigger", "provider": "telegram", "direction": "trigger", "trigger": "telegram.message.received"},
+            {
+                "key": "google_sheets_append",
+                "provider": "google_sheets",
+                "direction": "external_write",
+                "capability": "sheets.append_row_request",
+                "required_config": ["spreadsheet_id", "sheet_name"],
+            },
+        ]
+    }
+    rows = [
+        {
+            "id": "telegram-1",
+            "provider": "telegram",
+            "status": "active",
+            "config_json": {"bot_mode": "business_bot"},
+        },
+        {
+            "id": "sheets-1",
+            "provider": "google_sheets",
+            "status": "active",
+            "config_json": {"spreadsheet_id": "spreadsheet-1", "sheet_name": "Leads"},
+        },
+    ]
+
+    status = agent_blueprints_api._agent_integration_binding_status(metadata, rows)
+
+    assert [item["status"] for item in status] == ["connected", "connected"]
+    assert status[1]["integration_id"] == "sheets-1"
+    assert status[1]["missing_config"] == []
 
 
 def test_agent_blueprint_api_guards_version_blueprint_mismatch():
