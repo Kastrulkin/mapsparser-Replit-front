@@ -1,0 +1,38 @@
+{
+  "task_id": "agents-migration-cleanup-20260609",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Stage 7 adds a safe migration/cleanup layer for legacy AIAgents, legacy business AI settings, OpenClaw preview bridging, docs, and tests without deleting live fields.",
+      "status": "PASS",
+      "proof": [
+        "src/services/agent_legacy_migration.py builds a read-only migration plan.",
+        "GET /api/agent-blueprints/legacy-migration-plan is registered and authenticated.",
+        "AIAgents.workflow is marked deprecated_not_runtime_truth.",
+        "Business AI settings are mapped to persona/blueprint targets and marked deprecated_migration_source.",
+        "OpenClaw docs describe blueprint/run/capability runtime model.",
+        "py_compile passed.",
+        "tests/test_agent_blueprint_layer.py passed with 41 tests."
+      ],
+      "gaps": [
+        "No production data mutation or field deletion in this stage."
+      ]
+    }
+  ],
+  "changed_files": [
+    "src/services/agent_legacy_migration.py",
+    "src/api/agent_blueprints_api.py",
+    "tests/test_agent_blueprint_layer.py",
+    "docs/LOCALOS_AGENT_ARCHITECTURE_V1.md",
+    "docs/contracts/localos-openclaw/PHASE1.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "PYTHONPATH=src python3 -m py_compile src/api/agent_blueprints_api.py src/services/agent_legacy_migration.py",
+    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "scripts/proof_loop.sh validate agents-migration-cleanup-20260609"
+  ],
+  "known_gaps": [
+    "Deprecated legacy fields remain backward-compatible reads until a future Alembic migration plus UI/API no-read proof."
+  ]
+}

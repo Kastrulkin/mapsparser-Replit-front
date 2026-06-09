@@ -22,6 +22,9 @@ def test_agent_blueprint_routes_are_owned_by_blueprint():
         "/api/agent-blueprints/draft": {
             "POST": "agent_blueprints_api.create_agent_blueprint_draft",
         },
+        "/api/agent-blueprints/legacy-migration-plan": {
+            "GET": "agent_blueprints_api.get_agent_blueprint_legacy_migration_plan",
+        },
         "/api/agent-blueprints/<blueprint_id>": {
             "GET": "agent_blueprints_api.get_agent_blueprint",
         },
@@ -189,6 +192,32 @@ def test_openclaw_and_capability_routes_are_registered():
 
     for route, method in expected.items():
         assert method in actual.get(route, set())
+
+
+def test_legacy_ai_agent_migration_plan_marks_runtime_truth_and_deprecations():
+    from services.agent_legacy_migration import (
+        LEGACY_WORKFLOW_STATUS,
+        build_business_ai_settings_deprecation_plan,
+        build_legacy_run_preview_bridge,
+    )
+
+    settings_plan = build_business_ai_settings_deprecation_plan(
+        {
+            "ai_agent_enabled": True,
+            "ai_agent_tone": "friendly",
+            "ai_agent_restrictions": "no discounts",
+            "ai_agents_config": "{}",
+            "ai_agent_id": "voice-1",
+        }
+    )
+    bridge = build_legacy_run_preview_bridge({"id": "voice-1"}, "biz-1")
+
+    assert LEGACY_WORKFLOW_STATUS == "deprecated_not_runtime_truth"
+    assert settings_plan["fields"]["ai_agent_enabled"]["status"] == "deprecated_migration_source"
+    assert settings_plan["fields"]["ai_agent_id"]["target"] == "agent_blueprint_versions.persona_agent_id"
+    assert bridge["status"] == "moved_to_shared_run_preview_contract"
+    assert bridge["preview_contract"]["target_runtime"] == "agent_blueprints"
+    assert bridge["preview_contract"]["external_dispatch_performed"] is False
 
 
 def test_agent_blueprint_draft_builder_creates_safe_document_agent():

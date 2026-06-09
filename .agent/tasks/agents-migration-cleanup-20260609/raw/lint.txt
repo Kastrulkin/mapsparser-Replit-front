@@ -1,0 +1,5 @@
+Command:
+PYTHONPATH=src python3 -m py_compile src/api/agent_blueprints_api.py src/services/agent_legacy_migration.py
+
+Result:
+PASS. Syntax compile check used as lint gate for this backend-only change.

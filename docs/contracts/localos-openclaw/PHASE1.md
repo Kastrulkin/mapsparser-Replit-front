@@ -75,6 +75,33 @@
 37. `POST /api/capabilities/support-export/send` (user manual send of support bundle to superadmin Telegram)
 38. `GET /api/capabilities/support-export/send-history?tenant_id=&limit=` (user audit trail for manual support bundle sends)
 39. `GET /api/capabilities/support-export/send-history/export?tenant_id=&limit=&format=` (user canonical support-send history export)
+40. `GET /api/agent-blueprints/legacy-migration-plan?business_id=` (user/superadmin read-only migration preview for legacy `AIAgents` and business AI settings)
+
+## Agent Blueprint Runtime Model
+
+Для пользовательских агентов LocalOS runtime truth теперь выглядит так:
+
+- `Agent` = `agent_blueprints` product object.
+- `Persona` = legacy `AIAgents`, подключенный через
+  `agent_blueprint_versions.persona_agent_id`.
+- `Compiled Workflow` = `agent_blueprint_versions.steps_json` +
+  typed capability allowlist + approval policy.
+- `Run` = `agent_runs` / `agent_run_steps` / `agent_artifacts` /
+  `agent_approvals`.
+- OpenClaw/`ActionOrchestrator` остается execution boundary для side effects,
+  policy, billing, approvals, callbacks, outbox and audit.
+
+Legacy `AIAgents.workflow` is not runtime truth anymore. Status:
+`deprecated_not_runtime_truth`; it can only provide migration context while a
+blueprint version is being created. Legacy business fields
+`ai_agent_enabled`, `ai_agent_tone`, `ai_agent_restrictions`,
+`ai_agents_config`, and `ai_agent_id` remain backward-compatible reads until a
+dedicated Alembic migration and UI/API no-read proof make deletion safe.
+
+Legacy `AIAgents` sandbox/OpenClaw previews are bridged to the common run preview
+contract: preview is dry-run only, external dispatch is false, and real execution
+must go through `/api/agent-blueprints/<blueprint_id>/runs` and then the standard
+OpenClaw/ActionOrchestrator capability path.
 
 ## Обязательные поля envelope (`execute`)
 

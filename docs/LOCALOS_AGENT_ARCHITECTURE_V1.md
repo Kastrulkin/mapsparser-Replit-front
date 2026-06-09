@@ -202,6 +202,33 @@ third-party systems напрямую.
 | Legacy migration scripts outside Alembic (`src/migrate_add_ai_agents_config.py`, etc.) | Старые one-off migrations/debug. | Legacy wrapper. | Не использовать как runtime source of truth. Новые schema changes только Alembic. Удалять после проверки серверной истории/backup policy. |
 | Standalone communication-agent concept | Потенциальная новая сущность рядом с blueprints. | Удалить как продуктовую идею до реализации. | Коммуникация является `AgentBlueprint.category = communications`. |
 
+## Stage 7 Migration / Cleanup Canon
+
+Новый экран `Мои агенты` делает `agent_blueprints` продуктовой точкой входа,
+поэтому legacy cleanup теперь идет через проверяемый migration plan, а не через
+ручное удаление старых полей.
+
+- Read-only migration preview: `GET /api/agent-blueprints/legacy-migration-plan?business_id=<id>`.
+- Старые `AIAgents` без blueprint получают одно из решений:
+  - `use_as_persona`, если они уже связаны через `agent_blueprint_versions.persona_agent_id`;
+  - `create_blueprint_candidate`, если это активный голос/чат-конфиг без blueprint;
+  - `archive_candidate`, если строка неактивна или не содержит полезной persona-конфигурации.
+- `AIAgents.workflow` больше не считается runtime truth. Статус поля:
+  `deprecated_not_runtime_truth`; целевой runtime — `agent_blueprint_versions.steps_json`.
+- Старый sandbox/OpenClaw bridge для `AIAgents` переносится в общий run preview
+  contract: preview создается без side effects, а выполнение идет через
+  `/api/agent-blueprints/<blueprint_id>/runs` и `/api/agent-runs/<run_id>`.
+- `Businesses.ai_agent_enabled`, `ai_agent_tone`, `ai_agent_restrictions`,
+  `ai_agents_config`, `ai_agent_id` остаются backward-compatible reads и
+  migration source. Цели миграции:
+  - `ai_agent_enabled` -> `agent_blueprints.status`;
+  - `ai_agent_tone` -> persona speech style / version persona;
+  - `ai_agent_restrictions` -> persona restrictions / approval policy;
+  - `ai_agents_config` -> `agent_blueprints.metadata_json.agent_setup`;
+  - `ai_agent_id` -> `agent_blueprint_versions.persona_agent_id`.
+- Удаление разрешено только после Alembic migration script, backup policy и proof,
+  что UI/API больше не читают deprecated field/endpoint.
+
 ## Category Canon
 
 Разрешенные категории agent blueprint должны описывать тип workflow, а не отдельный

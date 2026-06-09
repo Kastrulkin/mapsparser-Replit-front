@@ -1,0 +1,8 @@
+Integration smoke is deferred until production deploy.
+
+Planned server checks:
+- cd /opt/seo-app && docker compose ps
+- cd /opt/seo-app && docker compose logs --since 15m app
+- cd /opt/seo-app && docker compose logs --since 15m worker
+- cd /opt/seo-app && curl -I http://localhost:8000
+- route registration check for /api/agent-blueprints/legacy-migration-plan

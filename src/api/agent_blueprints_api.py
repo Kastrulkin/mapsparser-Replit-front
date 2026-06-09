@@ -29,6 +29,7 @@ from services.agent_product_layer import (
     collect_persona_agent_ids,
     parse_persona_row,
 )
+from services.agent_legacy_migration import build_legacy_ai_agent_migration_plan
 from services.agent_source_ingestion import build_agent_source_from_upload
 from services.agent_datahub import build_agent_datahub_catalog
 
@@ -469,6 +470,26 @@ def create_agent_blueprint_draft():
     except Exception:
         db.conn.rollback()
         raise
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-blueprints/legacy-migration-plan", methods=["GET"])
+def get_agent_blueprint_legacy_migration_plan():
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    business_id = str(request.args.get("business_id") or "").strip()
+    if not business_id:
+        return _json_error("business_id is required", 400, "VALIDATION_ERROR")
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        allowed, access_error = _require_business_access(cursor, business_id, user_data)
+        if not allowed:
+            return access_error
+        plan = build_legacy_ai_agent_migration_plan(cursor, business_id)
+        return jsonify({"success": True, "migration_plan": plan})
     finally:
         db.close()
 
