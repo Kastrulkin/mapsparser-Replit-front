@@ -1,8 +1,8 @@
 # Evidence Bundle: agents-ui-my-agents-20260609
 
 ## Summary
-- Overall status: UNKNOWN
-- Last updated: 2026-06-09T12:12:00+00:00
+- Overall status: PASS
+- Last updated: 2026-06-09T12:17:00+00:00
 
 ## Acceptance criteria evidence
 
@@ -48,12 +48,14 @@
   - `journal_entries_count` is metadata-backed until richer per-run journal aggregation is needed.
 
 ### AC6
-- Status: UNKNOWN
+- Status: PASS
 - Proof:
   - Local tests and build passed.
-  - Commit/push/deploy will be performed after proof validation.
+  - Commit `3d32710` pushed to `origin/main`.
+  - Backend targeted deploy completed and `curl -I http://localhost:8000` returned `200 OK`.
+  - Frontend dist deployed and live HTML references `/assets/index-DYg0djKM.js`.
 - Gaps:
-  - Commit/push/deploy not completed at this evidence timestamp.
+  - None.
 
 ## Commands run
 - `PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py` -> 40 passed.
@@ -61,6 +63,10 @@
 - `python3 -m py_compile src/api/agent_blueprints_api.py` -> pass.
 - `git diff --check -- ...` -> pass.
 - `curl -I http://127.0.0.1:3000/dashboard/agents` -> 200 OK.
+- `git push origin main` -> pushed `3d32710`.
+- production `docker compose ps` -> app/worker/postgres running.
+- production `curl -I http://localhost:8000` -> 200 OK.
+- production live HTML check -> `/assets/index-DYg0djKM.js`.
 
 ## Raw artifacts
 - .agent/tasks/agents-ui-my-agents-20260609/raw/build.txt
@@ -71,4 +77,4 @@
 
 ## Known gaps
 - Browser MCP did not expose a `js` execution tool in this turn, so authenticated browser screenshot was not available. Build and HTTP smoke were used instead.
-- Deployment still pending before final sign-off.
+- Server git working tree remains dirty from previous partial deploy history; no destructive sync/reset performed.

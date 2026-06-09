@@ -1,6 +1,6 @@
 {
   "task_id": "agents-ui-my-agents-20260609",
-  "overall_status": "UNKNOWN",
+  "overall_status": "PASS",
   "acceptance_criteria": [
     {
       "id": "AC1",
@@ -40,9 +40,13 @@
     {
       "id": "AC6",
       "text": "Commit, push and deploy.",
-      "status": "UNKNOWN",
-      "proof": [],
-      "gaps": ["Commit/push/deploy pending"]
+      "status": "PASS",
+      "proof": [
+        "commit 3d32710 pushed to origin/main",
+        "production curl -I http://localhost:8000 -> 200 OK",
+        "live HTML references /assets/index-DYg0djKM.js"
+      ],
+      "gaps": []
     }
   ],
   "changed_files": [
@@ -59,6 +63,6 @@
   ],
   "known_gaps": [
     "Browser MCP did not expose js execution tool for authenticated screenshot.",
-    "Deployment pending before final sign-off."
+    "Server git working tree remains dirty from previous partial deploy history; no destructive sync/reset performed."
   ]
 }
