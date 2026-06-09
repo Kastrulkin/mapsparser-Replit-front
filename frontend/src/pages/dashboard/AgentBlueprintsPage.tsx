@@ -170,6 +170,18 @@ type AgentRunStep = {
   error_text?: string | null;
 };
 
+type AgentRunBillingAction = {
+  action_id?: string;
+  capability?: string;
+  status?: string;
+  reserved_tokens?: number;
+  settled_tokens?: number;
+  released_tokens?: number;
+  inflight_reserved_tokens?: number;
+  total_cost?: number;
+  entry_count?: number;
+};
+
 type AgentRunObservability = {
   schema?: string;
   run_history?: Record<string, unknown>;
@@ -249,6 +261,27 @@ type AgentRunObservability = {
     released_tokens?: number;
     inflight_reserved_tokens?: number;
     total_cost?: number;
+  };
+  billing_ledger?: {
+    summary?: {
+      reserved_tokens?: number;
+      settled_tokens?: number;
+      released_tokens?: number;
+      inflight_reserved_tokens?: number;
+      total_cost?: number;
+    };
+    actions?: AgentRunBillingAction[];
+    entries?: Array<{
+      action_id?: string;
+      capability?: string;
+      entry_type?: string;
+      tokens_in?: number;
+      tokens_out?: number;
+      cost?: number;
+      tariff_id?: string;
+      month_key?: string;
+      created_at?: string;
+    }>;
   };
   errors?: Array<{
     source?: string;
@@ -4168,6 +4201,9 @@ const AgentRunObservabilityPanel = ({ run }: { run: AgentRun }) => {
   const [downloading, setDownloading] = useState(false);
   const observability = run.observability || {};
   const costTokens = observability.cost_tokens || {};
+  const billingLedger = observability.billing_ledger || {};
+  const billingActions = billingLedger.actions || [];
+  const billingEntries = billingLedger.entries || [];
   const delivery = observability.delivery_status || {};
   const ledgerItems = observability.action_ledger?.items || [];
   const domainRequests = observability.domain_requests?.items || [];
@@ -4201,20 +4237,33 @@ const AgentRunObservabilityPanel = ({ run }: { run: AgentRun }) => {
     <div className="mt-4 space-y-4">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <AgentObservabilityMetric icon={Activity} label="Run history" value={run.status} hint={`${observability.step_history?.count || run.steps?.length || 0} шагов`} />
-        <AgentObservabilityMetric icon={ReceiptText} label="Cost / tokens" value={`${costTokens.settled_tokens || 0} ток.`} hint={`${costTokens.total_cost || 0} cost`} />
+        <AgentObservabilityMetric icon={ReceiptText} label="Billing" value={`${costTokens.settled_tokens || 0} ток.`} hint={`reserve ${costTokens.reserved_tokens || 0} · release ${costTokens.released_tokens || 0}`} />
         <AgentObservabilityMetric icon={Send} label="Delivery" value={humanizeMeta(delivery.state || 'not_applicable')} hint={`${delivery.attempts_success || 0}/${delivery.attempts_total || 0} attempts`} />
         <AgentObservabilityMetric icon={ShieldCheck} label="Approvals" value={String(observability.domain_requests?.pending || observability.approvals?.pending || 0)} hint={`${observability.domain_requests?.count || 0} domain requests`} />
         <AgentObservabilityMetric icon={AlertTriangle} label="Errors" value={String(errors.length)} hint={errors.length ? 'нужна проверка' : 'нет ошибок'} />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-4">
+      <div className="grid gap-4 xl:grid-cols-5">
         <RunColumn title="Action ledger" icon={ReceiptText}>
           {ledgerItems.map((item) => (
             <TimelineItem
               key={item.action_id || item.trace_id || item.capability || 'action'}
               title={item.capability || item.action_id || 'OpenClaw action'}
-              meta={`${item.action_id || 'no action id'} · ${item.billing_summary?.settled_tokens || 0} ток.`}
+              meta={`${item.action_id || 'no action id'} · reserve ${item.billing_summary?.reserved_tokens || 0} · settle ${item.billing_summary?.settled_tokens || 0}`}
               status={item.status || (item.error ? 'failed' : 'linked')}
+            />
+          ))}
+        </RunColumn>
+        <RunColumn title="Billing" icon={ReceiptText}>
+          {billingActions.map((item) => (
+            <BillingActionItem key={item.action_id || item.capability || 'billing'} item={item} />
+          ))}
+          {billingEntries.slice(0, 3).map((entry, index) => (
+            <TimelineItem
+              key={`${entry.action_id || 'entry'}-${entry.entry_type || index}-${entry.created_at || index}`}
+              title={humanizeMeta(entry.entry_type || 'billing_entry')}
+              meta={`${entry.action_id || entry.capability || 'action'} · ${entry.tokens_out || 0} ток. · ${entry.cost || 0}`}
+              status={entry.entry_type || 'billing'}
             />
           ))}
         </RunColumn>
@@ -4336,6 +4385,45 @@ const TimelineItem = ({ title, meta, status }: { title: string; meta: string; st
     </div>
   </div>
 );
+
+const BillingActionItem = ({
+  item,
+}: {
+  item: AgentRunBillingAction;
+}) => {
+  const reserved = item.reserved_tokens || 0;
+  const settled = item.settled_tokens || 0;
+  const released = item.released_tokens || 0;
+  const inflight = item.inflight_reserved_tokens || Math.max(reserved - settled - released, 0);
+  return (
+    <div className="rounded-xl bg-white px-3 py-3 shadow-sm ring-1 ring-slate-200">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-medium text-slate-900">{item.capability || item.action_id || 'billing action'}</div>
+          <div className="mt-1 text-xs text-slate-500">{item.action_id || 'no action id'}</div>
+        </div>
+        <StatusBadge status={inflight > 0 ? 'reserved' : item.status || 'settled'} />
+      </div>
+      <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+        <div className="rounded-lg bg-slate-50 px-2 py-2">
+          <div className="font-semibold text-slate-900">{reserved}</div>
+          <div className="text-slate-500">reserve</div>
+        </div>
+        <div className="rounded-lg bg-slate-50 px-2 py-2">
+          <div className="font-semibold text-slate-900">{settled}</div>
+          <div className="text-slate-500">settle</div>
+        </div>
+        <div className="rounded-lg bg-slate-50 px-2 py-2">
+          <div className="font-semibold text-slate-900">{released}</div>
+          <div className="text-slate-500">release</div>
+        </div>
+      </div>
+      <div className="mt-2 text-xs text-slate-500">
+        inflight {inflight} ток. · cost {item.total_cost || 0} · entries {item.entry_count || 0}
+      </div>
+    </div>
+  );
+};
 
 const compactValue = (value: unknown) => {
   if (Array.isArray(value)) {

@@ -923,8 +923,24 @@ class AgentBlueprintRunner:
             f"- settled_tokens: `{cost_tokens.get('settled_tokens') or 0}`",
             f"- total_cost: `{cost_tokens.get('total_cost') or 0}`",
             "",
-            "## Recovery Actions",
+            "## Billing",
         ]
+        billing = observability.get("billing_ledger") if isinstance(observability.get("billing_ledger"), dict) else {}
+        for item in billing.get("actions") or []:
+            lines.append(
+                f"- `{item.get('action_id') or 'no-action'}` {item.get('capability') or 'capability'}: "
+                f"reserve/settle/release "
+                f"`{item.get('reserved_tokens') or 0}/{item.get('settled_tokens') or 0}/{item.get('released_tokens') or 0}`, "
+                f"inflight `{item.get('inflight_reserved_tokens') or 0}`"
+            )
+        if not billing.get("actions"):
+            lines.append("- none")
+        lines.extend(
+            [
+                "",
+                "## Recovery Actions",
+            ]
+        )
         for item in observability.get("recovery_actions") or []:
             lines.append(f"- `{item.get('code')}` {item.get('label')}")
         if not observability.get("recovery_actions"):
@@ -969,6 +985,7 @@ class AgentBlueprintRunner:
                 action_errors.append(item)
 
         cost_tokens = self._aggregate_cost_tokens(action_observations)
+        billing_ledger = self._build_billing_ledger(action_observations)
         delivery_status = self._build_delivery_status(artifacts, action_observations)
         domain_requests = self._load_domain_request_observability(run, steps, action_ids)
         recovery_actions = self._build_recovery_actions(run, step_errors + action_errors, delivery_status, action_ids)
@@ -1014,6 +1031,7 @@ class AgentBlueprintRunner:
             },
             "delivery_status": delivery_status,
             "cost_tokens": cost_tokens,
+            "billing_ledger": billing_ledger,
             "errors": step_errors + action_errors,
             "recovery_actions": recovery_actions,
             "support_export": {
@@ -1418,6 +1436,50 @@ class AgentBlueprintRunner:
             "released_tokens": released_tokens,
             "inflight_reserved_tokens": max(reserved_tokens - settled_tokens - released_tokens, 0),
             "total_cost": round(total_cost, 6),
+        }
+
+    def _build_billing_ledger(self, action_observations: List[Dict[str, Any]]) -> Dict[str, Any]:
+        action_items = []
+        entries = []
+        for observation in action_observations:
+            summary = observation.get("billing_summary") if isinstance(observation.get("billing_summary"), dict) else {}
+            action_entries = observation.get("billing_entries") if isinstance(observation.get("billing_entries"), list) else []
+            action_id = str(observation.get("action_id") or "").strip()
+            capability = str(observation.get("capability") or "").strip()
+            action_items.append(
+                {
+                    "action_id": action_id,
+                    "capability": capability,
+                    "status": observation.get("status"),
+                    "reserved_tokens": int(summary.get("reserved_tokens") or 0),
+                    "settled_tokens": int(summary.get("settled_tokens") or 0),
+                    "released_tokens": int(summary.get("released_tokens") or 0),
+                    "inflight_reserved_tokens": int(summary.get("inflight_reserved_tokens") or 0),
+                    "total_cost": float(summary.get("total_cost") or 0.0),
+                    "entry_count": len(action_entries),
+                }
+            )
+            for entry in action_entries:
+                if not isinstance(entry, dict):
+                    continue
+                entries.append(
+                    {
+                        "action_id": action_id,
+                        "capability": capability,
+                        "entry_type": entry.get("entry_type"),
+                        "tokens_in": int(entry.get("tokens_in") or 0),
+                        "tokens_out": int(entry.get("tokens_out") or 0),
+                        "cost": float(entry.get("cost") or 0.0),
+                        "tariff_id": entry.get("tariff_id"),
+                        "month_key": entry.get("month_key"),
+                        "created_at": entry.get("created_at"),
+                    }
+                )
+        totals = self._aggregate_cost_tokens(action_observations)
+        return {
+            "summary": totals,
+            "actions": action_items,
+            "entries": entries[:100],
         }
 
     def _build_delivery_status(self, artifacts: List[Dict[str, Any]], action_observations: List[Dict[str, Any]]) -> Dict[str, Any]:

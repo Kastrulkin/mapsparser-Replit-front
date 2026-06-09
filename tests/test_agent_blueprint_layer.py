@@ -1128,6 +1128,9 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "publish_requests" in agents_page_source
     assert "Support export" in agents_page_source
     assert "agent_run_observability_v1" in Path("src/services/agent_blueprint_runner.py").read_text(encoding="utf-8")
+    assert "billing_ledger" in Path("src/services/agent_blueprint_runner.py").read_text(encoding="utf-8")
+    assert "BillingActionItem" in agents_page_source
+    assert "reserve ${item.billing_summary?.reserved_tokens" in agents_page_source
     assert "Использовано в последнем запуске" in agents_page_source
     assert "used_sources" in workspace_source
     assert "resultFieldLabels" in agents_page_source
@@ -2405,6 +2408,14 @@ def test_runner_load_run_includes_observability_envelope_for_openclaw_actions():
     assert observability["schema"] == "agent_run_observability_v1"
     assert observability["action_ids"] == ["action-1"]
     assert observability["action_ledger"]["items"][0]["billing_summary"]["settled_tokens"] == 42
+    assert observability["billing_ledger"]["summary"]["reserved_tokens"] == 2000
+    assert observability["billing_ledger"]["summary"]["settled_tokens"] == 42
+    assert observability["billing_ledger"]["summary"]["released_tokens"] == 1958
+    assert observability["billing_ledger"]["actions"][0]["action_id"] == "action-1"
+    assert observability["billing_ledger"]["actions"][0]["capability"] == "communications.send_reminder"
+    assert observability["billing_ledger"]["actions"][0]["entry_count"] == 1
+    assert observability["billing_ledger"]["entries"][0]["entry_type"] == "settle"
+    assert observability["billing_ledger"]["entries"][0]["tokens_out"] == 42
     assert observability["delivery_status"]["state"] == "delivered"
     assert observability["cost_tokens"]["total_cost"] == 0.012
     assert observability["domain_requests"]["count"] == 1
