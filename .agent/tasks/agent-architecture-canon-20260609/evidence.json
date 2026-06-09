@@ -1,0 +1,60 @@
+{
+  "task_id": "agent-architecture-canon-20260609",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Created canonical LocalOS Agent Architecture v1 document.",
+      "status": "PASS",
+      "proof": [
+        "Added docs/LOCALOS_AGENT_ARCHITECTURE_V1.md"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Document defines Agent, Persona, Blueprint, Compiled Workflow, Capability, Run, Approval, and OpenClaw/ActionOrchestrator.",
+      "status": "PASS",
+      "proof": [
+        "Required terms found in docs/LOCALOS_AGENT_ARCHITECTURE_V1.md via rg"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Document includes inventory table with use/adapt/legacy/delete decisions.",
+      "status": "PASS",
+      "proof": [
+        "Inventory table and four canonical states found in docs/LOCALOS_AGENT_ARCHITECTURE_V1.md"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Document states communication agents are blueprint category communications, not a separate entity.",
+      "status": "PASS",
+      "proof": [
+        "communications category and standalone communication-agent deletion rule found via rg"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "README links to canonical document.",
+      "status": "PASS",
+      "proof": [
+        "README.md links to ./docs/LOCALOS_AGENT_ARCHITECTURE_V1.md"
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "README.md",
+    "docs/LOCALOS_AGENT_ARCHITECTURE_V1.md"
+  ],
+  "commands_for_fresh_verifier": [],
+  "known_gaps": [
+    "Documentation-only stage; no runtime code was implemented.",
+    "P0 follow-up documented: verify /api/capabilities/* and /api/openclaw/* route registration in current Flask runtime."
+  ]
+}

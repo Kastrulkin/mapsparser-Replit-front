@@ -1,0 +1,2 @@
+No integration test output captured yet.
+Not applicable: documentation-only planning change.
