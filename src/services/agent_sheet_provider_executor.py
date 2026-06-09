@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import sys
 from typing import Any, Dict, List, Protocol
 
 from core.agent_api_security import log_agent_action
+from services.agent_google_sheets_adapter import GoogleSheetsAdapterError, load_google_sheets_append_adapter
 
 
 class SheetAppendAdapter(Protocol):
@@ -28,13 +30,21 @@ def execute_queued_sheet_provider_requests(
     items: List[Dict[str, Any]] = []
     for row in rows:
         request = _request_payload(row)
-        if adapter is None:
-            items.append(_mark_provider_unavailable(cursor, row, request, user_id))
-            continue
+        active_adapter = adapter
+        if active_adapter is None:
+            try:
+                active_adapter = load_google_sheets_append_adapter(
+                    cursor,
+                    business_id=business_id,
+                    integration_id=str(row.get("integration_id") or ""),
+                )
+            except GoogleSheetsAdapterError:
+                items.append(_mark_provider_unavailable(cursor, row, request, user_id, str(sys.exc_info()[1] or "")))
+                continue
         try:
-            result = adapter.append_row(request)
-        except Exception as exc:
-            items.append(_mark_provider_failed(cursor, row, request, user_id, str(exc)))
+            result = active_adapter.append_row(request)
+        except Exception:
+            items.append(_mark_provider_failed(cursor, row, request, user_id, str(sys.exc_info()[1] or "")))
             continue
         if bool(result.get("success")):
             items.append(_mark_provider_applied(cursor, row, request, result, user_id))
@@ -87,7 +97,13 @@ def _request_payload(row: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _mark_provider_unavailable(cursor: Any, row: Dict[str, Any], request: Dict[str, Any], user_id: str) -> Dict[str, Any]:
+def _mark_provider_unavailable(
+    cursor: Any,
+    row: Dict[str, Any],
+    request: Dict[str, Any],
+    user_id: str,
+    reason: str = "Google Sheets provider adapter is not configured.",
+) -> Dict[str, Any]:
     return _finish_request(
         cursor,
         row,
@@ -96,8 +112,8 @@ def _mark_provider_unavailable(cursor: Any, row: Dict[str, Any], request: Dict[s
         status="provider_unavailable",
         apply_state="provider_unavailable",
         provider_write_performed=False,
-        error_text="Google Sheets provider adapter is not configured.",
-        provider_result={"success": False, "error_code": "GOOGLE_SHEETS_PROVIDER_NOT_CONFIGURED"},
+        error_text=reason or "Google Sheets provider adapter is not configured.",
+        provider_result={"success": False, "error_code": "GOOGLE_SHEETS_PROVIDER_NOT_CONFIGURED", "error": reason},
     )
 
 

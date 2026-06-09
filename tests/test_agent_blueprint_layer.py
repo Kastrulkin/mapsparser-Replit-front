@@ -865,10 +865,145 @@ def test_sheet_provider_executor_marks_unavailable_without_adapter():
     assert request["status"] == "provider_unavailable"
     assert request["apply_state"] == "provider_unavailable"
     assert request["provider_write_performed"] is False
-    assert "not configured" in request["error_text"]
+    assert "integration" in request["error_text"] or "not found" in request["error_text"]
     assert cursor.ledger_entries[0]["action_type"] == "agent_sheet_provider_executor"
     assert cursor.ledger_entries[0]["status"] == "provider_attention"
     assert cursor.ledger_entries[0]["metadata"]["provider_write_performed"] is False
+
+
+def test_google_sheets_adapter_loads_active_agent_integration_credentials(monkeypatch):
+    from services import agent_google_sheets_adapter
+
+    cursor = FakeGoogleSheetsIntegrationCursor()
+    cursor.agent_integrations["integration-1"] = {
+        "id": "integration-1",
+        "business_id": "biz1",
+        "provider": "google_sheets",
+        "status": "active",
+        "auth_ref": "external-1",
+        "config_json": {},
+    }
+    cursor.external_accounts["external-1"] = {
+        "id": "external-1",
+        "business_id": "biz1",
+        "source": "google_sheets",
+        "auth_data_encrypted": "encrypted-auth",
+        "is_active": True,
+    }
+    monkeypatch.setattr(
+        agent_google_sheets_adapter,
+        "decrypt_auth_data",
+        lambda encrypted: json.dumps(
+            {
+                "token": "access-token",
+                "scopes": [agent_google_sheets_adapter.SHEETS_SCOPE],
+            }
+        ),
+    )
+
+    adapter = agent_google_sheets_adapter.load_google_sheets_append_adapter(
+        cursor,
+        business_id="biz1",
+        integration_id="integration-1",
+    )
+
+    assert adapter.credentials["token"] == "access-token"
+
+
+def test_google_sheets_adapter_append_row_uses_google_sheets_api(monkeypatch):
+    from services import agent_google_sheets_adapter
+
+    calls = []
+
+    class FakeResponse:
+        status_code = 200
+        content = b"{}"
+        text = "{}"
+
+        def json(self):
+            return {"updates": {"updatedRange": "Leads!A2:C2", "updatedRows": 1, "updatedCells": 3}}
+
+    def fake_post(url, **kwargs):
+        calls.append({"url": url, **kwargs})
+        return FakeResponse()
+
+    monkeypatch.setattr(agent_google_sheets_adapter.requests, "post", fake_post)
+    adapter = agent_google_sheets_adapter.GoogleSheetsAppendAdapter(
+        {"token": "access-token", "scopes": [agent_google_sheets_adapter.SHEETS_SCOPE]}
+    )
+
+    result = adapter.append_row(
+        {
+            "spreadsheet_id": "spreadsheet-1",
+            "sheet_name": "Leads",
+            "row_values": ["2026-06-09T10:00:00Z", "anna", "Новая заявка"],
+        }
+    )
+
+    assert result["success"] is True
+    assert result["updated_rows"] == 1
+    assert calls[0]["url"].startswith("https://sheets.googleapis.com/v4/spreadsheets/spreadsheet-1/values/Leads%21A1:append")
+    assert calls[0]["params"]["valueInputOption"] == "USER_ENTERED"
+    assert calls[0]["headers"]["Authorization"] == "Bearer access-token"
+    assert calls[0]["json"]["values"][0] == ["2026-06-09T10:00:00Z", "anna", "Новая заявка"]
+
+
+def test_sheet_provider_executor_loads_adapter_from_agent_integration_and_applies(monkeypatch):
+    from services import agent_sheet_provider_executor
+
+    class FakeSheetsAdapter:
+        def __init__(self):
+            self.requests = []
+
+        def append_row(self, request):
+            self.requests.append(request)
+            return {
+                "success": True,
+                "updated_range": "Leads!A2:C2",
+                "updated_rows": 1,
+            }
+
+    adapter = FakeSheetsAdapter()
+    requested = []
+
+    def fake_load_adapter(cursor, *, business_id, integration_id=""):
+        requested.append({"business_id": business_id, "integration_id": integration_id})
+        return adapter
+
+    monkeypatch.setattr(agent_sheet_provider_executor, "load_google_sheets_append_adapter", fake_load_adapter)
+    cursor = FakeSheetProviderExecutorCursor()
+    cursor.tables["agent_sheet_operation_requests"]["sheet-request-1"] = {
+        "id": "sheet-request-1",
+        "business_id": "biz1",
+        "user_id": "user1",
+        "action_id": "action-1",
+        "status": "approved_for_execution",
+        "approval_state": "approved",
+        "apply_state": "provider_request_queued",
+        "operation": "append_row",
+        "integration_id": "integration-1",
+        "spreadsheet_id": "spreadsheet-1",
+        "sheet_name": "Leads",
+        "row_values_json": ["2026-06-09T10:00:00Z", "anna", "Новая заявка"],
+        "mapping_json": {},
+        "source_event_json": {"trigger_event_id": "trigger-1"},
+        "limits_json": {"daily_append_cap": 50},
+        "provider_write_performed": False,
+    }
+
+    result = agent_sheet_provider_executor.execute_queued_sheet_provider_requests(
+        cursor,
+        business_id="biz1",
+        user_id="operator1",
+    )
+
+    request = cursor.tables["agent_sheet_operation_requests"]["sheet-request-1"]
+    assert requested == [{"business_id": "biz1", "integration_id": "integration-1"}]
+    assert adapter.requests[0]["spreadsheet_id"] == "spreadsheet-1"
+    assert result["provider_writes_performed"] is True
+    assert request["status"] == "applied"
+    assert request["apply_state"] == "applied"
+    assert request["provider_write_performed"] is True
 
 
 def test_sheet_provider_executor_applies_with_adapter_and_audit():
@@ -3414,6 +3549,7 @@ class FakeSheetProviderExecutorCursor:
             "agent_sheet_operation_requests": {},
             "agent_action_ledger": {},
         }
+        self.last_result = None
         self.last_results = []
         self.ledger_entries = []
 
@@ -3433,6 +3569,9 @@ class FakeSheetProviderExecutorCursor:
                 and row.get("provider_write_performed") is False
             ]
             self.last_results = rows[:limit]
+            return None
+        if "from agent_integrations" in normalized_query:
+            self.last_result = None
             return None
         if normalized_query.startswith("update agent_sheet_operation_requests"):
             request = self.tables["agent_sheet_operation_requests"].get(params[4])
@@ -3464,6 +3603,54 @@ class FakeSheetProviderExecutorCursor:
             self.tables["agent_action_ledger"][params[0]] = entry
             return None
         raise AssertionError(f"Unhandled sheet provider SQL: {query}")
+
+    def fetchall(self):
+        return self.last_results
+
+    def fetchone(self):
+        return self.last_result
+
+
+class FakeGoogleSheetsIntegrationCursor:
+    def __init__(self):
+        self.agent_integrations = {}
+        self.external_accounts = {}
+        self.last_result = None
+        self.last_results = []
+
+    def execute(self, query, params=None):
+        normalized_query = " ".join(query.split()).lower()
+        params = params or ()
+        if "from agent_integrations" in normalized_query:
+            business_id = params[1] if "where id = %s" in normalized_query else params[0]
+            integration_id = params[0] if "where id = %s" in normalized_query else ""
+            rows = [
+                row
+                for row in self.agent_integrations.values()
+                if row.get("business_id") == business_id
+                and row.get("provider") == "google_sheets"
+                and row.get("status") == "active"
+                and (not integration_id or row.get("id") == integration_id)
+            ]
+            self.last_result = rows[0] if rows else None
+            return None
+        if "from information_schema.columns" in normalized_query:
+            self.last_results = [{"column_name": "auth_data_encrypted"}]
+            return None
+        if "from externalbusinessaccounts" in normalized_query:
+            auth_ref = params[0]
+            business_id = params[1]
+            account = self.external_accounts.get(auth_ref)
+            self.last_result = (
+                account
+                if account and account.get("business_id") == business_id and account.get("is_active") is True
+                else None
+            )
+            return None
+        raise AssertionError(f"Unhandled Google Sheets integration SQL: {query}")
+
+    def fetchone(self):
+        return self.last_result
 
     def fetchall(self):
         return self.last_results
