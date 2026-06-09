@@ -192,6 +192,16 @@ def _remember_active_version(cursor, blueprint: dict, version: dict, user_data: 
     metadata["active_version_updated_at"] = event["created_at"]
     metadata["version_events"] = events[-50:]
     _save_blueprint_metadata(cursor, blueprint_id, metadata)
+    cursor.execute(
+        """
+        UPDATE agent_blueprints
+        SET status = 'active',
+            updated_at = NOW()
+        WHERE id = %s
+          AND status <> 'archived'
+        """,
+        (blueprint_id,),
+    )
     return event
 
 

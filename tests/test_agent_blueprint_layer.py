@@ -999,6 +999,110 @@ def test_telegram_trigger_runtime_records_ignored_event_when_no_custom_blueprint
     assert cursor.trigger_events[0]["reason_code"] == "NO_MATCHING_ACTIVE_BLUEPRINT"
 
 
+def test_telegram_trigger_runtime_starts_active_custom_agent_and_waits_for_sheet_approval():
+    from services.agent_blueprint_draft_builder import compile_agent_blueprint
+    from services.agent_trigger_runtime import dispatch_telegram_message_to_agent_blueprints
+
+    draft = compile_agent_blueprint("Когда пользователь пишет в Telegram бота, добавь строку в Google таблицу")
+    payload = draft["version_payload"]
+    cursor = FakeActiveTelegramTriggerCursor()
+    cursor.tables["agent_blueprints"]["bp1"] = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "name": draft["name"],
+        "category": "custom",
+        "status": "active",
+        "created_by_user_id": "user1",
+        "metadata_json": {
+            **draft["metadata"],
+            "active_version_id": "ver1",
+            "custom_process": {
+                **draft["metadata"]["custom_process"],
+                "google_sheets": {
+                    "spreadsheet_id": "spreadsheet-1",
+                    "sheet_name": "Leads",
+                },
+            },
+        },
+    }
+    cursor.tables["agent_blueprint_versions"]["ver1"] = {
+        "id": "ver1",
+        "blueprint_id": "bp1",
+        "version_number": 1,
+        "goal": payload["goal"],
+        "inputs_schema_json": payload["inputs_schema"],
+        "steps_json": payload["steps"],
+        "capability_allowlist_json": payload["capability_allowlist"],
+        "approval_policy_json": payload["approval_policy"],
+        "output_schema_json": payload["output_schema"],
+        "created_by_user_id": "user1",
+    }
+
+    result = dispatch_telegram_message_to_agent_blueprints(
+        cursor,
+        "biz1",
+        {
+            "message_text": "Новая заявка: Анна",
+            "telegram_user_id": "123",
+            "telegram_username": "anna",
+            "chat_id": "456",
+            "message_id": "789",
+            "received_at": "2026-06-09T10:00:00Z",
+        },
+    )
+
+    run = next(iter(cursor.tables["agent_runs"].values()))
+    approval = next(iter(cursor.tables["agent_approvals"].values()))
+    assert result["success"] is True
+    assert result["matched_count"] == 1
+    assert result["legacy_reply_should_continue"] is False
+    assert cursor.trigger_events[0]["status"] == "run_started"
+    assert cursor.trigger_events[0]["run_id"] == run["id"]
+    assert run["status"] == "waiting_approval"
+    assert run["input_json"]["spreadsheet_id"] == "spreadsheet-1"
+    assert run["input_json"]["sheet_name"] == "Leads"
+    assert approval["approval_type"] == "sheet_update"
+    assert approval["status"] == "pending"
+
+
+def test_activate_version_marks_blueprint_active_for_trigger_runtime(monkeypatch):
+    from api import agent_blueprints_api
+
+    class ActivationCursor:
+        def __init__(self):
+            self.metadata = {}
+            self.status = "draft"
+
+        def execute(self, query, params=None):
+            normalized_query = " ".join(query.split()).lower()
+            params = params or ()
+            if normalized_query.startswith("update agent_blueprints") and "set metadata_json" in normalized_query:
+                self.metadata = json.loads(params[0])
+                return None
+            if normalized_query.startswith("update agent_blueprints") and "set status = 'active'" in normalized_query:
+                self.status = "active"
+                return None
+            raise AssertionError(f"Unhandled activation SQL: {query}")
+
+    cursor = ActivationCursor()
+    blueprint = {"id": "bp1", "metadata_json": {"version_events": []}, "status": "draft"}
+    version = {"id": "ver1", "version_number": 1}
+    monkeypatch.setattr(agent_blueprints_api, "_load_blueprint", lambda _cursor, _blueprint_id: blueprint)
+
+    event = agent_blueprints_api._remember_active_version(
+        cursor,
+        blueprint,
+        version,
+        {"user_id": "user1"},
+        "activated",
+        "ready for telegram trigger",
+    )
+
+    assert event["active_version_id"] == "ver1"
+    assert cursor.metadata["active_version_id"] == "ver1"
+    assert cursor.status == "active"
+
+
 def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     api_source = Path("src/api/agent_blueprints_api.py").read_text(encoding="utf-8")
     workspace_source = Path("src/services/agent_blueprint_workspace.py").read_text(encoding="utf-8")
@@ -1044,6 +1148,7 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "/api/agent-runs/<run_id>/feedback" in api_source
     assert "trigger_type" in api_source
     assert "auto_activate" in api_source
+    assert "SET status = 'active'" in api_source
     assert "build_learning_loop_summary" in api_source
     assert "/api/agent-runs/<run_id>/support-export" in api_source
     assert "build_run_support_export" in api_source
@@ -3244,6 +3349,61 @@ class FakeTelegramTriggerCursor:
 
     def fetchall(self):
         return self.last_results
+
+
+class FakeActiveTelegramTriggerCursor(FakeCursor):
+    def __init__(self):
+        super().__init__()
+        self.trigger_events = []
+
+    def execute(self, query, params=None):
+        normalized_query = " ".join(query.split()).lower()
+        params = params or ()
+        if normalized_query.startswith("create table") or normalized_query.startswith("create index"):
+            return None
+        if normalized_query.startswith("insert into agent_trigger_events"):
+            self.trigger_events.append(
+                {
+                    "id": params[0],
+                    "business_id": params[1],
+                    "source": "telegram",
+                    "event_type": "telegram.message.received",
+                    "status": "received",
+                    "payload_json": json.loads(params[2]),
+                    "reason_code": None,
+                    "blueprint_id": None,
+                    "run_id": None,
+                }
+            )
+            return None
+        if "from agent_blueprints" in normalized_query and "status = 'active'" in normalized_query:
+            business_id = params[0]
+            self.last_results = [
+                row
+                for row in self.tables["agent_blueprints"].values()
+                if row.get("business_id") == business_id
+                and row.get("status") == "active"
+                and row.get("category") in {"custom", "tables"}
+            ]
+            return None
+        if normalized_query.startswith("select * from agent_blueprint_versions where blueprint_id"):
+            blueprint_id = params[0]
+            rows = [
+                row
+                for row in self.tables["agent_blueprint_versions"].values()
+                if row.get("blueprint_id") == blueprint_id
+            ]
+            rows.sort(key=lambda item: int(item.get("version_number") or 0), reverse=True)
+            self.last_result = rows[0] if rows else None
+            return None
+        if normalized_query.startswith("update agent_trigger_events set blueprint_id"):
+            for item in self.trigger_events:
+                if item["id"] == params[2]:
+                    item["blueprint_id"] = params[0]
+                    item["run_id"] = params[1]
+                    item["status"] = "run_started"
+            return None
+        return super().execute(query, params)
 
 
 class CountingOrchestrator:
