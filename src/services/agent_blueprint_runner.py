@@ -1095,7 +1095,7 @@ class AgentBlueprintRunner:
             """
             SELECT id, action_id, integration_id, spreadsheet_id, sheet_name, operation,
                    status, approval_state, apply_state, row_values_json, mapping_json,
-                   limits_json, provider_write_performed, created_at
+                   limits_json, provider_write_performed, error_text, created_at
             FROM agent_sheet_operation_requests
             WHERE business_id = %s AND (id = ANY(%s) OR action_id = ANY(%s))
             ORDER BY created_at DESC
@@ -1111,6 +1111,10 @@ class AgentBlueprintRunner:
             waiting_reason = "External spreadsheet write requires human approval before provider write."
             if approval_state == "approved":
                 waiting_reason = "Human approved; controlled Google Sheets provider request is queued. No spreadsheet write has run yet."
+            if apply_state in {"provider_unavailable", "provider_failed"}:
+                waiting_reason = "Human approved; Google Sheets provider executor needs attention before external write can complete."
+            if apply_state == "applied":
+                waiting_reason = "Google Sheets provider executor applied the approved request."
             provider_handoff = {
                 "provider_executor": "manual_controlled_google_sheets_append",
                 "handoff_state": apply_state or row.get("apply_state"),
@@ -1119,6 +1123,7 @@ class AgentBlueprintRunner:
                 "spreadsheet_id": row.get("spreadsheet_id"),
                 "sheet_name": row.get("sheet_name"),
                 "provider_write_performed": bool(row.get("provider_write_performed")),
+                "error": row.get("error_text"),
             }
             result.append(
                 {
@@ -1135,6 +1140,7 @@ class AgentBlueprintRunner:
                     "mapping": parse_json_field(row.get("mapping_json"), {}),
                     "limits": parse_json_field(row.get("limits_json"), {}),
                     "provider_handoff": provider_handoff,
+                    "error": row.get("error_text"),
                     "provider_write_performed": bool(row.get("provider_write_performed")),
                     "created_at": row.get("created_at"),
                 }

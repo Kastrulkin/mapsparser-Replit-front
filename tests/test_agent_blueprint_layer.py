@@ -833,6 +833,94 @@ def test_approved_domain_executor_moves_sheet_request_after_human_gate():
     assert cursor.ledger_entries[0]["output_summary"]["state"] == "provider_request_queued"
 
 
+def test_sheet_provider_executor_marks_unavailable_without_adapter():
+    from services.agent_sheet_provider_executor import execute_queued_sheet_provider_requests
+
+    cursor = FakeSheetProviderExecutorCursor()
+    cursor.tables["agent_sheet_operation_requests"]["sheet-request-1"] = {
+        "id": "sheet-request-1",
+        "business_id": "biz1",
+        "user_id": "user1",
+        "action_id": "action-1",
+        "status": "approved_for_execution",
+        "approval_state": "approved",
+        "apply_state": "provider_request_queued",
+        "operation": "append_row",
+        "integration_id": "integration-1",
+        "spreadsheet_id": "spreadsheet-1",
+        "sheet_name": "Leads",
+        "row_values_json": ["2026-06-09T10:00:00Z", "anna", "Новая заявка"],
+        "mapping_json": {},
+        "source_event_json": {"trigger_event_id": "trigger-1"},
+        "limits_json": {"daily_append_cap": 50},
+        "provider_write_performed": False,
+    }
+
+    result = execute_queued_sheet_provider_requests(cursor, business_id="biz1", user_id="operator1")
+
+    request = cursor.tables["agent_sheet_operation_requests"]["sheet-request-1"]
+    assert result["processed"] == 1
+    assert result["provider_writes_performed"] is False
+    assert result["items"][0]["apply_state"] == "provider_unavailable"
+    assert request["status"] == "provider_unavailable"
+    assert request["apply_state"] == "provider_unavailable"
+    assert request["provider_write_performed"] is False
+    assert "not configured" in request["error_text"]
+    assert cursor.ledger_entries[0]["action_type"] == "agent_sheet_provider_executor"
+    assert cursor.ledger_entries[0]["status"] == "provider_attention"
+    assert cursor.ledger_entries[0]["metadata"]["provider_write_performed"] is False
+
+
+def test_sheet_provider_executor_applies_with_adapter_and_audit():
+    from services.agent_sheet_provider_executor import execute_queued_sheet_provider_requests
+
+    class FakeSheetsAdapter:
+        def __init__(self):
+            self.requests = []
+
+        def append_row(self, request):
+            self.requests.append(request)
+            return {
+                "success": True,
+                "updated_range": "Leads!A2:C2",
+                "updated_rows": 1,
+                "access_token": "secret-token",
+            }
+
+    cursor = FakeSheetProviderExecutorCursor()
+    cursor.tables["agent_sheet_operation_requests"]["sheet-request-1"] = {
+        "id": "sheet-request-1",
+        "business_id": "biz1",
+        "user_id": "user1",
+        "action_id": "action-1",
+        "status": "approved_for_execution",
+        "approval_state": "approved",
+        "apply_state": "provider_request_queued",
+        "operation": "append_row",
+        "integration_id": "integration-1",
+        "spreadsheet_id": "spreadsheet-1",
+        "sheet_name": "Leads",
+        "row_values_json": ["2026-06-09T10:00:00Z", "anna", "Новая заявка"],
+        "mapping_json": {},
+        "source_event_json": {"trigger_event_id": "trigger-1"},
+        "limits_json": {"daily_append_cap": 50},
+        "provider_write_performed": False,
+    }
+    adapter = FakeSheetsAdapter()
+
+    result = execute_queued_sheet_provider_requests(cursor, business_id="biz1", user_id="operator1", adapter=adapter)
+
+    request = cursor.tables["agent_sheet_operation_requests"]["sheet-request-1"]
+    assert result["processed"] == 1
+    assert result["provider_writes_performed"] is True
+    assert adapter.requests[0]["row_values"] == ["2026-06-09T10:00:00Z", "anna", "Новая заявка"]
+    assert request["status"] == "applied"
+    assert request["apply_state"] == "applied"
+    assert request["provider_write_performed"] is True
+    assert cursor.ledger_entries[0]["status"] == "provider_applied"
+    assert cursor.ledger_entries[0]["output_summary"]["provider_result"]["access_token"] == "[redacted]"
+
+
 def test_approved_domain_executor_applies_service_optimization_to_localos_data():
     from services.agent_domain_request_executors import execute_approved_domain_requests
 
@@ -3315,6 +3403,67 @@ class FakeApprovedDomainExecutorCursor:
 
     def fetchone(self):
         return self.last_result
+
+    def fetchall(self):
+        return self.last_results
+
+
+class FakeSheetProviderExecutorCursor:
+    def __init__(self):
+        self.tables = {
+            "agent_sheet_operation_requests": {},
+            "agent_action_ledger": {},
+        }
+        self.last_results = []
+        self.ledger_entries = []
+
+    def execute(self, query, params=None):
+        normalized_query = " ".join(query.split()).lower()
+        params = params or ()
+        if normalized_query.startswith("select id, action_id, business_id"):
+            business_id = params[0]
+            limit = params[1]
+            rows = [
+                row
+                for row in self.tables["agent_sheet_operation_requests"].values()
+                if row.get("business_id") == business_id
+                and row.get("status") == "approved_for_execution"
+                and row.get("approval_state") == "approved"
+                and row.get("apply_state") == "provider_request_queued"
+                and row.get("provider_write_performed") is False
+            ]
+            self.last_results = rows[:limit]
+            return None
+        if normalized_query.startswith("update agent_sheet_operation_requests"):
+            request = self.tables["agent_sheet_operation_requests"].get(params[4])
+            if request and request.get("business_id") == params[5] and request.get("apply_state") == "provider_request_queued":
+                request["status"] = params[0]
+                request["apply_state"] = params[1]
+                request["provider_write_performed"] = params[2]
+                request["error_text"] = params[3] or None
+            return None
+        if (
+            normalized_query.startswith("create table")
+            or normalized_query.startswith("create index")
+            or normalized_query.startswith("create unique index")
+        ):
+            return None
+        if normalized_query.startswith("insert into agent_action_ledger"):
+            entry = {
+                "id": params[0],
+                "action_type": params[3],
+                "capability": params[4],
+                "risk_level": params[6],
+                "input_summary": json.loads(params[7]),
+                "output_summary": json.loads(params[8]),
+                "status": params[10],
+                "reason_code": params[11],
+                "metadata": json.loads(params[14]),
+            }
+            self.ledger_entries.append(entry)
+            self.tables["agent_action_ledger"][params[0]] = entry
+            return None
+        raise AssertionError(f"Unhandled sheet provider SQL: {query}")
 
     def fetchall(self):
         return self.last_results
