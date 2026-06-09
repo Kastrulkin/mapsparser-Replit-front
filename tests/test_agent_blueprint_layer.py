@@ -897,6 +897,11 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "Технический журнал" in agents_page_source
     assert "AgentRunObservabilityPanel" in agents_page_source
     assert "Action ledger" in agents_page_source
+    assert "domain_requests" in Path("src/services/agent_blueprint_runner.py").read_text(encoding="utf-8")
+    assert "agent_sheet_operation_requests" in Path("src/services/agent_blueprint_runner.py").read_text(encoding="utf-8")
+    assert "agent_communication_requests" in Path("src/services/agent_blueprint_runner.py").read_text(encoding="utf-8")
+    assert "Ожидают approval" in agents_page_source
+    assert "why_waiting" in agents_page_source
     assert "Support export" in agents_page_source
     assert "agent_run_observability_v1" in Path("src/services/agent_blueprint_runner.py").read_text(encoding="utf-8")
     assert "Использовано в последнем запуске" in agents_page_source
@@ -2144,7 +2149,30 @@ def test_runner_load_run_includes_observability_envelope_for_openclaw_actions():
         "step_type": "capability",
         "status": "completed",
         "input_json": {},
-        "output_json": {"orchestrator": {"action_id": "action-1"}},
+        "output_json": {
+            "capability": "sheets.append_row_request",
+            "orchestrator": {
+                "action_id": "action-1",
+                "result": {"request_id": "sheet-request-1"},
+            },
+        },
+    }
+    cursor.tables["agent_sheet_operation_requests"]["sheet-request-1"] = {
+        "id": "sheet-request-1",
+        "business_id": "biz1",
+        "action_id": "action-1",
+        "integration_id": "integration-1",
+        "spreadsheet_id": "spreadsheet-1",
+        "sheet_name": "Leads",
+        "operation": "append_row",
+        "status": "request_created",
+        "approval_state": "pending_human",
+        "apply_state": "not_applied",
+        "row_values_json": ["Anna", "Telegram"],
+        "mapping_json": {"name": "telegram_username"},
+        "limits_json": {"daily_cap": 10},
+        "provider_write_performed": False,
+        "created_at": "2026-06-09T10:00:00Z",
     }
 
     run = AgentBlueprintRunner(cursor, FakeObservabilityOrchestrator()).load_run("run1", {"user_id": "user1"})
@@ -2155,6 +2183,14 @@ def test_runner_load_run_includes_observability_envelope_for_openclaw_actions():
     assert observability["action_ledger"]["items"][0]["billing_summary"]["settled_tokens"] == 42
     assert observability["delivery_status"]["state"] == "delivered"
     assert observability["cost_tokens"]["total_cost"] == 0.012
+    assert observability["domain_requests"]["count"] == 1
+    assert observability["domain_requests"]["pending"] == 1
+    domain_request = observability["domain_requests"]["items"][0]
+    assert domain_request["kind"] == "sheet_operation_request"
+    assert domain_request["approval_state"] == "pending_human"
+    assert domain_request["apply_state"] == "not_applied"
+    assert domain_request["provider_write_performed"] is False
+    assert "External spreadsheet write requires human approval" in domain_request["why_waiting"]
     assert observability["support_export"]["endpoint"] == "/api/agent-runs/run1/support-export"
 
 
@@ -2169,6 +2205,10 @@ class FakeCursor:
             "agent_approvals": {},
             "prospectingleads": {},
             "outreachmessagedrafts": {},
+            "agent_sheet_operation_requests": {},
+            "agent_communication_requests": {},
+            "reviewreplydrafts": {},
+            "agent_service_optimization_requests": {},
         }
         self.last_result = None
         self.last_results = []
@@ -2176,6 +2216,50 @@ class FakeCursor:
     def execute(self, query, params=None):
         normalized_query = " ".join(query.split()).lower()
         params = params or ()
+        if normalized_query.startswith("select to_regclass"):
+            table_name = params[0]
+            self.last_result = {"table_name": table_name if table_name in self.tables else None}
+            return None
+        if "from agent_sheet_operation_requests" in normalized_query:
+            business_id = params[0]
+            request_ids = set(params[1])
+            action_ids = set(params[2])
+            self.last_results = [
+                row
+                for row in self.tables["agent_sheet_operation_requests"].values()
+                if row.get("business_id") == business_id and (row.get("id") in request_ids or row.get("action_id") in action_ids)
+            ]
+            return None
+        if "from agent_communication_requests" in normalized_query:
+            business_id = params[0]
+            request_ids = set(params[1])
+            action_ids = set(params[2])
+            self.last_results = [
+                row
+                for row in self.tables["agent_communication_requests"].values()
+                if row.get("business_id") == business_id and (row.get("id") in request_ids or row.get("action_id") in action_ids)
+            ]
+            return None
+        if "from reviewreplydrafts" in normalized_query:
+            business_id = params[0]
+            draft_ids = set(params[1])
+            review_ids = set(params[2])
+            self.last_results = [
+                row
+                for row in self.tables["reviewreplydrafts"].values()
+                if row.get("business_id") == business_id and (row.get("id") in draft_ids or row.get("review_id") in review_ids)
+            ]
+            return None
+        if "from agent_service_optimization_requests" in normalized_query:
+            business_id = params[0]
+            request_ids = set(params[1])
+            action_ids = set(params[2])
+            self.last_results = [
+                row
+                for row in self.tables["agent_service_optimization_requests"].values()
+                if row.get("business_id") == business_id and (row.get("id") in request_ids or row.get("action_id") in action_ids)
+            ]
+            return None
         if normalized_query.startswith("select * from agent_blueprint_versions where id"):
             self.last_result = self.tables["agent_blueprint_versions"].get(params[0])
             return None

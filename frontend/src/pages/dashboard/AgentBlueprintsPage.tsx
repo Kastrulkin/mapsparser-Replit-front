@@ -196,6 +196,32 @@ type AgentRunObservability = {
       error?: string;
     }>;
   };
+  domain_requests?: {
+    count?: number;
+    pending?: number;
+    items?: Array<{
+      kind?: string;
+      id?: string;
+      action_id?: string;
+      review_id?: string;
+      title?: string;
+      summary?: string;
+      status?: string;
+      approval_state?: string;
+      apply_state?: string;
+      delivery_state?: string;
+      why_waiting?: string;
+      recipient_count?: number;
+      recipients?: Array<Record<string, unknown>>;
+      row_values?: unknown[];
+      mapping?: Record<string, unknown>;
+      limits?: Record<string, unknown>;
+      consent?: Record<string, unknown>;
+      suggestions?: Array<Record<string, unknown>>;
+      provider_write_performed?: boolean;
+      created_at?: string;
+    }>;
+  };
   delivery_status?: {
     state?: string;
     queued_count?: number;
@@ -4132,6 +4158,7 @@ const AgentRunObservabilityPanel = ({ run }: { run: AgentRun }) => {
   const costTokens = observability.cost_tokens || {};
   const delivery = observability.delivery_status || {};
   const ledgerItems = observability.action_ledger?.items || [];
+  const domainRequests = observability.domain_requests?.items || [];
   const errors = observability.errors || [];
   const recoveryActions = observability.recovery_actions || [];
   const rawSupportEndpoint = observability.support_export?.endpoint || `/api/agent-runs/${run.id}/support-export`;
@@ -4160,14 +4187,15 @@ const AgentRunObservabilityPanel = ({ run }: { run: AgentRun }) => {
 
   return (
     <div className="mt-4 space-y-4">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <AgentObservabilityMetric icon={Activity} label="Run history" value={run.status} hint={`${observability.step_history?.count || run.steps?.length || 0} шагов`} />
         <AgentObservabilityMetric icon={ReceiptText} label="Cost / tokens" value={`${costTokens.settled_tokens || 0} ток.`} hint={`${costTokens.total_cost || 0} cost`} />
         <AgentObservabilityMetric icon={Send} label="Delivery" value={humanizeMeta(delivery.state || 'not_applicable')} hint={`${delivery.attempts_success || 0}/${delivery.attempts_total || 0} attempts`} />
+        <AgentObservabilityMetric icon={ShieldCheck} label="Approvals" value={String(observability.domain_requests?.pending || observability.approvals?.pending || 0)} hint={`${observability.domain_requests?.count || 0} domain requests`} />
         <AgentObservabilityMetric icon={AlertTriangle} label="Errors" value={String(errors.length)} hint={errors.length ? 'нужна проверка' : 'нет ошибок'} />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid gap-4 xl:grid-cols-4">
         <RunColumn title="Action ledger" icon={ReceiptText}>
           {ledgerItems.map((item) => (
             <TimelineItem
@@ -4176,6 +4204,11 @@ const AgentRunObservabilityPanel = ({ run }: { run: AgentRun }) => {
               meta={`${item.action_id || 'no action id'} · ${item.billing_summary?.settled_tokens || 0} ток.`}
               status={item.status || (item.error ? 'failed' : 'linked')}
             />
+          ))}
+        </RunColumn>
+        <RunColumn title="Ожидают approval" icon={ShieldCheck}>
+          {domainRequests.map((item) => (
+            <DomainRequestItem key={`${item.kind || 'request'}-${item.id || item.action_id || item.review_id || item.title}`} item={item} />
           ))}
         </RunColumn>
         <RunColumn title="Ошибки и статусы" icon={AlertTriangle}>
@@ -4198,6 +4231,40 @@ const AgentRunObservabilityPanel = ({ run }: { run: AgentRun }) => {
           </Button>
         </RunColumn>
       </div>
+    </div>
+  );
+};
+
+const DomainRequestItem = ({
+  item,
+}: {
+  item: NonNullable<NonNullable<AgentRunObservability['domain_requests']>['items']>[number];
+}) => {
+  const detailEntries = [
+    item.why_waiting ? ['why_waiting', item.why_waiting] : null,
+    item.limits ? ['limits', item.limits] : null,
+    item.consent ? ['consent', item.consent] : null,
+    item.row_values?.length ? ['row_values', item.row_values] : null,
+    item.suggestions?.length ? ['suggestions', item.suggestions] : null,
+  ].filter((entry): entry is [string, unknown] => Boolean(entry));
+  return (
+    <div className="rounded-xl bg-white px-3 py-3 shadow-sm ring-1 ring-slate-200">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-medium text-slate-900">{item.title || humanizeMeta(item.kind || 'domain request')}</div>
+          <div className="mt-1 text-xs text-slate-500">{item.summary || item.id || 'domain request'}</div>
+        </div>
+        <StatusBadge status={item.approval_state || item.apply_state || item.delivery_state || item.status || 'pending'} />
+      </div>
+      {detailEntries.length ? (
+        <div className="mt-2 space-y-1 text-xs leading-5 text-slate-600">
+          {detailEntries.slice(0, 3).map(([key, value]) => (
+            <div key={key}>
+              <span className="font-medium text-slate-800">{humanizeMeta(key)}:</span> {formatPayloadValue(value)}
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 };

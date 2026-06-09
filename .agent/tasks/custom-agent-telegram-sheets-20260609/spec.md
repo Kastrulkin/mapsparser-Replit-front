@@ -27,6 +27,7 @@ track.
 - AC7: New schema is represented by Alembic migrations.
 - AC8: Architecture docs describe Compile AI custom workflows as blueprint/capability/runtime, not a parallel integration entity.
 - AC9: Targeted tests and syntax checks pass.
+- AC10: Agent run observability surfaces domain requests, approval state, apply state and plain-language waiting reasons for compiled workflows.
 
 ## Constraints
 - No direct Google Sheets API write in this iteration.
@@ -44,4 +45,5 @@ track.
 - Build: `PYTHONPATH=src python3 -m py_compile ...`
 - Unit/regression: `PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py`
 - OpenClaw/capabilities smoke: `PYTHONPATH=src python3 -m pytest -q tests/test_capabilities_api_phase1.py`
+- Frontend build: `npm --prefix frontend run build`
 - Proof validation: `scripts/proof_loop.sh validate custom-agent-telegram-sheets-20260609`

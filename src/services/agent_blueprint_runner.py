@@ -955,6 +955,7 @@ class AgentBlueprintRunner:
 
         cost_tokens = self._aggregate_cost_tokens(action_observations)
         delivery_status = self._build_delivery_status(artifacts, action_observations)
+        domain_requests = self._load_domain_request_observability(run, steps, action_ids)
         recovery_actions = self._build_recovery_actions(run, step_errors + action_errors, delivery_status, action_ids)
 
         return {
@@ -984,6 +985,18 @@ class AgentBlueprintRunner:
                 "count": len(action_observations),
                 "items": action_observations,
             },
+            "domain_requests": {
+                "count": len(domain_requests),
+                "pending": len(
+                    [
+                        item
+                        for item in domain_requests
+                        if str(item.get("approval_state") or item.get("apply_state") or item.get("status") or "")
+                        in {"pending", "pending_human", "not_applied", "publish_requested", "request_created"}
+                    ]
+                ),
+                "items": domain_requests,
+            },
             "delivery_status": delivery_status,
             "cost_tokens": cost_tokens,
             "errors": step_errors + action_errors,
@@ -994,6 +1007,214 @@ class AgentBlueprintRunner:
                 "source": "agent_run_detail",
             },
         }
+
+    def _load_domain_request_observability(
+        self,
+        run: Dict[str, Any],
+        steps: List[Dict[str, Any]],
+        action_ids: List[str],
+    ) -> List[Dict[str, Any]]:
+        refs = self._extract_domain_request_refs(steps, action_ids)
+        business_id = str(run.get("business_id") or "").strip()
+        if not business_id:
+            return []
+        items = []
+        items.extend(self._load_sheet_operation_requests(business_id, refs))
+        items.extend(self._load_communication_requests(business_id, refs))
+        items.extend(self._load_review_publish_requests(business_id, refs))
+        items.extend(self._load_service_optimization_requests(business_id, refs))
+        return items[:50]
+
+    def _extract_domain_request_refs(self, steps: List[Dict[str, Any]], action_ids: List[str]) -> Dict[str, List[str]]:
+        refs = {
+            "action_ids": list(action_ids),
+            "request_ids": [],
+            "draft_ids": [],
+            "review_ids": [],
+        }
+        for step in steps:
+            output = step.get("output_json") if isinstance(step.get("output_json"), dict) else {}
+            orchestrator = output.get("orchestrator") if isinstance(output.get("orchestrator"), dict) else {}
+            nested_result = orchestrator.get("result") if isinstance(orchestrator.get("result"), dict) else {}
+            candidates = {
+                "request_ids": [output.get("request_id"), nested_result.get("request_id")],
+                "draft_ids": [output.get("draft_id"), nested_result.get("draft_id")],
+                "review_ids": [output.get("review_id"), nested_result.get("review_id")],
+                "action_ids": [output.get("action_id"), orchestrator.get("action_id"), nested_result.get("action_id")],
+            }
+            for key, values in candidates.items():
+                for value in values:
+                    text = str(value or "").strip()
+                    if text and text not in refs[key]:
+                        refs[key].append(text)
+        return refs
+
+    def _load_sheet_operation_requests(self, business_id: str, refs: Dict[str, List[str]]) -> List[Dict[str, Any]]:
+        rows = self._select_domain_request_rows(
+            "agent_sheet_operation_requests",
+            """
+            SELECT id, action_id, integration_id, spreadsheet_id, sheet_name, operation,
+                   status, approval_state, apply_state, row_values_json, mapping_json,
+                   limits_json, provider_write_performed, created_at
+            FROM agent_sheet_operation_requests
+            WHERE business_id = %s AND (id = ANY(%s) OR action_id = ANY(%s))
+            ORDER BY created_at DESC
+            LIMIT 50
+            """,
+            (business_id, refs.get("request_ids") or [], refs.get("action_ids") or []),
+            bool(refs.get("request_ids") or refs.get("action_ids")),
+        )
+        result = []
+        for row in rows:
+            result.append(
+                {
+                    "kind": "sheet_operation_request",
+                    "id": row.get("id"),
+                    "action_id": row.get("action_id"),
+                    "title": "Google Sheets update request",
+                    "summary": f"{row.get('operation') or 'append_row'} -> {row.get('sheet_name') or row.get('spreadsheet_id') or 'sheet'}",
+                    "status": row.get("status"),
+                    "approval_state": row.get("approval_state"),
+                    "apply_state": row.get("apply_state"),
+                    "why_waiting": "External spreadsheet write requires human approval before provider write.",
+                    "row_values": parse_json_field(row.get("row_values_json"), []),
+                    "mapping": parse_json_field(row.get("mapping_json"), {}),
+                    "limits": parse_json_field(row.get("limits_json"), {}),
+                    "provider_write_performed": bool(row.get("provider_write_performed")),
+                    "created_at": row.get("created_at"),
+                }
+            )
+        return result
+
+    def _load_communication_requests(self, business_id: str, refs: Dict[str, List[str]]) -> List[Dict[str, Any]]:
+        rows = self._select_domain_request_rows(
+            "agent_communication_requests",
+            """
+            SELECT id, action_id, capability, message_type, status, channel, recipient_count,
+                   recipients_json, limits_json, consent_json, delivery_state, created_at
+            FROM agent_communication_requests
+            WHERE business_id = %s AND (id = ANY(%s) OR action_id = ANY(%s))
+            ORDER BY created_at DESC
+            LIMIT 50
+            """,
+            (business_id, refs.get("request_ids") or [], refs.get("action_ids") or []),
+            bool(refs.get("request_ids") or refs.get("action_ids")),
+        )
+        result = []
+        for row in rows:
+            recipient_count = int(row.get("recipient_count") or 0)
+            channel = str(row.get("channel") or "channel").strip()
+            result.append(
+                {
+                    "kind": "communication_request",
+                    "id": row.get("id"),
+                    "action_id": row.get("action_id"),
+                    "title": "Communication send request",
+                    "summary": f"{row.get('message_type') or row.get('capability') or 'message'} -> {channel} · {recipient_count} recipients",
+                    "status": row.get("status"),
+                    "approval_state": "pending_human",
+                    "delivery_state": row.get("delivery_state"),
+                    "why_waiting": "External customer message requires approval, consent validation, and send limits.",
+                    "recipients": parse_json_field(row.get("recipients_json"), [])[:10],
+                    "recipient_count": recipient_count,
+                    "limits": parse_json_field(row.get("limits_json"), {}),
+                    "consent": parse_json_field(row.get("consent_json"), {}),
+                    "provider_write_performed": False,
+                    "created_at": row.get("created_at"),
+                }
+            )
+        return result
+
+    def _load_review_publish_requests(self, business_id: str, refs: Dict[str, List[str]]) -> List[Dict[str, Any]]:
+        ids = refs.get("draft_ids") or refs.get("request_ids") or []
+        review_ids = refs.get("review_ids") or []
+        rows = self._select_domain_request_rows(
+            "reviewreplydrafts",
+            """
+            SELECT id, review_id, status, source, rating, author_name,
+                   generated_text, edited_text, tone, created_at
+            FROM reviewreplydrafts
+            WHERE business_id = %s AND (id = ANY(%s) OR review_id = ANY(%s))
+            ORDER BY created_at DESC
+            LIMIT 50
+            """,
+            (business_id, ids, review_ids),
+            bool(ids or review_ids),
+        )
+        result = []
+        for row in rows:
+            result.append(
+                {
+                    "kind": "review_publish_request",
+                    "id": row.get("id"),
+                    "review_id": row.get("review_id"),
+                    "title": "Review reply publish request",
+                    "summary": f"{row.get('source') or 'review'} · {row.get('rating') or '-'} stars · {row.get('author_name') or 'author'}",
+                    "status": row.get("status"),
+                    "approval_state": "pending_human",
+                    "why_waiting": "Publishing a reply on behalf of the business requires approval.",
+                    "draft_text": row.get("edited_text") or row.get("generated_text"),
+                    "tone": row.get("tone"),
+                    "provider_write_performed": False,
+                    "created_at": row.get("created_at"),
+                }
+            )
+        return result
+
+    def _load_service_optimization_requests(self, business_id: str, refs: Dict[str, List[str]]) -> List[Dict[str, Any]]:
+        rows = self._select_domain_request_rows(
+            "agent_service_optimization_requests",
+            """
+            SELECT id, action_id, status, service_count, suggestions_json,
+                   apply_state, created_at
+            FROM agent_service_optimization_requests
+            WHERE business_id = %s AND (id = ANY(%s) OR action_id = ANY(%s))
+            ORDER BY created_at DESC
+            LIMIT 50
+            """,
+            (business_id, refs.get("request_ids") or [], refs.get("action_ids") or []),
+            bool(refs.get("request_ids") or refs.get("action_ids")),
+        )
+        result = []
+        for row in rows:
+            result.append(
+                {
+                    "kind": "service_optimization_request",
+                    "id": row.get("id"),
+                    "action_id": row.get("action_id"),
+                    "title": "Service optimization request",
+                    "summary": f"{row.get('service_count') or 0} services prepared",
+                    "status": row.get("status"),
+                    "approval_state": "pending_human",
+                    "apply_state": row.get("apply_state"),
+                    "why_waiting": "Service catalog changes require review before applying to business data.",
+                    "suggestions": parse_json_field(row.get("suggestions_json"), []),
+                    "provider_write_performed": False,
+                    "created_at": row.get("created_at"),
+                }
+            )
+        return result
+
+    def _select_domain_request_rows(self, table_name: str, query: str, params: Any, has_refs: bool) -> List[Dict[str, Any]]:
+        if not has_refs or not self._domain_request_table_exists(table_name):
+            return []
+        try:
+            self.cursor.execute(query, params)
+            return [dict(row) for row in (self.cursor.fetchall() or [])]
+        except Exception:
+            return []
+
+    def _domain_request_table_exists(self, table_name: str) -> bool:
+        try:
+            self.cursor.execute("SELECT to_regclass(%s) AS table_name", (table_name,))
+            row = self.cursor.fetchone()
+        except Exception:
+            return False
+        if not row:
+            return False
+        if isinstance(row, dict):
+            return bool(row.get("table_name") or row.get("to_regclass"))
+        return bool(row[0])
 
     def _load_action_observability(self, action_id: str, user_data: Dict[str, Any]) -> Dict[str, Any]:
         if not user_data:
