@@ -1,7 +1,7 @@
 # LocalOS Agent Architecture v1
 
 Дата: 9 июня 2026
-Статус: canonical planning document
+Статус: canonical architecture document; этапы 1-3 частично реализованы в backend
 
 ## Цель
 
@@ -18,10 +18,10 @@ blueprints**. Коммуникационный агент, агент напом
 
 | Термин | Каноничное значение | Текущая опора в коде |
 | --- | --- | --- |
-| `Agent` | Пользовательский продуктовый объект: "агент, который делает работу для бизнеса". Внутри он собирается из persona, blueprint, permissions, run history и approval policy. | Product/UI layer: `frontend/src/pages/dashboard/AgentBlueprintsPage.tsx`; backend layer: `agent_blueprints` плюс optional `AIAgents`. |
+| `Agent` | Пользовательский продуктовый объект: "агент, который делает работу для бизнеса". Внутри он собирается из persona, blueprint, permissions, run history и approval policy. | Product/UI layer: `frontend/src/pages/dashboard/AgentBlueprintsPage.tsx`; backend layer: `agent_blueprints` плюс optional `AIAgents`; serializer: `src/services/agent_product_layer.py`. |
 | `Persona` | Голос, стиль общения, роль, ограничения речи и channel behavior. Persona не является runtime workflow. | `AIAgents`, `AIAgentSettings`, `AIAgentsManagement`, `AIAgentConversations`, `AIAgentMessages`. |
 | `Blueprint` | Версионируемый workflow: цель, inputs, источники, шаги, allowed capabilities, approvals, output schema. | `agent_blueprints`, `agent_blueprint_versions`, `src/api/agent_blueprints_api.py`. |
-| `Compiled Workflow` | Проверенный исполняемый план, полученный из человеческого описания или диалога. Он отделяет deterministic steps от LLM steps и фиксирует validation/approval boundaries. | Сейчас представлен как `version_payload`/`steps_json`; следующий слой должен вырасти из `agent_builder_session.py` и `agent_blueprint_draft_builder.py`. |
+| `Compiled Workflow` | Проверенный исполняемый план, полученный из человеческого описания или диалога. Он отделяет deterministic steps от LLM steps и фиксирует validation/approval boundaries. | Представлен как `version_payload`/`steps_json`; compiler v1 живет в `agent_blueprint_draft_builder.py` как `compile_agent_blueprint()`, а old draft builder name сохранен как compatibility wrapper. |
 | `Capability` | Узкое разрешенное действие с контрактом input/output, risk class, side effects, permission policy, timeout/retry и audit event. Модель может предложить capability, но не исполняет side effects напрямую. | `ActionOrchestrator`, `services/agent_blueprint_orchestrator.py`, OpenClaw contract docs. |
 | `Run` | Конкретное выполнение blueprint version с input, steps, artifacts, approvals, output и stop reason. | `agent_runs`, `agent_run_steps`, `agent_artifacts`, `AgentBlueprintRunner`. |
 | `Approval` | Human gate вне prompt text. Требуется для внешних отправок, публикаций, платежей, destructive changes, массовых изменений и third-party writes. | `agent_approvals`; action-level approvals в `ActionOrchestrator`. |
@@ -51,24 +51,51 @@ blueprints**. Коммуникационный агент, агент напом
 Compiler:
   category = communications
   trigger = appointment.reminder.before
-  sources = appointments, clients, services, packages, business_profile
+  audience = clients_with_upcoming_appointments
+  sources = appointments, services, packages, business_profile
   steps =
     collect_audience
+    prepare_message
     validate_consent
-    prepare_message_draft
-    approve_template_or_batch
-    send_limited_batch
-    record_delivery_and_outcome
+    approve_message
+    send_message
+    record_outcome
   capabilities =
     appointments.read
     communications.draft
-    communications.send_reminder
-    communications.send_offer
+    communications.send
   approvals =
-    first_template
+    first_run
+    template
     external_send
     mass_send
+  limits =
+    frequency_cap
+    daily_cap
+  outputs =
+    drafts
+    delivery_report
+    outcomes
 ```
+
+## Current Backend Contract
+
+Этапы 2-3 не требуют новой таблицы `agents`. Product layer уже доступен как
+расширение существующих API-ответов:
+
+- `agent_blueprints` остается физическим product object.
+- `agent_blueprint_versions.persona_agent_id` является связью с `AIAgents`.
+- `AIAgents` сериализуется как `persona` и `voice` с ролью `agent_voice`.
+- API blueprint list/detail возвращает `product_agent`, где явно указаны
+  `components.blueprint`, `components.persona` и `components.compiled_workflow`.
+- Если `persona_agent_id` пустой, агент остается валидным: persona optional.
+- Старые `AIAgents` для Telegram/WhatsApp не удаляются; они становятся голосом
+  агента и legacy chat config.
+
+Compiler v1 доступен через `compile_agent_blueprint(description, category)`.
+Старое имя `build_agent_blueprint_draft()` сохранено, чтобы не ломать endpoints
+и UI. В metadata новое поле `compiler = agent_compiler_v1`, а
+`builder = description_builder_v1` оставлено как backward-compatible marker.
 
 ## Canonical Runtime Loop
 
@@ -96,15 +123,15 @@ third-party systems напрямую.
 
 | Блок | Текущее назначение | Решение | Каноничная роль / действие |
 | --- | --- | --- | --- |
-| `AIAgents` table and `src/ai_agents_api.py` | Старые пользовательские/админские агенты: name/type/description/prompt/workflow/task/identity/speech style/restrictions/tools. | Используется после адаптации. | Становится `Persona` и legacy chat config. `workflow` внутри `AIAgents` не должен быть source of truth для runtime после миграции в blueprints. |
+| `AIAgents` table and `src/ai_agents_api.py` | Старые пользовательские/админские агенты: name/type/description/prompt/workflow/task/identity/speech style/restrictions/tools. | Используется после адаптации. | Становится `Persona` и legacy chat config. Backend serializer уже возвращает `persona`/`voice` для `persona_agent_id`. `workflow` внутри `AIAgents` не должен быть source of truth для runtime после миграции в blueprints. |
 | `AIAgentConversations`, `AIAgentMessages`, `src/chats_api.py` | История чатов и sandbox/test для коммуникационных агентов. | Используется после адаптации. | Сохраняем как conversation memory/channel history для persona/chat agents. Run-level side effects должны идти через blueprint + orchestrator. |
 | `AIAgentSettings`, `AIAgentsManagement` | Отдельный UI управления чат-агентами и их persona/workflow fields. | Legacy wrapper. | Встроить в `Мои агенты` как вкладку "Голос и стиль". После миграции убрать отдельный параллельный entrypoint. |
 | `Businesses.ai_agent_enabled`, `ai_agent_tone`, `ai_agent_restrictions`, `ai_agents_config`, `ai_agent_id` | Legacy business-level settings для включения/настроек агента. | Legacy wrapper. | Использовать как migration source и backward compatibility. После переноса в persona/blueprint пометить deprecated, затем удалить отдельной миграцией. |
 | `agent_blueprints` | Product/workflow object. | Используется как есть. | Главная runtime-сущность пользовательского агента. Добавление новых типов агентов идет через `category`, а не через новые параллельные таблицы. |
-| `agent_blueprint_versions` | Versioned workflow payload: goal, schemas, steps, persona, allowlist, approvals. | Используется как есть. | Source of truth для compiled workflow. `persona_agent_id` должен стать рабочей связью с `AIAgents`. |
+| `agent_blueprint_versions` | Versioned workflow payload: goal, schemas, steps, persona, allowlist, approvals. | Используется как есть. | Source of truth для compiled workflow. `persona_agent_id` используется как связь с `AIAgents` и декорируется в API как `persona`/`voice`. |
 | `agent_runs`, `agent_run_steps`, `agent_artifacts`, `agent_approvals` | Запуски, шаги, результаты, human gates. | Используется как есть. | История выполнения и proof/audit surface для всех blueprint categories, включая communications. |
-| `agent_builder_sessions` | Диалоговый сбор требований и preview перед созданием blueprint. | Используется после адаптации. | Переосмыслить как Agent Studio session. Должен питать compiler, а не просто draft builder. |
-| `agent_blueprint_draft_builder.py` | Heuristic draft builder по описанию и категории. | Используется после адаптации. | Первый слой Agent Compiler. Расширить категориями `communications` и typed compiler outputs. |
+| `agent_builder_sessions` | Диалоговый сбор требований и preview перед созданием blueprint. | Используется после адаптации. | Agent Studio session. Уже питает compiler v1 и возвращает preview с `compiler`, `trigger`, `audience`, `limits`, `capability_allowlist`. |
+| `agent_blueprint_draft_builder.py` | Heuristic draft builder по описанию и категории. | Используется после адаптации. | Первый слой Agent Compiler. Добавлен `compile_agent_blueprint()` и категория `communications` с typed trigger/audience/sources/steps/capabilities/approvals/limits/output schema. |
 | `agent_blueprint_workspace.py` | DataHub catalog, source normalization, generic artifacts, review/journal/diff. | Используется как есть. | Рабочее пространство blueprint: sources, result review, used sources, version diff, human journal. |
 | `agent_source_ingestion.py`, `agent_datahub.py` | Загрузка файлов/текста и catalog источников. | Используется как есть. | Data sources layer для compiled workflow. |
 | `AgentBlueprintRunner` | Выполнение steps, artifact generation, approvals, capability calls. | Используется после адаптации. | Единый runner для blueprint categories. Нужно расширять step types и capability map, но не плодить отдельные runners для communications. |
@@ -202,9 +229,10 @@ Every existing agent-related block must end in one of four states:
 
 1. Verify whether `/api/capabilities/*` and `/api/openclaw/*` are registered in
    the current Flask runtime; if not, treat this as a P0 integration gap.
-2. Wire `persona_agent_id` from blueprint versions into UI and runner context.
-3. Extend compiler with `communications`.
-4. Extend `build_agent_blueprint_orchestrator()` beyond `outreach.send_batch`.
-5. Move OpenClaw diagnostics from integration-only UI into agent run detail.
-6. Mark legacy `AIAgents.workflow` and business-level `ai_agent_*` settings as
+2. Wire `persona_agent_id` from blueprint versions into UI controls and runner
+   context. Backend API decoration is already implemented.
+3. Extend `build_agent_blueprint_orchestrator()` beyond `outreach.send_batch`
+   with narrow typed communications capabilities.
+4. Move OpenClaw diagnostics from integration-only UI into agent run detail.
+5. Mark legacy `AIAgents.workflow` and business-level `ai_agent_*` settings as
    migration sources, not future source of truth.

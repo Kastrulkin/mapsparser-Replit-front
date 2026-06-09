@@ -5,7 +5,7 @@ from flask import Blueprint, jsonify, request
 
 from core.auth_helpers import require_auth_from_request, verify_business_access
 from database_manager import DatabaseManager
-from services.agent_blueprint_draft_builder import build_agent_blueprint_draft
+from services.agent_blueprint_draft_builder import compile_agent_blueprint
 from services.agent_blueprint_runner import normalize_steps, parse_json_field
 from services.agent_builder_session import append_user_message, build_agent_builder_state, preview_to_setup
 
@@ -212,9 +212,10 @@ def create_blueprint_from_agent_builder_session(session_id: str):
         preview = parse_json_field(session.get("preview_json"), {})
         description = str(preview.get("understood_task") or session.get("initial_prompt") or "").strip()
         category = str(preview.get("category") or session.get("category") or "").strip()
-        draft = build_agent_blueprint_draft(description, category)
+        draft = compile_agent_blueprint(description, category)
         metadata = draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}
         metadata["builder"] = "dialog_builder_v1"
+        metadata["compiler"] = "agent_compiler_v1"
         metadata["builder_session_id"] = session_id
         metadata["agent_builder_preview"] = preview
         metadata["agent_setup"] = preview_to_setup(preview)

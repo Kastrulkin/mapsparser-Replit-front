@@ -156,6 +156,92 @@ def test_agent_blueprint_draft_builder_respects_explicit_category():
     assert draft["summary"]["external_dispatch_performed"] is False
 
 
+def test_agent_compiler_creates_communications_reminder_blueprint():
+    from services.agent_blueprint_draft_builder import compile_agent_blueprint
+
+    draft = compile_agent_blueprint(
+        "Сделай агента, который напоминает клиентам о записи и сообщает про пакетное предложение"
+    )
+    payload = draft["version_payload"]
+
+    assert draft["category"] == "communications"
+    assert draft["metadata"]["compiler"] == "agent_compiler_v1"
+    assert payload["trigger"] == "appointment.reminder.before"
+    assert payload["audience"] == "clients_with_upcoming_appointments"
+    assert payload["data_sources"] == ["appointments", "services", "packages", "business_profile"]
+    assert [step["key"] for step in payload["steps"]] == [
+        "collect_audience",
+        "prepare_message",
+        "validate_consent",
+        "approve_message",
+        "send_message",
+        "record_outcome",
+    ]
+    assert payload["capability_allowlist"] == [
+        "appointments.read",
+        "communications.draft",
+        "communications.send",
+    ]
+    assert payload["approval_policy"]["first_run"] == "manual_approval_required"
+    assert payload["approval_policy"]["mass_send"] == "manual_approval_required"
+    assert payload["limits"]["daily_cap"] == 10
+    assert "drafts" in payload["output_schema"]["properties"]
+    assert "delivery_report" in payload["output_schema"]["properties"]
+    assert "outcomes" in payload["output_schema"]["properties"]
+
+
+def test_agent_product_view_uses_aiagent_as_voice_persona():
+    from services.agent_product_layer import (
+        attach_persona_to_version,
+        attach_product_agent_to_blueprint,
+        parse_persona_row,
+    )
+
+    persona = parse_persona_row(
+        {
+            "id": "voice-1",
+            "name": "Администратор Анна",
+            "type": "communication",
+            "description": "Голос администратора",
+            "personality": "спокойная и внимательная",
+            "identity": "администратор салона",
+            "speech_style": "коротко и дружелюбно",
+            "restrictions_json": "{\"no_promises\": true}",
+            "variables_json": "{\"signature\": \"Анна\"}",
+            "is_active": 1,
+        }
+    )
+    personas = {"voice-1": persona}
+    version = attach_persona_to_version(
+        {
+            "id": "version-1",
+            "version_number": 2,
+            "persona_agent_id": "voice-1",
+        },
+        personas,
+    )
+    blueprint = attach_product_agent_to_blueprint(
+        {
+            "id": "blueprint-1",
+            "name": "Напоминания о записи",
+            "category": "communications",
+            "status": "draft",
+            "metadata_json": "{\"compiler\": \"agent_compiler_v1\"}",
+        },
+        version,
+        personas,
+    )
+
+    assert version["persona"]["source"] == "AIAgents"
+    assert version["persona"]["role"] == "agent_voice"
+    assert blueprint["product_agent"]["kind"] == "agent"
+    assert blueprint["product_agent"]["source"] == "agent_blueprints"
+    assert blueprint["product_agent"]["persona_agent_id"] == "voice-1"
+    assert blueprint["product_agent"]["voice"]["name"] == "Администратор Анна"
+    assert blueprint["product_agent"]["components"]["persona"]["role"] == "agent_voice"
+    assert blueprint["product_agent"]["legacy"]["communication_agent_is_blueprint_category"] is True
+
+
 def test_agent_builder_session_understands_document_task_and_asks_questions():
     from services.agent_builder_session import build_agent_builder_state
 

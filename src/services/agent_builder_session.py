@@ -2,10 +2,15 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from services.agent_blueprint_draft_builder import build_agent_blueprint_draft, infer_blueprint_category
+from services.agent_blueprint_draft_builder import compile_agent_blueprint, infer_blueprint_category
 
 
 QUESTION_LIBRARY = {
+    "communications": {
+        "data": "Какие записи, услуги, пакеты и профиль бизнеса использовать для сообщения?",
+        "extract": "Кому писать и за сколько до записи напоминать?",
+        "output": "Нужны черновики, отчёт доставки и статусы реакции клиентов?",
+    },
     "documents": {
         "data": "Какие документы или примеры результата использовать: файл, вставленный текст или источник LocalOS?",
         "extract": "Что нужно извлечь из документа: суммы, сроки, риски, поля, обязательства?",
@@ -43,7 +48,7 @@ def build_agent_builder_state(messages: List[Dict[str, Any]], preferred_category
     normalized_messages = _normalize_messages(messages)
     description = _conversation_text(normalized_messages)
     category = _clean_text(preferred_category) or infer_blueprint_category(description)
-    draft = build_agent_blueprint_draft(description, category)
+    draft = compile_agent_blueprint(description, category)
     preview = _build_preview(description, category, draft)
     questions = _missing_questions(description, category)
     assistant_message = _assistant_message(preview, questions)
@@ -52,6 +57,10 @@ def build_agent_builder_state(messages: List[Dict[str, Any]], preferred_category
         "category": category,
         "preview": preview,
         "missing_questions": questions,
+        "compiler": {
+            "name": "agent_compiler_v1",
+            "status": "draft_compiled",
+        },
     }
 
 
@@ -105,13 +114,18 @@ def _build_preview(description: str, category: str, draft: Dict[str, Any]) -> Di
         "category_label": _category_label(category),
         "agent_name": draft.get("name") or _category_label(category),
         "data_sources": sources,
+        "trigger": summary.get("trigger") or "",
+        "audience": summary.get("audience") or "",
         "extraction_rules": _default_extraction_rules(category, description),
         "processing_rules": _default_processing_rules(category),
         "output_format": _default_output_format(category),
         "manual_control": "Ручное подтверждение перед финальным использованием и любым внешним действием.",
         "capability_allowlist": summary.get("capability_allowlist") if isinstance(summary.get("capability_allowlist"), list) else [],
+        "limits": summary.get("limits") if isinstance(summary.get("limits"), dict) else {},
+        "output_schema": summary.get("output_schema") if isinstance(summary.get("output_schema"), dict) else {},
         "approval_boundaries": summary.get("approval_boundaries") if isinstance(summary.get("approval_boundaries"), list) else ["final_output", "external_delivery"],
         "external_dispatch_performed": False,
+        "compiler": "agent_compiler_v1",
     }
 
 
@@ -142,15 +156,15 @@ def _assistant_message(preview: Dict[str, Any], questions: List[Dict[str, str]])
 
 
 def _has_data_hint(text: str) -> bool:
-    return any(marker in text for marker in ["файл", "pdf", "docx", "xlsx", "csv", "отзыв", "профиль", "услуг", "лид", "контекст", "шаблон", "источник", "загруз"])
+    return any(marker in text for marker in ["файл", "pdf", "docx", "xlsx", "csv", "отзыв", "профиль", "услуг", "лид", "контекст", "шаблон", "источник", "загруз", "запис", "пакет"])
 
 
 def _has_extraction_hint(text: str) -> bool:
-    return any(marker in text for marker in ["извлеч", "найд", "риск", "сумм", "срок", "пол", "исключ", "ответ", "подготов", "проверь"])
+    return any(marker in text for marker in ["извлеч", "найд", "риск", "сумм", "срок", "пол", "исключ", "ответ", "подготов", "проверь", "напом", "клиент"])
 
 
 def _has_output_hint(text: str) -> bool:
-    return any(marker in text for marker in ["результ", "отчет", "отчёт", "письм", "таблиц", "summary", "список", "черновик", "shortlist"])
+    return any(marker in text for marker in ["результ", "отчет", "отчёт", "письм", "таблиц", "summary", "список", "черновик", "shortlist", "сообщ"])
 
 
 def _has_control_hint(text: str) -> bool:
@@ -158,6 +172,8 @@ def _has_control_hint(text: str) -> bool:
 
 
 def _default_extraction_rules(category: str, description: str) -> str:
+    if category == "communications":
+        return "Выбрать клиентов с ближайшей записью, проверить услугу, пакетное предложение и допустимость контакта."
     if category == "documents":
         return "Извлечь факты, суммы, сроки, риски, обязательства и отсутствующие поля."
     if category == "email":
@@ -172,6 +188,8 @@ def _default_extraction_rules(category: str, description: str) -> str:
 
 
 def _default_processing_rules(category: str) -> str:
+    if category == "communications":
+        return "Подготовить черновики, проверить согласие, лимиты частоты и дневной лимит; не отправлять без approval."
     if category == "outreach":
         return "Не отправлять сообщения без approval; готовить только shortlist и черновики."
     return "Не придумывать факты; показывать, где данных не хватает; внешние действия не выполнять."
@@ -179,6 +197,7 @@ def _default_processing_rules(category: str) -> str:
 
 def _default_output_format(category: str) -> str:
     formats = {
+        "communications": "Черновики сообщений, отчёт доставки и outcomes.",
         "documents": "Краткий разбор: summary, facts, fields, risks, next_questions.",
         "email": "Черновик письма: subject, body, checklist.",
         "tables": "Отчёт по таблице: summary, exceptions, rows_to_review.",
@@ -190,6 +209,7 @@ def _default_output_format(category: str) -> str:
 
 def _category_label(category: str) -> str:
     labels = {
+        "communications": "Агент коммуникаций",
         "documents": "Документный агент",
         "email": "Агент писем",
         "tables": "Агент таблиц",

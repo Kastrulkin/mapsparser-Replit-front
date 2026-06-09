@@ -23,6 +23,12 @@ from services.agent_blueprint_workspace import (
     normalize_agent_source,
     workspace_parse_json_field,
 )
+from services.agent_product_layer import (
+    attach_persona_to_version,
+    attach_product_agent_to_blueprint,
+    collect_persona_agent_ids,
+    parse_persona_row,
+)
 from services.agent_source_ingestion import build_agent_source_from_upload
 from services.agent_datahub import build_agent_datahub_catalog
 
@@ -52,6 +58,27 @@ def _normalize_json_row(row: dict) -> dict:
             fallback = [] if key in {"steps_json", "capability_allowlist_json"} else {}
             result[key] = parse_json_field(result.get(key), fallback)
     return result
+
+
+def _load_personas_by_id(cursor, persona_ids: list[str]) -> dict:
+    clean_ids = [item for item in persona_ids if item]
+    if not clean_ids:
+        return {}
+    cursor.execute(
+        """
+        SELECT id, name, type, description, personality, identity, speech_style,
+               restrictions_json, variables_json, is_active
+        FROM AIAgents
+        WHERE id = ANY(%s)
+        """,
+        (clean_ids,),
+    )
+    personas = {}
+    for row in cursor.fetchall() or []:
+        persona = parse_persona_row(dict(row))
+        if persona:
+            personas[persona["id"]] = persona
+    return personas
 
 
 def _require_business_access(cursor, business_id: str, user_data: dict):
@@ -257,19 +284,21 @@ def list_agent_blueprints():
                    v.id AS latest_version_id,
                    v.version_number AS latest_version_number,
                    v.goal AS latest_goal,
+                   v.persona_agent_id latest_persona_agent_id,
                    av.id AS active_version_id,
                    av.version_number AS active_version_number,
-                   av.goal AS active_goal
+                   av.goal AS active_goal,
+                   av.persona_agent_id active_persona_agent_id
             FROM agent_blueprints b
             LEFT JOIN LATERAL (
-                SELECT id, version_number, goal
+                SELECT id, version_number, goal, persona_agent_id
                 FROM agent_blueprint_versions
                 WHERE blueprint_id = b.id
                 ORDER BY version_number DESC
                 LIMIT 1
             ) v ON TRUE
             LEFT JOIN LATERAL (
-                SELECT id, version_number, goal
+                SELECT id, version_number, goal, persona_agent_id
                 FROM agent_blueprint_versions
                 WHERE blueprint_id = b.id
                   AND id = COALESCE(NULLIF(b.metadata_json->>'active_version_id', ''), v.id)
@@ -282,7 +311,16 @@ def list_agent_blueprints():
             tuple(params),
         )
         rows = [_normalize_json_row(dict(row)) for row in (cursor.fetchall() or [])]
-        return jsonify({"success": True, "blueprints": rows})
+        personas = _load_personas_by_id(cursor, collect_persona_agent_ids(rows))
+        decorated_rows = []
+        for row in rows:
+            active_version = {
+                "id": row.get("active_version_id") or row.get("latest_version_id"),
+                "version_number": row.get("active_version_number") or row.get("latest_version_number"),
+                "persona_agent_id": row.get("active_persona_agent_id") or row.get("latest_persona_agent_id"),
+            }
+            decorated_rows.append(attach_product_agent_to_blueprint(row, active_version, personas))
+        return jsonify({"success": True, "blueprints": decorated_rows})
     finally:
         db.close()
 
@@ -430,6 +468,11 @@ def get_agent_blueprint(blueprint_id: str):
         )
         versions = [_normalize_json_row(dict(row)) for row in (cursor.fetchall() or [])]
         versions, active_version = _decorate_versions(cursor, blueprint, versions)
+        personas = _load_personas_by_id(cursor, collect_persona_agent_ids(versions, [active_version] if active_version else []))
+        versions = [attach_persona_to_version(version, personas) for version in versions]
+        if active_version:
+            active_version = attach_persona_to_version(_normalize_json_row(active_version), personas)
+        decorated_blueprint = attach_product_agent_to_blueprint(_normalize_json_row(blueprint), active_version, personas)
         run_status = str(request.args.get("run_status") or "").strip().lower()
         run_params = [blueprint_id]
         run_where = "WHERE blueprint_id = %s"
@@ -465,8 +508,8 @@ def get_agent_blueprint(blueprint_id: str):
         return jsonify(
             {
                 "success": True,
-                "blueprint": _normalize_json_row(blueprint),
-                "active_version": _normalize_json_row(active_version) if active_version else None,
+                "blueprint": decorated_blueprint,
+                "active_version": active_version if active_version else None,
                 "active_version_id": str((active_version or {}).get("id") or ""),
                 "active_version_number": _version_number(active_version),
                 "versions": versions,

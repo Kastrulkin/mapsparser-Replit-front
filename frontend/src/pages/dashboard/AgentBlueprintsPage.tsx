@@ -71,6 +71,31 @@ type AgentBlueprint = {
   active_version_id?: string | null;
   active_version_number?: number | null;
   active_goal?: string | null;
+  active_persona_agent_id?: string | null;
+  latest_persona_agent_id?: string | null;
+  persona?: AgentVoicePersona | null;
+  voice?: AgentVoicePersona | null;
+  product_agent?: ProductAgentView | null;
+};
+
+type AgentVoicePersona = {
+  id: string;
+  name?: string;
+  role?: string;
+  source?: string;
+  description?: string;
+  identity?: string;
+  speech_style?: string;
+  is_active?: boolean;
+};
+
+type ProductAgentView = {
+  id?: string;
+  kind?: string;
+  source?: string;
+  persona_agent_id?: string | null;
+  persona?: AgentVoicePersona | null;
+  voice?: AgentVoicePersona | null;
 };
 
 type AgentApproval = {
@@ -325,6 +350,18 @@ const getActiveVersionId = (blueprint: AgentBlueprint, details?: AgentBlueprintD
   }
   const active = (details?.versions || []).find((version) => version.is_active === true);
   return typeof active?.id === 'string' ? active.id : '';
+};
+
+const getAgentVoiceName = (blueprint: AgentBlueprint, details?: AgentBlueprintDetails | null) => {
+  const detailVoice = details?.active_version?.voice;
+  if (typeof detailVoice === 'object' && detailVoice !== null) {
+    const name = Reflect.get(detailVoice, 'name');
+    if (typeof name === 'string') {
+      return name;
+    }
+  }
+  const voice = blueprint.voice || blueprint.persona || blueprint.product_agent?.voice || blueprint.product_agent?.persona;
+  return voice?.name || '';
 };
 
 const runStatusFilters = [
@@ -2149,6 +2186,11 @@ const BlueprintAgentCard = ({
       <div className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">
         {blueprint.description || blueprint.latest_goal || 'Пользовательский агент с настройками, запусками и результатами.'}
       </div>
+      {getAgentVoiceName(blueprint) ? (
+        <div className="mt-3 text-xs font-medium text-slate-500">
+          Голос агента: {getAgentVoiceName(blueprint)}
+        </div>
+      ) : null}
     </button>
     <div className="mt-4 flex flex-wrap gap-2">
       <Button type="button" size="sm" variant="outline" onClick={onConfigure}>
@@ -2290,11 +2332,12 @@ const AgentDetailPanel = ({
 }) => {
   const latestVersionNumber = getActiveVersionNumber(blueprint, blueprintDetails);
   const activeVersionId = getActiveVersionId(blueprint, blueprintDetails);
+  const voiceName = getAgentVoiceName(blueprint, blueprintDetails);
   const versions = blueprintDetails?.versions || [];
   return (
   <DashboardSection
     title={blueprint.name}
-    description={`${humanizeCategory(blueprint.category)} · ${latestVersionNumber ? `активная версия v${latestVersionNumber}` : 'нет активной версии'} · ${mode === 'settings' ? 'настройка агента' : mode === 'run' ? 'запуск из карточки' : 'сохранённые результаты'}`}
+    description={`${humanizeCategory(blueprint.category)} · ${latestVersionNumber ? `активная версия v${latestVersionNumber}` : 'нет активной версии'}${voiceName ? ` · голос: ${voiceName}` : ''} · ${mode === 'settings' ? 'настройка агента' : mode === 'run' ? 'запуск из карточки' : 'сохранённые результаты'}`}
     actions={(
       <div className="flex flex-wrap gap-2">
         <Button type="button" size="sm" variant={mode === 'settings' ? 'default' : 'outline'} onClick={() => onModeChange('settings')}>Настроить</Button>
