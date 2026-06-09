@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, CheckSquare, Lock, MapPinned, MoreHorizontal, Sparkles, Trash2, Wand2 } from 'lucide-react';
+import { CalendarDays, CheckSquare, Globe, Lock, MapPinned, MoreHorizontal, Sparkles, Trash2, Wand2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
@@ -251,6 +251,7 @@ type ViewPresetKey = 'overview' | 'urgent' | 'ready' | 'published' | 'focus' | '
 type QuickActionKey = 'open_week' | 'weak_locations' | 'fix_gaps' | 'repeat_template';
 type ContentPlanZone = 'overview' | 'plan' | 'queue';
 type ContentPlanMode = 'point' | 'network';
+type ContentLanguageKey = 'ru' | 'en' | 'es' | 'de' | 'fr' | 'tr' | 'it' | 'pt' | 'zh';
 
 const CONTENT_MIX_OPTIONS: Array<{ key: ContentMixKey; labelRu: string; labelEn: string }> = [
   { key: 'services', labelRu: 'Услуги', labelEn: 'Services' },
@@ -258,6 +259,17 @@ const CONTENT_MIX_OPTIONS: Array<{ key: ContentMixKey; labelRu: string; labelEn:
   { key: 'sales', labelRu: 'Продажи', labelEn: 'Sales' },
   { key: 'audit', labelRu: 'Аудит', labelEn: 'Audit' },
   { key: 'seasonal', labelRu: 'Сезонность', labelEn: 'Seasonal' },
+];
+const CONTENT_LANGUAGE_OPTIONS: Array<{ value: ContentLanguageKey; label: string }> = [
+  { value: 'ru', label: 'Русский' },
+  { value: 'en', label: 'English' },
+  { value: 'es', label: 'Español' },
+  { value: 'de', label: 'Deutsch' },
+  { value: 'fr', label: 'Français' },
+  { value: 'tr', label: 'Türkçe' },
+  { value: 'it', label: 'Italiano' },
+  { value: 'pt', label: 'Português' },
+  { value: 'zh', label: '中文' },
 ];
 const ITEM_FILTER_OPTIONS: ItemFilterKey[] = ['all', 'has_draft', 'urgent'];
 const SIGNAL_FILTER_OPTIONS: SignalFilterKey[] = ['all', 'seo', 'services', 'sales', 'audit', 'seasonal'];
@@ -315,6 +327,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
   const [recentGeneratedItemId, setRecentGeneratedItemId] = useState('');
   const [activeZone, setActiveZone] = useState<ContentPlanZone>('overview');
   const [contentMode, setContentMode] = useState<ContentPlanMode>('point');
+  const [contentLanguage, setContentLanguage] = useState<ContentLanguageKey>(() => _normalizeContentLanguage(language));
   const [selectedQueueItemId, setSelectedQueueItemId] = useState('');
   const [editorItemId, setEditorItemId] = useState('');
   const [queueSearch, setQueueSearch] = useState('');
@@ -1105,6 +1118,9 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     if (stored.sortMode === 'priority' || stored.sortMode === 'date') {
       setSortMode(stored.sortMode);
     }
+    if (_isValidContentLanguageKey(stored.contentLanguage)) {
+      setContentLanguage(stored.contentLanguage);
+    }
     if (_isValidViewPresetKey(stored.selectedViewPreset)) {
       setSelectedViewPreset(stored.selectedViewPreset);
     }
@@ -1156,6 +1172,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       dateFromFilter,
       dateToFilter,
       sortMode,
+      contentLanguage,
     });
   }, [
     businessId,
@@ -1170,6 +1187,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     dateFromFilter,
     dateToFilter,
     sortMode,
+    contentLanguage,
   ]);
 
   const toggleMix = (key: ContentMixKey) => {
@@ -1252,6 +1270,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
     try {
       const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(itemId)}/generate-draft`, {
         method: 'POST',
+        body: JSON.stringify({ language: contentLanguage }),
       });
       setCurrentPlan(response.plan || null);
       setDraftEdits((prev) => _removeRecordKeys(prev, [itemId]));
@@ -1278,6 +1297,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
       await persistItemEdits(itemId);
       const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(itemId)}/create-news`, {
         method: 'POST',
+        body: JSON.stringify({ language: contentLanguage }),
       });
       setCurrentPlan(response.plan || null);
       await loadLearningMetrics();
@@ -1361,6 +1381,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         try {
           const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}/generate-draft`, {
             method: 'POST',
+            body: JSON.stringify({ language: contentLanguage }),
           });
           nextPlan = response.plan || null;
           setCurrentPlan(nextPlan);
@@ -1404,6 +1425,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         try {
           const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}/generate-draft`, {
             method: 'POST',
+            body: JSON.stringify({ language: contentLanguage }),
           });
           setCurrentPlan(response.plan || null);
           generatedCount += 1;
@@ -1520,6 +1542,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
           await persistItemEdits(item.id);
           const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}/create-news`, {
             method: 'POST',
+            body: JSON.stringify({ language: contentLanguage }),
           });
           nextPlan = response.plan || null;
           setCurrentPlan(nextPlan);
@@ -1728,6 +1751,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
         try {
           const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(item.id)}/generate-draft`, {
             method: 'POST',
+            body: JSON.stringify({ language: contentLanguage }),
           });
           nextPlan = response.plan || null;
           setCurrentPlan(nextPlan);
@@ -2510,7 +2534,7 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                   : 'Create one plan. Sources, density, and detailed controls are tucked away to reduce first-screen noise.')}
             </div>
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
               <div className="text-sm font-semibold text-slate-700">{isRu ? 'Куда строить план' : 'Scope'}</div>
               <Select value={selectedScopeKey} onValueChange={setSelectedScopeKey}>
@@ -2569,6 +2593,30 @@ export default function ContentPlanTab({ businessId }: ContentPlanTabProps) {
                     : '60 and 90 day plans are available on 25k and Elite tiers.'}
                 </div>
               ) : null}
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                <Globe className="h-4 w-4 text-slate-500" />
+                {isRu ? 'Язык публикаций' : 'Publication language'}
+              </div>
+              <Select value={contentLanguage} onValueChange={(value) => setContentLanguage(_normalizeContentLanguage(value))}>
+                <SelectTrigger className="rounded-xl border-slate-200">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CONTENT_LANGUAGE_OPTIONS.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="text-xs text-slate-500">
+                {isRu
+                  ? 'Новые черновики из плана будут генерироваться на этом языке.'
+                  : 'New drafts from the plan will use this language.'}
+              </div>
             </div>
 
             {showPlanSetupDetails ? (
@@ -4432,6 +4480,15 @@ function _isValidItemFilterKey(value: string): value is ItemFilterKey {
   return value === 'all'
     || value === 'urgent'
     || value === 'has_draft';
+}
+
+function _isValidContentLanguageKey(value: string): value is ContentLanguageKey {
+  return CONTENT_LANGUAGE_OPTIONS.some((item) => item.value === value);
+}
+
+function _normalizeContentLanguage(value: string): ContentLanguageKey {
+  const normalized = String(value || '').trim().toLowerCase();
+  return _isValidContentLanguageKey(normalized) ? normalized : 'ru';
 }
 
 function _isValidSignalFilterKey(value: string): value is SignalFilterKey {

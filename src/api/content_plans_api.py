@@ -200,8 +200,13 @@ def content_plan_item_generate_draft(item_id: str):
     user_data, error_response = _require_auth()
     if error_response:
         return error_response
+    data = request.get_json(silent=True) or {}
     try:
-        plan = generate_draft_for_plan_item(str(user_data.get("user_id") or ""), item_id)
+        plan = generate_draft_for_plan_item(
+            str(user_data.get("user_id") or ""),
+            item_id,
+            language=str(data.get("language") or "").strip() or None,
+        )
         return jsonify({"success": True, "plan": plan})
     except PermissionError as exc:
         return jsonify({"success": False, "error": str(exc)}), 403
@@ -216,8 +221,13 @@ def content_plan_item_create_news(item_id: str):
     user_data, error_response = _require_auth()
     if error_response:
         return error_response
+    data = request.get_json(silent=True) or {}
     try:
-        plan = create_news_from_plan_item(str(user_data.get("user_id") or ""), item_id)
+        plan = create_news_from_plan_item(
+            str(user_data.get("user_id") or ""),
+            item_id,
+            language=str(data.get("language") or "").strip() or None,
+        )
         return jsonify({"success": True, "plan": plan})
     except PermissionError as exc:
         return jsonify({"success": False, "error": str(exc)}), 403

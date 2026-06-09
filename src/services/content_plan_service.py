@@ -2407,7 +2407,46 @@ def _service_names_from_fact_block(service_facts: Any, limit: int = 5) -> list[s
     return names
 
 
-def _fallback_draft_text(business_name: str, item: dict[str, Any], business_facts: dict[str, Any] | None = None) -> str:
+CONTENT_PLAN_LANGUAGE_LABELS = {
+    "ru": "Russian",
+    "en": "English",
+    "es": "Spanish",
+    "de": "German",
+    "fr": "French",
+    "tr": "Turkish",
+    "it": "Italian",
+    "pt": "Portuguese",
+    "zh": "Chinese",
+}
+
+
+def _normalize_content_plan_language(language: str | None) -> str:
+    normalized = str(language or "").strip().lower()
+    return normalized if normalized in CONTENT_PLAN_LANGUAGE_LABELS else "ru"
+
+
+def _content_plan_language_instruction(language: str) -> str:
+    normalized = _normalize_content_plan_language(language)
+    label = CONTENT_PLAN_LANGUAGE_LABELS.get(normalized, "Russian")
+    if normalized == "ru":
+        return (
+            "Язык готовой новости: русский. Пиши обычным русским текстом.\n"
+            "Если факты на другом языке, всё равно верни только русский текст."
+        )
+    return (
+        f"Language of the final news post: {label}. Write the final publication only in {label}.\n"
+        "The business facts, service names, theme, or SEO query may be in Russian; use them as source facts, "
+        f"but translate the final wording into {label}. Do not include Russian explanatory text unless it is a brand or service name."
+    )
+
+
+def _fallback_draft_text(
+    business_name: str,
+    item: dict[str, Any],
+    business_facts: dict[str, Any] | None = None,
+    language: str | None = None,
+) -> str:
+    normalized_language = _normalize_content_plan_language(language)
     theme = str(item.get("theme") or "Новость компании").strip()
     keyword = str(item.get("seo_keyword") or "").strip()
     goal = str(item.get("goal") or "").strip()
@@ -2425,11 +2464,35 @@ def _fallback_draft_text(business_name: str, item: dict[str, Any], business_fact
     ).lower()
 
     if "riderra" in lower_identity:
+        if normalized_language == "en":
+            return (
+                "Riderra helps plan an airport transfer in advance: add the route, flight number, destination address, "
+                "number of passengers, and luggage details when booking. This makes it easier to prepare the trip before arrival "
+                "and confirm the route details. Transfers can be booked online at riderra.com."
+            )
         return (
             "Riderra помогает заранее спланировать трансфер из аэропорта: при заказе стоит указать маршрут, "
             "номер рейса, адрес назначения, количество пассажиров и багаж. Так проще подготовить поездку до прилёта "
             "и проверить детали маршрута. Забронировать трансфер можно онлайн на riderra.com."
         )
+
+    if normalized_language == "en":
+        city = str(facts.get("city") or "").strip()
+        city_text = f" in {city}" if city else ""
+        directions = ", ".join(service_names[:5]) if service_names else "the available services"
+        if service_names:
+            return (
+                f"{business_name}{city_text}: {theme}. The listing includes: {directions}. "
+                "Choose the service that matches your current need and check the details before booking. "
+                "Contact information is available in the listing."
+            )
+        lines = [f"{business_name}{city_text}: {theme}."]
+        if keyword:
+            lines.append(f"This also helps answer the local search query: {keyword}.")
+        if goal:
+            lines.append(goal)
+        lines.append("Details, booking, and current offers can be checked through the contacts in the listing.")
+        return " ".join(lines)
 
     if "school" in lower_identity or "школ" in lower_identity or "образован" in lower_identity:
         city = str(facts.get("city") or "").strip()
@@ -2681,7 +2744,8 @@ def _sanitize_generated_news_text(raw_text: str) -> str:
     return text
 
 
-def generate_draft_for_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
+def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | None = None) -> dict[str, Any]:
+    normalized_language = _normalize_content_plan_language(language)
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
@@ -2735,7 +2799,8 @@ def generate_draft_for_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
         source_kind = str(item.get("source_kind") or "").strip()
         prompt = (
             "Ты — маркетолог локального бизнеса. Напиши короткую новость для публикации на картах. "
-            "До 700 символов, обычным русским текстом.\n\n"
+            "До 700 символов.\n\n"
+            f"{_content_plan_language_instruction(normalized_language)}\n\n"
             "Жёсткие правила:\n"
             "- не возвращай JSON, markdown, эмодзи, хештеги, фигурные скобки или технические символы;\n"
             "- не выдумывай цены, скидки, акции, режим работы, бесплатные консультации, адрес, район, центр города;\n"
@@ -2767,11 +2832,11 @@ def generate_draft_for_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
             )
             generated_text = _sanitize_generated_news_text(str(result or ""))
             if not generated_text:
-                generated_text = _fallback_draft_text(business_name, item, business_facts)
+                generated_text = _fallback_draft_text(business_name, item, business_facts, normalized_language)
         except Exception:
-            generated_text = _fallback_draft_text(business_name, item, business_facts)
+            generated_text = _fallback_draft_text(business_name, item, business_facts, normalized_language)
         if _looks_like_ice_rink_hallucination(generated_text, business_facts) or _content_plan_draft_needs_fallback(generated_text, business_facts):
-            generated_text = _fallback_draft_text(business_name, item, business_facts)
+            generated_text = _fallback_draft_text(business_name, item, business_facts, normalized_language)
         if active_patterns:
             record_industry_pattern_impact_event(
                 db.conn,
@@ -2840,6 +2905,7 @@ def generate_draft_for_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
                 "seo_keyword": str(item.get("seo_keyword") or "").strip(),
                 "location_scope": location_scope,
                 "location_label": str(location_meta.get("scope_target_label") or "").strip(),
+                "language": normalized_language,
             },
         )
         db.conn.commit()
@@ -2851,7 +2917,8 @@ def generate_draft_for_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
         db.close()
 
 
-def create_news_from_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
+def create_news_from_plan_item(user_id: str, item_id: str, language: str | None = None) -> dict[str, Any]:
+    normalized_language = _normalize_content_plan_language(language)
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
@@ -2880,7 +2947,7 @@ def create_news_from_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
                 raise PermissionError("Нет доступа к элементу плана")
         generated_text = str(item.get("draft_text") or "").strip()
         if not generated_text:
-            generated_text = _fallback_draft_text("Бизнес", item)
+            generated_text = _fallback_draft_text("Бизнес", item, language=normalized_language)
         edited_before_accept = str(item.get("status") or "").strip() == "edited"
         news_id = str(uuid.uuid4())
         source_text = "\n".join(
@@ -2951,6 +3018,7 @@ def create_news_from_plan_item(user_id: str, item_id: str) -> dict[str, Any]:
                 "location_label": str(location_meta.get("scope_target_label") or "").strip(),
                 "acceptance_reason": _acceptance_reason(item, edited_before_accept),
                 "created_via": "content_plan",
+                "language": normalized_language,
             },
         )
         db.conn.commit()
