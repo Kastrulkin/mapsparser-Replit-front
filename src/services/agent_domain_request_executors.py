@@ -371,15 +371,21 @@ def _approve_review_publish_requests(cursor: Any, business_id: str, user_id: str
         cursor,
         "reviewreplydrafts",
         """
-        SELECT id, review_id, status, source
+        SELECT id, review_id, status, source, generated_text, edited_text, tone
         FROM reviewreplydrafts
         WHERE business_id = %s AND (id = ANY(%s) OR review_id = ANY(%s))
         """,
         (business_id, refs.get("draft_ids") or refs.get("request_ids") or [], refs.get("review_ids") or []),
         bool(refs.get("draft_ids") or refs.get("request_ids") or refs.get("review_ids")),
     )
+    if not rows:
+        return []
+    _ensure_review_publish_requests(cursor)
     items = []
     for row in rows:
+        reply_text = str(row.get("edited_text") or row.get("generated_text") or "").strip()
+        if not reply_text:
+            continue
         cursor.execute(
             """
             UPDATE reviewreplydrafts
@@ -388,6 +394,56 @@ def _approve_review_publish_requests(cursor: Any, business_id: str, user_id: str
             WHERE id = %s AND business_id = %s AND status IN ('publish_requested', 'generated', 'edited', 'pending_review')
             """,
             (row.get("id"), business_id),
+        )
+        publish_request_id = _stable_review_publish_request_id(str(row.get("id") or ""))
+        provider_request = {
+            "provider_executor": "manual_controlled_review_reply_publisher",
+            "publish_mode": "controlled_request_only",
+            "source": row.get("source"),
+            "review_id": row.get("review_id"),
+            "draft_id": row.get("id"),
+            "provider_write_performed": False,
+        }
+        audit_payload = {
+            "approval_reason": APPROVED_EXECUTOR_REASON,
+            "run_id": run_id,
+            "step_key": step_key,
+            "approved_by_user_id": user_id,
+            "tone": row.get("tone"),
+        }
+        cursor.execute(
+            """
+            INSERT INTO agent_review_publish_requests (
+                id, draft_id, review_id, business_id, run_id, user_id, source, reply_text,
+                status, publish_state, provider_request_json, audit_json, provider_write_performed
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'provider_publish_requested',
+                    'provider_request_queued', %s, %s, FALSE)
+            ON CONFLICT (draft_id) DO UPDATE SET
+                review_id = EXCLUDED.review_id,
+                run_id = EXCLUDED.run_id,
+                user_id = EXCLUDED.user_id,
+                source = EXCLUDED.source,
+                reply_text = EXCLUDED.reply_text,
+                status = EXCLUDED.status,
+                publish_state = EXCLUDED.publish_state,
+                provider_request_json = EXCLUDED.provider_request_json,
+                audit_json = EXCLUDED.audit_json,
+                provider_write_performed = FALSE,
+                updated_at = NOW()
+            """,
+            (
+                publish_request_id,
+                row.get("id"),
+                row.get("review_id"),
+                business_id,
+                run_id,
+                user_id,
+                row.get("source"),
+                reply_text,
+                json.dumps(provider_request, ensure_ascii=False),
+                json.dumps(audit_payload, ensure_ascii=False),
+            ),
         )
         ledger_id = _record_executor_ledger(
             cursor,
@@ -398,8 +454,12 @@ def _approve_review_publish_requests(cursor: Any, business_id: str, user_id: str
             request_id=str(row.get("id") or ""),
             action_id="",
             capability="reviews.reply.publish_request",
-            output_state="approved_for_publish",
-            summary={"review_id": row.get("review_id"), "source": row.get("source")},
+            output_state="provider_request_queued",
+            summary={
+                "review_id": row.get("review_id"),
+                "source": row.get("source"),
+                "publish_request_id": publish_request_id,
+            },
         )
         items.append(
             {
@@ -407,11 +467,55 @@ def _approve_review_publish_requests(cursor: Any, business_id: str, user_id: str
                 "id": row.get("id"),
                 "review_id": row.get("review_id"),
                 "status": "approved_for_publish",
+                "publish_request_id": publish_request_id,
+                "publish_state": "provider_request_queued",
                 "ledger_id": ledger_id,
                 "provider_write_performed": False,
             }
         )
     return items
+
+
+def _ensure_review_publish_requests(cursor: Any) -> None:
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS agent_review_publish_requests (
+            id TEXT PRIMARY KEY,
+            draft_id TEXT NOT NULL,
+            review_id TEXT NOT NULL,
+            business_id TEXT NOT NULL,
+            run_id TEXT,
+            user_id TEXT,
+            source TEXT,
+            reply_text TEXT NOT NULL,
+            status TEXT NOT NULL,
+            publish_state TEXT NOT NULL,
+            provider_request_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+            audit_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+            provider_write_performed BOOLEAN NOT NULL DEFAULT FALSE,
+            error_text TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_agent_review_publish_requests_draft
+        ON agent_review_publish_requests(draft_id)
+        """
+    )
+    cursor.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_agent_review_publish_requests_business_state
+        ON agent_review_publish_requests(business_id, publish_state, created_at DESC)
+        """
+    )
+
+
+def _stable_review_publish_request_id(draft_id: str) -> str:
+    raw = f"agent_review_publish_request|{draft_id}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
 
 
 def _approve_service_optimization_requests(cursor: Any, business_id: str, user_id: str, run_id: str, step_key: str, refs: Dict[str, List[str]]) -> List[Dict[str, Any]]:

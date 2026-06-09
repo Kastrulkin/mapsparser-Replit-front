@@ -159,6 +159,18 @@ def test_agent_communication_delivery_journal_migration_creates_handoff_table():
     assert "20260609_003" in migration
 
 
+def test_agent_review_publish_request_migration_creates_expected_table():
+    migration = Path("alembic_migrations/versions/20260609_add_agent_review_publish_requests.py").read_text(encoding="utf-8")
+
+    assert "CREATE TABLE IF NOT EXISTS agent_review_publish_requests" in migration
+    assert "provider_request_json JSONB" in migration
+    assert "audit_json JSONB" in migration
+    assert "provider_write_performed BOOLEAN NOT NULL DEFAULT FALSE" in migration
+    assert "publish_state TEXT NOT NULL" in migration
+    assert "20260609_005" in migration
+    assert "20260609_004" in migration
+
+
 def test_default_supervised_outreach_template_has_approval_gates():
     from services.agent_blueprint_runner import default_supervised_outreach_version_payload
 
@@ -920,6 +932,49 @@ def test_approved_domain_executor_creates_communication_delivery_journal_with_co
     assert cursor.ledger_entries[0]["metadata"]["provider_write_performed"] is False
 
 
+def test_approved_domain_executor_creates_review_provider_publish_request():
+    from services.agent_domain_request_executors import execute_approved_domain_requests
+
+    cursor = FakeApprovedDomainExecutorCursor()
+    cursor.tables["reviewreplydrafts"]["draft-1"] = {
+        "id": "draft-1",
+        "review_id": "review-1",
+        "business_id": "biz1",
+        "status": "publish_requested",
+        "source": "yandex",
+        "generated_text": "Спасибо за отзыв!",
+        "edited_text": "Спасибо за отзыв, будем рады видеть вас снова!",
+        "tone": "friendly",
+    }
+
+    result = execute_approved_domain_requests(
+        cursor,
+        run={"id": "run1", "business_id": "biz1"},
+        step={"key": "publish_review_reply"},
+        orchestrator_result={
+            "result": {"draft_id": "draft-1", "review_id": "review-1"},
+        },
+        user_data={"user_id": "user1"},
+    )
+
+    draft = cursor.tables["reviewreplydrafts"]["draft-1"]
+    publish_requests = list(cursor.tables["agent_review_publish_requests"].values())
+    assert result["executed"] == 1
+    assert result["items"][0]["kind"] == "review_publish_request"
+    assert result["items"][0]["publish_state"] == "provider_request_queued"
+    assert draft["status"] == "approved_for_publish"
+    assert len(publish_requests) == 1
+    assert publish_requests[0]["draft_id"] == "draft-1"
+    assert publish_requests[0]["review_id"] == "review-1"
+    assert publish_requests[0]["status"] == "provider_publish_requested"
+    assert publish_requests[0]["publish_state"] == "provider_request_queued"
+    assert publish_requests[0]["provider_request_json"]["publish_mode"] == "controlled_request_only"
+    assert publish_requests[0]["provider_write_performed"] is False
+    assert cursor.ledger_entries[0]["capability"] == "reviews.reply.publish_request"
+    assert cursor.ledger_entries[0]["status"] == "approved_pending_provider_executor"
+    assert cursor.ledger_entries[0]["metadata"]["provider_write_performed"] is False
+
+
 def test_telegram_trigger_runtime_records_ignored_event_when_no_custom_blueprint():
     from services.agent_trigger_runtime import dispatch_telegram_message_to_agent_blueprints
 
@@ -1069,6 +1124,8 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "agent_communication_requests" in Path("src/services/agent_blueprint_runner.py").read_text(encoding="utf-8")
     assert "Ожидают approval" in agents_page_source
     assert "why_waiting" in agents_page_source
+    assert "agent_review_publish_requests" in Path("src/services/agent_blueprint_runner.py").read_text(encoding="utf-8")
+    assert "publish_requests" in agents_page_source
     assert "Support export" in agents_page_source
     assert "agent_run_observability_v1" in Path("src/services/agent_blueprint_runner.py").read_text(encoding="utf-8")
     assert "Использовано в последнем запуске" in agents_page_source
@@ -2375,6 +2432,7 @@ class FakeCursor:
             "agent_sheet_operation_requests": {},
             "agent_communication_requests": {},
             "reviewreplydrafts": {},
+            "agent_review_publish_requests": {},
             "agent_service_optimization_requests": {},
         }
         self.last_result = None
@@ -2415,6 +2473,16 @@ class FakeCursor:
                 row
                 for row in self.tables["reviewreplydrafts"].values()
                 if row.get("business_id") == business_id and (row.get("id") in draft_ids or row.get("review_id") in review_ids)
+            ]
+            return None
+        if "from agent_review_publish_requests" in normalized_query:
+            business_id = params[0]
+            draft_id = params[1]
+            review_id = params[2]
+            self.last_results = [
+                row
+                for row in self.tables["agent_review_publish_requests"].values()
+                if row.get("business_id") == business_id and (row.get("draft_id") == draft_id or row.get("review_id") == review_id)
             ]
             return None
         if "from agent_service_optimization_requests" in normalized_query:
@@ -2952,6 +3020,7 @@ class FakeApprovedDomainExecutorCursor:
             "agent_sheet_operation_requests": {},
             "agent_communication_requests": {},
             "reviewreplydrafts": {},
+            "agent_review_publish_requests": {},
             "agent_service_optimization_requests": {},
             "agent_communication_delivery_journal": {},
             "agent_action_ledger": {},
@@ -2996,7 +3065,24 @@ class FakeApprovedDomainExecutorCursor:
             ]
             return None
         if "from reviewreplydrafts" in normalized_query:
-            self.last_results = []
+            business_id = params[0]
+            draft_ids = set(params[1])
+            review_ids = set(params[2])
+            self.last_results = [
+                row
+                for row in self.tables["reviewreplydrafts"].values()
+                if row.get("business_id") == business_id and (row.get("id") in draft_ids or row.get("review_id") in review_ids)
+            ]
+            return None
+        if "from agent_review_publish_requests" in normalized_query:
+            business_id = params[0]
+            draft_id = params[1]
+            review_id = params[2]
+            self.last_results = [
+                row
+                for row in self.tables["agent_review_publish_requests"].values()
+                if row.get("business_id") == business_id and (row.get("draft_id") == draft_id or row.get("review_id") == review_id)
+            ]
             return None
         if "from agent_service_optimization_requests" in normalized_query:
             business_id = params[0]
@@ -3048,6 +3134,29 @@ class FakeApprovedDomainExecutorCursor:
             if request and request.get("business_id") == params[2] and request.get("delivery_state") != "dispatched":
                 request["status"] = "approved_for_dispatch"
                 request["delivery_state"] = params[0]
+            return None
+        if normalized_query.startswith("update reviewreplydrafts"):
+            draft = self.tables["reviewreplydrafts"].get(params[0])
+            if draft and draft.get("business_id") == params[1]:
+                draft["status"] = "approved_for_publish"
+            return None
+        if normalized_query.startswith("insert into agent_review_publish_requests"):
+            row = {
+                "id": params[0],
+                "draft_id": params[1],
+                "review_id": params[2],
+                "business_id": params[3],
+                "run_id": params[4],
+                "user_id": params[5],
+                "source": params[6],
+                "reply_text": params[7],
+                "status": "provider_publish_requested",
+                "publish_state": "provider_request_queued",
+                "provider_request_json": json.loads(params[8]),
+                "audit_json": json.loads(params[9]),
+                "provider_write_performed": False,
+            }
+            self.tables["agent_review_publish_requests"][params[0]] = row
             return None
         if normalized_query.startswith("update agent_service_optimization_requests"):
             request = self.tables["agent_service_optimization_requests"].get(params[2])

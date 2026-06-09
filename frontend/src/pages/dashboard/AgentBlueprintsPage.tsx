@@ -225,6 +225,11 @@ type AgentRunObservability = {
         blocked?: number;
         items?: Array<Record<string, unknown>>;
       };
+      publish_requests?: {
+        count?: number;
+        queued?: number;
+        items?: Array<Record<string, unknown>>;
+      };
       provider_write_performed?: boolean;
       created_at?: string;
     }>;
@@ -4252,6 +4257,7 @@ const DomainRequestItem = ({
     item.limits ? ['limits', item.limits] : null,
     item.consent ? ['consent', item.consent] : null,
     item.delivery_journal ? ['delivery_journal', item.delivery_journal] : null,
+    item.publish_requests ? ['publish_requests', item.publish_requests] : null,
     item.row_values?.length ? ['row_values', item.row_values] : null,
     item.visual_diff?.length ? ['visual_diff', item.visual_diff] : null,
     item.suggestions?.length ? ['suggestions', item.suggestions] : null,

@@ -1217,6 +1217,13 @@ class AgentBlueprintRunner:
             waiting_reason = "Publishing a reply on behalf of the business requires approval."
             if approval_state == "approved":
                 waiting_reason = "Human approved; waiting for controlled provider publish executor."
+            publish_requests = self._load_review_provider_publish_requests(
+                str(row.get("id") or ""),
+                str(row.get("review_id") or ""),
+                business_id,
+            )
+            if publish_requests:
+                waiting_reason = "Human approved; controlled provider publish request is queued. No provider write has run yet."
             result.append(
                 {
                     "kind": "review_publish_request",
@@ -1229,7 +1236,52 @@ class AgentBlueprintRunner:
                     "why_waiting": waiting_reason,
                     "draft_text": row.get("edited_text") or row.get("generated_text"),
                     "tone": row.get("tone"),
+                    "publish_requests": {
+                        "count": len(publish_requests),
+                        "queued": len(
+                            [
+                                item
+                                for item in publish_requests
+                                if str(item.get("publish_state") or "") == "provider_request_queued"
+                            ]
+                        ),
+                        "items": publish_requests[:10],
+                    },
                     "provider_write_performed": False,
+                    "created_at": row.get("created_at"),
+                }
+            )
+        return result
+
+    def _load_review_provider_publish_requests(self, draft_id: str, review_id: str, business_id: str) -> List[Dict[str, Any]]:
+        rows = self._select_domain_request_rows(
+            "agent_review_publish_requests",
+            """
+            SELECT id, draft_id, review_id, source, status, publish_state,
+                   provider_request_json, audit_json, provider_write_performed,
+                   error_text, created_at
+            FROM agent_review_publish_requests
+            WHERE business_id = %s AND (draft_id = %s OR review_id = %s)
+            ORDER BY created_at DESC
+            LIMIT 50
+            """,
+            (business_id, draft_id, review_id),
+            bool((draft_id or review_id) and business_id),
+        )
+        result = []
+        for row in rows:
+            result.append(
+                {
+                    "id": row.get("id"),
+                    "draft_id": row.get("draft_id"),
+                    "review_id": row.get("review_id"),
+                    "source": row.get("source"),
+                    "status": row.get("status"),
+                    "publish_state": row.get("publish_state"),
+                    "provider_request": parse_json_field(row.get("provider_request_json"), {}),
+                    "audit": parse_json_field(row.get("audit_json"), {}),
+                    "provider_write_performed": bool(row.get("provider_write_performed")),
+                    "error": row.get("error_text"),
                     "created_at": row.get("created_at"),
                 }
             )
