@@ -1,8 +1,17 @@
-Integration smoke is deferred until production deploy.
+Production integration smoke after backend deploy:
 
-Planned server checks:
 - cd /opt/seo-app && docker compose ps
-- cd /opt/seo-app && docker compose logs --since 15m app
-- cd /opt/seo-app && docker compose logs --since 15m worker
+  - app Up, worker Up, postgres Up healthy.
+- cd /opt/seo-app && docker compose logs --since 15m app | tail -n 120
+  - Postgres ready, migrations done, Flask running on 0.0.0.0:8000.
+- cd /opt/seo-app && docker compose logs --since 15m worker | tail -n 80
+  - Postgres ready, migrations done.
 - cd /opt/seo-app && curl -I http://localhost:8000
-- route registration check for /api/agent-blueprints/legacy-migration-plan
+  - HTTP/1.1 200 OK.
+- cd /opt/seo-app && docker compose exec -T app python3 -c 'route smoke'
+  - LEGACY_MIGRATION_ROUTE ['GET']
+  - LEGACY_WORKFLOW_STATUS deprecated_not_runtime_truth
+
+Deploy note:
+- docker compose cp into /app/src failed because the runtime mount is read-only.
+- The accepted deploy path was host source upload to /opt/seo-app/src plus app/worker restart.

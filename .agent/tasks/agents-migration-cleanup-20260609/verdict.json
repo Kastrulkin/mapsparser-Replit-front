@@ -5,12 +5,15 @@
     {
       "id": "AC1",
       "status": "PASS",
-      "reason": "Read-only migration plan, route registration, deprecation mapping, OpenClaw docs, py_compile, and agent blueprint tests are complete."
+      "reason": "Read-only migration plan, route registration, deprecation mapping, OpenClaw docs, py_compile, agent blueprint tests, and production route smoke are complete."
     }
   ],
   "commands_run": [
     "PYTHONPATH=src python3 -m py_compile src/api/agent_blueprints_api.py src/services/agent_legacy_migration.py",
-    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py"
+    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "cd /opt/seo-app && docker compose ps",
+    "cd /opt/seo-app && curl -I http://localhost:8000",
+    "cd /opt/seo-app && docker compose exec -T app python3 -c 'route smoke'"
   ],
   "artifacts_used": [
     ".agent/tasks/agents-migration-cleanup-20260609/evidence.md",
