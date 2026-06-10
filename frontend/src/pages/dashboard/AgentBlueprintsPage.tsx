@@ -41,7 +41,6 @@ import {
 } from '@/components/ui/dialog';
 import {
   DashboardActionPanel,
-  DashboardCompactMetricsRow,
   DashboardEmptyState,
   DashboardPageHeader,
   DashboardSection,
@@ -53,13 +52,6 @@ import { cn } from '@/lib/utils';
 type DashboardContext = {
   currentBusinessId: string | null;
   currentBusiness?: ({ id?: string; name?: string } & Record<string, unknown>) | null;
-};
-
-type DashboardMetricItem = {
-  label: string;
-  value: React.ReactNode;
-  hint?: string;
-  tone?: 'default' | 'positive' | 'warning';
 };
 
 type AgentBlueprint = {
@@ -1195,8 +1187,6 @@ export const AgentBlueprintsPage = () => {
     [blueprints],
   );
 
-  const lastArtifactsCount = activeRun?.artifacts?.length || 0;
-
   const migrationStats = useMemo(() => {
     const legacyAgents = legacyMigrationPlan?.legacy_agents || [];
     const businessFields = legacyMigrationPlan?.business_settings?.fields || {};
@@ -1219,39 +1209,6 @@ export const AgentBlueprintsPage = () => {
     setBuilderOutputFormat(scenario.output);
     setBuilderManualControl(scenario.manualControl);
   };
-
-  const metrics = useMemo<DashboardMetricItem[]>(
-    () => [
-      {
-        label: 'Активны',
-        value: activeAgentsCount,
-        hint: `${systemAgents.length + blueprints.length} всего`,
-      },
-      {
-        label: 'Ждут решения',
-        value: totalPendingApprovals || pendingApprovals.length || activeRunPendingApprovals.length,
-        hint: totalPendingApprovals || pendingApprovals.length ? 'Есть ожидающие решения' : 'Нет ожидающих решений',
-        tone: totalPendingApprovals || pendingApprovals.length || pendingApproval ? 'warning' : 'default',
-      },
-      {
-        label: 'Последние результаты',
-        value: lastArtifactsCount,
-        hint: activeRun ? `Запуск ${activeRun.id.slice(0, 8)}` : 'Нет активных запусков',
-      },
-      {
-        label: 'Пользовательские агенты',
-        value: blueprints.length + availablePersonaAgents.length,
-        hint: currentBusiness?.name || 'Текущий бизнес',
-      },
-      {
-        label: 'Legacy к миграции',
-        value: migrationStats.needsBlueprint,
-        hint: migrationStats.deprecatedFieldsPresent ? `${migrationStats.deprecatedFieldsPresent} deprecated fields` : 'runtime truth: blueprints',
-        tone: migrationStats.needsBlueprint || migrationStats.deprecatedFieldsPresent ? 'warning' : 'positive',
-      },
-    ],
-    [activeAgentsCount, activeRun, activeRunPendingApprovals.length, availablePersonaAgents.length, blueprints.length, currentBusiness?.name, lastArtifactsCount, migrationStats.deprecatedFieldsPresent, migrationStats.needsBlueprint, pendingApproval, pendingApprovals.length, systemAgents.length, totalPendingApprovals],
-  );
 
   const loadBlueprints = useCallback(async () => {
     if (!currentBusinessId) {
@@ -2027,11 +1984,11 @@ export const AgentBlueprintsPage = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <DashboardPageHeader
         eyebrow="LocalOS"
-        title="Агенты"
-        description="Центр управления системными и пользовательскими агентами."
+        title="Мои агенты"
+        description="Создайте агента обычным языком, подключите данные и проверьте первый запуск перед внешним действием."
         icon={Bot}
         actions={(
           <>
@@ -2107,8 +2064,6 @@ export const AgentBlueprintsPage = () => {
         </DialogContent>
       </Dialog>
 
-      <DashboardCompactMetricsRow items={metrics} />
-
       {error ? (
         <DashboardActionPanel
           title="Ошибка"
@@ -2130,6 +2085,28 @@ export const AgentBlueprintsPage = () => {
         />
       ) : null}
 
+      {currentBusinessId ? (
+        <AgentCommandCenter
+          activeAgentsCount={activeAgentsCount}
+          totalAgents={blueprints.length + systemAgents.length}
+          pendingApprovals={totalPendingApprovals || pendingApprovals.length || activeRunPendingApprovals.length}
+          selectedBlueprint={selectedBlueprint}
+          loading={loading}
+          actionLoading={actionLoading}
+          onCreate={() => setCreateWizardOpen(true)}
+          onConfigureSelected={() => {
+            if (selectedBlueprint) {
+              setWorkspaceMode('settings');
+            }
+          }}
+          onOpenApprovals={() => {
+            if (selectedBlueprint) {
+              setWorkspaceMode('results');
+            }
+          }}
+        />
+      ) : null}
+
       {!currentBusinessId ? (
         <DashboardEmptyState
           title="Сначала выберите бизнес"
@@ -2138,262 +2115,282 @@ export const AgentBlueprintsPage = () => {
       ) : null}
 
       {currentBusinessId ? (
-        <DashboardSection
-          title="Agent cockpit"
-          description="Единый контур: product agents, legacy migration, approvals, версии, learning loop и runtime truth."
-        >
-          <AgentCockpitPanel
-            blueprints={blueprints}
-            systemAgents={systemAgents}
-            migrationPlan={legacyMigrationPlan}
-            migrationStats={migrationStats}
-            migrationNotice={legacyMigrationNotice}
-            actionLoading={actionLoading}
-            onApplyMigration={applyLegacyMigration}
-            onOpenLegacySettings={() => setWorkspaceMode('voice')}
-          />
-        </DashboardSection>
-      ) : null}
-
-      <DashboardSection
-        title="Мои агенты"
-        description="Центральный cockpit LocalOS agents: логика, статус, версии, learning history, approvals, источники и журнал запусков."
-      >
-        <div className="space-y-6">
-          {loading ? (
-            <div className="flex items-center gap-2 text-sm text-slate-500">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Загружаем агентов...
+        <div className="grid gap-5 xl:grid-cols-[minmax(20rem,0.42fr)_minmax(0,1fr)]">
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-slate-950">Агенты</div>
+                <div className="mt-1 text-xs leading-5 text-slate-500">
+                  Выберите агента, чтобы изменить логику, подключить данные или посмотреть журнал.
+                </div>
+              </div>
+              <span className="rounded-full bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
+                {blueprints.length}
+              </span>
             </div>
-          ) : blueprints.length === 0 ? (
-            <DashboardEmptyState
-              title="Агентов пока нет"
-              description="Создайте первого агента через мастер. Голос и стиль можно подключить внутри карточки агента."
-            />
-          ) : (
-            <div className="grid gap-4 xl:grid-cols-2">
-              {blueprints.map((blueprint) => {
-                const selected = selectedBlueprint?.id === blueprint.id;
-                return (
+            <div className="mt-4 space-y-2">
+              {loading ? (
+                <div className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-4 text-sm text-slate-500">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Загружаем агентов...
+                </div>
+              ) : blueprints.length === 0 ? (
+                <DashboardEmptyState
+                  title="Агентов пока нет"
+                  description="Создайте первого агента через мастер. Голос и стиль подключаются позже."
+                />
+              ) : (
+                blueprints.map((blueprint) => {
+                  const selected = selectedBlueprint?.id === blueprint.id;
+                  return (
                     <BlueprintAgentCard
-                    key={blueprint.id}
-                    blueprint={blueprint}
-                    latestVersionNumber={getActiveVersionNumber(blueprint, selected ? blueprintDetails : null)}
-                    selected={selected}
-                    onSelect={() => {
-                      setSelectedBlueprintId(blueprint.id);
-                      setActiveRun(null);
-                    }}
-                    onConfigure={() => {
-                      setSelectedBlueprintId(blueprint.id);
-                      setActiveRun(null);
-                      setWorkspaceMode('settings');
-                    }}
-                    onRun={() => {
-                      setSelectedBlueprintId(blueprint.id);
-                      setWorkspaceMode('run');
-                      void startRun(blueprint);
-                    }}
-                    onResults={() => {
-                      setSelectedBlueprintId(blueprint.id);
-                      setWorkspaceMode('results');
-                    }}
-                    onVoice={() => {
-                      setSelectedBlueprintId(blueprint.id);
-                      setActiveRun(null);
-                      setWorkspaceMode('voice');
-                    }}
-                  />
-                );
-              })}
+                      key={blueprint.id}
+                      blueprint={blueprint}
+                      latestVersionNumber={getActiveVersionNumber(blueprint, selected ? blueprintDetails : null)}
+                      selected={selected}
+                      onSelect={() => {
+                        setSelectedBlueprintId(blueprint.id);
+                        setActiveRun(null);
+                      }}
+                      onConfigure={() => {
+                        setSelectedBlueprintId(blueprint.id);
+                        setActiveRun(null);
+                        setWorkspaceMode('settings');
+                      }}
+                      onRun={() => {
+                        setSelectedBlueprintId(blueprint.id);
+                        setWorkspaceMode('run');
+                        void startRun(blueprint);
+                      }}
+                      onResults={() => {
+                        setSelectedBlueprintId(blueprint.id);
+                        setWorkspaceMode('results');
+                      }}
+                      onVoice={() => {
+                        setSelectedBlueprintId(blueprint.id);
+                        setActiveRun(null);
+                        setWorkspaceMode('voice');
+                      }}
+                    />
+                  );
+                })
+              )}
             </div>
-          )}
-          {availablePersonaAgents.length ? (
-            <DashboardActionPanel
-              title="Голоса и стиль перенесены внутрь агента"
-              description={`${availablePersonaAgents.length} legacy persona доступны во вкладке “Голос и стиль” выбранного агента. Отдельный legacy workflow editor больше не является runtime entrypoint.`}
-              tone="sky"
-            />
-          ) : null}
+          </section>
+
+          <div className="min-w-0">
+            {selectedBlueprint ? (
+              <AgentDetailPanel
+                mode={workspaceMode}
+                blueprint={selectedBlueprint}
+                blueprintDetails={blueprintDetails}
+                activeRun={activeRun}
+                availablePersonaAgents={availablePersonaAgents}
+                pendingApproval={pendingApproval}
+                queuedButNotDispatched={queuedButNotDispatched}
+                agentReview={agentReview}
+                feedbackText={feedbackText}
+                feedbackTrigger={feedbackTrigger}
+                feedbackVersionNotice={feedbackVersionNotice}
+                actionLoading={actionLoading}
+                setupDataSources={setupDataSources}
+                setupExtractionRules={setupExtractionRules}
+                setupProcessingRules={setupProcessingRules}
+                setupOutputFormat={setupOutputFormat}
+                setupManualControl={setupManualControl}
+                sourceName={sourceName}
+                sourceText={sourceText}
+                internalSource={internalSource}
+                sourceCatalog={sourceCatalog}
+                agentIntegrations={agentIntegrations}
+                availableAgentIntegrations={availableAgentIntegrations}
+                agentIntegrationCatalog={agentIntegrationCatalog}
+                agentExternalAuthOptions={agentExternalAuthOptions}
+                agentBindingStatus={agentBindingStatus}
+                sheetSpreadsheetId={sheetSpreadsheetId}
+                sheetName={sheetName}
+                sheetAuthRef={sheetAuthRef}
+                sheetDailyCap={sheetDailyCap}
+                telegramBotMode={telegramBotMode}
+                telegramDailyCap={telegramDailyCap}
+                processRowValues={processRowValues}
+                processPreviewMessage={processPreviewMessage}
+                runSource={runSource}
+                runCity={runCity}
+                runCategory={runCategory}
+                runLimit={runLimit}
+                onModeChange={setWorkspaceMode}
+                onStartRun={() => startRun(selectedBlueprint)}
+                onStartVersionRun={(versionId) => startRun(selectedBlueprint, versionId)}
+                onActivateVersion={(versionId) => activateVersion(versionId, 'activate')}
+                onRollbackVersion={(versionId) => activateVersion(versionId, 'rollback')}
+                onApprove={() => decideApproval('approve')}
+                onReject={() => decideApproval('reject')}
+                onFeedbackTextChange={setFeedbackText}
+                onFeedbackTriggerChange={setFeedbackTrigger}
+                onSubmitFeedback={sendRunFeedback}
+                onActivateFeedbackVersion={(versionId) => activateVersion(versionId, 'activate')}
+                onRollbackFeedbackVersion={(versionId) => activateVersion(versionId, 'rollback')}
+                onSetupDataSourcesChange={setSetupDataSources}
+                onSetupExtractionRulesChange={setSetupExtractionRules}
+                onSetupProcessingRulesChange={setSetupProcessingRules}
+                onSetupOutputFormatChange={setSetupOutputFormat}
+                onSetupManualControlChange={setSetupManualControl}
+                onSourceNameChange={setSourceName}
+                onSourceTextChange={setSourceText}
+                onInternalSourceChange={setInternalSource}
+                onSaveSetup={saveAgentSetup}
+                onAddTextSource={addTextSource}
+                onAddInternalSource={addInternalSource}
+                onAddCatalogSource={addInternalSourceByKey}
+                onAddFileSource={addFileSource}
+                onSheetSpreadsheetIdChange={setSheetSpreadsheetId}
+                onSheetNameChange={setSheetName}
+                onSheetAuthRefChange={setSheetAuthRef}
+                onSheetDailyCapChange={setSheetDailyCap}
+                onTelegramBotModeChange={setTelegramBotMode}
+                onTelegramDailyCapChange={setTelegramDailyCap}
+                onProcessRowValuesChange={setProcessRowValues}
+                onProcessPreviewMessageChange={setProcessPreviewMessage}
+                onSaveSheetIntegration={saveSheetIntegration}
+                onSaveTelegramIntegration={saveTelegramIntegration}
+                onSaveCustomProcess={saveCustomProcess}
+                onRunCustomProcessPreview={runCustomProcessPreview}
+                onRunSourceChange={setRunSource}
+                onRunCityChange={setRunCity}
+                onRunCategoryChange={setRunCategory}
+                onRunLimitChange={setRunLimit}
+              />
+            ) : (
+              <DashboardEmptyState
+                title="Выберите агента"
+                description="Слева откройте существующего агента или создайте нового через кнопку сверху."
+              />
+            )}
+          </div>
         </div>
-      </DashboardSection>
-
-      {selectedBlueprint ? (
-        <AgentDetailPanel
-          mode={workspaceMode}
-          blueprint={selectedBlueprint}
-          blueprintDetails={blueprintDetails}
-          activeRun={activeRun}
-          availablePersonaAgents={availablePersonaAgents}
-          pendingApproval={pendingApproval}
-          queuedButNotDispatched={queuedButNotDispatched}
-          agentReview={agentReview}
-          feedbackText={feedbackText}
-          feedbackTrigger={feedbackTrigger}
-          feedbackVersionNotice={feedbackVersionNotice}
-          actionLoading={actionLoading}
-          setupDataSources={setupDataSources}
-          setupExtractionRules={setupExtractionRules}
-          setupProcessingRules={setupProcessingRules}
-          setupOutputFormat={setupOutputFormat}
-          setupManualControl={setupManualControl}
-          sourceName={sourceName}
-          sourceText={sourceText}
-          internalSource={internalSource}
-          sourceCatalog={sourceCatalog}
-          agentIntegrations={agentIntegrations}
-          availableAgentIntegrations={availableAgentIntegrations}
-          agentIntegrationCatalog={agentIntegrationCatalog}
-          agentExternalAuthOptions={agentExternalAuthOptions}
-          agentBindingStatus={agentBindingStatus}
-          sheetSpreadsheetId={sheetSpreadsheetId}
-          sheetName={sheetName}
-          sheetAuthRef={sheetAuthRef}
-          sheetDailyCap={sheetDailyCap}
-          telegramBotMode={telegramBotMode}
-          telegramDailyCap={telegramDailyCap}
-          processRowValues={processRowValues}
-          processPreviewMessage={processPreviewMessage}
-          runSource={runSource}
-          runCity={runCity}
-          runCategory={runCategory}
-          runLimit={runLimit}
-          onModeChange={setWorkspaceMode}
-          onStartRun={() => startRun(selectedBlueprint)}
-          onStartVersionRun={(versionId) => startRun(selectedBlueprint, versionId)}
-          onActivateVersion={(versionId) => activateVersion(versionId, 'activate')}
-          onRollbackVersion={(versionId) => activateVersion(versionId, 'rollback')}
-          onApprove={() => decideApproval('approve')}
-          onReject={() => decideApproval('reject')}
-          onFeedbackTextChange={setFeedbackText}
-          onFeedbackTriggerChange={setFeedbackTrigger}
-          onSubmitFeedback={sendRunFeedback}
-          onActivateFeedbackVersion={(versionId) => activateVersion(versionId, 'activate')}
-          onRollbackFeedbackVersion={(versionId) => activateVersion(versionId, 'rollback')}
-          onSetupDataSourcesChange={setSetupDataSources}
-          onSetupExtractionRulesChange={setSetupExtractionRules}
-          onSetupProcessingRulesChange={setSetupProcessingRules}
-          onSetupOutputFormatChange={setSetupOutputFormat}
-          onSetupManualControlChange={setSetupManualControl}
-          onSourceNameChange={setSourceName}
-          onSourceTextChange={setSourceText}
-          onInternalSourceChange={setInternalSource}
-          onSaveSetup={saveAgentSetup}
-          onAddTextSource={addTextSource}
-          onAddInternalSource={addInternalSource}
-          onAddCatalogSource={addInternalSourceByKey}
-          onAddFileSource={addFileSource}
-          onSheetSpreadsheetIdChange={setSheetSpreadsheetId}
-          onSheetNameChange={setSheetName}
-          onSheetAuthRefChange={setSheetAuthRef}
-          onSheetDailyCapChange={setSheetDailyCap}
-          onTelegramBotModeChange={setTelegramBotMode}
-          onTelegramDailyCapChange={setTelegramDailyCap}
-          onProcessRowValuesChange={setProcessRowValues}
-          onProcessPreviewMessageChange={setProcessPreviewMessage}
-          onSaveSheetIntegration={saveSheetIntegration}
-          onSaveTelegramIntegration={saveTelegramIntegration}
-          onSaveCustomProcess={saveCustomProcess}
-          onRunCustomProcessPreview={runCustomProcessPreview}
-          onRunSourceChange={setRunSource}
-          onRunCityChange={setRunCity}
-          onRunCategoryChange={setRunCategory}
-          onRunLimitChange={setRunLimit}
-        />
       ) : null}
 
-      {selectedBlueprint ? (
-        <DashboardSection
-          title="Последние запуски"
-          description="Короткая история выбранного агента."
-          actions={(
-            <div className="flex flex-wrap gap-2">
-              {runStatusFilters.map((filter) => (
-                <Button
-                  key={filter.value}
-                  type="button"
-                  size="sm"
-                  variant={runStatusFilter === filter.value ? 'default' : 'outline'}
-                  onClick={() => setRunStatusFilter(filter.value)}
-                >
-                  {filter.label}
-                </Button>
-              ))}
-            </div>
-          )}
-        >
-          {blueprintDetails?.runs?.length ? (
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {blueprintDetails.runs.map((run) => (
-                <button
-                  key={run.id}
-                  type="button"
-                  className={cn(
-                    'rounded-xl border px-4 py-3 text-left transition',
-                    activeRun?.id === run.id ? 'border-slate-900 bg-slate-950 text-white' : 'border-slate-200 bg-white hover:border-slate-300',
+      {currentBusinessId ? (
+        <details className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-800">
+            Технический контур: миграция, системные агенты и полные журналы
+          </summary>
+          <div className="mt-4 space-y-5">
+            <AgentCockpitPanel
+              blueprints={blueprints}
+              systemAgents={systemAgents}
+              migrationPlan={legacyMigrationPlan}
+              migrationStats={migrationStats}
+              migrationNotice={legacyMigrationNotice}
+              actionLoading={actionLoading}
+              onApplyMigration={applyLegacyMigration}
+              onOpenLegacySettings={() => setWorkspaceMode('voice')}
+            />
+
+            {availablePersonaAgents.length ? (
+              <DashboardActionPanel
+                title="Голоса и стиль перенесены внутрь агента"
+                description={`${availablePersonaAgents.length} legacy persona доступны во вкладке “Голос и стиль” выбранного агента. Отдельный legacy workflow editor больше не является runtime entrypoint.`}
+                tone="sky"
+              />
+            ) : null}
+
+            {selectedBlueprint ? (
+              <div className="grid gap-5 xl:grid-cols-2">
+                <DashboardSection
+                  title="Последние запуски"
+                  description="Короткая история выбранного агента."
+                  actions={(
+                    <div className="flex flex-wrap gap-2">
+                      {runStatusFilters.map((filter) => (
+                        <Button
+                          key={filter.value}
+                          type="button"
+                          size="sm"
+                          variant={runStatusFilter === filter.value ? 'default' : 'outline'}
+                          onClick={() => setRunStatusFilter(filter.value)}
+                        >
+                          {filter.label}
+                        </Button>
+                      ))}
+                    </div>
                   )}
-                  onClick={() => void loadRun(run.id)}
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <Workflow className="h-4 w-4 shrink-0" />
-                      <span className="truncate text-sm font-semibold">Запуск {run.id.slice(0, 8)}</span>
+                  {blueprintDetails?.runs?.length ? (
+                    <div className="grid gap-3">
+                      {blueprintDetails.runs.map((run) => (
+                        <button
+                          key={run.id}
+                          type="button"
+                          className={cn(
+                            'rounded-xl border px-4 py-3 text-left transition',
+                            activeRun?.id === run.id ? 'border-slate-900 bg-slate-950 text-white' : 'border-slate-200 bg-white hover:border-slate-300',
+                          )}
+                          onClick={() => void loadRun(run.id)}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <Workflow className="h-4 w-4 shrink-0" />
+                              <span className="truncate text-sm font-semibold">Запуск {run.id.slice(0, 8)}</span>
+                            </div>
+                            <StatusBadge status={run.status} />
+                          </div>
+                          <div className={cn('mt-2 text-xs', activeRun?.id === run.id ? 'text-slate-300' : 'text-slate-500')}>
+                            {run.started_at || 'Дата запуска недоступна'}
+                          </div>
+                        </button>
+                      ))}
                     </div>
-                    <StatusBadge status={run.status} />
-                  </div>
-                  <div className={cn('mt-2 text-xs', activeRun?.id === run.id ? 'text-slate-300' : 'text-slate-500')}>
-                    {run.started_at || 'Дата запуска недоступна'}
-                  </div>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <DashboardEmptyState
-              title="История пуста"
-              description="Запустите агента, чтобы здесь появилась история."
-            />
-          )}
-        </DashboardSection>
-      ) : null}
+                  ) : (
+                    <DashboardEmptyState
+                      title="История пуста"
+                      description="Запустите агента, чтобы здесь появилась история."
+                    />
+                  )}
+                </DashboardSection>
 
-      {selectedBlueprint ? (
-        <DashboardSection
-          title="Ждут решения"
-          description="Решения, без которых агент не продолжит рискованное действие."
-        >
-          {pendingApprovals.length ? (
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {pendingApprovals.map((approval) => (
-                <button
-                  key={approval.id}
-                  type="button"
-                  className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left transition hover:border-amber-300"
-                  onClick={() => approval.run_id ? void loadRun(approval.run_id) : undefined}
+                <DashboardSection
+                  title="Ждут решения"
+                  description="Решения, без которых агент не продолжит рискованное действие."
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold text-slate-950">{approval.title}</div>
-                      <div className="mt-1 text-xs text-amber-700">
-                        Запуск {approval.run_id ? approval.run_id.slice(0, 8) : 'неизвестен'} · {humanizeMeta(approval.approval_type)}
-                      </div>
+                  {pendingApprovals.length ? (
+                    <div className="grid gap-3">
+                      {pendingApprovals.map((approval) => (
+                        <button
+                          key={approval.id}
+                          type="button"
+                          className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left transition hover:border-amber-300"
+                          onClick={() => approval.run_id ? void loadRun(approval.run_id) : undefined}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-semibold text-slate-950">{approval.title}</div>
+                              <div className="mt-1 text-xs text-amber-700">
+                                Запуск {approval.run_id ? approval.run_id.slice(0, 8) : 'неизвестен'} · {humanizeMeta(approval.approval_type)}
+                              </div>
+                            </div>
+                            <StatusBadge status={approval.status} />
+                          </div>
+                          <div className="mt-2 text-xs text-slate-500">{approval.requested_at || humanizeStatus(approval.run_status || 'pending')}</div>
+                          <div className="mt-2 rounded-lg bg-white/70 px-2 py-2 text-xs leading-5 text-amber-900 ring-1 ring-amber-100">
+                            {explainApproval(approval)}
+                          </div>
+                          <ApprovalPayloadSummary approval={approval} />
+                        </button>
+                      ))}
                     </div>
-                    <StatusBadge status={approval.status} />
-                  </div>
-                  <div className="mt-2 text-xs text-slate-500">{approval.requested_at || humanizeStatus(approval.run_status || 'pending')}</div>
-                  <div className="mt-2 rounded-lg bg-white/70 px-2 py-2 text-xs leading-5 text-amber-900 ring-1 ring-amber-100">
-                    {explainApproval(approval)}
-                  </div>
-                  <ApprovalPayloadSummary approval={approval} />
-                </button>
-              ))}
-            </div>
-          ) : (
-            <DashboardEmptyState
-              title="Очередь approval пуста"
-              description="Когда агент остановится на ручном подтверждении, решение появится здесь."
-            />
-          )}
-        </DashboardSection>
+                  ) : (
+                    <DashboardEmptyState
+                      title="Очередь approval пуста"
+                      description="Когда агент остановится на ручном подтверждении, решение появится здесь."
+                    />
+                  )}
+                </DashboardSection>
+              </div>
+            ) : null}
+          </div>
+        </details>
       ) : null}
     </div>
   );
@@ -2815,6 +2812,85 @@ const SystemAgentCard = ({
   </div>
 );
 
+const AgentCommandCenter = ({
+  activeAgentsCount,
+  totalAgents,
+  pendingApprovals,
+  selectedBlueprint,
+  loading,
+  actionLoading,
+  onCreate,
+  onConfigureSelected,
+  onOpenApprovals,
+}: {
+  activeAgentsCount: number;
+  totalAgents: number;
+  pendingApprovals: number;
+  selectedBlueprint: AgentBlueprint | null;
+  loading: boolean;
+  actionLoading: boolean;
+  onCreate: () => void;
+  onConfigureSelected: () => void;
+  onOpenApprovals: () => void;
+}) => (
+  <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="grid gap-3 lg:grid-cols-3">
+      <button
+        type="button"
+        className="group rounded-xl border border-slate-900 bg-slate-950 px-4 py-4 text-left text-white transition hover:bg-slate-900"
+        onClick={onCreate}
+        disabled={actionLoading}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <Sparkles className="h-5 w-5" />
+          <span className="text-xs font-medium text-slate-300">{totalAgents} всего</span>
+        </div>
+        <div className="mt-4 text-sm font-semibold">Создать агента</div>
+        <div className="mt-1 text-sm leading-6 text-slate-300">
+          Опишите задачу, проверьте preview, затем подключите данные.
+        </div>
+      </button>
+
+      <button
+        type="button"
+        className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 text-left transition hover:border-slate-300 hover:bg-white"
+        onClick={onConfigureSelected}
+        disabled={!selectedBlueprint || loading}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <Workflow className="h-5 w-5 text-slate-600" />
+          <span className="text-xs font-medium text-slate-500">{activeAgentsCount} активны</span>
+        </div>
+        <div className="mt-4 text-sm font-semibold text-slate-950">Настроить выбранного</div>
+        <div className="mt-1 line-clamp-2 text-sm leading-6 text-slate-600">
+          {selectedBlueprint ? selectedBlueprint.name : 'Сначала выберите агента в списке.'}
+        </div>
+      </button>
+
+      <button
+        type="button"
+        className={cn(
+          'rounded-xl border px-4 py-4 text-left transition',
+          pendingApprovals ? 'border-amber-200 bg-amber-50 hover:border-amber-300' : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white',
+        )}
+        onClick={onOpenApprovals}
+        disabled={!selectedBlueprint}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <ShieldCheck className={cn('h-5 w-5', pendingApprovals ? 'text-amber-700' : 'text-slate-600')} />
+          <span className={cn('text-xs font-medium', pendingApprovals ? 'text-amber-800' : 'text-slate-500')}>
+            {pendingApprovals} ждут
+          </span>
+        </div>
+        <div className="mt-4 text-sm font-semibold text-slate-950">Проверить решения</div>
+        <div className={cn('mt-1 text-sm leading-6', pendingApprovals ? 'text-amber-900' : 'text-slate-600')}>
+          Approval, журнал и результаты открываются внутри выбранного агента.
+        </div>
+      </button>
+    </div>
+  </section>
+);
+
 const BlueprintAgentCard = ({
   blueprint,
   latestVersionNumber,
@@ -2837,7 +2913,7 @@ const BlueprintAgentCard = ({
   const listStatus = getAgentListStatus(blueprint);
   const voiceName = getAgentVoiceName(blueprint);
   return (
-  <div className={cn('rounded-2xl border bg-white p-4 shadow-sm transition', selected ? 'border-slate-900' : 'border-slate-200 hover:border-slate-300')}>
+  <div className={cn('rounded-xl border bg-white p-3 transition', selected ? 'border-slate-900 shadow-sm' : 'border-slate-200 hover:border-slate-300')}>
     <button type="button" className="w-full text-left" onClick={onSelect}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -2851,35 +2927,33 @@ const BlueprintAgentCard = ({
       <div className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">
         {blueprint.description || blueprint.latest_goal || 'Пользовательский агент с настройками, запусками и результатами.'}
       </div>
-      <div className="mt-4 grid gap-2 sm:grid-cols-2">
-        <AgentSummaryPill label="Тип" value={humanizeCategory(blueprint.category)} />
-        <AgentSummaryPill label="Последний запуск" value={formatLastRun(blueprint)} />
-        <AgentSummaryPill label="Ожидающие approvals" value={String(blueprint.pending_approvals_count || 0)} tone={blueprint.pending_approvals_count ? 'warning' : 'default'} />
-        <AgentSummaryPill label="Источники данных" value={String(blueprint.sources_count || 0)} />
-        <AgentSummaryPill label="Журнал" value={`${blueprint.journal_entries_count || 0} записей`} />
-        <AgentSummaryPill label="Версии" value={String(blueprint.versions_count || latestVersionNumber || 0)} />
+      <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
+        <span className="rounded-full bg-slate-50 px-2.5 py-1 text-slate-600 ring-1 ring-slate-200">
+          {formatLastRun(blueprint)}
+        </span>
+        <span className={cn('rounded-full px-2.5 py-1 ring-1', blueprint.pending_approvals_count ? 'bg-amber-50 text-amber-800 ring-amber-200' : 'bg-slate-50 text-slate-600 ring-slate-200')}>
+          {blueprint.pending_approvals_count || 0} approval
+        </span>
+        <span className="rounded-full bg-slate-50 px-2.5 py-1 text-slate-600 ring-1 ring-slate-200">
+          {blueprint.sources_count || 0} источников
+        </span>
       </div>
-      <div className="mt-3 text-xs font-medium text-slate-500">
-        Голос и стиль: {voiceName || 'не привязан'}
+      <div className="mt-2 text-xs text-slate-500">
+        {voiceName ? `Голос: ${voiceName}` : 'Голос не привязан'}
       </div>
     </button>
-    <div className="mt-4 flex flex-wrap gap-2">
-      <Button type="button" size="sm" variant="outline" onClick={onConfigure}>
+    <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+      <Button type="button" size="sm" variant={selected ? 'default' : 'outline'} onClick={onConfigure}>
         Изменить логику
       </Button>
-      <Button type="button" size="sm" onClick={onRun}>
+      <Button type="button" size="sm" variant="outline" onClick={onRun}>
         <Play className="mr-2 h-4 w-4" />
         Запустить
       </Button>
-      <Button type="button" size="sm" variant="ghost" onClick={onResults}>
-        Журнал
-      </Button>
-      <Button type="button" size="sm" variant="ghost" onClick={onConfigure}>
-        Версии
-      </Button>
-      <Button type="button" size="sm" variant="ghost" onClick={onVoice}>
-        Голос и стиль
-      </Button>
+    </div>
+    <div className="mt-2 flex gap-1.5">
+      <Button type="button" size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={onResults}>Журнал</Button>
+      <Button type="button" size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={onVoice}>Голос</Button>
     </div>
   </div>
   );
