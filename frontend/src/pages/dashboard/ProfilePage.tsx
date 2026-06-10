@@ -3,7 +3,7 @@ import { useOutletContext, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 import { newAuth } from '@/lib/auth_new';
-import { Network, MapPin, User, Building2, Clock, Mail, Phone, Edit2, ShieldCheck, AlertTriangle, CheckCircle2, ArrowRight, FileSearch, RefreshCw, Plus, Trash2, Info } from 'lucide-react';
+import { Network, MapPin, User, Building2, Clock, Mail, Phone, Edit2, ShieldCheck, AlertTriangle, CheckCircle2, ArrowRight, FileSearch, RefreshCw, Plus, Trash2, Info, ExternalLink } from 'lucide-react';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { cn } from '@/lib/utils';
 import { SubscriptionManagement } from '@/components/SubscriptionManagement';
@@ -100,6 +100,7 @@ export const ProfilePage = () => {
     address: '',
     city: '',
     citySuggestion: '',
+    website: '',
     workingHours: '',
     mapLinks: [] as { id?: string; url: string; mapType?: string }[]
   });
@@ -109,6 +110,7 @@ export const ProfilePage = () => {
     address: '',
     city: '',
     citySuggestion: '',
+    website: '',
     workingHours: '',
     mapLinks: [] as { id?: string; url: string; mapType?: string }[]
   });
@@ -163,6 +165,7 @@ export const ProfilePage = () => {
     businessType: String(value.businessType || '').trim(),
     address: String(value.address || '').trim(),
     city: String(value.city || '').trim(),
+    website: String(value.website || '').trim(),
     workingHours: String(value.workingHours || '').trim(),
     mapLinks: normalizeMapLinks(value.mapLinks),
   });
@@ -307,6 +310,9 @@ export const ProfilePage = () => {
     workingHours: isRu
       ? 'Часы работы используются для проверки заполненности карточки и актуальности данных.'
       : 'Working hours are used to verify listing completeness and data accuracy.',
+    website: isRu
+      ? 'Сайт используется в карточке бизнеса, генерации новостей и описаний, а также как источник фактов о компании.'
+      : 'The website is used in the business profile, news generation, descriptions, and as a factual source about the company.',
     mapLinks: isRu
       ? 'Добавьте ссылку на карточку в Яндекс или 2ГИС. По ней LocalOS запускает сбор данных и создаёт аудит.'
       : 'Add the listing link from Yandex or 2GIS. LocalOS uses it to collect data and create the audit.',
@@ -421,6 +427,7 @@ export const ProfilePage = () => {
           address: data.address || '',
           city: data.city ?? '',
           citySuggestion: data.citySuggestion ?? '',
+          website: data.website || data.site || '',
           workingHours: data.workingHours || t.dashboard.profile.workingHoursPlaceholder,
           mapLinks: normalizedMapLinks
         };
@@ -686,6 +693,7 @@ export const ProfilePage = () => {
           address: reloadData.address || '',
           city: reloadData.city ?? '',
           citySuggestion: reloadData.citySuggestion ?? '',
+          website: reloadData.website || reloadData.site || '',
           workingHours: reloadData.workingHours || t.dashboard.profile.workingHoursPlaceholder,
           mapLinks: normalizedMapLinks
         };
@@ -702,6 +710,8 @@ export const ProfilePage = () => {
           name: clientInfo.businessName,
           business_type: clientInfo.businessType,
           address: clientInfo.address,
+          site: clientInfo.website,
+          website: clientInfo.website,
           working_hours: clientInfo.workingHours
         });
       }
@@ -829,7 +839,7 @@ export const ProfilePage = () => {
   };
 
   const profileCompletion = (() => {
-    const fieldsTotal = 9;
+    const fieldsTotal = 10;
     let filled = 0;
     if ((form.email || '').trim()) filled++;
     if ((form.phone || '').trim()) filled++;
@@ -838,6 +848,7 @@ export const ProfilePage = () => {
     if ((clientInfo.businessType || '').trim()) filled++;
     if ((clientInfo.address || '').trim()) filled++;
     if ((clientInfo.city || '').trim()) filled++;
+    if ((clientInfo.website || '').trim()) filled++;
     if ((clientInfo.workingHours || '').trim()) filled++;
     if (hasSavedMapLinks) filled++;
     return Math.round((filled / fieldsTotal) * 100);
@@ -846,6 +857,11 @@ export const ProfilePage = () => {
   const businessTypeOptions = businessTypes.length > 0
     ? businessTypes
     : defaultBusinessTypeOptions;
+  const websiteHref = (() => {
+    const value = String(clientInfo.website || '').trim();
+    if (!value) return '';
+    return /^https?:\/\//i.test(value) ? value : `https://${value}`;
+  })();
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-10">
@@ -1297,6 +1313,41 @@ export const ProfilePage = () => {
                   </button>
                 ))}
               </div>
+            )}
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <ExternalLink className="w-4 h-4 text-gray-400" />
+              {isRu ? 'Сайт' : 'Website'}
+              <FieldHint text={fieldHints.website} />
+            </label>
+            {editClientInfo ? (
+              <input
+                type="url"
+                value={clientInfo.website || ''}
+                onChange={(e) => setClientInfo({ ...clientInfo, website: e.target.value })}
+                disabled={!editClientInfo}
+                placeholder="https://example.com"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl bg-white transition-all duration-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+              />
+            ) : clientInfo.website ? (
+              <a
+                href={websiteHref}
+                target="_blank"
+                rel="noreferrer"
+                className="flex min-h-[46px] items-center gap-2 rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-blue-700 underline-offset-4 hover:underline"
+              >
+                <span className="truncate">{clientInfo.website}</span>
+                <ExternalLink className="h-4 w-4 shrink-0" />
+              </a>
+            ) : (
+              <input
+                type="text"
+                value=""
+                disabled
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-gray-50/50 text-gray-500"
+                placeholder="-"
+              />
             )}
           </div>
           <div className="col-span-1 md:col-span-2 space-y-2">

@@ -21,7 +21,7 @@ def _business_blob(business: dict[str, Any]) -> str:
     return _normalize(
         " ".join(
             _safe_text(business.get(key))
-            for key in ("name", "business_type", "categories", "address", "city")
+            for key in ("name", "business_type", "industry", "categories", "description", "site", "address", "city")
         )
     )
 

@@ -7,6 +7,9 @@ import unicodedata
 from datetime import date, datetime, timedelta
 from typing import Any
 
+import requests
+from bs4 import BeautifulSoup
+
 from database_manager import DatabaseManager
 from core.ai_learning import ensure_ai_learning_events_table, record_ai_learning_event
 from core.card_audit import build_card_audit_snapshot
@@ -521,7 +524,8 @@ def _scope_description(scope_type: str, label: str, city: str, address: str) -> 
 def _fetch_business_row(cursor: Any, business_id: str) -> dict[str, Any]:
     cursor.execute(
         """
-        SELECT id, owner_id, name, city, address, network_id, business_type, categories
+        SELECT id, owner_id, name, city, address, network_id, business_type, categories,
+               industry, description, site, website
         FROM businesses
         WHERE id = %s
         LIMIT 1
@@ -1433,7 +1437,10 @@ def load_plan_context_for_business(user_id: str, business_id: str, scope_type: s
                 "city": str(scope_business_row.get("city") or "").strip(),
                 "address": str(scope_business_row.get("address") or "").strip(),
                 "business_type": str(scope_business_row.get("business_type") or "").strip(),
+                "industry": str(scope_business_row.get("industry") or "").strip(),
                 "categories": str(scope_business_row.get("categories") or "").strip(),
+                "description": str(scope_business_row.get("description") or "").strip(),
+                "site": str(scope_business_row.get("site") or scope_business_row.get("website") or "").strip(),
             },
             "root_business": {
                 "id": str(business_row.get("id") or ""),
@@ -2407,6 +2414,161 @@ def _service_names_from_fact_block(service_facts: Any, limit: int = 5) -> list[s
     return names
 
 
+def _tokenize_content_plan_topic(value: Any) -> set[str]:
+    normalized = str(value or "").lower().replace("ё", "е")
+    tokens = set(re.findall(r"[a-zа-я0-9]+", normalized))
+    stop_words = {
+        "для",
+        "как",
+        "что",
+        "это",
+        "или",
+        "при",
+        "про",
+        "без",
+        "под",
+        "над",
+        "детей",
+        "ребенка",
+        "ребёнка",
+        "детям",
+        "подростков",
+        "направление",
+        "направления",
+        "программа",
+        "программе",
+        "раскрыть",
+        "усилить",
+        "доверие",
+    }
+    return {token for token in tokens if len(token) >= 3 and token not in stop_words}
+
+
+def _normalize_website_url(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if text.startswith(("http://", "https://")):
+        return text
+    return f"https://{text}"
+
+
+def _clean_site_description_text(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    text = re.sub(r"\s+", " ", text)
+    text = text.strip(" \t\r\n|—-")
+    return text[:500]
+
+
+def _extract_site_description_from_html(html: str) -> str:
+    if not html:
+        return ""
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+        for selector in (
+            {"name": "description"},
+            {"property": "og:description"},
+            {"name": "twitter:description"},
+        ):
+            tag = soup.find("meta", attrs=selector)
+            content = _clean_site_description_text(tag.get("content") if tag else "")
+            if content:
+                return content
+        title = _clean_site_description_text(soup.title.string if soup.title else "")
+        if title:
+            return title
+        h1 = soup.find("h1")
+        return _clean_site_description_text(h1.get_text(" ", strip=True) if h1 else "")
+    except Exception:
+        return ""
+
+
+def _fetch_site_description(site_url: Any) -> str:
+    url = _normalize_website_url(site_url)
+    if not url:
+        return ""
+    try:
+        response = requests.get(
+            url,
+            headers={"User-Agent": "LocalOSBot/1.0 (+https://localos.pro)"},
+            timeout=5,
+        )
+        if response.status_code >= 400:
+            return ""
+        return _extract_site_description_from_html(response.text or "")
+    except Exception:
+        return ""
+
+
+def _relevant_service_names_for_item(service_facts: Any, item: dict[str, Any], limit: int = 5) -> list[str]:
+    topic_tokens = _tokenize_content_plan_topic(
+        " ".join(
+            [
+                str(item.get("theme") or ""),
+                str(item.get("goal") or ""),
+                str(item.get("seo_keyword") or ""),
+            ]
+        )
+    )
+    if not topic_tokens:
+        return _service_names_from_fact_block(service_facts, limit=limit)
+
+    scored: list[tuple[int, str]] = []
+    fallback: list[str] = []
+    for line in str(service_facts or "").splitlines():
+        cleaned = line.strip().lstrip("-").strip()
+        if not cleaned:
+            continue
+        name = cleaned.split("(", 1)[0].strip()
+        if not name:
+            continue
+        fallback.append(name)
+        haystack_tokens = _tokenize_content_plan_topic(cleaned)
+        score = len(topic_tokens.intersection(haystack_tokens))
+        if score > 0:
+            scored.append((score, name))
+
+    if scored:
+        scored.sort(key=lambda pair: (-pair[0], fallback.index(pair[1]) if pair[1] in fallback else 999))
+        result: list[str] = []
+        for _, name in scored:
+            if name not in result:
+                result.append(name)
+            if len(result) >= limit:
+                break
+        return result
+    return fallback[:limit]
+
+
+def _is_general_school_intro_topic(theme: str, goal: str) -> bool:
+    text = f"{theme} {goal}".lower().replace("ё", "е")
+    markers = [
+        "что такое",
+        "чем школа полезна",
+        "общий пост",
+        "подход к обучению",
+        "подходе к обучению",
+        "направлениях для детей",
+        "о школе",
+    ]
+    return any(marker in text for marker in markers)
+
+
+def _school_goal_sentence(goal: str) -> str:
+    normalized = str(goal or "").strip().lower().replace("ё", "е")
+    if not normalized:
+        return "Это помогает родителям выбрать обучение под возраст и учебную задачу ребёнка."
+    if "младших школьников" in normalized:
+        return "Это помогает родителям младших школьников понять, как устроено направление и какие учебные задачи оно закрывает."
+    if "дошколь" in normalized or "подготов" in normalized:
+        return "Это помогает родителям понять, как мягко подготовить ребёнка к школе и первым учебным задачам."
+    if normalized.startswith("общий пост") or normalized.startswith("раскрыть"):
+        return "Это помогает родителям быстро понять, кому подходит направление и с какого шага начать знакомство."
+    return str(goal or "").strip().rstrip(".") + "."
+
+
 CONTENT_PLAN_LANGUAGE_LABELS = {
     "ru": "Russian",
     "en": "English",
@@ -2451,7 +2613,7 @@ def _fallback_draft_text(
     keyword = str(item.get("seo_keyword") or "").strip()
     goal = str(item.get("goal") or "").strip()
     facts = business_facts if isinstance(business_facts, dict) else {}
-    service_names = _service_names_from_fact_block(facts.get("services"))
+    service_names = _relevant_service_names_for_item(facts.get("services"), item)
     lower_identity = " ".join(
         [
             business_name,
@@ -2494,13 +2656,39 @@ def _fallback_draft_text(
         lines.append("Details, booking, and current offers can be checked through the contacts in the listing.")
         return " ".join(lines)
 
+    if bool(facts.get("is_cultural_space")):
+        site_description = str(facts.get("site_description") or facts.get("description") or "").strip()
+        directions = ", ".join(service_names[:5])
+        if directions:
+            return (
+                f"{business_name} — культурный центр. "
+                f"{site_description.rstrip('.') + '. ' if site_description else ''}"
+                f"В афише и направлениях: {directions}. "
+                "Подробности, расписание и запись можно уточнить по контактам в карточке."
+            )
+        return (
+            f"{business_name} — культурный центр: концерты, лекции, стендап, мастер-классы и камерные события. "
+            f"{theme.rstrip('.') + '.' if theme else 'В карточке можно уточнить ближайшие события.'} "
+            "Подробности, расписание и запись можно уточнить по контактам в карточке."
+        )
+
     if "school" in lower_identity or "школ" in lower_identity or "образован" in lower_identity:
         city = str(facts.get("city") or "").strip()
         city_text = f" в {city}" if city else ""
-        directions = ", ".join(service_names[:5]) if service_names else "занятия для детей и подростков"
+        if _is_general_school_intro_topic(theme, goal):
+            directions = ", ".join(service_names[:5]) if service_names else "подготовка к школе, английский, программирование и творческие направления"
+            return (
+                f"{business_name}{city_text} — школа и пространство для детей и подростков. "
+                f"В карточке можно выбрать направление под возраст и интересы ребёнка: {directions}. "
+                "Такой формат помогает поддерживать учебный ритм, развивать самостоятельность и пробовать новые навыки. "
+                "Подробности и запись можно уточнить по контактам в карточке."
+            )
+        directions = service_names[0] if service_names else theme
+        focus = theme.rstrip(".")
+        goal_sentence = _school_goal_sentence(goal)
         return (
-            f"{business_name}{city_text} помогает детям и подросткам развивать учебные и цифровые навыки. "
-            f"Среди направлений: {directions}. Можно выбрать курс по возрасту, интересам ребёнка и учебной задаче. "
+            f"{business_name}{city_text}: {focus}. "
+            f"В фокусе публикации — {directions}. {goal_sentence} "
             "Подробности и запись можно уточнить по контактам в карточке."
         )
 
@@ -2551,9 +2739,13 @@ def _content_plan_business_facts(business_row: Any, item: dict[str, Any]) -> dic
     categories = _normalize_fact_text(_row_get(business_row, "categories", 4, ""))
     address = _normalize_fact_text(_row_get(business_row, "address", 5, ""))
     description = _normalize_fact_text(_row_get(business_row, "description", 6, ""))
+    site = _normalize_fact_text(_row_get(business_row, "site", 7, ""))
+    website = _normalize_fact_text(_row_get(business_row, "website", 8, ""))
+    website_url = site or website
+    site_description = _fetch_site_description(website_url)
     theme = str(item.get("theme") or "").strip()
     goal = str(item.get("goal") or "").strip()
-    combined = " ".join([name, business_type, industry, categories, description, theme, goal]).lower()
+    combined = " ".join([name, business_type, industry, categories, description, site_description, theme, goal]).lower()
     cultural_markers = [
         "культур",
         "галере",
@@ -2576,6 +2768,8 @@ def _content_plan_business_facts(business_row: Any, item: dict[str, Any]) -> dic
         "categories": categories,
         "address": address,
         "description": description,
+        "site": website_url,
+        "site_description": site_description,
         "is_cultural_space": is_cultural_space,
         "ice_markers": ice_markers,
     }
@@ -2618,6 +2812,8 @@ def _build_content_plan_business_fact_block(facts: dict[str, Any]) -> str:
         f"Категории на картах: {facts.get('categories') or 'не указаны'}",
         f"Адрес: {facts.get('address') or 'не указан'}",
         f"Описание карточки: {facts.get('description') or 'не указано'}",
+        f"Сайт: {facts.get('site') or 'не указан'}",
+        f"Описание с сайта: {facts.get('site_description') or 'не найдено'}",
         f"Реальные услуги/направления:\n{facts.get('services') or 'не указаны'}",
         (
             "Название бизнеса может быть метафорой или брендом. "
@@ -2645,6 +2841,10 @@ def _content_plan_draft_needs_fallback(text: str, facts: dict[str, Any]) -> bool
     lower_text = str(text or "").lower()
     if not lower_text.strip():
         return True
+    if bool(facts.get("is_cultural_space")):
+        school_markers = ["школ", "учебн", "обучен", "детей и подростков", "ребенка", "ребёнка"]
+        if any(marker in lower_text for marker in school_markers):
+            return True
     technical_markers = [
         "manual_strategy:",
         "google_doc",
@@ -2754,6 +2954,7 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             """
             SELECT i.id, i.plan_id, i.business_id, i.theme, i.goal, i.content_type, i.source_kind, i.source_ref,
                    i.seo_keyword, i.seo_views, i.service_id, i.transaction_id, i.location_scope,
+                   i.usernews_id,
                    p.business_id AS root_business_id
             FROM contentplanitems i
             JOIN contentplans p ON p.id = i.plan_id
@@ -2772,7 +2973,11 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             if not bool(_row_get(cursor.fetchone(), "coalesce", 0, False)):
                 raise PermissionError("Нет доступа к элементу плана")
         cursor.execute(
-            "SELECT name, city, business_type, industry, categories, address, description FROM businesses WHERE id = %s",
+            """
+            SELECT name, city, business_type, industry, categories, address, description, site, website
+            FROM businesses
+            WHERE id = %s
+            """,
             (item.get("business_id"),),
         )
         business_row = cursor.fetchone()
@@ -2809,6 +3014,10 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             "- не добавляй лекции, концерты, мастерские, события, команду, специалистов, атмосферу или оборудование, если этого нет в фактах;\n"
             "- не используй пустые рекламные клише вроде уютное пространство, профессиональная команда, без забот, идеальный выбор;\n"
             "- не используй сезонность, если источник идеи не seasonal;\n"
+            "- главная тема новости обязана совпадать с полем «Тема» ниже;\n"
+            "- поле «Цель» объясняет, что именно раскрыть; выполни эту цель напрямую;\n"
+            "- не превращай узкую тему в общий обзор всех услуг/направлений бизнеса;\n"
+            "- реальные услуги/направления используй только как факты, выбирай только те, которые относятся к теме;\n"
             "- если данных мало, пиши нейтрально: что можно уточнить в карточке и как связаться.\n\n"
             "Факты о бизнесе:\n"
             f"{_build_content_plan_business_fact_block(business_facts)}\n\n"
@@ -2888,6 +3097,29 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             """,
             (generated_text, item_id),
         )
+        usernews_id = str(item.get("usernews_id") or "").strip()
+        if usernews_id:
+            _ensure_usernews_table(cursor)
+            cursor.execute(
+                """
+                UPDATE usernews
+                SET generated_text = %s,
+                    original_generated_text = %s,
+                    edited_before_approve = FALSE,
+                    approved = 0,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                  AND user_id = %s
+                  AND (business_id IS NULL OR business_id = %s)
+                """,
+                (
+                    generated_text,
+                    generated_text,
+                    usernews_id,
+                    user_id,
+                    str(item.get("business_id") or ""),
+                ),
+            )
         _record_content_plan_event(
             conn=db.conn,
             user_id=user_id,
@@ -2906,6 +3138,7 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
                 "location_scope": location_scope,
                 "location_label": str(location_meta.get("scope_target_label") or "").strip(),
                 "language": normalized_language,
+                "updated_usernews_id": usernews_id,
             },
         )
         db.conn.commit()

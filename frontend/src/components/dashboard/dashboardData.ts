@@ -305,6 +305,7 @@ export function buildDashboardClientInfo(business?: DashboardBusiness | null): D
     businessName: business?.name || "",
     businessType: business?.business_type || "other",
     address: business?.address || "",
+    website: business?.site || business?.website || "",
     workingHours: business?.working_hours || "",
     mapLinks: [],
   };

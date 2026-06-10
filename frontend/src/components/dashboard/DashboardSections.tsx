@@ -25,6 +25,8 @@ export type DashboardClientInfo = {
   businessName: string;
   businessType: string;
   address: string;
+  website?: string;
+  site?: string;
   workingHours: string;
   mapLinks: DashboardMapLink[];
 };
@@ -35,6 +37,8 @@ export type DashboardBusiness = {
   description?: string;
   business_type?: string;
   address?: string;
+  website?: string;
+  site?: string;
   working_hours?: string;
   yandex_url?: string;
   network_id?: string;

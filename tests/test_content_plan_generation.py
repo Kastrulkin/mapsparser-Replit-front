@@ -11,13 +11,17 @@ from src.services.content_plan_service import (
     _build_network_quality_summary,
     _build_planning_readiness,
     _classify_text_edit,
+    _content_plan_business_facts,
+    _content_plan_draft_needs_fallback,
     _fetch_audit_signals,
     _fetch_seo_keywords,
     _fetch_seo_keywords_isolated,
     _filter_foreign_brand_seo_keywords,
+    _fallback_draft_text,
     _merge_seo_keyword_lists,
     _network_location_targets_from_context,
     _json_ready,
+    _relevant_service_names_for_item,
     _resolve_scope_target_meta,
     _sanitize_generated_news_text,
     _scope_context_business_ids,
@@ -191,6 +195,38 @@ def test_content_plan_skeleton_uses_event_center_template_for_katok():
     assert any("афиша" in item["goal"].lower() or "событ" in item["goal"].lower() for item in plan["items"])
 
 
+def test_content_plan_katok_site_description_prevents_school_fallback(monkeypatch):
+    monkeypatch.setattr(
+        content_plan_service,
+        "_fetch_site_description",
+        lambda _: "Культурный центр в Краснодаре. Концерты, лекции, стендап, мастер-классы — события, которые нельзя пропустить.",
+    )
+    item = {
+        "theme": "Ближайшее событие в афише",
+        "goal": "Дать понятный анонс события: что будет, кому подойдет, дата, время и как попасть.",
+        "seo_keyword": "афиша",
+    }
+    business_row = {
+        "name": "Каток",
+        "city": "Краснодар",
+        "business_type": "",
+        "industry": "",
+        "categories": "",
+        "address": "ул. Жлобы, 139",
+        "description": "",
+        "site": "https://katok.io/",
+    }
+    facts = _content_plan_business_facts(business_row, item)
+    facts["services"] = "- 16 июня, 19:00 — Век вранья\n- 21 июня, 19:00 — Музыкальное казино"
+
+    draft = _fallback_draft_text("Каток", item, facts, "ru")
+
+    assert facts["is_cultural_space"] is True
+    assert "культурный центр" in draft.lower()
+    assert "школ" not in draft.lower()
+    assert _content_plan_draft_needs_fallback("Каток — школа и пространство для детей и подростков.", facts) is True
+
+
 def test_content_plan_skeleton_uses_transfer_fast_food_and_gas_station_templates():
     cases = [
         (
@@ -359,6 +395,83 @@ def test_sanitize_generated_news_text_extracts_fenced_payload():
     raw = '```json\n{"news":"Новая тема без технических символов"}\n```'
 
     assert _sanitize_generated_news_text(raw) == "Новая тема без технических символов"
+
+
+def test_relevant_service_names_for_item_prefers_topic_matches():
+    services = "\n".join(
+        [
+            "- Гимназия 1–4 класс (английский и естественные науки)",
+            "- Курс программирования в Minecraft для детей",
+            "- Английский для дошкольников",
+            "- Курс визуального дизайна и брендинга",
+        ]
+    )
+
+    result = _relevant_service_names_for_item(
+        services,
+        {
+            "theme": "Гимназия 1–4 класс: английский и естественные науки в понятной системе",
+            "goal": "Раскрыть направление для младших школьников",
+        },
+    )
+
+    assert result[0] == "Гимназия 1–4 класс"
+    assert "Курс программирования в Minecraft для детей" not in result[:2]
+
+
+def test_school_fallback_draft_stays_on_plan_item_topic():
+    text = _fallback_draft_text(
+        "Intellectum Space and School",
+        {
+            "theme": "Гимназия 1–4 класс: английский и естественные науки в понятной системе",
+            "goal": "Раскрыть направление для младших школьников и усилить доверие к программе",
+        },
+        {
+            "city": "Батуми",
+            "business_type": "school",
+            "services": "\n".join(
+                [
+                    "- Гимназия 1–4 класс (английский и естественные науки)",
+                    "- Курс программирования в Minecraft для детей",
+                    "- Подготовка детей к школе",
+                    "- Английский для дошкольников",
+                    "- Курс визуального дизайна и брендинга",
+                ]
+            ),
+        },
+    )
+
+    assert "Гимназия 1–4 класс" in text
+    assert "младших школьников" in text
+    assert "Курс программирования в Minecraft" not in text
+    assert "Курс визуального дизайна" not in text
+
+
+def test_school_fallback_general_intro_does_not_pick_random_single_course():
+    text = _fallback_draft_text(
+        "Intellectum Space and School",
+        {
+            "theme": "Что такое Intellectum Space and School и чем школа полезна детям в Батуми",
+            "goal": "Общий пост о школе, подходе к обучению и направлениях для детей и подростков",
+        },
+        {
+            "city": "Батуми",
+            "business_type": "school",
+            "services": "\n".join(
+                [
+                    "- Английский для дошкольников",
+                    "- Гимназия 1–4 класс (английский и естественные науки)",
+                    "- Курс программирования в Minecraft для детей",
+                    "- Робототехника для детей",
+                ]
+            ),
+        },
+    )
+
+    assert "школа и пространство для детей и подростков" in text
+    assert "В фокусе публикации" not in text
+    assert "Общий пост" not in text
+    assert "Английский для дошкольников. Общий пост" not in text
 
 
 def test_fetch_seo_keywords_isolated_returns_empty_list_when_optional_loader_fails(monkeypatch):

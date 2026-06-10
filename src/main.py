@@ -5159,6 +5159,72 @@ def delete_user_service_example(example_id: str):
         return jsonify({"error": str(e)}), 500
 
 # ==================== НОВОСТИ ДЛЯ КАРТ ====================
+def _normalize_news_site_url(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if text.startswith(("http://", "https://")):
+        return text
+    return f"https://{text}"
+
+
+def _clean_news_site_description(value: Any) -> str:
+    text = html.unescape(str(value or "").strip())
+    if not text:
+        return ""
+    text = re.sub(r"\s+", " ", text)
+    return text.strip(" \t\r\n|—-")[:500]
+
+
+def _extract_news_site_description(html_text: str) -> str:
+    if not html_text:
+        return ""
+    meta_patterns = [
+        r'<meta[^>]+name=["\\\']description["\\\'][^>]+content=["\\\']([^"\\\']+)["\\\']',
+        r'<meta[^>]+property=["\\\']og:description["\\\'][^>]+content=["\\\']([^"\\\']+)["\\\']',
+        r'<meta[^>]+name=["\\\']twitter:description["\\\'][^>]+content=["\\\']([^"\\\']+)["\\\']',
+        r'<meta[^>]+content=["\\\']([^"\\\']+)["\\\'][^>]+name=["\\\']description["\\\']',
+        r'<meta[^>]+content=["\\\']([^"\\\']+)["\\\'][^>]+property=["\\\']og:description["\\\']',
+    ]
+    for pattern in meta_patterns:
+        match = re.search(pattern, html_text, flags=re.IGNORECASE)
+        if match:
+            description = _clean_news_site_description(match.group(1))
+            if description:
+                return description
+    title_match = re.search(r"<title[^>]*>(.*?)</title>", html_text, flags=re.IGNORECASE | re.DOTALL)
+    return _clean_news_site_description(title_match.group(1) if title_match else "")
+
+
+def _fetch_news_site_description(site_url: Any) -> str:
+    url = _normalize_news_site_url(site_url)
+    if not url:
+        return ""
+    try:
+        response = requests.get(
+            url,
+            headers={"User-Agent": "LocalOSBot/1.0 (+https://localos.pro)"},
+            timeout=5,
+        )
+        if response.status_code >= 400:
+            return ""
+        return _extract_news_site_description(response.text or "")
+    except Exception:
+        return ""
+
+
+def _news_context_is_cultural_space(context: str) -> bool:
+    lower = str(context or "").lower()
+    cultural_markers = ["культур", "афиша", "лекци", "концерт", "стендап", "мастер-класс", "событи"]
+    return any(marker in lower for marker in cultural_markers)
+
+
+def _news_text_has_school_hallucination(text: str) -> bool:
+    lower = str(text or "").lower()
+    school_markers = ["школ", "учебн", "обучен", "детей и подростков", "ребенка", "ребёнка"]
+    return any(marker in lower for marker in school_markers)
+
+
 @app.route('/api/news/generate', methods=['POST', 'OPTIONS'])
 @rate_limit_if_available("30 per hour")
 def news_generate():
@@ -5316,7 +5382,7 @@ def news_generate():
         if business_id:
             cur.execute(
                 """
-                SELECT name, business_type, industry, categories, address
+                SELECT name, business_type, industry, categories, address, description, site, website
                 FROM businesses
                 WHERE id = %s
                 LIMIT 1
@@ -5335,9 +5401,18 @@ def news_generate():
                         str(business_data.get('industry') or "").strip(),
                         business_categories,
                         str(business_data.get('address') or "").strip(),
+                        str(business_data.get('description') or "").strip(),
+                        str(business_data.get('site') or business_data.get('website') or "").strip(),
                     ]
                     if item
                 )
+                site_description = _fetch_news_site_description(
+                    business_data.get('site') or business_data.get('website')
+                )
+                if site_description:
+                    business_type_context = " | ".join(
+                        item for item in [business_type_context, f"Описание сайта: {site_description}"] if item
+                    )
                 industry_key = detect_industry_key(
                     business_name=business_name,
                     business_type=business_data.get('business_type'),
@@ -5643,6 +5718,19 @@ Write all generated text in {language_name}.
                 generated_text = (
                     f"Business update: {business_name} keeps map information up to date so drivers can find the nearest fuel station, "
                     "check the address, and choose a convenient route. See the specific map listing for current details."
+                )
+
+        if _news_context_is_cultural_space(business_identity_text) and _news_text_has_school_hallucination(generated_text):
+            if language == "ru":
+                generated_text = (
+                    f"{business_name} — культурный центр: концерты, лекции, стендап, мастер-классы и события, "
+                    "которые можно выбрать по афише. Актуальное расписание, подробности и запись можно уточнить "
+                    "по контактам в карточке."
+                )
+            else:
+                generated_text = (
+                    f"{business_name} is a cultural venue with concerts, lectures, stand-up, workshops, and events. "
+                    "Check the listing contacts for the current schedule, details, and booking."
                 )
 
         news_id = str(uuid.uuid4())
@@ -7186,7 +7274,7 @@ def client_info():
             if current_business_id:
                 print(f"🔍 GET /api/client-info: Ищу бизнес в таблице businesses, business_id={current_business_id}")
                 cursor.execute(
-                    "SELECT owner_id, name, business_type, address, working_hours, is_active, city, geo_lat, geo_lon FROM businesses WHERE id = %s AND (is_active = TRUE OR is_active IS NULL)",
+                    "SELECT owner_id, name, business_type, address, working_hours, is_active, city, geo_lat, geo_lon, site, website FROM businesses WHERE id = %s AND (is_active = TRUE OR is_active IS NULL)",
                     (current_business_id,),
                 )
                 business_row = cursor.fetchone()
@@ -7199,6 +7287,7 @@ def client_info():
                     city = (row_dict.get("city") or "").strip() or None
                     geo_lat = row_dict.get("geo_lat")
                     geo_lon = row_dict.get("geo_lon")
+                    website = str(row_dict.get("site") or row_dict.get("website") or "").strip()
                     city_suggestion = None
                     if not city and address:
                         city_suggestion = suggest_city_from_address(address)
@@ -7276,6 +7365,8 @@ def client_info():
                             "citySuggestion": city_suggestion or "",
                             "geoLat": geo_lat,
                             "geoLon": geo_lon,
+                            "website": website,
+                            "site": website,
                             "description": "",
                             "services": services_list,
                             "mapLinks": links,
@@ -7316,6 +7407,8 @@ def client_info():
                     "address": "",
                     "workingHours": "",
                     "description": "",
+                    "website": "",
+                    "site": "",
                     "services": [],
                     "mapLinks": [],
                     "owner": None
@@ -7324,21 +7417,22 @@ def client_info():
             current_business_id = first_dict.get("id") if first_dict else None
             if not current_business_id:
                 db.close()
-                return jsonify({"success": True, "businessName": "", "businessType": "", "address": "", "workingHours": "", "description": "", "services": [], "mapLinks": [], "owner": None})
+                return jsonify({"success": True, "businessName": "", "businessType": "", "address": "", "workingHours": "", "description": "", "website": "", "site": "", "services": [], "mapLinks": [], "owner": None})
             cursor.execute(
-                "SELECT owner_id, name, business_type, address, working_hours, is_active, city, geo_lat, geo_lon FROM businesses WHERE id = %s AND (is_active = TRUE OR is_active IS NULL)",
+                "SELECT owner_id, name, business_type, address, working_hours, is_active, city, geo_lat, geo_lon, site, website FROM businesses WHERE id = %s AND (is_active = TRUE OR is_active IS NULL)",
                 (current_business_id,),
             )
             business_row = cursor.fetchone()
             row_dict = _row_to_dict(cursor, business_row)
             if not row_dict:
                 db.close()
-                return jsonify({"success": True, "businessName": "", "businessType": "", "address": "", "workingHours": "", "city": "", "citySuggestion": "", "geoLat": None, "geoLon": None, "description": "", "services": [], "mapLinks": [], "owner": None})
+                return jsonify({"success": True, "businessName": "", "businessType": "", "address": "", "workingHours": "", "city": "", "citySuggestion": "", "geoLat": None, "geoLon": None, "description": "", "website": "", "site": "", "services": [], "mapLinks": [], "owner": None})
             owner_id = row_dict.get("owner_id")
             business_name, business_type, address, working_hours = _business_display_fields(row_dict)
             is_active_val = row_dict.get("is_active")
             city = (row_dict.get("city") or "").strip() or None
             geo_lat, geo_lon = row_dict.get("geo_lat"), row_dict.get("geo_lon")
+            website = str(row_dict.get("site") or row_dict.get("website") or "").strip()
             city_suggestion = suggest_city_from_address(address) if not city and address else None
             links = []
             cursor.execute("""
@@ -7388,6 +7482,8 @@ def client_info():
                 "citySuggestion": city_suggestion or "",
                 "geoLat": geo_lat,
                 "geoLon": geo_lon,
+                "website": website,
+                "site": website,
                 "description": "",
                 "services": services_list,
                 "mapLinks": links,
@@ -7573,12 +7669,17 @@ def client_info():
                     # Обновляем данные бизнеса
                     updates = []
                     params = []
+                    website_value = data.get('website') if 'website' in data else data.get('site') if 'site' in data else None
                     if data.get('businessName') is not None:
                         updates.append('name = %s'); params.append(data.get('businessName'))
                     if data.get('address') is not None:
                         updates.append('address = %s'); params.append(data.get('address'))
                     if data.get('workingHours') is not None:
                         updates.append('working_hours = %s'); params.append(data.get('workingHours'))
+                    if website_value is not None:
+                        normalized_website = str(website_value or "").strip()
+                        updates.append('site = %s'); params.append(normalized_website or None)
+                        updates.append('website = %s'); params.append(normalized_website or None)
                     if data.get('businessType') is not None:
                         business_type_value = data.get('businessType')
                         print(f"📋 Сохраняем businessType в businesses: {business_type_value}")
@@ -7615,13 +7716,14 @@ def client_info():
 
         # Ответ: данные бизнеса всегда из таблицы businesses (lowercase), маппинг через cursor.description
         if business_id:
-            cursor.execute("SELECT name, business_type, address, working_hours, city, geo_lat, geo_lon FROM businesses WHERE id = %s", (business_id,))
+            cursor.execute("SELECT name, business_type, address, working_hours, city, geo_lat, geo_lon, site, website FROM businesses WHERE id = %s", (business_id,))
             business_row = cursor.fetchone()
             row_dict = _row_to_dict(cursor, business_row)
             if row_dict:
                 business_name, business_type, address, working_hours = _business_display_fields(row_dict)
                 city = (row_dict.get("city") or "").strip() or ""
                 city_suggestion = suggest_city_from_address(address) if not city and address else ""
+                website = str(row_dict.get("site") or row_dict.get("website") or "").strip()
                 print(f"📋 POST /api/client-info: из businesses для business_id={business_id}: name={business_name!r}, businessType={business_type!r}")
                 response_data.update({
                     "businessName": business_name or "",
@@ -7632,6 +7734,8 @@ def client_info():
                     "citySuggestion": city_suggestion or "",
                     "geoLat": row_dict.get("geo_lat"),
                     "geoLon": row_dict.get("geo_lon"),
+                    "website": website,
+                    "site": website,
                 })
 
         db.close()
