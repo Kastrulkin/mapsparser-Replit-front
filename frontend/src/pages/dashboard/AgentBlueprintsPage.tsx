@@ -519,7 +519,7 @@ type LegacyMigrationPlan = {
   };
 };
 
-type AgentWorkspaceMode = 'settings' | 'run' | 'results' | 'voice';
+type AgentWorkspaceMode = 'overview' | 'settings' | 'run' | 'results' | 'connections' | 'voice' | 'advanced';
 
 type FeedbackVersionNotice = {
   version_id?: string;
@@ -651,7 +651,7 @@ const runStatusFilters = [
 const learningTriggerOptions = [
   { value: 'manual_edit', label: 'Ручная правка текста' },
   { value: 'approval_rejected', label: 'Отклонение' },
-  { value: 'bad_outcome', label: 'Плохой outcome' },
+  { value: 'bad_outcome', label: 'Плохой результат' },
   { value: 'runtime_error', label: 'Ошибка' },
   { value: 'manual_feedback', label: 'Комментарий' },
 ];
@@ -672,7 +672,7 @@ const agentScenarios: AgentBuilderScenario[] = [
     prompt: 'Сделай агента, который напоминает клиентам о записи и сообщает про пакетное предложение',
     dataSources: 'записи, услуги, пакеты, профиль бизнеса, история коммуникаций',
     extraction: 'триггер, аудитория, согласие, релевантная услуга, канал и лимиты частоты',
-    processing: 'подготовить черновики, проверить согласие, поставить отправку только после approval',
+    processing: 'подготовить черновики, проверить согласие, поставить отправку только после ручного подтверждения',
     output: 'черновики, отчёт доставки и журнал outcomes',
     manualControl: 'первый запуск, шаблон и каждая массовая отправка подтверждаются человеком',
     icon: MessageSquareText,
@@ -720,7 +720,7 @@ const agentScenarios: AgentBuilderScenario[] = [
     prompt: 'Найди клиентов и покажи черновики сообщений перед отправкой',
     dataSources: 'prospectingleads, профиль бизнеса, услуги',
     extraction: 'подходящие лиды, канал связи, причина релевантности',
-    processing: 'не отправлять без approval, ограничить объём, сохранять источник лида',
+    processing: 'не отправлять без ручного подтверждения, ограничить объём, сохранять источник лида',
     output: 'shortlist и черновики сообщений',
     manualControl: 'shortlist, черновики и очередь отправки подтверждаются вручную',
     icon: Users,
@@ -866,6 +866,24 @@ const metaLabels: Record<string, string> = {
   tables: 'таблицы',
   outreach: 'outreach',
   services_optimize: 'услуги',
+  telegram: 'Telegram',
+  google_sheets: 'Google Sheets',
+  'telegram.message.received': 'новое сообщение в Telegram',
+  'google_sheets.append': 'запись строки в Google Sheets',
+  'outreach.send_batch': 'отправка согласованной пачки',
+  'reviews.reply.draft': 'черновик ответа на отзыв',
+  'reviews.reply.publish_request': 'запрос на публикацию ответа',
+  'services.optimize': 'оптимизация услуг',
+  'news.generate': 'подготовка новости',
+  'appointments.read': 'чтение записей',
+  'appointments.create_request': 'запрос на создание записи',
+  'communications.draft': 'черновик сообщения',
+  'communications.send_reminder': 'напоминание клиенту',
+  'communications.send_offer': 'предложение клиенту',
+  'support.export': 'выгрузка для поддержки',
+  'billing.reserve': 'резерв токенов',
+  'billing.settle': 'списание токенов',
+  not_applicable: 'не применимо',
 };
 
 const resultFieldLabels: Record<string, string> = {
@@ -1072,7 +1090,7 @@ export const AgentBlueprintsPage = () => {
   const [runLimit, setRunLimit] = useState('30');
   const [createWizardOpen, setCreateWizardOpen] = useState(false);
   const [createWizardStep, setCreateWizardStep] = useState(0);
-  const [workspaceMode, setWorkspaceMode] = useState<AgentWorkspaceMode>('run');
+  const [workspaceMode, setWorkspaceMode] = useState<AgentWorkspaceMode>('overview');
   const [availablePersonaAgents, setAvailablePersonaAgents] = useState<PersonaAgent[]>([]);
   const [agentPrompt, setAgentPrompt] = useState('');
   const [builderCategory, setBuilderCategory] = useState('documents');
@@ -1118,10 +1136,35 @@ export const AgentBlueprintsPage = () => {
   const [legacyMigrationPlan, setLegacyMigrationPlan] = useState<LegacyMigrationPlan | null>(null);
   const [legacyMigrationNotice, setLegacyMigrationNotice] = useState('');
   const [recentCreatedAgentName, setRecentCreatedAgentName] = useState('');
+  const [showAdvancedAgentTools, setShowAdvancedAgentTools] = useState(false);
 
   useEffect(() => {
     setSystemAgentConfig(parseAgentConfig(currentBusiness));
   }, [currentBusiness]);
+
+  useEffect(() => {
+    let mounted = true;
+    const syncUserRole = async () => {
+      const cachedUser = newAuth.getCurrentUserSync();
+      if (mounted) {
+        setShowAdvancedAgentTools(Boolean(cachedUser?.is_superadmin));
+      }
+      const user = await newAuth.getCurrentUser();
+      if (mounted) {
+        setShowAdvancedAgentTools(Boolean(user?.is_superadmin));
+      }
+    };
+    void syncUserRole();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!showAdvancedAgentTools && workspaceMode === 'advanced') {
+      setWorkspaceMode('overview');
+    }
+  }, [showAdvancedAgentTools, workspaceMode]);
 
   const selectedBlueprint = useMemo(
     () => blueprints.find((item) => item.id === selectedBlueprintId) || blueprints[0] || null,
@@ -1441,7 +1484,7 @@ export const AgentBlueprintsPage = () => {
         business_id: currentBusinessId,
         name: requestText.trim() ? requestText.trim().slice(0, 80) : 'Агент поиска клиентов',
         category: 'outreach',
-        description: requestText.trim() || 'Ищет лиды, готовит shortlist и черновики, внешние отправки только через approval.',
+        description: requestText.trim() || 'Ищет лиды, готовит список и черновики, внешние отправки только через ручное подтверждение.',
         status: 'active',
         template: 'supervised_outreach',
       });
@@ -1653,7 +1696,7 @@ export const AgentBlueprintsPage = () => {
     setError(null);
     try {
       await api.post(`/agent-blueprints/${selectedBlueprint.id}/versions/${versionId}/${action}`, {
-        reason: action === 'rollback' ? 'Rollback from dashboard' : 'Activated from dashboard',
+        reason: action === 'rollback' ? 'Откат из карточки агента' : 'Активировано из карточки агента',
       });
       if (feedbackVersionNotice?.version_id === versionId) {
         setFeedbackVersionNotice({
@@ -1692,7 +1735,7 @@ export const AgentBlueprintsPage = () => {
       }
     } catch (requestError) {
       console.error(requestError);
-      setError('Не удалось применить решение approval.');
+      setError('Не удалось применить решение.');
     } finally {
       setActionLoading(false);
     }
@@ -1911,7 +1954,7 @@ export const AgentBlueprintsPage = () => {
     setError(null);
     try {
       const response = await api.post(`/agent-blueprints/${selectedBlueprint.id}/custom-process/preview`, {
-        message_text: processPreviewMessage.trim() || 'Новая заявка из preview',
+        message_text: processPreviewMessage.trim() || 'Новая заявка для проверки',
         telegram_username: 'preview_user',
       });
       setActiveRun(response.data?.run || null);
@@ -1920,7 +1963,7 @@ export const AgentBlueprintsPage = () => {
       await loadBlueprintReview(selectedBlueprint.id);
     } catch (requestError) {
       console.error(requestError);
-      setError(getRequestErrorMessage(requestError, 'Не удалось запустить preview процесса.'));
+      setError(getRequestErrorMessage(requestError, 'Не удалось проверить процесс на примере.'));
     } finally {
       setActionLoading(false);
     }
@@ -1973,9 +2016,9 @@ export const AgentBlueprintsPage = () => {
         version_number: typeof version.version_number === 'number' ? version.version_number : undefined,
         feedback: feedbackText,
         activation_state: learning.activation_state || 'candidate',
-        trigger_label: learning.trigger_label || learningTriggerOptions.find((item) => item.value === feedbackTrigger)?.label || 'Feedback',
+        trigger_label: learning.trigger_label || learningTriggerOptions.find((item) => item.value === feedbackTrigger)?.label || 'Обратная связь',
         diff: learning.diff || response.data?.diff || undefined,
-        next_run_note: 'Это candidate-версия. Она сохранена с diff, но не станет runtime truth, пока человек не активирует её.',
+        next_run_note: 'Это кандидатная версия. Она сохранена с diff, но не станет активной, пока человек не активирует её.',
       });
       setFeedbackText('');
       if (selectedBlueprint?.id) {
@@ -2016,7 +2059,7 @@ export const AgentBlueprintsPage = () => {
           <DialogHeader>
             <DialogTitle>Создать агента</DialogTitle>
             <DialogDescription>
-              Опишите задачу обычным языком. LocalOS уточнит недостающие детали и покажет preview агента перед созданием.
+              Опишите задачу обычным языком. LocalOS уточнит недостающие детали и покажет понятную проверку перед созданием.
             </DialogDescription>
           </DialogHeader>
           <DialogAgentBuilder
@@ -2032,7 +2075,7 @@ export const AgentBlueprintsPage = () => {
           />
           <details className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
             <summary className="cursor-pointer text-sm font-medium text-slate-700">
-              Открыть ручной мастер
+              Расширенная ручная настройка
             </summary>
             <div className="mt-4">
           <CreateAgentWizard
@@ -2093,9 +2136,9 @@ export const AgentBlueprintsPage = () => {
       ) : null}
 
       {currentBusinessId ? (
-        <AgentCommandCenter
-          activeAgentsCount={activeAgentsCount}
-          totalAgents={blueprints.length + systemAgents.length}
+          <AgentCommandCenter
+            activeAgentsCount={activeAgentsCount}
+            totalAgents={blueprints.length}
           pendingApprovals={totalPendingApprovals || pendingApprovals.length || activeRunPendingApprovals.length}
           selectedBlueprint={selectedBlueprint}
           loading={loading}
@@ -2122,7 +2165,7 @@ export const AgentBlueprintsPage = () => {
       ) : null}
 
       {currentBusinessId ? (
-        <div className="grid gap-5 xl:grid-cols-[minmax(20rem,0.42fr)_minmax(0,1fr)]">
+        <div className="space-y-5">
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -2132,10 +2175,10 @@ export const AgentBlueprintsPage = () => {
                 </div>
               </div>
               <span className="rounded-full bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
-                {blueprints.length}
+                {blueprints.length} всего
               </span>
             </div>
-            <div className="mt-4 space-y-2">
+            <div className="mt-4 grid max-h-[28rem] gap-3 overflow-y-auto pr-1 lg:grid-cols-2 2xl:grid-cols-3">
               {loading ? (
                 <div className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-4 text-sm text-slate-500">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -2158,6 +2201,7 @@ export const AgentBlueprintsPage = () => {
                       onSelect={() => {
                         setSelectedBlueprintId(blueprint.id);
                         setActiveRun(null);
+                        setWorkspaceMode('overview');
                       }}
                       onConfigure={() => {
                         setSelectedBlueprintId(blueprint.id);
@@ -2267,21 +2311,22 @@ export const AgentBlueprintsPage = () => {
                 onRunCityChange={setRunCity}
                 onRunCategoryChange={setRunCategory}
                 onRunLimitChange={setRunLimit}
+                showAdvancedTools={showAdvancedAgentTools}
               />
             ) : (
               <DashboardEmptyState
                 title="Выберите агента"
-                description="Слева откройте существующего агента или создайте нового через кнопку сверху."
+                description="Откройте существующего агента или создайте нового через кнопку сверху."
               />
             )}
           </div>
         </div>
       ) : null}
 
-      {currentBusinessId ? (
+      {currentBusinessId && showAdvancedAgentTools ? (
         <details className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
           <summary className="cursor-pointer text-sm font-semibold text-slate-800">
-            Технический контур: миграция, системные агенты и полные журналы
+            Служебные инструменты миграции и поддержки
           </summary>
           <div className="mt-4 space-y-5">
             <AgentCockpitPanel
@@ -2298,7 +2343,7 @@ export const AgentBlueprintsPage = () => {
             {availablePersonaAgents.length ? (
               <DashboardActionPanel
                 title="Голоса и стиль перенесены внутрь агента"
-                description={`${availablePersonaAgents.length} legacy persona доступны во вкладке “Голос и стиль” выбранного агента. Отдельный legacy workflow editor больше не является runtime entrypoint.`}
+                description={`${availablePersonaAgents.length} старых голосов доступны во вкладке “Голос и стиль” выбранного агента. Отдельный редактор старой логики больше не используется как основной вход.`}
                 tone="sky"
               />
             ) : null}
@@ -2389,7 +2434,7 @@ export const AgentBlueprintsPage = () => {
                     </div>
                   ) : (
                     <DashboardEmptyState
-                      title="Очередь approval пуста"
+                      title="Очередь решений пуста"
                       description="Когда агент остановится на ручном подтверждении, решение появится здесь."
                     />
                   )}
@@ -2613,7 +2658,7 @@ const CreateAgentWizard = ({
           <WizardTextArea label="Какие правила применить" value={processingRules} onChange={onProcessingRulesChange} placeholder="Не придумывать факты, учитывать стиль, помечать спорное" />
           <WizardTextArea label="Где нужен ручной контроль" value={manualControl} onChange={onManualControlChange} placeholder="Перед отправкой, публикацией, платежом, изменением данных" />
           <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-4 text-sm leading-6 text-emerald-900">
-            Generic agents в v1 готовят результат и ждут проверки. Внешние отправки, публикации, платежи и destructive actions не запускаются из wizard.
+            Первые версии агентов готовят результат и ждут проверки. Внешние отправки, публикации, платежи и опасные изменения не запускаются из мастера.
           </div>
         </div>
       ) : null}
@@ -2745,7 +2790,7 @@ const DialogAgentBuilder = ({
           <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <div className="text-sm font-semibold text-slate-950">Preview будущего агента</div>
+                <div className="text-sm font-semibold text-slate-950">Проверка будущего агента</div>
                 <div className="mt-1 text-xs text-slate-500">Проверьте задачу, данные, правила и ручной контроль перед созданием.</div>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -2769,7 +2814,7 @@ const DialogAgentBuilder = ({
               <PreviewRow label="Подключение" value="источники добавляются в карточке агента; внешние действия выключены по умолчанию" />
             </div>
             <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-900">
-              Внешние отправки, публикации, платежи и destructive actions не запускаются из builder. Рискованные действия требуют approval.
+              Внешние отправки, публикации, платежи и опасные изменения не запускаются из мастера. Рискованные действия требуют ручного подтверждения.
             </div>
             {estimatedCredits > 0 ? (
               <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-900">
@@ -2779,7 +2824,7 @@ const DialogAgentBuilder = ({
             <div className="mt-4 flex justify-end">
               <Button type="button" onClick={onCreate} disabled={actionLoading}>
                 {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-                Создать из preview
+                Создать после проверки
               </Button>
             </div>
           </div>
@@ -2867,7 +2912,7 @@ const AgentCommandCenter = ({
         </div>
         <div className="mt-4 text-sm font-semibold">Создать агента</div>
         <div className="mt-1 text-sm leading-6 text-slate-300">
-          Опишите задачу, проверьте preview, затем подключите данные.
+          Опишите задачу, проверьте будущую логику, затем подключите данные.
         </div>
       </button>
 
@@ -2904,7 +2949,7 @@ const AgentCommandCenter = ({
         </div>
         <div className="mt-4 text-sm font-semibold text-slate-950">Проверить решения</div>
         <div className={cn('mt-1 text-sm leading-6', pendingApprovals ? 'text-amber-900' : 'text-slate-600')}>
-          Approval, журнал и результаты открываются внутри выбранного агента.
+          Ручные решения, журнал и результаты открываются внутри выбранного агента.
         </div>
       </button>
     </div>
@@ -2952,7 +2997,7 @@ const BlueprintAgentCard = ({
           {formatLastRun(blueprint)}
         </span>
         <span className={cn('rounded-full px-2.5 py-1 ring-1', blueprint.pending_approvals_count ? 'bg-amber-50 text-amber-800 ring-amber-200' : 'bg-slate-50 text-slate-600 ring-slate-200')}>
-          {blueprint.pending_approvals_count || 0} approval
+          {blueprint.pending_approvals_count || 0} решений
         </span>
         <span className="rounded-full bg-slate-50 px-2.5 py-1 text-slate-600 ring-1 ring-slate-200">
           {blueprint.sources_count || 0} источников
@@ -3011,24 +3056,24 @@ const AgentCockpitPanel = ({
   return (
     <div className="space-y-4">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <CockpitTile icon={Bot} label="Product agents" value={`${activeBlueprints}/${blueprints.length}`} hint="active / total blueprints" />
-        <CockpitTile icon={ShieldCheck} label="Approvals" value={String(pendingBlueprints)} hint="agents waiting for human gate" tone={pendingBlueprints ? 'warning' : 'default'} />
-        <CockpitTile icon={RefreshCw} label="Legacy wrappers" value={String(migrationStats.needsBlueprint)} hint={`${migrationStats.linkedVoices} voices linked`} tone={migrationStats.needsBlueprint ? 'warning' : 'default'} />
-        <CockpitTile icon={AlertTriangle} label="Deprecated fields" value={String(migrationStats.deprecatedFieldsPresent)} hint="business ai_agent_* fields" tone={migrationStats.deprecatedFieldsPresent ? 'warning' : 'default'} />
+        <CockpitTile icon={Bot} label="Агенты продукта" value={`${activeBlueprints}/${blueprints.length}`} hint="включены / всего" />
+        <CockpitTile icon={ShieldCheck} label="Ручные решения" value={String(pendingBlueprints)} hint="агенты ждут человека" tone={pendingBlueprints ? 'warning' : 'default'} />
+        <CockpitTile icon={RefreshCw} label="Старые обёртки" value={String(migrationStats.needsBlueprint)} hint={`${migrationStats.linkedVoices} голосов привязано`} tone={migrationStats.needsBlueprint ? 'warning' : 'default'} />
+        <CockpitTile icon={AlertTriangle} label="Устаревшие поля" value={String(migrationStats.deprecatedFieldsPresent)} hint="старые настройки бизнеса" tone={migrationStats.deprecatedFieldsPresent ? 'warning' : 'default'} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.75fr)]">
         <div className="rounded-2xl border border-slate-200 bg-white p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="text-sm font-semibold text-slate-950">Migration health</div>
+              <div className="text-sm font-semibold text-slate-950">Состояние миграции</div>
               <div className="mt-1 text-sm leading-6 text-slate-600">
-                AIAgents остаются voice/persona. Runtime truth для логики: `agent_blueprint_versions.steps_json`.
+                Старые AIAgents остаются голосом и стилем. Активная логика агента хранится в версиях blueprint.
               </div>
             </div>
             <Button type="button" onClick={onApplyMigration} disabled={actionLoading || !migrationStats.needsBlueprint}>
               {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-              Применить migration
+              Применить миграцию
             </Button>
           </div>
           {migrationNotice ? (
@@ -3041,8 +3086,8 @@ const AgentCockpitPanel = ({
               <div key={agent.agent_id || agent.name} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="truncate font-medium text-slate-950">{agent.name || 'Legacy persona'}</div>
-                    <div className="mt-1 text-xs text-slate-500">{agent.reason || 'migration decision'}</div>
+                    <div className="truncate font-medium text-slate-950">{agent.name || 'Старый голос'}</div>
+                    <div className="mt-1 text-xs text-slate-500">{agent.reason || 'решение миграции'}</div>
                   </div>
                   <StatusBadge status={agent.action === 'use_as_persona' ? 'active' : agent.action === 'create_blueprint_candidate' ? 'needs_approval' : 'paused'} />
                 </div>
@@ -3058,7 +3103,7 @@ const AgentCockpitPanel = ({
 
         <div className="space-y-4">
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <div className="text-sm font-semibold text-slate-950">Deprecated business settings</div>
+            <div className="text-sm font-semibold text-slate-950">Устаревшие настройки бизнеса</div>
             <div className="mt-3 space-y-2">
               {Object.entries(deprecatedFields).map(([field, info]) => (
                 <div key={field} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-xs">
@@ -3131,7 +3176,7 @@ const PersonaAgentCard = ({ agent, onConfigure }: { agent: PersonaAgent; onConfi
       </span>
     </div>
     <div className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">
-      {agent.description || agent.task || agent.identity || 'Настраивает тон, стиль и ограничения общения. Не является workflow runtime.'}
+      {agent.description || agent.task || agent.identity || 'Настраивает тон, стиль и ограничения общения. Не является отдельной логикой запуска.'}
     </div>
     <div className="mt-4 flex justify-end">
       <Button type="button" size="sm" variant="outline" onClick={onConfigure}>
@@ -3221,6 +3266,7 @@ const AgentDetailPanel = ({
   onRunCityChange,
   onRunCategoryChange,
   onRunLimitChange,
+  showAdvancedTools,
 }: {
   mode: AgentWorkspaceMode;
   blueprint: AgentBlueprint;
@@ -3301,24 +3347,48 @@ const AgentDetailPanel = ({
   onRunCityChange: (value: string) => void;
   onRunCategoryChange: (value: string) => void;
   onRunLimitChange: (value: string) => void;
+  showAdvancedTools: boolean;
 }) => {
   const latestVersionNumber = getActiveVersionNumber(blueprint, blueprintDetails);
   const activeVersionId = getActiveVersionId(blueprint, blueprintDetails);
   const voiceName = getAgentVoiceName(blueprint, blueprintDetails);
   const versions = blueprintDetails?.versions || [];
+  const listStatus = getAgentListStatus(blueprint);
   return (
   <DashboardSection
     title={blueprint.name}
-    description={`${humanizeCategory(blueprint.category)} · ${latestVersionNumber ? `активная версия v${latestVersionNumber}` : 'нет активной версии'}${voiceName ? ` · голос: ${voiceName}` : ''} · ${mode === 'settings' ? 'логика агента' : mode === 'run' ? 'запуск из карточки' : mode === 'voice' ? 'голос и стиль' : 'журнал и результаты'}`}
+    description={`${humanizeCategory(blueprint.category)} · ${latestVersionNumber ? `активная версия v${latestVersionNumber}` : 'нет активной версии'}${voiceName ? ` · голос: ${voiceName}` : ''}`}
     actions={(
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" size="sm" variant={mode === 'settings' ? 'default' : 'outline'} onClick={() => onModeChange('settings')}>Логика</Button>
-        <Button type="button" size="sm" variant={mode === 'run' ? 'default' : 'outline'} onClick={() => onModeChange('run')}>Запуск</Button>
-        <Button type="button" size="sm" variant={mode === 'results' ? 'default' : 'outline'} onClick={() => onModeChange('results')}>Журнал</Button>
-        <Button type="button" size="sm" variant={mode === 'voice' ? 'default' : 'outline'} onClick={() => onModeChange('voice')}>Голос и стиль</Button>
+      <div className="flex max-w-full gap-2 overflow-x-auto pb-1">
+        <Button type="button" size="sm" className="shrink-0" variant={mode === 'overview' ? 'default' : 'outline'} onClick={() => onModeChange('overview')}>Обзор</Button>
+        <Button type="button" size="sm" className="shrink-0" variant={mode === 'settings' ? 'default' : 'outline'} onClick={() => onModeChange('settings')}>Логика</Button>
+        <Button type="button" size="sm" className="shrink-0" variant={mode === 'run' ? 'default' : 'outline'} onClick={() => onModeChange('run')}>Запуски</Button>
+        <Button type="button" size="sm" className="shrink-0" variant={mode === 'results' ? 'default' : 'outline'} onClick={() => onModeChange('results')}>Обучение</Button>
+        <Button type="button" size="sm" className="shrink-0" variant={mode === 'connections' ? 'default' : 'outline'} onClick={() => onModeChange('connections')}>Подключения</Button>
+        <Button type="button" size="sm" className="shrink-0" variant={mode === 'voice' ? 'default' : 'outline'} onClick={() => onModeChange('voice')}>Голос и стиль</Button>
+        {showAdvancedTools ? (
+          <Button type="button" size="sm" className="shrink-0" variant={mode === 'advanced' ? 'default' : 'outline'} onClick={() => onModeChange('advanced')}>Advanced</Button>
+        ) : null}
       </div>
     )}
   >
+    {mode === 'overview' ? (
+      <AgentOverviewPanel
+        blueprint={blueprint}
+        latestVersionNumber={latestVersionNumber}
+        voiceName={voiceName}
+        listStatus={listStatus}
+        pendingApproval={pendingApproval}
+        review={agentReview}
+        actionLoading={actionLoading}
+        onStartRun={onStartRun}
+        onOpenLogic={() => onModeChange('settings')}
+        onOpenResults={() => onModeChange('results')}
+        onOpenConnections={() => onModeChange('connections')}
+        onOpenVoice={() => onModeChange('voice')}
+      />
+    ) : null}
+
     {mode === 'settings' ? (
         <AgentWorkspacePanel
         versions={versions}
@@ -3336,19 +3406,6 @@ const AgentDetailPanel = ({
         sourceText={sourceText}
         internalSource={internalSource}
         sourceCatalog={sourceCatalog}
-        agentIntegrations={agentIntegrations}
-        availableAgentIntegrations={availableAgentIntegrations}
-        agentIntegrationCatalog={agentIntegrationCatalog}
-        agentExternalAuthOptions={agentExternalAuthOptions}
-        agentBindingStatus={agentBindingStatus}
-        sheetSpreadsheetId={sheetSpreadsheetId}
-        sheetName={sheetName}
-        sheetAuthRef={sheetAuthRef}
-        sheetDailyCap={sheetDailyCap}
-        telegramBotMode={telegramBotMode}
-        telegramDailyCap={telegramDailyCap}
-        processRowValues={processRowValues}
-        processPreviewMessage={processPreviewMessage}
         review={agentReview}
         actionLoading={actionLoading}
         onSetupDataSourcesChange={onSetupDataSourcesChange}
@@ -3367,6 +3424,25 @@ const AgentDetailPanel = ({
         onAddInternalSource={onAddInternalSource}
         onAddCatalogSource={onAddCatalogSource}
         onAddFileSource={onAddFileSource}
+      />
+    ) : null}
+
+    {mode === 'connections' ? (
+      <AgentConnectionsPanel
+        agentIntegrations={agentIntegrations}
+        availableAgentIntegrations={availableAgentIntegrations}
+        agentIntegrationCatalog={agentIntegrationCatalog}
+        agentExternalAuthOptions={agentExternalAuthOptions}
+        agentBindingStatus={agentBindingStatus}
+        sheetSpreadsheetId={sheetSpreadsheetId}
+        sheetName={sheetName}
+        sheetAuthRef={sheetAuthRef}
+        sheetDailyCap={sheetDailyCap}
+        telegramBotMode={telegramBotMode}
+        telegramDailyCap={telegramDailyCap}
+        processRowValues={processRowValues}
+        processPreviewMessage={processPreviewMessage}
+        actionLoading={actionLoading}
         onSheetSpreadsheetIdChange={onSheetSpreadsheetIdChange}
         onSheetNameChange={onSheetNameChange}
         onSheetAuthRefChange={onSheetAuthRefChange}
@@ -3456,29 +3532,7 @@ const AgentDetailPanel = ({
           onActivateFeedbackVersion={onActivateFeedbackVersion}
           onRollbackFeedbackVersion={onRollbackFeedbackVersion}
         />
-        {activeRun ? (
-          <details className="rounded-2xl border border-slate-200 bg-white p-4">
-            <summary className="cursor-pointer text-sm font-semibold text-slate-700 hover:text-slate-950">
-              Технический журнал
-            </summary>
-            <AgentRunObservabilityPanel run={activeRun} />
-            <div className="mt-4 grid gap-4 xl:grid-cols-3">
-              <RunColumn title="Шаги runtime" icon={Clock3}>
-                {(activeRun.steps || []).map((step) => (
-                  <TimelineItem key={step.id} title={humanizeStep(step.step_key)} meta={humanizeMeta(step.step_type)} status={step.status} />
-                ))}
-              </RunColumn>
-              <RunColumn title="Сохранённые результаты" icon={FileCheck2}>
-                {(activeRun.artifacts || []).map((artifact) => <ArtifactItem key={artifact.id} artifact={artifact} />)}
-              </RunColumn>
-              <RunColumn title="Решения" icon={ShieldCheck}>
-                {(activeRun.approvals || []).map((approval) => (
-                  <TimelineItem key={approval.id} title={approval.title} meta={humanizeMeta(approval.approval_type)} status={approval.status} />
-                ))}
-              </RunColumn>
-            </div>
-          </details>
-        ) : (
+        {activeRun ? null : (
           <DashboardEmptyState title="Нет активных запусков" description="Запустите агента из карточки, чтобы увидеть результат." />
         )}
       </div>
@@ -3489,9 +3543,287 @@ const AgentDetailPanel = ({
         availablePersonaAgents={availablePersonaAgents}
       />
     ) : null}
+    {showAdvancedTools && mode === 'advanced' ? (
+      <AgentAdvancedPanel activeRun={activeRun} versions={versions} />
+    ) : null}
   </DashboardSection>
   );
 };
+
+const AgentOverviewPanel = ({
+  blueprint,
+  latestVersionNumber,
+  voiceName,
+  listStatus,
+  pendingApproval,
+  review,
+  actionLoading,
+  onStartRun,
+  onOpenLogic,
+  onOpenResults,
+  onOpenConnections,
+  onOpenVoice,
+}: {
+  blueprint: AgentBlueprint;
+  latestVersionNumber: number | null;
+  voiceName: string;
+  listStatus: string;
+  pendingApproval: AgentApproval | null;
+  review: AgentReview | null;
+  actionLoading: boolean;
+  onStartRun: () => void;
+  onOpenLogic: () => void;
+  onOpenResults: () => void;
+  onOpenConnections: () => void;
+  onOpenVoice: () => void;
+}) => {
+  const needsApproval = Boolean(pendingApproval || blueprint.pending_approvals_count);
+  const hasSources = Boolean(blueprint.sources_count);
+  const nextStep = needsApproval
+    ? 'Проверьте решение, которое ждёт человек.'
+    : !latestVersionNumber
+      ? 'Настройте первую версию логики агента.'
+      : !hasSources
+        ? 'Добавьте данные или подключение перед регулярным запуском.'
+        : 'Можно проверить агента на примере.';
+
+  return (
+    <div className="space-y-4">
+      <div className={cn('rounded-2xl border px-4 py-4', needsApproval ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50')}>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-slate-950">Следующий шаг</div>
+            <div className={cn('mt-1 text-sm leading-6', needsApproval ? 'text-amber-900' : 'text-slate-700')}>
+              {nextStep}
+            </div>
+            {pendingApproval ? (
+              <div className="mt-2 rounded-xl bg-white/80 px-3 py-2 text-xs leading-5 text-amber-900 ring-1 ring-amber-100">
+                {pendingApproval.title}: {explainApproval(pendingApproval)}
+              </div>
+            ) : null}
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            {needsApproval ? (
+              <Button type="button" onClick={onOpenResults}>
+                Открыть решение
+              </Button>
+            ) : (
+              <Button type="button" onClick={onStartRun} disabled={actionLoading}>
+                {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+                Проверить на примере
+              </Button>
+            )}
+            <Button type="button" variant="outline" onClick={onOpenLogic}>
+              Изменить логику
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <AgentSummaryPill label="Статус" value={humanizeStatus(listStatus)} tone={needsApproval ? 'warning' : 'default'} />
+        <AgentSummaryPill label="Последний запуск" value={formatLastRun(blueprint)} />
+        <AgentSummaryPill label="Источники" value={`${blueprint.sources_count || 0} подключено`} tone={hasSources ? 'default' : 'warning'} />
+        <AgentSummaryPill label="Голос" value={voiceName || 'не привязан'} />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.55fr)]">
+        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+          <div className="text-sm font-semibold text-slate-950">Что делает агент</div>
+          <div className="mt-2 text-sm leading-7 text-slate-700">
+            {blueprint.description || blueprint.active_goal || blueprint.latest_goal || 'Описание появится после настройки логики агента.'}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button type="button" size="sm" variant="outline" onClick={onOpenLogic}>
+              Логика и данные
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={onOpenResults}>
+              Запуски и обучение
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={onOpenConnections}>
+              Подключения
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={onOpenVoice}>
+              Голос и стиль
+            </Button>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+          <div className="text-sm font-semibold text-slate-950">Готовность</div>
+          <div className="mt-3 space-y-2 text-sm">
+            <ReadinessRow label="Логика" ready={Boolean(latestVersionNumber)} readyText={`v${latestVersionNumber || 1}`} blockedText="нужна версия" />
+            <ReadinessRow label="Данные" ready={hasSources} readyText={`${blueprint.sources_count || 0} источн.`} blockedText="добавить" />
+            <ReadinessRow label="Ручной контроль" ready blockedText="" readyText="включён" />
+            <ReadinessRow label="Результаты" ready={Boolean(review?.has_run || blueprint.last_run_id)} readyText="есть запуск" blockedText="нет запуска" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ReadinessRow = ({
+  label,
+  ready,
+  readyText,
+  blockedText,
+}: {
+  label: string;
+  ready: boolean;
+  readyText: string;
+  blockedText: string;
+}) => (
+  <div className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2">
+    <span className="text-slate-600">{label}</span>
+    <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium ring-1', ready ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-amber-50 text-amber-800 ring-amber-200')}>
+      {ready ? readyText : blockedText}
+    </span>
+  </div>
+);
+
+const AgentConnectionsPanel = ({
+  agentIntegrations,
+  availableAgentIntegrations,
+  agentIntegrationCatalog,
+  agentExternalAuthOptions,
+  agentBindingStatus,
+  sheetSpreadsheetId,
+  sheetName,
+  sheetAuthRef,
+  sheetDailyCap,
+  telegramBotMode,
+  telegramDailyCap,
+  processRowValues,
+  processPreviewMessage,
+  actionLoading,
+  onSheetSpreadsheetIdChange,
+  onSheetNameChange,
+  onSheetAuthRefChange,
+  onSheetDailyCapChange,
+  onTelegramBotModeChange,
+  onTelegramDailyCapChange,
+  onProcessRowValuesChange,
+  onProcessPreviewMessageChange,
+  onSaveSheetIntegration,
+  onSaveTelegramIntegration,
+  onSaveCustomProcess,
+  onRunCustomProcessPreview,
+}: {
+  agentIntegrations: AgentIntegration[];
+  availableAgentIntegrations: AgentIntegration[];
+  agentIntegrationCatalog: AgentIntegrationCatalogItem[];
+  agentExternalAuthOptions: AgentExternalAuthOption[];
+  agentBindingStatus: AgentIntegrationBindingStatus[];
+  sheetSpreadsheetId: string;
+  sheetName: string;
+  sheetAuthRef: string;
+  sheetDailyCap: string;
+  telegramBotMode: string;
+  telegramDailyCap: string;
+  processRowValues: string;
+  processPreviewMessage: string;
+  actionLoading: boolean;
+  onSheetSpreadsheetIdChange: (value: string) => void;
+  onSheetNameChange: (value: string) => void;
+  onSheetAuthRefChange: (value: string) => void;
+  onSheetDailyCapChange: (value: string) => void;
+  onTelegramBotModeChange: (value: string) => void;
+  onTelegramDailyCapChange: (value: string) => void;
+  onProcessRowValuesChange: (value: string) => void;
+  onProcessPreviewMessageChange: (value: string) => void;
+  onSaveSheetIntegration: () => void;
+  onSaveTelegramIntegration: () => void;
+  onSaveCustomProcess: () => void;
+  onRunCustomProcessPreview: () => void;
+}) => (
+  <div className="space-y-4">
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+      <div className="text-sm font-semibold text-slate-950">Подключения агента</div>
+      <div className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+        Здесь настраиваются входящие каналы, внешняя запись и безопасный процесс доставки. Логика агента остаётся во вкладке “Логика”.
+      </div>
+    </div>
+    <AgentIntegrationsPanel
+      integrations={agentIntegrations}
+      availableIntegrations={availableAgentIntegrations}
+      providerCatalog={agentIntegrationCatalog}
+      authOptions={agentExternalAuthOptions}
+      bindingStatus={agentBindingStatus}
+      sheetSpreadsheetId={sheetSpreadsheetId}
+      sheetName={sheetName}
+      sheetAuthRef={sheetAuthRef}
+      sheetDailyCap={sheetDailyCap}
+      telegramBotMode={telegramBotMode}
+      telegramDailyCap={telegramDailyCap}
+      processRowValues={processRowValues}
+      processPreviewMessage={processPreviewMessage}
+      actionLoading={actionLoading}
+      onSheetSpreadsheetIdChange={onSheetSpreadsheetIdChange}
+      onSheetNameChange={onSheetNameChange}
+      onSheetAuthRefChange={onSheetAuthRefChange}
+      onSheetDailyCapChange={onSheetDailyCapChange}
+      onTelegramBotModeChange={onTelegramBotModeChange}
+      onTelegramDailyCapChange={onTelegramDailyCapChange}
+      onProcessRowValuesChange={onProcessRowValuesChange}
+      onProcessPreviewMessageChange={onProcessPreviewMessageChange}
+      onSaveSheetIntegration={onSaveSheetIntegration}
+      onSaveTelegramIntegration={onSaveTelegramIntegration}
+      onSaveCustomProcess={onSaveCustomProcess}
+      onRunCustomProcessPreview={onRunCustomProcessPreview}
+    />
+  </div>
+);
+
+const AgentAdvancedPanel = ({
+  activeRun,
+  versions,
+}: {
+  activeRun: AgentRun | null;
+  versions: Array<Record<string, unknown>>;
+}) => (
+  <div className="space-y-4">
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+      <div className="text-sm font-semibold text-slate-950">Advanced runtime</div>
+      <div className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+        Технический слой для superadmin/debug: raw workflow versions, action ledger, OpenClaw billing, artifacts, approvals и support export.
+      </div>
+    </div>
+    {activeRun ? (
+      <>
+        <AgentRunObservabilityPanel run={activeRun} />
+        <div className="grid gap-4 xl:grid-cols-3">
+          <RunColumn title="Шаги runtime" icon={Clock3}>
+            {(activeRun.steps || []).map((step) => (
+              <TimelineItem key={step.id} title={humanizeStep(step.step_key)} meta={humanizeMeta(step.step_type)} status={step.status} />
+            ))}
+          </RunColumn>
+          <RunColumn title="Сохранённые результаты" icon={FileCheck2}>
+            {(activeRun.artifacts || []).map((artifact) => <ArtifactItem key={artifact.id} artifact={artifact} />)}
+          </RunColumn>
+          <RunColumn title="Решения" icon={ShieldCheck}>
+            {(activeRun.approvals || []).map((approval) => (
+              <TimelineItem key={approval.id} title={approval.title} meta={humanizeMeta(approval.approval_type)} status={approval.status} />
+            ))}
+          </RunColumn>
+        </div>
+      </>
+    ) : (
+      <DashboardEmptyState
+        title="Нет выбранного запуска"
+        description="Запустите агента или откройте результат, чтобы увидеть runtime ledger и support export."
+      />
+    )}
+    <details className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+      <summary className="cursor-pointer text-sm font-semibold text-slate-700 hover:text-slate-950">
+        Raw versions payload
+      </summary>
+      <pre className="mt-3 max-h-96 overflow-auto rounded-xl bg-slate-950 p-3 text-[11px] leading-5 text-slate-100">
+        {JSON.stringify(versions.slice(0, 5), null, 2)}
+      </pre>
+    </details>
+  </div>
+);
 
 const AgentVoiceStylePanel = ({
   blueprint,
@@ -3511,15 +3843,15 @@ const AgentVoiceStylePanel = ({
             <div>
               <div className="text-sm font-semibold text-slate-950">Голос выбранного агента</div>
               <div className="mt-1 text-sm leading-6 text-slate-600">
-                Persona задаёт стиль общения, но не является workflow. Логика, approvals и capabilities остаются в blueprint.
+                Голос задаёт стиль общения. Логика, ручные подтверждения и разрешённые действия остаются в настройках агента.
               </div>
             </div>
             <StatusBadge status={voiceName ? 'active' : 'draft'} />
           </div>
           <div className="mt-4 grid gap-2">
             <AgentSummaryPill label="Текущий голос" value={voiceName || 'не привязан'} />
-            <AgentSummaryPill label="Persona ID" value={String(personaId || 'нет связи')} />
-            <AgentSummaryPill label="Источник" value="AIAgents legacy wrapper" />
+            <AgentSummaryPill label="Связь" value={String(personaId || 'нет связи')} />
+            <AgentSummaryPill label="Источник" value="старый голос AIAgents" />
           </div>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -3533,26 +3865,26 @@ const AgentVoiceStylePanel = ({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="truncate text-sm font-semibold text-slate-950">{agent.name || 'Голос агента'}</div>
-                    <div className="mt-1 text-xs text-slate-500">{agent.type || 'persona'} · {agent.is_active === false ? 'выключен' : 'доступен'}</div>
+                    <div className="mt-1 text-xs text-slate-500">{agent.type || 'голос'} · {agent.is_active === false ? 'выключен' : 'доступен'}</div>
                   </div>
                   {agent.id === personaId ? <StatusBadge status="active" /> : null}
                 </div>
                 <div className="mt-2 line-clamp-2 text-xs leading-5 text-slate-600">
-                  {agent.description || agent.task || agent.identity || 'Стиль общения без отдельного workflow runtime.'}
+                  {agent.description || agent.task || agent.identity || 'Стиль общения без отдельной логики запуска.'}
                 </div>
               </div>
             )) : (
               <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500">
-                Legacy persona пока нет. Их можно создать в блоке ниже и потом привязать к версии blueprint.
+                Старых голосов пока нет. Их можно создать отдельно и потом привязать к версии агента.
               </div>
             )}
           </div>
         </div>
       </div>
       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-        <div className="text-sm font-semibold text-amber-950">Legacy workflow editor removed from runtime UI</div>
+        <div className="text-sm font-semibold text-amber-950">Старая логика больше не основной редактор</div>
         <div className="mt-1 text-sm leading-6 text-amber-900">
-          AIAgents показываются как voice/persona cards. Редактирование runtime-логики идёт через blueprint versions, diff, activation и rollback.
+          AIAgents показываются как голоса. Логика агента редактируется через версии, diff, активацию и откат.
         </div>
       </div>
     </div>
@@ -3575,19 +3907,6 @@ const AgentWorkspacePanel = ({
   sourceText,
   internalSource,
   sourceCatalog,
-  agentIntegrations,
-  availableAgentIntegrations,
-  agentIntegrationCatalog,
-  agentExternalAuthOptions,
-  agentBindingStatus,
-  sheetSpreadsheetId,
-  sheetName,
-  sheetAuthRef,
-  sheetDailyCap,
-  telegramBotMode,
-  telegramDailyCap,
-  processRowValues,
-  processPreviewMessage,
   review,
   actionLoading,
   onSetupDataSourcesChange,
@@ -3606,18 +3925,6 @@ const AgentWorkspacePanel = ({
   onAddInternalSource,
   onAddCatalogSource,
   onAddFileSource,
-  onSheetSpreadsheetIdChange,
-  onSheetNameChange,
-  onSheetAuthRefChange,
-  onSheetDailyCapChange,
-  onTelegramBotModeChange,
-  onTelegramDailyCapChange,
-  onProcessRowValuesChange,
-  onProcessPreviewMessageChange,
-  onSaveSheetIntegration,
-  onSaveTelegramIntegration,
-  onSaveCustomProcess,
-  onRunCustomProcessPreview,
 }: {
   versions: Array<Record<string, unknown>>;
   learningEvents: AgentLearningEvent[];
@@ -3634,19 +3941,6 @@ const AgentWorkspacePanel = ({
   sourceText: string;
   internalSource: string;
   sourceCatalog: AgentSourceCatalogItem[];
-  agentIntegrations: AgentIntegration[];
-  availableAgentIntegrations: AgentIntegration[];
-  agentIntegrationCatalog: AgentIntegrationCatalogItem[];
-  agentExternalAuthOptions: AgentExternalAuthOption[];
-  agentBindingStatus: AgentIntegrationBindingStatus[];
-  sheetSpreadsheetId: string;
-  sheetName: string;
-  sheetAuthRef: string;
-  sheetDailyCap: string;
-  telegramBotMode: string;
-  telegramDailyCap: string;
-  processRowValues: string;
-  processPreviewMessage: string;
   review: AgentReview | null;
   actionLoading: boolean;
   onSetupDataSourcesChange: (value: string) => void;
@@ -3665,22 +3959,10 @@ const AgentWorkspacePanel = ({
   onAddInternalSource: () => void;
   onAddCatalogSource: (sourceKey: string) => void;
   onAddFileSource: (file?: File | null) => void;
-  onSheetSpreadsheetIdChange: (value: string) => void;
-  onSheetNameChange: (value: string) => void;
-  onSheetAuthRefChange: (value: string) => void;
-  onSheetDailyCapChange: (value: string) => void;
-  onTelegramBotModeChange: (value: string) => void;
-  onTelegramDailyCapChange: (value: string) => void;
-  onProcessRowValuesChange: (value: string) => void;
-  onProcessPreviewMessageChange: (value: string) => void;
-  onSaveSheetIntegration: () => void;
-  onSaveTelegramIntegration: () => void;
-  onSaveCustomProcess: () => void;
-  onRunCustomProcessPreview: () => void;
 }) => (
   <DashboardSection
     title="Настройка агента"
-    description="Короткий builder: данные, правила, результат и ручной контроль. Это рабочая версия без технического JSON на первом экране."
+    description="Данные, правила, результат и ручной контроль. Технический JSON спрятан в расширенном режиме."
   >
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
       <div className="grid gap-3">
@@ -3767,34 +4049,6 @@ const AgentWorkspacePanel = ({
             onConnect={onAddCatalogSource}
           />
           <AgentSourcesList sources={review?.sources || []} />
-          <AgentIntegrationsPanel
-            integrations={agentIntegrations}
-            availableIntegrations={availableAgentIntegrations}
-            providerCatalog={agentIntegrationCatalog}
-            authOptions={agentExternalAuthOptions}
-            bindingStatus={agentBindingStatus}
-            sheetSpreadsheetId={sheetSpreadsheetId}
-            sheetName={sheetName}
-            sheetAuthRef={sheetAuthRef}
-            sheetDailyCap={sheetDailyCap}
-            telegramBotMode={telegramBotMode}
-            telegramDailyCap={telegramDailyCap}
-            processRowValues={processRowValues}
-            processPreviewMessage={processPreviewMessage}
-            actionLoading={actionLoading}
-            onSheetSpreadsheetIdChange={onSheetSpreadsheetIdChange}
-            onSheetNameChange={onSheetNameChange}
-            onSheetAuthRefChange={onSheetAuthRefChange}
-            onSheetDailyCapChange={onSheetDailyCapChange}
-            onTelegramBotModeChange={onTelegramBotModeChange}
-            onTelegramDailyCapChange={onTelegramDailyCapChange}
-            onProcessRowValuesChange={onProcessRowValuesChange}
-            onProcessPreviewMessageChange={onProcessPreviewMessageChange}
-            onSaveSheetIntegration={onSaveSheetIntegration}
-            onSaveTelegramIntegration={onSaveTelegramIntegration}
-            onSaveCustomProcess={onSaveCustomProcess}
-            onRunCustomProcessPreview={onRunCustomProcessPreview}
-          />
         </div>
       </div>
     </div>
@@ -4021,11 +4275,11 @@ const AgentIntegrationsPanel = ({
   const sheetIntegration = integrations.find((item) => item.provider === 'google_sheets');
   const telegramIntegration = integrations.find((item) => item.provider === 'telegram');
   return (
-    <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3">
+    <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Внешние границы</div>
-          <div className="mt-1 text-xs leading-5 text-slate-500">Trigger и write capabilities, которые compiled workflow может использовать только через approval/audit.</div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Каналы и действия</div>
+          <div className="mt-1 text-xs leading-5 text-slate-500">Что может запускать агента и куда он может записывать результат после подтверждения.</div>
         </div>
         <span className="shrink-0 text-xs text-slate-400">{integrations.length}/{providerCatalog.length || 2}</span>
       </div>
@@ -4037,14 +4291,14 @@ const AgentIntegrationsPanel = ({
 
       {bindingStatus.length ? (
         <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Compiled workflow bindings</div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Что нужно подключить</div>
           {bindingStatus.map((binding) => (
             <div key={binding.key || binding.provider} className="rounded-lg bg-white px-3 py-2 text-xs ring-1 ring-slate-200">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="font-medium text-slate-900">{humanizeMeta(binding.key || binding.provider)}</div>
                   <div className="mt-1 text-slate-500">
-                    {binding.trigger || binding.capability || binding.direction || binding.provider}
+                    {humanizeMeta(binding.trigger || binding.capability || binding.direction || binding.provider)}
                   </div>
                 </div>
                 <StatusBadge status={binding.status} />
@@ -4053,7 +4307,7 @@ const AgentIntegrationsPanel = ({
                 <div className="mt-1 text-amber-700">Нужно заполнить: {binding.missing_config.join(', ')}</div>
               ) : null}
               {binding.approval_required ? (
-                <div className="mt-1 text-slate-500">human approval required before external action</div>
+                <div className="mt-1 text-slate-500">Перед внешним действием агент остановится на подтверждение.</div>
               ) : null}
             </div>
           ))}
@@ -4063,7 +4317,7 @@ const AgentIntegrationsPanel = ({
       <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
         <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
           <Workflow className="h-4 w-4" />
-          Процесс Telegram → Google Sheets
+          Логика канала Telegram → Google Sheets
         </div>
         <textarea
           className="min-h-20 w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
@@ -4072,7 +4326,7 @@ const AgentIntegrationsPanel = ({
           placeholder="{{received_at}}, {{telegram_username}}, {{message_text}}"
         />
         <div className="text-xs leading-5 text-slate-500">
-          Значения идут в строку таблицы по порядку. Сохранение создаёт новую active version агента.
+          Значения идут в строку таблицы по порядку. Сохранение создаёт новую активную версию агента.
         </div>
         <textarea
           className="min-h-20 w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
@@ -4082,10 +4336,10 @@ const AgentIntegrationsPanel = ({
         />
         <div className="flex flex-wrap gap-2">
           <Button type="button" size="sm" onClick={onSaveCustomProcess} disabled={actionLoading}>
-            Сохранить процесс
+            Сохранить логику канала
           </Button>
           <Button type="button" size="sm" variant="outline" onClick={onRunCustomProcessPreview} disabled={actionLoading}>
-            Preview run
+            Проверить на примере
           </Button>
         </div>
       </div>
@@ -4146,7 +4400,7 @@ const AgentIntegrationsPanel = ({
           value={sheetAuthRef}
           onChange={(event) => onSheetAuthRefChange(event.target.value)}
         >
-          <option value="">Credentials позже / manual auth_ref</option>
+          <option value="">Доступ подключим позже</option>
           {authOptions.map((option) => (
             <option key={option.id} value={option.id}>
               {option.display_name || humanizeMeta(option.source)} · {option.id.slice(0, 8)}
@@ -4154,13 +4408,13 @@ const AgentIntegrationsPanel = ({
           ))}
         </select>
         <Button type="button" size="sm" onClick={onSaveSheetIntegration} disabled={actionLoading || !sheetSpreadsheetId.trim()}>
-          Подключить Google Sheets
+          Подключить таблицу
         </Button>
       </div>
 
       {availableIntegrations.length ? (
         <div className="space-y-1">
-          <div className="text-xs font-semibold text-slate-700">Доступны в бизнесе</div>
+          <div className="text-xs font-semibold text-slate-700">Уже подключены в бизнесе</div>
           {availableIntegrations.slice(0, 3).map((integration) => (
             <AgentIntegrationStatusItem key={integration.id} integration={integration} provider={integration.provider} fallbackTitle={integration.display_name || integration.provider_label || integration.provider} />
           ))}
@@ -4189,17 +4443,17 @@ const AgentIntegrationStatusItem = ({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="truncate text-sm font-medium text-slate-950">{integration?.display_name || integration?.provider_label || fallbackTitle}</div>
-          <div className="mt-1 text-xs text-slate-500">{provider === 'google_sheets' ? 'approved external write' : 'trigger / delivery boundary'}</div>
+          <div className="mt-1 text-xs text-slate-500">{provider === 'google_sheets' ? 'Запись после подтверждения' : 'Когда запускать и куда отвечать'}</div>
         </div>
         <StatusBadge status={integration?.status || 'draft'} />
       </div>
       <div className="mt-2 text-xs leading-5 text-slate-600">
-        {boundaryItems.length ? boundaryItems.slice(0, 3).join(', ') : 'capability не подключена'}
+        {boundaryItems.length ? boundaryItems.slice(0, 3).map((item) => humanizeMeta(item)).join(', ') : 'Действие пока не подключено'}
       </div>
       {integration?.has_auth_ref ? (
-        <div className="mt-1 text-xs text-emerald-700">credentials linked</div>
+        <div className="mt-1 text-xs text-emerald-700">Доступ подключён</div>
       ) : provider === 'google_sheets' ? (
-        <div className="mt-1 text-xs text-amber-700">credentials required before provider executor can write</div>
+        <div className="mt-1 text-xs text-amber-700">Нужен доступ к Google Sheets перед записью</div>
       ) : null}
     </div>
   );
@@ -4250,7 +4504,7 @@ const VersionSummary = ({
               <div key={String(version.id || versionNumber || 'version')} className={cn('rounded-lg px-2 py-2 text-xs text-slate-600 ring-1', isActive ? 'bg-emerald-50 ring-emerald-200' : 'bg-slate-50 ring-slate-200')}>
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-medium text-slate-900">{versionNumber ? `v${versionNumber}` : 'версия'}</span>
-                  <span>{isActive ? 'runtime truth сейчас' : 'candidate / archived'}</span>
+                  <span>{isActive ? 'активна сейчас' : 'кандидат / архив'}</span>
                 </div>
                 {summary ? <div className="mt-1 text-slate-500">{summary}</div> : null}
                 {changedFields.length ? (
@@ -4265,16 +4519,16 @@ const VersionSummary = ({
                 {createdAt ? <div className="mt-1 text-[11px] text-slate-400">Создана: {createdAt}</div> : null}
                 <div className="mt-2 flex flex-wrap gap-2">
                   <Button type="button" size="sm" variant="outline" onClick={() => onStartVersionRun(versionId)} disabled={!versionId}>
-                    Preview run
+                    Проверить на примере
                   </Button>
                   {!isActive ? (
                     <Button type="button" size="sm" onClick={() => onActivateVersion(versionId)} disabled={!versionId}>
-                      Сделать runtime truth
+                      Активировать
                     </Button>
                   ) : null}
                   {!isActive && versionNumber && latestVersionNumber && versionNumber < latestVersionNumber ? (
                     <Button type="button" size="sm" variant="outline" onClick={() => onRollbackVersion(versionId)} disabled={!versionId}>
-                      Rollback сюда
+                      Откатиться сюда
                     </Button>
                   ) : null}
                 </div>
@@ -4302,48 +4556,48 @@ const LearningHistoryPanel = ({
   return (
     <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-700">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="font-semibold text-slate-950">Learning и версии</div>
+        <div className="font-semibold text-slate-950">Обучение и версии</div>
         <span className="rounded-full bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
-          {learningEvents.length} learning events
+          {learningEvents.length} событий
         </span>
       </div>
       {legacySource ? (
         <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-2 text-xs text-amber-900">
-          Мигрировано из {legacySource}. Legacy workflow не является runtime truth.
+          Мигрировано из {legacySource}. Старая логика больше не является активной логикой агента.
         </div>
       ) : null}
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         <div className="space-y-2">
-          <div className="text-xs font-semibold uppercase text-slate-500">Learning history</div>
+          <div className="text-xs font-semibold uppercase text-slate-500">История обучения</div>
           {latestLearning.length ? latestLearning.map((event) => (
             <div key={`${event.run_id || 'run'}-${event.candidate_version_id || event.created_at}`} className="rounded-lg bg-slate-50 px-3 py-2 text-xs">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-medium text-slate-900">{humanizeLearningTrigger(event.trigger_type)}</span>
-                <span className="text-slate-500">{event.candidate_version_number ? `v${event.candidate_version_number}` : event.activation_state || 'candidate'}</span>
+                <span className="text-slate-500">{event.candidate_version_number ? `v${event.candidate_version_number}` : humanizeVersionState(event.activation_state)}</span>
               </div>
-              <div className="mt-1 line-clamp-2 text-slate-600">{event.feedback || 'feedback сохранён'}</div>
+              <div className="mt-1 line-clamp-2 text-slate-600">{event.feedback || 'обратная связь сохранена'}</div>
               <div className="mt-1 text-[11px] text-slate-400">{event.created_at || ''}</div>
             </div>
           )) : (
             <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-500">
-              Learning events появятся после правки, отклонения, плохого outcome или ошибки.
+              История обучения появится после правки, отклонения, плохого результата или ошибки.
             </div>
           )}
         </div>
         <div className="space-y-2">
-          <div className="text-xs font-semibold uppercase text-slate-500">Activate / rollback history</div>
+          <div className="text-xs font-semibold uppercase text-slate-500">История версий</div>
           {latestVersionEvents.length ? latestVersionEvents.map((event) => (
             <div key={`${event.action || 'event'}-${event.created_at || event.active_version_id}`} className="rounded-lg bg-slate-50 px-3 py-2 text-xs">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-medium text-slate-900">{humanizeVersionAction(event.action)}</span>
                 <span className="text-slate-500">{event.active_version_number ? `v${event.active_version_number}` : ''}</span>
               </div>
-              <div className="mt-1 line-clamp-2 text-slate-600">{event.reason || 'version event'}</div>
+              <div className="mt-1 line-clamp-2 text-slate-600">{event.reason || 'событие версии'}</div>
               <div className="mt-1 text-[11px] text-slate-400">{event.created_at || ''}</div>
             </div>
           )) : (
             <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-500">
-              История activation/rollback появится после смены runtime truth.
+              История активации и отката появится после смены активной версии.
             </div>
           )}
         </div>
@@ -4355,20 +4609,27 @@ const LearningHistoryPanel = ({
 const humanizeLearningTrigger = (trigger?: string) => ({
   manual_edit: 'Ручная правка',
   approval_rejected: 'Отклонение',
-  bad_outcome: 'Плохой outcome',
+  bad_outcome: 'Плохой результат',
   runtime_error: 'Ошибка',
   manual_feedback: 'Комментарий',
   run_review: 'Проверка запуска',
-}[trigger || ''] || trigger || 'Learning event');
+}[trigger || ''] || trigger || 'Событие обучения');
 
 const humanizeVersionAction = (action?: string) => ({
   created: 'Создана версия',
   setup_updated: 'Обновлена логика',
   activated: 'Активирована',
-  rollback: 'Rollback',
-  feedback_applied: 'Feedback применён',
+  rollback: 'Откат',
+  feedback_applied: 'Обратная связь применена',
   legacy_migration_created: 'Создано миграцией',
-}[action || ''] || action || 'Version event');
+}[action || ''] || action || 'Событие версии');
+
+const humanizeVersionState = (state?: string) => ({
+  candidate: 'кандидатная версия',
+  active: 'активная',
+  rolled_back: 'откачена',
+  archived: 'в архиве',
+}[state || ''] || state || 'кандидатная версия');
 
 const AgentRunReviewPanel = ({
   review,
@@ -4438,18 +4699,18 @@ const AgentRunReviewPanel = ({
           {journal.map((entry, index) => <JournalEntryCard key={`${entry.kind || 'entry'}-${entry.title || index}`} entry={entry} />)}
         </div>
       ) : (
-        <DashboardEmptyState title="Журнал появится после запуска" description="Запустите агента, чтобы увидеть extraction, processing и output." />
+        <DashboardEmptyState title="Журнал появится после запуска" description="Запустите агента, чтобы увидеть входные данные, выводы, правила и результат." />
       )}
       <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <div className="text-sm font-semibold text-slate-950">Learning Loop</div>
+            <div className="text-sm font-semibold text-slate-950">Улучшение версии</div>
             <div className="mt-1 text-xs leading-5 text-slate-500">
-              Правка, отклонение, плохой outcome или ошибка сохраняются как feedback и создают candidate-версию с diff. Активирует её человек.
+              Правка, отклонение, плохой результат или ошибка сохраняются как обратная связь и создают новую версию со списком изменений. Активирует её человек.
             </div>
           </div>
           <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
-            versioned learning
+            версионное улучшение
           </span>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -4485,7 +4746,7 @@ const AgentRunReviewPanel = ({
                 Candidate-версия {feedbackVersionNotice.version_number ? `v${feedbackVersionNotice.version_number}` : 'агента'} готова
               </div>
               <div className="mt-1 text-xs">
-                {feedbackVersionNotice.trigger_label || 'Feedback'} · {noticeState === 'active' ? 'активирована' : noticeState === 'rolled_back' ? 'откат выполнен' : 'ждёт решения'}
+                {feedbackVersionNotice.trigger_label || 'Обратная связь'} · {noticeState === 'active' ? 'активирована' : noticeState === 'rolled_back' ? 'откат выполнен' : 'ждёт решения'}
               </div>
             </div>
             <StatusBadge status={noticeState === 'active' ? 'active' : noticeState === 'rolled_back' ? 'paused' : 'needs_approval'} />
