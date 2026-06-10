@@ -32,6 +32,8 @@ const CATEGORY_LABELS_RU: Record<string, string> = {
   services_optimization: 'Оптимизация услуг',
   news_generation: 'Новости',
   ai_agents: 'ИИ-агенты',
+  agent_creation: 'Создание агентов',
+  operator_chat: 'Чат оператора',
   reviews: 'Отзывы',
   other: 'Прочее',
 };
@@ -39,6 +41,8 @@ const CATEGORY_LABELS_EN: Record<string, string> = {
   services_optimization: 'Service optimization',
   news_generation: 'News',
   ai_agents: 'AI agents',
+  agent_creation: 'Agent creation',
+  operator_chat: 'Operator chat',
   reviews: 'Reviews',
   other: 'Other',
 };

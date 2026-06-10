@@ -7,6 +7,7 @@ from core.auth_helpers import require_auth_from_request, verify_business_access
 from database_manager import DatabaseManager
 from services.agent_blueprint_draft_builder import compile_agent_blueprint
 from services.agent_blueprint_runner import normalize_steps, parse_json_field
+from services.agent_builder_billing import charge_agent_creation_credits
 from services.agent_builder_session import append_user_message, build_agent_builder_state, preview_to_setup
 
 
@@ -221,6 +222,24 @@ def create_blueprint_from_agent_builder_session(session_id: str):
         metadata["agent_setup"] = preview_to_setup(preview)
         metadata["setup_completed"] = True
         blueprint_id = str(uuid.uuid4())
+        billing = charge_agent_creation_credits(
+            cursor,
+            business_id=business_id,
+            user_id=_user_id(user_data),
+            source_id=session_id,
+            description=description,
+        )
+        if billing.get("status") == "blocked":
+            db.conn.rollback()
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "Недостаточно кредитов для создания агента.",
+                    "code": "AGENT_CREATION_BILLING_BLOCKED",
+                    "billing": billing,
+                }
+            ), 402
+        metadata["billing"] = billing
         cursor.execute(
             """
             INSERT INTO agent_blueprints (
@@ -280,6 +299,7 @@ def create_blueprint_from_agent_builder_session(session_id: str):
                 "session": _normalize_session(refreshed),
                 "blueprint": blueprint,
                 "version": version,
+                "billing": billing,
             }
         ), 201
     except Exception:

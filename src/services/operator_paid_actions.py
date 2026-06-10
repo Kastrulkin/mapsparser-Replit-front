@@ -59,6 +59,16 @@ PAID_ACTIONS: dict[str, dict[str, Any]] = {
         "external_write": False,
         "description": "Подготовка предложений по услугам, описаниям и структуре карточки.",
     },
+    "agent_creation": {
+        "label": "Создать ИИ-агента",
+        "action_class": "paid_compute",
+        "cost_source": "model_tokens",
+        "provider": "configured_ai_provider",
+        "credit_multiplier": 1,
+        "manual_approval_required": False,
+        "external_write": False,
+        "description": "Компиляция описания пользователя в проверяемый blueprint агента.",
+    },
     "operator_intent_classify": {
         "label": "Разобрать команду Operator",
         "action_class": "paid_compute",

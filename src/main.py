@@ -817,6 +817,10 @@ def _normalize_token_usage_category(task_type: Any) -> str:
     task = str(task_type or "").strip().lower()
     if not task:
         return "other"
+    if task in {"agent_creation", "agent_builder", "agent_builder_session", "agent_compiler", "agent_blueprint_draft"}:
+        return "agent_creation"
+    if task in {"operator_chat", "operator_intent_classify", "operator_help", "operator_chat_reply"}:
+        return "operator_chat"
     if any(marker in task for marker in ("service", "optimization")):
         return "services_optimization"
     if "news" in task:

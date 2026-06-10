@@ -14,6 +14,7 @@ from services.agent_blueprint_runner import (
 )
 from services.agent_blueprint_orchestrator import build_agent_blueprint_orchestrator
 from services.agent_blueprint_draft_builder import build_agent_blueprint_draft
+from services.agent_builder_billing import charge_agent_creation_credits
 from services.agent_blueprint_workspace import (
     build_agent_version_diff,
     build_blueprint_review,
@@ -825,6 +826,26 @@ def create_agent_blueprint_draft():
         if not allowed:
             return access_error
         blueprint_id = str(uuid.uuid4())
+        billing = charge_agent_creation_credits(
+            cursor,
+            business_id=business_id,
+            user_id=_user_id(user_data),
+            source_id=blueprint_id,
+            description=description,
+            channel="agent_blueprint_draft",
+        )
+        if billing.get("status") == "blocked":
+            db.conn.rollback()
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "Недостаточно кредитов для создания агента.",
+                    "code": "AGENT_CREATION_BILLING_BLOCKED",
+                    "billing": billing,
+                }
+            ), 402
+        metadata = draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}
+        metadata["billing"] = billing
         cursor.execute(
             """
             INSERT INTO agent_blueprints (
@@ -840,12 +861,12 @@ def create_agent_blueprint_draft():
                 str(draft.get("description") or "").strip() or None,
                 "draft",
                 _user_id(user_data),
-                json.dumps(draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}, ensure_ascii=False),
+                json.dumps(metadata, ensure_ascii=False),
             ),
         )
         version_payload = draft.get("version_payload") if isinstance(draft.get("version_payload"), dict) else {}
         version = _insert_version(cursor, blueprint_id, version_payload, user_data)
-        _remember_active_version(cursor, {"id": blueprint_id, "metadata_json": draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}}, version, user_data, "created")
+        _remember_active_version(cursor, {"id": blueprint_id, "metadata_json": metadata}, version, user_data, "created")
         db.conn.commit()
         blueprint = _load_blueprint(cursor, blueprint_id)
         return jsonify(
@@ -857,6 +878,7 @@ def create_agent_blueprint_draft():
                     "category": draft.get("category"),
                     "summary": draft.get("summary") if isinstance(draft.get("summary"), dict) else {},
                 },
+                "billing": billing,
             }
         ), 201
     except Exception:

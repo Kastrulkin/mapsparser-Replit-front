@@ -554,6 +554,13 @@ type AgentBuilderPreview = {
   manual_control?: string;
   approval_boundaries?: string[];
   external_dispatch_performed?: boolean;
+  cost_preview?: {
+    label?: string;
+    estimated_credits?: number;
+    actual_credits?: number;
+    billing_url?: string;
+    copy?: string;
+  };
 };
 
 type AgentBuilderSession = {
@@ -2673,6 +2680,7 @@ const DialogAgentBuilder = ({
   const preview = session?.preview || null;
   const questions = session?.missing_questions || [];
   const messages = session?.messages || [];
+  const estimatedCredits = Number(preview?.cost_preview?.estimated_credits || 0);
   return (
     <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4">
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
@@ -2740,9 +2748,16 @@ const DialogAgentBuilder = ({
                 <div className="text-sm font-semibold text-slate-950">Preview будущего агента</div>
                 <div className="mt-1 text-xs text-slate-500">Проверьте задачу, данные, правила и ручной контроль перед созданием.</div>
               </div>
-              <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
-                {preview?.category_label || humanizeCategory(session.category)}
-              </span>
+              <div className="flex flex-wrap gap-2">
+                <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+                  {preview?.category_label || humanizeCategory(session.category)}
+                </span>
+                {estimatedCredits > 0 ? (
+                  <span className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700 ring-1 ring-sky-200">
+                    ~{estimatedCredits} кредита
+                  </span>
+                ) : null}
+              </div>
             </div>
             <div className="mt-4 space-y-3 text-sm leading-6 text-slate-700">
               <PreviewRow label="Понял задачу так" value={preview?.understood_task || input} />
@@ -2756,6 +2771,11 @@ const DialogAgentBuilder = ({
             <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-900">
               Внешние отправки, публикации, платежи и destructive actions не запускаются из builder. Рискованные действия требуют approval.
             </div>
+            {estimatedCredits > 0 ? (
+              <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-900">
+                Создание агента спишет примерно {estimatedCredits} кредита с баланса. Если кредитов не хватит, предложим пополнить счёт.
+              </div>
+            ) : null}
             <div className="mt-4 flex justify-end">
               <Button type="button" onClick={onCreate} disabled={actionLoading}>
                 {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}

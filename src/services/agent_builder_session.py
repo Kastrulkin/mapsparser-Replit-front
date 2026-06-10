@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from services.agent_blueprint_draft_builder import compile_agent_blueprint, infer_blueprint_category
+from services.agent_builder_billing import build_agent_creation_cost_preview
 
 
 QUESTION_LIBRARY = {
@@ -125,6 +126,7 @@ def _build_preview(description: str, category: str, draft: Dict[str, Any]) -> Di
         "output_schema": summary.get("output_schema") if isinstance(summary.get("output_schema"), dict) else {},
         "approval_boundaries": summary.get("approval_boundaries") if isinstance(summary.get("approval_boundaries"), list) else ["final_output", "external_delivery"],
         "external_dispatch_performed": False,
+        "cost_preview": build_agent_creation_cost_preview(),
         "compiler": "agent_compiler_v1",
     }
 
