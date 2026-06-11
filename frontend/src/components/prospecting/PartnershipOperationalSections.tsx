@@ -113,6 +113,30 @@ const outcomeLabel = (value?: string | null) => {
   return value || '—';
 };
 
+const statusLabel = (value?: string | null) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized || normalized === 'generated' || normalized === 'draft') return 'Ждёт проверки';
+  if (normalized === 'approved') return 'Готово к отправке';
+  if (normalized === 'rejected') return 'Нужна правка';
+  if (normalized === 'queued' || normalized === 'pending' || normalized === 'created') return 'Ждёт ручной отправки';
+  if (normalized === 'sent') return 'Отправлено вручную';
+  if (normalized === 'delivered') return 'Доставлено / принято';
+  if (normalized === 'failed' || normalized === 'dlq') return 'Ошибка отправки';
+  if (normalized === 'sending') return 'Идёт отправка';
+  return value || '—';
+};
+
+const channelLabel = (value?: string | null) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return 'Канал не выбран';
+  if (normalized === 'email') return 'Email';
+  if (normalized === 'telegram') return 'Telegram';
+  if (normalized === 'whatsapp') return 'WhatsApp';
+  if (normalized === 'phone') return 'Телефон';
+  if (normalized === 'manual') return 'Ручная отправка';
+  return value || 'Канал не выбран';
+};
+
 const buildMailtoHref = (email?: string | null, leadName?: string | null, text?: string | null) => {
   const recipient = String(email || '').trim();
   const body = String(text || '').trim();
@@ -139,6 +163,9 @@ export function PartnershipDraftsSection({
   onDraftTextChange,
   onApproveDraft,
 }: DraftsSectionProps) {
+  const approvedCount = drafts.filter((draft) => String(draft.status || '').toLowerCase() === 'approved').length;
+  const waitingApprovalCount = drafts.length - approvedCount;
+
   return (
     <div className="space-y-4 rounded-3xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -149,7 +176,7 @@ export function PartnershipDraftsSection({
         <div className="flex flex-wrap gap-2">
           <Select value={draftView} onValueChange={onDraftViewChange}>
             <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="Фильтр черновиков" />
+              <SelectValue placeholder="Фильтр писем" />
             </SelectTrigger>
             <SelectContent>
               {draftViewOptions.map((opt) => (
@@ -165,10 +192,28 @@ export function PartnershipDraftsSection({
         </div>
       </div>
 
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+          <div className="text-sm font-semibold text-slate-950">Письмо 1</div>
+          <div className="mt-1 text-xs leading-relaxed text-slate-500">Короткая первая записка: кто мы, почему пишем, общая аудитория, предложение созвониться.</div>
+          <div className="mt-3 text-xs font-medium text-slate-700">Ждут проверки: {waitingApprovalCount}</div>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+          <div className="text-sm font-semibold text-slate-950">КП / конкретное предложение</div>
+          <div className="mt-1 text-xs leading-relaxed text-slate-500">Пакетное предложение по сегменту партнёра: совместный продукт, QR, сертификат или обмен рекомендациями.</div>
+          <div className="mt-3 text-xs font-medium text-slate-700">Утверждено: {approvedCount}</div>
+        </div>
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-4">
+          <div className="text-sm font-semibold text-slate-950">Follow-up</div>
+          <div className="mt-1 text-xs leading-relaxed text-slate-500">Следующий шаг после первого касания. Пока готовится вручную после ответа или запроса КП.</div>
+          <div className="mt-3 text-xs font-medium text-slate-500">Не мешает первому письму</div>
+        </div>
+      </div>
+
       {drafts.length > 0 ? (
         <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="text-xs text-muted-foreground">Выбрано черновиков: {selectedDraftIds.length}</div>
+            <div className="text-xs text-muted-foreground">Выбрано писем: {selectedDraftIds.length}</div>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={onBulkApprove} disabled={loading || selectedDraftIds.length === 0}>
                 Утвердить выбранные
@@ -183,7 +228,7 @@ export function PartnershipDraftsSection({
 
       {drafts.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-muted-foreground">
-          Черновиков пока нет. Перейдите в воронку, выберите партнёров и подготовьте первое сообщение.
+          Писем пока нет. Перейдите в отбор, выберите партнёров и подготовьте первое сообщение.
         </div>
       ) : (
         <>
@@ -193,7 +238,7 @@ export function PartnershipDraftsSection({
               checked={drafts.length > 0 && drafts.every((draft) => selectedDraftIds.includes(draft.id))}
               onChange={(event) => onToggleAll(event.target.checked)}
             />
-            Выбрать все черновики в текущем фильтре
+            Выбрать все письма в текущем фильтре
           </label>
           {drafts.map((draft) => {
             const draftText = draft.approved_text || draft.edited_text || draft.generated_text || '';
@@ -210,7 +255,7 @@ export function PartnershipDraftsSection({
                   <div className="flex-1">
                     <div className="text-sm font-semibold text-foreground">{draft.lead_name || draft.lead_id}</div>
                     <div className="mb-2 text-xs text-muted-foreground">
-                      Статус: {draft.status || '—'} · канал: {draft.channel || '—'}
+                      {statusLabel(draft.status)} · {channelLabel(draft.channel)}
                     </div>
                     <Textarea
                       rows={5}
@@ -305,16 +350,16 @@ export function PartnershipQueueSection({
             <div className="flex flex-wrap gap-2">
               <Select value={bulkQueueStatus} onValueChange={onBulkQueueStatusChange}>
                 <SelectTrigger className="w-[220px] bg-white">
-                  <SelectValue placeholder="Delivery-статус" />
+                  <SelectValue placeholder="Статус отправки" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="sent">sent</SelectItem>
-                  <SelectItem value="delivered">delivered</SelectItem>
-                  <SelectItem value="failed">failed</SelectItem>
+                  <SelectItem value="sent">Отправлено вручную</SelectItem>
+                  <SelectItem value="delivered">Доставлено / принято</SelectItem>
+                  <SelectItem value="failed">Ошибка отправки</SelectItem>
                 </SelectContent>
               </Select>
               <Button variant="outline" onClick={onBulkUpdateDelivery} disabled={loading || selectedQueueIds.length === 0}>
-                Обновить статус
+                Отметить статус
               </Button>
               <Button variant="outline" onClick={onBulkDeleteQueueItems} disabled={loading || selectedQueueIds.length === 0}>
                 Удалить выбранные
@@ -327,7 +372,7 @@ export function PartnershipQueueSection({
       {batches.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-muted-foreground">
           <div className="font-medium text-slate-900">Нет писем, готовых к отправке.</div>
-          <div className="mt-1">Сначала утвердите черновики в разделе «Письма». После этого здесь появится короткий список: открыть письмо, отправить вручную, отметить результат.</div>
+          <div className="mt-1">Сначала утвердите письма в разделе «Письма». После этого здесь появится короткий список: открыть письмо, отправить вручную, отметить результат.</div>
         </div>
       ) : (
         <>
@@ -345,7 +390,7 @@ export function PartnershipQueueSection({
                 <div>
                   <div className="font-semibold text-foreground">Письма к ручной отправке</div>
                   <div className="text-xs text-muted-foreground">
-                    ID: {batch.id} · статус: {batch.status} · сообщений: {(batch.items || []).length}
+                    {statusLabel(batch.status)} · сообщений: {(batch.items || []).length}
                   </div>
                 </div>
                 {batch.status === 'draft' ? (
@@ -370,9 +415,12 @@ export function PartnershipQueueSection({
                           />
                           <div className="min-w-0 flex-1">
                             <div>
-                              {item.lead_name || item.id} · {item.channel || '—'} · {item.delivery_status || '—'}
-                              {item.error_text ? ` · ${item.error_text}` : ''}
+                              <span className="font-medium text-slate-800">{item.lead_name || 'Партнёр'}</span>
+                              <span> · {channelLabel(item.channel)} · {statusLabel(item.delivery_status)}</span>
                             </div>
+                            {item.error_text ? (
+                              <div className="mt-1 text-red-600">{item.error_text}</div>
+                            ) : null}
                             <div className="mt-2 flex flex-wrap gap-1">
                               <Button size="sm" variant="outline" className="h-7 px-2" disabled={!mailtoHref} asChild={Boolean(mailtoHref)}>
                                 {mailtoHref ? (
@@ -479,7 +527,7 @@ export function PartnershipSentSection({
           <div key={reaction.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="text-sm font-semibold">{reaction.lead_name || reaction.lead_id}</div>
             <div className="text-xs text-muted-foreground">
-              Очередь: {reaction.batch_id || '—'} · канал: {reaction.channel || '—'} · доставка: {reaction.delivery_status || '—'}
+              {channelLabel(reaction.channel)} · {statusLabel(reaction.delivery_status)}
             </div>
             {reaction.raw_reply ? (
               <div className="mt-2 whitespace-pre-wrap text-sm text-foreground">{reaction.raw_reply}</div>

@@ -81,11 +81,11 @@ const compactMetaClass = 'truncate text-[11px] text-slate-500';
 
 const shortStatusLabel = (value?: string) => {
   const normalized = String(value || '').trim().toLowerCase();
-  if (!normalized || normalized === 'unprocessed') return 'Необработан';
+  if (!normalized || normalized === 'unprocessed' || normalized === 'imported') return 'Кандидат';
   if (normalized === 'in_progress' || normalized === 'qualified') return 'В работе';
-  if (normalized === 'contacted') return 'Отправлено';
+  if (normalized === 'contacted') return 'Письмо 1 отправлено';
   if (normalized === 'second_message_sent') return 'КП отправлено';
-  if (normalized === 'replied') return 'Ответил';
+  if (normalized === 'replied') return 'Есть ответ';
   if (normalized === 'converted') return 'Партнёр';
   if (normalized === 'postponed' || normalized === 'deferred') return 'Отложен';
   if (normalized === 'not_relevant' || normalized === 'disqualified') return 'Неактуален';
@@ -151,7 +151,7 @@ export const PartnershipLeadCard = ({
       draggable={mode === 'pipeline'}
       onDragStart={mode === 'pipeline' ? onDragStart : undefined}
       onDragEnd={mode === 'pipeline' ? onDragEnd : undefined}
-      className={`overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${dragging ? 'opacity-70' : ''}`}
+      className={`overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${dragging ? 'opacity-70' : ''}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -178,7 +178,7 @@ export const PartnershipLeadCard = ({
           hasMessenger={Boolean(lead.telegram_url || lead.whatsapp_url)}
         />
       </div>
-      <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
+      <div className={`mt-3 grid gap-2 text-xs text-slate-600 ${mode === 'raw' ? '' : 'sm:grid-cols-2'}`}>
         <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2">
           <div className="flex items-center justify-between gap-2">
             <span className="font-medium uppercase text-slate-400">Статус</span>
@@ -191,6 +191,7 @@ export const PartnershipLeadCard = ({
             {shortStatusLabel(lead.pipeline_status || 'unprocessed')} · {shortStatusLabel(lead.partnership_stage || 'imported')}
           </div>
         </div>
+        {mode === 'pipeline' ? (
         <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2">
           <div className="flex items-center justify-between gap-2">
             <span className="font-medium uppercase text-slate-400">Аудит</span>
@@ -199,6 +200,7 @@ export const PartnershipLeadCard = ({
           <div className="mt-1 line-clamp-2 font-medium text-slate-900">{auditPresentation.primary}</div>
           <div className={compactMetaClass}>{auditPresentation.secondary}</div>
         </div>
+        ) : null}
       </div>
       {lead.parse_error ? <div className="mt-2 text-xs text-red-600">{lead.parse_error}</div> : null}
       <WorkflowActionRow
@@ -227,16 +229,16 @@ export const PartnershipLeadCard = ({
             onClick: () => onMoveToStage(lead.id, 'not_relevant', { deferredReason: '', deferredUntil: '' }),
             disabled: loading,
           },
-          {
+          ...(mode === 'pipeline' ? [{
             label: stageValue === 'deferred' ? 'Отложен' : 'Отложить',
             onClick: () => onDeferLead(lead, deferredPayload),
             disabled: loading,
-          },
+          }] : []),
         ]}
       />
       <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
         <span className={mutedPillClass}><span className="truncate">Воронка: {shortStatusLabel(lead.pipeline_status || 'unprocessed')}</span></span>
-        <span className={mutedPillClass}><span className="truncate">Этап: {shortStatusLabel(lead.partnership_stage || 'новый')}</span></span>
+        {mode === 'pipeline' ? <span className={mutedPillClass}><span className="truncate">Этап: {shortStatusLabel(lead.partnership_stage || 'новый')}</span></span> : null}
         <span>{parseStatusLabel}</span>
         <span>{hasContacts ? 'контакты есть' : 'контактов мало'}</span>
       </div>
@@ -520,8 +522,8 @@ export const PartnershipPipelineList = ({
       <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-3 py-3 text-xs text-sky-800">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div>
-            <div className="font-medium text-sky-900">Активен фильтр по последнему geo-search: {lastGeoSearchLeadCount} лидов.</div>
-            <div className="mt-1 text-[11px] text-sky-800">Можно сразу запустить цепочку: обогащение → аудит → матчинг → черновик только по этим новым лидам.</div>
+            <div className="font-medium text-sky-900">Активен фильтр по последнему поиску на картах: {lastGeoSearchLeadCount} лидов.</div>
+            <div className="mt-1 text-[11px] text-sky-800">Можно сразу запустить цепочку: обогащение → аудит → подбор оффера → письмо только по этим новым лидам.</div>
             <div className="mt-1 text-[11px] text-sky-800">Источник: {lastGeoSearchSourceLabel}{lastGeoSearchMatchesBestSource ? ' · совпадает с лучшим источником недели' : ''}</div>
             {lastGeoSearchStats ? (
               <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
@@ -529,15 +531,15 @@ export const PartnershipPipelineList = ({
                 <span className="rounded-full border border-sky-200 bg-white px-2 py-0.5">парсинг готов {lastGeoSearchStats.parsedCompleted}</span>
                 <span className="rounded-full border border-sky-200 bg-white px-2 py-0.5">обогащено {lastGeoSearchStats.enriched}</span>
                 <span className="rounded-full border border-sky-200 bg-white px-2 py-0.5">с контактами {lastGeoSearchStats.withContacts}</span>
-                <span className="rounded-full border border-sky-200 bg-white px-2 py-0.5">готовы к черновику {lastGeoSearchStats.readyForDraft}</span>
+                <span className="rounded-full border border-sky-200 bg-white px-2 py-0.5">готовы к письму {lastGeoSearchStats.readyForDraft}</span>
               </div>
             ) : null}
             {lastGeoSearchFlowSummary ? (
               <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
                 <span className="rounded-full border border-indigo-200 bg-white px-2 py-0.5">аудит {lastGeoSearchFlowSummary.audited}</span>
-                <span className="rounded-full border border-indigo-200 bg-white px-2 py-0.5">матчинг {lastGeoSearchFlowSummary.matched}</span>
-                <span className="rounded-full border border-indigo-200 bg-white px-2 py-0.5">черновик готов {lastGeoSearchFlowSummary.draftReady}</span>
-                <span className="rounded-full border border-indigo-200 bg-white px-2 py-0.5">черновик утверждён {lastGeoSearchFlowSummary.draftsApproved}</span>
+                <span className="rounded-full border border-indigo-200 bg-white px-2 py-0.5">оффер подобран {lastGeoSearchFlowSummary.matched}</span>
+                <span className="rounded-full border border-indigo-200 bg-white px-2 py-0.5">письмо готово {lastGeoSearchFlowSummary.draftReady}</span>
+                <span className="rounded-full border border-indigo-200 bg-white px-2 py-0.5">письмо утверждено {lastGeoSearchFlowSummary.draftsApproved}</span>
                 <span className="rounded-full border border-indigo-200 bg-white px-2 py-0.5">в очереди {lastGeoSearchFlowSummary.queued}</span>
                 <span className="rounded-full border border-indigo-200 bg-white px-2 py-0.5">отправлено {lastGeoSearchFlowSummary.sent}</span>
                 <span className="rounded-full border border-indigo-200 bg-white px-2 py-0.5">интерес {lastGeoSearchFlowSummary.positive}</span>
@@ -577,7 +579,6 @@ export const PartnershipPipelineList = ({
           <Button variant="outline" onClick={onApplyBulkUpdate} disabled={loading || selectedLeadIds.length === 0}>Применить к выбранным</Button>
           <Button variant="outline" onClick={onBulkDeferLeads} disabled={loading || selectedLeadIds.length === 0}>Отложить выбранные</Button>
           <Button variant="outline" onClick={onNormalizeSelectedViaOpenClaw} disabled={loading || selectedLeadIds.length === 0}>Подготовить письма</Button>
-          <Button variant="outline" onClick={onBulkDeferLeads} disabled={loading || selectedLeadIds.length === 0}>Отложить</Button>
           <Button variant="outline" onClick={onBulkMarkNotRelevant} disabled={loading || selectedLeadIds.length === 0}>Неактуальны</Button>
         </div>
       </div>
@@ -632,7 +633,7 @@ export const PartnershipPipelineList = ({
                       <div className="mt-2 space-y-1 rounded-xl bg-slate-50 p-3">
                         <div>Парсинг: {lead.parse_status || 'не запускался'}{lead.parse_updated_at ? ` · ${new Date(lead.parse_updated_at).toLocaleString('ru-RU')}` : ''}</div>
                         {Array.isArray(lead.matching_sources_json) && lead.matching_sources_json.length > 1 ? <div>Объединено источников: {lead.matching_sources_json.length}</div> : null}
-                        {lead.enrich_payload_json?.provider ? <div>Обогащение: {lead.enrich_payload_json.provider}</div> : null}
+                        {lead.enrich_payload_json?.provider ? <div>Источник данных: {lead.enrich_payload_json.provider}</div> : null}
                         {lead.parse_error ? <div className="text-red-600">{lead.parse_error}</div> : null}
                         {lead.source_url ? <a href={lead.source_url} target="_blank" rel="noreferrer" className="break-all text-blue-600 underline">Открыть источник</a> : null}
                       </div>
@@ -695,7 +696,7 @@ export const PartnershipPipelineBulkBar = ({
         <Button size="sm" variant="outline" onClick={onBulkEnrichContacts} disabled={loading}>Обогатить</Button>
         <Button size="sm" variant="outline" onClick={onBulkRunMatch} disabled={loading}>Матчинг</Button>
         <Button size="sm" variant="outline" onClick={onApplyBulkUpdate} disabled={loading || !canApplyStageOrChannel}>Применить этап/канал</Button>
-        <Button size="sm" variant="outline" onClick={onNormalizeSelectedViaOpenClaw} disabled={loading}>Подготовить черновики</Button>
+        <Button size="sm" variant="outline" onClick={onNormalizeSelectedViaOpenClaw} disabled={loading}>Подготовить письма</Button>
         <Button size="sm" variant="outline" onClick={onBulkPrepareCommercialOffers} disabled={loading}>Подготовить КП</Button>
         <Button size="sm" variant="outline" onClick={onBulkDeleteLeads} disabled={loading}>Удалить</Button>
       </div>

@@ -356,7 +356,7 @@ type LeadFilters = {
 };
 
 type KanbanColumnId = 'new' | 'shortlist' | 'in_progress' | 'contacted' | 'closed';
-type WorkspaceTab = 'raw' | 'pipeline' | 'groups' | 'outreach' | 'analytics';
+type WorkspaceTab = 'overview' | 'raw' | 'pipeline' | 'groups' | 'outreach' | 'analytics';
 const toOutreachContactFilter = (value: string): OutreachContactFilter => {
     if (value === 'telegram' || value === 'whatsapp' || value === 'max' || value === 'email' || value === 'vk') {
         return value;
@@ -365,7 +365,7 @@ const toOutreachContactFilter = (value: string): OutreachContactFilter => {
 };
 
 const toWorkspaceTab = (value: string): WorkspaceTab => {
-    if (value === 'pipeline' || value === 'groups' || value === 'outreach' || value === 'analytics') {
+    if (value === 'overview' || value === 'pipeline' || value === 'groups' || value === 'outreach' || value === 'analytics') {
         return value;
     }
     return 'raw';
@@ -718,6 +718,43 @@ const PIPELINE_IN_PROGRESS = 'in_progress';
 const PIPELINE_POSTPONED = 'postponed';
 const PIPELINE_NOT_RELEVANT = 'not_relevant';
 const PIPELINE_CONTACTED = 'contacted';
+
+const notRelevantReasonOptions = [
+    { code: 'not_icp', label: 'Не наша аудитория' },
+    { code: 'duplicate', label: 'Дубль' },
+    { code: 'closed_business', label: 'Бизнес закрыт' },
+    { code: 'no_contacts', label: 'Нет контактов' },
+    { code: 'weak_potential', label: 'Слабый потенциал' },
+    { code: 'wrong_geo', label: 'Не тот район' },
+    { code: 'other', label: 'Другое' },
+];
+
+const chooseNotRelevantReason = () => {
+    const promptText = notRelevantReasonOptions
+        .map((item, index) => `${index + 1}. ${item.label}`)
+        .join('\n');
+    const rawChoice = window.prompt(`Почему переносим лида в неактуальные?\n${promptText}`, '1');
+    if (rawChoice === null) {
+        return null;
+    }
+    const normalizedChoice = String(rawChoice || '').trim().toLowerCase();
+    const byNumber = notRelevantReasonOptions[Number(normalizedChoice) - 1];
+    const byCode = notRelevantReasonOptions.find((item) => item.code === normalizedChoice);
+    const selectedReason = byNumber || byCode || notRelevantReasonOptions[0];
+    const comment = window.prompt(
+        selectedReason.code === 'other'
+            ? 'Коротко напишите причину:'
+            : 'Комментарий к причине (необязательно):',
+        ''
+    );
+    if (selectedReason.code === 'other' && (!comment || !comment.trim())) {
+        return null;
+    }
+    return {
+        reason: selectedReason.code,
+        comment: (comment || '').trim() || selectedReason.label,
+    };
+};
 const PIPELINE_WAITING_REPLY = 'waiting_reply';
 const PIPELINE_SECOND_MESSAGE_SENT = 'second_message_sent';
 const PIPELINE_REPLIED = 'replied';
@@ -746,7 +783,7 @@ const getLeadPipelineStatus = (lead?: Partial<Lead> | null) => {
 const pipelineStatusLabel = (status?: string | null) => {
     switch (String(status || '').trim().toLowerCase()) {
         case PIPELINE_UNPROCESSED:
-            return 'Необработан';
+            return 'Кандидат';
         case PIPELINE_IN_PROGRESS:
             return 'В работе';
         case PIPELINE_POSTPONED:
@@ -754,15 +791,15 @@ const pipelineStatusLabel = (status?: string | null) => {
         case PIPELINE_NOT_RELEVANT:
             return 'Неактуален';
         case PIPELINE_CONTACTED:
-            return 'Отправлено';
+            return 'Письмо 1 отправлено';
         case PIPELINE_WAITING_REPLY:
-            return 'Отправлено';
+            return 'Письмо 1 отправлено';
         case PIPELINE_SECOND_MESSAGE_SENT:
-            return 'Второе сообщение отправлено';
+            return 'Предложение отправлено';
         case PIPELINE_REPLIED:
-            return 'Ответил';
+            return 'Есть ответ';
         case PIPELINE_CONVERTED:
-            return 'Конвертирован';
+            return 'Клиент';
         case PIPELINE_CLOSED_LOST:
             return 'Закрыт';
         default:
@@ -810,8 +847,8 @@ const kanbanColumnMeta: Record<KanbanColumnId, { label: string; description: str
         statusToSet: selectedForOutreach,
     },
     contacted: {
-        label: 'Контактированы',
-        description: 'Сообщение отправлено или в процессе.',
+        label: 'Письмо 1',
+        description: 'Первое сообщение отправлено или готовится к отправке.',
         statusToSet: 'sent',
     },
     closed: {
@@ -868,22 +905,22 @@ const pipelineBoardColumnMeta: Record<PipelineBoardColumnId, { label: string; de
         statusToSet: PIPELINE_NOT_RELEVANT,
     },
     contacted: {
-        label: 'Отправлено',
-        description: 'Первичный контакт уже состоялся: вручную или через отправку.',
+        label: 'Письмо 1 отправлено',
+        description: 'Первое короткое письмо уже отправлено, ждём реакцию или запрос предложения.',
         statusToSet: PIPELINE_CONTACTED,
     },
     second_message_sent: {
-        label: 'Второе сообщение отправлено',
-        description: 'Повторное касание отправлено через другой доступный канал.',
+        label: 'Предложение отправлено',
+        description: 'Лиду отправлено конкретное предложение или следующий коммерческий шаг.',
         statusToSet: PIPELINE_SECOND_MESSAGE_SENT,
     },
     replied: {
-        label: 'Ответил',
+        label: 'Есть ответ',
         description: 'Лид ответил, идёт переписка или уточнение деталей.',
         statusToSet: PIPELINE_REPLIED,
     },
     converted: {
-        label: 'Конвертирован',
+        label: 'Клиент',
         description: 'Лид перешёл в следующий коммерческий этап или стал клиентом.',
         statusToSet: PIPELINE_CONVERTED,
     },
@@ -931,17 +968,17 @@ const sourceLabel = (source?: string) => {
         case 'external_import':
             return 'Внешний импорт';
         case 'apify_yandex':
-            return 'Apify Yandex';
+            return 'Яндекс Карты';
         case 'apify_2gis':
-            return 'Apify 2GIS';
+            return '2ГИС';
         case 'apify_google':
-            return 'Apify Google';
+            return 'Google Maps';
         case 'apify_apple':
-            return 'Apify Apple';
+            return 'Apple Maps';
         case 'manual':
             return 'Ручной ввод';
         case 'openclaw':
-            return 'OpenClaw';
+            return 'Автоматический поиск';
         default:
             return source || 'Источник не указан';
     }
@@ -968,7 +1005,7 @@ const formatLeadChannel = (channel?: string) => {
         case 'email':
             return 'Email';
         case 'manual':
-            return 'Manual';
+            return 'Вручную';
         default:
             return normalized || 'Канал не выбран';
     }
@@ -982,9 +1019,9 @@ const normalizeAnalyticsSegmentLabel = (value: unknown, fallback: string) => {
 const formatQueueProvider = (providerName?: string | null) => {
     const normalized = String(providerName || '').trim().toLowerCase();
     if (normalized === 'telegram_app') return 'Telegram app';
-    if (normalized === 'openclaw') return 'OpenClaw';
+    if (normalized === 'openclaw') return 'Автоматический поиск';
     if (normalized === 'maton') return 'Maton';
-    if (normalized === 'manual') return 'Manual';
+    if (normalized === 'manual') return 'Вручную';
     if (normalized === 'email') return 'Email';
     if (normalized === 'max') return 'Max';
     return normalized || '—';
@@ -1023,6 +1060,16 @@ const buildLeadRecipientValue = (lead: Lead | null | undefined, channel?: string
         return 'Ручная отправка';
     }
     return lead.phone || lead.website || null;
+};
+
+const buildLeadMailtoHref = (lead: Lead | null | undefined, text?: string, subjectPrefix = 'Follow-up') => {
+    const email = String(lead?.email || '').trim();
+    const body = String(text || '').trim();
+    if (!email || !body) {
+        return '';
+    }
+    const subjectTarget = String(lead?.name || '').trim() || 'лиду';
+    return `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(`${subjectPrefix}: ${subjectTarget}`)}&body=${encodeURIComponent(body)}`;
 };
 
 const buildSyntheticSentQueueItem = (lead: Lead): OutreachQueueItem | null => {
@@ -1110,7 +1157,7 @@ const summarizeBatchFromItems = (batch: OutreachBatch) => {
 
 const formatBatchRuntimeStatus = (batch: OutreachBatch) => {
     const runtimeStatus = String(batch.runtime_status || batch.status || '').trim().toLowerCase();
-    if (runtimeStatus === 'draft') return 'Черновик';
+    if (runtimeStatus === 'draft') return 'Очередь готовится';
     if (runtimeStatus === 'sending') return 'Идёт отправка';
     if (runtimeStatus === 'completed') return 'Завершён';
     if (runtimeStatus === 'approved') return 'Подтверждён';
@@ -1540,7 +1587,7 @@ export const ProspectingManagement: React.FC = () => {
     const [manualLeadName, setManualLeadName] = useState('');
     const [manualLeadCategory, setManualLeadCategory] = useState('');
     const [manualLeadBusy, setManualLeadBusy] = useState(false);
-    const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceTab>('raw');
+    const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceTab>('overview');
     const [outreachTab, setOutreachTab] = useState<OutreachTab>('drafts');
     const [pipelineView, setPipelineView] = useState<PipelineViewMode>('kanban');
     const [quickFilter, setQuickFilter] = useState<PipelineQuickFilter>('all');
@@ -1703,7 +1750,7 @@ export const ProspectingManagement: React.FC = () => {
         if (loading && !searchJob) {
             return {
                 title: 'Идёт запуск поиска',
-                hint: 'Ждём постановки задачи и первого статуса от Apify.',
+                hint: 'Ждём запуска поиска на картах и первого статуса.',
                 tone: 'border-sky-200 bg-sky-50 text-sky-900',
             };
         }
@@ -1726,7 +1773,7 @@ export const ProspectingManagement: React.FC = () => {
             }
             return {
                 title: 'Поиск продолжается',
-                hint: searchPollError || 'Apify ещё собирает выдачу. Обновление результатов произойдёт автоматически.',
+                hint: searchPollError || 'Сервис карт ещё собирает выдачу. Обновление результатов произойдёт автоматически.',
                 tone: 'border-sky-200 bg-sky-50 text-sky-900',
             };
         }
@@ -2282,37 +2329,30 @@ export const ProspectingManagement: React.FC = () => {
     };
 
     const moveLeadToNotRelevant = async (leadId: string) => {
-        const reason = window.prompt('Причина: not_icp / duplicate / closed_business / no_contacts / weak_potential / wrong_geo / other', 'other');
-        if (!reason || !reason.trim()) {
+        const selectedReason = chooseNotRelevantReason();
+        if (!selectedReason) {
             return;
         }
-        const normalizedReason = reason.trim().toLowerCase();
-        const comment = window.prompt('Комментарий к причине (обязательно для other):', normalizedReason === 'other' ? '' : undefined) || '';
         await api.post(`/admin/prospecting/lead/${leadId}/status`, {
             pipeline_status: PIPELINE_NOT_RELEVANT,
-            disqualification_reason: normalizedReason,
-            disqualification_comment: comment.trim() || undefined,
-            comment: comment.trim() || undefined,
+            disqualification_reason: selectedReason.reason,
+            disqualification_comment: selectedReason.comment,
+            comment: selectedReason.comment,
         });
         await Promise.all([fetchSavedLeads(), fetchLeadGroups()]);
     };
 
     const saveSearchResultAsNotRelevant = async (lead: Lead) => {
-        const reason = window.prompt('Причина: not_icp / duplicate / closed_business / no_contacts / weak_potential / wrong_geo / other', 'other');
-        if (!reason || !reason.trim()) {
-            return;
-        }
-        const normalizedReason = reason.trim().toLowerCase();
-        const comment = window.prompt('Комментарий к причине (обязательно для other):', normalizedReason === 'other' ? '' : undefined) || '';
-        if (normalizedReason === 'other' && !comment.trim()) {
+        const selectedReason = chooseNotRelevantReason();
+        if (!selectedReason) {
             return;
         }
         await saveLead(
             {
                 ...lead,
                 pipeline_status: PIPELINE_NOT_RELEVANT,
-                disqualification_reason: normalizedReason,
-                disqualification_comment: comment.trim() || undefined,
+                disqualification_reason: selectedReason.reason,
+                disqualification_comment: selectedReason.comment,
             },
             shortlistRejected
         );
@@ -2686,7 +2726,7 @@ export const ProspectingManagement: React.FC = () => {
                 const total = Number(summary.total ?? summary.queued ?? 0);
                 const sent = Number(summary.sent ?? 0);
                 const failed = Number(summary.failed ?? 0);
-                alert(`Batch подтверждён: в очередь поставлено ${total}, sent ${sent}, failed ${failed}`);
+                alert(`Очередь подтверждена: поставлено ${total}, отправлено ${sent}, с ошибкой ${failed}`);
             }
         });
     };
@@ -2698,7 +2738,7 @@ export const ProspectingManagement: React.FC = () => {
             const batch = response.data?.batch as OutreachBatch | undefined;
             const summary = batch ? summarizeBatchFromItems(batch) : null;
             if (summary) {
-                alert(`Отправка запущена: queued ${summary.queued}, sending ${summary.sending}, sent ${summary.sent}, failed ${summary.failed}`);
+                alert(`Отправка запущена: в очереди ${summary.queued}, отправляется ${summary.sending}, отправлено ${summary.sent}, с ошибкой ${summary.failed}`);
             }
         });
     };
@@ -2747,7 +2787,7 @@ export const ProspectingManagement: React.FC = () => {
             await refreshProspectingData('all');
             setActiveWorkspace('outreach');
             setOutreachTab('drafts');
-            toast.success(`Подготовили переотправку через ${formatLeadChannel(alternativeChannel)}. Лид перенесён в "Черновики".`);
+            toast.success(`Подготовили переотправку через ${formatLeadChannel(alternativeChannel)}. Лид перенесён в "Письма".`);
         });
     };
 
@@ -3118,15 +3158,15 @@ export const ProspectingManagement: React.FC = () => {
             },
             {
                 key: 'contacted',
-                label: 'Первое касание',
-                hint: 'Лиды, которым уже отправлено первое сообщение',
+                label: 'Письмо 1',
+                hint: 'Лиды, которым уже отправлено первое письмо',
                 count: outreachFunnelSummary.firstTouch,
                 conversion: outreachFunnelSummary.firstTouchRate,
             },
             {
                 key: 'second_message_sent',
-                label: 'Второе касание',
-                hint: 'Лиды, которым уже отправлено повторное сообщение',
+                label: 'Предложение',
+                hint: 'Лиды, которым уже отправлено конкретное предложение',
                 count: outreachFunnelSummary.secondTouch,
                 conversion: outreachFunnelSummary.secondTouchRate,
             },
@@ -3139,7 +3179,7 @@ export const ProspectingManagement: React.FC = () => {
             },
             {
                 key: 'converted',
-                label: 'Конвертирован',
+                label: 'Клиент',
                 hint: 'Лид доведён до следующего коммерческого шага',
                 count: convertedLeadCount,
                 conversion: formatConversion(convertedLeadCount, repliedLeadCount),
@@ -3566,11 +3606,11 @@ export const ProspectingManagement: React.FC = () => {
         return [
             {
                 key: 'drafts',
-                label: 'Черновики',
+                label: 'Письма',
                 count: drafts.length,
                 conversion: formatConversion(approvedDrafts, drafts.length),
                 dropOff: formatDropOff(drafts.length - approvedDrafts, drafts.length),
-                hint: 'Сколько черновиков создано и какая часть дошла до approval.',
+                hint: 'Сколько писем создано и какая часть дошла до утверждения.',
             },
             {
                 key: 'queue',
@@ -3578,7 +3618,7 @@ export const ProspectingManagement: React.FC = () => {
                 count: visibleQueueItems.length,
                 conversion: formatConversion(deliveredQueueItems, visibleQueueItems.length),
                 dropOff: `${failedQueueItems}`,
-                hint: 'Какой объём реально дошёл до delivered и сколько упало на доставке.',
+                hint: 'Сколько писем отмечено как доставленные и сколько не удалось отправить.',
             },
             {
                 key: 'sent',
@@ -3586,7 +3626,7 @@ export const ProspectingManagement: React.FC = () => {
                 count: reactions.length,
                 conversion: formatConversion(positiveReactionCount, responseCount),
                 dropOff: formatDropOff(positiveReactionCount, responseCount),
-                hint: 'Какой объём входящих реакций закончился позитивным outcome.',
+                hint: 'Сколько входящих реакций закончилось интересом.',
             },
         ];
     }, [drafts, visibleQueueItems, reactions, positiveReactionCount]);
@@ -3818,6 +3858,9 @@ export const ProspectingManagement: React.FC = () => {
         const columnId = leadToPipelineBoardColumn(lead);
         const isDragging = leadId && draggingLeadId === leadId;
         const isSelected = Boolean(leadId && selectedPipelineLeadIds.includes(leadId));
+        const pipelineLabel = pipelineStatusLabel(getLeadPipelineStatus(lead));
+        const auditReady = hasLeadAudit(lead);
+        const contactReady = Boolean(lead.phone || lead.email || lead.telegram_url || lead.whatsapp_url || extractHasMessengers(lead));
 
         return (
             <Card
@@ -3854,9 +3897,9 @@ export const ProspectingManagement: React.FC = () => {
                                     className="mt-1 h-4 w-4 rounded border border-input"
                                 />
                             ) : null}
-                            <div>
-                                <div className="text-sm font-semibold">{lead.name}</div>
-                                <div className="mt-1 text-xs text-muted-foreground">
+                            <div className="min-w-0">
+                                <div className="truncate text-sm font-semibold">{lead.name}</div>
+                                <div className="mt-1 line-clamp-1 text-xs text-muted-foreground">
                                     {lead.category || 'Без категории'}
                                 </div>
                             </div>
@@ -3865,13 +3908,30 @@ export const ProspectingManagement: React.FC = () => {
                             {sourceLabel(lead.source)}
                         </Badge>
                     </div>
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
-                        <span>{lead.rating ?? '-'}</span>
-                        {lead.reviews_count ? <span>({lead.reviews_count})</span> : null}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        <Badge variant={columnId === 'not_relevant' ? 'destructive' : columnId === 'contacted' || columnId === 'replied' || columnId === 'converted' ? 'secondary' : 'outline'} className="text-[11px] font-normal">
+                            {pipelineLabel}
+                        </Badge>
+                        <Badge variant={contactReady ? 'secondary' : 'outline'} className="text-[11px] font-normal">
+                            {contactReady ? 'Контакт есть' : 'Контакт нужен'}
+                        </Badge>
+                        <Badge variant={auditReady ? 'secondary' : 'outline'} className="text-[11px] font-normal">
+                            {auditReady ? 'Аудит готов' : 'Без аудита'}
+                        </Badge>
+                        <Badge variant="outline" className="text-[11px] font-normal">
+                            {formatLeadChannel(lead.selected_channel || bestAvailableOutreachChannel(lead))}
+                        </Badge>
                     </div>
-                    <div className="text-xs leading-5 text-muted-foreground">
-                        {lead.address || lead.city || 'Адрес не указан'}
+                    <div className="grid gap-1 text-xs text-muted-foreground">
+                        <div className="flex min-w-0 items-center gap-1">
+                            <MapPin className="h-3.5 w-3.5 shrink-0" />
+                            <span className="truncate">{lead.address || lead.city || 'Адрес не указан'}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                            <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+                            <span>{lead.rating ?? '-'}</span>
+                            {lead.reviews_count ? <span>({lead.reviews_count})</span> : null}
+                        </div>
                     </div>
                 </CardHeader>
                 <CardContent className="pt-0" />
@@ -3888,6 +3948,8 @@ export const ProspectingManagement: React.FC = () => {
         const selectedDraftText = selectedDraft ? (draftEdits[selectedDraft.id] || '') : '';
         const selectedDraftPending = selectedDraft ? draftBusy[selectedDraft.id] : '';
         const selectedDraftHasIssue = Boolean(selectedItem?.warning);
+        const approvedDraftCount = drafts.filter((draft) => String(draft.status || '').trim().toLowerCase() === 'approved').length;
+        const waitingDraftCount = drafts.length - approvedDraftCount;
         const selectedDraftMissingContacts = filteredDrafts.filter((draft) => {
             const lead = savedLeadById.get(draft.lead_id);
             return Boolean(selectedChannelWarning(lead, getEffectiveDraftChannel(draft)));
@@ -3953,13 +4015,13 @@ export const ProspectingManagement: React.FC = () => {
                         disabled: Boolean(selectedDraftPending),
                     }
                     : {
-                        label: 'Утвердить черновик',
+                        label: 'Утвердить письмо',
                         onClick: () => approveDraft(selectedDraft.id),
                         disabled: Boolean(selectedDraftPending) || !selectedDraftText.trim(),
                     }}
                 secondaryActions={[
                     {
-                        label: 'Сохранить черновик',
+                        label: 'Сохранить текст',
                         onClick: () => saveDraftEdit(selectedDraft.id),
                         disabled: Boolean(selectedDraftPending) || !selectedDraftText.trim(),
                     },
@@ -4014,6 +4076,30 @@ export const ProspectingManagement: React.FC = () => {
 
         return (
             <div className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-3">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                        <div className="text-sm font-semibold text-slate-950">Письмо 1</div>
+                        <div className="mt-1 text-xs leading-relaxed text-slate-500">
+                            Первое короткое сообщение: кто мы, почему пишем и какой следующий шаг предлагаем.
+                        </div>
+                        <div className="mt-3 text-xs font-medium text-slate-700">Ждут проверки: {waitingDraftCount}</div>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                        <div className="text-sm font-semibold text-slate-950">КП / предложение</div>
+                        <div className="mt-1 text-xs leading-relaxed text-slate-500">
+                            Конкретное предложение после интереса: аудит, оффер, пакет или персональный следующий шаг.
+                        </div>
+                        <div className="mt-3 text-xs font-medium text-slate-700">Готово в очередь: {approvedDraftCount}</div>
+                    </div>
+                    <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-4">
+                        <div className="text-sm font-semibold text-slate-950">Follow-up</div>
+                        <div className="mt-1 text-xs leading-relaxed text-slate-500">
+                            Ответ, уточнение или повторное касание живут отдельно от первого письма и очереди.
+                        </div>
+                        <div className="mt-3 text-xs font-medium text-slate-500">Смотрите во вкладке «Ответы»</div>
+                    </div>
+                </div>
+
                 <div className="flex flex-wrap items-center gap-3 rounded-xl border p-4">
                     <div className="text-sm font-medium">Канал</div>
                     <select className="border rounded-md px-3 py-2 bg-background text-sm" value={draftChannelFilter} onChange={(e) => setDraftChannelFilter(e.target.value)}>
@@ -4045,7 +4131,7 @@ export const ProspectingManagement: React.FC = () => {
 
                 {selectedDraftMissingContacts > 0 ? (
                     <ErrorSummary
-                        title="Есть черновики с неверным каналом"
+                        title="Есть письма с неверным каналом"
                         description={`У ${selectedDraftMissingContacts} лидов выбран канал, для которого нет контакта. Сначала проверьте канал или откройте карточку лида.`}
                     />
                 ) : null}
@@ -4060,7 +4146,7 @@ export const ProspectingManagement: React.FC = () => {
                             {loadingDrafts ? (
                                 <div className="flex justify-center py-10 text-sm text-muted-foreground">
                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Загружаем черновики...
+                                    Загружаем письма...
                                 </div>
                             ) : filteredDrafts.length === 0 ? (
                                 <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
@@ -4107,7 +4193,7 @@ export const ProspectingManagement: React.FC = () => {
                     </LeadList>
                 </div>
 
-                <StickyBulkActionBar count={selectedDraftIds.length} label="Можно массово утвердить, отклонить или удалить выбранные черновики.">
+                <StickyBulkActionBar count={selectedDraftIds.length} label="Можно массово утвердить, отклонить или удалить выбранные письма.">
                     <Button size="sm" onClick={approveSelectedDrafts} disabled={selectedDraftIds.length === 0 || draftBusy.bulkApprove === 'approve'}>
                         {draftBusy.bulkApprove === 'approve' && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
                         Утвердить
@@ -4254,7 +4340,7 @@ export const ProspectingManagement: React.FC = () => {
 
                 <StickyBulkActionBar count={selectedQueueItemIds.length} label="Выбранные лиды можно быстро отметить, удалить из очереди или вернуть на ручную проверку.">
                     <Button size="sm" onClick={() => bulkMarkDelivery('sent')} disabled={selectedQueueItemIds.length === 0 || sendQueueBusy.bulkDelivery === 'sent'}>Отметить как отправленные</Button>
-                    <Button size="sm" variant="outline" onClick={() => bulkMarkDelivery('delivered')} disabled={selectedQueueItemIds.length === 0 || sendQueueBusy.bulkDelivery === 'delivered'}>Отметить как доставленные</Button>
+                    <Button size="sm" variant="outline" onClick={() => bulkMarkDelivery('delivered')} disabled={selectedQueueItemIds.length === 0 || sendQueueBusy.bulkDelivery === 'delivered'}>Доставлено / принято</Button>
                     <Button size="sm" variant="outline" onClick={() => bulkMarkDelivery('failed')} disabled={selectedQueueItemIds.length === 0 || sendQueueBusy.bulkDelivery === 'failed'}>Нужна проверка</Button>
                     <Button size="sm" variant="destructive" onClick={bulkDeleteQueueItems} disabled={selectedQueueItemIds.length === 0 || sendQueueBusy.bulkDeleteQueue === 'delete'}>Удалить из очереди</Button>
                 </StickyBulkActionBar>
@@ -4285,7 +4371,7 @@ export const ProspectingManagement: React.FC = () => {
                             channelSecondaryText={selectedRecipient || 'Откройте карточку лида или смените канал'}
                             channelTone={selectedRecipient ? 'success' : 'warning'}
                             queueStatusLabel={selectedItem.latest_human_outcome || selectedItem.latest_outcome || 'Без ответа'}
-                            queuePrimaryText={selectedItem.delivery_status ? `Статус доставки: ${formatQueueStatusLabel(selectedItem.delivery_status)}` : 'Статус ещё не задан'}
+                            queuePrimaryText={selectedItem.delivery_status ? `Статус отправки: ${formatQueueStatusLabel(selectedItem.delivery_status)}` : 'Статус ещё не задан'}
                             queueSecondaryText={selectedItem.updated_at ? `Последнее изменение ${formatDateTime(selectedItem.updated_at)}` : 'Без даты'}
                             queueTone={selectedItem.latest_human_outcome || selectedItem.latest_outcome ? 'info' : 'default'}
                             topErrorSummary={selectedItem.error_text ? (
@@ -4345,7 +4431,7 @@ export const ProspectingManagement: React.FC = () => {
                             reviewActions={
                                 <>
                                     <Button size="sm" variant={selectedItem.delivery_status === 'delivered' ? 'default' : 'outline'} onClick={() => markDelivery(selectedItem.id, 'delivered')} disabled={Boolean(sendQueueBusy[selectedItem.id])}>
-                                        Отметить как доставлено
+                                        Доставлено / принято
                                     </Button>
                                     <Button size="sm" variant="outline" onClick={() => markDelivery(selectedItem.id, 'failed')} disabled={Boolean(sendQueueBusy[selectedItem.id])}>
                                         Ошибка отправки
@@ -4356,10 +4442,10 @@ export const ProspectingManagement: React.FC = () => {
                             onNoteChange={(value) => setReplyDrafts((prev) => ({ ...prev, [selectedItem.id]: value }))}
                             noteHint="Если ответ уже есть, вставьте его сюда и выберите безопасную классификацию."
                             historyRows={[
-                                { label: 'Batch', value: selectedQueueBatch?.batch_date || selectedItem.batch_id },
-                                { label: 'Provider', value: formatQueueProvider(selectedItem.provider_name) },
-                                { label: 'Recipient', value: selectedItem.recipient_value || '—' },
-                                { label: 'Последний outcome', value: selectedItem.latest_human_outcome || selectedItem.latest_outcome || '—' },
+                                { label: 'Очередь', value: selectedQueueBatch?.batch_date || 'Ручная отправка' },
+                                { label: 'Канал отправки', value: formatQueueProvider(selectedItem.provider_name) },
+                                { label: 'Получатель', value: selectedItem.recipient_value || '—' },
+                                { label: 'Последний результат', value: selectedItem.latest_human_outcome || selectedItem.latest_outcome || '—' },
                             ]}
                         />
                     </OutreachDetailModal>
@@ -4381,10 +4467,10 @@ export const ProspectingManagement: React.FC = () => {
                             <TableHead>Сегмент</TableHead>
                             <TableHead className="text-right">Всего</TableHead>
                             <TableHead className="text-right">В работе</TableHead>
-                            <TableHead className="text-right">1 касание</TableHead>
-                            <TableHead className="text-right">2 касание</TableHead>
+                            <TableHead className="text-right">Письмо 1</TableHead>
+                            <TableHead className="text-right">Предложение</TableHead>
                             <TableHead className="text-right">Ответы</TableHead>
-                            <TableHead className="text-right">Ответ / 1 касание</TableHead>
+                            <TableHead className="text-right">Ответ / письмо 1</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -4429,6 +4515,18 @@ export const ProspectingManagement: React.FC = () => {
         const followUpReadyCount = sentDetailRows.filter((item) => item.state === 'ready').length;
         const sentHistoryCount = sentDetailRows.filter((item) => item.state === 'history').length;
         const canPrepareAlternativeResend = Boolean(selectedLead && bestAlternativeOutreachChannel(selectedLead, selectedQueue?.channel || selectedLead.selected_channel));
+        const selectedFollowUpMailto = buildLeadMailtoHref(selectedLead, selectedFollowUp, 'Follow-up');
+        const openOrCopyFollowUp = () => {
+            if (!selectedFollowUp.trim()) {
+                return;
+            }
+            if (selectedFollowUpMailto) {
+                window.location.href = selectedFollowUpMailto;
+                return;
+            }
+            void navigator.clipboard?.writeText(selectedFollowUp);
+            toast.success('Follow-up скопирован для ручной отправки');
+        };
 
         return (
             <div className="space-y-4">
@@ -4548,7 +4646,7 @@ export const ProspectingManagement: React.FC = () => {
                             hasMessenger={selectedLead ? extractHasMessengers(selectedLead) : false}
                             channelStatusLabel={formatLeadChannel(selectedQueue?.channel || selectedLead?.selected_channel)}
                             channelPrimaryText={selectedQueue?.recipient_value || 'Контакт нужно уточнить в карточке лида'}
-                            channelSecondaryText={selectedQueue?.delivery_status ? `Статус: ${formatQueueStatusLabel(selectedQueue.delivery_status)}` : 'Без статуса отправки'}
+                            channelSecondaryText={selectedQueue?.delivery_status ? `Статус отправки: ${formatQueueStatusLabel(selectedQueue.delivery_status)}` : 'Без статуса отправки'}
                             channelTone={selectedSentDetail.state === 'problem' ? 'warning' : 'success'}
                             responseStatusLabel={selectedQueue?.latest_human_outcome || selectedQueue?.latest_outcome || 'Без ответа'}
                             responsePrimaryText={selectedQueue?.latest_raw_reply ? 'Ответ уже зафиксирован' : 'Ответ ещё не зафиксирован'}
@@ -4571,9 +4669,9 @@ export const ProspectingManagement: React.FC = () => {
                                     disabled: !selectedLead.id || !canPrepareAlternativeResend,
                                 }
                                 : {
-                                    label: 'Сохранить follow-up',
-                                    onClick: () => toast.success('Follow-up сохранён локально в интерфейсе'),
-                                    disabled: !selectedLead.id,
+                                    label: selectedFollowUpMailto ? 'Открыть follow-up' : 'Скопировать follow-up',
+                                    onClick: openOrCopyFollowUp,
+                                    disabled: !selectedLead.id || !selectedFollowUp.trim(),
                                 }) : undefined}
                             secondaryActions={selectedLead ? [
                                 {
@@ -4619,8 +4717,8 @@ export const ProspectingManagement: React.FC = () => {
                             historyRows={selectedQueue ? [
                                 { label: 'Отправлено', value: selectedQueue.sent_at ? formatDateTime(selectedQueue.sent_at) : '—' },
                                 { label: 'Последнее изменение', value: selectedQueue.updated_at ? formatDateTime(selectedQueue.updated_at) : '—' },
-                                { label: 'Delivery', value: formatQueueStatusLabel(selectedQueue.delivery_status) },
-                                { label: 'Outcome', value: selectedQueue.latest_human_outcome || selectedQueue.latest_outcome || '—' },
+                                { label: 'Статус отправки', value: formatQueueStatusLabel(selectedQueue.delivery_status) },
+                                { label: 'Результат', value: selectedQueue.latest_human_outcome || selectedQueue.latest_outcome || '—' },
                             ] : []}
                             rawReply={selectedQueue?.latest_raw_reply || undefined}
                         />
@@ -4630,7 +4728,9 @@ export const ProspectingManagement: React.FC = () => {
         );
     };
 
-    const visibleMainTab = activeWorkspace === 'raw'
+    const visibleMainTab = activeWorkspace === 'overview'
+        ? 'overview'
+        : activeWorkspace === 'raw'
         ? 'raw'
         : activeWorkspace === 'pipeline'
             ? 'inbox'
@@ -4657,14 +4757,14 @@ export const ProspectingManagement: React.FC = () => {
                             Дубликаты в поиске: {duplicateSearchResultsCount}
                         </span>
                         <span className="rounded-full border border-current/15 bg-white/60 px-3 py-1">
-                            Уже в pipeline: {sourceFilteredLeads.length}
+                            Уже в работе: {sourceFilteredLeads.length}
                         </span>
                     </div>
                 </div>
             </div>
 
             <div className="space-y-4">
-                <div className="text-sm font-medium">Поиск через Apify</div>
+                <div className="text-sm font-medium">Поиск на картах</div>
                 <form onSubmit={handleSearch} className="flex flex-wrap gap-4 items-end">
                     <div className="grid w-56 items-center gap-1.5">
                         <label htmlFor="search-source">Источник</label>
@@ -4689,10 +4789,10 @@ export const ProspectingManagement: React.FC = () => {
                             }}
                             className="h-10 rounded-md border border-input bg-background px-3 text-sm"
                         >
-                            <option value="apify_yandex">Apify Yandex</option>
-                            <option value="apify_2gis">Apify 2GIS</option>
-                            <option value="apify_google">Apify Google</option>
-                            <option value="apify_apple">Apify Apple</option>
+                            <option value="apify_yandex">Яндекс Карты</option>
+                            <option value="apify_2gis">2ГИС</option>
+                            <option value="apify_google">Google Maps</option>
+                            <option value="apify_apple">Apple Maps</option>
                         </select>
                     </div>
                     <div className="grid w-full max-w-sm items-center gap-1.5">
@@ -4797,7 +4897,7 @@ export const ProspectingManagement: React.FC = () => {
                 </div>
                 <textarea
                     className="min-h-[180px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    placeholder='Вставьте JSON из Apify export: [{"title":"...","address":"..."}]'
+                    placeholder='Вставьте JSON из экспорта: [{"title":"...","address":"..."}]'
                     value={importJson}
                     onChange={(e) => setImportJson(e.target.value)}
                 />
@@ -4810,7 +4910,7 @@ export const ProspectingManagement: React.FC = () => {
 
             <div className="rounded-lg border border-border bg-muted/30 p-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
-                    <div className="text-sm font-medium">Необработанные лиды ({unprocessedLeads.length})</div>
+                    <div className="text-sm font-medium">Кандидаты ({unprocessedLeads.length})</div>
                     {unprocessedLeads.length > 0 ? (
                         <Button size="sm" variant="outline" onClick={() => createLeadGroupFromIds(unprocessedLeads.map((lead) => lead.id || '').filter(Boolean))}>
                             Собрать всех в группу
@@ -4937,7 +5037,7 @@ export const ProspectingManagement: React.FC = () => {
                 <div>
                     <h2 className="text-3xl font-bold tracking-tight">Поиск клиентов</h2>
                     <p className="text-muted-foreground">
-                        Единый рабочий экран: сначала добавляем лиды, затем ведём их по pipeline до контакта и follow-up.
+                        Единый рабочий экран: сначала добавляем лиды, затем ведём их по воронке до контакта и follow-up.
                     </p>
                 </div>
             </div>
@@ -5090,7 +5190,7 @@ export const ProspectingManagement: React.FC = () => {
                     <SheetHeader>
                         <SheetTitle>Добавить лиды</SheetTitle>
                         <SheetDescription>
-                            Сырые результаты поиска, ручной ввод и импорт. Здесь пополняем pipeline, не смешивая intake с рабочей воронкой.
+                            Результаты поиска, ручной ввод и импорт. Здесь пополняем список кандидатов, не смешивая поиск с рабочей воронкой.
                         </SheetDescription>
                     </SheetHeader>
                     <div className="mt-6">{renderIntakeContent()}</div>
@@ -5102,7 +5202,7 @@ export const ProspectingManagement: React.FC = () => {
                 <SheetHeader>
                     <SheetTitle>Все фильтры</SheetTitle>
                     <SheetDescription>
-                        Расширенные фильтры для pipeline. Основной экран остаётся лёгким, а детальный отбор — здесь.
+                        Расширенные фильтры для рабочей воронки. Основной экран остаётся лёгким, а детальный отбор — здесь.
                     </SheetDescription>
                 </SheetHeader>
                 <div className="mt-6 space-y-4">
@@ -5112,10 +5212,10 @@ export const ProspectingManagement: React.FC = () => {
                                 <option value={PIPELINE_IN_PROGRESS}>В работе</option>
                                 <option value={PIPELINE_POSTPONED}>Отложенные</option>
                                 <option value={PIPELINE_NOT_RELEVANT}>Неактуален</option>
-                                <option value={PIPELINE_CONTACTED}>Отправлено</option>
-                                <option value={PIPELINE_SECOND_MESSAGE_SENT}>Второе сообщение отправлено</option>
-                                <option value={PIPELINE_REPLIED}>Ответил</option>
-                                <option value={PIPELINE_CONVERTED}>Конвертирован</option>
+                                <option value={PIPELINE_CONTACTED}>Письмо 1 отправлено</option>
+                                <option value={PIPELINE_SECOND_MESSAGE_SENT}>Предложение отправлено</option>
+                                <option value={PIPELINE_REPLIED}>Есть ответ</option>
+                                <option value={PIPELINE_CONVERTED}>Клиент</option>
                             </select>
                             <Input placeholder="Город" value={pendingFilters.city} onChange={(e) => setPendingFilters(prev => ({ ...prev, city: e.target.value }))} />
                             <Input placeholder="Мин. рейтинг" type="number" min="0" max="5" step="0.1" value={pendingFilters.minRating} onChange={(e) => setPendingFilters(prev => ({ ...prev, minRating: e.target.value }))} />
@@ -5173,29 +5273,128 @@ export const ProspectingManagement: React.FC = () => {
                 activeWorkspace={activeWorkspace}
                 onWorkspaceChange={(value) => setActiveWorkspace(toWorkspaceTab(value))}
                 workspaces={[
-                    { value: 'raw', label: 'Необработанные', count: unprocessedLeads.length + unresolvedSearchResults.length },
-                    { value: 'pipeline', label: 'Воронка', count: sourceFilteredLeads.length },
-                    { value: 'groups', label: 'Группы лидов', count: leadGroups.length },
-                    { value: 'outreach', label: 'Аутрич', count: drafts.length + visibleQueueItems.length + sentDetailRows.length },
-                    { value: 'analytics', label: 'Аналитика' },
+                    { value: 'overview', label: 'Обзор' },
+                    { value: 'raw', label: 'Кандидаты', count: unprocessedLeads.length + unresolvedSearchResults.length },
+                    { value: 'pipeline', label: 'Лиды', count: sourceFilteredLeads.length },
+                    { value: 'groups', label: 'Группы', count: leadGroups.length },
+                    { value: 'outreach', label: 'Письма', count: drafts.length + visibleQueueItems.length + sentDetailRows.length },
+                    { value: 'analytics', label: 'Отчёт' },
                 ]}
                 outreachTabs={[
-                    { value: 'drafts', label: 'Черновики', count: drafts.length },
-                    { value: 'queue', label: 'В очереди', count: visibleQueueItems.length },
-                    { value: 'sent', label: 'Отправлено', count: sentDetailRows.length },
+                    { value: 'drafts', label: 'Письма', count: drafts.length },
+                    { value: 'queue', label: 'Очередь', count: visibleQueueItems.length },
+                    { value: 'sent', label: 'Ответы', count: sentDetailRows.length },
                 ]}
                 activeOutreachTab={outreachTab}
                 onOutreachTabChange={(value) => setOutreachTab(toOutreachTab(value))}
             />
 
             <Tabs value={visibleMainTab} className="w-full">
+                <TabsContent value="overview" className="space-y-6">
+                    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+                        <Card className="border-border/70 shadow-sm">
+                            <CardHeader>
+                                <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                                    <div>
+                                        <CardTitle>Кампания поиска клиентов</CardTitle>
+                                        <CardDescription>
+                                            Один объект управления: кандидаты, рабочие лиды, письма, очередь отправки и отчётность разнесены по вкладкам.
+                                        </CardDescription>
+                                    </div>
+                                    <Badge variant="outline">Ручной контроль</Badge>
+                                </div>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                                    {[
+                                        {
+                                            key: 'raw',
+                                            title: '1. Кандидаты',
+                                            count: unprocessedLeads.length + unresolvedSearchResults.length,
+                                            text: 'Найти, импортировать и сохранить новых кандидатов.',
+                                        },
+                                        {
+                                            key: 'pipeline',
+                                            title: '2. Лиды',
+                                            count: sourceFilteredLeads.length,
+                                            text: 'Отобрать, отложить или убрать неактуальных.',
+                                        },
+                                        {
+                                            key: 'groups',
+                                            title: '3. Группы',
+                                            count: leadGroups.length,
+                                            text: 'Собрать аудитории для ручной обработки.',
+                                        },
+                                        {
+                                            key: 'outreach',
+                                            title: '4. Письма',
+                                            count: drafts.length + visibleQueueItems.length,
+                                            text: 'Проверить тексты и подготовить очередь.',
+                                        },
+                                        {
+                                            key: 'analytics',
+                                            title: '5. Отчёт',
+                                            count: sentDetailRows.length,
+                                            text: 'Посмотреть отправки, ответы и конверсию.',
+                                        },
+                                    ].map((step) => (
+                                        <button
+                                            key={step.key}
+                                            type="button"
+                                            onClick={() => setActiveWorkspace(toWorkspaceTab(step.key))}
+                                            className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-left transition hover:border-primary/30 hover:bg-white hover:shadow-sm"
+                                        >
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="text-sm font-semibold text-slate-950">{step.title}</div>
+                                                <Badge variant="secondary">{step.count}</Badge>
+                                            </div>
+                                            <div className="mt-2 text-xs leading-relaxed text-slate-500">{step.text}</div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="border-border/70 shadow-sm">
+                            <CardHeader>
+                                <CardTitle className="text-lg">Следующий шаг</CardTitle>
+                                <CardDescription>Показываем одну ближайшую задачу, а не весь операторский комбайн.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                {unprocessedLeads.length + unresolvedSearchResults.length > 0 ? (
+                                    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                                        Разберите новых кандидатов и переведите подходящих в лиды.
+                                    </div>
+                                ) : drafts.length > 0 ? (
+                                    <div className="rounded-2xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
+                                        Есть письма. Проверьте тексты и утвердите отправку.
+                                    </div>
+                                ) : visibleQueueItems.length > 0 ? (
+                                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+                                        Есть очередь отправки. Отправьте вручную и отметьте результат.
+                                    </div>
+                                ) : (
+                                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                                        Кампания без срочных задач. Можно добавить кандидатов или посмотреть отчёт.
+                                    </div>
+                                )}
+                                <div className="flex flex-wrap gap-2">
+                                    <Button size="sm" onClick={() => setActiveWorkspace('raw')}>Добавить кандидатов</Button>
+                                    <Button size="sm" variant="outline" onClick={() => setActiveWorkspace('pipeline')}>Открыть лиды</Button>
+                                    <Button size="sm" variant="outline" onClick={() => setActiveWorkspace('analytics')}>Отчёт</Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                </TabsContent>
+
                 <TabsContent value="raw" className="space-y-6">
                     <ProspectingIntakePanel
-                        title="Необработанные"
-                        description="Все новые лиды сначала попадают сюда. Здесь разбираем ручной ввод, импорт и результаты поиска перед переводом в работу или в неактуальные."
+                        title="Кандидаты"
+                        description="Все новые компании сначала попадают сюда. На этом шаге их сохраняем, переводим в работу или убираем как неактуальные."
                         badges={[
                             { label: 'Найдено в последнем поиске', value: searchJob?.result_count || 0 },
-                            { label: 'Сохранено в необработанные', value: unprocessedLeads.length },
+                            { label: 'Новые кандидаты', value: unprocessedLeads.length },
                             { label: 'Ещё не сохранено из выдачи', value: unresolvedSearchResults.length },
                             { label: 'Дубликаты в последнем поиске', value: duplicateSearchResultsCount },
                         ]}
@@ -5329,7 +5528,7 @@ export const ProspectingManagement: React.FC = () => {
                 <TabsContent value="analytics" className="space-y-6">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Эффективность воронки</CardTitle>
+                            <CardTitle>Отчёт по этапам кампании</CardTitle>
                             <CardDescription>
                                 Отдельный аналитический экран: объёмы, конверсия, потери между этапами и тренд за 7/30 дней.
                             </CardDescription>
@@ -5339,14 +5538,20 @@ export const ProspectingManagement: React.FC = () => {
                                 items={[
                                     { key: 'total', label: 'Всего лидов', value: pipelineEfficiencySummary.foundCount, helper: 'Все сохранённые лиды в поиске клиентов' },
                                     { key: 'pipeline', label: 'В работе', value: pipelineEfficiencySummary.pipelineCount, helper: `От всех: ${pipelineEfficiencySummary.saveRate}` },
-                                    { key: 'first-touch', label: 'Первое касание', value: outreachFunnelSummary.firstTouch, helper: `Из работы: ${pipelineEfficiencySummary.readyRate}` },
-                                    { key: 'second-touch', label: 'Второе касание', value: outreachFunnelSummary.secondTouch, helper: `Из первого: ${pipelineEfficiencySummary.secondTouchRate}` },
+                                    { key: 'first-touch', label: 'Письмо 1', value: outreachFunnelSummary.firstTouch, helper: `Из работы: ${pipelineEfficiencySummary.readyRate}` },
+                                    { key: 'second-touch', label: 'Предложение', value: outreachFunnelSummary.secondTouch, helper: `После письма 1: ${pipelineEfficiencySummary.secondTouchRate}` },
                                     { key: 'replied', label: 'Ответы', value: outreachFunnelSummary.replies, helper: `От отправленных: ${pipelineEfficiencySummary.replyRate}` },
-                                    { key: 'converted', label: 'Конвертировано', value: convertedLeadCount, helper: `Из ответа: ${pipelineEfficiencySummary.qualifiedRate}` },
+                                    { key: 'converted', label: 'Клиенты', value: convertedLeadCount, helper: `Из ответа: ${pipelineEfficiencySummary.qualifiedRate}` },
                                     { key: 'inactive', label: 'Неактуально / отложено', value: notRelevantLeadCount + postponedLeadCount, helper: 'Сняты с процесса или отложены' },
                                 ]}
                             />
 
+                            <div>
+                                <h3 className="text-base font-semibold text-foreground">Воронка по этапам</h3>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    Короткий маршрут кампании: от кандидатов до ответа и клиента.
+                                </p>
+                            </div>
                             <AnalyticsMetricGrid
                                 items={pipelineStageMetrics.map((stage, index) => {
                                     const previousCount = index > 0 ? pipelineStageMetrics[index - 1]?.count || 0 : 0;
@@ -5367,22 +5572,22 @@ export const ProspectingManagement: React.FC = () => {
                                 items={pipelineWindowMetrics.map((window) => ({
                                     key: window.key,
                                     label: window.label,
-                                    badgeLabel: 'Pipeline',
+                                    badgeLabel: 'Лиды',
                                     badgeValue: window.pipelineCount,
                                     stats: [
-                                        { key: `${window.key}-progress`, label: 'В работе', value: window.activeCount, helper: `Conv: ${formatConversion(window.activeCount, window.pipelineCount)}` },
-                                        { key: `${window.key}-contacted`, label: 'Первое касание', value: window.firstTouchCount, helper: `Conv: ${formatConversion(window.firstTouchCount, window.activeCount)}` },
-                                        { key: `${window.key}-second-touch`, label: 'Второе касание', value: window.secondTouchCount, helper: `Conv: ${formatConversion(window.secondTouchCount, window.firstTouchCount)}` },
-                                        { key: `${window.key}-inactive`, label: 'Неактуально / отложено', value: window.inactiveCount, helper: `Conv: ${formatConversion(window.inactiveCount, window.pipelineCount)}` },
-                                        { key: `${window.key}-reply`, label: 'Ответы', value: window.reactionCount, helper: `Conv: ${formatConversion(window.reactionCount, window.firstTouchCount)}` },
-                                        { key: `${window.key}-positive`, label: 'Позитивный ответ', value: window.positiveCount, helper: `Conv: ${formatConversion(window.positiveCount, window.reactionCount)}` },
+                                        { key: `${window.key}-progress`, label: 'В работе', value: window.activeCount, helper: `Доля: ${formatConversion(window.activeCount, window.pipelineCount)}` },
+                                        { key: `${window.key}-contacted`, label: 'Письмо 1', value: window.firstTouchCount, helper: `Доля: ${formatConversion(window.firstTouchCount, window.activeCount)}` },
+                                        { key: `${window.key}-second-touch`, label: 'Предложение', value: window.secondTouchCount, helper: `После письма 1: ${formatConversion(window.secondTouchCount, window.firstTouchCount)}` },
+                                        { key: `${window.key}-inactive`, label: 'Неактуально / отложено', value: window.inactiveCount, helper: `Доля: ${formatConversion(window.inactiveCount, window.pipelineCount)}` },
+                                        { key: `${window.key}-reply`, label: 'Ответы', value: window.reactionCount, helper: `После письма 1: ${formatConversion(window.reactionCount, window.firstTouchCount)}` },
+                                        { key: `${window.key}-positive`, label: 'Интерес', value: window.positiveCount, helper: `Из ответов: ${formatConversion(window.positiveCount, window.reactionCount)}` },
                                     ],
                                 }))}
                             />
 
                             <AnalyticsSection
-                                title="Операторский блок outreach"
-                                description="Отдельно по черновикам, отправке и ответам, чтобы видеть узкие места уже после отбора."
+                                title="Операторский блок отправки"
+                                description="Отдельно по письмам, отправке и ответам, чтобы видеть узкие места уже после отбора."
                             >
                                 <AnalyticsMetricGrid items={outreachOperatorMetrics} columnsClassName="md:grid-cols-3" />
                             </AnalyticsSection>
@@ -5404,6 +5609,16 @@ export const ProspectingManagement: React.FC = () => {
                                 'Топ категорий/типов бизнеса по количеству первых касаний.',
                                 businessTypeConversionRows
                             )}
+
+                            <details className="rounded-lg border border-dashed border-border bg-muted/20 p-4">
+                                <summary className="cursor-pointer text-sm font-semibold text-foreground">
+                                    Дополнительно: обучение и рекомендации
+                                </summary>
+                                <div className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                                    Этот блок оставлен вторичным: сначала оператор смотрит этапы кампании, письма, очередь и ответы.
+                                    Рекомендации по каналам, сегментам и текстам можно развивать здесь, не перегружая основной маршрут.
+                                </div>
+                            </details>
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -5428,7 +5643,7 @@ export const ProspectingManagement: React.FC = () => {
                                 </div>
                             ) : leadGroups.length === 0 ? (
                                 <div className="rounded-lg border border-dashed border-border bg-background p-6 text-sm text-muted-foreground">
-                                    Групп пока нет. Выделите лиды в этапе «В работе» или «Необработанные» и соберите первую группу.
+                                    Групп пока нет. Выделите лиды в этапе «В работе» или «Кандидаты» и соберите первую группу.
                                 </div>
                             ) : (
                                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -5450,7 +5665,7 @@ export const ProspectingManagement: React.FC = () => {
                                                     <div>Без аудита: <span className="font-medium text-foreground">{group.without_audit_count || 0}</span></div>
                                                     <div>Без канала: <span className="font-medium text-foreground">{group.without_channel_count || 0}</span></div>
                                                     <div>Без контакта: <span className="font-medium text-foreground">{group.without_contact_count || 0}</span></div>
-                                                    <div>Черновиков: <span className="font-medium text-foreground">{group.drafts_count || 0}</span></div>
+                                                    <div>Писем: <span className="font-medium text-foreground">{group.drafts_count || 0}</span></div>
                                                 </div>
                                                 <WorkflowActionRow
                                                     primary={{ label: 'Открыть группу', onClick: () => openLeadGroup(group.id) }}

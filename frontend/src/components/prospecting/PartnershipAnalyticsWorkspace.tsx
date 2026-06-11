@@ -141,6 +141,38 @@ const outcomeLabel = (value: string) => {
   return value;
 };
 
+const sourceKindLabel = (value?: string) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized.includes('google_doc')) return 'Документ';
+  if (normalized.includes('yandex')) return 'Яндекс Карты';
+  if (normalized.includes('2gis')) return '2ГИС';
+  if (normalized.includes('manual')) return 'Ручной ввод';
+  if (normalized.includes('network')) return 'Сеть / ручной список';
+  return value || 'Источник не указан';
+};
+
+const sourceProviderLabel = (value?: string) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return 'провайдер не указан';
+  if (normalized.includes('google_doc')) return 'импорт из документа';
+  if (normalized.includes('yandex')) return 'поиск на картах';
+  if (normalized.includes('manual')) return 'ручное добавление';
+  return value || 'провайдер не указан';
+};
+
+const sourceLabel = (kind?: string, provider?: string) =>
+  `${sourceKindLabel(kind)} · ${sourceProviderLabel(provider)}`;
+
+const channelLabel = (value?: string) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'telegram') return 'Telegram';
+  if (normalized === 'whatsapp') return 'WhatsApp';
+  if (normalized === 'email') return 'Email';
+  if (normalized === 'manual') return 'Вручную';
+  if (normalized === 'max') return 'Max';
+  return value || 'Канал не указан';
+};
+
 export const PartnershipAnalyticsWorkspace = ({
   loading,
   health,
@@ -187,30 +219,76 @@ export const PartnershipAnalyticsWorkspace = ({
           </div>
           <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
             <div className="font-semibold text-foreground">Объёмы</div>
-            <div className="mt-1 text-muted-foreground">Партнёры: {health.counts?.leads_total ?? 0} · Черновики: {health.counts?.drafts_total ?? 0}</div>
+            <div className="mt-1 text-muted-foreground">Партнёры: {health.counts?.leads_total ?? 0} · Письма: {health.counts?.drafts_total ?? 0}</div>
             <div className="text-muted-foreground">Очереди: {health.counts?.batches_total ?? 0} · Реакции: {health.counts?.reactions_total ?? 0}</div>
           </div>
         </div>
       )}
     </AnalyticsSection>
 
-    <AnalyticsSection title="Сводка оператора" description="Короткий срез по текущему бизнесу">
-      <AnalyticsSummaryGrid
-        columnsClassName="md:grid-cols-3 xl:grid-cols-6"
+  <AnalyticsSection title="Сводка оператора" description="Короткий срез по текущему бизнесу">
+    <AnalyticsSummaryGrid
+      columnsClassName="md:grid-cols-3 xl:grid-cols-6"
         items={[
           { key: 'pilot-total', label: 'Лиды', value: pilotSummary.total, helper: 'Всего в текущем бизнесе' },
-          { key: 'pilot-parsed', label: 'Парсинг завершён', value: pilotSummary.parsed, helper: 'Уже готовы данные', tone: 'text-sky-700' },
+          { key: 'pilot-parsed', label: 'Данные готовы', value: pilotSummary.parsed, helper: 'Можно переходить к письмам', tone: 'text-sky-700' },
           { key: 'pilot-ready', label: 'Готовы к письму', value: pilotSummary.readyForDraft, helper: 'Можно готовить первое сообщение', tone: 'text-violet-700' },
-          { key: 'pilot-approval', label: 'Ждут утверждения', value: pilotSummary.waitingApproval, helper: 'Есть черновики или очереди на согласовании', tone: 'text-amber-700' },
-          { key: 'pilot-outcome', label: 'Ждут outcome', value: pilotSummary.waitingOutcome, helper: 'Отправлено, но ответ ещё не зафиксирован', tone: 'text-blue-700' },
+          { key: 'pilot-approval', label: 'Ждут утверждения', value: pilotSummary.waitingApproval, helper: 'Есть письма или очереди на согласовании', tone: 'text-amber-700' },
+          { key: 'pilot-outcome', label: 'Ждут результата', value: pilotSummary.waitingOutcome, helper: 'Отправлено, но ответ ещё не зафиксирован', tone: 'text-blue-700' },
           { key: 'pilot-positive', label: 'Интерес', value: `${pilotSummary.acceptance}%`, helper: 'Текущий показатель положительных ответов', tone: 'text-emerald-700' },
         ]}
-      />
-    </AnalyticsSection>
+    />
+  </AnalyticsSection>
 
-    <AnalyticsSection
-      title="Лучшее действие на неделю"
-      description={bestSourceThisWeek ? `Лучший источник: ${bestSourceThisWeek.source_kind || 'unknown'} / ${bestSourceThisWeek.source_provider || 'unknown'}` : 'Лучший источник недели пока не определён'}
+  <AnalyticsSection
+    title="Отчёт по этапам кампании"
+    description="Короткая цепочка, по которой оператор понимает, где сейчас теряются партнёры."
+  >
+    <div className="grid grid-cols-1 gap-2 md:grid-cols-5">
+      {[
+        {
+          key: 'candidates',
+          label: '1. Кандидаты',
+          value: pilotSummary.total,
+          helper: 'Все найденные партнёры',
+        },
+        {
+          key: 'ready',
+          label: '2. Готовы к письму',
+          value: pilotSummary.readyForDraft,
+          helper: 'Есть данные для первого контакта',
+        },
+        {
+          key: 'approval',
+          label: '3. Письма',
+          value: pilotSummary.waitingApproval,
+          helper: 'Ждут проверки или очереди',
+        },
+        {
+          key: 'outcome',
+          label: '4. Отправлено',
+          value: pilotSummary.waitingOutcome,
+          helper: 'Нужно зафиксировать результат',
+        },
+        {
+          key: 'positive',
+          label: '5. Интерес',
+          value: `${pilotSummary.acceptance}%`,
+          helper: 'Доля положительных ответов',
+        },
+      ].map((stage) => (
+        <div key={stage.key} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+          <div className="text-xs font-medium uppercase text-muted-foreground">{stage.label}</div>
+          <div className="mt-1 text-2xl font-semibold text-foreground">{stage.value}</div>
+          <div className="mt-1 text-xs text-muted-foreground">{stage.helper}</div>
+        </div>
+      ))}
+    </div>
+  </AnalyticsSection>
+
+  <AnalyticsSection
+    title="Лучшее действие на неделю"
+      description={bestSourceThisWeek ? `Лучший источник: ${sourceLabel(bestSourceThisWeek.source_kind, bestSourceThisWeek.source_provider)}` : 'Лучший источник недели пока не определён'}
     >
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" onClick={onExportWeeklyReview} disabled={loading}>Еженедельный отчёт</Button>
@@ -221,8 +299,6 @@ export const PartnershipAnalyticsWorkspace = ({
       </div>
       <div className="text-xs text-muted-foreground">Это короткий операторский путь: выбрать лучший источник, подготовить цепочку действий и собрать очередь отправки.</div>
     </AnalyticsSection>
-
-    {ralphLoopPanel}
 
     <div className="space-y-3 rounded-3xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">
       <div className="flex items-center justify-between gap-2">
@@ -264,16 +340,16 @@ export const PartnershipAnalyticsWorkspace = ({
             <div key={`${item.source_kind || 'source'}-${item.source_provider || 'provider'}-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <div className="font-medium text-foreground">{item.source_kind || 'unknown'} · {item.source_provider || 'unknown'}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">Партнёров: {item.leads_total ?? 0} · Аудит: {item.audited_count ?? 0} · Матчинг: {item.matched_count ?? 0} · Черновики: {item.draft_count ?? 0} · Отправлено: {item.sent_count ?? 0}</div>
+                  <div className="font-medium text-foreground">{sourceLabel(item.source_kind, item.source_provider)}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">Партнёров: {item.leads_total ?? 0} · Аудит: {item.audited_count ?? 0} · Оффер подобран: {item.matched_count ?? 0} · Письма: {item.draft_count ?? 0} · Отправлено: {item.sent_count ?? 0}</div>
                 </div>
                 <div className="text-sm text-muted-foreground">партнёр → интерес: <span className="font-medium text-foreground">{item.lead_to_positive_pct ?? 0}%</span></div>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs md:grid-cols-5">
                 {[
                   ['Аудит', item.audit_rate_pct],
-                  ['Матчинг', item.match_rate_pct],
-                  ['Черновики', item.draft_rate_pct],
+                  ['Оффер', item.match_rate_pct],
+                  ['Письма', item.draft_rate_pct],
                   ['Отправка', item.sent_rate_pct],
                   ['Интерес', item.positive_rate_pct],
                 ].map(([label, value]) => (
@@ -335,7 +411,7 @@ export const PartnershipAnalyticsWorkspace = ({
               <div className="space-y-1 text-sm">
                 {outcomes.by_channel.map((channel, index) => (
                   <div key={`${channel.channel || 'channel'}-${index}`} className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium">{channel.channel || 'unknown'}</span>
+                    <span className="font-medium">{channelLabel(channel.channel)}</span>
                     <span className="text-muted-foreground">всего: {channel.total ?? 0}</span>
                     <span className="text-emerald-700">{outcomeLabel('positive')}: {channel.positive_count ?? 0}</span>
                     <span className="text-blue-700">{outcomeLabel('question')}: {channel.question_count ?? 0}</span>
@@ -349,5 +425,14 @@ export const PartnershipAnalyticsWorkspace = ({
         </>
       )}
     </div>
+
+    <details className="rounded-3xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">
+      <summary className="cursor-pointer text-sm font-semibold text-slate-950">
+        Дополнительно: обучение и рекомендации
+      </summary>
+      <div className="mt-4">
+        {ralphLoopPanel}
+      </div>
+    </details>
   </>
 );

@@ -125,6 +125,36 @@ function InfoCard({
   );
 }
 
+function channelLabel(value?: string) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'telegram') return 'Telegram';
+  if (normalized === 'whatsapp') return 'WhatsApp';
+  if (normalized === 'email') return 'Email';
+  if (normalized === 'manual') return 'Вручную';
+  if (normalized === 'max') return 'Max';
+  return value || 'Канал не указан';
+}
+
+function sourceLabel(kind?: string, provider?: string) {
+  const rawKind = String(kind || '').trim();
+  const rawProvider = String(provider || '').trim();
+  const normalizedKind = rawKind.toLowerCase();
+  const normalizedProvider = rawProvider.toLowerCase();
+  const kindLabel = normalizedKind.includes('yandex')
+    ? 'Яндекс Карты'
+    : normalizedKind.includes('2gis')
+      ? '2ГИС'
+      : normalizedKind.includes('google_doc')
+        ? 'Документ'
+        : rawKind || 'Источник не указан';
+  const providerLabel = normalizedProvider.includes('manual')
+    ? 'ручной ввод'
+    : normalizedProvider.includes('google_doc')
+      ? 'импорт из документа'
+      : rawProvider || 'провайдер не указан';
+  return `${kindLabel} · ${providerLabel}`;
+}
+
 export function RalphLoopAnalyticsPanel({
   loading,
   ralphLoop,
@@ -141,7 +171,7 @@ export function RalphLoopAnalyticsPanel({
 
   return (
     <AnalyticsSection
-      title="Ralph loop summary (7 дней)"
+      title="Итоги обучения и отправок за 7 дней"
       actions={
         <Button variant="outline" onClick={onRefresh} disabled={loading}>
           Обновить
@@ -149,20 +179,20 @@ export function RalphLoopAnalyticsPanel({
       }
     >
       {!summary ? (
-        <p className="text-sm text-muted-foreground">Недельная summary пока недоступна.</p>
+        <p className="text-sm text-muted-foreground">Недельная сводка пока недоступна.</p>
       ) : (
         <div className="space-y-3">
           <AnalyticsSummaryGrid
             columnsClassName="md:grid-cols-4 xl:grid-cols-8"
             items={[
               { key: 'leads', label: 'Лиды', value: summary.leads_total ?? 0, helper: 'Всего за окно' },
-              { key: 'parsed', label: 'Парсинг', value: summary.parsed_completed_count ?? 0, helper: 'Завершено', tone: 'text-sky-700' },
+              { key: 'parsed', label: 'Данные', value: summary.parsed_completed_count ?? 0, helper: 'Собраны', tone: 'text-sky-700' },
               { key: 'audited', label: 'Аудит', value: summary.audited_count ?? 0, helper: 'С данными', tone: 'text-indigo-700' },
-              { key: 'matched', label: 'Матчинг', value: summary.matched_count ?? 0, helper: 'Совпадения найдены', tone: 'text-violet-700' },
-              { key: 'drafts', label: 'Черновики', value: summary.drafts_total ?? 0, helper: 'Подготовлено', tone: 'text-amber-700' },
-              { key: 'sent', label: 'Sent', value: summary.sent_total ?? 0, helper: 'Ушло в канал', tone: 'text-emerald-700' },
-              { key: 'positive', label: 'Positive', value: summary.positive_count ?? 0, helper: 'Есть интерес', tone: 'text-green-700' },
-              { key: 'rate', label: 'Positive rate', value: `${summary.positive_rate_pct ?? 0}%`, helper: 'Итог по окну', tone: 'text-teal-700' },
+              { key: 'matched', label: 'Оффер', value: summary.matched_count ?? 0, helper: 'Подобран', tone: 'text-violet-700' },
+              { key: 'drafts', label: 'Письма', value: summary.drafts_total ?? 0, helper: 'Подготовлено', tone: 'text-amber-700' },
+              { key: 'sent', label: 'Отправлено', value: summary.sent_total ?? 0, helper: 'Ушло в канал', tone: 'text-emerald-700' },
+              { key: 'positive', label: 'Интерес', value: summary.positive_count ?? 0, helper: 'Есть положительный ответ', tone: 'text-green-700' },
+              { key: 'rate', label: 'Доля интереса', value: `${summary.positive_rate_pct ?? 0}%`, helper: 'Итог по окну', tone: 'text-teal-700' },
             ]}
           />
 
@@ -170,7 +200,7 @@ export function RalphLoopAnalyticsPanel({
             <InfoCard title="Сравнение с предыдущими 7 днями" tone="bg-blue-50 border-blue-200">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                 <div className="rounded-lg border border-white/80 bg-white/80 p-3">
-                  <div className="text-xs uppercase text-muted-foreground">Sent</div>
+                  <div className="text-xs uppercase text-muted-foreground">Отправлено</div>
                   <div className="text-lg font-semibold text-foreground mt-1">
                     {summary.sent_total ?? 0}
                     <DeltaValue value={baseline?.deltas?.sent_total ?? 0} />
@@ -178,7 +208,7 @@ export function RalphLoopAnalyticsPanel({
                   <div className="text-xs text-muted-foreground mt-1">было: {baseline?.sent_total ?? 0}</div>
                 </div>
                 <div className="rounded-lg border border-white/80 bg-white/80 p-3">
-                  <div className="text-xs uppercase text-muted-foreground">Positive</div>
+                  <div className="text-xs uppercase text-muted-foreground">Интерес</div>
                   <div className="text-lg font-semibold text-foreground mt-1">
                     {summary.positive_count ?? 0}
                     <DeltaValue value={baseline?.deltas?.positive_count ?? 0} />
@@ -186,7 +216,7 @@ export function RalphLoopAnalyticsPanel({
                   <div className="text-xs text-muted-foreground mt-1">было: {baseline?.positive_count ?? 0}</div>
                 </div>
                 <div className="rounded-lg border border-white/80 bg-white/80 p-3">
-                  <div className="text-xs uppercase text-muted-foreground">Positive rate</div>
+                  <div className="text-xs uppercase text-muted-foreground">Доля интереса</div>
                   <div className="text-lg font-semibold text-foreground mt-1">
                     {summary.positive_rate_pct ?? 0}%
                     <DeltaValue value={baseline?.deltas?.positive_rate_pct ?? 0} suffix=" п.п." />
@@ -207,7 +237,7 @@ export function RalphLoopAnalyticsPanel({
                 </div>
               ) : (
                 <div className="text-sm text-muted-foreground">
-                  Явных рекомендаций пока нет. Можно продолжать текущий сценарий и смотреть на outcome.
+                  Явных рекомендаций пока нет. Можно продолжать текущий сценарий и смотреть на результат.
                 </div>
               )}
             </InfoCard>
@@ -219,7 +249,7 @@ export function RalphLoopAnalyticsPanel({
                 <div className="space-y-1 text-sm">
                   {ralphLoop.top_channels.map((item, index) => (
                     <div key={`${item.channel || 'channel'}-${index}`} className="flex items-center justify-between gap-2">
-                      <span>{item.channel || 'unknown'}</span>
+                      <span>{channelLabel(item.channel)}</span>
                       <span className="text-muted-foreground">
                         {item.positive_rate_pct ?? 0}% ({item.positive_count ?? 0}/{item.total ?? 0})
                       </span>
@@ -237,13 +267,13 @@ export function RalphLoopAnalyticsPanel({
                   Показать лиды
                 </Button>
                 <Button size="sm" onClick={onMoveBestSourceToPilot} disabled={loading || !hasBestSource}>
-                  В pilot cohort
+                  В пилотную группу
                 </Button>
                 <Button size="sm" variant="outline" onClick={onRunBestSourcePilotFlow} disabled={loading || !hasBestSource}>
-                  Pilot run
+                  Подготовить цепочку
                 </Button>
                 <Button size="sm" variant="outline" onClick={onPrepareBestSourceBatch} disabled={loading || !hasBestSource}>
-                  Batch prep
+                  Собрать очередь
                 </Button>
               </div>
               {Array.isArray(ralphLoop?.source_performance) && ralphLoop.source_performance.length > 0 ? (
@@ -255,17 +285,17 @@ export function RalphLoopAnalyticsPanel({
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-medium text-foreground">
-                          {item.source_kind || 'unknown'} / {item.source_provider || 'unknown'}
+                          {sourceLabel(item.source_kind, item.source_provider)}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                          {item.lead_to_positive_pct ?? 0}% lead→positive
+                          {item.lead_to_positive_pct ?? 0}% партнёр → интерес
                         </span>
                       </div>
                       <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                         <div>Лидов: {item.leads_total ?? 0}</div>
-                        <div>Sent: {item.sent_count ?? 0}</div>
-                        <div>Draft: {item.draft_rate_pct ?? 0}%</div>
-                        <div>Positive: {item.positive_rate_pct ?? 0}%</div>
+                        <div>Отправлено: {item.sent_count ?? 0}</div>
+                        <div>Письма: {item.draft_rate_pct ?? 0}%</div>
+                        <div>Интерес: {item.positive_rate_pct ?? 0}%</div>
                       </div>
                     </div>
                   ))}
@@ -275,7 +305,7 @@ export function RalphLoopAnalyticsPanel({
               )}
             </InfoCard>
 
-            <InfoCard title="Обучение по промптам">
+            <InfoCard title="Обучение по шаблонам">
               {Array.isArray(ralphLoop?.learning) && ralphLoop.learning.length > 0 ? (
                 <div className="space-y-1 text-sm">
                   {ralphLoop.learning.map((item, index) => (
@@ -286,7 +316,7 @@ export function RalphLoopAnalyticsPanel({
                   ))}
                 </div>
               ) : (
-                <div className="text-sm text-muted-foreground">Пока нет learning-сигналов.</div>
+                <div className="text-sm text-muted-foreground">Пока нет сигналов обучения.</div>
               )}
             </InfoCard>
           </div>
@@ -309,7 +339,7 @@ export function RalphLoopAnalyticsPanel({
                 columnsClassName="md:grid-cols-3 xl:grid-cols-6"
                 items={[
                   { key: 'edited-total', label: 'Правок', value: editInsights?.edited_accepts_total ?? 0, helper: 'Утверждённые письма' },
-                  { key: 'generated', label: 'Черновик', value: editInsights?.avg_generated_len ?? 0, helper: 'ср. длина' },
+                  { key: 'generated', label: 'Сгенерировано', value: editInsights?.avg_generated_len ?? 0, helper: 'ср. длина письма' },
                   { key: 'final', label: 'Финал', value: editInsights?.avg_final_len ?? 0, helper: 'ср. длина' },
                   { key: 'expanded', label: 'Дописывают', value: editInsights?.expanded_count ?? 0, helper: 'Удлинили текст' },
                   { key: 'shortened', label: 'Сокращают', value: editInsights?.shortened_count ?? 0, helper: 'Сжали текст' },
@@ -323,12 +353,12 @@ export function RalphLoopAnalyticsPanel({
             )}
           </InfoCard>
 
-          <InfoCard title="Версии prompt для первого письма" tone="bg-cyan-50 border-cyan-200">
+          <InfoCard title="Версии шаблона первого письма" tone="bg-cyan-50 border-cyan-200">
             <div className="flex items-center justify-between gap-2 mb-2">
               <div className="text-sm font-semibold">Какая версия даёт лучший отклик</div>
               {ralphLoop?.recommended_prompt_version ? (
                 <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
-                  Рекомендовано: {ralphLoop.recommended_prompt_version.prompt_key || 'unknown'} · v{ralphLoop.recommended_prompt_version.prompt_version || 'unknown'}
+                  Рекомендовано: {ralphLoop.recommended_prompt_version.prompt_key || 'шаблон'} · v{ralphLoop.recommended_prompt_version.prompt_version || '—'}
                 </Badge>
               ) : null}
             </div>
@@ -341,24 +371,24 @@ export function RalphLoopAnalyticsPanel({
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="font-medium text-foreground">
-                        {item.prompt_key || 'unknown'} · v{item.prompt_version || 'unknown'}
+                        {item.prompt_key || 'шаблон'} · v{item.prompt_version || '—'}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        sent: {item.sent_total ?? 0} · positive: {item.positive_rate_pct ?? 0}%
+                        отправлено: {item.sent_total ?? 0} · интерес: {item.positive_rate_pct ?? 0}%
                       </div>
                     </div>
                     <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-muted-foreground">
                       <div>Утверждено: {item.approved_total ?? 0}</div>
                       <div>Правок: {item.edited_before_accept_pct ?? 0}%</div>
-                      <div>Черновиков: {item.drafts_total ?? 0}</div>
-                      <div>Positive: {item.positive_count ?? 0}</div>
+                      <div>Писем: {item.drafts_total ?? 0}</div>
+                      <div>Интерес: {item.positive_count ?? 0}</div>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
               <div className="text-sm text-muted-foreground">
-                Пока нет данных по версиям prompt. Они начнут копиться на новых первых письмах.
+                Пока нет данных по версиям шаблонов. Они начнут копиться на новых первых письмах.
               </div>
             )}
           </InfoCard>

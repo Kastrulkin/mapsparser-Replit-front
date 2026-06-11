@@ -115,6 +115,28 @@ function DrawerSection({ children }: { children: ReactNode }) {
   return <div className="space-y-4 px-5 py-5">{children}</div>;
 }
 
+function formatSourceLabel(value?: string) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return '—';
+  if (normalized === 'yandex_maps') return 'Яндекс Карты';
+  if (normalized === 'google_docs' || normalized === 'google_doc_partnership_import') return 'Google Docs';
+  if (normalized === 'network_manual') return 'Вручную';
+  if (normalized === 'manual') return 'Вручную';
+  if (normalized === 'localos') return 'LocalOS';
+  return value || '—';
+}
+
+function formatChannelLabel(value?: string) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return 'Канал ещё не выбран';
+  if (normalized === 'email') return 'Email';
+  if (normalized === 'telegram') return 'Telegram';
+  if (normalized === 'whatsapp') return 'WhatsApp';
+  if (normalized === 'phone') return 'Телефон';
+  if (normalized === 'manual') return 'Ручной контакт';
+  return value || 'Канал ещё не выбран';
+}
+
 export default function PartnershipLeadDetailDrawer({
   selectedLead,
   selectedLeadFlowStatus,
@@ -134,6 +156,9 @@ export default function PartnershipLeadDetailDrawer({
   pilotCohortOptions,
   onPilotCohortChange,
 }: PartnershipLeadDetailDrawerProps) {
+  const flowPrimaryText = `Этап: ${stagePresentation.label} · Канал: ${formatChannelLabel(selectedLead.selected_channel)}`;
+  const flowSecondaryText = `Писем: ${selectedLeadFlowStatus?.draftsTotal ?? 0} · утверждено: ${selectedLeadFlowStatus?.draftsApproved ?? 0} · отправлено: ${selectedLeadFlowStatus?.sentTotal ?? 0} · результат: ${selectedLeadFlowStatus?.outcomeFinal || 'пока нет'}`;
+
   return (
     <div className="fixed inset-0 z-50 bg-black/25 backdrop-blur-sm" onClick={onClose}>
       <div
@@ -145,7 +170,7 @@ export default function PartnershipLeadDetailDrawer({
             <div>
               <h2 className="text-xl font-semibold text-foreground">{selectedLead.name || 'Карточка лида'}</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                {selectedLead.city || '—'} · {selectedLead.category || '—'} · этап: {selectedLead.partnership_stage || 'imported'}
+                {selectedLead.city || '—'} · {selectedLead.category || '—'} · этап: {stagePresentation.label}
               </p>
             </div>
             <Button variant="outline" size="sm" onClick={onClose}>
@@ -172,8 +197,8 @@ export default function PartnershipLeadDetailDrawer({
               statusLabel={stagePresentation.label}
               statusVariant={stagePresentation.variant}
               tone={stagePresentation.tone}
-              primaryText={`stage: ${selectedLead.partnership_stage || 'imported'} · parse: ${selectedLead.parse_status || '—'} · channel: ${selectedLead.selected_channel || '—'}`}
-              secondaryText={`drafts: ${selectedLeadFlowStatus?.draftsTotal ?? 0} · approved: ${selectedLeadFlowStatus?.draftsApproved ?? 0} · sent: ${selectedLeadFlowStatus?.sentTotal ?? 0} · outcome: ${selectedLeadFlowStatus?.outcomeFinal || '—'}`}
+              primaryText={flowPrimaryText}
+              secondaryText={flowSecondaryText}
             />
             <StatusSummaryCard
               title="Аудит"
@@ -189,13 +214,13 @@ export default function PartnershipLeadDetailDrawer({
             <LeadDetailMetaList
               columns={2}
               items={[
-                { label: 'Provider', value: selectedLead.source_provider || '—' },
-                { label: 'Source', value: selectedLead.source_kind || '—' },
-                { label: 'External source id', value: selectedLead.external_source_id || '—' },
-                { label: 'External place id', value: selectedLead.external_place_id || '—' },
+                { label: 'Площадка', value: formatSourceLabel(selectedLead.source_provider) },
+                { label: 'Источник', value: formatSourceLabel(selectedLead.source_kind) },
+                { label: 'Внешний ID', value: selectedLead.external_source_id || '—' },
+                { label: 'ID места на карте', value: selectedLead.external_place_id || '—' },
                 { label: 'Координаты', value: `${selectedLead.lat ?? '—'}, ${selectedLead.lon ?? '—'}` },
                 {
-                  label: 'Matched sources',
+                  label: 'Объединённые источники',
                   value: Array.isArray(selectedLead.matched_sources_json) && selectedLead.matched_sources_json.length
                     ? selectedLead.matched_sources_json.join(', ')
                     : '—',
@@ -212,18 +237,18 @@ export default function PartnershipLeadDetailDrawer({
             />
           </LeadDetailSection>
 
-          <LeadDetailSection title="Результат enrich" tone="muted">
+          <LeadDetailSection title="Дополнительные данные" tone="muted">
             <LeadDetailMetaList
               items={[
-                { label: 'Provider', value: selectedLead.enrich_payload_json?.provider || '—' },
+                { label: 'Источник данных', value: formatSourceLabel(selectedLead.enrich_payload_json?.provider) },
                 {
-                  label: 'Found fields',
+                  label: 'Найденные поля',
                   value: Array.isArray(selectedLead.enrich_payload_json?.found_fields) && selectedLead.enrich_payload_json.found_fields.length
                     ? selectedLead.enrich_payload_json.found_fields.join(', ')
                     : '—',
                 },
                 {
-                  label: 'Confidence',
+                  label: 'Уверенность',
                   value: selectedLead.enrich_payload_json?.confidence && Object.keys(selectedLead.enrich_payload_json.confidence).length
                     ? Object.entries(selectedLead.enrich_payload_json.confidence)
                         .map(([key, value]) => `${key} ${Math.round(Number(value || 0) * 100)}%`)

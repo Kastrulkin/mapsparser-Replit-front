@@ -224,7 +224,7 @@ export function ProspectingPipelineHeader({
           <div>
             <CardTitle>Воронка</CardTitle>
             <CardDescription>
-              Один рабочий экран для лидов: intake живёт отдельно, а здесь только движение по воронке.
+              Один рабочий экран для лидов: поиск живёт отдельно, а здесь только движение по воронке.
             </CardDescription>
           </div>
           <Badge variant="outline">Всего лидов: {totalLeads}</Badge>
@@ -252,13 +252,13 @@ export function ProspectingPipelineHeader({
             onChange={(event) => onSourceChange(event.target.value)}
           >
             <option value="">Источник: любой</option>
-            <option value="apify_yandex">Apify Yandex</option>
-            <option value="apify_2gis">Apify 2GIS</option>
-            <option value="apify_google">Apify Google</option>
-            <option value="apify_apple">Apify Apple</option>
+            <option value="apify_yandex">Яндекс Карты</option>
+            <option value="apify_2gis">2ГИС</option>
+            <option value="apify_google">Google Maps</option>
+            <option value="apify_apple">Apple Maps</option>
             <option value="manual">Ручной ввод</option>
             <option value="external_import">Внешний импорт</option>
-            <option value="openclaw">OpenClaw</option>
+            <option value="openclaw">Автоматический поиск</option>
           </select>
           <Button variant="outline" onClick={onOpenFilters}>
             <SlidersHorizontal className="mr-2 h-4 w-4" />

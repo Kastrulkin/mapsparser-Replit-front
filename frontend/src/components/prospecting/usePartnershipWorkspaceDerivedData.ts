@@ -334,7 +334,7 @@ export function usePartnershipWorkspaceDerivedData<TLead extends PartnershipDeri
     [items]
   );
 
-  const rawLeads = visibleLeads;
+  const rawLeads = useMemo(() => visibleLeads.filter((item) => getLeadPipelineStatus(item) === 'unprocessed'), [visibleLeads]);
   const rawLeadCount = rawLeads.length;
   const pipelineLeads = useMemo(() => visibleLeads.filter((item) => {
     const pipelineStatus = getLeadPipelineStatus(item);

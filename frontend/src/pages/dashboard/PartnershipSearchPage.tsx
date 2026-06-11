@@ -363,21 +363,21 @@ type PartnershipRalphLoop = {
 
 const STAGE_OPTIONS = [
   { value: 'all', label: 'Все этапы' },
-  { value: 'unprocessed', label: 'Необработан' },
+  { value: 'unprocessed', label: 'Кандидат' },
   { value: 'in_progress', label: 'В работе' },
-  { value: 'contacted', label: 'Отправлено' },
-  { value: 'second_message_sent', label: 'Второе сообщение' },
-  { value: 'replied', label: 'Ответил' },
-  { value: 'converted', label: 'Конвертирован' },
+  { value: 'contacted', label: 'Письмо 1 отправлено' },
+  { value: 'second_message_sent', label: 'КП отправлено' },
+  { value: 'replied', label: 'Есть ответ' },
+  { value: 'converted', label: 'Партнёр' },
   { value: 'postponed', label: 'Отложен' },
   { value: 'not_relevant', label: 'Неактуален' },
 ];
 const BULK_STAGE_OPTIONS = [
   { value: 'in_progress', label: 'В работе' },
-  { value: 'contacted', label: 'Отправлено' },
-  { value: 'second_message_sent', label: 'Второе сообщение отправлено' },
-  { value: 'replied', label: 'Ответил' },
-  { value: 'converted', label: 'Конвертирован' },
+  { value: 'contacted', label: 'Письмо 1 отправлено' },
+  { value: 'second_message_sent', label: 'КП отправлено' },
+  { value: 'replied', label: 'Есть ответ' },
+  { value: 'converted', label: 'Партнёр' },
   { value: 'postponed', label: 'Отложен' },
   { value: 'not_relevant', label: 'Неактуален' },
 ];
@@ -395,7 +395,7 @@ const LEAD_VIEW_OPTIONS = [
   { value: 'no_parse', label: 'Без парсинга' },
   { value: 'ready_for_letter', label: 'Готовы к письму' },
   { value: 'errors', label: 'Ошибки' },
-  { value: 'last_geo_search', label: 'Последний geo-search' },
+  { value: 'last_geo_search', label: 'Последний поиск на картах' },
   { value: 'requires_action', label: 'Требуют действия' },
   { value: 'ready_next_step', label: 'Готовы к следующему шагу' },
   { value: 'parsed', label: 'Парсинг завершён' },
@@ -403,12 +403,13 @@ const LEAD_VIEW_OPTIONS = [
   { value: 'best_source', label: 'Лучший источник недели' },
 ] as const;
 const PARTNERSHIP_WORKSPACE_OPTIONS = [
-  { value: 'raw', label: 'Собранные' },
-  { value: 'pipeline', label: 'Pipeline' },
-  { value: 'analytics', label: 'Аналитика' },
+  { value: 'overview', label: 'Обзор' },
+  { value: 'raw', label: 'Кандидаты' },
+  { value: 'pipeline', label: 'Отбор' },
   { value: 'drafts', label: 'Письма' },
   { value: 'queue', label: 'Отправка' },
-  { value: 'sent', label: 'Отправлено' },
+  { value: 'sent', label: 'Ответы' },
+  { value: 'analytics', label: 'Отчёт' },
 ] as const;
 type PartnershipWorkspaceView = (typeof PARTNERSHIP_WORKSPACE_OPTIONS)[number]['value'];
 type PartnershipBoardColumnId = 'in_progress' | 'contacted' | 'second_message_sent' | 'replied' | 'converted' | 'postponed' | 'not_relevant';
@@ -418,7 +419,7 @@ type WorkflowTone = 'default' | 'success' | 'warning' | 'info' | 'danger';
 
 const toPartnershipWorkspaceView = (value: string): PartnershipWorkspaceView => {
   const matched = PARTNERSHIP_WORKSPACE_OPTIONS.find((option) => option.value === value);
-  return matched ? matched.value : 'raw';
+  return matched ? matched.value : 'overview';
 };
 
 const toLeadView = (value: string): LeadView => {
@@ -446,22 +447,22 @@ const partnershipBoardColumnMeta: Record<PartnershipBoardColumnId, { label: stri
     pipelineStatusToSet: PIPELINE_IN_PROGRESS,
   },
   contacted: {
-    label: 'Отправлено',
-    description: 'Первичный контакт уже состоялся: вручную или через письмо.',
+    label: 'Письмо 1 отправлено',
+    description: 'Первое короткое письмо уже отправлено, ждём реакцию или запрос КП.',
     pipelineStatusToSet: PIPELINE_CONTACTED,
   },
   second_message_sent: {
-    label: 'Второе сообщение отправлено',
-    description: 'Повторное касание отправлено через доступный канал.',
+    label: 'КП отправлено',
+    description: 'Партнёру отправлено конкретное предложение, пакет или следующий коммерческий шаг.',
     pipelineStatusToSet: PIPELINE_SECOND_MESSAGE_SENT,
   },
   replied: {
-    label: 'Ответил',
+    label: 'Есть ответ',
     description: 'Партнёр ответил, идёт переписка или уточнение деталей.',
     pipelineStatusToSet: PIPELINE_REPLIED,
   },
   converted: {
-    label: 'Конвертирован',
+    label: 'Партнёр',
     description: 'Партнёрство перешло в следующий коммерческий этап.',
     pipelineStatusToSet: PIPELINE_CONVERTED,
   },
@@ -502,7 +503,7 @@ const getLeadPipelineStatus = (lead: Partial<PartnershipLead> | null | undefined
 const pipelineStatusLabel = (status?: string | null) => {
   switch (String(status || '').trim().toLowerCase()) {
     case PIPELINE_UNPROCESSED:
-      return 'Необработан';
+      return 'Кандидат';
     case PIPELINE_IN_PROGRESS:
       return 'В работе';
     case PIPELINE_POSTPONED:
@@ -511,13 +512,13 @@ const pipelineStatusLabel = (status?: string | null) => {
       return 'Неактуален';
     case PIPELINE_CONTACTED:
     case PIPELINE_WAITING_REPLY:
-      return 'Отправлено';
+      return 'Письмо 1 отправлено';
     case PIPELINE_SECOND_MESSAGE_SENT:
-      return 'Второе сообщение отправлено';
+      return 'КП отправлено';
     case PIPELINE_REPLIED:
-      return 'Ответил';
+      return 'Есть ответ';
     case PIPELINE_CONVERTED:
-      return 'Конвертирован';
+      return 'Партнёр';
     case PIPELINE_CLOSED_LOST:
       return 'Закрыт';
     default:
@@ -585,10 +586,10 @@ const partnershipStagePresentation = (lead: PartnershipLead): {
   const pipelineStatus = getLeadPipelineStatus(lead);
   if (pipelineStatus === PIPELINE_UNPROCESSED) {
     return {
-      label: 'Необработан',
+      label: 'Кандидат',
       variant: 'outline',
       tone: 'default',
-      helper: 'Лид ещё не взят в операторскую воронку.',
+      helper: 'Компания ждёт отбора: взять в работу, отложить или отметить неактуальной.',
     };
   }
   if (pipelineStatus === PIPELINE_POSTPONED) {
@@ -665,34 +666,59 @@ const partnershipAuditPresentation = (lead: PartnershipLead): {
     variant: 'outline',
     tone: 'default',
     primary: 'Аудит ещё не запускался.',
-    secondary: 'Сначала enrich/парсинг, затем аудит и матчинг.',
+    secondary: 'Сначала обогащение и парсинг, затем аудит и подбор оффера.',
   };
 };
+
+const sourceLabel = (kind?: string, provider?: string) => {
+  const rawKind = String(kind || '').trim();
+  const rawProvider = String(provider || '').trim();
+  const normalizedKind = rawKind.toLowerCase();
+  const normalizedProvider = rawProvider.toLowerCase();
+  const kindLabel = normalizedKind.includes('yandex')
+    ? 'Яндекс Карты'
+    : normalizedKind.includes('2gis')
+      ? '2ГИС'
+      : normalizedKind.includes('google_doc')
+        ? 'Документ'
+        : normalizedKind.includes('manual')
+          ? 'Ручной ввод'
+          : rawKind || 'Источник не указан';
+  const providerLabel = normalizedProvider.includes('google_doc')
+    ? 'импорт из документа'
+    : normalizedProvider.includes('manual')
+      ? 'ручное добавление'
+      : normalizedProvider.includes('yandex')
+        ? 'поиск на картах'
+        : rawProvider || 'провайдер не указан';
+  return `${kindLabel} · ${providerLabel}`;
+};
+
 const DRAFT_VIEW_OPTIONS = [
-  { value: 'all', label: 'Все черновики' },
+  { value: 'all', label: 'Все письма' },
   { value: 'needs_approval', label: 'Ждут утверждения' },
   { value: 'approved', label: 'Утверждённые' },
 ] as const;
 const QUEUE_VIEW_OPTIONS = [
   { value: 'all', label: 'Вся очередь' },
-  { value: 'needs_approval', label: 'Batch ждёт утверждения' },
-  { value: 'waiting_delivery', label: 'Ждут доставки' },
-  { value: 'waiting_outcome', label: 'Ждут outcome' },
-  { value: 'failed', label: 'С ошибкой доставки' },
+  { value: 'needs_approval', label: 'Ждёт проверки' },
+  { value: 'waiting_delivery', label: 'Ждут ручной отправки' },
+  { value: 'waiting_outcome', label: 'Ждут результата' },
+  { value: 'failed', label: 'С ошибкой отправки' },
 ] as const;
 const REACTION_VIEW_OPTIONS = [
   { value: 'all', label: 'Все реакции' },
   { value: 'needs_confirmation', label: 'Требуют подтверждения' },
-  { value: 'positive', label: 'Positive' },
-  { value: 'question', label: 'Question' },
-  { value: 'no_response', label: 'No response' },
-  { value: 'hard_no', label: 'Hard no' },
+  { value: 'positive', label: 'Интерес' },
+  { value: 'question', label: 'Вопрос' },
+  { value: 'no_response', label: 'Нет ответа' },
+  { value: 'hard_no', label: 'Отказ' },
 ] as const;
 const PILOT_COHORT_OPTIONS = [
-  { value: 'all', label: 'Все когорты' },
-  { value: 'pilot', label: 'Пилот' },
-  { value: 'backlog', label: 'Backlog' },
-  { value: 'watchlist', label: 'Watchlist' },
+  { value: 'all', label: 'Все группы' },
+  { value: 'pilot', label: 'Пилотная группа' },
+  { value: 'backlog', label: 'Позже' },
+  { value: 'watchlist', label: 'Наблюдение' },
 ] as const;
 
 type DraftView = (typeof DRAFT_VIEW_OPTIONS)[number]['value'];
@@ -739,7 +765,7 @@ export const PartnershipSearchPage: React.FC = () => {
   const [stage, setStage] = useState('all');
   const [pilotCohort, setPilotCohort] = useState<PilotCohort>('all');
   const [query, setQuery] = useState('');
-  const [workspaceView, setWorkspaceView] = useState<PartnershipWorkspaceView>('raw');
+  const [workspaceView, setWorkspaceView] = useState<PartnershipWorkspaceView>('overview');
   const [items, setItems] = useState<PartnershipLead[]>([]);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
@@ -823,7 +849,6 @@ export const PartnershipSearchPage: React.FC = () => {
     pipelineLeadCount,
     lastGeoSearchLeadCount,
     pipelineSummary,
-    rawLeadStatusSummary,
   } = usePartnershipWorkspaceDerivedData({
     items,
     selectedLeadId,
@@ -1158,7 +1183,7 @@ export const PartnershipSearchPage: React.FC = () => {
       setMessage('Для нормализации не выбраны лиды.');
       return;
     }
-    await runPartnershipAction('Не удалось нормализовать выбранные лиды через OpenClaw', async () => {
+    await runPartnershipAction('Не удалось подготовить выбранных партнёров', async () => {
       const data = await normalizePartnershipLeads(currentBusinessId, {
         city: geoCity.trim(),
         category: geoCategory.trim(),
@@ -1189,7 +1214,7 @@ export const PartnershipSearchPage: React.FC = () => {
         setSelectedLeadIds(importedLeadIds);
       }
       setMessage(
-        `OpenClaw нормализовал список: импортировано ${data.imported_count || 0}, объединено ${data.merged_count || 0}, пропущено ${data.skipped_count || 0}, найдено ${data.source_total || 0}.`
+        `Список подготовлен: импортировано ${data.imported_count || 0}, объединено ${data.merged_count || 0}, пропущено ${data.skipped_count || 0}, найдено ${data.source_total || 0}.`
       );
       await refreshAllPartnershipData();
     });
@@ -1492,30 +1517,29 @@ export const PartnershipSearchPage: React.FC = () => {
 
   const prepareLastGeoSearchBatch = async () => {
     if (!currentBusinessId || lastGeoSearchLeadIds.length === 0) {
-      setMessage('Для последнего geo-search пока нет лидов для batch prep.');
+      setMessage('Для последнего поиска на картах пока нет лидов для очереди.');
       return;
     }
 
     const lastGeoLeadSet = new Set(lastGeoSearchLeadIds);
     const targetDrafts = drafts.filter((draft) => lastGeoLeadSet.has(String(draft.lead_id || '')));
     if (targetDrafts.length === 0) {
-      setMessage('Для последнего geo-search ещё нет черновиков. Сначала запустите быстрый сценарий.');
+      setMessage('Для последнего поиска на картах ещё нет писем. Сначала запустите быстрый сценарий.');
       return;
     }
 
-    await runPartnershipAction('Не удалось подготовить batch для последнего geo-search', async () => {
+    await runPartnershipAction('Не удалось подготовить очередь для последнего поиска на картах', async () => {
       const batchPrep = await preparePartnershipBatch(newAuth.makeRequest, currentBusinessId, targetDrafts);
       if (!batchPrep.batchId) {
-        setMessage(`Для последнего geo-search не удалось подготовить черновики.${batchPrep.errors.length ? ` Ошибок: ${batchPrep.errors.length}` : ''}`);
+        setMessage(`Для последнего поиска на картах не удалось подготовить письма.${batchPrep.errors.length ? ` Ошибок: ${batchPrep.errors.length}` : ''}`);
         await loadDrafts();
         return;
       }
       setMessage(
         [
-          `Последний geo-search batch prep`,
-          `approve ${batchPrep.approvedCount}`,
-          `в batch ${batchPrep.queuedCount}`,
-          batchPrep.batchId ? `batch ${batchPrep.batchId}` : '',
+          `Последний поиск на картах: очередь подготовлена`,
+          `утверждено ${batchPrep.approvedCount}`,
+          `в очереди ${batchPrep.queuedCount}`,
           batchPrep.errors.length ? `ошибок: ${batchPrep.errors.length}` : '',
         ]
           .filter(Boolean)
@@ -1529,23 +1553,23 @@ export const PartnershipSearchPage: React.FC = () => {
     if (!currentBusinessId) return;
     const sourceLeads = items.filter((item) => lastGeoSearchLeadIds.includes(item.id));
     if (sourceLeads.length === 0) {
-      setMessage('Для последнего geo-search пока нет лидов.');
+      setMessage('Для последнего поиска на картах пока нет лидов.');
       return;
     }
 
-    await runPartnershipAction('Не удалось выполнить быстрый сценарий для последнего geo-search', async () => {
+    await runPartnershipAction('Не удалось выполнить быстрый сценарий для последнего поиска на картах', async () => {
       const leadIds = sourceLeads.map((item) => item.id);
       const pilotFlow = await runPartnershipPilotFlow(newAuth.makeRequest, currentBusinessId, sourceLeads);
       setSelectedLeadIds(leadIds);
       const summaryParts = [
-        `Последний geo-search: ${sourceLeads.length} лидов`,
-        `enrich ${pilotFlow.enrichedCount}`,
+        `Последний поиск на картах: ${sourceLeads.length} лидов`,
+        `обогащено ${pilotFlow.enrichedCount}`,
         `audit ${pilotFlow.auditedCount}`,
-        `match ${pilotFlow.matchedCount}`,
-        `draft ${pilotFlow.draftedCount}`,
+        `матчей ${pilotFlow.matchedCount}`,
+        `писем ${pilotFlow.draftedCount}`,
       ];
       if (pilotFlow.skippedParseCount > 0) {
-        summaryParts.push(`пропущено без parse completed: ${pilotFlow.skippedParseCount}`);
+        summaryParts.push(`пропущено без готового парсинга: ${pilotFlow.skippedParseCount}`);
       }
       if (pilotFlow.errors.length > 0) {
         summaryParts.push(`ошибок: ${pilotFlow.errors.length}`);
@@ -1557,15 +1581,15 @@ export const PartnershipSearchPage: React.FC = () => {
 
   const moveLastGeoSearchToPilot = async () => {
     if (!currentBusinessId || lastGeoSearchLeadIds.length === 0) {
-      setMessage('Для последнего geo-search нет лидов для перевода в pilot cohort.');
+      setMessage('Для последнего поиска на картах нет лидов для перевода в пилотную группу.');
       return;
     }
-    await runPartnershipAction('Не удалось перевести последний geo-search в pilot cohort', async () => {
+    await runPartnershipAction('Не удалось перевести последний поиск на картах в пилотную группу', async () => {
       const data = await bulkUpdatePartnershipLeads(currentBusinessId, lastGeoSearchLeadIds, {
         pilot_cohort: 'pilot',
       });
       setSelectedLeadIds(lastGeoSearchLeadIds);
-      setMessage(`В pilot cohort переведено ${data.updated_count || 0} лидов из последнего geo-search`);
+      setMessage(`В пилотную группу переведено ${data.updated_count || 0} лидов из последнего поиска на картах`);
       await refreshOperationalData();
       await loadRalphLoop();
     });
@@ -1584,7 +1608,7 @@ export const PartnershipSearchPage: React.FC = () => {
         .map((item) => item.id)
     );
     setMessage(
-      `Показаны лиды из лучшего источника: ${bestSourceThisWeek.source_kind || 'unknown'} / ${bestSourceThisWeek.source_provider || 'unknown'}`
+      `Показаны лиды из лучшего источника: ${sourceLabel(bestSourceThisWeek.source_kind, bestSourceThisWeek.source_provider)}`
     );
   };
 
@@ -1592,15 +1616,15 @@ export const PartnershipSearchPage: React.FC = () => {
     if (!currentBusinessId || !bestSourceThisWeek) return;
     const candidateIds = collectLeadIdsForSource(items, bestSourceThisWeek, { onlyOutsidePilot: true });
     if (candidateIds.length === 0) {
-      setMessage('Для лучшего источника уже нет лидов вне pilot cohort.');
+      setMessage('Для лучшего источника уже нет лидов вне пилотной группы.');
       return;
     }
-    await runPartnershipAction('Не удалось перевести лучший источник в pilot cohort', async () => {
+    await runPartnershipAction('Не удалось перевести лучший источник в пилотную группу', async () => {
       const data = await bulkUpdatePartnershipLeads(currentBusinessId, candidateIds, {
         pilot_cohort: 'pilot',
       });
       setMessage(
-        `В pilot cohort переведено ${data.updated_count || 0} лидов из источника ${bestSourceThisWeek.source_kind || 'unknown'} / ${bestSourceThisWeek.source_provider || 'unknown'}`
+        `В пилотную группу переведено ${data.updated_count || 0} лидов из источника ${sourceLabel(bestSourceThisWeek.source_kind, bestSourceThisWeek.source_provider)}`
       );
       setSelectedLeadIds(candidateIds);
       await refreshOperationalData();
@@ -1620,18 +1644,18 @@ export const PartnershipSearchPage: React.FC = () => {
       return;
     }
 
-    await runPartnershipAction('Не удалось выполнить pilot run для лучшего источника', async () => {
+    await runPartnershipAction('Не удалось подготовить цепочку для лучшего источника', async () => {
       const pilotFlow = await runPartnershipPilotFlow(newAuth.makeRequest, currentBusinessId, sourceLeads);
       setSelectedLeadIds(sourceLeads.map((item) => item.id));
       const summaryParts = [
-        `Источник: ${bestSourceThisWeek.source_kind || 'unknown'} / ${bestSourceThisWeek.source_provider || 'unknown'}`,
-        `enrich ${pilotFlow.enrichedCount}`,
-        `audit ${pilotFlow.auditedCount}`,
-        `match ${pilotFlow.matchedCount}`,
-        `draft ${pilotFlow.draftedCount}`,
+        `Источник: ${sourceLabel(bestSourceThisWeek.source_kind, bestSourceThisWeek.source_provider)}`,
+        `обогащено ${pilotFlow.enrichedCount}`,
+        `аудитов ${pilotFlow.auditedCount}`,
+        `матчей ${pilotFlow.matchedCount}`,
+        `писем ${pilotFlow.draftedCount}`,
       ];
       if (pilotFlow.skippedParseCount > 0) {
-        summaryParts.push(`пропущено без parse completed: ${pilotFlow.skippedParseCount}`);
+        summaryParts.push(`пропущено без готового парсинга: ${pilotFlow.skippedParseCount}`);
       }
       if (pilotFlow.errors.length > 0) {
         summaryParts.push(`ошибок: ${pilotFlow.errors.length}`);
@@ -1651,18 +1675,18 @@ export const PartnershipSearchPage: React.FC = () => {
 
     const relatedDrafts = drafts.filter((draft) => sourceLeadIds.has(draft.lead_id));
     if (relatedDrafts.length === 0) {
-      setMessage('Для лучшего источника пока нет черновиков для batch.');
+      setMessage('Для лучшего источника пока нет писем для очереди.');
       return;
     }
 
-    await runPartnershipAction('Не удалось подготовить batch для лучшего источника', async () => {
+    await runPartnershipAction('Не удалось подготовить очередь для лучшего источника', async () => {
       const batchPrep = await preparePartnershipBatch(newAuth.makeRequest, currentBusinessId, relatedDrafts);
       if (!batchPrep.batchId) {
-        setMessage('После подготовки у лучшего источника не осталось approved draft для batch.');
+        setMessage('После подготовки у лучшего источника не осталось утверждённых писем для очереди.');
         return;
       }
       setMessage(
-        `Batch подготовлен для ${bestSourceThisWeek.source_kind || 'unknown'} / ${bestSourceThisWeek.source_provider || 'unknown'} · approve ${batchPrep.approvedCount} · в batch ${batchPrep.queuedCount}${batchPrep.errors.length ? ` · ошибок ${batchPrep.errors.length}` : ''}`
+        `Очередь подготовлена для ${sourceLabel(bestSourceThisWeek.source_kind, bestSourceThisWeek.source_provider)} · утверждено ${batchPrep.approvedCount} · в очереди ${batchPrep.queuedCount}${batchPrep.errors.length ? ` · ошибок ${batchPrep.errors.length}` : ''}`
       );
       await refreshAllPartnershipData();
     });
@@ -1795,14 +1819,14 @@ export const PartnershipSearchPage: React.FC = () => {
       setLoading(true);
       setError(null);
       await approvePartnershipDraft(currentBusinessId, draftId, text);
-      setMessage('Черновик утверждён');
+      setMessage('Письмо утверждено');
       await loadDrafts();
       await loadBatches();
       await loadLeads();
       await loadFunnel();
       await loadOutcomes();
     } catch (e: any) {
-      setError(e.message || 'Не удалось утвердить черновик');
+      setError(e.message || 'Не удалось утвердить письмо');
     } finally {
       setLoading(false);
     }
@@ -1831,13 +1855,13 @@ export const PartnershipSearchPage: React.FC = () => {
           return approvePartnershipDraft(currentBusinessId, draftId, text);
         })
       );
-      setMessage(`Утверждено черновиков: ${selectedDraftIds.length}`);
+      setMessage(`Утверждено писем: ${selectedDraftIds.length}`);
       setSelectedDraftIds([]);
       await loadDrafts();
       await loadBatches();
       await loadLeads();
     } catch (e: any) {
-      setError(e.message || 'Не удалось массово утвердить черновики');
+      setError(e.message || 'Не удалось массово утвердить письма');
     } finally {
       setLoading(false);
     }
@@ -1845,7 +1869,7 @@ export const PartnershipSearchPage: React.FC = () => {
 
   const bulkDeleteDrafts = async () => {
     if (!currentBusinessId || selectedDraftIds.length === 0) return;
-    const ok = window.confirm(`Удалить выбранные черновики (${selectedDraftIds.length})?`);
+    const ok = window.confirm(`Удалить выбранные письма (${selectedDraftIds.length})?`);
     if (!ok) return;
     try {
       setLoading(true);
@@ -1855,12 +1879,12 @@ export const PartnershipSearchPage: React.FC = () => {
           deletePartnershipDraft(currentBusinessId, draftId)
         )
       );
-      setMessage(`Удалено черновиков: ${selectedDraftIds.length}`);
+      setMessage(`Удалено писем: ${selectedDraftIds.length}`);
       setSelectedDraftIds([]);
       await loadDrafts();
       await loadBatches();
     } catch (e: any) {
-      setError(e.message || 'Не удалось массово удалить черновики');
+      setError(e.message || 'Не удалось массово удалить письма');
     } finally {
       setLoading(false);
     }
@@ -1872,17 +1896,14 @@ export const PartnershipSearchPage: React.FC = () => {
       setLoading(true);
       setError(null);
       const data = await createPartnershipBatch(currentBusinessId);
-      if (data.batch?.id) {
-        setMessage(`Batch создан: ${data.batch.id}`);
-      } else {
-        setMessage('Batch создан');
-      }
+      const queuedCount = Number(data.batch?.items?.length || data.batch?.queue_summary?.queued || 0);
+      setMessage(queuedCount > 0 ? `Очередь создана: ${queuedCount} писем к ручной отправке` : 'Очередь создана');
       await loadBatches();
       await loadLeads();
       await loadFunnel();
       await loadOutcomes();
     } catch (e: any) {
-      setError(e.message || 'Не удалось создать batch');
+      setError(e.message || 'Не удалось создать очередь');
     } finally {
       setLoading(false);
     }
@@ -1894,13 +1915,13 @@ export const PartnershipSearchPage: React.FC = () => {
       setLoading(true);
       setError(null);
       await approvePartnershipBatch(currentBusinessId, batchId);
-      setMessage(`Batch утверждён: ${batchId}`);
+      setMessage('Очередь утверждена');
       await loadBatches();
       await loadLeads();
       await loadFunnel();
       await loadOutcomes();
     } catch (e: any) {
-      setError(e.message || 'Не удалось утвердить batch');
+      setError(e.message || 'Не удалось утвердить очередь');
     } finally {
       setLoading(false);
     }
@@ -1921,7 +1942,7 @@ export const PartnershipSearchPage: React.FC = () => {
   const bulkUpdateQueueDelivery = async () => {
     if (!currentBusinessId || selectedQueueIds.length === 0) return;
     if (!bulkQueueStatus) {
-      setError('Выберите delivery-статус для очереди');
+      setError('Выберите статус отправки для очереди');
       return;
     }
     try {
@@ -1932,7 +1953,7 @@ export const PartnershipSearchPage: React.FC = () => {
           updatePartnershipQueueDelivery(currentBusinessId, queueId, bulkQueueStatus)
         )
       );
-      setMessage(`Обновлено queue-элементов: ${selectedQueueIds.length}`);
+      setMessage(`Обновлено позиций в очереди: ${selectedQueueIds.length}`);
       setSelectedQueueIds([]);
       await loadBatches();
       await loadLeads();
@@ -1946,7 +1967,7 @@ export const PartnershipSearchPage: React.FC = () => {
 
   const bulkDeleteQueueItems = async () => {
     if (!currentBusinessId || selectedQueueIds.length === 0) return;
-    const ok = window.confirm(`Удалить выбранные queue-элементы (${selectedQueueIds.length})?`);
+    const ok = window.confirm(`Удалить выбранные позиции очереди (${selectedQueueIds.length})?`);
     if (!ok) return;
     try {
       setLoading(true);
@@ -1956,12 +1977,12 @@ export const PartnershipSearchPage: React.FC = () => {
           deletePartnershipQueueItem(currentBusinessId, queueId)
         )
       );
-      setMessage(`Удалено queue-элементов: ${selectedQueueIds.length}`);
+      setMessage(`Удалено позиций из очереди: ${selectedQueueIds.length}`);
       setSelectedQueueIds([]);
       await loadBatches();
       await loadLeads();
     } catch (e: any) {
-      setError(e.message || 'Не удалось удалить queue-элементы');
+      setError(e.message || 'Не удалось удалить позиции очереди');
     } finally {
       setLoading(false);
     }
@@ -1996,13 +2017,13 @@ export const PartnershipSearchPage: React.FC = () => {
     setReactionBusy((prev) => ({ ...prev, [reactionId]: outcome }));
     try {
       await confirmPartnershipReaction(currentBusinessId, reactionId, outcome);
-      setMessage('Outcome подтверждён');
+      setMessage('Результат подтверждён');
       await loadBatches();
       await loadLeads();
       await loadFunnel();
       await loadOutcomes();
     } catch (e: any) {
-      setError(e.message || 'Не удалось подтвердить outcome');
+      setError(e.message || 'Не удалось подтвердить результат');
     } finally {
       setReactionBusy((prev) => {
         const next = { ...prev };
@@ -2112,6 +2133,100 @@ export const PartnershipSearchPage: React.FC = () => {
         </div>
       ) : (
         <>
+          {workspaceView === 'overview' ? (
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+              <div className="rounded-3xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">
+                <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <h2 className="text-xl font-semibold text-slate-950">Маршрут кампании</h2>
+                    <p className="mt-1 max-w-2xl text-sm text-slate-500">
+                      Двигайтесь по шагам: сначала собираем кандидатов, затем отбираем подходящих, проверяем письма, отправляем вручную и фиксируем ответы.
+                    </p>
+                  </div>
+                  <Badge variant={loading ? 'secondary' : 'outline'}>
+                    {loading ? 'Обновляем данные' : 'Ручная отправка'}
+                  </Badge>
+                </div>
+
+                <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                  {[
+                    {
+                      key: 'raw',
+                      title: '1. Кандидаты',
+                      count: rawLeadCount,
+                      text: 'Найти или импортировать компании.',
+                    },
+                    {
+                      key: 'pipeline',
+                      title: '2. Отбор',
+                      count: pipelineLeadCount,
+                      text: 'Оставить подходящих и убрать лишних.',
+                    },
+                    {
+                      key: 'drafts',
+                      title: '3. Письма',
+                      count: visibleDrafts.length,
+                      text: 'Проверить первое письмо и КП.',
+                    },
+                    {
+                      key: 'queue',
+                      title: '4. Отправка',
+                      count: visibleBatches.length,
+                      text: 'Открыть письмо и отметить отправку.',
+                    },
+                    {
+                      key: 'sent',
+                      title: '5. Ответы',
+                      count: visibleReactions.length,
+                      text: 'Зафиксировать интерес, вопрос или отказ.',
+                    },
+                  ].map((step) => (
+                    <button
+                      key={step.key}
+                      type="button"
+                      onClick={() => setWorkspaceView(toPartnershipWorkspaceView(step.key))}
+                      className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-left transition hover:border-primary/30 hover:bg-white hover:shadow-sm"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-sm font-semibold text-slate-950">{step.title}</div>
+                        <Badge variant="secondary">{step.count}</Badge>
+                      </div>
+                      <div className="mt-2 text-xs leading-relaxed text-slate-500">{step.text}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">
+                <h2 className="text-lg font-semibold text-slate-950">Что делать сейчас</h2>
+                <div className="mt-3 space-y-3 text-sm text-slate-600">
+                  {rawLeadCount > 0 ? (
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-amber-900">
+                      Есть новые кандидаты. Быстрее всего начать с вкладки «Кандидаты» и перевести подходящих в отбор.
+                    </div>
+                  ) : visibleDrafts.length > 0 ? (
+                    <div className="rounded-2xl border border-sky-200 bg-sky-50 p-3 text-sky-900">
+                      Есть письма на проверку. Откройте вкладку «Письма», поправьте текст и утвердите отправку.
+                    </div>
+                  ) : visibleBatches.length > 0 ? (
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-emerald-900">
+                      Есть очередь отправки. Откройте письма через mailto, отправьте вручную и отметьте результат.
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                      Кампания спокойная. Добавьте кандидатов или посмотрите отчёт по прошлым касаниям.
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" onClick={() => setWorkspaceView('raw')}>Добавить кандидатов</Button>
+                    <Button size="sm" variant="outline" onClick={() => setWorkspaceView('pipeline')}>Открыть отбор</Button>
+                    <Button size="sm" variant="outline" onClick={() => setWorkspaceView('analytics')}>Посмотреть отчёт</Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           {workspaceView === 'raw' ? (
           <>
           <PartnershipRawIntakeControls
@@ -2150,20 +2265,17 @@ export const PartnershipSearchPage: React.FC = () => {
             }}
           />
           <ProspectingIntakePanel
-            title="Собранные лиды"
-            description="Полный входящий поток geo-search и импорта. Здесь видно, кто ещё сырой, кого уже взяли в pipeline, кого отложили и кого отклонили."
+            title="Кандидаты"
+            description="Новые компании из поиска на картах и импорта. На этом шаге достаточно решить: подходит, отложить или убрать как неактуального."
             badges={[
-              { label: 'Всего', value: rawLeadCount },
-              { label: 'Сырые', value: rawLeadStatusSummary.imported },
-              { label: 'В pipeline', value: rawLeadStatusSummary.inPipeline },
-              { label: 'Отложены', value: rawLeadStatusSummary.deferred },
-              { label: 'Отклонены', value: rawLeadStatusSummary.rejected },
-              { label: 'Последний geo-search', value: lastGeoSearchLeadCount },
+              { label: 'Новые кандидаты', value: rawLeadCount },
+              { label: 'В работе', value: pipelineLeadCount },
+              { label: 'Последний поиск', value: lastGeoSearchLeadCount },
             ]}
           >
             {rawLeads.length === 0 ? (
               <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-muted-foreground">
-                Сырых лидов пока нет. Запусти geo-search по радиусу, импортируй список или добавь ссылки вручную.
+                Кандидатов пока нет. Запустите поиск по радиусу, импортируйте список или добавьте ссылки вручную.
               </div>
             ) : (
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -2201,7 +2313,7 @@ export const PartnershipSearchPage: React.FC = () => {
                 <Suspense
                   fallback={(
                     <div className="rounded-xl border bg-white p-4 text-sm text-muted-foreground">
-                      Загружаем Ralph loop аналитики...
+                      Загружаем дополнительную аналитику обучения...
                     </div>
                   )}
                 >
@@ -2260,9 +2372,9 @@ export const PartnershipSearchPage: React.FC = () => {
               shortlistCount={items.filter((item) => String(item.partnership_stage || '').toLowerCase() === 'selected_for_outreach').length}
               deferredLeadsCount={deferredLeadsCount}
               overdueDeferredLeadsCount={overdueDeferredLeadsCount}
-              preferredSourceLabel={preferredSourceFilter ? `${preferredSourceFilter.source_kind || 'unknown'} / ${preferredSourceFilter.source_provider || 'unknown'}` : null}
+              preferredSourceLabel={preferredSourceFilter ? sourceLabel(preferredSourceFilter.source_kind, preferredSourceFilter.source_provider) : null}
               lastGeoSearchLeadCount={lastGeoSearchLeadCount}
-              lastGeoSearchSourceLabel={`${lastGeoSearchSourceSummary?.source_kind || '—'} / ${lastGeoSearchSourceSummary?.source_provider || '—'}`}
+              lastGeoSearchSourceLabel={sourceLabel(lastGeoSearchSourceSummary?.source_kind, lastGeoSearchSourceSummary?.source_provider)}
               lastGeoSearchMatchesBestSource={lastGeoSearchMatchesBestSource}
               lastGeoSearchStats={lastGeoSearchStats}
               lastGeoSearchFlowSummary={lastGeoSearchFlowSummary}

@@ -17,12 +17,13 @@ type PartnershipWorkspaceOverviewProps = {
 };
 
 const workspaceLabelByValue: Record<string, string> = {
-  raw: 'поиск',
+  overview: 'обзор кампании',
+  raw: 'кандидаты',
   pipeline: 'отбор',
-  analytics: 'аналитика',
   drafts: 'письма',
   queue: 'отправка',
-  sent: 'результаты',
+  sent: 'ответы',
+  analytics: 'отчёт',
 };
 
 export function PartnershipWorkspaceOverview({
@@ -39,16 +40,17 @@ export function PartnershipWorkspaceOverview({
     <>
       <DashboardPageHeader
         eyebrow="LocalOS"
-        title="Поиск партнёров"
-        description="Простой маршрут: найти партнёра, отобрать подходящих, подготовить письмо, отправить вручную и зафиксировать результат."
+        title="Партнёрская кампания"
+        description="Один рабочий объект для поиска партнёров: кандидаты, отбор, письма, ручная отправка, ответы и отчётность разделены по вкладкам."
       />
 
       <DashboardCompactMetricsRow
         items={[
-          { label: 'Найдено', value: rawLeadCount, hint: 'Все импортированные и найденные компании.' },
+          { label: 'Кандидаты', value: rawLeadCount, hint: 'Найденные компании, которые ещё не взяли в работу.' },
           { label: 'В отборе', value: pipelineLeadCount, hint: 'Партнёры, с которыми уже работаем.' },
-          { label: 'Письма', value: visibleDraftsCount, hint: 'Черновики, которые ждут проверки.' },
-          { label: 'Результаты', value: visibleBatchesCount + visibleReactionsCount, hint: 'Отправка и зафиксированные ответы.' },
+          { label: 'Письма', value: visibleDraftsCount, hint: 'Первые письма и КП, которые ждут проверки.' },
+          { label: 'Очередь', value: visibleBatchesCount, hint: 'Письма, подготовленные к ручной отправке.' },
+          { label: 'Ответы', value: visibleReactionsCount, hint: 'Зафиксированные реакции партнёров.' },
         ]}
       />
 
@@ -64,12 +66,13 @@ export function PartnershipWorkspaceOverview({
           activeWorkspace={workspaceView}
           onWorkspaceChange={onWorkspaceChange}
           workspaces={[
-            { value: 'raw', label: 'Поиск', count: rawLeadCount },
+            { value: 'overview', label: 'Обзор' },
+            { value: 'raw', label: 'Кандидаты', count: rawLeadCount },
             { value: 'pipeline', label: 'Отбор', count: pipelineLeadCount },
             { value: 'drafts', label: 'Письма', count: visibleDraftsCount },
             { value: 'queue', label: 'Отправка', count: visibleBatchesCount },
-            { value: 'sent', label: 'Результаты', count: visibleReactionsCount },
-            { value: 'analytics', label: 'Аналитика' },
+            { value: 'sent', label: 'Ответы', count: visibleReactionsCount },
+            { value: 'analytics', label: 'Отчёт' },
           ]}
         />
       </div>
