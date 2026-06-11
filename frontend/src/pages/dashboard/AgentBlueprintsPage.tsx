@@ -177,6 +177,7 @@ type AgentRunBillingAction = {
 
 type AgentRunObservability = {
   schema?: string;
+  preview_summary?: Record<string, unknown>;
   run_history?: Record<string, unknown>;
   step_history?: { count?: number; completed?: number; failed?: number; items?: AgentRunStep[] };
   artifacts?: { count?: number; items?: AgentArtifact[] };
@@ -302,6 +303,7 @@ type AgentRun = {
   id: string;
   status: string;
   blueprint_id: string;
+  input_json?: Record<string, unknown>;
   steps?: AgentRunStep[];
   artifacts?: AgentArtifact[];
   approvals?: AgentApproval[];
@@ -496,6 +498,27 @@ type AgentIntegrationPreflight = {
   missing?: AgentIntegrationBindingStatus[];
 };
 
+type AgentProviderAction = {
+  kind?: string;
+  available?: boolean;
+  ui_target?: string;
+  label?: string;
+  description?: string;
+  role?: string;
+};
+
+type AgentProviderRoute = {
+  provider?: string;
+  label?: string;
+  state?: string;
+  status?: string;
+  role?: string;
+  kind?: string;
+  connect_mode?: string;
+  primary_cta?: string;
+  provider_action?: AgentProviderAction;
+};
+
 type AgentConnectionPlanItem = {
   key?: string;
   provider?: string;
@@ -507,10 +530,13 @@ type AgentConnectionPlanItem = {
   action?: string;
   primary_label?: string;
   explanation?: string;
+  route_state?: string;
+  route_summary?: string;
   missing_config?: string[];
   approval_required?: boolean;
   existing_integrations?: Array<{ id?: string; provider?: string; display_name?: string; status?: string }>;
   attached_integrations?: Array<{ id?: string; provider?: string; display_name?: string; status?: string }>;
+  provider_routes?: AgentProviderRoute[];
   provider_paths?: Array<{ provider?: string; label?: string; status?: string }>;
 };
 
@@ -521,11 +547,21 @@ type AgentConnectionPlan = {
   items?: AgentConnectionPlanItem[];
 };
 
+type AgentConnectionDecision = {
+  tone: string;
+  title: string;
+  description: string;
+  action: string;
+  cta: string;
+  bindingKey?: string;
+};
+
 type AgentActivationGate = {
   schema?: string;
   status?: string;
   can_activate?: boolean;
   next_step?: string;
+  next_binding_key?: string;
   active_version_id?: string;
   blockers?: Array<{ type?: string; provider?: string; message?: string }>;
   human_blockers?: Array<{ type?: string; provider?: string; title?: string; message?: string; action?: string }>;
@@ -533,6 +569,13 @@ type AgentActivationGate = {
   primary_action_label?: string;
   connection_plan?: AgentConnectionPlan;
   preflight?: AgentIntegrationPreflight;
+  preview_run_status?: {
+    ready?: boolean;
+    status?: string;
+    message?: string;
+    latest_run?: Record<string, unknown> | null;
+    passed_run?: Record<string, unknown> | null;
+  };
   compiled_validation?: {
     ready?: boolean;
     validation?: {
@@ -541,6 +584,21 @@ type AgentActivationGate = {
       warnings?: Array<{ field?: string; message?: string }>;
     };
   };
+  approval_policy_status?: {
+    ready?: boolean;
+    status?: string;
+    summary?: string;
+    write_steps?: Array<{ key?: string; capability?: string; requires_approval?: boolean; required_approval_type?: string }>;
+    missing_approval_steps?: string[];
+    autonomous_writes_allowed?: boolean;
+  };
+};
+
+type AgentActivationPathStep = {
+  key: string;
+  label: string;
+  detail: string;
+  status: string;
 };
 
 type AgentPostCreateHandoff = {
@@ -548,6 +606,9 @@ type AgentPostCreateHandoff = {
   status?: string;
   next_step?: string;
   workspace_mode?: AgentWorkspaceMode;
+  next_binding_key?: string;
+  next_binding?: AgentConnectionPlanItem | null;
+  next_route?: AgentProviderRoute | null;
   title?: string;
   description?: string;
   missing_bindings?: AgentIntegrationBindingStatus[];
@@ -695,8 +756,15 @@ type AgentBuilderSetupFlow = {
   schema?: string;
   status?: string;
   primary_action?: string;
+  next_step?: string;
+  next_step_title?: string;
+  next_step_description?: string;
   can_create_draft?: boolean;
+  can_run_preview?: boolean;
   can_activate?: boolean;
+  post_create_status?: string;
+  post_create_next_step?: string;
+  post_create_description?: string;
   activation_blockers?: Array<{ type?: string; provider?: string; message?: string }>;
   steps?: AgentBuilderSetupStep[];
 };
@@ -714,6 +782,116 @@ type AgentBuilderPlannerLoop = {
   };
 };
 
+type AgentConnectorIntelligence = {
+  schema?: string;
+  status?: string;
+  headline?: string;
+  can_compile_draft?: boolean;
+  can_preview_after_connections?: boolean;
+  next_action?: string;
+  bindings?: Array<{
+    key?: string;
+    provider?: string;
+    title?: string;
+    capability?: string;
+    status?: string;
+    action?: string;
+    route_state?: string;
+    route_summary?: string;
+    action_label?: string;
+    explanation?: string;
+    setup_cta?: { mode?: string; label?: string; description?: string };
+    connection_count?: number;
+    missing_config?: string[];
+    connections?: Array<{ id?: string; display_name?: string; provider?: string }>;
+    provider_routes?: AgentProviderRoute[];
+    provider_paths?: Array<{ provider?: string; label?: string; status?: string; source?: string }>;
+  }>;
+  capabilities?: Array<{
+    capability?: string;
+    status?: string;
+    route_state?: string;
+    provider_routes?: AgentProviderRoute[];
+    provider_candidates?: Array<{ provider?: string; state?: string; role?: string; label?: string }>;
+    openclaw_actions?: Array<{ service?: string; action?: string; openclaw_action_ref?: string }>;
+  }>;
+  provider_paths?: Array<{ provider?: string; label?: string; status?: string; source?: string }>;
+  forbidden?: Array<{ term?: string; reason?: string }>;
+  unsupported?: Array<{ capability?: string; reason?: string }>;
+};
+
+type AgentConnectionSummary = {
+  schema?: string;
+  status?: string;
+  headline?: string;
+  next_action?: string;
+  next_action_label?: string;
+  ready_count?: number;
+  missing_count?: number;
+  choice_count?: number;
+  blocked_count?: number;
+  items?: Array<{
+    key?: string;
+    provider?: string;
+    title?: string;
+    capability?: string;
+    status?: string;
+    action?: string;
+    action_label?: string;
+    explanation?: string;
+    setup_cta?: { mode?: string; label?: string; description?: string };
+    connection_count?: number;
+    connections?: Array<{ id?: string; display_name?: string; provider?: string }>;
+    missing_config?: string[];
+    provider_paths?: Array<{ provider?: string; label?: string; status?: string; source?: string }>;
+  }>;
+  forbidden?: Array<{ term?: string; reason?: string }>;
+  unsupported?: Array<{ capability?: string; reason?: string }>;
+};
+
+type AgentConnectionReadinessService = {
+  key?: string;
+  provider?: string;
+  title?: string;
+  capability?: string;
+  action?: string;
+  action_label?: string;
+  status?: string;
+  route_state?: string;
+  route_summary?: string;
+  explanation?: string;
+  provider_route_label?: string;
+  provider_route_cta?: string;
+  connect_mode?: string;
+  connection_count?: number;
+  missing_config?: string[];
+  connections?: Array<{ id?: string; display_name?: string; provider?: string }>;
+  setup_cta?: { mode?: string; label?: string; description?: string };
+};
+
+type AgentConnectionReadiness = {
+  schema?: string;
+  status?: string;
+  next_action?: string;
+  title?: string;
+  description?: string;
+  required_count?: number;
+  ready_count?: number;
+  missing_count?: number;
+  choice_count?: number;
+  blocked_count?: number;
+  can_create_draft?: boolean;
+  can_run_preview_after_create?: boolean;
+  post_create_workspace?: string;
+  services?: AgentConnectionReadinessService[];
+  ready_services?: AgentConnectionReadinessService[];
+  missing_services?: AgentConnectionReadinessService[];
+  choice_services?: AgentConnectionReadinessService[];
+  blocked_services?: AgentConnectionReadinessService[];
+  forbidden?: Array<{ term?: string; reason?: string }>;
+  unsupported?: Array<{ capability?: string; reason?: string }>;
+};
+
 type AgentBuilderPreview = {
   understood_task?: string;
   category?: string;
@@ -727,6 +905,9 @@ type AgentBuilderPreview = {
   approval_boundaries?: string[];
   required_connectors?: AgentBuilderConnectorPreview[];
   feasibility?: AgentBuilderFeasibility;
+  connector_intelligence?: AgentConnectorIntelligence;
+  connection_readiness?: AgentConnectionReadiness;
+  connection_summary?: AgentConnectionSummary;
   setup_flow?: AgentBuilderSetupFlow;
   connection_plan?: AgentConnectionPlan;
   openclaw_planner_loop?: AgentBuilderPlannerLoop;
@@ -772,14 +953,21 @@ const normalizePostCreateHandoff = (value: unknown): AgentPostCreateHandoff | nu
   const missingBindings = objectValue(value, 'missing_bindings');
   const items = objectValue(value, 'items');
   const connectionPlan = normalizeConnectionPlan(objectValue(value, 'connection_plan'));
+  const nextBinding = normalizeConnectionPlanItem(objectValue(value, 'next_binding'));
+  const nextRoute = normalizeProviderRoute(objectValue(value, 'next_route'));
+  const normalizedMissingBindings = Array.isArray(missingBindings) ? missingBindings : [];
+  const firstMissingBinding = normalizedMissingBindings.find((item) => item && typeof item === 'object');
   return {
     schema: String(objectValue(value, 'schema') || ''),
     status: String(objectValue(value, 'status') || ''),
     next_step: String(objectValue(value, 'next_step') || ''),
     workspace_mode: String(objectValue(value, 'workspace_mode') || ''),
+    next_binding_key: String(objectValue(value, 'next_binding_key') || (firstMissingBinding && typeof firstMissingBinding === 'object' ? objectValue(firstMissingBinding, 'key') || '' : '')),
+    next_binding: nextBinding,
+    next_route: nextRoute,
     title: String(objectValue(value, 'title') || ''),
     description: String(objectValue(value, 'description') || ''),
-    missing_bindings: Array.isArray(missingBindings) ? missingBindings : [],
+    missing_bindings: normalizedMissingBindings,
     items: Array.isArray(items) ? items : [],
     connection_plan: connectionPlan,
   };
@@ -817,6 +1005,62 @@ const normalizeConnectionPlan = (value: unknown): AgentConnectionPlan | null => 
   };
 };
 
+const normalizeConnectionPlanItem = (value: unknown): AgentConnectionPlanItem | null => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const providerRoutes = objectValue(value, 'provider_routes');
+  const providerPaths = objectValue(value, 'provider_paths');
+  const missingConfig = objectValue(value, 'missing_config');
+  const existingIntegrations = objectValue(value, 'existing_integrations');
+  const attachedIntegrations = objectValue(value, 'attached_integrations');
+  return {
+    key: String(objectValue(value, 'key') || ''),
+    provider: String(objectValue(value, 'provider') || ''),
+    title: String(objectValue(value, 'title') || ''),
+    capability: String(objectValue(value, 'capability') || ''),
+    trigger: String(objectValue(value, 'trigger') || ''),
+    direction: String(objectValue(value, 'direction') || ''),
+    binding_status: String(objectValue(value, 'binding_status') || ''),
+    action: String(objectValue(value, 'action') || ''),
+    primary_label: String(objectValue(value, 'primary_label') || ''),
+    explanation: String(objectValue(value, 'explanation') || ''),
+    route_state: String(objectValue(value, 'route_state') || ''),
+    route_summary: String(objectValue(value, 'route_summary') || ''),
+    missing_config: Array.isArray(missingConfig) ? missingConfig : [],
+    approval_required: objectValue(value, 'approval_required') === true,
+    existing_integrations: Array.isArray(existingIntegrations) ? existingIntegrations : [],
+    attached_integrations: Array.isArray(attachedIntegrations) ? attachedIntegrations : [],
+    provider_routes: Array.isArray(providerRoutes) ? providerRoutes : [],
+    provider_paths: Array.isArray(providerPaths) ? providerPaths : [],
+  };
+};
+
+const normalizeProviderRoute = (value: unknown) => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const providerAction = objectValue(value, 'provider_action');
+  return {
+    provider: String(objectValue(value, 'provider') || ''),
+    label: String(objectValue(value, 'label') || ''),
+    state: String(objectValue(value, 'state') || ''),
+    status: String(objectValue(value, 'status') || ''),
+    role: String(objectValue(value, 'role') || ''),
+    kind: String(objectValue(value, 'kind') || ''),
+    connect_mode: String(objectValue(value, 'connect_mode') || ''),
+    primary_cta: String(objectValue(value, 'primary_cta') || ''),
+    provider_action: providerAction && typeof providerAction === 'object' ? {
+      kind: String(objectValue(providerAction, 'kind') || ''),
+      available: objectValue(providerAction, 'available') === true,
+      ui_target: String(objectValue(providerAction, 'ui_target') || ''),
+      label: String(objectValue(providerAction, 'label') || ''),
+      description: String(objectValue(providerAction, 'description') || ''),
+      role: String(objectValue(providerAction, 'role') || ''),
+    } : undefined,
+  };
+};
+
 const formatPreflightBlock = (preflight?: AgentIntegrationPreflight | null) => {
   const missing = Array.isArray(preflight?.missing) ? preflight.missing : [];
   if (!missing.length) {
@@ -829,7 +1073,11 @@ const formatPreflightBlock = (preflight?: AgentIntegrationPreflight | null) => {
       return `${label}${config}`;
     })
     .join(', ');
-  return `Перед запуском нужно подключить: ${items}.`;
+  const needsOnlyConfig = missing.every((item) => item.status === 'needs_config' || item.resolution?.includes('missing_config'));
+  if (needsOnlyConfig) {
+    return `Перед запуском нужно заполнить настройки подключений: ${items}.`;
+  }
+  return `Перед запуском нужно подключить или настроить: ${items}.`;
 };
 
 const connectorLabel = (provider?: string) => ({
@@ -839,6 +1087,20 @@ const connectorLabel = (provider?: string) => ({
   localos_finance: 'Финансы LocalOS',
   composio: 'Composio',
 }[provider || ''] || humanizeMeta(provider || 'подключение'));
+
+const autoSelectBuilderConnectionBindings = (preview?: AgentBuilderPreview | null): Record<string, string> => {
+  const items = preview?.connection_summary?.items || [];
+  const selected: Record<string, string> = {};
+  items.forEach((item) => {
+    const key = item.key || '';
+    const connections = item.connections || [];
+    const integrationId = connections.length === 1 ? connections[0]?.id || '' : '';
+    if (key && integrationId) {
+      selected[key] = integrationId;
+    }
+  });
+  return selected;
+};
 
 const bindingResolutionLabel = (binding: AgentIntegrationBindingStatus) => ({
   native_localos: 'внутри LocalOS',
@@ -866,6 +1128,253 @@ const bindingActionHint = (binding: AgentIntegrationBindingStatus) => {
     return 'Composio будет доступен как OAuth-provider позже; пока используйте ручной или native путь.';
   }
   return 'Подключите источник или оставьте агент в draft-only режиме.';
+};
+
+const isReadyConnectionAction = (action?: string) => action === 'ready' || action === 'native_ready';
+
+const buildAgentConnectionDecision = (
+  connectionPlan: AgentConnectionPlan | null,
+  bindingStatus: AgentIntegrationBindingStatus[],
+  canPreviewRun: boolean,
+): AgentConnectionDecision => {
+  const planItems = Array.isArray(connectionPlan?.items) ? connectionPlan.items : [];
+  const nextPlanItem = planItems.find((item) => !isReadyConnectionAction(item.action));
+  if (nextPlanItem) {
+    const provider = connectorLabel(nextPlanItem.provider);
+    const routes = nextPlanItem.provider_routes || [];
+    const route = routes.find((item) => item.state === 'available') || routes[0];
+    const routeAction = route?.primary_cta || providerRouteLabel(route?.state || route?.status || '');
+    const title = nextPlanItem.action === 'choose_existing'
+      ? `Выберите подключение ${provider}`
+      : nextPlanItem.action === 'complete_config'
+      ? `Заполните настройки ${provider}`
+      : `Подключите ${provider}`;
+    return {
+      tone: nextPlanItem.action === 'choose_existing' ? 'choice' : 'needs_action',
+      title,
+      description: nextPlanItem.route_summary || nextPlanItem.explanation || `${routeAction}. После этого LocalOS разрешит preview run.`,
+      action: 'configure',
+      cta: nextPlanItem.primary_label || routeAction || 'Настроить доступ',
+      bindingKey: nextPlanItem.key || '',
+    };
+  }
+  const nextBinding = bindingStatus.find((binding) => binding.status !== 'connected' && binding.status !== 'ready');
+  if (nextBinding) {
+    return {
+      tone: 'needs_action',
+      title: `Настройте ${connectorLabel(nextBinding.provider)}`,
+      description: bindingActionHint(nextBinding),
+      action: 'configure',
+      cta: 'Открыть настройку',
+      bindingKey: nextBinding.key || '',
+    };
+  }
+  if (canPreviewRun) {
+    return {
+      tone: 'ready',
+      title: 'Подключения готовы',
+      description: 'Запустите safe preview run: LocalOS проверит preflight, limits и approvals без внешней отправки.',
+      action: 'preview',
+      cta: 'Проверить на примере',
+    };
+  }
+  return {
+    tone: 'pending',
+    title: 'Проверьте подключения',
+    description: 'LocalOS покажет следующий шаг после загрузки connection plan.',
+    action: 'none',
+    cta: '',
+  };
+};
+
+const buildBuilderCreationDecision = ({
+  preview,
+  questions,
+  missingConnectionChoices,
+  canCreateDraft,
+  createDraftLabel,
+}: {
+  preview: AgentBuilderPreview | null;
+  questions: AgentBuilderQuestion[];
+  missingConnectionChoices: Array<AgentConnectionSummary['items'] extends Array<infer Item> ? Item : never>;
+  canCreateDraft: boolean;
+  createDraftLabel: string;
+}): AgentConnectionDecision => {
+  const forbidden = preview?.connection_summary?.forbidden || [];
+  const unsupported = preview?.connection_summary?.unsupported || [];
+  if (forbidden.length || unsupported.length) {
+    const reason = forbidden[0]?.reason || unsupported[0]?.reason || 'Такой provider path не разрешён LocalOS policy envelope.';
+    return {
+      tone: 'blocked',
+      title: 'Такого агента нельзя создать',
+      description: reason,
+      action: 'none',
+      cta: '',
+    };
+  }
+  if (questions.length) {
+    return {
+      tone: 'needs_action',
+      title: 'Ответьте на уточнение',
+      description: questions[0]?.question || 'LocalOS/OpenClaw нужно больше деталей, чтобы скомпилировать workflow без догадок.',
+      action: 'answer',
+      cta: 'Отправить ответ',
+    };
+  }
+  if (missingConnectionChoices.length) {
+    const title = missingConnectionChoices[0]?.title || connectorLabel(missingConnectionChoices[0]?.provider);
+    return {
+      tone: 'choice',
+      title: `Выберите подключение ${title}`,
+      description: 'У бизнеса уже есть несколько подходящих коннектов. LocalOS должен явно привязать один из них к compiled workflow.',
+      action: 'choose',
+      cta: 'Выбрать ниже',
+      bindingKey: missingConnectionChoices[0]?.key || '',
+    };
+  }
+  if (canCreateDraft) {
+    return {
+      tone: preview?.setup_flow?.post_create_status === 'ready_for_preview' ? 'ready' : 'choice',
+      title: preview?.setup_flow?.post_create_status === 'ready_for_preview'
+        ? 'Можно создать draft и открыть preview'
+        : 'Можно создать draft и подключить сервисы',
+      description: preview?.setup_flow?.post_create_description || 'LocalOS сохранит compiled workflow candidate и откроет следующий безопасный шаг.',
+      action: 'create',
+      cta: createDraftLabel,
+    };
+  }
+  return {
+    tone: 'pending',
+    title: preview?.setup_flow?.next_step_title || 'Завершите настройку',
+    description: preview?.setup_flow?.next_step_description || 'LocalOS покажет следующий шаг после уточнения задачи и проверки provider paths.',
+    action: 'none',
+    cta: '',
+  };
+};
+
+const activationBlockerText = (gate?: AgentActivationGate) => {
+  const humanBlockers = gate?.human_blockers || [];
+  const blockers = gate?.blockers || [];
+  const labels = [
+    ...humanBlockers.map((item) => item.message || item.title || connectorLabel(item.provider)),
+    ...blockers.map((item) => item.message || connectorLabel(item.provider)),
+  ].map((item) => item.trim()).filter(Boolean);
+  return labels.slice(0, 3).join(', ');
+};
+
+const buildActivationGateDecision = (gate?: AgentActivationGate): AgentConnectionDecision => {
+  if (!gate) {
+    return {
+      tone: 'pending',
+      title: 'Activation gate ещё не проверен',
+      description: 'Создайте версию и запустите safe preview, чтобы LocalOS понял, можно ли включать агента.',
+      action: 'none',
+      cta: '',
+    };
+  }
+  if (gate.can_activate) {
+    return {
+      tone: 'ready',
+      title: 'Версию можно активировать',
+      description: gate.summary || 'Safe preview, preflight, limits и compiled workflow прошли проверку. Внешние действия останутся за approval gate.',
+      action: 'activate',
+      cta: gate.primary_action_label || 'Активировать версию',
+    };
+  }
+  if (gate.next_step === 'connect_required_integrations') {
+    return {
+      tone: 'needs_action',
+      title: 'Нужно подключить сервисы',
+      description: gate.summary || activationBlockerText(gate) || 'LocalOS понял нужные подключения, но без них нельзя пройти preview и активацию.',
+      action: 'connections',
+      cta: gate.primary_action_label || 'Открыть подключения',
+      bindingKey: gate.next_binding_key || '',
+    };
+  }
+  if (gate.next_step === 'fix_compiled_workflow') {
+    return {
+      tone: 'blocked',
+      title: 'Compiled workflow требует правки',
+      description: gate.summary || activationBlockerText(gate) || 'Логика агента не прошла проверку. Исправьте версию перед запуском.',
+      action: 'logic',
+      cta: gate.primary_action_label || 'Открыть логику',
+    };
+  }
+  if (gate.next_step === 'create_version') {
+    return {
+      tone: 'needs_action',
+      title: 'Нужно создать версию',
+      description: gate.summary || 'У агента ещё нет проверенной версии workflow.',
+      action: 'logic',
+      cta: gate.primary_action_label || 'Создать версию',
+    };
+  }
+  if (gate.next_step === 'run_preview') {
+    return {
+      tone: 'choice',
+      title: 'Нужно запустить safe preview',
+      description: gate.preview_run_status?.message || gate.summary || 'Перед активацией LocalOS должен выполнить preview без внешних side effects.',
+      action: 'preview',
+      cta: gate.primary_action_label || 'Запустить preview',
+    };
+  }
+  if (gate.next_step === 'review_approvals') {
+    return {
+      tone: 'needs_action',
+      title: 'Нужно проверить approval',
+      description: gate.summary || activationBlockerText(gate) || 'Есть решение человека, которое влияет на готовность агента.',
+      action: 'results',
+      cta: gate.primary_action_label || 'Открыть approvals',
+    };
+  }
+  return {
+    tone: 'pending',
+    title: 'Активация пока недоступна',
+    description: gate.summary || activationBlockerText(gate) || 'Проверьте логику, подключения и safe preview агента.',
+    action: 'none',
+    cta: '',
+  };
+};
+
+const buildActivationPathSteps = (gate?: AgentActivationGate): AgentActivationPathStep[] => {
+  const nextStep = gate?.next_step || '';
+  const compiledReady = gate?.compiled_validation?.ready === true;
+  const policyReady = gate?.approval_policy_status?.ready === true;
+  const connectionsReady = gate?.preflight?.ready === true;
+  const previewReady = gate?.preview_run_status?.ready === true;
+  const canActivate = gate?.can_activate === true;
+  return [
+    {
+      key: 'compiled',
+      label: 'Логика',
+      detail: compiledReady ? 'workflow проверен' : 'нужно проверить',
+      status: compiledReady ? 'done' : nextStep === 'fix_compiled_workflow' || nextStep === 'create_version' ? 'current' : 'pending',
+    },
+    {
+      key: 'policy',
+      label: 'Policy',
+      detail: policyReady ? 'approvals и limits готовы' : 'нужен human gate',
+      status: policyReady ? 'done' : nextStep === 'fix_compiled_workflow' ? 'current' : 'pending',
+    },
+    {
+      key: 'connections',
+      label: 'Доступы',
+      detail: connectionsReady ? 'готовы' : 'нужно подключить',
+      status: connectionsReady ? 'done' : nextStep === 'connect_required_integrations' ? 'current' : 'pending',
+    },
+    {
+      key: 'preview',
+      label: 'Preview',
+      detail: previewReady ? 'безопасно пройден' : 'нужен запуск',
+      status: previewReady ? 'done' : nextStep === 'run_preview' ? 'current' : 'pending',
+    },
+    {
+      key: 'activate',
+      label: 'Активация',
+      detail: canActivate ? 'можно включить' : 'после gate',
+      status: canActivate ? 'current' : 'pending',
+    },
+  ];
 };
 
 const getVersionNumber = (version: Record<string, unknown> | undefined) => {
@@ -1412,6 +1921,7 @@ export const AgentBlueprintsPage = () => {
   const [dialogBuilderInput, setDialogBuilderInput] = useState('');
   const [dialogBuilderReply, setDialogBuilderReply] = useState('');
   const [dialogBuilderSession, setDialogBuilderSession] = useState<AgentBuilderSession | null>(null);
+  const [selectedBuilderConnectionBindings, setSelectedBuilderConnectionBindings] = useState<Record<string, string>>({});
   const [agentReview, setAgentReview] = useState<AgentReview | null>(null);
   const [sourceCatalog, setSourceCatalog] = useState<AgentSourceCatalogItem[]>([]);
   const [setupDataSources, setSetupDataSources] = useState('профиль бизнеса, ручной контекст');
@@ -1428,12 +1938,16 @@ export const AgentBlueprintsPage = () => {
   const [agentExternalAuthOptions, setAgentExternalAuthOptions] = useState<AgentExternalAuthOption[]>([]);
   const [agentBindingStatus, setAgentBindingStatus] = useState<AgentIntegrationBindingStatus[]>([]);
   const [agentConnectionPlan, setAgentConnectionPlan] = useState<AgentConnectionPlan | null>(null);
+  const [selectedConnectionBindingKey, setSelectedConnectionBindingKey] = useState('');
   const [sheetSpreadsheetId, setSheetSpreadsheetId] = useState('');
   const [sheetName, setSheetName] = useState('Sheet1');
   const [sheetAuthRef, setSheetAuthRef] = useState('');
   const [sheetDailyCap, setSheetDailyCap] = useState('50');
   const [telegramBotMode, setTelegramBotMode] = useState('business_bot');
   const [telegramDailyCap, setTelegramDailyCap] = useState('50');
+  const [matonAuthRef, setMatonAuthRef] = useState('');
+  const [matonChannel, setMatonChannel] = useState('maton_bridge');
+  const [matonDailyCap, setMatonDailyCap] = useState('50');
   const [processRowValues, setProcessRowValues] = useState('{{received_at}}, {{telegram_username}}, {{message_text}}');
   const [processPreviewMessage, setProcessPreviewMessage] = useState('Новая заявка: Анна, телефон +7 900 000-00-00, хочет консультацию');
   const [feedbackText, setFeedbackText] = useState('');
@@ -1744,6 +2258,10 @@ export const AgentBlueprintsPage = () => {
       setAgentExternalAuthOptions(authOptions);
       setAgentBindingStatus(bindingStatus);
       setAgentConnectionPlan(connectionPlan);
+      const selectedBindingStillExists = bindingStatus.some((binding) => binding.key === selectedConnectionBindingKey);
+      if (selectedConnectionBindingKey && !selectedBindingStillExists) {
+        setSelectedConnectionBindingKey('');
+      }
       if (Array.isArray(customProcess.row_values)) {
         setProcessRowValues(customProcess.row_values.map((item) => String(item || '').trim()).filter(Boolean).join(', '));
       }
@@ -1759,6 +2277,13 @@ export const AgentBlueprintsPage = () => {
         setTelegramBotMode(String(telegram.config?.bot_mode || 'business_bot'));
         setTelegramDailyCap(String(telegram.limits?.daily_message_cap || 50));
       }
+      const maton = integrations.find((item) => item.provider === 'maton') || available.find((item) => item.provider === 'maton');
+      const matonAuth = authOptions.find((item) => item.source === 'maton');
+      if (maton || matonAuth) {
+        setMatonAuthRef(String(maton?.auth_ref || matonAuth?.id || ''));
+        setMatonChannel(String(maton?.config?.channel || 'maton_bridge'));
+        setMatonDailyCap(String(maton?.limits?.daily_message_cap || 50));
+      }
     } catch (requestError) {
       console.error(requestError);
       setAgentIntegrations([]);
@@ -1767,8 +2292,26 @@ export const AgentBlueprintsPage = () => {
       setAgentExternalAuthOptions([]);
       setAgentBindingStatus([]);
       setAgentConnectionPlan(null);
+      setSelectedConnectionBindingKey('');
     }
-  }, []);
+  }, [selectedConnectionBindingKey]);
+
+  const applyPostConnectHandoff = (value: unknown) => {
+    const handoff = normalizePostCreateHandoff(value);
+    if (!handoff) {
+      return;
+    }
+    setRecentPostCreateHandoff(handoff);
+    if (handoff.workspace_mode === 'run') {
+      setSelectedConnectionBindingKey('');
+      setWorkspaceMode('run');
+    } else if (handoff.workspace_mode === 'connections') {
+      if (handoff.next_binding_key) {
+        setSelectedConnectionBindingKey(handoff.next_binding_key);
+      }
+      setWorkspaceMode('connections');
+    }
+  };
 
   useEffect(() => {
     if (selectedBlueprint?.id) {
@@ -1783,6 +2326,7 @@ export const AgentBlueprintsPage = () => {
       setAgentIntegrationCatalog([]);
       setAgentExternalAuthOptions([]);
       setAgentBindingStatus([]);
+      setSelectedConnectionBindingKey('');
     }
   }, [loadAgentIntegrations, loadBlueprintReview, loadSourceCatalog, selectedBlueprint?.id]);
 
@@ -1831,6 +2375,7 @@ export const AgentBlueprintsPage = () => {
         message: dialogBuilderInput.trim(),
       });
       setDialogBuilderSession(response.data?.session || null);
+      setSelectedBuilderConnectionBindings(autoSelectBuilderConnectionBindings(response.data?.session?.preview || null));
       setAgentPrompt(dialogBuilderInput.trim());
       const preview = response.data?.session?.preview || {};
       if (typeof preview.category === 'string') {
@@ -1870,6 +2415,7 @@ export const AgentBlueprintsPage = () => {
         message: dialogBuilderReply.trim(),
       });
       setDialogBuilderSession(response.data?.session || null);
+      setSelectedBuilderConnectionBindings(autoSelectBuilderConnectionBindings(response.data?.session?.preview || null));
       setDialogBuilderReply('');
     } catch (requestError) {
       console.error(requestError);
@@ -1888,6 +2434,7 @@ export const AgentBlueprintsPage = () => {
     try {
       const response = await api.post(`/agent-builder/sessions/${dialogBuilderSession.id}/create-blueprint`, {
         use_ai_compiler: true,
+        selected_connection_bindings: selectedBuilderConnectionBindings,
       });
       const blueprint = response.data?.blueprint;
       const handoff = normalizePostCreateHandoff(response.data?.post_create_handoff);
@@ -1900,13 +2447,23 @@ export const AgentBlueprintsPage = () => {
         await loadAgentIntegrations(blueprint.id);
         setRecentCreatedAgentName(String(blueprint.name || 'Новый агент'));
         setRecentPostCreateHandoff(handoff);
+        if (handoff?.workspace_mode === 'run') {
+          setSelectedConnectionBindingKey('');
+        } else if (handoff?.next_binding_key) {
+          setSelectedConnectionBindingKey(handoff.next_binding_key);
+        }
       }
       setDialogBuilderInput('');
       setDialogBuilderReply('');
       setDialogBuilderSession(null);
+      setSelectedBuilderConnectionBindings({});
       setCreateWizardOpen(false);
       const handoffMode = handoff?.workspace_mode || '';
-      setWorkspaceMode(handoffMode === 'connections' || handoffMode === 'settings' ? handoffMode : (response.data?.next_step === 'connect_required_integrations' ? 'connections' : 'settings'));
+      setWorkspaceMode(
+        handoffMode === 'connections' || handoffMode === 'settings' || handoffMode === 'run'
+          ? handoffMode
+          : (response.data?.next_step === 'connect_required_integrations' ? 'connections' : 'run'),
+      );
     } catch (requestError) {
       console.error(requestError);
       setError(getRequestErrorMessage(requestError, 'Не удалось создать агента из диалога.'));
@@ -1986,11 +2543,19 @@ export const AgentBlueprintsPage = () => {
     setError(null);
     try {
       const runInput = {
-        source: runSource.trim() || 'dashboard',
+        schema: 'localos_agent_preview_input_v1',
+        preview_mode: true,
+        source: 'agent_preview',
+        dashboard_source: runSource.trim() || 'dashboard',
         city: runCity.trim(),
         category: runCategory.trim(),
-        intent: 'client_outreach',
+        goal: targetBlueprint.description || targetBlueprint.latest_goal || '',
+        intent: 'agent_preview',
         business_id: currentBusinessId,
+        blueprint_id: targetBlueprint.id,
+        blueprint_version_id: blueprintVersionId || getActiveVersionId(targetBlueprint, blueprintDetails) || '',
+        external_side_effects_allowed: false,
+        approval_required_for_external_actions: true,
         limit: Number(runLimit) > 0 ? Math.min(Number(runLimit), 100) : 30,
       };
       const preflightResponse = await api.post(`/agent-blueprints/${targetBlueprint.id}/preflight`, {
@@ -1999,6 +2564,15 @@ export const AgentBlueprintsPage = () => {
       });
       const preflight = normalizeAgentIntegrationPreflight(preflightResponse.data?.preflight);
       if (preflightResponse.data?.can_start === false || preflight?.ready === false) {
+        const connectionPlan = normalizeConnectionPlan(preflightResponse.data?.connection_plan);
+        if (connectionPlan) {
+          setAgentConnectionPlan(connectionPlan);
+        }
+        const nextBindingKey = String(preflightResponse.data?.next_binding_key || '');
+        if (nextBindingKey) {
+          setSelectedConnectionBindingKey(nextBindingKey);
+        }
+        setWorkspaceMode('connections');
         setError(formatPreflightBlock(preflight) || 'Перед запуском нужно подключить источники агента.');
         await loadBlueprintDetails(targetBlueprint.id);
         return;
@@ -2216,15 +2790,22 @@ export const AgentBlueprintsPage = () => {
     if (!selectedBlueprint || !sheetSpreadsheetId.trim()) {
       return;
     }
+    const selectedBinding = agentBindingStatus.find((item) => item.key === selectedConnectionBindingKey && item.provider === 'google_sheets');
     const existing = [...agentIntegrations, ...availableAgentIntegrations].find((item) => item.provider === 'google_sheets');
     const needsRead = agentBindingStatus.some((item) => item.provider === 'google_sheets' && item.capability === 'google_sheets.read_rows');
     const needsAppend = agentBindingStatus.some((item) => item.provider === 'google_sheets' && item.capability === 'sheets.append_row_request');
-    const operation = needsRead && needsAppend ? 'read_write' : needsRead ? 'read_rows' : 'append_row';
+    const selectedCapability = selectedBinding?.capability || '';
+    const operation = selectedCapability === 'google_sheets.read_rows'
+      ? 'read_rows'
+      : selectedCapability === 'sheets.append_row_request'
+        ? 'append_row'
+        : needsRead && needsAppend ? 'read_write' : needsRead ? 'read_rows' : 'append_row';
     setActionLoading(true);
     setError(null);
     try {
-      await api.post(`/agent-blueprints/${selectedBlueprint.id}/integrations`, {
+      const response = await api.post(`/agent-blueprints/${selectedBlueprint.id}/integrations`, {
         integration_id: existing?.id,
+        binding_key: selectedBinding?.key || '',
         provider: 'google_sheets',
         status: 'active',
         display_name: 'Google Sheets',
@@ -2241,6 +2822,7 @@ export const AgentBlueprintsPage = () => {
       });
       await loadAgentIntegrations(selectedBlueprint.id);
       await loadBlueprintDetails(selectedBlueprint.id);
+      applyPostConnectHandoff(response.data?.post_connect_handoff);
     } catch (requestError) {
       console.error(requestError);
       setError(getRequestErrorMessage(requestError, 'Не удалось подключить Google Sheets.'));
@@ -2253,12 +2835,14 @@ export const AgentBlueprintsPage = () => {
     if (!selectedBlueprint) {
       return;
     }
+    const selectedBinding = agentBindingStatus.find((item) => item.key === selectedConnectionBindingKey && item.provider === 'telegram');
     const existing = [...agentIntegrations, ...availableAgentIntegrations].find((item) => item.provider === 'telegram');
     setActionLoading(true);
     setError(null);
     try {
-      await api.post(`/agent-blueprints/${selectedBlueprint.id}/integrations`, {
+      const response = await api.post(`/agent-blueprints/${selectedBlueprint.id}/integrations`, {
         integration_id: existing?.id,
+        binding_key: selectedBinding?.key || '',
         provider: 'telegram',
         status: 'active',
         display_name: 'Telegram',
@@ -2272,6 +2856,7 @@ export const AgentBlueprintsPage = () => {
       });
       await loadAgentIntegrations(selectedBlueprint.id);
       await loadBlueprintDetails(selectedBlueprint.id);
+      applyPostConnectHandoff(response.data?.post_connect_handoff);
     } catch (requestError) {
       console.error(requestError);
       setError(getRequestErrorMessage(requestError, 'Не удалось подключить Telegram.'));
@@ -2280,15 +2865,51 @@ export const AgentBlueprintsPage = () => {
     }
   };
 
-  const attachExistingAgentIntegration = async (integration: AgentIntegration) => {
+  const saveMatonIntegration = async () => {
+    if (!selectedBlueprint) {
+      return;
+    }
+    const selectedBinding = agentBindingStatus.find((item) => item.key === selectedConnectionBindingKey && item.provider === 'maton');
+    const existing = [...agentIntegrations, ...availableAgentIntegrations].find((item) => item.provider === 'maton');
+    setActionLoading(true);
+    setError(null);
+    try {
+      const response = await api.post(`/agent-blueprints/${selectedBlueprint.id}/integrations`, {
+        integration_id: existing?.id,
+        binding_key: selectedBinding?.key || '',
+        provider: 'maton',
+        status: 'active',
+        display_name: 'Maton.ai',
+        auth_ref: matonAuthRef.trim(),
+        config: {
+          channel: matonChannel.trim() || 'maton_bridge',
+        },
+        limits: {
+          daily_message_cap: Number(matonDailyCap) > 0 ? Number(matonDailyCap) : 50,
+          frequency_cap_minutes: 30,
+        },
+      });
+      await loadAgentIntegrations(selectedBlueprint.id);
+      await loadBlueprintDetails(selectedBlueprint.id);
+      applyPostConnectHandoff(response.data?.post_connect_handoff);
+    } catch (requestError) {
+      console.error(requestError);
+      setError(getRequestErrorMessage(requestError, 'Не удалось подключить Maton.ai.'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const attachExistingAgentIntegration = async (integration: AgentIntegration, bindingKey = '') => {
     if (!selectedBlueprint || !integration?.id || !integration.provider) {
       return;
     }
     setActionLoading(true);
     setError(null);
     try {
-      await api.post(`/agent-blueprints/${selectedBlueprint.id}/integrations`, {
+      const response = await api.post(`/agent-blueprints/${selectedBlueprint.id}/integrations`, {
         integration_id: integration.id,
+        binding_key: bindingKey,
         provider: integration.provider,
         status: 'active',
         display_name: integration.display_name || integration.provider_label || humanizeMeta(integration.provider),
@@ -2298,6 +2919,7 @@ export const AgentBlueprintsPage = () => {
       });
       await loadAgentIntegrations(selectedBlueprint.id);
       await loadBlueprintDetails(selectedBlueprint.id);
+      applyPostConnectHandoff(response.data?.post_connect_handoff);
     } catch (requestError) {
       console.error(requestError);
       setError(getRequestErrorMessage(requestError, 'Не удалось подключить существующий доступ к агенту.'));
@@ -2459,6 +3081,13 @@ export const AgentBlueprintsPage = () => {
             onStart={startDialogBuilderSession}
             onSendReply={sendDialogBuilderReply}
             onCreate={createAgentFromDialogSession}
+            selectedConnectionBindings={selectedBuilderConnectionBindings}
+            onSelectConnectionBinding={(bindingKey, integrationId) => {
+              setSelectedBuilderConnectionBindings((current) => ({
+                ...current,
+                [bindingKey]: integrationId,
+              }));
+            }}
           />
           <details className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
             <summary className="cursor-pointer text-sm font-medium text-slate-700">
@@ -2522,6 +3151,11 @@ export const AgentBlueprintsPage = () => {
                     Открыть подключения
                   </Button>
                 ) : null}
+                {recentPostCreateHandoff?.workspace_mode === 'run' ? (
+                  <Button type="button" size="sm" onClick={() => setWorkspaceMode('run')}>
+                    Запустить preview
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   size="sm"
@@ -2535,8 +3169,31 @@ export const AgentBlueprintsPage = () => {
                 </Button>
               </div>
             )}
+	          />
+	          {recentPostCreateHandoff?.next_binding ? (
+	            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-950">
+	              <div className="font-semibold">
+	                Следующий доступ: {recentPostCreateHandoff.next_binding.title || connectorLabel(recentPostCreateHandoff.next_binding.provider)}
+	              </div>
+	              <div className="mt-1">
+	                {recentPostCreateHandoff.next_binding.route_summary || recentPostCreateHandoff.next_binding.explanation || 'Откройте подключения и завершите настройку этого шага.'}
+	              </div>
+	              {recentPostCreateHandoff.next_route?.label || recentPostCreateHandoff.next_route?.primary_cta ? (
+	                <div className="mt-2 rounded-lg bg-white/80 px-2 py-1.5 text-amber-900 ring-1 ring-amber-100">
+	                  <ProviderActionPill route={recentPostCreateHandoff.next_route} />
+	                  {providerActionDescription(recentPostCreateHandoff.next_route) ? (
+	                    <div className="mt-1">{providerActionDescription(recentPostCreateHandoff.next_route)}</div>
+	                  ) : null}
+	                </div>
+	              ) : null}
+	            </div>
+	          ) : null}
+	          <AgentConnectionPlanPanel
+	            connectionPlan={recentPostCreateHandoff?.connection_plan || agentConnectionPlan}
+            availableIntegrations={availableAgentIntegrations}
+            actionLoading={actionLoading}
+            onAttachExistingIntegration={attachExistingAgentIntegration}
           />
-          <AgentConnectionPlanPanel connectionPlan={recentPostCreateHandoff?.connection_plan || agentConnectionPlan} />
         </div>
       ) : null}
 
@@ -2664,12 +3321,16 @@ export const AgentBlueprintsPage = () => {
                 agentExternalAuthOptions={agentExternalAuthOptions}
                 agentBindingStatus={agentBindingStatus}
                 agentConnectionPlan={agentConnectionPlan}
+                selectedConnectionBindingKey={selectedConnectionBindingKey}
                 sheetSpreadsheetId={sheetSpreadsheetId}
                 sheetName={sheetName}
                 sheetAuthRef={sheetAuthRef}
                 sheetDailyCap={sheetDailyCap}
                 telegramBotMode={telegramBotMode}
                 telegramDailyCap={telegramDailyCap}
+                matonAuthRef={matonAuthRef}
+                matonChannel={matonChannel}
+                matonDailyCap={matonDailyCap}
                 processRowValues={processRowValues}
                 processPreviewMessage={processPreviewMessage}
                 runSource={runSource}
@@ -2708,11 +3369,16 @@ export const AgentBlueprintsPage = () => {
                 onSheetDailyCapChange={setSheetDailyCap}
                 onTelegramBotModeChange={setTelegramBotMode}
                 onTelegramDailyCapChange={setTelegramDailyCap}
+                onMatonAuthRefChange={setMatonAuthRef}
+                onMatonChannelChange={setMatonChannel}
+                onMatonDailyCapChange={setMatonDailyCap}
                 onProcessRowValuesChange={setProcessRowValues}
                 onProcessPreviewMessageChange={setProcessPreviewMessage}
                 onSaveSheetIntegration={saveSheetIntegration}
                 onSaveTelegramIntegration={saveTelegramIntegration}
+                onSaveMatonIntegration={saveMatonIntegration}
                 onAttachExistingIntegration={attachExistingAgentIntegration}
+                onSelectConnectionBinding={setSelectedConnectionBindingKey}
                 onSaveCustomProcess={saveCustomProcess}
                 onRunCustomProcessPreview={runCustomProcessPreview}
                 onRunSourceChange={setRunSource}
@@ -3119,6 +3785,8 @@ const DialogAgentBuilder = ({
   onStart,
   onSendReply,
   onCreate,
+  selectedConnectionBindings,
+  onSelectConnectionBinding,
 }: {
   input: string;
   reply: string;
@@ -3129,12 +3797,55 @@ const DialogAgentBuilder = ({
   onStart: () => void;
   onSendReply: () => void;
   onCreate: () => void;
+  selectedConnectionBindings: Record<string, string>;
+  onSelectConnectionBinding: (bindingKey: string, integrationId: string) => void;
 }) => {
   const preview = session?.preview || null;
   const questions = session?.missing_questions || [];
   const messages = session?.messages || [];
   const estimatedCredits = Number(preview?.cost_preview?.estimated_credits || 0);
-  const canCreateDraft = preview?.setup_flow?.can_create_draft !== false;
+  const connectionSummaryItems = preview?.connection_summary?.items || [];
+  const requiredConnectionChoices = connectionSummaryItems.filter((item) => item.action === 'choose_existing' && item.key && (item.connections?.length || 0) > 1);
+  const missingConnectionChoices = requiredConnectionChoices.filter((item) => !selectedConnectionBindings[item.key || '']);
+  const canCreateDraft = preview?.setup_flow?.can_create_draft !== false && !missingConnectionChoices.length;
+  const createBlockers: Array<{ key: string; label: string }> = [];
+  const addCreateBlocker = (key: string, label: string) => {
+    const cleanKey = key.trim();
+    const cleanLabel = label.trim();
+    if (!cleanKey || !cleanLabel || createBlockers.some((item) => item.key === cleanKey || item.label === cleanLabel)) {
+      return;
+    }
+    createBlockers.push({ key: cleanKey, label: cleanLabel });
+  };
+  questions.slice(0, 4).forEach((question) => {
+    addCreateBlocker(`question:${question.key || question.question}`, question.question || 'Ответьте на уточнение.');
+  });
+  missingConnectionChoices.slice(0, 4).forEach((item) => {
+    addCreateBlocker(`choice:${item.key || item.provider}`, `Выберите подключение ${item.title || connectorLabel(item.provider)}.`);
+  });
+  preview?.setup_flow?.activation_blockers?.slice(0, 4).forEach((item) => {
+    addCreateBlocker(`blocker:${item.type || item.provider || item.message}`, item.message || connectorLabel(item.provider));
+  });
+  preview?.connection_summary?.forbidden?.slice(0, 2).forEach((item) => {
+    addCreateBlocker(`forbidden:${item.term || item.reason}`, item.reason || 'Запрос запрещён policy envelope LocalOS.');
+  });
+  preview?.connection_summary?.unsupported?.slice(0, 2).forEach((item) => {
+    addCreateBlocker(`unsupported:${item.capability || item.reason}`, item.reason || 'Нет разрешённого provider path.');
+  });
+  const createDraftLabel = preview?.setup_flow?.post_create_status === 'ready_for_preview'
+    ? 'Создать draft и открыть preview'
+    : missingConnectionChoices.length
+      ? 'Сначала выберите подключение'
+      : preview?.setup_flow?.post_create_status === 'needs_connection' || preview?.setup_flow?.post_create_status === 'needs_connection_choice'
+      ? 'Создать draft и подключить сервисы'
+      : 'Создать draft агента';
+  const builderDecision = buildBuilderCreationDecision({
+    preview,
+    questions,
+    missingConnectionChoices,
+    canCreateDraft,
+    createDraftLabel,
+  });
   return (
     <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4">
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
@@ -3221,20 +3932,61 @@ const DialogAgentBuilder = ({
               <PreviewRow label="Результат" value={preview?.output_format || 'уточнить'} />
               <PreviewRow label="Ручной контроль" value={preview?.manual_control || 'перед внешним действием'} />
             </div>
+            <BuilderCreationDecisionBanner
+              decision={builderDecision}
+              actionLoading={actionLoading}
+              canSendReply={Boolean(reply.trim())}
+              canCreateDraft={canCreateDraft}
+              onSendReply={onSendReply}
+              onCreate={onCreate}
+            />
+            <BuilderConnectionReadinessPanel readiness={preview?.connection_readiness} />
             <BuilderSetupFlowPanel setupFlow={preview?.setup_flow} />
-            <BuilderPlannerLoopPanel plannerLoop={preview?.openclaw_planner_loop} />
-            <AgentConnectionPlanPanel connectionPlan={preview?.connection_plan || null} compact />
-            <BuilderFeasibilityPanel feasibility={preview?.feasibility} connectors={preview?.required_connectors} />
-            <CompiledBuilderFlow />
+            <BuilderConnectionSummaryPanel
+              summary={preview?.connection_summary}
+              selectedBindings={selectedConnectionBindings}
+              onSelectBinding={onSelectConnectionBinding}
+            />
+            {missingConnectionChoices.length ? (
+              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-950">
+                Выберите, какие уже подключённые сервисы использовать: {missingConnectionChoices.map((item) => item.title || connectorLabel(item.provider)).join(', ')}. После этого LocalOS привяжет их к compiled workflow.
+              </div>
+            ) : null}
+            <BuilderTechnicalDiagnostics
+              connectorIntelligence={preview?.connector_intelligence}
+              plannerLoop={preview?.openclaw_planner_loop}
+              connectionPlan={preview?.connection_plan || null}
+              feasibility={preview?.feasibility}
+              connectors={preview?.required_connectors}
+            />
             {estimatedCredits > 0 ? (
               <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-900">
                 Создание агента спишет примерно {estimatedCredits} кредита с баланса. Если кредитов не хватит, предложим пополнить счёт.
               </div>
             ) : null}
-            <div className="mt-4 flex justify-end">
+            {!canCreateDraft && createBlockers.length ? (
+              <div className="mt-3 rounded-xl border border-amber-200 bg-white px-3 py-3 text-xs leading-5 text-amber-950">
+                <div className="font-semibold">Почему draft пока нельзя создать</div>
+                <div className="mt-1 text-[11px] leading-4 text-amber-800">
+                  LocalOS должен собрать проверяемый workflow до создания агента.
+                </div>
+                <div className="mt-2 space-y-1">
+                  {createBlockers.slice(0, 5).map((item) => (
+                    <div key={item.key} className="flex gap-2">
+                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>{item.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+              {!canCreateDraft && preview?.setup_flow?.next_step_title ? (
+                <span className="text-xs leading-5 text-slate-500">{preview.setup_flow.next_step_title}</span>
+              ) : null}
               <Button type="button" onClick={onCreate} disabled={actionLoading || !canCreateDraft}>
                 {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-                {canCreateDraft ? 'Создать draft агента' : 'Сначала завершите настройку'}
+                {canCreateDraft ? createDraftLabel : 'Сначала завершите настройку'}
               </Button>
             </div>
           </div>
@@ -3244,8 +3996,50 @@ const DialogAgentBuilder = ({
   );
 };
 
-const CompiledBuilderFlow = () => (
-  <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-xs leading-5 text-emerald-950">
+const BuilderTechnicalDiagnostics = ({
+  connectorIntelligence,
+  plannerLoop,
+  connectionPlan,
+  feasibility,
+  connectors,
+}: {
+  connectorIntelligence?: AgentConnectorIntelligence;
+  plannerLoop?: AgentBuilderPlannerLoop;
+  connectionPlan?: AgentConnectionPlan | null;
+  feasibility?: AgentBuilderFeasibility;
+  connectors?: AgentBuilderConnectorPreview[];
+}) => {
+  const hasDetails = Boolean(
+    connectorIntelligence
+    || plannerLoop
+    || connectionPlan
+    || feasibility
+    || (connectors && connectors.length),
+  );
+  if (!hasDetails) {
+    return <CompiledBuilderFlow compact />;
+  }
+  return (
+    <details className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs leading-5 text-slate-700">
+      <summary className="cursor-pointer font-semibold text-slate-950">
+        Техническая диагностика LocalOS/OpenClaw
+      </summary>
+      <div className="mt-1 text-[11px] leading-4 text-slate-500">
+        Для проверки: provider paths, capability map, preflight и policy envelope. Обычный следующий шаг показан выше.
+      </div>
+      <div className="mt-3">
+        <CompiledBuilderFlow compact />
+        <ConnectorIntelligencePanel intelligence={connectorIntelligence} />
+        <BuilderPlannerLoopPanel plannerLoop={plannerLoop} />
+        <AgentConnectionPlanPanel connectionPlan={connectionPlan || null} compact />
+        <BuilderFeasibilityPanel feasibility={feasibility} connectors={connectors} />
+      </div>
+    </details>
+  );
+};
+
+const CompiledBuilderFlow = ({ compact = false }: { compact?: boolean }) => (
+  <div className={cn(compact ? 'mt-0' : 'mt-4', 'rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-xs leading-5 text-emerald-950')}>
     <div className="font-semibold">После создания LocalOS скомпилирует агента</div>
     <div className="mt-2 grid gap-2 sm:grid-cols-4">
       {[
@@ -3269,6 +4063,146 @@ const CompiledBuilderFlow = () => (
   </div>
 );
 
+const BuilderCreationDecisionBanner = ({
+  decision,
+  actionLoading,
+  canSendReply,
+  canCreateDraft,
+  onSendReply,
+  onCreate,
+}: {
+  decision: AgentConnectionDecision;
+  actionLoading: boolean;
+  canSendReply: boolean;
+  canCreateDraft: boolean;
+  onSendReply: () => void;
+  onCreate: () => void;
+}) => {
+  const ready = decision.tone === 'ready';
+  const choice = decision.tone === 'choice';
+  const blocked = decision.tone === 'blocked';
+  const needsAction = decision.tone === 'needs_action';
+  const canClick = decision.action === 'answer'
+    ? canSendReply
+    : decision.action === 'create'
+    ? canCreateDraft
+    : false;
+  return (
+    <div className={cn(
+      'mt-4 rounded-xl border px-3 py-3',
+      ready ? 'border-emerald-200 bg-emerald-50' : '',
+      choice ? 'border-sky-200 bg-sky-50' : '',
+      needsAction ? 'border-amber-200 bg-amber-50' : '',
+      blocked ? 'border-rose-200 bg-rose-50' : '',
+      !ready && !choice && !needsAction && !blocked ? 'border-slate-200 bg-white' : '',
+    )}>
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+        <div>
+          <div className={cn('text-sm font-semibold', ready ? 'text-emerald-950' : choice ? 'text-sky-950' : needsAction ? 'text-amber-950' : blocked ? 'text-rose-950' : 'text-slate-950')}>
+            {decision.title}
+          </div>
+          <div className={cn('mt-1 text-xs leading-5', ready ? 'text-emerald-800' : choice ? 'text-sky-800' : needsAction ? 'text-amber-900' : blocked ? 'text-rose-900' : 'text-slate-600')}>
+            {decision.description}
+          </div>
+        </div>
+        {decision.cta ? (
+          <Button
+            type="button"
+            size="sm"
+            variant={ready || decision.action === 'create' ? 'default' : 'outline'}
+            className={cn(!(ready || decision.action === 'create') && 'bg-white')}
+            disabled={actionLoading || !canClick}
+            onClick={() => {
+              if (decision.action === 'answer') {
+                onSendReply();
+                return;
+              }
+              if (decision.action === 'create') {
+                onCreate();
+              }
+            }}
+          >
+            {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : decision.action === 'answer' ? <MessageSquareText className="mr-2 h-4 w-4" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+            {decision.cta}
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+};
+
+const BuilderConnectionReadinessPanel = ({ readiness }: { readiness?: AgentConnectionReadiness }) => {
+  const services = readiness?.services || [];
+  const forbidden = readiness?.forbidden || [];
+  const unsupported = readiness?.unsupported || [];
+  if (!readiness || (!services.length && !forbidden.length && !unsupported.length)) {
+    return null;
+  }
+  const blocked = Boolean((readiness.blocked_count || 0) > 0 || forbidden.length || unsupported.length);
+  const needsAction = Boolean((readiness.missing_count || 0) > 0 || (readiness.choice_count || 0) > 0);
+  const ready = !blocked && !needsAction;
+  return (
+    <div className={cn(
+      'mt-3 rounded-xl border px-3 py-3 text-xs leading-5',
+      blocked ? 'border-rose-200 bg-rose-50 text-rose-950' : '',
+      needsAction ? 'border-amber-200 bg-amber-50 text-amber-950' : '',
+      ready ? 'border-emerald-200 bg-emerald-50 text-emerald-950' : '',
+      !blocked && !needsAction && !ready ? 'border-slate-200 bg-white text-slate-700' : '',
+    )}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="font-semibold">Готовность подключений</div>
+          <div className="mt-1 max-w-2xl">{readiness.description || readiness.title || 'LocalOS понял, какие сервисы нужны агенту.'}</div>
+        </div>
+        <span className="rounded-full bg-white px-2 py-0.5 font-medium ring-1 ring-current/10">
+          {readiness.title || 'Проверить доступы'}
+        </span>
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-4">
+        <AgentMiniMetric label="Нужно" value={String(readiness.required_count || 0)} />
+        <AgentMiniMetric label="Готово" value={String(readiness.ready_count || 0)} />
+        <AgentMiniMetric label="Действие" value={String((readiness.missing_count || 0) + (readiness.choice_count || 0))} />
+        <AgentMiniMetric label="Блокеры" value={String(readiness.blocked_count || 0)} />
+      </div>
+      {services.length ? (
+        <div className="mt-3 grid gap-2 md:grid-cols-2">
+          {services.slice(0, 4).map((service) => (
+            <div key={service.key || service.provider || service.title} className="rounded-lg bg-white px-3 py-2 ring-1 ring-current/10">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <div className="font-medium text-slate-950">{service.title || connectorLabel(service.provider)}</div>
+                  <div className="mt-0.5 text-[11px] leading-4 text-slate-500">{humanizeMeta(service.capability || service.provider || 'service')}</div>
+                </div>
+                <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium ring-1', connectionActionTone(service.action || ''))}>
+                  {service.action_label || humanizeMeta(service.action || service.status || '')}
+                </span>
+              </div>
+              <div className="mt-1 text-[11px] leading-4 text-slate-600">
+                {service.route_summary || service.explanation || 'Будет проверено перед safe preview.'}
+              </div>
+              {service.provider_route_label || service.provider_route_cta ? (
+                <div className="mt-2 rounded-lg bg-slate-50 px-2 py-1.5 text-[11px] leading-4 text-slate-700 ring-1 ring-slate-200">
+                  {service.provider_route_label ? `${service.provider_route_label}: ` : ''}
+                  {service.provider_route_cta || providerRouteLabel(service.route_state || '')}
+                </div>
+              ) : null}
+              {service.connections?.length ? (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {service.connections.slice(0, 3).map((connection) => (
+                    <span key={connection.id || connection.display_name} className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] text-sky-700 ring-1 ring-sky-100">
+                      {connection.display_name || connectorLabel(connection.provider)}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
 const BuilderSetupFlowPanel = ({ setupFlow }: { setupFlow?: AgentBuilderSetupFlow }) => {
   const steps = Array.isArray(setupFlow?.steps) ? setupFlow.steps : [];
   if (!setupFlow || !steps.length) {
@@ -3282,19 +4216,26 @@ const BuilderSetupFlowPanel = ({ setupFlow }: { setupFlow?: AgentBuilderSetupFlo
     cannot_create: 'Такой агент недоступен',
     create_draft: 'Можно создать draft',
   }[setupFlow.primary_action || ''] || 'Проверьте настройку';
+  const nextStepTitle = setupFlow.next_step_title || primaryActionLabel;
+  const nextStepDescription = setupFlow.next_step_description || setupFlow.post_create_description || '';
   return (
     <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs leading-5 text-slate-700">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="font-semibold text-slate-950">Что дальше</div>
+        <div>
+          <div className="font-semibold text-slate-950">Что дальше</div>
+          <div className="mt-1 max-w-2xl text-[11px] leading-4 text-slate-500">
+            {nextStepDescription || 'LocalOS ведёт агента от описания к draft, preview run и активации.'}
+          </div>
+        </div>
         <span className={cn('rounded-full px-2 py-0.5 font-medium ring-1', statusTone[setupFlow.status || 'pending'] || statusTone.pending)}>
-          {primaryActionLabel}
+          {nextStepTitle}
         </span>
       </div>
-      <div className="mt-3 grid gap-2 sm:grid-cols-5">
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
         {steps.map((step) => {
           const status = step.status || 'pending';
           const done = status === 'done' || status === 'ready';
-          const active = status === 'active';
+          const active = status === 'active' || status === 'next';
           const blocked = status === 'blocked';
           return (
             <div
@@ -3319,6 +4260,199 @@ const BuilderSetupFlowPanel = ({ setupFlow }: { setupFlow?: AgentBuilderSetupFlo
       {setupFlow.activation_blockers?.length ? (
         <div className="mt-2 text-[11px] leading-4 text-slate-500">
           Активация будет доступна после: {setupFlow.activation_blockers.slice(0, 3).map((item) => item.message || connectorLabel(item.provider)).join(', ')}.
+        </div>
+      ) : null}
+      {setupFlow.post_create_description ? (
+        <div className="mt-2 rounded-lg bg-slate-50 px-2 py-2 text-[11px] leading-4 text-slate-600 ring-1 ring-slate-100">
+          После создания: {setupFlow.post_create_description}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+const BuilderConnectionSummaryPanel = ({
+  summary,
+  selectedBindings = {},
+  onSelectBinding,
+}: {
+  summary?: AgentConnectionSummary;
+  selectedBindings?: Record<string, string>;
+  onSelectBinding?: (bindingKey: string, integrationId: string) => void;
+}) => {
+  const items = summary?.items || [];
+  const forbidden = summary?.forbidden || [];
+  const unsupported = summary?.unsupported || [];
+  if (!summary || (!items.length && !forbidden.length && !unsupported.length)) {
+    return null;
+  }
+  const blocked = Boolean((summary.blocked_count || 0) > 0 || forbidden.length || unsupported.length);
+  const needsAction = Boolean((summary.missing_count || 0) > 0 || (summary.choice_count || 0) > 0);
+  return (
+    <div className={cn('mt-3 rounded-xl border px-3 py-3 text-xs leading-5', blocked ? 'border-rose-200 bg-rose-50 text-rose-950' : needsAction ? 'border-amber-200 bg-amber-50 text-amber-950' : 'border-emerald-200 bg-emerald-50 text-emerald-950')}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="font-semibold">Подключения для агента</div>
+          <div className="mt-1 max-w-2xl">{summary.headline || 'LocalOS проверил нужные источники и каналы.'}</div>
+        </div>
+        <span className="rounded-full bg-white px-2 py-0.5 font-medium ring-1 ring-current/10">
+          {summary.next_action_label || 'Проверить подключения'}
+        </span>
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-4">
+        <AgentMiniMetric label="Готово" value={String(summary.ready_count || 0)} />
+        <AgentMiniMetric label="Подключить" value={String(summary.missing_count || 0)} />
+        <AgentMiniMetric label="Выбрать" value={String(summary.choice_count || 0)} />
+        <AgentMiniMetric label="Блокеры" value={String(summary.blocked_count || 0)} />
+      </div>
+      <div className="mt-3 grid gap-2 md:grid-cols-2">
+        {items.slice(0, 4).map((item) => (
+          <div key={`${item.key || item.provider || item.title}`} className="rounded-lg bg-white px-3 py-2 ring-1 ring-current/10">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="font-medium">{item.title || connectorLabel(item.provider)}</div>
+              <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600 ring-1 ring-slate-200">
+                {item.action_label || humanizeMeta(item.action || item.status || 'status')}
+              </span>
+            </div>
+            <div className="mt-1 text-[11px] leading-4 opacity-80">{item.explanation || 'Подключение будет проверено перед preview run.'}</div>
+            {item.setup_cta?.mode && item.setup_cta.mode !== 'none' ? (
+              <div className="mt-2 rounded-lg bg-slate-50 px-2 py-1.5 text-[11px] leading-4 text-slate-700 ring-1 ring-slate-200">
+                <div className="font-medium">{item.setup_cta.label || 'Настроить подключение'}</div>
+                {item.setup_cta.description ? <div className="mt-0.5">{item.setup_cta.description}</div> : null}
+              </div>
+            ) : null}
+            {item.connections?.length ? (
+              <div className="mt-2 space-y-1.5">
+                <div className="text-[11px] font-medium opacity-80">
+                  Доступно: {item.connections.slice(0, 2).map((connection) => connection.display_name || connectorLabel(connection.provider)).join(', ')}
+                </div>
+                {item.connections.length === 1 && selectedBindings[item.key || ''] === item.connections[0]?.id ? (
+                  <div className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-200">
+                    Выбрано автоматически
+                  </div>
+                ) : null}
+                {item.connections.length > 1 && onSelectBinding ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {item.connections.slice(0, 4).map((connection) => {
+                      const bindingKey = item.key || item.provider || '';
+                      const integrationId = connection.id || '';
+                      const selected = Boolean(bindingKey && integrationId && selectedBindings[bindingKey] === integrationId);
+                      return (
+                        <Button
+                          key={`${bindingKey}-${integrationId}`}
+                          type="button"
+                          size="sm"
+                          variant={selected ? 'default' : 'outline'}
+                          className={cn('h-7 px-2 text-[11px]', selected ? '' : 'bg-white')}
+                          disabled={!bindingKey || !integrationId}
+                          onClick={() => onSelectBinding(bindingKey, integrationId)}
+                        >
+                          {selected ? 'Выбрано' : 'Использовать'} {connection.display_name || connectorLabel(connection.provider)}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      {forbidden.length || unsupported.length ? (
+        <div className="mt-3 rounded-lg bg-white px-3 py-2 text-[11px] leading-4 ring-1 ring-current/10">
+          {[...forbidden.map((item) => item.reason || item.term || 'Запрещено policy'), ...unsupported.map((item) => item.reason || item.capability || 'Нет provider path')].slice(0, 3).join(' · ')}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+const AgentMiniMetric = ({ label, value }: { label: string; value: string }) => (
+  <div className="rounded-lg bg-white px-3 py-2 ring-1 ring-current/10">
+    <div className="text-[11px] font-medium opacity-70">{label}</div>
+    <div className="mt-1 text-base font-semibold">{value}</div>
+  </div>
+);
+
+const ConnectorIntelligencePanel = ({ intelligence }: { intelligence?: AgentConnectorIntelligence }) => {
+  const bindings = intelligence?.bindings || [];
+  const capabilities = intelligence?.capabilities || [];
+  const providerPaths = intelligence?.provider_paths || [];
+  const forbidden = intelligence?.forbidden || [];
+  const unsupported = intelligence?.unsupported || [];
+  if (!intelligence || (!bindings.length && !capabilities.length && !forbidden.length && !unsupported.length)) {
+    return null;
+  }
+  const blocked = Boolean(forbidden.length || unsupported.length);
+  const needsAction = bindings.some((item) => !['ready', 'native_ready'].includes(item.action || ''));
+  return (
+    <div className={cn('mt-3 rounded-xl border px-3 py-3 text-xs leading-5', blocked ? 'border-rose-200 bg-rose-50 text-rose-950' : needsAction ? 'border-amber-200 bg-amber-50 text-amber-950' : 'border-emerald-200 bg-emerald-50 text-emerald-950')}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="font-semibold">Доступность сервисов</div>
+          <div className="mt-1 max-w-2xl">
+            {intelligence.headline || 'LocalOS проверил нужные подключения и provider paths.'}
+          </div>
+        </div>
+        <span className={cn('rounded-full bg-white px-2.5 py-1 font-medium ring-1', blocked ? 'text-rose-700 ring-rose-200' : needsAction ? 'text-amber-800 ring-amber-200' : 'text-emerald-800 ring-emerald-200')}>
+          {blocked ? 'нельзя создать' : needsAction ? 'нужно действие' : 'готово к preview'}
+        </span>
+      </div>
+
+      {bindings.length ? (
+        <div className="mt-3 grid gap-2 md:grid-cols-2">
+          {bindings.slice(0, 4).map((item) => (
+            <div key={item.key || item.provider} className="rounded-lg bg-white px-2 py-2 ring-1 ring-black/5">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="font-medium text-slate-950">{item.title || connectorLabel(item.provider)}</div>
+                  <div className="mt-0.5 text-[11px] text-slate-500">{humanizeMeta(item.capability || item.provider || 'capability')}</div>
+                </div>
+                <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1', connectionActionTone(item.action || ''))}>
+                  {item.action_label || humanizeMeta(item.action || item.status || '')}
+                </span>
+              </div>
+              <div className="mt-1 text-[11px] leading-4 text-slate-600">{item.route_summary || item.explanation || 'Будет проверено на preflight.'}</div>
+              {item.connections?.length ? (
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {item.connections.slice(0, 2).map((connection) => (
+                    <span key={connection.id || connection.display_name} className="rounded-full bg-sky-50 px-1.5 py-0.5 text-[10px] text-sky-700 ring-1 ring-sky-100">
+                      {connection.display_name || connectorLabel(connection.provider)}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              {item.provider_routes?.length ? (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {item.provider_routes.slice(0, 4).map((route) => (
+                    <ProviderActionPill key={`${item.key}-${route.provider}-${route.role}`} route={route} />
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {capabilities.length ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {capabilities.slice(0, 5).map((item) => (
+            <span key={item.capability} className="rounded-full bg-white px-2 py-0.5 text-[11px] text-slate-700 ring-1 ring-black/5">
+              {humanizeMeta(item.capability || '')}
+              {item.route_state ? ` · ${providerRouteLabel(item.route_state)}` : ''}
+              {item.openclaw_actions?.length ? ` · OpenClaw ${item.openclaw_actions.length}` : ''}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {providerPaths.length ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {providerPaths.slice(0, 6).map((item) => (
+            <span key={`${item.provider}-${item.status}-${item.source}`} className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] text-slate-600 ring-1 ring-black/5">
+              {item.label || connectorLabel(item.provider)}: {humanizeMeta(item.status || 'unknown')}
+            </span>
+          ))}
         </div>
       ) : null}
     </div>
@@ -3816,12 +4950,16 @@ const AgentDetailPanel = ({
   agentBindingStatus,
   agentConnectionPlan,
   postCreateHandoff,
+  selectedConnectionBindingKey,
   sheetSpreadsheetId,
   sheetName,
   sheetAuthRef,
   sheetDailyCap,
   telegramBotMode,
   telegramDailyCap,
+  matonAuthRef,
+  matonChannel,
+  matonDailyCap,
   processRowValues,
   processPreviewMessage,
   runSource,
@@ -3860,11 +4998,16 @@ const AgentDetailPanel = ({
   onSheetDailyCapChange,
   onTelegramBotModeChange,
   onTelegramDailyCapChange,
+  onMatonAuthRefChange,
+  onMatonChannelChange,
+  onMatonDailyCapChange,
   onProcessRowValuesChange,
   onProcessPreviewMessageChange,
   onSaveSheetIntegration,
   onSaveTelegramIntegration,
+  onSaveMatonIntegration,
   onAttachExistingIntegration,
+  onSelectConnectionBinding,
   onSaveCustomProcess,
   onRunCustomProcessPreview,
   onRunSourceChange,
@@ -3901,12 +5044,16 @@ const AgentDetailPanel = ({
   agentBindingStatus: AgentIntegrationBindingStatus[];
   agentConnectionPlan: AgentConnectionPlan | null;
   postCreateHandoff: AgentPostCreateHandoff | null;
+  selectedConnectionBindingKey: string;
   sheetSpreadsheetId: string;
   sheetName: string;
   sheetAuthRef: string;
   sheetDailyCap: string;
   telegramBotMode: string;
   telegramDailyCap: string;
+  matonAuthRef: string;
+  matonChannel: string;
+  matonDailyCap: string;
   processRowValues: string;
   processPreviewMessage: string;
   runSource: string;
@@ -3945,11 +5092,16 @@ const AgentDetailPanel = ({
   onSheetDailyCapChange: (value: string) => void;
   onTelegramBotModeChange: (value: string) => void;
   onTelegramDailyCapChange: (value: string) => void;
+  onMatonAuthRefChange: (value: string) => void;
+  onMatonChannelChange: (value: string) => void;
+  onMatonDailyCapChange: (value: string) => void;
   onProcessRowValuesChange: (value: string) => void;
   onProcessPreviewMessageChange: (value: string) => void;
   onSaveSheetIntegration: () => void;
   onSaveTelegramIntegration: () => void;
-  onAttachExistingIntegration: (integration: AgentIntegration) => void;
+  onSaveMatonIntegration: () => void;
+  onAttachExistingIntegration: (integration: AgentIntegration, bindingKey?: string) => void;
+  onSelectConnectionBinding: (bindingKey: string) => void;
   onSaveCustomProcess: () => void;
   onRunCustomProcessPreview: () => void;
   onRunSourceChange: (value: string) => void;
@@ -3960,9 +5112,39 @@ const AgentDetailPanel = ({
 }) => {
   const latestVersionNumber = getActiveVersionNumber(blueprint, blueprintDetails);
   const activeVersionId = getActiveVersionId(blueprint, blueprintDetails);
+  const activationGate = blueprintDetails?.activation_gate;
   const voiceName = getAgentVoiceName(blueprint, blueprintDetails);
   const versions = blueprintDetails?.versions || [];
   const listStatus = getAgentListStatus(blueprint);
+  const openConnectionsFromActivationGate = () => {
+    if (activationGate?.next_binding_key) {
+      onSelectConnectionBinding(activationGate.next_binding_key);
+    }
+    onModeChange('connections');
+  };
+  const handlePreviewNextStep = (nextStep: string) => {
+    if (nextStep === 'connect_required_integrations') {
+      onModeChange('connections');
+      return;
+    }
+    if (nextStep === 'fix_preview_error') {
+      onModeChange('settings');
+      return;
+    }
+    if (nextStep === 'review_approvals') {
+      onModeChange('results');
+      return;
+    }
+    if (nextStep === 'check_activation_gate') {
+      onModeChange('overview');
+      return;
+    }
+    if (nextStep === 'review_preview') {
+      onModeChange('run');
+      return;
+    }
+    onModeChange('overview');
+  };
   return (
   <DashboardSection
     title={blueprint.name}
@@ -3994,15 +5176,16 @@ const AgentDetailPanel = ({
         pendingApproval={pendingApproval}
         review={agentReview}
         metrics={blueprintDetails?.metrics}
-        activationGate={blueprintDetails?.activation_gate}
+        activationGate={activationGate}
         bindingStatus={agentBindingStatus}
         actionLoading={actionLoading}
         onStartRun={onStartRun}
         onActivateVersion={onActivateVersion}
         onOpenLogic={() => onModeChange('settings')}
         onOpenResults={() => onModeChange('results')}
-        onOpenConnections={() => onModeChange('connections')}
+        onOpenConnections={openConnectionsFromActivationGate}
         onOpenVoice={() => onModeChange('voice')}
+        onDeleteAgent={onDeleteAgent}
       />
     ) : null}
 
@@ -4053,12 +5236,16 @@ const AgentDetailPanel = ({
         agentBindingStatus={agentBindingStatus}
         agentConnectionPlan={agentConnectionPlan}
         postCreateHandoff={recentPostCreateHandoff}
+        selectedConnectionBindingKey={selectedConnectionBindingKey}
         sheetSpreadsheetId={sheetSpreadsheetId}
         sheetName={sheetName}
         sheetAuthRef={sheetAuthRef}
         sheetDailyCap={sheetDailyCap}
         telegramBotMode={telegramBotMode}
         telegramDailyCap={telegramDailyCap}
+        matonAuthRef={matonAuthRef}
+        matonChannel={matonChannel}
+        matonDailyCap={matonDailyCap}
         processRowValues={processRowValues}
         processPreviewMessage={processPreviewMessage}
         actionLoading={actionLoading}
@@ -4068,11 +5255,16 @@ const AgentDetailPanel = ({
         onSheetDailyCapChange={onSheetDailyCapChange}
         onTelegramBotModeChange={onTelegramBotModeChange}
         onTelegramDailyCapChange={onTelegramDailyCapChange}
+        onMatonAuthRefChange={onMatonAuthRefChange}
+        onMatonChannelChange={onMatonChannelChange}
+        onMatonDailyCapChange={onMatonDailyCapChange}
         onProcessRowValuesChange={onProcessRowValuesChange}
         onProcessPreviewMessageChange={onProcessPreviewMessageChange}
         onSaveSheetIntegration={onSaveSheetIntegration}
         onSaveTelegramIntegration={onSaveTelegramIntegration}
+        onSaveMatonIntegration={onSaveMatonIntegration}
         onAttachExistingIntegration={attachExistingAgentIntegration}
+        onSelectConnectionBinding={onSelectConnectionBinding}
         onSaveCustomProcess={onSaveCustomProcess}
         onRunCustomProcessPreview={onRunCustomProcessPreview}
         onPreviewRun={onStartRun}
@@ -4110,6 +5302,16 @@ const AgentDetailPanel = ({
 
     {mode === 'results' ? (
       <div className="space-y-4">
+        {activeRun ? (
+          <PreviewRunSummaryPanel
+            summary={activeRun.observability?.preview_summary}
+            runInput={activeRun.input_json && typeof activeRun.input_json === 'object' ? activeRun.input_json : {}}
+            activationGate={activationGate}
+            actionLoading={actionLoading}
+            onNextStepAction={handlePreviewNextStep}
+            onActivateVersion={onActivateVersion}
+          />
+        ) : null}
         {blueprint.category === 'outreach' ? (
           <OutreachRunProgress review={agentReview} activeRun={activeRun} />
         ) : (
@@ -4165,7 +5367,14 @@ const AgentDetailPanel = ({
       />
     ) : null}
     {showAdvancedTools && mode === 'advanced' ? (
-      <AgentAdvancedPanel activeRun={activeRun} versions={versions} />
+      <AgentAdvancedPanel
+        activeRun={activeRun}
+        versions={versions}
+        activationGate={activationGate}
+        actionLoading={actionLoading}
+        onPreviewNextStepAction={handlePreviewNextStep}
+        onActivateVersion={onActivateVersion}
+      />
     ) : null}
   </DashboardSection>
   );
@@ -4188,6 +5397,7 @@ const AgentOverviewPanel = ({
   onOpenResults,
   onOpenConnections,
   onOpenVoice,
+  onDeleteAgent,
 }: {
   blueprint: AgentBlueprint;
   latestVersionNumber: number | null;
@@ -4205,42 +5415,28 @@ const AgentOverviewPanel = ({
   onOpenResults: () => void;
   onOpenConnections: () => void;
   onOpenVoice: () => void;
+  onDeleteAgent: () => void;
 }) => {
   const needsApproval = Boolean(pendingApproval || blueprint.pending_approvals_count);
-  const hasSources = Boolean(blueprint.sources_count);
   const compiledValid = metrics?.compiled?.validation_valid === true;
   const compiledKnown = Boolean(metrics?.compiled?.validation_status || metrics?.compiled?.candidate_status);
   const missingBindings = bindingStatus.filter((binding) => binding.status !== 'connected' && binding.status !== 'ready').length;
   const requiredBindings = bindingStatus.length || Number(metrics?.setup?.required_bindings || 0);
   const connectorsReady = requiredBindings === 0 || missingBindings === 0;
-  const canActivate = activationGate?.can_activate === true;
+  const previewReady = activationGate?.preview_run_status?.ready === true;
   const activationVersionId = activationGate?.active_version_id || blueprint.active_version_id || '';
-  const activationSummary = activationGate?.summary || '';
-  const activationPrimaryLabel = activationGate?.primary_action_label || '';
   const settledTokens = Number(metrics?.cost_tokens?.settled_tokens || 0);
   const totalCost = Number(metrics?.cost_tokens?.total_cost || 0);
-  const nextStep = needsApproval
-    ? 'Проверьте решение, которое ждёт человек.'
-    : activationSummary
-      ? activationSummary
-    : compiledKnown && !compiledValid
-      ? 'Логика агента не прошла проверку. Откройте “Логика” и исправьте версию.'
-      : !connectorsReady
-        ? 'Подключите недостающие источники перед активацией или запуском.'
-    : !latestVersionNumber
-      ? 'Настройте первую версию логики агента.'
-      : !hasSources
-        ? 'Добавьте данные или подключение перед регулярным запуском.'
-        : 'Можно проверить агента на примере.';
 
   return (
     <div className="space-y-4">
-      <div className={cn('rounded-2xl border px-4 py-4', needsApproval ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50')}>
+      {needsApproval ? (
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-slate-950">Следующий шаг</div>
-            <div className={cn('mt-1 text-sm leading-6', needsApproval ? 'text-amber-900' : 'text-slate-700')}>
-              {nextStep}
+            <div className="text-sm font-semibold text-slate-950">Ждёт решения человека</div>
+            <div className="mt-1 text-sm leading-6 text-amber-900">
+              Проверьте pending approval: без решения человека агент не продолжит внешний шаг.
             </div>
             {pendingApproval ? (
               <div className="mt-2 rounded-xl bg-white/80 px-3 py-2 text-xs leading-5 text-amber-900 ring-1 ring-amber-100">
@@ -4249,28 +5445,16 @@ const AgentOverviewPanel = ({
             ) : null}
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
-            {needsApproval ? (
-              <Button type="button" onClick={onOpenResults}>
-                Открыть решение
-              </Button>
-            ) : (
-              <Button type="button" onClick={onStartRun} disabled={actionLoading}>
-                {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
-                Проверить на примере
-              </Button>
-            )}
-            {canActivate ? (
-              <Button type="button" variant="outline" onClick={() => onActivateVersion(activationVersionId)} disabled={actionLoading || !activationVersionId}>
-                <CheckCircle2 className="mr-2 h-4 w-4" />
-                Активировать
-              </Button>
-            ) : null}
+            <Button type="button" onClick={onOpenResults}>
+              Открыть решение
+            </Button>
             <Button type="button" variant="outline" onClick={onOpenLogic}>
               Изменить логику
             </Button>
           </div>
         </div>
       </div>
+      ) : null}
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <AgentSummaryPill label="Статус" value={humanizeStatus(listStatus)} tone={needsApproval ? 'warning' : 'default'} />
@@ -4280,38 +5464,16 @@ const AgentOverviewPanel = ({
       </div>
 
       {activationGate ? (
-        <div className={cn('rounded-2xl border px-4 py-3 text-sm leading-6', canActivate ? 'border-emerald-200 bg-emerald-50 text-emerald-950' : 'border-amber-200 bg-amber-50 text-amber-950')}>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <div className="font-semibold">{canActivate ? 'Версию можно активировать' : 'Активация пока недоступна'}</div>
-              <div className="mt-1 text-xs leading-5">
-                {activationSummary || (canActivate
-                  ? 'Compiled workflow и preflight готовы. Внешние действия всё равно останутся за approval gate.'
-                  : activationGate.human_blockers?.slice(0, 3).map((item) => item.message || item.title || connectorLabel(item.provider)).join(', ') || activationGate.blockers?.slice(0, 3).map((item) => item.message || connectorLabel(item.provider)).join(', ') || 'Проверьте логику и подключения агента.')}
-              </div>
-            </div>
-            {canActivate ? (
-              <Button type="button" size="sm" onClick={() => onActivateVersion(activationVersionId)} disabled={actionLoading || !activationVersionId}>
-                {activationPrimaryLabel || 'Активировать версию'}
-              </Button>
-            ) : activationGate.next_step === 'connect_required_integrations' ? (
-              <Button type="button" size="sm" variant="outline" onClick={onOpenConnections}>
-                {activationPrimaryLabel || 'Открыть подключения'}
-              </Button>
-            ) : activationGate.next_step === 'fix_compiled_workflow' ? (
-              <Button type="button" size="sm" variant="outline" onClick={onOpenLogic}>
-                {activationPrimaryLabel || 'Открыть логику'}
-              </Button>
-            ) : activationGate.next_step === 'create_version' ? (
-              <Button type="button" size="sm" variant="outline" onClick={onOpenLogic}>
-                {activationPrimaryLabel || 'Создать версию'}
-              </Button>
-            ) : null}
-          </div>
-          {!canActivate && activationGate.connection_plan ? (
-            <AgentConnectionPlanPanel connectionPlan={activationGate.connection_plan} compact />
-          ) : null}
-        </div>
+        <ActivationGateDecisionCard
+          gate={activationGate}
+          activationVersionId={activationVersionId}
+          actionLoading={actionLoading}
+          onActivateVersion={onActivateVersion}
+          onOpenConnections={onOpenConnections}
+          onOpenLogic={onOpenLogic}
+          onOpenResults={onOpenResults}
+          onStartRun={onStartRun}
+        />
       ) : null}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.55fr)]">
@@ -4333,6 +5495,10 @@ const AgentOverviewPanel = ({
             <Button type="button" size="sm" variant="outline" onClick={onOpenVoice}>
               Голос и стиль
             </Button>
+            <Button type="button" size="sm" variant="outline" className="text-red-700 hover:text-red-800" onClick={onDeleteAgent} disabled={actionLoading}>
+              <Trash2 className="mr-2 h-4 w-4" />
+              Архивировать
+            </Button>
           </div>
         </div>
 
@@ -4342,6 +5508,7 @@ const AgentOverviewPanel = ({
             <ReadinessRow label="Логика" ready={Boolean(latestVersionNumber)} readyText={`v${latestVersionNumber || 1}`} blockedText="нужна версия" />
             <ReadinessRow label="Validation" ready={!compiledKnown || compiledValid} readyText={compiledKnown ? 'пройден' : 'ожидает'} blockedText="исправить" />
             <ReadinessRow label="Подключения" ready={connectorsReady} readyText={requiredBindings ? 'готовы' : 'не нужны'} blockedText={`нужно ${missingBindings}`} />
+            <ReadinessRow label="Preview" ready={previewReady} readyText="пройден" blockedText="нужен запуск" />
             <ReadinessRow label="Ручной контроль" ready blockedText="" readyText="включён" />
             <ReadinessRow label="Результаты" ready={Boolean(review?.has_run || blueprint.last_run_id)} readyText="есть запуск" blockedText="нет запуска" />
           </div>
@@ -4354,6 +5521,142 @@ const AgentOverviewPanel = ({
     </div>
   );
 };
+
+const ActivationGateDecisionCard = ({
+  gate,
+  activationVersionId,
+  actionLoading,
+  onActivateVersion,
+  onOpenConnections,
+  onOpenLogic,
+  onOpenResults,
+  onStartRun,
+}: {
+  gate: AgentActivationGate;
+  activationVersionId: string;
+  actionLoading: boolean;
+  onActivateVersion: (versionId: string) => void;
+  onOpenConnections: () => void;
+  onOpenLogic: () => void;
+  onOpenResults: () => void;
+  onStartRun: () => void;
+}) => {
+  const decision = buildActivationGateDecision(gate);
+  const ready = decision.tone === 'ready';
+  const choice = decision.tone === 'choice';
+  const blocked = decision.tone === 'blocked';
+  const needsAction = decision.tone === 'needs_action';
+  const blockerText = activationBlockerText(gate);
+  const pathSteps = buildActivationPathSteps(gate);
+  const runAction = () => {
+    if (decision.action === 'activate') {
+      onActivateVersion(activationVersionId);
+      return;
+    }
+    if (decision.action === 'connections') {
+      onOpenConnections();
+      return;
+    }
+    if (decision.action === 'logic') {
+      onOpenLogic();
+      return;
+    }
+    if (decision.action === 'results') {
+      onOpenResults();
+      return;
+    }
+    if (decision.action === 'preview') {
+      onStartRun();
+    }
+  };
+  const canClick = decision.action === 'activate' ? Boolean(activationVersionId) : decision.action !== 'none';
+  return (
+    <div className={cn(
+      'rounded-2xl border px-4 py-4 text-sm leading-6',
+      ready ? 'border-emerald-200 bg-emerald-50 text-emerald-950' : '',
+      choice ? 'border-sky-200 bg-sky-50 text-sky-950' : '',
+      needsAction ? 'border-amber-200 bg-amber-50 text-amber-950' : '',
+      blocked ? 'border-rose-200 bg-rose-50 text-rose-950' : '',
+      !ready && !choice && !needsAction && !blocked ? 'border-slate-200 bg-slate-50 text-slate-700' : '',
+    )}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="font-semibold">{decision.title}</div>
+          <div className="mt-1 text-xs leading-5">{decision.description}</div>
+          {blockerText && !ready ? (
+            <div className="mt-2 rounded-xl bg-white/80 px-3 py-2 text-xs leading-5 ring-1 ring-current/10">
+              Почему ждём: {blockerText}
+            </div>
+          ) : null}
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-medium ring-1 ring-current/10">
+              Preview: {gate.preview_run_status?.ready ? 'пройден' : 'нужен'}
+            </span>
+            <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-medium ring-1 ring-current/10">
+              Preflight: {gate.preflight?.ready ? 'готов' : 'проверить'}
+            </span>
+            <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-medium ring-1 ring-current/10">
+              Compiled: {gate.compiled_validation?.ready ? 'валиден' : 'проверить'}
+            </span>
+            <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-medium ring-1 ring-current/10">
+              Policy: {gate.approval_policy_status?.ready ? 'готова' : 'проверить'}
+            </span>
+          </div>
+          <AgentActivationPathStrip steps={pathSteps} />
+        </div>
+        {decision.cta ? (
+          <Button
+            type="button"
+            size="sm"
+            variant={ready ? 'default' : 'outline'}
+            className={cn(!ready && 'bg-white')}
+            onClick={runAction}
+            disabled={actionLoading || !canClick}
+          >
+            {actionLoading && decision.action === 'preview' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : ready ? <CheckCircle2 className="mr-2 h-4 w-4" /> : decision.action === 'preview' ? <Play className="mr-2 h-4 w-4" /> : <Zap className="mr-2 h-4 w-4" />}
+            {decision.cta}
+          </Button>
+        ) : null}
+      </div>
+      {!ready && gate.connection_plan ? (
+        <AgentConnectionPlanPanel connectionPlan={gate.connection_plan} compact />
+      ) : null}
+    </div>
+  );
+};
+
+const AgentActivationPathStrip = ({ steps }: { steps: AgentActivationPathStep[] }) => (
+  <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+    {steps.map((step, index) => {
+      const done = step.status === 'done';
+      const current = step.status === 'current';
+      return (
+        <div
+          key={step.key}
+          className={cn(
+            'rounded-xl border bg-white/75 px-3 py-2 ring-1 ring-current/5',
+            done ? 'border-emerald-200 text-emerald-900' : '',
+            current ? 'border-sky-200 text-sky-900' : '',
+            !done && !current ? 'border-slate-200 text-slate-500' : '',
+          )}
+        >
+          <div className="flex items-center gap-2 text-xs font-semibold">
+            <span className={cn(
+              'flex h-5 w-5 items-center justify-center rounded-full text-[11px]',
+              done ? 'bg-emerald-100 text-emerald-700' : '',
+              current ? 'bg-sky-100 text-sky-700' : '',
+              !done && !current ? 'bg-slate-100 text-slate-500' : '',
+            )}>
+              {done ? <CheckCircle2 className="h-3.5 w-3.5" /> : index + 1}
+            </span>
+            {step.label}
+          </div>
+          <div className="mt-1 text-[11px] leading-4 opacity-80">{step.detail}</div>
+        </div>
+      );
+    })}
+  </div>
+);
 
 const ReadinessRow = ({
   label,
@@ -4381,12 +5684,16 @@ const AgentConnectionsPanel = ({
   agentExternalAuthOptions,
   agentBindingStatus,
   agentConnectionPlan,
+  selectedConnectionBindingKey,
   sheetSpreadsheetId,
   sheetName,
   sheetAuthRef,
   sheetDailyCap,
   telegramBotMode,
   telegramDailyCap,
+  matonAuthRef,
+  matonChannel,
+  matonDailyCap,
   processRowValues,
   processPreviewMessage,
   actionLoading,
@@ -4396,11 +5703,16 @@ const AgentConnectionsPanel = ({
   onSheetDailyCapChange,
   onTelegramBotModeChange,
   onTelegramDailyCapChange,
+  onMatonAuthRefChange,
+  onMatonChannelChange,
+  onMatonDailyCapChange,
   onProcessRowValuesChange,
   onProcessPreviewMessageChange,
   onSaveSheetIntegration,
   onSaveTelegramIntegration,
+  onSaveMatonIntegration,
   onAttachExistingIntegration,
+  onSelectConnectionBinding,
   onSaveCustomProcess,
   onRunCustomProcessPreview,
   onPreviewRun,
@@ -4411,12 +5723,16 @@ const AgentConnectionsPanel = ({
   agentExternalAuthOptions: AgentExternalAuthOption[];
   agentBindingStatus: AgentIntegrationBindingStatus[];
   agentConnectionPlan: AgentConnectionPlan | null;
+  selectedConnectionBindingKey: string;
   sheetSpreadsheetId: string;
   sheetName: string;
   sheetAuthRef: string;
   sheetDailyCap: string;
   telegramBotMode: string;
   telegramDailyCap: string;
+  matonAuthRef: string;
+  matonChannel: string;
+  matonDailyCap: string;
   processRowValues: string;
   processPreviewMessage: string;
   actionLoading: boolean;
@@ -4426,11 +5742,16 @@ const AgentConnectionsPanel = ({
   onSheetDailyCapChange: (value: string) => void;
   onTelegramBotModeChange: (value: string) => void;
   onTelegramDailyCapChange: (value: string) => void;
+  onMatonAuthRefChange: (value: string) => void;
+  onMatonChannelChange: (value: string) => void;
+  onMatonDailyCapChange: (value: string) => void;
   onProcessRowValuesChange: (value: string) => void;
   onProcessPreviewMessageChange: (value: string) => void;
   onSaveSheetIntegration: () => void;
   onSaveTelegramIntegration: () => void;
-  onAttachExistingIntegration: (integration: AgentIntegration) => void;
+  onSaveMatonIntegration: () => void;
+  onAttachExistingIntegration: (integration: AgentIntegration, bindingKey?: string) => void;
+  onSelectConnectionBinding: (bindingKey: string) => void;
   onSaveCustomProcess: () => void;
   onRunCustomProcessPreview: () => void;
   onPreviewRun: () => void;
@@ -4457,19 +5778,30 @@ const AgentConnectionsPanel = ({
         Здесь настраиваются входящие каналы, внешняя запись и безопасный процесс доставки. Логика агента остаётся во вкладке “Логика”.
       </div>
     </div>
-    <AgentConnectionPlanPanel connectionPlan={agentConnectionPlan} />
+    <AgentConnectionPlanPanel
+      connectionPlan={agentConnectionPlan}
+      availableIntegrations={availableAgentIntegrations}
+      actionLoading={actionLoading}
+      onAttachExistingIntegration={onAttachExistingIntegration}
+      onConfigureBinding={onSelectConnectionBinding}
+    />
     <AgentIntegrationsPanel
       integrations={agentIntegrations}
       availableIntegrations={availableAgentIntegrations}
       providerCatalog={agentIntegrationCatalog}
       authOptions={agentExternalAuthOptions}
       bindingStatus={agentBindingStatus}
+      connectionPlan={agentConnectionPlan}
+      selectedBindingKey={selectedConnectionBindingKey}
       sheetSpreadsheetId={sheetSpreadsheetId}
       sheetName={sheetName}
       sheetAuthRef={sheetAuthRef}
       sheetDailyCap={sheetDailyCap}
       telegramBotMode={telegramBotMode}
       telegramDailyCap={telegramDailyCap}
+      matonAuthRef={matonAuthRef}
+      matonChannel={matonChannel}
+      matonDailyCap={matonDailyCap}
       processRowValues={processRowValues}
       processPreviewMessage={processPreviewMessage}
       actionLoading={actionLoading}
@@ -4479,11 +5811,16 @@ const AgentConnectionsPanel = ({
       onSheetDailyCapChange={onSheetDailyCapChange}
       onTelegramBotModeChange={onTelegramBotModeChange}
       onTelegramDailyCapChange={onTelegramDailyCapChange}
+      onMatonAuthRefChange={onMatonAuthRefChange}
+      onMatonChannelChange={onMatonChannelChange}
+      onMatonDailyCapChange={onMatonDailyCapChange}
       onProcessRowValuesChange={onProcessRowValuesChange}
       onProcessPreviewMessageChange={onProcessPreviewMessageChange}
         onSaveSheetIntegration={onSaveSheetIntegration}
         onSaveTelegramIntegration={onSaveTelegramIntegration}
+        onSaveMatonIntegration={onSaveMatonIntegration}
       onAttachExistingIntegration={onAttachExistingIntegration}
+      onSelectBinding={onSelectConnectionBinding}
       onSaveCustomProcess={onSaveCustomProcess}
       onRunCustomProcessPreview={onRunCustomProcessPreview}
       onPreviewRun={onPreviewRun}
@@ -4491,7 +5828,21 @@ const AgentConnectionsPanel = ({
   </div>
 );
 
-const AgentConnectionPlanPanel = ({ connectionPlan, compact = false }: { connectionPlan: AgentConnectionPlan | null; compact?: boolean }) => {
+const AgentConnectionPlanPanel = ({
+  connectionPlan,
+  compact = false,
+  availableIntegrations = [],
+  actionLoading = false,
+  onAttachExistingIntegration,
+  onConfigureBinding,
+}: {
+  connectionPlan: AgentConnectionPlan | null;
+  compact?: boolean;
+  availableIntegrations?: AgentIntegration[];
+  actionLoading?: boolean;
+  onAttachExistingIntegration?: (integration: AgentIntegration, bindingKey?: string) => void;
+  onConfigureBinding?: (bindingKey: string) => void;
+}) => {
   const items = Array.isArray(connectionPlan?.items) ? connectionPlan.items : [];
   if (!items.length) {
     return null;
@@ -4513,7 +5864,11 @@ const AgentConnectionPlanPanel = ({ connectionPlan, compact = false }: { connect
         </span>
       </div>
       <div className={cn('mt-3 grid gap-2', compact ? 'sm:grid-cols-1' : 'lg:grid-cols-2')}>
-        {(compact ? items.slice(0, 3) : items).map((item) => (
+        {(compact ? items.slice(0, 3) : items).map((item) => {
+          const matchingExisting = (item.existing_integrations || [])
+            .map((summary) => availableIntegrations.find((integration) => integration.id === summary.id))
+            .filter((integration) => Boolean(integration));
+          return (
           <div key={item.key || item.provider || item.title} className="rounded-xl bg-white px-3 py-3 text-sm ring-1 ring-slate-200">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -4526,7 +5881,14 @@ const AgentConnectionPlanPanel = ({ connectionPlan, compact = false }: { connect
                 {item.primary_label || humanizeMeta(item.action || 'проверить')}
               </span>
             </div>
-            <div className="mt-2 text-xs leading-5 text-slate-600">{item.explanation || bindingActionHint({ key: item.key || '', provider: item.provider || '', status: item.binding_status || '' })}</div>
+            <div className="mt-2 text-xs leading-5 text-slate-600">{item.route_summary || item.explanation || bindingActionHint({ key: item.key || '', provider: item.provider || '', status: item.binding_status || '' })}</div>
+            {item.provider_routes?.length ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {item.provider_routes.slice(0, 5).map((route) => (
+                  <ProviderActionPill key={`${item.key}-${route.provider}-${route.role}`} route={route} />
+                ))}
+              </div>
+            ) : null}
             {item.existing_integrations?.length ? (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {item.existing_integrations.slice(0, 3).map((integration) => (
@@ -4534,6 +5896,35 @@ const AgentConnectionPlanPanel = ({ connectionPlan, compact = false }: { connect
                     {integration.display_name || connectorLabel(integration.provider)}
                   </span>
                 ))}
+              </div>
+            ) : null}
+            {!compact && item.action === 'choose_existing' && matchingExisting.length && onAttachExistingIntegration ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {matchingExisting.slice(0, 3).map((integration) => integration ? (
+                  <Button
+                    key={integration.id}
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onAttachExistingIntegration(integration, item.key || '')}
+                    disabled={actionLoading}
+                  >
+                    Использовать {integration.display_name || connectorLabel(integration.provider)}
+                  </Button>
+                ) : null)}
+              </div>
+            ) : null}
+            {!compact && item.action !== 'ready' && item.action !== 'native_ready' && onConfigureBinding ? (
+              <div className="mt-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={item.action === 'choose_existing' ? 'outline' : 'default'}
+                  onClick={() => onConfigureBinding(item.key || '')}
+                  disabled={actionLoading || !item.key}
+                >
+                  Настроить {connectorLabel(item.provider)}
+                </Button>
               </div>
             ) : null}
             {item.provider_paths?.length ? (
@@ -4546,7 +5937,8 @@ const AgentConnectionPlanPanel = ({ connectionPlan, compact = false }: { connect
               </div>
             ) : null}
           </div>
-        ))}
+          );
+        })}
       </div>
       {compact && items.length > 3 ? (
         <div className="mt-2 text-[11px] leading-4 text-slate-500">Ещё {items.length - 3} подключений будут видны после создания draft.</div>
@@ -4568,12 +5960,78 @@ const connectionActionTone = (action: string) => {
   return 'bg-amber-50 text-amber-700 ring-amber-200';
 };
 
+const providerRouteLabel = (state: string) => ({
+  connected: 'подключено',
+  available: 'доступно',
+  manual: 'ручной режим',
+  planned: 'позже',
+  unavailable: 'недоступно',
+}[state] || humanizeMeta(state || 'unknown'));
+
+const providerRouteTone = (state: string) => {
+  if (state === 'connected' || state === 'available') {
+    return 'bg-emerald-50 text-emerald-700 ring-emerald-200';
+  }
+  if (state === 'manual') {
+    return 'bg-sky-50 text-sky-700 ring-sky-200';
+  }
+  if (state === 'planned') {
+    return 'bg-slate-50 text-slate-600 ring-slate-200';
+  }
+  return 'bg-rose-50 text-rose-700 ring-rose-200';
+};
+
+const providerActionLabel = (route?: AgentProviderRoute | null) => {
+  const action = route?.provider_action;
+  if (action?.label) {
+    return action.label;
+  }
+  return route?.primary_cta || providerRouteLabel(route?.state || route?.status || '');
+};
+
+const providerActionDescription = (route?: AgentProviderRoute | null) => {
+  const action = route?.provider_action;
+  if (action?.description) {
+    return action.description;
+  }
+  if (route?.connect_mode === 'openclaw_policy_boundary') {
+    return 'OpenClaw используется только внутри LocalOS policy, approval, audit и limits.';
+  }
+  if (route?.connect_mode === 'external_account_key') {
+    return 'Выберите сохранённый API key или добавьте его в интеграциях бизнеса.';
+  }
+  if (route?.connect_mode === 'planned_oauth_connector') {
+    return 'OAuth connector запланирован и пока не активирует агента.';
+  }
+  return '';
+};
+
+const ProviderActionPill = ({ route }: { route?: AgentProviderRoute | null }) => {
+  if (!route) {
+    return null;
+  }
+  const state = route.state || route.status || '';
+  return (
+    <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium ring-1', providerRouteTone(state))}>
+      {route.label || connectorLabel(route.provider)} · {providerActionLabel(route)}
+    </span>
+  );
+};
+
 const AgentAdvancedPanel = ({
   activeRun,
   versions,
+  activationGate,
+  actionLoading,
+  onPreviewNextStepAction,
+  onActivateVersion,
 }: {
   activeRun: AgentRun | null;
   versions: Array<Record<string, unknown>>;
+  activationGate?: AgentActivationGate;
+  actionLoading: boolean;
+  onPreviewNextStepAction: (nextStep: string) => void;
+  onActivateVersion: (versionId: string) => void;
 }) => (
   <div className="space-y-4">
     <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
@@ -4584,7 +6042,13 @@ const AgentAdvancedPanel = ({
     </div>
     {activeRun ? (
       <>
-        <AgentRunObservabilityPanel run={activeRun} />
+        <AgentRunObservabilityPanel
+          run={activeRun}
+          activationGate={activationGate}
+          actionLoading={actionLoading}
+          onPreviewNextStepAction={onPreviewNextStepAction}
+          onActivateVersion={onActivateVersion}
+        />
         <div className="grid gap-4 xl:grid-cols-3">
           <RunColumn title="Шаги runtime" icon={Clock3}>
             {(activeRun.steps || []).map((step) => (
@@ -5010,18 +6474,81 @@ const AgentSourcesList = ({ sources, compact = false }: { sources: AgentSource[]
   </div>
 );
 
+const AgentConnectionDecisionBanner = ({
+  decision,
+  actionLoading,
+  onConfigure,
+  onPreview,
+}: {
+  decision: AgentConnectionDecision;
+  actionLoading: boolean;
+  onConfigure: (bindingKey: string) => void;
+  onPreview: () => void;
+}) => {
+  const ready = decision.tone === 'ready';
+  const choice = decision.tone === 'choice';
+  const blocked = decision.tone === 'needs_action';
+  const canClick = decision.action === 'preview' || (decision.action === 'configure' && Boolean(decision.bindingKey));
+  return (
+    <div className={cn(
+      'rounded-xl border px-3 py-3',
+      ready ? 'border-emerald-200 bg-emerald-50' : '',
+      choice ? 'border-sky-200 bg-sky-50' : '',
+      blocked ? 'border-amber-200 bg-amber-50' : '',
+      !ready && !choice && !blocked ? 'border-slate-200 bg-slate-50' : '',
+    )}>
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+        <div>
+          <div className={cn('text-sm font-semibold', ready ? 'text-emerald-950' : choice ? 'text-sky-950' : blocked ? 'text-amber-950' : 'text-slate-950')}>
+            {decision.title}
+          </div>
+          <div className={cn('mt-1 text-xs leading-5', ready ? 'text-emerald-800' : choice ? 'text-sky-800' : blocked ? 'text-amber-900' : 'text-slate-600')}>
+            {decision.description}
+          </div>
+        </div>
+        {decision.cta ? (
+          <Button
+            type="button"
+            size="sm"
+            variant={ready ? 'default' : 'outline'}
+            className={cn(!ready && 'bg-white')}
+            disabled={actionLoading || !canClick}
+            onClick={() => {
+              if (decision.action === 'preview') {
+                onPreview();
+                return;
+              }
+              if (decision.bindingKey) {
+                onConfigure(decision.bindingKey);
+              }
+            }}
+          >
+            {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : ready ? <Play className="mr-2 h-4 w-4" /> : <Zap className="mr-2 h-4 w-4" />}
+            {decision.cta}
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+};
+
 const AgentIntegrationsPanel = ({
   integrations,
   availableIntegrations,
   providerCatalog,
   authOptions,
   bindingStatus,
+  connectionPlan,
+  selectedBindingKey,
   sheetSpreadsheetId,
   sheetName,
   sheetAuthRef,
   sheetDailyCap,
   telegramBotMode,
   telegramDailyCap,
+  matonAuthRef,
+  matonChannel,
+  matonDailyCap,
   processRowValues,
   processPreviewMessage,
   actionLoading,
@@ -5031,11 +6558,16 @@ const AgentIntegrationsPanel = ({
   onSheetDailyCapChange,
   onTelegramBotModeChange,
   onTelegramDailyCapChange,
+  onMatonAuthRefChange,
+  onMatonChannelChange,
+  onMatonDailyCapChange,
   onProcessRowValuesChange,
   onProcessPreviewMessageChange,
   onSaveSheetIntegration,
   onSaveTelegramIntegration,
+  onSaveMatonIntegration,
   onAttachExistingIntegration,
+  onSelectBinding,
   onSaveCustomProcess,
   onRunCustomProcessPreview,
   onPreviewRun,
@@ -5045,12 +6577,17 @@ const AgentIntegrationsPanel = ({
   providerCatalog: AgentIntegrationCatalogItem[];
   authOptions: AgentExternalAuthOption[];
   bindingStatus: AgentIntegrationBindingStatus[];
+  connectionPlan: AgentConnectionPlan | null;
+  selectedBindingKey: string;
   sheetSpreadsheetId: string;
   sheetName: string;
   sheetAuthRef: string;
   sheetDailyCap: string;
   telegramBotMode: string;
   telegramDailyCap: string;
+  matonAuthRef: string;
+  matonChannel: string;
+  matonDailyCap: string;
   processRowValues: string;
   processPreviewMessage: string;
   actionLoading: boolean;
@@ -5060,18 +6597,26 @@ const AgentIntegrationsPanel = ({
   onSheetDailyCapChange: (value: string) => void;
   onTelegramBotModeChange: (value: string) => void;
   onTelegramDailyCapChange: (value: string) => void;
+  onMatonAuthRefChange: (value: string) => void;
+  onMatonChannelChange: (value: string) => void;
+  onMatonDailyCapChange: (value: string) => void;
   onProcessRowValuesChange: (value: string) => void;
   onProcessPreviewMessageChange: (value: string) => void;
   onSaveSheetIntegration: () => void;
   onSaveTelegramIntegration: () => void;
-  onAttachExistingIntegration: (integration: AgentIntegration) => void;
+  onSaveMatonIntegration: () => void;
+  onAttachExistingIntegration: (integration: AgentIntegration, bindingKey?: string) => void;
+  onSelectBinding: (bindingKey: string) => void;
   onSaveCustomProcess: () => void;
   onRunCustomProcessPreview: () => void;
   onPreviewRun: () => void;
 }) => {
   const sheetIntegration = integrations.find((item) => item.provider === 'google_sheets');
   const telegramIntegration = integrations.find((item) => item.provider === 'telegram');
+  const matonIntegration = integrations.find((item) => item.provider === 'maton');
+  const selectedPlanItem = (connectionPlan?.items || []).find((item) => item.key === selectedBindingKey);
   const needsTelegram = bindingStatus.some((binding) => binding.provider === 'telegram');
+  const needsMaton = bindingStatus.some((binding) => binding.provider === 'maton') || (selectedPlanItem?.provider_routes || []).some((route) => route.provider === 'maton');
   const needsSheetsRead = bindingStatus.some((binding) => binding.provider === 'google_sheets' && binding.capability === 'google_sheets.read_rows');
   const needsSheetsAppend = bindingStatus.some((binding) => binding.provider === 'google_sheets' && binding.capability === 'sheets.append_row_request');
   const needsSheets = needsSheetsRead || needsSheetsAppend || bindingStatus.some((binding) => binding.provider === 'google_sheets');
@@ -5080,6 +6625,9 @@ const AgentIntegrationsPanel = ({
   const connectedBindings = bindingStatus.filter((binding) => binding.status === 'connected' || binding.status === 'ready').length;
   const missingBindings = bindingStatus.filter((binding) => binding.status !== 'connected' && binding.status !== 'ready').length;
   const canPreviewRun = !bindingStatus.length || missingBindings === 0;
+  const connectionDecision = buildAgentConnectionDecision(connectionPlan, bindingStatus, canPreviewRun);
+  const selectedBinding = bindingStatus.find((binding) => binding.key === selectedBindingKey);
+  const selectedProvider = selectedBinding?.provider || '';
   return (
     <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
       <div className="flex items-start justify-between gap-3">
@@ -5089,6 +6637,13 @@ const AgentIntegrationsPanel = ({
         </div>
         <span className="shrink-0 text-xs text-slate-400">{bindingStatus.length ? `${connectedBindings}/${bindingStatus.length}` : `${integrations.length}/${providerCatalog.length || 2}`}</span>
       </div>
+
+      <AgentConnectionDecisionBanner
+        decision={connectionDecision}
+        actionLoading={actionLoading}
+        onConfigure={onSelectBinding}
+        onPreview={onPreviewRun}
+      />
 
       {bindingStatus.length ? (
         <div className={cn('rounded-lg px-3 py-2 text-xs leading-5 ring-1', missingBindings ? 'bg-amber-50 text-amber-900 ring-amber-200' : 'bg-emerald-50 text-emerald-900 ring-emerald-200')}>
@@ -5115,6 +6670,7 @@ const AgentIntegrationsPanel = ({
 
       <div className="grid gap-2">
         {needsTelegram || !bindingStatus.length ? <AgentIntegrationStatusItem integration={telegramIntegration} provider="telegram" fallbackTitle="Telegram trigger" /> : null}
+        {needsMaton ? <AgentIntegrationStatusItem integration={matonIntegration} provider="maton" fallbackTitle="Maton.ai bridge" /> : null}
         {needsSheets || !bindingStatus.length ? <AgentIntegrationStatusItem integration={sheetIntegration} provider="google_sheets" fallbackTitle={sheetsTitle} /> : null}
       </div>
 
@@ -5122,7 +6678,13 @@ const AgentIntegrationsPanel = ({
         <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Что нужно подключить</div>
           {bindingStatus.map((binding) => (
-            <div key={binding.key || binding.provider} className="rounded-lg bg-white px-3 py-2 text-xs ring-1 ring-slate-200">
+            <div
+              key={binding.key || binding.provider}
+              className={cn(
+                'rounded-lg bg-white px-3 py-2 text-xs ring-1',
+                selectedBindingKey && binding.key === selectedBindingKey ? 'ring-sky-300' : 'ring-slate-200',
+              )}
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="font-medium text-slate-900">{connectorLabel(binding.provider)}</div>
@@ -5139,8 +6701,47 @@ const AgentIntegrationsPanel = ({
               {binding.approval_required ? (
                 <div className="mt-1 text-slate-500">Перед внешним действием агент остановится на подтверждение.</div>
               ) : null}
+              {binding.status !== 'connected' && binding.status !== 'ready' ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="mt-2"
+                  onClick={() => onSelectBinding(binding.key || '')}
+                  disabled={!binding.key}
+                >
+                  Настроить этот доступ
+                </Button>
+              ) : null}
             </div>
           ))}
+        </div>
+      ) : null}
+
+      {selectedBinding ? (
+        <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-950">
+          <div className="font-semibold">Сейчас настраивается: {connectorLabel(selectedBinding.provider)}</div>
+          <div className="mt-1">
+            {humanizeMeta(selectedBinding.key || selectedBinding.capability || selectedBinding.provider)}
+            {selectedBinding.missing_config?.length ? ` · заполните: ${selectedBinding.missing_config.join(', ')}` : ''}
+          </div>
+          {selectedPlanItem?.route_summary ? (
+            <div className="mt-2 rounded-lg bg-white/80 px-2 py-1.5 text-sky-900 ring-1 ring-sky-100">
+              {selectedPlanItem.route_summary}
+            </div>
+          ) : null}
+          {selectedPlanItem?.provider_routes?.length ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {selectedPlanItem.provider_routes.slice(0, 5).map((route) => (
+                <ProviderActionPill key={`${selectedPlanItem.key}-${route.provider}-${route.role}`} route={route} />
+              ))}
+            </div>
+          ) : null}
+          {selectedPlanItem?.provider_routes?.length ? (
+            <div className="mt-2 rounded-lg bg-white/80 px-2 py-1.5 text-sky-900 ring-1 ring-sky-100">
+              {providerActionDescription(selectedPlanItem.provider_routes.find((route) => route.state === 'available') || selectedPlanItem.provider_routes[0]) || 'Выберите доступный provider route для этого binding.'}
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -5177,7 +6778,7 @@ const AgentIntegrationsPanel = ({
       ) : null}
 
       {needsTelegram || !bindingStatus.length ? (
-      <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+      <div className={cn('space-y-2 rounded-lg border px-3 py-3', selectedProvider === 'telegram' ? 'border-sky-200 bg-sky-50' : 'border-slate-200 bg-slate-50')}>
         <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
           <MessageSquareText className="h-4 w-4" />
           Telegram
@@ -5198,13 +6799,55 @@ const AgentIntegrationsPanel = ({
           inputMode="numeric"
         />
         <Button type="button" size="sm" variant="outline" onClick={onSaveTelegramIntegration} disabled={actionLoading}>
-          Подключить Telegram
+          {selectedProvider === 'telegram' ? 'Сохранить Telegram для выбранного шага' : 'Подключить Telegram'}
+        </Button>
+      </div>
+      ) : null}
+
+      {needsMaton ? (
+      <div className={cn('space-y-2 rounded-lg border px-3 py-3', selectedProvider === 'maton' ? 'border-sky-200 bg-sky-50' : 'border-slate-200 bg-slate-50')}>
+        <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
+          <Workflow className="h-4 w-4" />
+          Maton.ai bridge
+        </div>
+        <div className="rounded-lg bg-white px-3 py-2 text-xs leading-5 text-slate-600 ring-1 ring-slate-200">
+          Используем сохранённый Maton.ai API key как delivery/provider bridge за LocalOS approval и audit boundary.
+        </div>
+        <select
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+          value={matonAuthRef}
+          onChange={(event) => onMatonAuthRefChange(event.target.value)}
+        >
+          <option value="">Maton key не выбран</option>
+          {authOptions.filter((option) => option.source === 'maton').map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.display_name || 'Maton.ai'} · {option.id.slice(0, 8)}
+            </option>
+          ))}
+        </select>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <input
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+            value={matonChannel}
+            onChange={(event) => onMatonChannelChange(event.target.value)}
+            placeholder="maton_bridge"
+          />
+          <input
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
+            value={matonDailyCap}
+            onChange={(event) => onMatonDailyCapChange(event.target.value)}
+            placeholder="Лимит действий в день"
+            inputMode="numeric"
+          />
+        </div>
+        <Button type="button" size="sm" onClick={onSaveMatonIntegration} disabled={actionLoading || !matonAuthRef.trim()}>
+          {selectedProvider === 'maton' ? 'Сохранить Maton для выбранного шага' : 'Подключить Maton.ai'}
         </Button>
       </div>
       ) : null}
 
       {needsSheets || !bindingStatus.length ? (
-      <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+      <div className={cn('space-y-2 rounded-lg border px-3 py-3', selectedProvider === 'google_sheets' ? 'border-sky-200 bg-sky-50' : 'border-slate-200 bg-slate-50')}>
         <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
           <Database className="h-4 w-4" />
           {needsSheetsRead && needsSheetsAppend ? 'Google Sheets: чтение и запись' : needsSheetsRead ? 'Google Sheets: чтение строк' : 'Google Sheets: запись строк'}
@@ -5243,7 +6886,7 @@ const AgentIntegrationsPanel = ({
           ))}
         </select>
         <Button type="button" size="sm" onClick={onSaveSheetIntegration} disabled={actionLoading || !sheetSpreadsheetId.trim()}>
-          Сохранить таблицу
+          {selectedProvider === 'google_sheets' ? 'Сохранить таблицу для выбранного шага' : 'Сохранить таблицу'}
         </Button>
       </div>
       ) : null}
@@ -5254,8 +6897,14 @@ const AgentIntegrationsPanel = ({
           {availableIntegrations.slice(0, 3).map((integration) => (
             <div key={integration.id} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
               <AgentIntegrationStatusItem integration={integration} provider={integration.provider} fallbackTitle={integration.display_name || integration.provider_label || integration.provider} />
-              <Button type="button" size="sm" variant="outline" onClick={() => onAttachExistingIntegration(integration)} disabled={actionLoading}>
-                Использовать
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => onAttachExistingIntegration(integration, selectedProvider === integration.provider ? selectedBindingKey : '')}
+                disabled={actionLoading}
+              >
+                {selectedProvider === integration.provider ? 'Использовать для шага' : 'Использовать'}
               </Button>
             </div>
           ))}
@@ -6038,7 +7687,19 @@ const formatPayloadValue = (value: unknown): string => {
   return String(value ?? '');
 };
 
-const AgentRunObservabilityPanel = ({ run }: { run: AgentRun }) => {
+const AgentRunObservabilityPanel = ({
+  run,
+  activationGate,
+  actionLoading,
+  onPreviewNextStepAction,
+  onActivateVersion,
+}: {
+  run: AgentRun;
+  activationGate?: AgentActivationGate;
+  actionLoading: boolean;
+  onPreviewNextStepAction: (nextStep: string) => void;
+  onActivateVersion: (versionId: string) => void;
+}) => {
   const [downloading, setDownloading] = useState(false);
   const observability = run.observability || {};
   const costTokens = observability.cost_tokens || {};
@@ -6050,6 +7711,7 @@ const AgentRunObservabilityPanel = ({ run }: { run: AgentRun }) => {
   const domainRequests = observability.domain_requests?.items || [];
   const errors = observability.errors || [];
   const recoveryActions = observability.recovery_actions || [];
+  const runInput = run.input_json && typeof run.input_json === 'object' ? run.input_json : {};
   const rawSupportEndpoint = observability.support_export?.endpoint || `/api/agent-runs/${run.id}/support-export`;
   const supportEndpoint = rawSupportEndpoint.startsWith('/api/') ? rawSupportEndpoint.slice(4) : rawSupportEndpoint;
 
@@ -6083,6 +7745,15 @@ const AgentRunObservabilityPanel = ({ run }: { run: AgentRun }) => {
         <AgentObservabilityMetric icon={ShieldCheck} label="Approvals" value={String(observability.domain_requests?.pending || observability.approvals?.pending || 0)} hint={`${observability.domain_requests?.count || 0} domain requests`} />
         <AgentObservabilityMetric icon={AlertTriangle} label="Errors" value={String(errors.length)} hint={errors.length ? 'нужна проверка' : 'нет ошибок'} />
       </div>
+
+      <PreviewRunSummaryPanel
+        summary={observability.preview_summary}
+        runInput={runInput}
+        activationGate={activationGate}
+        actionLoading={actionLoading}
+        onNextStepAction={onPreviewNextStepAction}
+        onActivateVersion={onActivateVersion}
+      />
 
       <div className="grid gap-4 xl:grid-cols-5">
         <RunColumn title="Action ledger" icon={ReceiptText}>
@@ -6194,6 +7865,246 @@ const AgentObservabilityMetric = ({
     </div>
     <div className="mt-2 text-lg font-semibold text-slate-950">{value}</div>
     <div className="mt-1 text-xs text-slate-500">{hint}</div>
+  </div>
+);
+
+const PreviewRunSummaryPanel = ({
+  summary,
+  runInput,
+  activationGate,
+  actionLoading = false,
+  onNextStepAction,
+  onActivateVersion,
+}: {
+  summary?: Record<string, unknown>;
+  runInput: Record<string, unknown>;
+  activationGate?: AgentActivationGate;
+  actionLoading?: boolean;
+  onNextStepAction?: (nextStep: string) => void;
+  onActivateVersion?: (versionId: string) => void;
+}) => {
+  const inputPreviewContext = runInput.preview_context && typeof runInput.preview_context === 'object' ? toRecordOrNull(runInput.preview_context) || {} : {};
+  const isPreview = Boolean(summary?.is_preview || runInput.preview_mode);
+  if (!isPreview) {
+    return null;
+  }
+  const dataSources = Array.isArray(summary?.data_sources)
+    ? summary.data_sources.map((item) => String(item || '')).filter(Boolean)
+    : [];
+  const completedSteps = Array.isArray(summary?.completed_steps)
+    ? summary.completed_steps.map((item) => String(item || '')).filter(Boolean)
+    : [];
+  const artifacts = Array.isArray(summary?.artifacts) ? summary.artifacts : [];
+  const pendingApprovals = Array.isArray(summary?.pending_approvals) ? summary.pending_approvals : [];
+  const waitingActions = Array.isArray(summary?.waiting_actions) ? summary.waiting_actions : [];
+  const providerBindings = Array.isArray(runInput.provider_bindings) ? runInput.provider_bindings : [];
+  const understoodTask = String(summary?.understood_task || objectValue(inputPreviewContext, 'understood_task') || objectValue(runInput, 'goal') || 'LocalOS проверяет compiled workflow на безопасном примере.');
+  const manualControl = String(summary?.manual_control || objectValue(inputPreviewContext, 'manual_control') || 'Перед внешним действием нужен approval.');
+  const safePreview = summary?.safe_preview !== false && runInput.external_side_effects_allowed === false;
+  const nextStep = String(summary?.next_step || 'review_preview');
+  const nextStepLabel = String(summary?.next_step_label || 'Проверить preview');
+  const nextStepDescription = String(summary?.next_step_description || summary?.activation_hint || 'Проверьте результат preview и следующий шаг агента.');
+  const activationVersionId = String(activationGate?.active_version_id || runInput.blueprint_version_id || '');
+  const canActivateFromPreview = activationGate?.can_activate === true && Boolean(activationVersionId);
+  const sourceEvent = toRecordOrNull(runInput.source_event) || {};
+  const eventType = String(sourceEvent.event_type || runInput.trigger || 'manual.preview');
+  const compiledSteps = Array.isArray(objectValue(inputPreviewContext, 'steps')) ? objectValue(inputPreviewContext, 'steps') : [];
+  const simulationSteps = [
+    {
+      key: 'input',
+      title: 'Входные данные',
+      status: safePreview ? 'completed' : 'pending',
+      detail: eventType,
+    },
+    {
+      key: 'preflight',
+      title: 'Preflight',
+      status: summary?.preflight_ready === false ? 'blocked' : 'completed',
+      detail: summary?.preflight_ready === false ? 'нужны подключения' : 'подключения, лимиты и policy проверены',
+    },
+    {
+      key: 'workflow',
+      title: 'Compiled workflow',
+      status: completedSteps.length ? 'completed' : 'pending',
+      detail: completedSteps.length
+        ? `${completedSteps.length} шагов выполнено`
+        : compiledSteps.length
+        ? `${compiledSteps.length} шагов в плане`
+        : 'шаги появятся после запуска',
+    },
+    {
+      key: 'approval',
+      title: 'Approval gate',
+      status: pendingApprovals.length || waitingActions.length ? 'waiting_approval' : 'completed',
+      detail: pendingApprovals.length || waitingActions.length
+        ? 'внешнее действие остановлено до решения человека'
+        : 'ручной контроль проверен',
+    },
+    {
+      key: 'activation',
+      title: 'Activation gate',
+      status: canActivateFromPreview ? 'completed' : 'pending',
+      detail: canActivateFromPreview ? 'версию можно активировать' : nextStepDescription,
+    },
+  ];
+  const actionLabel = canActivateFromPreview
+    ? String(activationGate?.primary_action_label || 'Активировать версию')
+    : previewNextStepActionLabel(nextStep, nextStepLabel);
+  return (
+    <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-4 text-sm leading-6 text-sky-950">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="font-semibold">Что показал preview run</div>
+          <div className="mt-1 max-w-3xl text-xs leading-5 text-sky-800">
+            {String(summary?.headline || 'Safe preview выполнен без внешних действий.')}
+          </div>
+        </div>
+        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-sky-700 ring-1 ring-sky-200">
+          {safePreview ? 'Preview run без внешних действий' : 'проверьте внешние действия'}
+        </span>
+      </div>
+
+      <div className="mt-3 grid gap-2 md:grid-cols-3">
+        <PreviewRunFact label="Задача" value={understoodTask} />
+        <PreviewRunFact label="Данные" value={dataSources.length ? dataSources.join(', ') : providerBindings.length ? providerBindings.map((item) => formatPayloadValue(item)).join(' · ') : 'проверены preflight'} />
+        <PreviewRunFact label="Ручной контроль" value={manualControl} />
+      </div>
+
+      <CompiledPreviewSimulationPanel steps={simulationSteps} safePreview={safePreview} externalActionsPerformed={Boolean(summary?.external_actions_performed)} />
+
+      <div className="mt-3 grid gap-2 lg:grid-cols-3">
+        <PreviewSummaryList
+          title="Шаги"
+          items={completedSteps.length ? completedSteps.slice(0, 5).map((item) => humanizeMeta(item)) : ['Шаги будут видны после выполнения preview.']}
+        />
+        <PreviewSummaryList
+          title="Результаты"
+          items={artifacts.length ? artifacts.slice(0, 4).map((item) => {
+            const record = toRecordOrNull(item) || {};
+            return `${String(record.title || humanizeMeta(String(record.type || 'artifact')))}: ${String(record.summary || 'сохранён для проверки')}`;
+          }) : ['Artifact появится после подготовки результата.']}
+        />
+        <PreviewSummaryList
+          title="Approval"
+          items={
+            pendingApprovals.length
+              ? pendingApprovals.slice(0, 4).map((item) => {
+                const record = toRecordOrNull(item) || {};
+                return `${String(record.title || record.approval_type || 'Approval')}: ${humanizeMeta(String(record.status || 'pending'))}`;
+              })
+              : waitingActions.length
+                ? waitingActions.slice(0, 4).map((item) => {
+                  const record = toRecordOrNull(item) || {};
+                  return `${humanizeMeta(String(record.kind || 'external_action'))}: ${String(record.why || record.state || 'ждёт approval')}`;
+                })
+                : ['Внешние действия останутся за approval gate.']
+          }
+        />
+      </div>
+
+      <div className="mt-3 rounded-xl bg-white px-3 py-2 text-xs leading-5 text-sky-800 ring-1 ring-sky-100">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="font-semibold text-sky-900">Следующий шаг: {nextStepLabel}</div>
+            <div className="mt-1">{nextStepDescription}</div>
+            {canActivateFromPreview ? (
+              <div className="mt-1 font-medium text-emerald-700">Activation gate готов: safe preview, preflight и compiled workflow прошли проверку.</div>
+            ) : null}
+            <div className="mt-1 text-sky-700">
+              {String(summary?.activation_hint || 'После safe preview activation gate покажет, можно ли активировать версию.')}
+            </div>
+          </div>
+          {canActivateFromPreview && onActivateVersion ? (
+            <Button type="button" size="sm" className="shrink-0" onClick={() => onActivateVersion(activationVersionId)} disabled={actionLoading}>
+              {actionLabel}
+            </Button>
+          ) : onNextStepAction ? (
+            <Button type="button" size="sm" variant="outline" className="shrink-0 bg-white" onClick={() => onNextStepAction(nextStep)} disabled={actionLoading}>
+              {actionLabel}
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const previewNextStepActionLabel = (nextStep: string, fallback: string) => {
+  const labels: Record<string, string> = {
+    connect_required_integrations: 'Открыть подключения',
+    fix_preview_error: 'Открыть логику',
+    review_approvals: 'Открыть approvals',
+    check_activation_gate: 'Проверить активацию',
+    review_preview: 'Открыть запуск',
+  };
+  return labels[nextStep] || fallback || 'Открыть следующий шаг';
+};
+
+const CompiledPreviewSimulationPanel = ({
+  steps,
+  safePreview,
+  externalActionsPerformed,
+}: {
+  steps: Array<{ key: string; title: string; status: string; detail: string }>;
+  safePreview: boolean;
+  externalActionsPerformed: boolean;
+}) => (
+  <div className="mt-3 rounded-xl bg-white px-3 py-3 text-xs leading-5 text-sky-800 ring-1 ring-sky-100">
+    <div className="flex flex-wrap items-start justify-between gap-2">
+      <div>
+        <div className="font-semibold text-sky-950">Симуляция compiled workflow</div>
+        <div className="mt-1 text-sky-700">
+          Preview показывает, как агент пройдёт workflow в runtime: вход, preflight, шаги, approvals и activation gate.
+        </div>
+      </div>
+      <span className={cn('rounded-full px-2 py-0.5 font-medium ring-1', safePreview && !externalActionsPerformed ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-amber-50 text-amber-700 ring-amber-200')}>
+        {safePreview && !externalActionsPerformed ? 'внешних действий не было' : 'проверьте side effects'}
+      </span>
+    </div>
+    <div className="mt-3 grid gap-2 md:grid-cols-5">
+      {steps.map((step, index) => (
+        <div key={step.key} className={cn('rounded-lg px-2 py-2 ring-1', previewSimulationTone(step.status))}>
+          <div className="flex items-center gap-2">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[11px] font-semibold ring-1 ring-current/10">
+              {index + 1}
+            </span>
+            <div className="min-w-0 font-semibold">{step.title}</div>
+          </div>
+          <div className="mt-1 line-clamp-3 text-[11px] leading-4">{step.detail}</div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+const previewSimulationTone = (status: string) => {
+  if (status === 'completed') {
+    return 'bg-emerald-50 text-emerald-800 ring-emerald-100';
+  }
+  if (status === 'waiting_approval') {
+    return 'bg-amber-50 text-amber-800 ring-amber-100';
+  }
+  if (status === 'blocked' || status === 'failed') {
+    return 'bg-rose-50 text-rose-800 ring-rose-100';
+  }
+  return 'bg-slate-50 text-slate-600 ring-slate-200';
+};
+
+const PreviewSummaryList = ({ title, items }: { title: string; items: string[] }) => (
+  <div className="rounded-xl bg-white px-3 py-2 text-xs leading-5 ring-1 ring-sky-100">
+    <div className="font-semibold text-sky-900">{title}</div>
+    <div className="mt-1 space-y-1 text-sky-700">
+      {items.map((item, index) => (
+        <div key={`${title}-${index}`} className="line-clamp-2">{item}</div>
+      ))}
+    </div>
+  </div>
+);
+
+const PreviewRunFact = ({ label, value }: { label: string; value: string }) => (
+  <div className="rounded-xl bg-white px-3 py-2 text-xs leading-5 ring-1 ring-sky-100">
+    <div className="font-semibold text-sky-900">{label}</div>
+    <div className="mt-1 text-sky-700">{value || 'не указано'}</div>
   </div>
 );
 

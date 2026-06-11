@@ -36,6 +36,8 @@ from services.agent_legacy_migration import apply_legacy_ai_agent_migration, bui
 from services.agent_source_ingestion import build_agent_source_from_upload
 from services.agent_datahub import build_agent_datahub_catalog
 from services.agent_provider_registry import (
+    best_provider_route_state,
+    connector_provider_routes,
     integration_execution_boundary,
     integration_provider_catalog,
 )
@@ -250,6 +252,8 @@ def _agent_connection_plan(
         available = available_by_provider.get(provider, [])
         status = str(binding.get("status") or "").strip()
         action = _connection_plan_action(binding, attached, available, catalog_item)
+        provider_routes = connector_provider_routes(provider, str(binding.get("capability") or ""))
+        route_state = "connected" if action in {"ready", "native_ready"} else best_provider_route_state(provider_routes)
         items.append(
             {
                 "key": str(binding.get("key") or provider or ""),
@@ -262,6 +266,9 @@ def _agent_connection_plan(
                 "action": action,
                 "primary_label": _connection_plan_label(action),
                 "explanation": _connection_plan_explanation(binding, action),
+                "route_state": route_state,
+                "route_summary": _connection_plan_route_summary(binding, action, route_state),
+                "provider_routes": provider_routes,
                 "missing_config": binding.get("missing_config") if isinstance(binding.get("missing_config"), list) else [],
                 "approval_required": bool(binding.get("approval_required", True)),
                 "existing_integrations": [_connection_plan_integration(item) for item in available[:5]],
@@ -276,6 +283,75 @@ def _agent_connection_plan(
         "missing_count": missing_count,
         "items": items,
     }
+
+
+def _build_agent_post_connect_handoff(connection_plan: dict) -> dict:
+    missing_count = _safe_int(connection_plan.get("missing_count"), 0, 0, 100)
+    if missing_count == 0:
+        return {
+            "schema": "localos_agent_post_create_handoff_v1",
+            "status": "ready_for_preview",
+            "next_step": "run_preview",
+            "workspace_mode": "run",
+            "next_binding_key": "",
+            "next_binding": {},
+            "next_route": {},
+            "title": "Подключения готовы",
+            "description": "Теперь запустите safe preview run: он проверит workflow, preflight, limits и approval gate без внешних действий.",
+            "connection_plan": connection_plan,
+        }
+    next_binding_key = _connection_plan_next_binding_key(connection_plan)
+    next_binding = _connection_plan_item_by_key(connection_plan, next_binding_key)
+    return {
+        "schema": "localos_agent_post_create_handoff_v1",
+        "status": "needs_connections",
+        "next_step": "connect_required_integrations",
+        "workspace_mode": "connections",
+        "next_binding_key": next_binding_key,
+        "next_binding": next_binding,
+        "next_route": _preferred_connection_plan_route(next_binding),
+        "title": "Остались подключения",
+        "description": "Завершите обязательные подключения, затем LocalOS откроет safe preview run.",
+        "connection_plan": connection_plan,
+    }
+
+
+def _connection_plan_next_binding_key(connection_plan: dict) -> str:
+    items = connection_plan.get("items") if isinstance(connection_plan.get("items"), list) else []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        action = str(item.get("action") or "").strip()
+        if action in {"ready", "native_ready"}:
+            continue
+        key = str(item.get("key") or "").strip()
+        if key:
+            return key
+    return ""
+
+
+def _connection_plan_item_by_key(connection_plan: dict, binding_key: str) -> dict:
+    items = connection_plan.get("items") if isinstance(connection_plan.get("items"), list) else []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("key") or "").strip() == binding_key:
+            return item
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("action") or "").strip() not in {"ready", "native_ready"}:
+            return item
+    return {}
+
+
+def _preferred_connection_plan_route(plan_item: dict) -> dict:
+    routes = plan_item.get("provider_routes") if isinstance(plan_item.get("provider_routes"), list) else []
+    for state in ["available", "manual", "planned", "connected"]:
+        for route in routes:
+            if isinstance(route, dict) and str(route.get("state") or route.get("status") or "") == state:
+                return route
+    return routes[0] if routes and isinstance(routes[0], dict) else {}
 
 
 def _integrations_by_provider(values: list[dict]) -> dict:
@@ -329,6 +405,24 @@ def _connection_plan_explanation(binding: dict, action: str) -> str:
     if action == "planned_provider":
         return "Этот provider есть в roadmap, но пока недоступен для активации агента."
     return f"Подключите {provider}, чтобы агент можно было активировать после preflight."
+
+
+def _connection_plan_route_summary(binding: dict, action: str, route_state: str) -> str:
+    provider = str(binding.get("provider") or "сервис").strip()
+    title = _agent_integration_provider_label(provider)
+    if action in {"ready", "native_ready"}:
+        return f"{title} уже подключён для этого агента."
+    if action == "choose_existing":
+        return f"У бизнеса уже есть подключение {title}; выберите его для шага workflow."
+    if action == "complete_config":
+        return f"Подключение {title} найдено, но нужно заполнить недостающие настройки."
+    if route_state == "available":
+        return f"{title} можно подключить через доступный provider route LocalOS/OpenClaw/Maton."
+    if route_state == "manual":
+        return f"{title} доступен как ручной fallback или загруженный источник."
+    if route_state == "planned":
+        return f"{title} появится через planned provider route, но сейчас агент нельзя активировать на этом пути."
+    return f"Для {title} нет разрешённого provider route."
 
 
 def _connection_plan_provider_paths(catalog_item: dict) -> list[dict]:
@@ -673,7 +767,153 @@ def _build_custom_process_preview_input(blueprint: dict, payload: dict) -> dict:
     }
 
 
-def _sync_blueprint_integration_metadata(cursor, blueprint: dict, integration: dict) -> dict:
+def _build_agent_preview_run_input(blueprint: dict, version: dict | None, payload: dict) -> dict:
+    metadata = _blueprint_metadata(blueprint)
+    user_input = payload.get("input") if isinstance(payload.get("input"), dict) else {}
+    preview = metadata.get("agent_builder_preview") if isinstance(metadata.get("agent_builder_preview"), dict) else {}
+    custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+    required_bindings = metadata.get("required_integration_bindings") if isinstance(metadata.get("required_integration_bindings"), list) else []
+    if not required_bindings and version:
+        version_payload = build_version_payload_from_row(version)
+        required_bindings = version_payload.get("required_integration_bindings") if isinstance(version_payload.get("required_integration_bindings"), list) else []
+    version_payload = build_version_payload_from_row(version or {}) if version else {}
+    capability_allowlist = version_payload.get("capability_allowlist") if isinstance(version_payload.get("capability_allowlist"), list) else []
+    steps = version_payload.get("steps") if isinstance(version_payload.get("steps"), list) else []
+    trigger_event_id = str(user_input.get("trigger_event_id") or f"preview-{uuid.uuid4()}")
+    received_at = _utc_now_text()
+    sample_rows = _preview_sample_rows(custom_process, user_input)
+    provider_bindings = _preview_provider_bindings(required_bindings)
+    preview_input = {
+        **user_input,
+        "schema": "localos_agent_preview_input_v1",
+        "preview_mode": True,
+        "source": "agent_preview",
+        "business_id": str(blueprint.get("business_id") or user_input.get("business_id") or ""),
+        "blueprint_id": str(blueprint.get("id") or ""),
+        "blueprint_version_id": str((version or {}).get("id") or user_input.get("blueprint_version_id") or ""),
+        "category": str(blueprint.get("category") or preview.get("category") or ""),
+        "goal": str((version or {}).get("goal") or preview.get("understood_task") or blueprint.get("description") or ""),
+        "trigger_event_id": trigger_event_id,
+        "external_side_effects_allowed": False,
+        "approval_required_for_external_actions": True,
+        "capability_allowlist": [str(item) for item in capability_allowlist],
+        "required_connectors": _preview_required_connectors(metadata, required_bindings),
+        "provider_bindings": provider_bindings,
+        "source_event": {
+            "id": trigger_event_id,
+            "source": "agent_preview",
+            "event_type": str(version_payload.get("trigger") or custom_process.get("trigger") or "manual.preview"),
+            "preview": True,
+            "received_at": received_at,
+        },
+        "preview_context": {
+            "understood_task": str(preview.get("understood_task") or blueprint.get("description") or ""),
+            "data_sources": preview.get("data_sources") if isinstance(preview.get("data_sources"), list) else [],
+            "manual_control": str(preview.get("manual_control") or "Ручное подтверждение перед внешним действием."),
+            "steps": _preview_step_summaries(steps),
+            "expected_result": str(preview.get("output_format") or ""),
+        },
+    }
+    if sample_rows:
+        preview_input["google_sheets"] = {
+            "preview": True,
+            "sample_rows": sample_rows,
+            "selected_row_strategy": "previous_day_sample",
+            "read_only": True,
+        }
+    if _has_provider(required_bindings, "telegram") or "telegram" in custom_process.get("archetype", ""):
+        preview_input["telegram"] = {
+            "preview": True,
+            "draft_only": True,
+            "external_publish_performed": False,
+            "message_style": _preview_message_style(preview, custom_process),
+        }
+    return preview_input
+
+
+def _preview_required_connectors(metadata: dict, required_bindings: list) -> list[dict]:
+    preview_connectors = metadata.get("required_connectors") if isinstance(metadata.get("required_connectors"), list) else []
+    if preview_connectors:
+        return preview_connectors
+    result = []
+    for item in required_bindings:
+        if not isinstance(item, dict):
+            continue
+        result.append(
+            {
+                "key": str(item.get("key") or ""),
+                "provider": str(item.get("provider") or ""),
+                "capability": str(item.get("capability") or ""),
+                "direction": str(item.get("direction") or ""),
+            }
+        )
+    return result
+
+
+def _preview_provider_bindings(required_bindings: list) -> list[dict]:
+    result = []
+    for item in required_bindings:
+        if not isinstance(item, dict):
+            continue
+        result.append(
+            {
+                "key": str(item.get("key") or ""),
+                "provider": str(item.get("provider") or ""),
+                "capability": str(item.get("capability") or ""),
+                "required_config": [str(value) for value in item.get("required_config", []) if str(value or "").strip()],
+            }
+        )
+    return result
+
+
+def _preview_step_summaries(steps: list) -> list[dict]:
+    result = []
+    for step in steps[:12]:
+        if not isinstance(step, dict):
+            continue
+        result.append(
+            {
+                "key": str(step.get("key") or ""),
+                "type": str(step.get("type") or ""),
+                "title": str(step.get("title") or step.get("key") or ""),
+                "capability": str(step.get("capability") or ""),
+                "artifact_type": str(step.get("artifact_type") or ""),
+                "requires_approval": bool(step.get("requires_approval")),
+            }
+        )
+    return result
+
+
+def _preview_sample_rows(custom_process: dict, user_input: dict) -> list[dict]:
+    rows = user_input.get("sample_rows") if isinstance(user_input.get("sample_rows"), list) else []
+    if rows:
+        return [item for item in rows[:5] if isinstance(item, dict)]
+    archetype = str(custom_process.get("archetype") or "")
+    if archetype == "google_sheets_to_telegram":
+        return [
+            {
+                "date": "yesterday",
+                "route": "Los Angeles airport → Santa Barbara",
+                "passenger_name": "Preview passenger",
+                "status": "completed",
+            }
+        ]
+    if str(custom_process.get("source") or "") == "google_sheets.read_rows":
+        return [{"date": "yesterday", "amount": "1000", "status": "preview"}]
+    return []
+
+
+def _preview_message_style(preview: dict, custom_process: dict) -> str:
+    output_format = str(preview.get("output_format") or "").strip()
+    style = str(custom_process.get("style") or custom_process.get("message_style") or "").strip()
+    return style or output_format or "Черновик в стиле, описанном пользователем."
+
+
+def _has_provider(required_bindings: list, provider: str) -> bool:
+    return any(isinstance(item, dict) and str(item.get("provider") or "") == provider for item in required_bindings)
+
+
+def _sync_blueprint_integration_metadata(cursor, blueprint: dict, integration: dict, binding_key: str = "") -> dict:
     blueprint_id = str(blueprint.get("id") or "")
     metadata = _blueprint_metadata(_load_blueprint(cursor, blueprint_id) or blueprint)
     integration_ids = _agent_integration_ids(metadata)
@@ -686,6 +926,15 @@ def _sync_blueprint_integration_metadata(cursor, blueprint: dict, integration: d
     if provider:
         capability_integrations[provider] = integration_id
     metadata["capability_integrations"] = capability_integrations
+    binding_key = str(binding_key or "").strip()
+    if binding_key and integration_id:
+        binding_integrations = metadata.get("agent_binding_integrations") if isinstance(metadata.get("agent_binding_integrations"), dict) else {}
+        binding_integrations[binding_key] = {
+            "integration_id": integration_id,
+            "provider": provider,
+            "attached_at": _utc_now_text(),
+        }
+        metadata["agent_binding_integrations"] = binding_integrations
     if provider == "google_sheets":
         custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
         custom_process["trigger"] = str(custom_process.get("trigger") or "telegram.message.received")
@@ -698,9 +947,23 @@ def _sync_blueprint_integration_metadata(cursor, blueprint: dict, integration: d
             "sheet_name": str(config.get("sheet_name") or "Sheet1").strip() or "Sheet1",
             "operation": str(config.get("operation") or "read_write").strip() or "read_write",
         }
+        if binding_key:
+            custom_process[binding_key] = dict(custom_process["google_sheets"])
         custom_process["binding_status"] = "connected"
         metadata["custom_process"] = custom_process
     if provider == "telegram":
+        custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+        config = workspace_parse_json_field(integration.get("config_json"), {})
+        if not isinstance(config, dict):
+            config = {}
+        telegram_binding = {
+            "integration_id": integration_id,
+            "bot_mode": str(config.get("bot_mode") or "business_bot").strip() or "business_bot",
+        }
+        custom_process["telegram"] = telegram_binding
+        if binding_key:
+            custom_process[binding_key] = dict(telegram_binding)
+        metadata["custom_process"] = custom_process
         triggers = metadata.get("triggers") if isinstance(metadata.get("triggers"), list) else []
         if "telegram.message.received" not in triggers:
             triggers.append("telegram.message.received")
@@ -1218,15 +1481,25 @@ def get_agent_blueprint(blueprint_id: str):
 def _build_activation_gate_summary(cursor, blueprint: dict, active_version: dict | None, metadata: dict) -> dict:
     blockers = []
     compiled_validation = {}
+    version_payload = {}
+    preview_run_status = _activation_preview_run_status(
+        cursor,
+        str(blueprint.get("id") or ""),
+        str((active_version or {}).get("id") or ""),
+    )
     if not active_version:
         blockers.append({"type": "version", "message": "Создайте или выберите версию агента."})
     else:
+        version_payload = build_version_payload_from_row(active_version)
         compiled_validation = validate_compiled_artifact_candidate(
-            build_version_payload_from_row(active_version),
+            version_payload,
             metadata,
         )
         if not compiled_validation.get("ready"):
             blockers.append({"type": "compiled_validation", "message": "Compiled workflow не прошёл проверку."})
+    approval_policy_status = _build_activation_approval_policy_status(version_payload, compiled_validation)
+    if active_version and not approval_policy_status.get("ready"):
+        blockers.append({"type": "approval_policy", "message": str(approval_policy_status.get("summary") or "Approval policy и limits требуют проверки.")})
     preflight = build_agent_integration_preflight(
         cursor,
         business_id=str(blueprint.get("business_id") or ""),
@@ -1244,9 +1517,18 @@ def _build_activation_gate_summary(cursor, blueprint: dict, active_version: dict
                     "message": str(item.get("provider") or item.get("key") or "Нужно подключение"),
                 }
             )
-    ready = bool(active_version) and bool(compiled_validation.get("ready")) and bool(preflight.get("ready"))
+    if active_version and not preview_run_status.get("ready"):
+        blockers.append({"type": "preview_run", "message": "Запустите безопасный preview run перед активацией."})
+    ready = (
+        bool(active_version)
+        and bool(compiled_validation.get("ready"))
+        and bool(approval_policy_status.get("ready"))
+        and bool(preflight.get("ready"))
+        and bool(preview_run_status.get("ready"))
+    )
     next_step = "activate_version" if ready else _activation_gate_next_step(blockers)
     human_blockers = _activation_gate_human_blockers(blockers, preflight, compiled_validation)
+    connection_plan = _activation_connection_plan_from_preflight(preflight)
     return {
         "schema": "localos_agent_activation_gate_v1",
         "status": "ready" if ready else "blocked",
@@ -1254,26 +1536,175 @@ def _build_activation_gate_summary(cursor, blueprint: dict, active_version: dict
         "active_version_id": str((active_version or {}).get("id") or ""),
         "requires_compiled_validation": True,
         "requires_preflight_ready": True,
+        "requires_preview_run": True,
         "requires_approval_policy": True,
         "compiled_validation": compiled_validation,
+        "approval_policy_status": approval_policy_status,
         "preflight": preflight,
+        "preview_run_status": preview_run_status,
         "blockers": blockers,
         "human_blockers": human_blockers,
         "summary": _activation_gate_summary_text(ready, next_step, human_blockers),
         "primary_action_label": _activation_gate_primary_action_label(next_step),
-        "connection_plan": _activation_connection_plan_from_preflight(preflight),
+        "connection_plan": connection_plan,
+        "next_binding_key": _connection_plan_next_binding_key(connection_plan),
         "next_step": next_step,
     }
+
+
+def _activation_preview_run_status(cursor, blueprint_id: str, version_id: str) -> dict:
+    accepted_statuses = ["completed", "waiting_approval"]
+    if not blueprint_id or not version_id:
+        return {
+            "schema": "localos_agent_preview_run_status_v1",
+            "required": True,
+            "ready": False,
+            "status": "missing_version",
+            "accepted_statuses": accepted_statuses,
+            "message": "Создайте версию агента, затем запустите preview.",
+        }
+    cursor.execute(
+        """
+        SELECT id, status, input_json, output_json, error_text, started_at, completed_at, updated_at
+        FROM agent_runs
+        WHERE blueprint_id = %s
+          AND blueprint_version_id = %s
+        ORDER BY started_at DESC
+        LIMIT 20
+        """,
+        (blueprint_id, version_id),
+    )
+    preview_runs = []
+    for row in cursor.fetchall() or []:
+        normalized = _normalize_json_row(dict(row))
+        run_input = normalized.get("input_json") if isinstance(normalized.get("input_json"), dict) else {}
+        if run_input.get("preview_mode") is not True:
+            continue
+        if run_input.get("external_side_effects_allowed") is not False:
+            continue
+        preview_runs.append(
+            {
+                "id": str(normalized.get("id") or ""),
+                "status": str(normalized.get("status") or ""),
+                "started_at": normalized.get("started_at"),
+                "completed_at": normalized.get("completed_at"),
+                "error_text": str(normalized.get("error_text") or ""),
+                "source": str(run_input.get("source") or ""),
+            }
+        )
+    latest_run = preview_runs[0] if preview_runs else None
+    passed_run = next((item for item in preview_runs if item.get("status") in accepted_statuses), None)
+    if passed_run:
+        return {
+            "schema": "localos_agent_preview_run_status_v1",
+            "required": True,
+            "ready": True,
+            "status": "passed",
+            "accepted_statuses": accepted_statuses,
+            "latest_run": latest_run,
+            "passed_run": passed_run,
+            "checked_count": len(preview_runs),
+            "message": "Безопасный preview run пройден.",
+        }
+    return {
+        "schema": "localos_agent_preview_run_status_v1",
+        "required": True,
+        "ready": False,
+        "status": "missing_passed_preview",
+        "accepted_statuses": accepted_statuses,
+        "latest_run": latest_run,
+        "checked_count": len(preview_runs),
+        "message": "Запустите preview run без внешних действий перед активацией.",
+    }
+
+
+def _build_activation_approval_policy_status(version_payload: dict, compiled_validation: dict) -> dict:
+    candidate = compiled_validation.get("candidate") if isinstance(compiled_validation.get("candidate"), dict) else {}
+    dsl = candidate.get("dsl") if isinstance(candidate.get("dsl"), dict) else {}
+    steps = version_payload.get("steps") if isinstance(version_payload.get("steps"), list) else dsl.get("steps") if isinstance(dsl.get("steps"), list) else []
+    approval_policy = (
+        version_payload.get("approval_policy")
+        if isinstance(version_payload.get("approval_policy"), dict)
+        else dsl.get("approval_policy")
+        if isinstance(dsl.get("approval_policy"), dict)
+        else {}
+    )
+    limits = (
+        version_payload.get("limits")
+        if isinstance(version_payload.get("limits"), dict)
+        else dsl.get("limits")
+        if isinstance(dsl.get("limits"), dict)
+        else {}
+    )
+    write_steps = []
+    missing_approval = []
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        if str(step.get("type") or "") != "capability":
+            continue
+        capability = str(step.get("capability") or "").strip()
+        if not _activation_capability_requires_policy(capability):
+            continue
+        step_key = str(step.get("key") or capability or "capability").strip()
+        approval_type = str(step.get("required_approval_type") or "").strip()
+        write_steps.append(
+            {
+                "key": step_key,
+                "capability": capability,
+                "requires_approval": step.get("requires_approval") is True,
+                "required_approval_type": approval_type,
+            }
+        )
+        if step.get("requires_approval") is not True or not approval_type:
+            missing_approval.append(step_key)
+            continue
+        if approval_type not in approval_policy and not _activation_has_approval_step(steps, approval_type):
+            missing_approval.append(step_key)
+    autonomous_writes_allowed = bool(limits.get("autonomous_external_write_allowed") is True or limits.get("autonomous_localos_write_allowed") is True)
+    ready = not missing_approval and not autonomous_writes_allowed
+    if ready:
+        summary = "Approval policy и limits готовы: внешние действия остаются за human gate."
+    elif autonomous_writes_allowed:
+        summary = "Limits не должны разрешать автономную внешнюю или LocalOS-запись."
+    else:
+        summary = "Для write-capability нужен declared approval gate."
+    return {
+        "schema": "localos_agent_approval_policy_status_v1",
+        "ready": ready,
+        "status": "ready" if ready else "blocked",
+        "summary": summary,
+        "write_steps": write_steps,
+        "missing_approval_steps": missing_approval,
+        "limits": limits,
+        "autonomous_writes_allowed": autonomous_writes_allowed,
+    }
+
+
+def _activation_capability_requires_policy(capability: str) -> bool:
+    markers = [".create", ".send", ".publish", ".settle", ".reserve", "append_row", "send_"]
+    return any(marker in capability for marker in markers)
+
+
+def _activation_has_approval_step(steps: list, approval_type: str) -> bool:
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        if str(step.get("type") or "") == "approval" and str(step.get("approval_type") or "").strip() == approval_type:
+            return True
+    return False
 
 
 def _activation_gate_next_step(blockers: list[dict]) -> str:
     blocker_types = {str(item.get("type") or "") for item in blockers if isinstance(item, dict)}
     if "version" in blocker_types:
         return "create_version"
-    if "compiled_validation" in blocker_types:
+    if "compiled_validation" in blocker_types or "approval_policy" in blocker_types:
         return "fix_compiled_workflow"
     if "connection" in blocker_types:
         return "connect_required_integrations"
+    if "preview_run" in blocker_types:
+        return "run_preview"
     return "review_blockers"
 
 
@@ -1308,6 +1739,15 @@ def _activation_gate_human_blockers(blockers: list[dict], preflight: dict, compi
                     "action": "open_logic",
                 }
             )
+        elif blocker_type == "approval_policy":
+            result.append(
+                {
+                    "type": "approval_policy",
+                    "title": "Проверьте approval policy и limits",
+                    "message": str(item.get("message") or "Для внешних действий нужен human gate и безопасные limits."),
+                    "action": "open_logic",
+                }
+            )
         elif blocker_type == "version":
             result.append(
                 {
@@ -1315,6 +1755,15 @@ def _activation_gate_human_blockers(blockers: list[dict], preflight: dict, compi
                     "title": "Нет активной версии",
                     "message": "Создайте или выберите версию агента.",
                     "action": "open_logic",
+                }
+            )
+        elif blocker_type == "preview_run":
+            result.append(
+                {
+                    "type": "preview_run",
+                    "title": "Нужен preview run",
+                    "message": "Сначала проверьте агента на примере: preview покажет шаги, черновики и approval gate без внешних действий.",
+                    "action": "run_preview",
                 }
             )
     if not result and preflight and not preflight.get("ready"):
@@ -1340,6 +1789,8 @@ def _activation_gate_summary_text(ready: bool, next_step: str, human_blockers: l
         return "Исправьте логику агента перед активацией."
     if next_step == "create_version":
         return "Создайте первую версию агента."
+    if next_step == "run_preview":
+        return "Запустите безопасный preview run перед активацией."
     return "Проверьте требования активации агента."
 
 
@@ -1349,6 +1800,7 @@ def _activation_gate_primary_action_label(next_step: str) -> str:
         "connect_required_integrations": "Открыть подключения",
         "fix_compiled_workflow": "Открыть логику",
         "create_version": "Создать версию",
+        "run_preview": "Запустить preview",
         "review_blockers": "Проверить требования",
     }
     return labels.get(next_step, "Проверить требования")
@@ -1372,6 +1824,8 @@ def _activation_connection_plan_from_preflight(preflight: dict) -> dict:
         action = "ready" if status == "ready" else "connect_required"
         if action == "ready" and resolution == "native_localos":
             action = "native_ready"
+        provider_routes = connector_provider_routes(provider, str(item.get("capability") or ""))
+        route_state = "connected" if action in {"ready", "native_ready"} else best_provider_route_state(provider_routes)
         plan_items.append(
             {
                 "key": str(item.get("key") or provider or ""),
@@ -1384,6 +1838,9 @@ def _activation_connection_plan_from_preflight(preflight: dict) -> dict:
                 "action": action,
                 "primary_label": _connection_plan_label(action),
                 "explanation": _activation_connection_explanation(provider, action, item),
+                "route_state": route_state,
+                "route_summary": _connection_plan_route_summary(item, action, route_state),
+                "provider_routes": provider_routes,
                 "missing_config": item.get("missing_config") if isinstance(item.get("missing_config"), list) else [],
                 "approval_required": bool(item.get("required", True)),
                 "existing_integrations": [],
@@ -1528,32 +1985,19 @@ def activate_agent_blueprint_version(blueprint_id: str, version_id: str):
         version = _load_blueprint_version_for_blueprint(cursor, str(blueprint.get("id") or ""), version_id)
         if not version:
             return _json_error("Blueprint version not found", 404, "VERSION_NOT_FOUND")
-        compiled_validation = validate_compiled_artifact_candidate(
-            build_version_payload_from_row(version),
-            _blueprint_metadata(blueprint),
-        )
-        if not compiled_validation.get("ready"):
-            return jsonify(
-                {
-                    "success": False,
-                    "error": "Compiled workflow не прошёл проверку перед активацией.",
-                    "code": "AGENT_COMPILED_VALIDATION_FAILED",
-                    "compiled_validation": compiled_validation,
-                }
-            ), 400
-        preflight = build_agent_integration_preflight(
+        activation_gate = _build_activation_gate_summary(
             cursor,
-            business_id=str(blueprint.get("business_id") or ""),
+            blueprint=blueprint,
+            active_version=version,
             metadata=_blueprint_metadata(blueprint),
-            input_payload={},
         )
-        if not preflight.get("ready"):
+        if not activation_gate.get("can_activate"):
             return jsonify(
                 {
                     "success": False,
-                    "error": "Перед активацией нужно подключить источники агента.",
-                    "code": "AGENT_INTEGRATIONS_REQUIRED",
-                    "preflight": preflight,
+                    "error": str(activation_gate.get("summary") or "Перед активацией нужно пройти проверки агента."),
+                    "code": "AGENT_ACTIVATION_GATE_BLOCKED",
+                    "activation_gate": activation_gate,
                 }
             ), 400
         active_before = _resolve_active_version(cursor, blueprint)
@@ -1793,7 +2237,25 @@ def save_agent_blueprint_integration(blueprint_id: str):
             (integration_id, business_id),
         )
         integration = dict(cursor.fetchone())
-        metadata = _sync_blueprint_integration_metadata(cursor, blueprint, integration)
+        metadata = _sync_blueprint_integration_metadata(cursor, blueprint, integration, str(payload.get("binding_key") or ""))
+        attached_ids = _agent_integration_ids(metadata)
+        attached_rows = _load_agent_integrations(cursor, business_id, attached_ids) if attached_ids else []
+        all_rows = _load_agent_integrations(cursor, business_id)
+        attached_lookup = {str(row.get("id") or "") for row in attached_rows}
+        attached_integrations = [_normalize_agent_integration(row, attached=True) for row in attached_rows]
+        available_integrations = [
+            _normalize_agent_integration(row, attached=False)
+            for row in all_rows
+            if str(row.get("id") or "") not in attached_lookup
+        ]
+        binding_status = _agent_integration_binding_status(metadata, attached_rows)
+        connection_plan = _agent_connection_plan(
+            binding_status,
+            attached_integrations,
+            available_integrations,
+            _agent_integration_provider_catalog(),
+        )
+        post_connect_handoff = _build_agent_post_connect_handoff(connection_plan)
         db.conn.commit()
         return jsonify(
             {
@@ -1801,7 +2263,10 @@ def save_agent_blueprint_integration(blueprint_id: str):
                 "integration": _normalize_agent_integration(integration, attached=True),
                 "capability_integrations": metadata.get("capability_integrations") if isinstance(metadata.get("capability_integrations"), dict) else {},
                 "custom_process": metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {},
-                "binding_status": _agent_integration_binding_status(metadata, [integration]),
+                "binding_status": binding_status,
+                "connection_plan": connection_plan,
+                "post_connect_handoff": post_connect_handoff,
+                "next_step": str(post_connect_handoff.get("next_step") or ""),
             }
         ), 201
     except Exception:
@@ -2002,7 +2467,8 @@ def preflight_agent_blueprint_run(blueprint_id: str):
             version = _resolve_active_version(cursor, blueprint)
         if not version:
             return _json_error("Blueprint has no version", 400, "NO_VERSION")
-        run_input = payload.get("input") if isinstance(payload.get("input"), dict) else {}
+        raw_input = payload.get("input") if isinstance(payload.get("input"), dict) else {}
+        run_input = _build_agent_preview_run_input(blueprint, version, payload) if raw_input.get("preview_mode") else raw_input
         metadata = _blueprint_metadata(blueprint)
         preflight = build_agent_integration_preflight(
             cursor,
@@ -2019,13 +2485,17 @@ def preflight_agent_blueprint_run(blueprint_id: str):
             "approval_required_for_external_actions": True,
             "next_step": "start_preview_run" if bool(preflight.get("ready")) else "connect_required_integrations",
         }
+        connection_plan = _activation_connection_plan_from_preflight(preflight)
         return jsonify(
             {
                 "success": True,
                 "blueprint_id": str(blueprint.get("id") or ""),
                 "blueprint_version_id": str(version.get("id") or ""),
                 "preflight": preflight,
+                "connection_plan": connection_plan,
+                "next_binding_key": _connection_plan_next_binding_key(connection_plan),
                 "preview_run_gate": preview_run_gate,
+                "preview_input": run_input if run_input.get("preview_mode") else {},
                 "can_start": bool(preflight.get("ready")),
             }
         )
@@ -2053,8 +2523,11 @@ def start_agent_blueprint_run(blueprint_id: str):
             return _json_error("Blueprint version does not belong to this blueprint", 400, "VERSION_BLUEPRINT_MISMATCH")
         if not version_id:
             return _json_error("Blueprint has no version", 400, "NO_VERSION")
+        version = _load_blueprint_version_for_blueprint(cursor, str(blueprint.get("id") or ""), version_id)
+        raw_input = payload.get("input") if isinstance(payload.get("input"), dict) else {}
+        run_input = _build_agent_preview_run_input(blueprint, version, payload) if raw_input.get("preview_mode") else raw_input
         runner = AgentBlueprintRunner(cursor, build_agent_blueprint_orchestrator())
-        result = runner.start_run(version_id, payload.get("input") if isinstance(payload.get("input"), dict) else {}, user_data)
+        result = runner.start_run(version_id, run_input, user_data)
         db.conn.commit()
         if not result.get("success"):
             if result.get("code") == "AGENT_INTEGRATIONS_REQUIRED":

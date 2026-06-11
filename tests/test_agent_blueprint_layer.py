@@ -264,6 +264,24 @@ def test_agent_blueprint_orchestrator_exposes_stage4_capability_map():
     assert integration_execution_boundary("maton")["executor"] == "channel_router"
     assert integration_execution_boundary("localos_finance")["executor"] == "localos_finance_request_executor"
     assert integration_execution_boundary("composio")["external_write"] == "planned_provider_write"
+    from services.agent_provider_registry import connector_provider_routes
+
+    reminder_routes = connector_provider_routes("telegram", "communications.send_reminder")
+    maton_route = next(item for item in reminder_routes if item["provider"] == "maton")
+    openclaw_route = next(item for item in reminder_routes if item["provider"] == "openclaw")
+    composio_route = next(item for item in reminder_routes if item["provider"] == "composio")
+    assert maton_route["connect_mode"] == "external_account_key"
+    assert maton_route["primary_cta"] == "Выбрать Maton key"
+    assert maton_route["provider_action"]["kind"] == "select_external_account_key"
+    assert maton_route["provider_action"]["ui_target"] == "external_business_accounts"
+    assert openclaw_route["connect_mode"] == "openclaw_policy_boundary"
+    assert openclaw_route["primary_cta"] == "Использовать OpenClaw boundary"
+    assert openclaw_route["provider_action"]["kind"] == "use_openclaw_boundary"
+    assert openclaw_route["provider_action"]["ui_target"] == "openclaw_policy_boundary"
+    assert composio_route["connect_mode"] == "planned_oauth_connector"
+    assert composio_route["primary_cta"] == "Будет доступно позже"
+    assert composio_route["provider_action"]["kind"] == "planned_oauth_connector"
+    assert composio_route["provider_action"]["available"] is False
 
 
 def test_custom_process_preview_input_uses_bound_integrations_and_safe_telegram_payload():
@@ -297,6 +315,51 @@ def test_custom_process_preview_input_uses_bound_integrations_and_safe_telegram_
     assert preview["sheet_name"] == "Leads"
     assert preview["telegram"]["message_text"] == "Новая заявка: Анна"
     assert preview["telegram"]["username"] == "anna"
+
+
+def test_agent_preview_run_input_is_safe_and_compiled_workflow_aware():
+    from api import agent_blueprints_api
+    from services.agent_blueprint_draft_builder import compile_agent_blueprint
+
+    draft = compile_agent_blueprint(
+        "Каждый день бери заказ из Google Sheets за вчера и готовь пост в Telegram. "
+        "Результат нужен как черновик поста. Перед публикацией человек проверяет результат."
+    )
+    version_payload = draft["version_payload"]
+    blueprint = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "category": draft["category"],
+        "description": "Google Sheets to Telegram",
+        "metadata_json": draft["metadata"],
+    }
+    version = {
+        "id": "version-1",
+        "goal": version_payload["goal"],
+        "trigger": version_payload["trigger"],
+        "inputs_schema_json": version_payload["inputs_schema"],
+        "steps_json": version_payload["steps"],
+        "capability_allowlist_json": version_payload["capability_allowlist"],
+        "approval_policy_json": version_payload["approval_policy"],
+        "output_schema_json": version_payload["output_schema"],
+    }
+
+    preview_input = agent_blueprints_api._build_agent_preview_run_input(
+        blueprint,
+        version,
+        {"input": {"preview_mode": True}},
+    )
+
+    assert preview_input["schema"] == "localos_agent_preview_input_v1"
+    assert preview_input["preview_mode"] is True
+    assert preview_input["external_side_effects_allowed"] is False
+    assert preview_input["approval_required_for_external_actions"] is True
+    assert preview_input["source_event"]["preview"] is True
+    assert preview_input["google_sheets"]["read_only"] is True
+    assert preview_input["google_sheets"]["sample_rows"][0]["route"] == "Los Angeles airport → Santa Barbara"
+    assert preview_input["telegram"]["draft_only"] is True
+    assert preview_input["telegram"]["external_publish_performed"] is False
+    assert [item["provider"] for item in preview_input["provider_bindings"]] == ["google_sheets", "telegram"]
 
 
 def test_openclaw_and_capability_routes_are_registered():
@@ -1048,6 +1111,7 @@ def test_openclaw_planner_loop_uses_catalog_without_tool_execution():
     assert "execute_tools" in result["planner_contract"]["must_not"]
     assert result["status"] == "needs_clarification"
     assert result["clarifying_questions"][0]["key"] == "connect_google_sheets"
+    assert any(item["key"] == "google_sheets_target" for item in result["clarifying_questions"])
     assert result["workflow_proposal"]["policy"] == "localos_envelope"
     assert {"capability": "google_sheets.read_rows", "provider_path": "openclaw:available"} in result["workflow_proposal"]["provider_paths"]
     assert result["workflow_proposal"]["openclaw_action_refs"] == [
@@ -1090,7 +1154,12 @@ def test_agent_feasibility_resolver_reports_ready_missing_choice_and_forbidden()
     assert missing["status"] == "needs_connection"
     assert missing["ready"] is False
     assert [item["provider"] for item in missing["missing_connections"]] == ["google_sheets"]
+    assert missing["missing_connections"][0]["route_state"] == "available"
+    assert any(item["provider"] == "native_localos" for item in missing["missing_connections"][0]["provider_routes"])
     assert missing["ready_bindings"][0]["provider"] == "telegram"
+    assert missing["ready_bindings"][0]["route_state"] == "connected"
+    assert missing["capabilities"][0]["route_state"] == "available"
+    assert any(item["provider"] == "openclaw" for item in missing["capabilities"][1]["provider_routes"])
 
     choice = resolve_agent_feasibility(
         required_capabilities=["google_sheets.read_rows"],
@@ -1334,20 +1403,666 @@ def test_agent_builder_session_preview_includes_feasibility_for_required_connect
     assert [item["provider"] for item in feasibility["missing_connections"]] == ["google_sheets"]
     assert feasibility["ready_bindings"][0]["provider"] == "telegram"
     assert preview["setup_flow"]["schema"] == "localos_agent_builder_setup_flow_v1"
-    assert preview["setup_flow"]["status"] == "needs_connection"
-    assert preview["setup_flow"]["primary_action"] == "connect_service"
-    assert preview["setup_flow"]["can_create_draft"] is True
+    assert preview["setup_flow"]["status"] == "needs_clarification"
+    assert preview["setup_flow"]["primary_action"] == "answer_question"
+    assert preview["setup_flow"]["next_step"] == "answer_clarification"
+    assert preview["setup_flow"]["post_create_status"] == "needs_connection"
+    assert preview["setup_flow"]["post_create_next_step"] == "connect_required_integrations"
+    assert preview["setup_flow"]["can_create_draft"] is False
     assert preview["setup_flow"]["can_activate"] is False
+    assert preview["setup_flow"]["steps"][1]["key"] == "clarify"
+    assert preview["setup_flow"]["steps"][1]["status"] == "active"
+    assert preview["setup_flow"]["steps"][-2]["key"] == "preview"
+    assert preview["setup_flow"]["steps"][-1]["key"] == "activate"
+    assert any(item["type"] == "clarification" for item in preview["setup_flow"]["activation_blockers"])
     assert any(item["type"] == "connection" and item["provider"] == "google_sheets" for item in preview["setup_flow"]["activation_blockers"])
     assert preview["connection_plan"]["schema"] == "localos_agent_connection_plan_v1"
     assert preview["connection_plan"]["status"] == "needs_action"
     assert preview["connection_plan"]["items"][0]["action"] == "connect_required"
     assert preview["connection_plan"]["items"][1]["action"] == "ready"
+    assert preview["connection_summary"]["schema"] == "localos_agent_connection_summary_v1"
+    assert preview["connection_summary"]["status"] == "needs_connection"
+    assert preview["connection_summary"]["missing_count"] == 1
+    assert preview["connection_summary"]["ready_count"] == 1
+    assert preview["connection_summary"]["next_action"] == "connect_required_integrations"
+    assert preview["connection_summary"]["items"][0]["action"] == "connect_required"
+    assert preview["connection_summary"]["items"][0]["setup_cta"]["mode"] == "post_create_connections"
+    assert "Google Sheets" in preview["connection_summary"]["items"][0]["setup_cta"]["label"]
+    assert preview["connection_summary"]["items"][1]["action"] == "ready"
+    assert preview["connection_readiness"]["schema"] == "localos_agent_connection_readiness_v1"
+    assert preview["connection_readiness"]["next_action"] == "connect_missing_services"
+    assert preview["connection_readiness"]["post_create_workspace"] == "connections"
+    assert preview["connection_readiness"]["required_count"] == 2
+    assert preview["connection_readiness"]["missing_count"] == 1
+    assert preview["connection_readiness"]["ready_count"] == 1
+    assert preview["connection_readiness"]["missing_services"][0]["provider"] == "google_sheets"
+    assert preview["connection_readiness"]["ready_services"][0]["provider"] == "telegram"
+    assert preview["connection_readiness"]["services"][0]["provider_route_cta"]
+    assert preview["connector_intelligence"]["schema"] == "localos_agent_connector_intelligence_v1"
+    assert preview["connector_intelligence"]["status"] == "needs_connection"
+    assert preview["connector_intelligence"]["can_compile_draft"] is True
+    assert preview["connector_intelligence"]["can_preview_after_connections"] is False
+    assert preview["connector_intelligence"]["bindings"][0]["action"] == "connect_required"
+    assert preview["connector_intelligence"]["bindings"][0]["route_state"] == "available"
+    assert any(item["provider"] == "native_localos" for item in preview["connector_intelligence"]["bindings"][0]["provider_routes"])
+    assert preview["connector_intelligence"]["bindings"][0]["setup_cta"]["mode"] == "post_create_connections"
+    assert preview["connector_intelligence"]["bindings"][1]["action"] == "ready"
+    assert preview["connector_intelligence"]["bindings"][1]["route_state"] == "connected"
+    assert preview["connector_intelligence"]["capabilities"][0]["route_state"] == "available"
+    assert any(item["label"] == "OpenClaw" for item in preview["connector_intelligence"]["provider_paths"])
     assert preview["openclaw_planner_loop"]["schema"] == "localos_openclaw_planner_loop_v1"
     assert preview["openclaw_planner_loop"]["may_execute_tools"] is False
     assert "openclaw.google_sheets.read_rows" in preview["openclaw_planner_loop"]["workflow_proposal"]["openclaw_action_refs"]
-    assert not state["missing_questions"]
+    assert any(item["key"] == "google_sheets_target" for item in state["missing_questions"])
+    assert any("таблиц" in item["question"].lower() for item in state["missing_questions"])
     assert "Google Sheets" in state["messages"][-1]["content"]
+
+
+def test_agent_builder_setup_flow_points_ready_connectors_to_preview_run():
+    from services.agent_builder_session import build_agent_builder_state
+
+    state = build_agent_builder_state(
+        [
+            {
+                "role": "user",
+                "content": (
+                    "Каждый день бери заказ из Google Sheets за вчера и готовь пост в Telegram. "
+                    "Результат нужен как черновик поста. Перед публикацией человек проверяет результат."
+                ),
+            }
+        ],
+        connected_integrations=[
+            {
+                "id": "sheets-1",
+                "provider": "google_sheets",
+                "status": "active",
+                "display_name": "Orders sheet",
+                "config": {"spreadsheet_id": "sheet-1", "sheet_name": "Orders"},
+            },
+            {
+                "id": "telegram-1",
+                "provider": "telegram",
+                "status": "active",
+                "display_name": "Business bot",
+                "config": {"bot_mode": "business_bot"},
+            },
+        ],
+    )
+
+    setup_flow = state["preview"]["setup_flow"]
+
+    assert setup_flow["status"] == "ready_for_draft"
+    assert setup_flow["next_step"] == "create_draft_then_preview"
+    assert setup_flow["post_create_status"] == "ready_for_preview"
+    assert setup_flow["post_create_next_step"] == "run_preview"
+    assert setup_flow["can_create_draft"] is True
+    assert setup_flow["can_run_preview"] is True
+    assert setup_flow["can_activate"] is False
+    assert setup_flow["steps"][-2]["status"] == "next"
+    assert "preview run" in setup_flow["post_create_description"]
+    assert state["preview"]["connection_readiness"]["next_action"] == "create_draft_then_preview"
+    assert state["preview"]["connection_readiness"]["post_create_workspace"] == "run"
+    assert state["preview"]["connection_readiness"]["can_run_preview_after_create"] is True
+    assert state["preview"]["connection_readiness"]["ready_count"] == 2
+
+
+def test_compiled_agent_creation_contract_google_sheets_to_telegram():
+    from api import agent_blueprints_api, agent_builder_api
+    from services.agent_blueprint_draft_builder import compile_agent_blueprint
+    from services.agent_integration_preflight import build_agent_integration_preflight
+    from services.agent_builder_session import build_agent_builder_state
+
+    prompt = (
+        "Каждый день бери заказ из Google Sheets за вчера и готовь пост в Telegram. "
+        "Результат нужен как черновик поста. Перед публикацией человек проверяет результат."
+    )
+    connected_integrations = [
+        {
+            "id": "sheets-1",
+            "provider": "google_sheets",
+            "status": "active",
+            "display_name": "Orders sheet",
+            "config": {"spreadsheet_id": "spreadsheet-1", "sheet_name": "Orders"},
+        },
+        {
+            "id": "telegram-1",
+            "provider": "telegram",
+            "status": "active",
+            "display_name": "Business bot",
+            "config": {"bot_mode": "business_bot"},
+        },
+    ]
+    state = build_agent_builder_state(
+        [{"role": "user", "content": prompt}],
+        connected_integrations=connected_integrations,
+        business_id="biz1",
+        user_id="user1",
+    )
+
+    preview = state["preview"]
+    setup_flow = preview["setup_flow"]
+
+    assert state["missing_questions"] == []
+    assert setup_flow["status"] == "ready_for_draft"
+    assert setup_flow["next_step"] == "create_draft_then_preview"
+    assert setup_flow["post_create_next_step"] == "run_preview"
+    assert preview["connector_intelligence"]["status"] == "ready"
+    assert [item["action"] for item in preview["connection_summary"]["items"]] == ["ready", "ready"]
+    assert preview["openclaw_planner_loop"]["may_execute_tools"] is False
+    assert "openclaw.google_sheets.read_rows" in preview["openclaw_planner_loop"]["workflow_proposal"]["openclaw_action_refs"]
+
+    selected_bindings = agent_builder_api._selected_connection_bindings(
+        {"selected_connection_bindings": {}},
+        preview,
+        connected_integrations,
+    )
+    draft = compile_agent_blueprint(
+        preview["understood_task"],
+        preview["category"],
+        business_id="biz1",
+        user_id="user1",
+        planner_context=preview["openclaw_planner_context"],
+    )
+    metadata = dict(draft["metadata"])
+    metadata["agent_builder_preview"] = preview
+    metadata["required_connectors"] = preview["required_connectors"]
+    metadata["builder_setup_flow"] = setup_flow
+    metadata = agent_builder_api._apply_selected_connection_bindings(metadata, selected_bindings)
+
+    class Cursor:
+        def __init__(self):
+            self.rows = []
+
+        def execute(self, query, params=None):
+            normalized_query = " ".join(query.split()).lower()
+            self.rows = []
+            if "from agent_integrations" in normalized_query:
+                return None
+            if "from agent_runs" in normalized_query:
+                self.rows = [
+                    {
+                        "id": "run-1",
+                        "status": "completed",
+                        "input_json": {
+                            "schema": "localos_agent_preview_input_v1",
+                            "preview_mode": True,
+                            "external_side_effects_allowed": False,
+                            "source": "agent_preview",
+                        },
+                        "output_json": {},
+                        "error_text": "",
+                        "started_at": datetime(2026, 6, 11, tzinfo=timezone.utc),
+                        "completed_at": datetime(2026, 6, 11, tzinfo=timezone.utc),
+                        "updated_at": datetime(2026, 6, 11, tzinfo=timezone.utc),
+                    }
+                ]
+                return None
+            raise AssertionError(f"Unhandled SQL: {query}")
+
+        def fetchall(self):
+            return self.rows
+
+    preflight = build_agent_integration_preflight(
+        Cursor(),
+        business_id="biz1",
+        metadata=metadata,
+        input_payload={},
+    )
+    post_create_handoff = agent_builder_api._build_post_create_handoff(preflight)
+    blueprint = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "category": "custom",
+        "description": preview["understood_task"],
+        "metadata_json": metadata,
+    }
+    version = {
+        "id": "version-1",
+        "version_number": 1,
+        "goal": draft["version_payload"]["goal"],
+        "inputs_schema_json": draft["version_payload"]["inputs_schema"],
+        "steps_json": draft["version_payload"]["steps"],
+        "capability_allowlist_json": draft["version_payload"]["capability_allowlist"],
+        "approval_policy_json": draft["version_payload"]["approval_policy"],
+        "output_schema_json": draft["version_payload"]["output_schema"],
+    }
+    preview_input = agent_blueprints_api._build_agent_preview_run_input(
+        blueprint,
+        version,
+        {"input": {}},
+    )
+    activation_gate = agent_blueprints_api._build_activation_gate_summary(
+        Cursor(),
+        blueprint,
+        version,
+        metadata,
+    )
+
+    assert selected_bindings["google_sheets_read"]["selection_source"] == "auto_single_connection"
+    assert selected_bindings["telegram_delivery"]["selection_source"] == "auto_single_connection"
+    assert metadata["agent_binding_integrations"]["google_sheets_read"]["integration_id"] == "sheets-1"
+    assert metadata["agent_binding_integrations"]["telegram_delivery"]["integration_id"] == "telegram-1"
+    assert preflight["ready"] is True
+    assert {item["provider"]: item["resolution"] for item in preflight["items"]} == {
+        "google_sheets": "blueprint_metadata",
+        "telegram": "blueprint_metadata",
+    }
+    assert post_create_handoff["status"] == "ready_for_preview"
+    assert post_create_handoff["next_step"] == "run_preview"
+    assert preview_input["schema"] == "localos_agent_preview_input_v1"
+    assert preview_input["preview_mode"] is True
+    assert preview_input["external_side_effects_allowed"] is False
+    assert preview_input["google_sheets"]["read_only"] is True
+    assert preview_input["telegram"]["draft_only"] is True
+    assert activation_gate["can_activate"] is True
+    assert activation_gate["next_step"] == "activate_version"
+
+
+def test_agent_builder_create_blueprint_endpoint_returns_ready_preview_handoff(monkeypatch):
+    from flask import Flask
+
+    from api import agent_builder_api
+    from services.agent_builder_session import build_agent_builder_state
+
+    prompt = (
+        "Каждый день бери заказ из Google Sheets за вчера и готовь пост в Telegram. "
+        "Результат нужен как черновик поста. Перед публикацией человек проверяет результат."
+    )
+    connected_integrations = [
+        {
+            "id": "sheets-1",
+            "business_id": "biz1",
+            "provider": "google_sheets",
+            "status": "active",
+            "display_name": "Orders sheet",
+            "config_json": {"spreadsheet_id": "spreadsheet-1", "sheet_name": "Orders"},
+        },
+        {
+            "id": "telegram-1",
+            "business_id": "biz1",
+            "provider": "telegram",
+            "status": "active",
+            "display_name": "Business bot",
+            "config_json": {"bot_mode": "business_bot"},
+        },
+    ]
+    state = build_agent_builder_state(
+        [{"role": "user", "content": prompt}],
+        connected_integrations=[
+            {
+                "id": "sheets-1",
+                "provider": "google_sheets",
+                "status": "active",
+                "display_name": "Orders sheet",
+                "config": {"spreadsheet_id": "spreadsheet-1", "sheet_name": "Orders"},
+            },
+            {
+                "id": "telegram-1",
+                "provider": "telegram",
+                "status": "active",
+                "display_name": "Business bot",
+                "config": {"bot_mode": "business_bot"},
+            },
+        ],
+        business_id="biz1",
+        user_id="user1",
+    )
+
+    class FakeConnection:
+        def __init__(self):
+            self.cursor_instance = FakeCursor()
+            self.committed = False
+            self.rolled_back = False
+
+        def cursor(self):
+            return self.cursor_instance
+
+        def commit(self):
+            self.committed = True
+
+        def rollback(self):
+            self.rolled_back = True
+
+    class FakeDatabase:
+        def __init__(self):
+            self.conn = fake_connection
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    class FakeCursor:
+        def __init__(self):
+            self.sessions = {
+                "session-1": {
+                    "id": "session-1",
+                    "business_id": "biz1",
+                    "created_by_user_id": "user1",
+                    "status": "draft",
+                    "initial_prompt": prompt,
+                    "category": state["category"],
+                    "messages_json": state["messages"],
+                    "preview_json": state["preview"],
+                    "missing_questions_json": state["missing_questions"],
+                    "blueprint_id": None,
+                }
+            }
+            self.integrations = connected_integrations
+            self.blueprints = {}
+            self.versions = {}
+            self.last_result = None
+            self.last_results = []
+
+        def execute(self, query, params=None):
+            normalized_query = " ".join(query.split()).lower()
+            params = params or ()
+            self.last_result = None
+            self.last_results = []
+            if normalized_query.startswith("select * from agent_builder_sessions"):
+                self.last_result = self.sessions.get(params[0])
+                return None
+            if normalized_query.startswith("select id, provider, status, display_name, config_json"):
+                business_id = params[0]
+                self.last_results = [item for item in self.integrations if item["business_id"] == business_id]
+                return None
+            if normalized_query.startswith("select id, source, display_name"):
+                self.last_results = []
+                return None
+            if normalized_query.startswith("select telegram_bot_token"):
+                self.last_result = {"telegram_bot_token": ""}
+                return None
+            if normalized_query.startswith("insert into agent_blueprints"):
+                metadata = json.loads(params[7])
+                self.blueprints[params[0]] = {
+                    "id": params[0],
+                    "business_id": params[1],
+                    "name": params[2],
+                    "category": params[3],
+                    "description": params[4],
+                    "status": params[5],
+                    "created_by_user_id": params[6],
+                    "metadata_json": metadata,
+                }
+                return None
+            if normalized_query.startswith("select coalesce(max(version_number)"):
+                self.last_result = {"next_version": 1}
+                return None
+            if normalized_query.startswith("insert into agent_blueprint_versions"):
+                self.versions[params[0]] = {
+                    "id": params[0],
+                    "blueprint_id": params[1],
+                    "version_number": params[2],
+                    "goal": params[3],
+                    "inputs_schema_json": json.loads(params[4]),
+                    "steps_json": json.loads(params[5]),
+                    "persona_agent_id": params[6],
+                    "capability_allowlist_json": json.loads(params[7]),
+                    "approval_policy_json": json.loads(params[8]),
+                    "output_schema_json": json.loads(params[9]),
+                    "created_by_user_id": params[10],
+                }
+                return None
+            if normalized_query.startswith("select * from agent_blueprint_versions where id"):
+                self.last_result = self.versions.get(params[0])
+                return None
+            if normalized_query.startswith("update agent_builder_sessions"):
+                session = self.sessions.get(params[6])
+                session["status"] = params[0]
+                session["category"] = params[1]
+                session["messages_json"] = json.loads(params[2])
+                session["preview_json"] = json.loads(params[3])
+                session["missing_questions_json"] = json.loads(params[4])
+                if params[5]:
+                    session["blueprint_id"] = params[5]
+                return None
+            if normalized_query.startswith("select b.*"):
+                blueprint = self.blueprints.get(params[0])
+                latest_version = next(
+                    (version for version in self.versions.values() if version["blueprint_id"] == params[0]),
+                    None,
+                )
+                self.last_result = {
+                    **blueprint,
+                    "latest_version_id": latest_version["id"],
+                    "latest_version_number": latest_version["version_number"],
+                    "latest_goal": latest_version["goal"],
+                }
+                return None
+            if "from agent_integrations" in normalized_query:
+                business_id = params[0]
+                self.last_results = [item for item in self.integrations if item["business_id"] == business_id]
+                return None
+            raise AssertionError(f"Unhandled SQL: {query}")
+
+        def fetchone(self):
+            return self.last_result
+
+        def fetchall(self):
+            return self.last_results
+
+    fake_connection = FakeConnection()
+    monkeypatch.setattr(agent_builder_api, "DatabaseManager", FakeDatabase)
+    monkeypatch.setattr(agent_builder_api, "_require_auth", lambda: ({"user_id": "user1"}, None))
+    monkeypatch.setattr(agent_builder_api, "_require_business_access", lambda cursor, business_id, user_data: (True, None))
+    monkeypatch.setattr(
+        agent_builder_api,
+        "charge_agent_creation_credits",
+        lambda cursor, business_id, user_id, source_id, description: {
+            "status": "charged",
+            "action_key": "agent_creation",
+            "actual_credits": 3,
+        },
+    )
+
+    app = Flask(__name__)
+    request_context = app.test_request_context(
+        "/api/agent-builder/sessions/session-1/create-blueprint",
+        method="POST",
+        json={},
+    )
+    request_context.push()
+    try:
+        response, status_code = agent_builder_api.create_blueprint_from_agent_builder_session("session-1")
+    finally:
+        request_context.pop()
+
+    payload = response.get_json()
+    blueprint_id = payload["blueprint"]["id"]
+    metadata = fake_connection.cursor_instance.blueprints[blueprint_id]["metadata_json"]
+
+    assert status_code == 201
+    assert fake_connection.committed is True
+    assert fake_connection.rolled_back is False
+    assert payload["success"] is True
+    assert payload["next_step"] == "run_preview"
+    assert payload["post_create_handoff"]["status"] == "ready_for_preview"
+    assert payload["post_create_handoff"]["workspace_mode"] == "run"
+    assert payload["connection_preflight"]["ready"] is True
+    assert {item["provider"]: item["resolution"] for item in payload["connection_preflight"]["items"]} == {
+        "google_sheets": "blueprint_metadata",
+        "telegram": "blueprint_metadata",
+    }
+    assert payload["session"]["status"] == "blueprint_created"
+    assert payload["session"]["blueprint_id"] == blueprint_id
+    assert metadata["builder_selected_connection_bindings"]["google_sheets_read"]["selection_source"] == "auto_single_connection"
+    assert metadata["agent_binding_integrations"]["telegram_delivery"]["integration_id"] == "telegram-1"
+    assert metadata["openclaw_planner_loop"]["may_execute_tools"] is False
+    assert payload["version"]["capability_allowlist_json"] == ["google_sheets.read_rows", "communications.draft"]
+
+
+def test_agent_preview_run_and_activation_endpoints_enforce_safe_gate(monkeypatch):
+    from flask import Flask
+
+    from api import agent_blueprints_api
+    from api.agent_blueprints_api import _build_agent_preview_run_input
+    from services.agent_blueprint_draft_builder import compile_agent_blueprint
+
+    draft = compile_agent_blueprint(
+        "Каждый день бери заказ из Google Sheets за вчера и готовь пост в Telegram. "
+        "Результат нужен как черновик поста. Перед публикацией человек проверяет результат."
+    )
+    metadata = dict(draft["metadata"])
+    metadata["custom_process"] = {
+        "google_sheets_read": {
+            "integration_id": "sheets-1",
+            "spreadsheet_id": "spreadsheet-1",
+            "sheet_name": "Orders",
+        },
+        "telegram_delivery": {
+            "integration_id": "telegram-1",
+            "bot_mode": "business_bot",
+        },
+        "google_sheets": {
+            "integration_id": "sheets-1",
+            "spreadsheet_id": "spreadsheet-1",
+            "sheet_name": "Orders",
+        },
+        "telegram": {
+            "integration_id": "telegram-1",
+            "bot_mode": "business_bot",
+        },
+    }
+    metadata["agent_binding_integrations"] = {
+        "google_sheets_read": {
+            "integration_id": "sheets-1",
+            "provider": "google_sheets",
+        },
+        "telegram_delivery": {
+            "integration_id": "telegram-1",
+            "provider": "telegram",
+        },
+    }
+    cursor = FakeCursor()
+    cursor.tables["agent_blueprints"]["bp1"] = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "name": "Sheets to Telegram",
+        "category": "custom",
+        "description": "Google Sheets to Telegram",
+        "status": "draft",
+        "metadata_json": metadata,
+    }
+    cursor.tables["agent_blueprint_versions"]["ver1"] = {
+        "id": "ver1",
+        "blueprint_id": "bp1",
+        "version_number": 1,
+        "goal": draft["version_payload"]["goal"],
+        "inputs_schema_json": draft["version_payload"]["inputs_schema"],
+        "steps_json": draft["version_payload"]["steps"],
+        "capability_allowlist_json": draft["version_payload"]["capability_allowlist"],
+        "approval_policy_json": draft["version_payload"]["approval_policy"],
+        "output_schema_json": draft["version_payload"]["output_schema"],
+    }
+
+    class FakeConnection:
+        def __init__(self):
+            self.cursor_instance = cursor
+            self.commit_count = 0
+            self.rollback_count = 0
+
+        def cursor(self):
+            return self.cursor_instance
+
+        def commit(self):
+            self.commit_count += 1
+
+        def rollback(self):
+            self.rollback_count += 1
+
+    class FakeDatabase:
+        def __init__(self):
+            self.conn = fake_connection
+
+        def close(self):
+            return None
+
+    fake_connection = FakeConnection()
+    monkeypatch.setattr(agent_blueprints_api, "DatabaseManager", FakeDatabase)
+    monkeypatch.setattr(agent_blueprints_api, "_require_auth", lambda: ({"user_id": "user1"}, None))
+    monkeypatch.setattr(agent_blueprints_api, "_require_business_access", lambda cursor, business_id, user_data: (True, None))
+    monkeypatch.setattr(agent_blueprints_api, "build_agent_blueprint_orchestrator", CountingOrchestrator)
+
+    app = Flask(__name__)
+
+    blocked_context = app.test_request_context(
+        "/api/agent-blueprints/bp1/versions/ver1/activate",
+        method="POST",
+        json={},
+    )
+    blocked_context.push()
+    try:
+        blocked_response, blocked_status = agent_blueprints_api.activate_agent_blueprint_version("bp1", "ver1")
+    finally:
+        blocked_context.pop()
+    blocked_payload = blocked_response.get_json()
+
+    preflight_context = app.test_request_context(
+        "/api/agent-blueprints/bp1/preflight",
+        method="POST",
+        json={"blueprint_version_id": "ver1", "input": {"preview_mode": True}},
+    )
+    preflight_context.push()
+    try:
+        preflight_response = agent_blueprints_api.preflight_agent_blueprint_run("bp1")
+    finally:
+        preflight_context.pop()
+    preflight_payload = preflight_response.get_json()
+
+    run_context = app.test_request_context(
+        "/api/agent-blueprints/bp1/runs",
+        method="POST",
+        json={"blueprint_version_id": "ver1", "input": {"preview_mode": True}},
+    )
+    run_context.push()
+    try:
+        run_response, run_status = agent_blueprints_api.start_agent_blueprint_run("bp1")
+    finally:
+        run_context.pop()
+    run_payload = run_response.get_json()
+    run = run_payload["run"]
+
+    activate_context = app.test_request_context(
+        "/api/agent-blueprints/bp1/versions/ver1/activate",
+        method="POST",
+        json={"reason": "safe preview passed"},
+    )
+    activate_context.push()
+    try:
+        activate_response = agent_blueprints_api.activate_agent_blueprint_version("bp1", "ver1")
+    finally:
+        activate_context.pop()
+    activate_payload = activate_response.get_json()
+
+    preview_input = _build_agent_preview_run_input(
+        cursor.tables["agent_blueprints"]["bp1"],
+        cursor.tables["agent_blueprint_versions"]["ver1"],
+        {"input": {"preview_mode": True}},
+    )
+    run_input = cursor.tables["agent_runs"][run["id"]]["input_json"]
+
+    assert blocked_status == 400
+    assert blocked_payload["code"] == "AGENT_ACTIVATION_GATE_BLOCKED"
+    assert blocked_payload["activation_gate"]["next_step"] == "run_preview"
+    assert preflight_payload["success"] is True
+    assert preflight_payload["can_start"] is True
+    assert preflight_payload["preview_run_gate"]["can_preview_run"] is True
+    assert preflight_payload["preview_input"]["schema"] == "localos_agent_preview_input_v1"
+    assert preflight_payload["preview_input"]["external_side_effects_allowed"] is False
+    assert preflight_payload["preflight"]["ready"] is True
+    assert run_status == 201
+    assert run_payload["success"] is True
+    assert run_input["schema"] == "localos_agent_preview_input_v1"
+    assert run_input["preview_mode"] is True
+    assert run_input["external_side_effects_allowed"] is False
+    assert run["observability"]["preview_summary"]["safe_preview"] is True
+    assert run["status"] in {"completed", "waiting_approval"}
+    assert activate_payload["success"] is True
+    assert activate_payload["active_version"]["id"] == "ver1"
+    assert cursor.tables["agent_blueprints"]["bp1"]["status"] == "active"
+    assert cursor.tables["agent_blueprints"]["bp1"]["metadata_json"]["active_version_id"] == "ver1"
+    assert fake_connection.commit_count >= 2
+    assert fake_connection.rollback_count == 0
+    assert preview_input["external_side_effects_allowed"] is False
 
 
 def test_agent_builder_setup_flow_blocks_draft_until_clarification_is_answered():
@@ -1362,6 +2077,156 @@ def test_agent_builder_setup_flow_blocks_draft_until_clarification_is_answered()
     assert setup_flow["steps"][1]["key"] == "clarify"
     assert setup_flow["steps"][1]["status"] == "active"
     assert any(item["type"] == "clarification" for item in setup_flow["activation_blockers"])
+
+
+def test_agent_builder_connector_intelligence_blocks_forbidden_provider_path():
+    from services.agent_builder_session import build_agent_builder_state
+
+    state = build_agent_builder_state(
+        [
+            {
+                "role": "user",
+                "content": (
+                    "Подключись к компьютерам Роскосмоса, забери закрытые данные и каждый день "
+                    "пиши отчёт. Результат нужен как таблица, человек проверяет итог."
+                ),
+            }
+        ],
+    )
+
+    intelligence = state["preview"]["connector_intelligence"]
+
+    assert intelligence["schema"] == "localos_agent_connector_intelligence_v1"
+    assert intelligence["status"] == "forbidden"
+    assert intelligence["can_compile_draft"] is False
+    assert intelligence["forbidden"][0]["term"] == "роскосмос"
+    assert state["preview"]["setup_flow"]["next_step"] == "cannot_create"
+    assert state["preview"]["setup_flow"]["can_create_draft"] is False
+
+
+def test_agent_builder_selected_connection_bindings_are_validated_and_stored():
+    from api import agent_builder_api
+
+    preview = {
+        "connection_summary": {
+            "items": [
+                {
+                    "key": "telegram_trigger",
+                    "provider": "telegram",
+                    "connections": [
+                        {"id": "telegram-1", "display_name": "Bot 1", "provider": "telegram"},
+                        {"id": "telegram-2", "display_name": "Bot 2", "provider": "telegram"},
+                    ],
+                }
+            ]
+        }
+    }
+    inventory = [
+        {
+            "id": "telegram-2",
+            "provider": "telegram",
+            "display_name": "Bot 2",
+            "config": {"bot_mode": "business_bot"},
+        }
+    ]
+    selected = agent_builder_api._selected_connection_bindings(
+        {"selected_connection_bindings": {"telegram_trigger": "telegram-2", "other": "telegram-2"}},
+        preview,
+        inventory,
+    )
+    metadata = agent_builder_api._apply_selected_connection_bindings(
+        {"custom_process": {}, "required_integration_bindings": []},
+        selected,
+    )
+
+    assert selected["telegram_trigger"]["integration_id"] == "telegram-2"
+    assert "other" not in selected
+    assert metadata["agent_binding_integrations"]["telegram_trigger"]["integration_id"] == "telegram-2"
+    assert metadata["custom_process"]["telegram_trigger"]["integration_id"] == "telegram-2"
+    assert metadata["custom_process"]["telegram"]["bot_mode"] == "business_bot"
+
+
+def test_agent_builder_requires_choice_when_multiple_existing_connections_are_available():
+    from api import agent_builder_api
+
+    preview = {
+        "connection_summary": {
+            "items": [
+                {
+                    "key": "telegram_trigger",
+                    "provider": "telegram",
+                    "title": "Telegram trigger",
+                    "action": "choose_existing",
+                    "connections": [
+                        {"id": "telegram-1", "display_name": "Bot 1", "provider": "telegram"},
+                        {"id": "telegram-2", "display_name": "Bot 2", "provider": "telegram"},
+                    ],
+                }
+            ]
+        }
+    }
+
+    missing = agent_builder_api._missing_required_connection_choices(preview, {})
+    selected_missing = agent_builder_api._missing_required_connection_choices(
+        preview,
+        {"telegram_trigger": {"integration_id": "telegram-2", "provider": "telegram"}},
+    )
+
+    assert missing[0]["key"] == "telegram_trigger"
+    assert missing[0]["connection_count"] == 2
+    assert selected_missing == []
+
+
+def test_agent_builder_auto_selects_single_existing_connection():
+    from api import agent_builder_api
+
+    preview = {
+        "connection_summary": {
+            "items": [
+                {
+                    "key": "telegram_trigger",
+                    "provider": "telegram",
+                    "action": "choose_existing",
+                    "connections": [
+                        {"id": "telegram-1", "display_name": "Bot 1", "provider": "telegram"},
+                    ],
+                },
+                {
+                    "key": "google_sheets_read",
+                    "provider": "google_sheets",
+                    "action": "choose_existing",
+                    "connections": [
+                        {"id": "sheet-1", "display_name": "Orders", "provider": "google_sheets"},
+                        {"id": "sheet-2", "display_name": "Archive", "provider": "google_sheets"},
+                    ],
+                },
+            ]
+        }
+    }
+    inventory = [
+        {
+            "id": "telegram-1",
+            "provider": "telegram",
+            "display_name": "Bot 1",
+            "config": {"bot_mode": "business_bot"},
+        },
+        {
+            "id": "sheet-1",
+            "provider": "google_sheets",
+            "display_name": "Orders",
+            "config": {"spreadsheet_id": "orders", "sheet_name": "Orders"},
+        },
+    ]
+
+    selected = agent_builder_api._selected_connection_bindings(
+        {"selected_connection_bindings": {}},
+        preview,
+        inventory,
+    )
+
+    assert selected["telegram_trigger"]["integration_id"] == "telegram-1"
+    assert selected["telegram_trigger"]["selection_source"] == "auto_single_connection"
+    assert "google_sheets_read" not in selected
 
 
 def test_agent_builder_session_includes_openclaw_planner_context_envelope():
@@ -2699,6 +3564,182 @@ def test_agent_integration_binding_status_treats_localos_finance_as_native_ready
     assert status[0]["missing_config"] == []
 
 
+def test_sync_blueprint_integration_metadata_records_selected_binding(monkeypatch):
+    from api import agent_blueprints_api
+    from services.agent_integration_preflight import build_agent_integration_preflight
+
+    class Cursor:
+        def __init__(self):
+            self.saved_metadata = {}
+
+        def execute(self, query, params=None):
+            normalized_query = " ".join(query.split()).lower()
+            if normalized_query.startswith("update agent_blueprints"):
+                self.saved_metadata = json.loads(params[0])
+                return None
+            if "from agent_integrations" in normalized_query:
+                return None
+            raise AssertionError(f"Unhandled SQL: {query}")
+
+        def fetchall(self):
+            return []
+
+    blueprint = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "metadata_json": {
+            "required_integration_bindings": [
+                {
+                    "key": "google_sheets_read",
+                    "provider": "google_sheets",
+                    "capability": "google_sheets.read_rows",
+                    "required_config": ["spreadsheet_id", "sheet_name"],
+                }
+            ],
+            "custom_process": {},
+        },
+    }
+    integration = {
+        "id": "sheets-1",
+        "provider": "google_sheets",
+        "status": "active",
+        "config_json": {"spreadsheet_id": "spreadsheet-1", "sheet_name": "Orders", "operation": "read_rows"},
+    }
+    monkeypatch.setattr(agent_blueprints_api, "_load_blueprint", lambda _cursor, _blueprint_id: blueprint)
+    cursor = Cursor()
+
+    metadata = agent_blueprints_api._sync_blueprint_integration_metadata(
+        cursor,
+        blueprint,
+        integration,
+        "google_sheets_read",
+    )
+    preflight = build_agent_integration_preflight(cursor, business_id="biz1", metadata=metadata, input_payload={})
+
+    assert metadata["agent_binding_integrations"]["google_sheets_read"]["integration_id"] == "sheets-1"
+    assert metadata["custom_process"]["google_sheets_read"]["spreadsheet_id"] == "spreadsheet-1"
+    assert preflight["ready"] is True
+    assert preflight["items"][0]["resolution"] == "blueprint_metadata"
+    assert preflight["items"][0]["integration_id"] == "sheets-1"
+
+
+def test_agent_preflight_reports_selected_binding_missing_config():
+    from services.agent_integration_preflight import build_agent_integration_preflight
+
+    class Cursor:
+        def execute(self, query, params=None):
+            return None
+
+        def fetchall(self):
+            return []
+
+    metadata = {
+        "required_integration_bindings": [
+            {
+                "key": "google_sheets_read",
+                "provider": "google_sheets",
+                "capability": "google_sheets.read_rows",
+                "required_config": ["spreadsheet_id", "sheet_name"],
+            }
+        ],
+        "agent_binding_integrations": {
+            "google_sheets_read": {
+                "integration_id": "sheets-1",
+                "provider": "google_sheets",
+            }
+        },
+    }
+
+    preflight = build_agent_integration_preflight(Cursor(), business_id="biz1", metadata=metadata, input_payload={})
+
+    assert preflight["ready"] is False
+    assert preflight["status"] == "blocked"
+    assert preflight["missing_count"] == 1
+    assert preflight["items"][0]["status"] == "needs_config"
+    assert preflight["items"][0]["resolution"] == "blueprint_metadata_missing_config"
+    assert preflight["items"][0]["integration_id"] == "sheets-1"
+    assert preflight["items"][0]["missing_config"] == ["spreadsheet_id", "sheet_name"]
+    assert "spreadsheet_id" in preflight["items"][0]["summary"]
+
+
+def test_agent_preflight_does_not_treat_compiled_defaults_as_external_connection():
+    from services.agent_integration_preflight import build_agent_integration_preflight
+
+    class Cursor:
+        def execute(self, query, params=None):
+            return None
+
+        def fetchall(self):
+            return []
+
+    metadata = {
+        "required_integration_bindings": [
+            {
+                "key": "telegram_delivery",
+                "provider": "telegram",
+                "capability": "communications.draft",
+                "direction": "external_publish_request",
+                "required_config": ["bot_mode"],
+                "default_config": {"bot_mode": "business_bot"},
+            }
+        ]
+    }
+
+    preflight = build_agent_integration_preflight(Cursor(), business_id="biz1", metadata=metadata, input_payload={})
+
+    assert preflight["ready"] is False
+    assert preflight["status"] == "blocked"
+    assert preflight["items"][0]["status"] == "needs_connection"
+    assert preflight["items"][0]["resolution"] == "missing_integration"
+    assert preflight["items"][0]["provider"] == "telegram"
+
+
+def test_agent_preflight_reports_active_integration_missing_config():
+    from services.agent_integration_preflight import build_agent_integration_preflight
+
+    class Cursor:
+        def __init__(self):
+            self.results = []
+
+        def execute(self, query, params=None):
+            normalized_query = " ".join(query.split()).lower()
+            if "from agent_integrations" in normalized_query:
+                self.results = [
+                    {
+                        "id": "sheets-1",
+                        "business_id": "biz1",
+                        "provider": "google_sheets",
+                        "status": "active",
+                        "display_name": "Orders sheet",
+                        "config_json": {"spreadsheet_id": "spreadsheet-1"},
+                    }
+                ]
+                return None
+            raise AssertionError(f"Unhandled SQL: {query}")
+
+        def fetchall(self):
+            return self.results
+
+    metadata = {
+        "required_integration_bindings": [
+            {
+                "key": "google_sheets_read",
+                "provider": "google_sheets",
+                "capability": "google_sheets.read_rows",
+                "required_config": ["spreadsheet_id", "sheet_name"],
+            }
+        ],
+    }
+
+    preflight = build_agent_integration_preflight(Cursor(), business_id="biz1", metadata=metadata, input_payload={})
+
+    assert preflight["ready"] is False
+    assert preflight["items"][0]["status"] == "needs_config"
+    assert preflight["items"][0]["resolution"] == "agent_integration_missing_config"
+    assert preflight["items"][0]["integration_id"] == "sheets-1"
+    assert preflight["items"][0]["missing_config"] == ["sheet_name"]
+
+
 def test_agent_connection_plan_turns_bindings_into_user_next_actions():
     from api import agent_blueprints_api
 
@@ -2747,10 +3788,55 @@ def test_agent_connection_plan_turns_bindings_into_user_next_actions():
     assert plan["status"] == "needs_action"
     assert plan["missing_count"] == 1
     assert plan["items"][0]["action"] == "choose_existing"
+    assert plan["items"][0]["route_state"] == "available"
+    assert "выберите" in plan["items"][0]["route_summary"].lower()
     assert plan["items"][0]["existing_integrations"][0]["display_name"] == "Orders sheet"
+    assert any(item["provider"] == "openclaw" for item in plan["items"][0]["provider_routes"])
     assert any(item["provider"] == "native_localos" for item in plan["items"][0]["provider_paths"])
     assert plan["items"][1]["action"] == "ready"
+    assert plan["items"][1]["route_state"] == "connected"
     assert plan["items"][2]["action"] == "native_ready"
+
+
+def test_agent_post_connect_handoff_routes_ready_connections_to_preview():
+    from api import agent_blueprints_api
+
+    ready = agent_blueprints_api._build_agent_post_connect_handoff(
+        {
+            "schema": "localos_agent_connection_plan_v1",
+            "status": "ready",
+            "missing_count": 0,
+            "items": [],
+        }
+    )
+    blocked = agent_blueprints_api._build_agent_post_connect_handoff(
+        {
+            "schema": "localos_agent_connection_plan_v1",
+            "status": "needs_action",
+            "missing_count": 2,
+            "items": [
+                {
+                    "key": "google_sheets_read",
+                    "provider": "google_sheets",
+                    "action": "ready",
+                },
+                {
+                    "key": "telegram_delivery",
+                    "provider": "telegram",
+                    "action": "connect_required",
+                },
+            ],
+        }
+    )
+
+    assert ready["status"] == "ready_for_preview"
+    assert ready["workspace_mode"] == "run"
+    assert ready["next_step"] == "run_preview"
+    assert "safe preview run" in ready["description"]
+    assert blocked["status"] == "needs_connections"
+    assert blocked["workspace_mode"] == "connections"
+    assert blocked["next_step"] == "connect_required_integrations"
+    assert blocked["next_binding_key"] == "telegram_delivery"
 
 
 def test_agent_builder_post_create_handoff_contains_connection_plan():
@@ -2792,10 +3878,54 @@ def test_agent_builder_post_create_handoff_contains_connection_plan():
 
     assert handoff["schema"] == "localos_agent_post_create_handoff_v1"
     assert handoff["status"] == "needs_connections"
+    assert handoff["next_binding_key"] == "google_sheets_read"
+    assert handoff["next_binding"]["key"] == "google_sheets_read"
+    assert handoff["next_binding"]["title"] == "Google Sheets"
+    assert handoff["next_binding"]["route_state"] == "available"
+    assert handoff["next_binding"]["route_summary"]
+    assert handoff["next_route"]["provider"] == "native_localos"
+    assert handoff["next_route"]["primary_cta"]
     assert handoff["connection_plan"]["schema"] == "localos_agent_connection_plan_v1"
     assert handoff["connection_plan"]["missing_count"] == 1
     assert handoff["connection_plan"]["items"][0]["action"] == "connect_required"
+    assert handoff["connection_plan"]["items"][0]["provider_routes"]
     assert handoff["connection_plan"]["items"][1]["action"] == "ready"
+
+
+def test_agent_builder_post_create_handoff_routes_ready_agent_to_preview_run():
+    from api import agent_builder_api
+
+    handoff = agent_builder_api._build_post_create_handoff(
+        {
+            "ready": True,
+            "items": [
+                {
+                    "key": "google_sheets_read",
+                    "provider": "google_sheets",
+                    "capability": "google_sheets.read_rows",
+                    "status": "ready",
+                    "resolution": "agent_integration",
+                    "required": True,
+                },
+                {
+                    "key": "telegram_delivery",
+                    "provider": "telegram",
+                    "capability": "communications.draft",
+                    "status": "ready",
+                    "resolution": "agent_integration",
+                    "required": True,
+                },
+            ],
+            "missing": [],
+        }
+    )
+
+    assert handoff["status"] == "ready_for_preview"
+    assert handoff["next_step"] == "run_preview"
+    assert handoff["workspace_mode"] == "run"
+    assert handoff["next_binding"] == {}
+    assert handoff["next_route"] == {}
+    assert "preview run" in handoff["description"]
 
 
 def test_activation_gate_summary_explains_missing_connector(monkeypatch):
@@ -2844,6 +3974,186 @@ def test_activation_gate_summary_explains_missing_connector(monkeypatch):
     assert "Подключите" in gate["summary"]
     assert gate["connection_plan"]["schema"] == "localos_agent_connection_plan_v1"
     assert gate["connection_plan"]["items"][0]["action"] == "connect_required"
+    assert gate["next_binding_key"] == "google_sheets_read"
+
+
+def test_activation_gate_requires_safe_preview_run(monkeypatch):
+    from api import agent_blueprints_api
+
+    class Cursor:
+        def __init__(self):
+            self.rows = []
+
+        def execute(self, query, params=None):
+            normalized_query = " ".join(query.split()).lower()
+            self.rows = []
+            if "from agent_runs" in normalized_query:
+                self.rows = []
+
+        def fetchall(self):
+            return self.rows
+
+    monkeypatch.setattr(
+        agent_blueprints_api,
+        "validate_compiled_artifact_candidate",
+        lambda payload, metadata: {"ready": True, "validation": {"status": "passed", "errors": []}},
+    )
+    monkeypatch.setattr(
+        agent_blueprints_api,
+        "build_version_payload_from_row",
+        lambda row: {"steps": []},
+    )
+
+    gate = agent_blueprints_api._build_activation_gate_summary(
+        Cursor(),
+        {"id": "bp1", "business_id": "biz1"},
+        {"id": "version-1", "version_number": 1},
+        {"required_integration_bindings": []},
+    )
+
+    assert gate["can_activate"] is False
+    assert gate["requires_preview_run"] is True
+    assert gate["preview_run_status"]["ready"] is False
+    assert gate["next_step"] == "run_preview"
+    assert gate["primary_action_label"] == "Запустить preview"
+    assert gate["human_blockers"][0]["type"] == "preview_run"
+
+
+def test_activation_gate_accepts_completed_safe_preview_run(monkeypatch):
+    from api import agent_blueprints_api
+
+    class Cursor:
+        def __init__(self):
+            self.rows = []
+
+        def execute(self, query, params=None):
+            normalized_query = " ".join(query.split()).lower()
+            self.rows = []
+            if "from agent_runs" in normalized_query:
+                self.rows = [
+                    {
+                        "id": "run-1",
+                        "status": "completed",
+                        "input_json": {
+                            "schema": "localos_agent_preview_input_v1",
+                            "preview_mode": True,
+                            "external_side_effects_allowed": False,
+                            "source": "agent_preview",
+                        },
+                        "output_json": {},
+                        "error_text": "",
+                        "started_at": datetime(2026, 6, 11, tzinfo=timezone.utc),
+                        "completed_at": datetime(2026, 6, 11, tzinfo=timezone.utc),
+                        "updated_at": datetime(2026, 6, 11, tzinfo=timezone.utc),
+                    }
+                ]
+
+        def fetchall(self):
+            return self.rows
+
+    monkeypatch.setattr(
+        agent_blueprints_api,
+        "validate_compiled_artifact_candidate",
+        lambda payload, metadata: {"ready": True, "validation": {"status": "passed", "errors": []}},
+    )
+    monkeypatch.setattr(
+        agent_blueprints_api,
+        "build_version_payload_from_row",
+        lambda row: {"steps": []},
+    )
+
+    gate = agent_blueprints_api._build_activation_gate_summary(
+        Cursor(),
+        {"id": "bp1", "business_id": "biz1"},
+        {"id": "version-1", "version_number": 1},
+        {"required_integration_bindings": []},
+    )
+
+    assert gate["can_activate"] is True
+    assert gate["preview_run_status"]["ready"] is True
+    assert gate["preview_run_status"]["passed_run"]["id"] == "run-1"
+    assert gate["next_step"] == "activate_version"
+
+
+def test_activation_gate_blocks_autonomous_write_limits_even_after_preview(monkeypatch):
+    from api import agent_blueprints_api
+
+    class Cursor:
+        def __init__(self):
+            self.rows = []
+
+        def execute(self, query, params=None):
+            normalized_query = " ".join(query.split()).lower()
+            self.rows = []
+            if "from agent_runs" in normalized_query:
+                self.rows = [
+                    {
+                        "id": "run-1",
+                        "status": "completed",
+                        "input_json": {
+                            "schema": "localos_agent_preview_input_v1",
+                            "preview_mode": True,
+                            "external_side_effects_allowed": False,
+                            "source": "agent_preview",
+                        },
+                        "output_json": {},
+                        "error_text": "",
+                        "started_at": datetime(2026, 6, 11, tzinfo=timezone.utc),
+                        "completed_at": datetime(2026, 6, 11, tzinfo=timezone.utc),
+                        "updated_at": datetime(2026, 6, 11, tzinfo=timezone.utc),
+                    }
+                ]
+
+        def fetchall(self):
+            return self.rows
+
+    monkeypatch.setattr(
+        agent_blueprints_api,
+        "validate_compiled_artifact_candidate",
+        lambda payload, metadata: {
+            "ready": True,
+            "validation": {"status": "passed", "errors": []},
+            "candidate": {
+                "dsl": {
+                    "limits": {
+                        "autonomous_external_write_allowed": True,
+                    }
+                }
+            },
+        },
+    )
+
+    gate = agent_blueprints_api._build_activation_gate_summary(
+        Cursor(),
+        {"id": "bp1", "business_id": "biz1"},
+        {
+            "id": "version-1",
+            "version_number": 1,
+            "steps_json": [
+                {
+                    "key": "write_sheet",
+                    "type": "capability",
+                    "capability": "sheets.append_row_request",
+                    "requires_approval": True,
+                    "required_approval_type": "sheet_update",
+                },
+                {
+                    "key": "approve_sheet_update",
+                    "type": "approval",
+                    "approval_type": "sheet_update",
+                },
+            ],
+            "approval_policy_json": {"sheet_update": "manual_approval_required"},
+            "capability_allowlist_json": ["sheets.append_row_request"],
+        },
+        {"required_integration_bindings": []},
+    )
+
+    assert gate["can_activate"] is False
+    assert gate["next_step"] == "fix_compiled_workflow"
+    assert gate["approval_policy_status"]["ready"] is False
+    assert gate["approval_policy_status"]["autonomous_writes_allowed"] is True
+    assert gate["human_blockers"][0]["type"] == "approval_policy"
 
 
 def test_google_sheets_integration_config_preserves_read_write_operation():
@@ -2872,6 +4182,24 @@ def test_google_sheets_integration_config_preserves_read_write_operation():
 
     assert read_config["operation"] == "read_rows"
     assert invalid_config["operation"] == "read_write"
+
+
+def test_maton_integration_config_is_delivery_bridge_with_caps():
+    from api import agent_blueprints_api
+
+    config = agent_blueprints_api._sanitize_agent_integration_config(
+        "maton",
+        {"config": {"channel": "whatsapp_business"}},
+    )
+    limits = agent_blueprints_api._sanitize_agent_integration_limits(
+        "maton",
+        {"limits": {"daily_message_cap": 25, "frequency_cap_minutes": 15}},
+    )
+
+    assert config["channel"] == "whatsapp_business"
+    assert config["mode"] == "approved_delivery_bridge"
+    assert limits["daily_message_cap"] == 25
+    assert limits["frequency_cap_minutes"] == 15
 
 
 def test_custom_process_mapping_updates_compiled_version_steps():
@@ -2947,6 +4275,9 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "preflight_agent_blueprint_run" in api_source
     assert "localos_agent_preview_run_gate_v1" in api_source
     assert '"external_side_effects_allowed": False' in api_source
+    assert '"next_binding_key": _connection_plan_next_binding_key(connection_plan)' in api_source
+    assert "_build_agent_preview_run_input" in api_source
+    assert "localos_agent_preview_input_v1" in api_source
     assert "AGENT_INTEGRATIONS_REQUIRED" in api_source
     assert 'return jsonify(result), 400' in api_source
     assert "/api/agent-runs/<run_id>/feedback" in api_source
@@ -2959,14 +4290,18 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "/api/agent-blueprints/<blueprint_id>/versions/<version_id>/diff" in api_source
     assert "/api/agent-blueprints/<blueprint_id>/versions/<version_id>/activate" in api_source
     assert "localos_agent_activation_gate_v1" in api_source
+    assert "localos_agent_preview_run_status_v1" in api_source
     assert "_build_activation_gate_summary" in api_source
+    assert "_activation_preview_run_status" in api_source
     assert "primary_action_label" in api_source
     assert "human_blockers" in api_source
+    assert "requires_preview_run" in api_source
+    assert "AGENT_ACTIVATION_GATE_BLOCKED" in api_source
     assert "_activation_connection_plan_from_preflight" in api_source
     assert "/api/agent-blueprints/<blueprint_id>/versions/<version_id>/rollback" in api_source
     assert "_resolve_active_version" in api_source
     assert "_remember_active_version" in api_source
-    assert "Перед активацией нужно подключить источники агента." in api_source
+    assert "Запустите безопасный preview run перед активацией." in api_source
     assert "build_agent_version_diff" in workspace_source
     assert "agent_learning_loop_v1" in workspace_source
     assert "versioned_review" in workspace_source
@@ -3026,9 +4361,19 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "metadata[\"openclaw_planner_context\"] = planner_context" in builder_api_source
     assert "metadata[\"openclaw_planner_loop\"] = planner_loop" in builder_api_source
     assert "metadata[\"builder_setup_flow\"] = setup_flow" in builder_api_source
+    assert "AGENT_SETUP_INCOMPLETE" in builder_api_source
+    assert "\"missing_questions\": missing_questions" in builder_api_source
+    assert "\"connector_intelligence\": preview.get(\"connector_intelligence\")" in builder_api_source
+    assert "selected_connection_bindings" in builder_api_source
+    assert "_selected_connection_bindings" in builder_api_source
+    assert "_apply_selected_connection_bindings" in builder_api_source
+    assert "_missing_required_connection_choices" in builder_api_source
+    assert "AGENT_CONNECTION_CHOICE_REQUIRED" in builder_api_source
+    assert "metadata[\"builder_selected_connection_bindings\"]" in builder_api_source
     assert "connection_preflight" in builder_api_source
     assert "post_create_handoff" in builder_api_source
     assert "localos_agent_post_create_handoff_v1" in builder_api_source
+    assert "next_binding_key" in builder_api_source
     assert "_build_handoff_connection_plan" in builder_api_source
     assert "\"connection_plan\": connection_plan" in builder_api_source
     assert "next_step" in builder_api_source
@@ -3036,24 +4381,124 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "connect_required_integrations" in agents_page_source
     assert "recentPostCreateHandoff" in agents_page_source
     assert "recentPostCreateHandoff?.connection_plan || agentConnectionPlan" in agents_page_source
+    assert "binding_key" in agents_page_source
+    assert "selectedBuilderConnectionBindings" in agents_page_source
+    assert "selected_connection_bindings: selectedBuilderConnectionBindings" in agents_page_source
+    assert "onSelectConnectionBinding" in agents_page_source
+    assert "autoSelectBuilderConnectionBindings" in agents_page_source
+    assert "Выбрано автоматически" in agents_page_source
+    assert "missingConnectionChoices" in agents_page_source
+    assert "Сначала выберите подключение" in agents_page_source
+    assert "Почему draft пока нельзя создать" in agents_page_source
+    assert "createBlockers" in agents_page_source
+    assert "LocalOS должен собрать проверяемый workflow" in agents_page_source
+    assert "provider_routes" in agents_page_source
+    assert "route_summary" in agents_page_source
+    assert "providerRouteLabel" in agents_page_source
+    assert "providerRouteTone" in agents_page_source
+    assert "selectedConnectionBindingKey" in agents_page_source
+    assert "onConfigureBinding" in agents_page_source
+    assert "Настроить этот доступ" in agents_page_source
+    assert "Сейчас настраивается" in agents_page_source
+    assert "connectionPlan={agentConnectionPlan}" in agents_page_source
+    assert "selectedPlanItem" in agents_page_source
+    assert "binding_key: selectedBinding?.key || ''" in agents_page_source
+    assert "Использовать для шага" in agents_page_source
+    assert "Выбрано" in agents_page_source
+    assert "Использовать" in agents_page_source
     assert "Preflight и preview run" in agents_page_source
+    assert "preview_mode: true" in agents_page_source
+    assert "external_side_effects_allowed: false" in agents_page_source
+    assert "Preview run без внешних действий" in agents_page_source
+    assert "preflightResponse.data?.next_binding_key" in agents_page_source
+    assert "setWorkspaceMode('connections')" in agents_page_source
     assert "activationGate" in agents_page_source
-    assert "activationGate?.summary" in agents_page_source
-    assert "activationGate.connection_plan" in agents_page_source
+    assert "gate.summary" in agents_page_source
+    assert "gate.connection_plan" in agents_page_source
+    assert "activationGate?.next_binding_key" in agents_page_source
+    assert "openConnectionsFromActivationGate" in agents_page_source
+    assert "onDeleteAgent={onDeleteAgent}" in agents_page_source
+    assert "Архивировать" in agents_page_source
     assert "primary_action_label" in agents_page_source
     assert "Активировать версию" in agents_page_source
+    assert "Запустить preview" in agents_page_source
+    assert "preview_run_status" in agents_page_source
     assert "BuilderPlannerLoopPanel" in agents_page_source
     assert "OpenClaw planner" in agents_page_source
+    assert "ConnectorIntelligencePanel" in agents_page_source
+    assert "Доступность сервисов" in agents_page_source
+    assert "connector_intelligence" in agents_page_source
+    assert "BuilderTechnicalDiagnostics" in agents_page_source
+    assert "Техническая диагностика LocalOS/OpenClaw" in agents_page_source
+    assert "Обычный следующий шаг показан выше" in agents_page_source
+    assert "BuilderConnectionSummaryPanel" in agents_page_source
+    assert "Подключения для агента" in agents_page_source
+    assert "connection_summary" in agents_page_source
+    assert "BuilderConnectionReadinessPanel" in agents_page_source
+    assert "Готовность подключений" in agents_page_source
+    assert "connection_readiness" in agents_page_source
+    assert "setup_cta" in agents_page_source
+    assert "Настроить подключение" in agents_page_source
     assert "preview?.connection_plan" in agents_page_source
     assert "compact" in agents_page_source
     assert "_build_preview_connection_plan" in Path("src/services/agent_builder_session.py").read_text(encoding="utf-8")
+    assert "_build_connection_readiness" in Path("src/services/agent_builder_session.py").read_text(encoding="utf-8")
+    assert "localos_agent_connection_readiness_v1" in Path("src/services/agent_builder_session.py").read_text(encoding="utf-8")
+    assert "_build_connection_summary" in Path("src/services/agent_builder_session.py").read_text(encoding="utf-8")
+    assert "localos_agent_connection_summary_v1" in Path("src/services/agent_builder_session.py").read_text(encoding="utf-8")
+    assert "_build_connector_intelligence" in Path("src/services/agent_builder_session.py").read_text(encoding="utf-8")
+    assert "localos_agent_connector_intelligence_v1" in Path("src/services/agent_builder_session.py").read_text(encoding="utf-8")
     assert "onPreviewRun" in agents_page_source
     assert "onAttachExistingIntegration" in agents_page_source
     assert "bindingActionHint" in agents_page_source
     assert "AgentConnectionPlanPanel" in agents_page_source
     assert "План подключений" in agents_page_source
+    assert "applyPostConnectHandoff" in agents_page_source
+    assert "response.data?.post_connect_handoff" in agents_page_source
+    assert "handoff.next_binding_key" in agents_page_source
+    assert "setSelectedConnectionBindingKey(handoff.next_binding_key)" in agents_page_source
+    assert "handoff.workspace_mode === 'run'" in agents_page_source
+    assert "setSelectedConnectionBindingKey('')" in agents_page_source
+    assert "next_binding" in builder_api_source
+    assert "next_route" in builder_api_source
+    assert "_preferred_handoff_route" in builder_api_source
+    assert "Следующий доступ" in agents_page_source
+    assert "recentPostCreateHandoff.next_binding" in agents_page_source
+    assert "recentPostCreateHandoff.next_route" in agents_page_source
     assert "connection_plan" in api_source
     assert "localos_agent_connection_plan_v1" in api_source
+    assert "agent_binding_integrations" in api_source
+    assert "binding_key" in api_source
+    assert "_build_agent_post_connect_handoff" in api_source
+    assert "_connection_plan_next_binding_key" in api_source
+    assert "_connection_plan_route_summary" in api_source
+    assert "connector_provider_routes" in api_source
+    assert "post_connect_handoff" in api_source
+    assert "ready_for_preview" in api_source
+    assert "connect_mode" in Path("src/services/agent_provider_registry.py").read_text(encoding="utf-8")
+    assert "primary_cta" in Path("src/services/agent_provider_registry.py").read_text(encoding="utf-8")
+    assert "provider_action" in Path("src/services/agent_provider_registry.py").read_text(encoding="utf-8")
+    assert "use_openclaw_boundary" in Path("src/services/agent_provider_registry.py").read_text(encoding="utf-8")
+    assert "select_external_account_key" in Path("src/services/agent_provider_registry.py").read_text(encoding="utf-8")
+    assert "planned_oauth_connector" in Path("src/services/agent_provider_registry.py").read_text(encoding="utf-8")
+    assert "ProviderActionPill" in agents_page_source
+    assert "providerActionLabel" in agents_page_source
+    assert "providerActionDescription" in agents_page_source
+    assert "route?.primary_cta" in agents_page_source
+    assert "saveMatonIntegration" in agents_page_source
+    assert "Maton.ai bridge" in agents_page_source
+    assert "matonAuthRef" in agents_page_source
+    assert "onSaveMatonIntegration" in agents_page_source
+    assert "AgentConnectionDecisionBanner" in agents_page_source
+    assert "buildAgentConnectionDecision" in agents_page_source
+    assert "BuilderCreationDecisionBanner" in agents_page_source
+    assert "buildBuilderCreationDecision" in agents_page_source
+    assert "Ответьте на уточнение" in agents_page_source
+    assert "Можно создать draft и открыть preview" in agents_page_source
+    assert "У бизнеса уже есть несколько подходящих коннектов" in agents_page_source
+    assert "Подключения готовы" in agents_page_source
+    assert "Запустите safe preview run" in agents_page_source
+    assert "LocalOS покажет следующий шаг" in agents_page_source
     assert "GenericRunProgress" in agents_page_source
     assert "Мои агенты" in agents_page_source
     assert "getAgentListStatus" in agents_page_source
@@ -3068,7 +4513,43 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "Путь {humanizeCategory(category).toLowerCase()}-агента" in agents_page_source
     assert "Технический журнал" in agents_page_source
     assert "AgentRunObservabilityPanel" in agents_page_source
+    assert "PreviewRunSummaryPanel" in agents_page_source
+    assert "CompiledPreviewSimulationPanel" in agents_page_source
+    assert "previewSimulationTone" in agents_page_source
+    assert "Симуляция compiled workflow" in agents_page_source
+    assert "внешних действий не было" in agents_page_source
+    assert "ActivationGateDecisionCard" in agents_page_source
+    assert "buildActivationGateDecision" in agents_page_source
+    assert "AgentActivationPathStrip" in agents_page_source
+    assert "buildActivationPathSteps" in agents_page_source
+    assert "workflow проверен" in agents_page_source
+    assert "нужно подключить" in agents_page_source
+    assert "activationBlockerText" in agents_page_source
+    assert "Ждёт решения человека" in agents_page_source
+    assert "без решения человека агент не продолжит внешний шаг" in agents_page_source
+    assert "Почему ждём" in agents_page_source
+    assert "Preview: {gate.preview_run_status?.ready ? 'пройден' : 'нужен'}" in agents_page_source
+    assert "Preflight: {gate.preflight?.ready ? 'готов' : 'проверить'}" in agents_page_source
+    assert "Compiled: {gate.compiled_validation?.ready ? 'валиден' : 'проверить'}" in agents_page_source
+    assert "Policy: {gate.approval_policy_status?.ready ? 'готова' : 'проверить'}" in agents_page_source
+    assert "approvals и limits готовы" in agents_page_source
+    assert "нужен human gate" in agents_page_source
+    assert "Activation gate" in agents_page_source
+    assert "Что показал preview run" in agents_page_source
+    assert "activation_hint" in agents_page_source
+    assert "Следующий шаг" in agents_page_source
+    assert "next_step_label" in agents_page_source
+    assert "previewNextStepActionLabel" in agents_page_source
+    assert "onNextStepAction" in agents_page_source
+    assert "canActivateFromPreview" in agents_page_source
+    assert "Activation gate готов" in agents_page_source
+    assert "onActivateVersion(activationVersionId)" in agents_page_source
+    assert "Открыть подключения" in agents_page_source
+    assert "Проверить активацию" in agents_page_source
     assert "Action ledger" in agents_page_source
+    assert "localos_agent_preview_summary_v1" in Path("src/services/agent_blueprint_runner.py").read_text(encoding="utf-8")
+    assert "_build_preview_summary" in Path("src/services/agent_blueprint_runner.py").read_text(encoding="utf-8")
+    assert "_preview_next_step" in Path("src/services/agent_blueprint_runner.py").read_text(encoding="utf-8")
     assert "domain_requests" in Path("src/services/agent_blueprint_runner.py").read_text(encoding="utf-8")
     assert "agent_sheet_operation_requests" in Path("src/services/agent_blueprint_runner.py").read_text(encoding="utf-8")
     assert "agent_communication_requests" in Path("src/services/agent_blueprint_runner.py").read_text(encoding="utf-8")
@@ -4247,7 +5728,16 @@ def test_runner_passes_compiled_step_rows_to_next_capability_without_runtime_ai(
         "blueprint_version_id": "ver1",
         "business_id": "biz1",
         "status": "running",
-        "input_json": {},
+        "input_json": {
+            "preview_mode": True,
+            "external_side_effects_allowed": False,
+            "goal": "Проверить таблицу и подготовить действие",
+            "preview_context": {
+                "understood_task": "Проверить Google Sheets и показать append request",
+                "data_sources": ["Google Sheets", "Telegram"],
+                "manual_control": "Подтвердить перед записью в таблицу.",
+            },
+        },
         "output_json": {},
         "created_by_user_id": "user1",
     }
@@ -4334,7 +5824,16 @@ def test_runner_builds_finance_outcome_artifact_from_compiled_step_outputs():
         "blueprint_version_id": "ver1",
         "business_id": "biz1",
         "status": "completed",
-        "input_json": {},
+        "input_json": {
+            "preview_mode": True,
+            "external_side_effects_allowed": False,
+            "goal": "Проверить таблицу и подготовить действие",
+            "preview_context": {
+                "understood_task": "Проверить Google Sheets и показать append request",
+                "data_sources": ["Google Sheets", "Telegram"],
+                "manual_control": "Подтвердить перед записью в таблицу.",
+            },
+        },
         "output_json": {},
         "created_by_user_id": "user1",
     }
@@ -4613,7 +6112,16 @@ def test_runner_load_run_includes_observability_envelope_for_openclaw_actions():
         "blueprint_version_id": "ver1",
         "business_id": "biz1",
         "status": "completed",
-        "input_json": {},
+        "input_json": {
+            "preview_mode": True,
+            "external_side_effects_allowed": False,
+            "goal": "Проверить таблицу и подготовить действие",
+            "preview_context": {
+                "understood_task": "Проверить Google Sheets и показать append request",
+                "data_sources": ["Google Sheets", "Telegram"],
+                "manual_control": "Подтвердить перед записью в таблицу.",
+            },
+        },
         "output_json": {},
         "created_by_user_id": "user1",
     }
@@ -4655,6 +6163,14 @@ def test_runner_load_run_includes_observability_envelope_for_openclaw_actions():
     observability = run["observability"]
 
     assert observability["schema"] == "agent_run_observability_v1"
+    assert observability["preview_summary"]["schema"] == "localos_agent_preview_summary_v1"
+    assert observability["preview_summary"]["is_preview"] is True
+    assert observability["preview_summary"]["safe_preview"] is True
+    assert observability["preview_summary"]["understood_task"] == "Проверить Google Sheets и показать append request"
+    assert observability["preview_summary"]["external_actions_performed"] is False
+    assert "approval" in observability["preview_summary"]["activation_hint"].lower()
+    assert observability["preview_summary"]["next_step"] == "review_approvals"
+    assert observability["preview_summary"]["next_step_label"] == "Проверить approval"
     assert observability["action_ids"] == ["action-1"]
     assert observability["action_ledger"]["items"][0]["billing_summary"]["settled_tokens"] == 42
     assert observability["billing_ledger"]["summary"]["reserved_tokens"] == 2000
@@ -4760,6 +6276,16 @@ class FakeCursor:
         if normalized_query.startswith("select * from agent_blueprint_versions where id"):
             self.last_result = self.tables["agent_blueprint_versions"].get(params[0])
             return None
+        if normalized_query.startswith("select * from agent_blueprint_versions where blueprint_id"):
+            blueprint_id = params[0]
+            versions = [
+                version
+                for version in self.tables["agent_blueprint_versions"].values()
+                if version.get("blueprint_id") == blueprint_id
+            ]
+            versions = sorted(versions, key=lambda item: item.get("version_number") or 0, reverse=True)
+            self.last_result = versions[0] if versions else None
+            return None
         if normalized_query.startswith("select * from agent_blueprints where id"):
             self.last_result = self.tables["agent_blueprints"].get(params[0])
             return None
@@ -4777,6 +6303,15 @@ class FakeCursor:
             return None
         if normalized_query.startswith("select * from agent_runs where id"):
             self.last_result = self.tables["agent_runs"].get(params[0])
+            return None
+        if normalized_query.startswith("select id, status, input_json, output_json, error_text"):
+            blueprint_id = params[0]
+            version_id = params[1]
+            self.last_results = [
+                run
+                for run in self.tables["agent_runs"].values()
+                if run.get("blueprint_id") == blueprint_id and run.get("blueprint_version_id") == version_id
+            ]
             return None
         if normalized_query.startswith("select step_index from agent_run_steps"):
             run_id = params[0]
@@ -5032,6 +6567,16 @@ class FakeCursor:
         if normalized_query.startswith("update agent_runs set status = 'completed'"):
             self.tables["agent_runs"][params[1]]["status"] = "completed"
             self.tables["agent_runs"][params[1]]["output_json"] = json.loads(params[0])
+            return None
+        if normalized_query.startswith("update agent_blueprints") and "set metadata_json" in normalized_query:
+            blueprint = self.tables["agent_blueprints"].get(params[1])
+            if blueprint:
+                blueprint["metadata_json"] = json.loads(params[0])
+            return None
+        if normalized_query.startswith("update agent_blueprints") and "set status = 'active'" in normalized_query:
+            blueprint = self.tables["agent_blueprints"].get(params[0])
+            if blueprint and blueprint.get("status") != "archived":
+                blueprint["status"] = "active"
             return None
         if normalized_query.startswith("select count(*) as count from agent_artifacts"):
             run_id = params[0]

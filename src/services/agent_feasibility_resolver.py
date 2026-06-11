@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from services.agent_provider_registry import CAPABILITY_PROVIDER_MAP, INTEGRATION_PROVIDER_CATALOG
+from services.agent_provider_registry import (
+    CAPABILITY_PROVIDER_MAP,
+    INTEGRATION_PROVIDER_CATALOG,
+    best_provider_route_state,
+    connector_provider_routes,
+)
 from services.openclaw_capability_catalog import get_openclaw_capability_catalog, openclaw_actions_for_capability
 
 
@@ -119,10 +124,14 @@ def _unsupported_capabilities(capabilities: List[str], catalog: Dict[str, Any]) 
 def _capability_item(capability: str, catalog: Dict[str, Any]) -> Dict[str, Any]:
     openclaw_actions = openclaw_actions_for_capability(catalog, capability)
     provider_candidates = [dict(item) for item in CAPABILITY_PROVIDER_MAP.get(capability, [])]
+    provider_routes = connector_provider_routes("", capability)
+    route_state = best_provider_route_state(provider_routes)
     return {
         "capability": capability,
         "status": "supported" if provider_candidates or openclaw_actions else "unsupported",
         "provider_candidates": provider_candidates,
+        "provider_routes": provider_routes,
+        "route_state": route_state,
         "openclaw_actions": openclaw_actions,
     }
 
@@ -164,19 +173,43 @@ def _base_binding_item(
     resolution: str,
 ) -> Dict[str, Any]:
     catalog_item = INTEGRATION_PROVIDER_CATALOG.get(provider, {})
+    capability = str(binding.get("capability") or "")
+    provider_routes = connector_provider_routes(provider, capability)
+    route_state = "connected" if status == "ready" else best_provider_route_state(provider_routes)
     return {
         "key": key,
         "provider": provider,
         "provider_title": str(catalog_item.get("title") or provider),
-        "capability": str(binding.get("capability") or ""),
+        "capability": capability,
         "direction": str(binding.get("direction") or ""),
         "status": status,
         "resolution": resolution,
+        "route_state": route_state,
+        "provider_routes": provider_routes,
+        "route_summary": _route_summary(provider, status, route_state, integrations, missing_config),
         "required_config": [str(value) for value in binding.get("required_config", []) if str(value or "").strip()],
         "missing_config": missing_config,
         "connection_count": len(integrations),
         "connections": [_connection_summary(item) for item in integrations],
     }
+
+
+def _route_summary(provider: str, status: str, route_state: str, integrations: List[Dict[str, Any]], missing_config: List[str]) -> str:
+    catalog_item = INTEGRATION_PROVIDER_CATALOG.get(provider, {})
+    title = str(catalog_item.get("title") or provider or "подключение")
+    if status == "ready":
+        return f"{title} уже подключён и готов для агента."
+    if status == "needs_choice":
+        return f"Найдено несколько подключений {title}; выберите одно для compiled workflow."
+    if integrations and missing_config:
+        return f"{title} найден, но нужно заполнить настройки: {', '.join(missing_config)}."
+    if route_state == "available":
+        return f"{title} можно подключить через доступный provider route."
+    if route_state == "manual":
+        return f"{title} доступен только как ручной fallback или загруженный источник."
+    if route_state == "planned":
+        return f"{title} есть в roadmap provider registry, но пока не активирует агента."
+    return f"Для {title} нет разрешённого provider route."
 
 
 def _integration_config(integration: Dict[str, Any]) -> Dict[str, Any]:

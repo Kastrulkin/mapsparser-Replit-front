@@ -1202,9 +1202,11 @@ class AgentBlueprintRunner:
         domain_requests = self._load_domain_request_observability(run, steps, action_ids)
         integration_preflight = self._build_run_integration_preflight(run)
         recovery_actions = self._build_recovery_actions(run, step_errors + action_errors, delivery_status, action_ids)
+        preview_summary = self._build_preview_summary(run, steps, artifacts, approvals, domain_requests, integration_preflight)
 
         return {
             "schema": "agent_run_observability_v1",
+            "preview_summary": preview_summary,
             "run_history": {
                 "run_id": run.get("id"),
                 "blueprint_id": run.get("blueprint_id"),
@@ -1261,6 +1263,194 @@ class AgentBlueprintRunner:
                 "source": "agent_run_detail",
             },
         }
+
+    def _build_preview_summary(
+        self,
+        run: Dict[str, Any],
+        steps: List[Dict[str, Any]],
+        artifacts: List[Dict[str, Any]],
+        approvals: List[Dict[str, Any]],
+        domain_requests: List[Dict[str, Any]],
+        integration_preflight: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        run_input = self._run_input(run)
+        preview_context = run_input.get("preview_context") if isinstance(run_input.get("preview_context"), dict) else {}
+        safe_preview = bool(run_input.get("preview_mode")) and run_input.get("external_side_effects_allowed") is False
+        completed_steps = [
+            str(step.get("step_key") or step.get("key") or step.get("step_type") or "")
+            for step in steps
+            if str(step.get("status") or "") == "completed"
+        ]
+        blocked_steps = [
+            {
+                "key": str(step.get("step_key") or step.get("key") or ""),
+                "status": str(step.get("status") or ""),
+                "reason": str(step.get("error_text") or ""),
+            }
+            for step in steps
+            if str(step.get("status") or "") in {"blocked", "failed", "rejected"}
+        ]
+        artifact_cards = []
+        for artifact in artifacts:
+            payload = artifact.get("payload_json") if isinstance(artifact.get("payload_json"), dict) else {}
+            artifact_cards.append(
+                {
+                    "type": str(artifact.get("artifact_type") or ""),
+                    "title": str(artifact.get("title") or artifact.get("artifact_type") or ""),
+                    "summary": self._artifact_summary(payload),
+                }
+            )
+        pending_approvals = [
+            {
+                "id": str(item.get("id") or ""),
+                "title": str(item.get("title") or item.get("approval_type") or ""),
+                "approval_type": str(item.get("approval_type") or ""),
+                "status": str(item.get("status") or ""),
+            }
+            for item in approvals
+            if str(item.get("status") or "") == "pending"
+        ]
+        waiting_actions = []
+        for item in domain_requests:
+            state = str(item.get("approval_state") or item.get("apply_state") or item.get("status") or "")
+            if state in {"pending", "pending_human", "not_applied", "publish_requested", "request_created", "provider_request_queued"}:
+                waiting_actions.append(
+                    {
+                        "kind": str(item.get("kind") or ""),
+                        "state": state,
+                        "why": str(item.get("why_waiting") or ""),
+                        "provider_write_performed": bool(item.get("provider_write_performed")),
+                    }
+                )
+        next_step = self._preview_next_step(run, integration_preflight, pending_approvals, waiting_actions)
+        return {
+            "schema": "localos_agent_preview_summary_v1",
+            "is_preview": bool(run_input.get("preview_mode")),
+            "safe_preview": safe_preview,
+            "headline": self._preview_summary_headline(run, safe_preview, integration_preflight, pending_approvals, waiting_actions),
+            "understood_task": str(preview_context.get("understood_task") or run_input.get("goal") or ""),
+            "data_sources": self._preview_summary_list(preview_context.get("data_sources") or run_input.get("required_connectors") or []),
+            "manual_control": str(preview_context.get("manual_control") or "Перед внешним действием нужен approval."),
+            "completed_steps": [item for item in completed_steps if item],
+            "blocked_steps": blocked_steps,
+            "artifacts": artifact_cards[:6],
+            "pending_approvals": pending_approvals,
+            "waiting_actions": waiting_actions[:6],
+            "preflight_ready": bool(integration_preflight.get("ready")),
+            "external_side_effects_allowed": bool(run_input.get("external_side_effects_allowed")),
+            "external_actions_performed": self._external_actions_performed(domain_requests),
+            "activation_hint": self._preview_activation_hint(run, integration_preflight, pending_approvals, waiting_actions),
+            "next_step": next_step,
+            "next_step_label": self._preview_next_step_label(next_step),
+            "next_step_description": self._preview_next_step_description(next_step),
+        }
+
+    def _artifact_summary(self, payload: Dict[str, Any]) -> str:
+        for key in ["summary", "body", "message", "title", "result"]:
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()[:240]
+            if isinstance(value, dict):
+                nested = value.get("summary") or value.get("body") or value.get("message") or value.get("title")
+                if isinstance(nested, str) and nested.strip():
+                    return nested.strip()[:240]
+        items = payload.get("items")
+        if isinstance(items, list) and items:
+            return f"Подготовлено элементов: {len(items)}"
+        return "Artifact сохранён для проверки."
+
+    def _preview_summary_list(self, value: Any) -> List[str]:
+        if isinstance(value, list):
+            result = []
+            for item in value:
+                if isinstance(item, dict):
+                    label = str(item.get("title") or item.get("provider") or item.get("key") or "").strip()
+                else:
+                    label = str(item or "").strip()
+                if label and label not in result:
+                    result.append(label)
+            return result[:8]
+        if isinstance(value, str) and value.strip():
+            return [value.strip()]
+        return []
+
+    def _external_actions_performed(self, domain_requests: List[Dict[str, Any]]) -> bool:
+        for item in domain_requests:
+            if item.get("provider_write_performed") is True:
+                return True
+            if item.get("external_dispatch_performed") is True:
+                return True
+        return False
+
+    def _preview_summary_headline(
+        self,
+        run: Dict[str, Any],
+        safe_preview: bool,
+        integration_preflight: Dict[str, Any],
+        pending_approvals: List[Dict[str, Any]],
+        waiting_actions: List[Dict[str, Any]],
+    ) -> str:
+        if not integration_preflight.get("ready"):
+            return "Preview не готов: сначала подключите обязательные сервисы."
+        if str(run.get("status") or "") in {"failed", "blocked"}:
+            return "Preview остановился на ошибке. Проверьте блокеры ниже."
+        if safe_preview and (pending_approvals or waiting_actions):
+            return "Preview показал результат и места, где агент остановится на approval."
+        if safe_preview:
+            return "Safe preview выполнен без внешних действий."
+        return "Запуск выполнен. Проверьте действия и approvals."
+
+    def _preview_next_step(
+        self,
+        run: Dict[str, Any],
+        integration_preflight: Dict[str, Any],
+        pending_approvals: List[Dict[str, Any]],
+        waiting_actions: List[Dict[str, Any]],
+    ) -> str:
+        if not integration_preflight.get("ready"):
+            return "connect_required_integrations"
+        if str(run.get("status") or "") in {"failed", "blocked", "rejected"}:
+            return "fix_preview_error"
+        if pending_approvals or waiting_actions:
+            return "review_approvals"
+        if str(run.get("status") or "") in {"completed", "waiting_approval"}:
+            return "check_activation_gate"
+        return "review_preview"
+
+    def _preview_next_step_label(self, next_step: str) -> str:
+        labels = {
+            "connect_required_integrations": "Подключить сервисы",
+            "fix_preview_error": "Исправить логику",
+            "review_approvals": "Проверить approval",
+            "check_activation_gate": "Проверить активацию",
+            "review_preview": "Проверить preview",
+        }
+        return labels.get(next_step, "Проверить preview")
+
+    def _preview_next_step_description(self, next_step: str) -> str:
+        descriptions = {
+            "connect_required_integrations": "Сначала подключите обязательные источники и каналы, затем повторите preview.",
+            "fix_preview_error": "Preview нашёл ошибку или блокер. Исправьте compiled workflow перед активацией.",
+            "review_approvals": "Preview подготовил внешнее действие, но реальные отправки и записи останутся за approval gate.",
+            "check_activation_gate": "Preview прошёл безопасно. Если gate активации зелёный, версию можно включать.",
+            "review_preview": "Проверьте результат preview и запустите повторно, если нужно уточнить данные.",
+        }
+        return descriptions.get(next_step, "Проверьте результат preview и следующий шаг агента.")
+
+    def _preview_activation_hint(
+        self,
+        run: Dict[str, Any],
+        integration_preflight: Dict[str, Any],
+        pending_approvals: List[Dict[str, Any]],
+        waiting_actions: List[Dict[str, Any]],
+    ) -> str:
+        if not integration_preflight.get("ready"):
+            return "Активация закрыта: не пройден preflight подключений."
+        if str(run.get("status") or "") in {"failed", "blocked"}:
+            return "Активация закрыта: preview завершился ошибкой или блокером."
+        if pending_approvals or waiting_actions:
+            return "Агент можно активировать после проверки preview: реальные внешние действия всё равно остановятся на approval."
+        return "Preview готов. Если activation gate зелёный, версию можно активировать."
 
     def _build_run_integration_preflight(self, run: Dict[str, Any]) -> Dict[str, Any]:
         blueprint = self._load_blueprint(str(run.get("blueprint_id") or ""))

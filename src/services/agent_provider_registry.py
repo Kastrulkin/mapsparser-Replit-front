@@ -74,6 +74,7 @@ CAPABILITY_PROVIDER_MAP: Dict[str, List[Dict[str, Any]]] = {
     ],
     "communications.draft": [
         {"provider": "native_localos", "state": "available", "role": "draft_store"},
+        {"provider": "openclaw", "state": "available", "role": "planner_or_connector"},
     ],
     "communications.send_reminder": [
         {"provider": "openclaw", "state": "available", "role": "approval_boundary"},
@@ -94,11 +95,13 @@ CAPABILITY_PROVIDER_MAP: Dict[str, List[Dict[str, Any]]] = {
         {"provider": "native_localos", "state": "available", "role": "agent_run_export"},
     ],
     "sheets.append_row_request": [
+        {"provider": "openclaw", "state": "available", "role": "planner_or_connector"},
         {"provider": "native_localos", "state": "available", "role": "approved_google_sheets_executor"},
         {"provider": "composio", "state": "planned", "role": "future_google_sheets_connector"},
         {"provider": "manual", "state": "available", "role": "fallback"},
     ],
     "google_sheets.read_rows": [
+        {"provider": "openclaw", "state": "available", "role": "planner_or_connector"},
         {"provider": "composio", "state": "planned", "role": "future_google_sheets_reader"},
         {"provider": "native_localos", "state": "available", "role": "native_google_sheets_reader"},
         {"provider": "manual", "state": "available", "role": "uploaded_file_or_paste"},
@@ -191,6 +194,43 @@ def capability_provider_candidates(capability: str) -> List[Dict[str, Any]]:
     return result
 
 
+def connector_provider_routes(provider: str = "", capability: str = "") -> List[Dict[str, Any]]:
+    provider_key = str(provider or "").strip()
+    capability_key = str(capability or "").strip()
+    routes: List[Dict[str, Any]] = []
+    if provider_key:
+        catalog_item = INTEGRATION_PROVIDER_CATALOG.get(provider_key, {})
+        for candidate in catalog_item.get("provider_candidates", []) if isinstance(catalog_item.get("provider_candidates"), list) else []:
+            route = _provider_route(str(candidate or "").strip(), "connector")
+            if route:
+                routes.append(route)
+    if capability_key:
+        for candidate in capability_provider_candidates(capability_key):
+            route = _provider_route(str(candidate.get("provider") or "").strip(), str(candidate.get("role") or "capability"))
+            if route:
+                routes.append(route)
+    return _dedupe_provider_routes(routes)
+
+
+def best_provider_route_state(routes: List[Dict[str, Any]]) -> str:
+    rank = {
+        "connected": 0,
+        "available": 1,
+        "manual": 2,
+        "planned": 3,
+        "unavailable": 4,
+    }
+    best = "unavailable"
+    best_rank = rank[best]
+    for route in routes:
+        state = str(route.get("state") or "unavailable")
+        current_rank = rank.get(state, 4)
+        if current_rank < best_rank:
+            best = state
+            best_rank = current_rank
+    return best
+
+
 def integration_provider_catalog() -> List[Dict[str, Any]]:
     result: List[Dict[str, Any]] = []
     for provider, meta in INTEGRATION_PROVIDER_CATALOG.items():
@@ -205,6 +245,131 @@ def integration_provider_catalog() -> List[Dict[str, Any]]:
             for candidate in item.get("provider_candidates", [])
         ]
         result.append(item)
+    return result
+
+
+def _provider_route(provider: str, role: str) -> Dict[str, Any]:
+    if not provider:
+        return {}
+    meta = PROVIDER_REGISTRY.get(provider, {})
+    status = str(meta.get("status") or "unknown")
+    state = "available"
+    if provider == "manual":
+        state = "manual"
+    elif status == "planned":
+        state = "planned"
+    elif status not in {"available", "ready"}:
+        state = "unavailable"
+    return {
+        "provider": provider,
+        "label": str(meta.get("label") or provider),
+        "kind": str(meta.get("kind") or ""),
+        "state": state,
+        "status": status,
+        "role": role,
+        "connect_mode": _provider_connect_mode(provider),
+        "primary_cta": _provider_primary_cta(provider, state),
+        "provider_action": _provider_action(provider, state, role),
+        "credentials_source": str(meta.get("credentials_source") or ""),
+        "description": str(meta.get("description") or ""),
+    }
+
+
+def _provider_connect_mode(provider: str) -> str:
+    if provider == "native_localos":
+        return "localos_native_config"
+    if provider == "maton":
+        return "external_account_key"
+    if provider == "openclaw":
+        return "openclaw_policy_boundary"
+    if provider == "composio":
+        return "planned_oauth_connector"
+    if provider == "manual":
+        return "manual_fallback"
+    return "provider_config"
+
+
+def _provider_primary_cta(provider: str, state: str) -> str:
+    if state == "planned":
+        return "Будет доступно позже"
+    if provider == "native_localos":
+        return "Настроить в LocalOS"
+    if provider == "maton":
+        return "Выбрать Maton key"
+    if provider == "openclaw":
+        return "Использовать OpenClaw boundary"
+    if provider == "manual":
+        return "Использовать ручной режим"
+    return "Настроить provider"
+
+
+def _provider_action(provider: str, state: str, role: str) -> Dict[str, Any]:
+    if state == "planned":
+        return {
+            "kind": "planned_oauth_connector" if provider == "composio" else "planned_provider",
+            "available": False,
+            "ui_target": "provider_roadmap",
+            "label": "Будет доступно позже",
+            "description": "Provider route есть в registry, но пока не может активировать агента.",
+            "role": role,
+        }
+    if provider == "native_localos":
+        return {
+            "kind": "open_localos_config",
+            "available": True,
+            "ui_target": "agent_connections",
+            "label": "Настроить в LocalOS",
+            "description": "Откройте форму LocalOS для выбранного binding; preflight проверит поля перед preview.",
+            "role": role,
+        }
+    if provider == "maton":
+        return {
+            "kind": "select_external_account_key",
+            "available": True,
+            "ui_target": "external_business_accounts",
+            "label": "Выбрать Maton key",
+            "description": "Используйте сохранённый Maton.ai API key как provider bridge за approval/audit boundary.",
+            "role": role,
+        }
+    if provider == "openclaw":
+        return {
+            "kind": "use_openclaw_boundary",
+            "available": True,
+            "ui_target": "openclaw_policy_boundary",
+            "label": "Использовать OpenClaw boundary",
+            "description": "OpenClaw может планировать или исполнять capability только внутри LocalOS policy envelope.",
+            "role": role,
+        }
+    if provider == "manual":
+        return {
+            "kind": "manual_fallback",
+            "available": True,
+            "ui_target": "draft_only_or_manual",
+            "label": "Использовать ручной режим",
+            "description": "LocalOS подготовит draft/artifacts, а внешний шаг выполнит человек.",
+            "role": role,
+        }
+    return {
+        "kind": "provider_config",
+        "available": state in {"available", "connected"},
+        "ui_target": "agent_connections",
+        "label": "Настроить provider",
+        "description": "Настройте provider route перед preflight и preview.",
+        "role": role,
+    }
+
+
+def _dedupe_provider_routes(routes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    result: List[Dict[str, Any]] = []
+    seen = set()
+    for route in routes:
+        provider = str(route.get("provider") or "")
+        role = str(route.get("role") or "")
+        key = (provider, role)
+        if not provider or key in seen:
+            continue
+        seen.add(key)
+        result.append(route)
     return result
 
 

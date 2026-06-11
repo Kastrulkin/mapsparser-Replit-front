@@ -67,25 +67,32 @@ def _binding_preflight_item(
     if provider in NATIVE_READY_PROVIDERS:
         return _base_item(binding, "ready", "native_localos", "", [], "LocalOS native domain is available.")
     default_config = binding.get("default_config") if isinstance(binding.get("default_config"), dict) else {}
-    missing_default_config = [key for key in required_config if not str(default_config.get(key) or "").strip()]
-    if required_config and not missing_default_config:
-        return _base_item(binding, "ready", "compiled_default", "", [], "Compiled binding contains the required default config.")
     metadata_config = _metadata_binding_config(metadata, provider, str(binding.get("key") or ""))
     if metadata_config:
-        missing_metadata_config = [key for key in required_config if not str(metadata_config.get(key) or "").strip()]
+        resolved_config = _merge_default_config(default_config, metadata_config)
+        missing_metadata_config = [key for key in required_config if not str(resolved_config.get(key) or "").strip()]
         if not missing_metadata_config:
             return _base_item(
                 binding,
                 "ready",
                 "blueprint_metadata",
-                str(metadata_config.get("integration_id") or ""),
+                str(resolved_config.get("integration_id") or ""),
                 [],
                 "Blueprint metadata contains the required connection config.",
             )
+        return _base_item(
+            binding,
+            "needs_config",
+            "blueprint_metadata_missing_config",
+            str(metadata_config.get("integration_id") or ""),
+            missing_metadata_config,
+            _missing_config_summary(provider, missing_metadata_config),
+        )
     for integration in active_integrations:
         config = parse_json_field(integration.get("config_json"), {})
         config = config if isinstance(config, dict) else {}
-        missing_config = [key for key in required_config if not str(config.get(key) or "").strip()]
+        resolved_config = _merge_default_config(default_config, config)
+        missing_config = [key for key in required_config if not str(resolved_config.get(key) or "").strip()]
         if not missing_config:
             return _base_item(
                 binding,
@@ -95,12 +102,29 @@ def _binding_preflight_item(
                 [],
                 str(integration.get("display_name") or integration.get("provider") or provider),
             )
-    missing_config = required_config
     if active_integrations:
-        config = parse_json_field(active_integrations[0].get("config_json"), {})
+        selected_integration = active_integrations[0]
+        config = parse_json_field(selected_integration.get("config_json"), {})
         config = config if isinstance(config, dict) else {}
-        missing_config = [key for key in required_config if not str(config.get(key) or "").strip()]
+        resolved_config = _merge_default_config(default_config, config)
+        missing_config = [key for key in required_config if not str(resolved_config.get(key) or "").strip()]
+        return _base_item(
+            binding,
+            "needs_config",
+            "agent_integration_missing_config",
+            str(selected_integration.get("id") or ""),
+            missing_config,
+            _missing_config_summary(provider, missing_config),
+        )
+    missing_config = required_config
     return _base_item(binding, "needs_connection", "missing_integration", "", missing_config, "")
+
+
+def _merge_default_config(default_config: Dict[str, Any], selected_config: Dict[str, Any]) -> Dict[str, Any]:
+    resolved = dict(default_config)
+    for key, value in selected_config.items():
+        resolved[str(key)] = value
+    return resolved
 
 
 def _base_item(
@@ -143,16 +167,29 @@ def _input_resolution(provider: str, required_config: List[str], input_payload: 
 
 def _metadata_binding_config(metadata: Dict[str, Any], provider: str, binding_key: str) -> Dict[str, Any]:
     custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+    binding_integrations = (
+        metadata.get("agent_binding_integrations")
+        if isinstance(metadata.get("agent_binding_integrations"), dict)
+        else {}
+    )
     candidates = [
         custom_process.get(provider),
         custom_process.get(binding_key),
     ]
     if provider == "google_sheets":
         candidates.extend([custom_process.get("google_sheets_read"), custom_process.get("google_sheets_append")])
+    candidates.append(binding_integrations.get(binding_key))
     for candidate in candidates:
         if isinstance(candidate, dict):
             return candidate
     return {}
+
+
+def _missing_config_summary(provider: str, missing_config: List[str]) -> str:
+    if not missing_config:
+        return "Connection was found, but LocalOS could not verify the required config."
+    provider_label = provider or "connection"
+    return f"{provider_label} connection is selected, but missing required config: {', '.join(missing_config)}."
 
 
 def _load_agent_integrations(cursor: Any, business_id: str) -> List[Dict[str, Any]]:

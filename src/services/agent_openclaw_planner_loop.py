@@ -149,13 +149,21 @@ def _questions_for_connection_state(connection_state: Dict[str, Any]) -> List[Di
 
 
 def _questions_for_required_bindings(required_bindings: List[Any], connection_state: Dict[str, Any]) -> List[Dict[str, str]]:
-    if connection_state.get("missing_connections") or connection_state.get("connection_choices"):
-        return []
+    ready_providers = set()
+    ready_bindings = connection_state.get("ready_bindings") if isinstance(connection_state.get("ready_bindings"), list) else []
+    for ready_binding in ready_bindings:
+        if not isinstance(ready_binding, dict):
+            continue
+        provider = str(ready_binding.get("provider") or "").strip()
+        if provider:
+            ready_providers.add(provider)
     questions = []
     for item in required_bindings:
         if not isinstance(item, dict):
             continue
         provider = str(item.get("provider") or "").strip()
+        if provider in ready_providers:
+            continue
         required_config = _clean_list(item.get("required_config"))
         if provider == "google_sheets" and {"spreadsheet_id", "sheet_name"}.issubset(set(required_config)):
             questions.append(

@@ -7,7 +7,7 @@ from services.agent_builder_billing import build_agent_creation_cost_preview
 from services.agent_feasibility_resolver import resolve_agent_feasibility
 from services.agent_openclaw_planner_context import build_openclaw_planner_context
 from services.agent_openclaw_planner_loop import build_openclaw_planner_loop
-from services.agent_provider_registry import integration_provider_catalog
+from services.agent_provider_registry import capability_provider_candidates, integration_provider_catalog
 
 
 QUESTION_LIBRARY = {
@@ -208,8 +208,11 @@ def _build_preview(
         "capability_allowlist": capability_allowlist,
         "required_integration_bindings": required_bindings,
         "feasibility": feasibility,
+        "connector_intelligence": _build_connector_intelligence(feasibility),
         "required_connectors": _connector_preview_items(feasibility),
         "connection_plan": _build_preview_connection_plan(feasibility),
+        "connection_readiness": _build_connection_readiness(feasibility),
+        "connection_summary": _build_connection_summary(feasibility),
         "limits": summary.get("limits") if isinstance(summary.get("limits"), dict) else {},
         "output_schema": summary.get("output_schema") if isinstance(summary.get("output_schema"), dict) else {},
         "approval_boundaries": summary.get("approval_boundaries") if isinstance(summary.get("approval_boundaries"), list) else ["final_output", "external_delivery"],
@@ -301,13 +304,23 @@ def _build_setup_flow(preview: Dict[str, Any], questions: List[Dict[str, str]]) 
     unsupported = feasibility.get("unsupported") if isinstance(feasibility.get("unsupported"), list) else []
     forbidden = feasibility.get("forbidden") if isinstance(feasibility.get("forbidden"), list) else []
     can_create_draft = not questions and status not in {"forbidden", "unsupported", "needs_payment"}
-    can_activate = can_create_draft and status == "ready"
+    can_run_preview = can_create_draft and status == "ready"
+    can_activate = False
+    next_step = _setup_next_step(status, questions, missing_connections, connection_choices)
+    post_create_status = _post_create_status(status, missing_connections, connection_choices)
     return {
         "schema": "localos_agent_builder_setup_flow_v1",
         "status": _setup_flow_status(status, questions),
         "primary_action": _setup_primary_action(status, questions, missing_connections, connection_choices),
+        "next_step": next_step,
+        "next_step_title": _setup_next_step_title(next_step),
+        "next_step_description": _setup_next_step_description(next_step, missing_connections, connection_choices),
         "can_create_draft": can_create_draft,
+        "can_run_preview": can_run_preview,
         "can_activate": can_activate,
+        "post_create_status": post_create_status,
+        "post_create_next_step": _post_create_next_step(post_create_status),
+        "post_create_description": _post_create_description(post_create_status, missing_connections, connection_choices),
         "activation_blockers": _activation_blockers(status, questions, missing_connections, connection_choices, forbidden, unsupported),
         "steps": [
             {
@@ -341,12 +354,127 @@ def _build_setup_flow(preview: Dict[str, Any], questions: List[Dict[str, str]]) 
             },
             {
                 "key": "create",
-                "label": "Создать агента",
+                "label": "Создать draft",
                 "status": "ready" if can_create_draft else "blocked",
-                "description": "Создаст draft агента. Активация возможна только после preflight." if can_create_draft else "Сначала завершите обязательные шаги выше.",
+                "description": _create_step_description(can_create_draft, post_create_status),
+            },
+            {
+                "key": "preview",
+                "label": "Preview run",
+                "status": "next" if can_create_draft and post_create_status == "ready_for_preview" else "blocked",
+                "description": "Следующий шаг после draft: проверить агента без внешних действий." if can_create_draft else "Сначала создайте draft агента.",
+            },
+            {
+                "key": "activate",
+                "label": "Активировать",
+                "status": "blocked",
+                "description": "Активация станет доступна после preflight, preview run, limits и approval policy.",
             },
         ],
     }
+
+
+def _setup_next_step(
+    feasibility_status: str,
+    questions: List[Dict[str, str]],
+    missing_connections: List[Dict[str, Any]],
+    connection_choices: List[Dict[str, Any]],
+) -> str:
+    if feasibility_status in {"forbidden", "unsupported"}:
+        return "cannot_create"
+    if questions:
+        return "answer_clarification"
+    if feasibility_status == "needs_payment":
+        return "top_up_balance"
+    if connection_choices:
+        return "create_draft_then_choose_connection"
+    if missing_connections:
+        return "create_draft_then_connect"
+    return "create_draft_then_preview"
+
+
+def _setup_next_step_title(next_step: str) -> str:
+    labels = {
+        "answer_clarification": "Ответьте на уточнение",
+        "create_draft_then_connect": "Создайте draft, затем подключите сервисы",
+        "create_draft_then_choose_connection": "Создайте draft, затем выберите доступ",
+        "create_draft_then_preview": "Создайте draft и проверьте preview run",
+        "top_up_balance": "Пополните баланс",
+        "cannot_create": "Такой агент недоступен",
+    }
+    return labels.get(next_step, "Проверьте настройку")
+
+
+def _setup_next_step_description(
+    next_step: str,
+    missing_connections: List[Dict[str, Any]],
+    connection_choices: List[Dict[str, Any]],
+) -> str:
+    if next_step == "answer_clarification":
+        return "LocalOS ещё не знает достаточно деталей, чтобы собрать проверяемый workflow."
+    if next_step == "create_draft_then_connect":
+        names = ", ".join([str(item.get("provider_title") or item.get("provider") or "") for item in missing_connections[:3]])
+        return f"Draft можно создать сейчас. После создания откроем подключения: {names or 'обязательные сервисы'}."
+    if next_step == "create_draft_then_choose_connection":
+        names = ", ".join([str(item.get("provider_title") or item.get("provider") or "") for item in connection_choices[:3]])
+        return f"Draft можно создать сейчас. После создания выберите, какой доступ использовать: {names or 'подключение'}."
+    if next_step == "create_draft_then_preview":
+        return "Подключения выглядят готовыми. После создания откроем preview run: он проверит workflow без внешних действий."
+    if next_step == "top_up_balance":
+        return "Создание или первый запуск упирается в лимиты подписки или кредиты."
+    if next_step == "cannot_create":
+        return "Запрос выходит за LocalOS policy envelope или не имеет разрешённого provider path."
+    return "Проверьте задачу, подключения и policy."
+
+
+def _post_create_status(
+    feasibility_status: str,
+    missing_connections: List[Dict[str, Any]],
+    connection_choices: List[Dict[str, Any]],
+) -> str:
+    if feasibility_status in {"forbidden", "unsupported", "needs_payment"}:
+        return "blocked"
+    if connection_choices:
+        return "needs_connection_choice"
+    if missing_connections:
+        return "needs_connection"
+    return "ready_for_preview"
+
+
+def _post_create_next_step(post_create_status: str) -> str:
+    values = {
+        "needs_connection": "connect_required_integrations",
+        "needs_connection_choice": "choose_existing_connection",
+        "ready_for_preview": "run_preview",
+        "blocked": "review_blockers",
+    }
+    return values.get(post_create_status, "review_blockers")
+
+
+def _post_create_description(
+    post_create_status: str,
+    missing_connections: List[Dict[str, Any]],
+    connection_choices: List[Dict[str, Any]],
+) -> str:
+    if post_create_status == "ready_for_preview":
+        return "После создания откроем preview run. Он покажет входные данные, шаги, artifacts и approval gate без внешних действий."
+    if post_create_status == "needs_connection_choice":
+        names = ", ".join([str(item.get("provider_title") or item.get("provider") or "") for item in connection_choices[:3]])
+        return f"После создания нужно выбрать существующий доступ: {names or 'подключение'}."
+    if post_create_status == "needs_connection":
+        names = ", ".join([str(item.get("provider_title") or item.get("provider") or "") for item in missing_connections[:3]])
+        return f"После создания нужно подключить: {names or 'обязательные сервисы'}."
+    return "Перед продолжением нужно разобраться с блокерами."
+
+
+def _create_step_description(can_create_draft: bool, post_create_status: str) -> str:
+    if not can_create_draft:
+        return "Сначала завершите обязательные шаги выше."
+    if post_create_status == "ready_for_preview":
+        return "Создаст draft агента и откроет preview run перед активацией."
+    if post_create_status in {"needs_connection", "needs_connection_choice"}:
+        return "Создаст draft агента и откроет подключение обязательных сервисов."
+    return "Создаст draft агента, но продолжение зависит от блокеров."
 
 
 def _connector_step_status(
@@ -507,6 +635,425 @@ def _build_preview_connection_plan(feasibility: Dict[str, Any]) -> Dict[str, Any
     }
 
 
+def _build_connector_intelligence(feasibility: Dict[str, Any]) -> Dict[str, Any]:
+    bindings = feasibility.get("bindings") if isinstance(feasibility.get("bindings"), list) else []
+    capabilities = feasibility.get("capabilities") if isinstance(feasibility.get("capabilities"), list) else []
+    forbidden = feasibility.get("forbidden") if isinstance(feasibility.get("forbidden"), list) else []
+    unsupported = feasibility.get("unsupported") if isinstance(feasibility.get("unsupported"), list) else []
+    status = str(feasibility.get("status") or "ready")
+    binding_items = [_connector_intelligence_binding(item) for item in bindings if isinstance(item, dict)]
+    capability_items = [_connector_intelligence_capability(item) for item in capabilities if isinstance(item, dict)]
+    return {
+        "schema": "localos_agent_connector_intelligence_v1",
+        "status": status,
+        "headline": _connector_intelligence_headline(status, binding_items, forbidden, unsupported),
+        "can_compile_draft": status not in {"forbidden", "unsupported", "needs_payment"},
+        "can_preview_after_connections": status == "ready",
+        "next_action": str(feasibility.get("next_action") or ""),
+        "bindings": binding_items,
+        "capabilities": capability_items,
+        "provider_paths": _connector_intelligence_provider_paths(binding_items, capability_items),
+        "forbidden": forbidden,
+        "unsupported": unsupported,
+    }
+
+
+def _build_connection_summary(feasibility: Dict[str, Any]) -> Dict[str, Any]:
+    bindings = feasibility.get("bindings") if isinstance(feasibility.get("bindings"), list) else []
+    forbidden = feasibility.get("forbidden") if isinstance(feasibility.get("forbidden"), list) else []
+    unsupported = feasibility.get("unsupported") if isinstance(feasibility.get("unsupported"), list) else []
+    status = str(feasibility.get("status") or "ready")
+    items = [_connection_summary_item(item) for item in bindings if isinstance(item, dict)]
+    missing_count = len([item for item in items if item.get("action") == "connect_required"])
+    choice_count = len([item for item in items if item.get("action") == "choose_existing"])
+    ready_count = len([item for item in items if item.get("action") in {"ready", "native_ready"}])
+    blocked_count = len([item for item in items if item.get("action") == "planned_provider"]) + len(forbidden) + len(unsupported)
+    next_action = _connection_summary_next_action(status, missing_count, choice_count, blocked_count)
+    return {
+        "schema": "localos_agent_connection_summary_v1",
+        "status": status,
+        "headline": _connection_summary_headline(status, missing_count, choice_count, ready_count, blocked_count),
+        "next_action": next_action,
+        "next_action_label": _connection_summary_next_action_label(next_action),
+        "ready_count": ready_count,
+        "missing_count": missing_count,
+        "choice_count": choice_count,
+        "blocked_count": blocked_count,
+        "items": items,
+        "forbidden": forbidden,
+        "unsupported": unsupported,
+    }
+
+
+def _build_connection_readiness(feasibility: Dict[str, Any]) -> Dict[str, Any]:
+    bindings = feasibility.get("bindings") if isinstance(feasibility.get("bindings"), list) else []
+    forbidden = feasibility.get("forbidden") if isinstance(feasibility.get("forbidden"), list) else []
+    unsupported = feasibility.get("unsupported") if isinstance(feasibility.get("unsupported"), list) else []
+    status = str(feasibility.get("status") or "ready")
+    services = [_connection_readiness_service(item) for item in bindings if isinstance(item, dict)]
+    missing = [item for item in services if item.get("action") == "connect_required"]
+    choices = [item for item in services if item.get("action") == "choose_existing"]
+    ready = [item for item in services if item.get("action") in {"ready", "native_ready"}]
+    blocked = [item for item in services if item.get("action") == "planned_provider"]
+    next_action = _connection_readiness_next_action(status, missing, choices, blocked, forbidden, unsupported)
+    return {
+        "schema": "localos_agent_connection_readiness_v1",
+        "status": status,
+        "next_action": next_action,
+        "title": _connection_readiness_title(next_action, missing, choices, ready, blocked, forbidden, unsupported),
+        "description": _connection_readiness_description(next_action, missing, choices, ready, blocked, forbidden, unsupported),
+        "required_count": len(services),
+        "ready_count": len(ready),
+        "missing_count": len(missing),
+        "choice_count": len(choices),
+        "blocked_count": len(blocked) + len(forbidden) + len(unsupported),
+        "can_create_draft": status not in {"forbidden", "unsupported", "needs_payment"},
+        "can_run_preview_after_create": status == "ready",
+        "post_create_workspace": _connection_readiness_post_create_workspace(next_action),
+        "services": services,
+        "ready_services": ready,
+        "missing_services": missing,
+        "choice_services": choices,
+        "blocked_services": blocked,
+        "forbidden": forbidden,
+        "unsupported": unsupported,
+    }
+
+
+def _connection_readiness_service(binding: Dict[str, Any]) -> Dict[str, Any]:
+    provider = str(binding.get("provider") or "").strip()
+    catalog_item = _catalog_item_by_provider(provider)
+    action = _preview_connection_action(binding, catalog_item)
+    connections = binding.get("connections") if isinstance(binding.get("connections"), list) else []
+    provider_routes = _provider_routes(binding.get("provider_routes"))
+    route = _preferred_provider_route(provider_routes)
+    return {
+        "key": str(binding.get("key") or provider or ""),
+        "provider": provider,
+        "title": str(binding.get("provider_title") or catalog_item.get("title") or provider),
+        "capability": str(binding.get("capability") or ""),
+        "action": action,
+        "action_label": _preview_connection_label(action),
+        "status": str(binding.get("status") or ""),
+        "route_state": str(binding.get("route_state") or ""),
+        "route_summary": str(binding.get("route_summary") or ""),
+        "explanation": _preview_connection_explanation(binding, action),
+        "provider_route_label": str(route.get("label") or ""),
+        "provider_route_cta": str(route.get("primary_cta") or ""),
+        "connect_mode": str(route.get("connect_mode") or ""),
+        "connections": connections[:5],
+        "connection_count": len(connections),
+        "missing_config": binding.get("missing_config") if isinstance(binding.get("missing_config"), list) else [],
+        "setup_cta": _preview_connection_setup_cta(binding, action),
+    }
+
+
+def _preferred_provider_route(routes: List[Dict[str, str]]) -> Dict[str, str]:
+    for state in ["connected", "available", "manual", "planned"]:
+        for route in routes:
+            if str(route.get("state") or route.get("status") or "") == state:
+                return route
+    return routes[0] if routes else {}
+
+
+def _connection_readiness_next_action(
+    status: str,
+    missing: List[Dict[str, Any]],
+    choices: List[Dict[str, Any]],
+    blocked: List[Dict[str, Any]],
+    forbidden: List[Dict[str, Any]],
+    unsupported: List[Dict[str, Any]],
+) -> str:
+    if status in {"forbidden", "unsupported"} or blocked or forbidden or unsupported:
+        return "blocked_by_policy_or_provider"
+    if status == "needs_payment":
+        return "top_up_balance"
+    if choices:
+        return "choose_existing_connections"
+    if missing:
+        return "connect_missing_services"
+    return "create_draft_then_preview"
+
+
+def _connection_readiness_post_create_workspace(next_action: str) -> str:
+    if next_action in {"choose_existing_connections", "connect_missing_services"}:
+        return "connections"
+    if next_action == "create_draft_then_preview":
+        return "run"
+    return "settings"
+
+
+def _connection_readiness_title(
+    next_action: str,
+    missing: List[Dict[str, Any]],
+    choices: List[Dict[str, Any]],
+    ready: List[Dict[str, Any]],
+    blocked: List[Dict[str, Any]],
+    forbidden: List[Dict[str, Any]],
+    unsupported: List[Dict[str, Any]],
+) -> str:
+    if next_action == "blocked_by_policy_or_provider":
+        return "Этот workflow нельзя активировать через доступные provider paths"
+    if next_action == "top_up_balance":
+        return "Перед созданием нужен доступный баланс"
+    if next_action == "choose_existing_connections":
+        return f"Нужно выбрать подключение: {len(choices)}"
+    if next_action == "connect_missing_services":
+        return f"Нужно подключить сервисы: {len(missing)}"
+    if ready:
+        return f"Все подключения готовы: {len(ready)}"
+    if not missing and not choices and not blocked and not forbidden and not unsupported:
+        return "Внешние подключения не требуются"
+    return "Проверьте подключения агента"
+
+
+def _connection_readiness_description(
+    next_action: str,
+    missing: List[Dict[str, Any]],
+    choices: List[Dict[str, Any]],
+    ready: List[Dict[str, Any]],
+    blocked: List[Dict[str, Any]],
+    forbidden: List[Dict[str, Any]],
+    unsupported: List[Dict[str, Any]],
+) -> str:
+    if next_action == "blocked_by_policy_or_provider":
+        reasons = [str(item.get("reason") or item.get("capability") or item.get("term") or "") for item in forbidden + unsupported]
+        if not reasons and blocked:
+            reasons = [str(item.get("title") or item.get("provider") or "") for item in blocked]
+        return ". ".join([item for item in reasons if item][:2]) or "Нет разрешённого provider route внутри LocalOS policy envelope."
+    if next_action == "top_up_balance":
+        return "LocalOS не начнёт compiled workflow, пока лимиты подписки или кредиты не позволяют создать агента."
+    if next_action == "choose_existing_connections":
+        names = ", ".join([str(item.get("title") or item.get("provider") or "") for item in choices[:3]])
+        return f"Найдены несколько подходящих доступов. Выберите, какой использовать для: {names}."
+    if next_action == "connect_missing_services":
+        names = ", ".join([str(item.get("title") or item.get("provider") or "") for item in missing[:3]])
+        return f"Draft можно создать, но preview и активация будут заблокированы, пока не подключены: {names}."
+    if ready:
+        names = ", ".join([str(item.get("title") or item.get("provider") or "") for item in ready[:3]])
+        return f"После создания LocalOS откроет safe preview run. Готовые доступы: {names}."
+    return "LocalOS проверит доступы ещё раз на preflight перед preview run и активацией."
+
+
+def _connection_summary_item(binding: Dict[str, Any]) -> Dict[str, Any]:
+    provider = str(binding.get("provider") or "").strip()
+    catalog_item = _catalog_item_by_provider(provider)
+    action = _preview_connection_action(binding, catalog_item)
+    connections = binding.get("connections") if isinstance(binding.get("connections"), list) else []
+    return {
+        "key": str(binding.get("key") or provider or ""),
+        "provider": provider,
+        "title": str(binding.get("provider_title") or catalog_item.get("title") or provider),
+        "capability": str(binding.get("capability") or ""),
+        "status": str(binding.get("status") or ""),
+        "action": action,
+        "action_label": _preview_connection_label(action),
+        "explanation": _preview_connection_explanation(binding, action),
+        "setup_cta": _preview_connection_setup_cta(binding, action),
+        "connection_count": len(connections),
+        "connections": connections[:5],
+        "missing_config": binding.get("missing_config") if isinstance(binding.get("missing_config"), list) else [],
+        "provider_paths": _preview_provider_paths(catalog_item),
+    }
+
+
+def _connection_summary_next_action(status: str, missing_count: int, choice_count: int, blocked_count: int) -> str:
+    if status in {"forbidden", "unsupported"} or blocked_count:
+        return "review_blockers"
+    if status == "needs_payment":
+        return "top_up_balance"
+    if choice_count:
+        return "choose_existing_connection"
+    if missing_count:
+        return "connect_required_integrations"
+    return "create_draft_then_preview"
+
+
+def _connection_summary_next_action_label(next_action: str) -> str:
+    labels = {
+        "review_blockers": "Проверить ограничения",
+        "top_up_balance": "Пополнить баланс",
+        "choose_existing_connection": "Выбрать подключение",
+        "connect_required_integrations": "Подключить сервисы",
+        "create_draft_then_preview": "Создать draft и открыть preview",
+    }
+    return labels.get(next_action, "Проверить подключения")
+
+
+def _connection_summary_headline(status: str, missing_count: int, choice_count: int, ready_count: int, blocked_count: int) -> str:
+    if status == "forbidden":
+        return "Запрос нельзя выполнить в LocalOS policy envelope."
+    if status == "unsupported":
+        return "Для части действий нет разрешённого provider path."
+    if status == "needs_payment":
+        return "Перед продолжением нужен доступный баланс или тариф."
+    if blocked_count:
+        return "Часть подключений заблокирована политикой или provider registry."
+    if choice_count:
+        return f"Нужно выбрать существующее подключение: {choice_count}."
+    if missing_count:
+        return f"Нужно подключить сервисы: {missing_count}. Уже готово: {ready_count}."
+    return f"Все нужные подключения готовы: {ready_count}."
+
+
+def _connector_intelligence_binding(binding: Dict[str, Any]) -> Dict[str, Any]:
+    provider = str(binding.get("provider") or "").strip()
+    status = str(binding.get("status") or "").strip()
+    catalog_item = _catalog_item_by_provider(provider)
+    action = _preview_connection_action(binding, catalog_item)
+    return {
+        "key": str(binding.get("key") or provider or ""),
+        "provider": provider,
+        "title": str(binding.get("provider_title") or catalog_item.get("title") or provider),
+        "capability": str(binding.get("capability") or ""),
+        "status": status,
+        "resolution": str(binding.get("resolution") or ""),
+        "route_state": str(binding.get("route_state") or ""),
+        "route_summary": str(binding.get("route_summary") or ""),
+        "action": action,
+        "action_label": _preview_connection_label(action),
+        "explanation": _preview_connection_explanation(binding, action),
+        "setup_cta": _preview_connection_setup_cta(binding, action),
+        "connection_count": binding.get("connection_count") if isinstance(binding.get("connection_count"), int) else 0,
+        "missing_config": binding.get("missing_config") if isinstance(binding.get("missing_config"), list) else [],
+        "connections": binding.get("connections") if isinstance(binding.get("connections"), list) else [],
+        "provider_routes": _provider_routes(binding.get("provider_routes")),
+        "provider_paths": _preview_provider_paths(catalog_item),
+    }
+
+
+def _connector_intelligence_capability(capability_item: Dict[str, Any]) -> Dict[str, Any]:
+    capability = str(capability_item.get("capability") or "").strip()
+    provider_candidates = capability_item.get("provider_candidates") if isinstance(capability_item.get("provider_candidates"), list) else []
+    if not provider_candidates:
+        provider_candidates = capability_provider_candidates(capability)
+    openclaw_actions = capability_item.get("openclaw_actions") if isinstance(capability_item.get("openclaw_actions"), list) else []
+    return {
+        "capability": capability,
+        "status": str(capability_item.get("status") or ""),
+        "route_state": str(capability_item.get("route_state") or ""),
+        "provider_routes": _provider_routes(capability_item.get("provider_routes")),
+        "provider_candidates": [_provider_candidate_summary(item) for item in provider_candidates if isinstance(item, dict)],
+        "openclaw_actions": [
+            {
+                "service": str(item.get("service") or ""),
+                "action": str(item.get("action") or ""),
+                "openclaw_action_ref": str(item.get("openclaw_action_ref") or ""),
+            }
+            for item in openclaw_actions
+            if isinstance(item, dict)
+        ],
+    }
+
+
+def _provider_routes(values: Any) -> List[Dict[str, str]]:
+    if not isinstance(values, list):
+        return []
+    result: List[Dict[str, str]] = []
+    for item in values:
+        if not isinstance(item, dict):
+            continue
+        provider = str(item.get("provider") or "").strip()
+        if not provider:
+            continue
+        result.append(
+            {
+                "provider": provider,
+                "label": str(item.get("label") or provider),
+                "state": str(item.get("state") or ""),
+                "status": str(item.get("status") or ""),
+                "role": str(item.get("role") or ""),
+                "kind": str(item.get("kind") or ""),
+                "connect_mode": str(item.get("connect_mode") or ""),
+                "primary_cta": str(item.get("primary_cta") or ""),
+                "provider_action": item.get("provider_action") if isinstance(item.get("provider_action"), dict) else {},
+            }
+        )
+    return result
+
+
+def _provider_candidate_summary(item: Dict[str, Any]) -> Dict[str, str]:
+    provider = str(item.get("provider") or "").strip()
+    return {
+        "provider": provider,
+        "state": str(item.get("state") or item.get("provider_status") or ""),
+        "role": str(item.get("role") or ""),
+        "label": str(item.get("provider_label") or _provider_label_from_catalog(provider)),
+    }
+
+
+def _connector_intelligence_provider_paths(binding_items: List[Dict[str, Any]], capability_items: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    seen = set()
+    result: List[Dict[str, str]] = []
+    for binding in binding_items:
+        for item in binding.get("provider_paths") if isinstance(binding.get("provider_paths"), list) else []:
+            if not isinstance(item, dict):
+                continue
+            key = f"{item.get('provider')}:{item.get('status')}"
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(
+                {
+                    "provider": str(item.get("provider") or ""),
+                    "label": str(item.get("label") or item.get("provider") or ""),
+                    "status": str(item.get("status") or ""),
+                    "source": "binding",
+                }
+            )
+    for capability in capability_items:
+        for item in capability.get("provider_candidates") if isinstance(capability.get("provider_candidates"), list) else []:
+            if not isinstance(item, dict):
+                continue
+            key = f"{item.get('provider')}:{item.get('state')}"
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(
+                {
+                    "provider": str(item.get("provider") or ""),
+                    "label": str(item.get("label") or item.get("provider") or ""),
+                    "status": str(item.get("state") or ""),
+                    "source": "capability",
+                }
+            )
+    return result[:8]
+
+
+def _connector_intelligence_headline(status: str, bindings: List[Dict[str, Any]], forbidden: List[Dict[str, Any]], unsupported: List[Dict[str, Any]]) -> str:
+    if forbidden:
+        return "Запрос выходит за policy envelope LocalOS."
+    if unsupported:
+        return "Для части действий нет разрешённого provider path."
+    missing_count = len([item for item in bindings if item.get("action") in {"connect_required", "planned_provider"}])
+    choice_count = len([item for item in bindings if item.get("action") == "choose_existing"])
+    if status == "needs_payment":
+        return "Перед созданием нужно решить вопрос с оплатой или лимитами."
+    if choice_count:
+        return f"Нужно выбрать существующее подключение: {choice_count}."
+    if missing_count:
+        return f"Нужно подключить сервисы: {missing_count}."
+    return "Нужные сервисы выглядят доступными; следующий шаг — safe preview."
+
+
+def _catalog_item_by_provider(provider: str) -> Dict[str, Any]:
+    for item in integration_provider_catalog():
+        if isinstance(item, dict) and str(item.get("provider") or "") == provider:
+            return item
+    return {}
+
+
+def _provider_label_from_catalog(provider: str) -> str:
+    if not provider:
+        return ""
+    for item in integration_provider_catalog():
+        providers = item.get("providers") if isinstance(item.get("providers"), list) else []
+        for candidate in providers:
+            if isinstance(candidate, dict) and str(candidate.get("provider") or "") == provider:
+                return str(candidate.get("label") or provider)
+    return provider
+
+
 def _preview_connection_action(binding: Dict[str, Any], catalog_item: Dict[str, Any]) -> str:
     status = str(binding.get("status") or "").strip()
     resolution = str(binding.get("resolution") or "").strip()
@@ -543,6 +1090,34 @@ def _preview_connection_explanation(binding: Dict[str, Any], action: str) -> str
     if missing_config:
         return f"После создания draft заполните: {', '.join([str(item) for item in missing_config])}."
     return f"После создания draft откроем подключение {provider_title}."
+
+
+def _preview_connection_setup_cta(binding: Dict[str, Any], action: str) -> Dict[str, str]:
+    provider = str(binding.get("provider") or "").strip()
+    provider_title = str(binding.get("provider_title") or provider or "подключение")
+    if action in {"ready", "native_ready"}:
+        return {
+            "mode": "none",
+            "label": "Готово",
+            "description": f"{provider_title} уже доступен для safe preview.",
+        }
+    if action == "choose_existing":
+        return {
+            "mode": "choose_existing",
+            "label": "Выбрать доступ",
+            "description": f"Выберите, какой доступ {provider_title} привязать к compiled workflow.",
+        }
+    if action == "planned_provider":
+        return {
+            "mode": "planned",
+            "label": "Недоступно",
+            "description": "Provider path есть в roadmap, но пока не может активировать агента.",
+        }
+    return {
+        "mode": "post_create_connections",
+        "label": f"Создать draft и подключить {provider_title}",
+        "description": f"После создания draft LocalOS откроет вкладку подключений и привяжет {provider_title} к нужному шагу.",
+    }
 
 
 def _preview_provider_paths(catalog_item: Dict[str, Any]) -> List[Dict[str, str]]:
