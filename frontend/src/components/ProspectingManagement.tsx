@@ -188,6 +188,106 @@ type Lead = {
     } | null;
 };
 
+type StageDecisionMode = 'postponed' | 'not_relevant';
+
+type StageDecisionTarget =
+    | { kind: 'saved'; leadId: string; lead?: Lead | null }
+    | { kind: 'search_result'; lead: Lead };
+
+type StageDecisionState = {
+    mode: StageDecisionMode;
+    target: StageDecisionTarget;
+};
+
+const stageDecisionReasonLabel = (
+    options: Array<{ code: string; label: string }>,
+    code: string
+) => options.find((item) => item.code === code)?.label || options[0]?.label || 'Причина';
+
+const LeadStageDecisionModal = ({
+    state,
+    reason,
+    comment,
+    returnDate,
+    busy,
+    onReasonChange,
+    onCommentChange,
+    onReturnDateChange,
+    onClose,
+    onSubmit,
+}: {
+    state: StageDecisionState | null;
+    reason: string;
+    comment: string;
+    returnDate: string;
+    busy: boolean;
+    onReasonChange: (value: string) => void;
+    onCommentChange: (value: string) => void;
+    onReturnDateChange: (value: string) => void;
+    onClose: () => void;
+    onSubmit: () => void;
+}) => {
+    if (!state) {
+        return null;
+    }
+
+    const isPostponed = state.mode === 'postponed';
+    const options = isPostponed ? postponeReasonOptions : notRelevantReasonOptions;
+    const lead = state.target.kind === 'search_result' ? state.target.lead : state.target.lead;
+    const leadName = lead?.name || 'лид';
+
+    return (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/55 p-3 backdrop-blur-sm" onClick={onClose}>
+            <Card className="w-full max-w-xl border-0 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                <CardHeader className="space-y-2 border-b border-border/70">
+                    <CardTitle>{isPostponed ? 'Отложить лида' : 'Перенести в неактуальные'}</CardTitle>
+                    <CardDescription>
+                        {leadName}. Укажите причину, чтобы позже было понятно, почему лид ушёл с основного маршрута.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4 pt-4">
+                    <div className="grid gap-2">
+                        <label className="text-sm font-medium text-foreground">Причина</label>
+                        <select
+                            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                            value={reason}
+                            onChange={(event) => onReasonChange(event.target.value)}
+                        >
+                            {options.map((item) => (
+                                <option key={item.code} value={item.code}>{item.label}</option>
+                            ))}
+                        </select>
+                    </div>
+                    {isPostponed ? (
+                        <div className="grid gap-2">
+                            <label className="text-sm font-medium text-foreground">Вернуться к лиду</label>
+                            <Input type="date" value={returnDate} onChange={(event) => onReturnDateChange(event.target.value)} />
+                        </div>
+                    ) : null}
+                    <div className="grid gap-2">
+                        <label className="text-sm font-medium text-foreground">
+                            {reason === 'other' ? 'Комментарий' : 'Комментарий, если нужен'}
+                        </label>
+                        <textarea
+                            className="min-h-[96px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            placeholder={isPostponed ? 'Например: вернуться в конце месяца с оффером по WhatsApp' : 'Например: дубль, нет контактов, не подходит по району'}
+                            value={comment}
+                            onChange={(event) => onCommentChange(event.target.value)}
+                        />
+                    </div>
+                    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                        <Button type="button" variant="outline" onClick={onClose} disabled={busy}>Отмена</Button>
+                        <Button type="button" onClick={onSubmit} disabled={busy}>
+                            {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            {isPostponed ? 'Отложить' : 'В неактуальные'}
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+    );
+};
+
 type LeadGroup = {
     id: string;
     name: string;
@@ -729,32 +829,13 @@ const notRelevantReasonOptions = [
     { code: 'other', label: 'Другое' },
 ];
 
-const chooseNotRelevantReason = () => {
-    const promptText = notRelevantReasonOptions
-        .map((item, index) => `${index + 1}. ${item.label}`)
-        .join('\n');
-    const rawChoice = window.prompt(`Почему переносим лида в неактуальные?\n${promptText}`, '1');
-    if (rawChoice === null) {
-        return null;
-    }
-    const normalizedChoice = String(rawChoice || '').trim().toLowerCase();
-    const byNumber = notRelevantReasonOptions[Number(normalizedChoice) - 1];
-    const byCode = notRelevantReasonOptions.find((item) => item.code === normalizedChoice);
-    const selectedReason = byNumber || byCode || notRelevantReasonOptions[0];
-    const comment = window.prompt(
-        selectedReason.code === 'other'
-            ? 'Коротко напишите причину:'
-            : 'Комментарий к причине (необязательно):',
-        ''
-    );
-    if (selectedReason.code === 'other' && (!comment || !comment.trim())) {
-        return null;
-    }
-    return {
-        reason: selectedReason.code,
-        comment: (comment || '').trim() || selectedReason.label,
-    };
-};
+const postponeReasonOptions = [
+    { code: 'later', label: 'Вернуться позже' },
+    { code: 'seasonal', label: 'Не сезон' },
+    { code: 'needs_other_offer', label: 'Нужен другой оффер' },
+    { code: 'waiting_contacts', label: 'Нужно найти контакт' },
+    { code: 'other', label: 'Другое' },
+];
 const PIPELINE_WAITING_REPLY = 'waiting_reply';
 const PIPELINE_SECOND_MESSAGE_SENT = 'second_message_sent';
 const PIPELINE_REPLIED = 'replied';
@@ -1666,6 +1747,11 @@ export const ProspectingManagement: React.FC = () => {
     const [dropColumnId, setDropColumnId] = useState<PipelineBoardColumnId | null>(null);
     const [statusUpdateBusy, setStatusUpdateBusy] = useState<Record<string, boolean>>({});
     const [statusUpdateError, setStatusUpdateError] = useState<Record<string, string>>({});
+    const [stageDecision, setStageDecision] = useState<StageDecisionState | null>(null);
+    const [stageDecisionReason, setStageDecisionReason] = useState(notRelevantReasonOptions[0].code);
+    const [stageDecisionComment, setStageDecisionComment] = useState('');
+    const [stageDecisionReturnDate, setStageDecisionReturnDate] = useState('');
+    const [stageDecisionBusy, setStageDecisionBusy] = useState(false);
 
     const displayedSearchResults = useMemo(() => {
         if (Array.isArray(results) && results.length > 0) {
@@ -2217,7 +2303,7 @@ export const ProspectingManagement: React.FC = () => {
                 lead: {
                     ...lead,
                     status: targetStatus,
-                    pipeline_status: PIPELINE_UNPROCESSED,
+                    pipeline_status: lead.pipeline_status || PIPELINE_UNPROCESSED,
                 },
             });
             await Promise.all([fetchSavedLeads(), fetchLeadGroups()]);
@@ -2225,6 +2311,93 @@ export const ProspectingManagement: React.FC = () => {
             console.error('Error saving lead:', error);
         } finally {
             setSaving(prev => ({ ...prev, [key]: false }));
+        }
+    };
+
+    const closeLeadStageDecision = () => {
+        if (stageDecisionBusy) {
+            return;
+        }
+        setStageDecision(null);
+        setStageDecisionComment('');
+        setStageDecisionReturnDate('');
+    };
+
+    const openLeadStageDecision = (mode: StageDecisionMode, target: StageDecisionTarget) => {
+        const lead = target.kind === 'search_result'
+            ? target.lead
+            : target.lead || savedLeads.find((item) => item.id === target.leadId) || null;
+        setStageDecision({
+            mode,
+            target: target.kind === 'search_result'
+                ? target
+                : { ...target, lead },
+        });
+        setStageDecisionReason(mode === 'postponed' ? postponeReasonOptions[0].code : notRelevantReasonOptions[0].code);
+        setStageDecisionComment(
+            mode === 'postponed'
+                ? String(lead?.postponed_comment || '')
+                : String(lead?.disqualification_comment || '')
+        );
+        setStageDecisionReturnDate(String(lead?.next_action_at || '').slice(0, 10));
+    };
+
+    const submitLeadStageDecision = async () => {
+        if (!stageDecision) {
+            return;
+        }
+        const isPostponed = stageDecision.mode === 'postponed';
+        const options = isPostponed ? postponeReasonOptions : notRelevantReasonOptions;
+        const comment = stageDecisionComment.trim() || stageDecisionReasonLabel(options, stageDecisionReason);
+        if (stageDecisionReason === 'other' && !stageDecisionComment.trim()) {
+            toast.error('Добавьте комментарий для причины «Другое»');
+            return;
+        }
+        setStageDecisionBusy(true);
+        try {
+            if (stageDecision.target.kind === 'search_result') {
+                await saveLead(
+                    isPostponed
+                        ? {
+                            ...stageDecision.target.lead,
+                            pipeline_status: PIPELINE_POSTPONED,
+                            postponed_comment: comment,
+                            next_action_at: stageDecisionReturnDate || undefined,
+                        }
+                        : {
+                            ...stageDecision.target.lead,
+                            pipeline_status: PIPELINE_NOT_RELEVANT,
+                            disqualification_reason: stageDecisionReason,
+                            disqualification_comment: comment,
+                        },
+                    isPostponed ? deferredLead : shortlistRejected
+                );
+            } else if (isPostponed) {
+                await api.post(`/admin/prospecting/lead/${stageDecision.target.leadId}/status`, {
+                    pipeline_status: PIPELINE_POSTPONED,
+                    postponed_reason: stageDecisionReason,
+                    postponed_comment: comment,
+                    next_action_at: stageDecisionReturnDate || undefined,
+                    comment,
+                });
+                await Promise.all([fetchSavedLeads(), fetchLeadGroups()]);
+            } else {
+                await api.post(`/admin/prospecting/lead/${stageDecision.target.leadId}/status`, {
+                    pipeline_status: PIPELINE_NOT_RELEVANT,
+                    disqualification_reason: stageDecisionReason,
+                    disqualification_comment: comment,
+                    comment,
+                });
+                await Promise.all([fetchSavedLeads(), fetchLeadGroups()]);
+            }
+            setStageDecision(null);
+            setStageDecisionComment('');
+            setStageDecisionReturnDate('');
+        } catch (error) {
+            console.error('Error applying lead stage decision:', error);
+            toast.error('Не удалось обновить лида');
+        } finally {
+            setStageDecisionBusy(false);
         }
     };
 
@@ -2315,47 +2488,33 @@ export const ProspectingManagement: React.FC = () => {
         }
     };
 
-    const moveLeadToPostponed = async (leadId: string) => {
-        const comment = window.prompt('Почему откладываем этого лида?');
-        if (!comment || !comment.trim()) {
+    const moveLeadToPostponed = (leadId: string) => {
+        if (!leadId) {
             return;
         }
-        await api.post(`/admin/prospecting/lead/${leadId}/status`, {
-            pipeline_status: PIPELINE_POSTPONED,
-            postponed_comment: comment.trim(),
-            comment: comment.trim(),
+        openLeadStageDecision('postponed', {
+            kind: 'saved',
+            leadId,
+            lead: savedLeads.find((lead) => lead.id === leadId) || previewLead,
         });
-        await Promise.all([fetchSavedLeads(), fetchLeadGroups()]);
     };
 
-    const moveLeadToNotRelevant = async (leadId: string) => {
-        const selectedReason = chooseNotRelevantReason();
-        if (!selectedReason) {
+    const moveLeadToNotRelevant = (leadId: string) => {
+        if (!leadId) {
             return;
         }
-        await api.post(`/admin/prospecting/lead/${leadId}/status`, {
-            pipeline_status: PIPELINE_NOT_RELEVANT,
-            disqualification_reason: selectedReason.reason,
-            disqualification_comment: selectedReason.comment,
-            comment: selectedReason.comment,
+        openLeadStageDecision('not_relevant', {
+            kind: 'saved',
+            leadId,
+            lead: savedLeads.find((lead) => lead.id === leadId) || previewLead,
         });
-        await Promise.all([fetchSavedLeads(), fetchLeadGroups()]);
     };
 
-    const saveSearchResultAsNotRelevant = async (lead: Lead) => {
-        const selectedReason = chooseNotRelevantReason();
-        if (!selectedReason) {
-            return;
-        }
-        await saveLead(
-            {
-                ...lead,
-                pipeline_status: PIPELINE_NOT_RELEVANT,
-                disqualification_reason: selectedReason.reason,
-                disqualification_comment: selectedReason.comment,
-            },
-            shortlistRejected
-        );
+    const saveSearchResultAsNotRelevant = (lead: Lead) => {
+        openLeadStageDecision('not_relevant', {
+            kind: 'search_result',
+            lead,
+        });
     };
 
     const markLeadManualContact = async (leadId: string, channel: string = 'manual') => {
@@ -5041,6 +5200,19 @@ export const ProspectingManagement: React.FC = () => {
                     </p>
                 </div>
             </div>
+
+            <LeadStageDecisionModal
+                state={stageDecision}
+                reason={stageDecisionReason}
+                comment={stageDecisionComment}
+                returnDate={stageDecisionReturnDate}
+                busy={stageDecisionBusy}
+                onReasonChange={setStageDecisionReason}
+                onCommentChange={setStageDecisionComment}
+                onReturnDateChange={setStageDecisionReturnDate}
+                onClose={closeLeadStageDecision}
+                onSubmit={submitLeadStageDecision}
+            />
 
             <Sheet open={Boolean(previewLead)} onOpenChange={(open) => {
                 if (!open) {

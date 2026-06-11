@@ -26,6 +26,9 @@ const checks = [
   ['partner main tabs include sending', files.partnerPage, "{ value: 'queue', label: 'Отправка'"],
   ['partner main tabs include report', files.partnerPage, "{ value: 'analytics', label: 'Отчёт'"],
   ['customer details use drawer', files.customer, '<Sheet open={Boolean(previewLead)}'],
+  ['customer postpone/disqualify modal', files.customer, '<LeadStageDecisionModal'],
+  ['customer postpone reason field', files.customer, 'postponed_reason'],
+  ['customer return date field', files.customer, 'next_action_at'],
   ['partner details use drawer', files.partnerPage, '<PartnershipLeadDetailDrawer'],
   ['customer sequence first email', files.customer, 'Письмо 1'],
   ['customer sequence offer', files.customer, 'КП / предложение'],
@@ -57,6 +60,8 @@ const forbidden = [
   ['fake follow-up save', 'Follow-up сохранён локально'],
   ['fake follow-up button', 'Сохранить follow-up'],
   ['old unprocessed label', 'Необработанные лиды'],
+  ['old postpone prompt', 'Почему откладываем этого лида'],
+  ['old disqualify prompt', 'Почему переносим лида'],
 ];
 
 const failures = [];
