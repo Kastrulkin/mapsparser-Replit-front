@@ -35,11 +35,13 @@ def execute_approved_domain_requests(
     items.extend(_approve_communication_requests(cursor, business_id, user_id, run_id, step_key, refs))
     items.extend(_approve_review_publish_requests(cursor, business_id, user_id, run_id, step_key, refs))
     items.extend(_approve_service_optimization_requests(cursor, business_id, user_id, run_id, step_key, refs))
+    items.extend(_apply_finance_transaction_requests(cursor, business_id, user_id, run_id, step_key, refs, orchestrator_result))
     return {
         "executor": "agent_domain_request_executor_v1",
         "executed": len(items),
         "items": items,
         "external_dispatch_performed": False,
+        "localos_writes_performed": bool([item for item in items if item.get("localos_write_performed")]),
         "provider_writes_performed": False,
         "reason_code": APPROVED_EXECUTOR_REASON,
     }
@@ -51,6 +53,7 @@ def _empty_result() -> Dict[str, Any]:
         "executed": 0,
         "items": [],
         "external_dispatch_performed": False,
+        "localos_writes_performed": False,
         "provider_writes_performed": False,
         "reason_code": "NO_DOMAIN_REQUESTS",
     }
@@ -594,6 +597,206 @@ def _approve_service_optimization_requests(cursor: Any, business_id: str, user_i
             }
         )
     return items
+
+
+def _apply_finance_transaction_requests(
+    cursor: Any,
+    business_id: str,
+    user_id: str,
+    run_id: str,
+    step_key: str,
+    refs: Dict[str, List[str]],
+    orchestrator_result: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    result = orchestrator_result.get("result") if isinstance(orchestrator_result.get("result"), dict) else {}
+    proposals = result.get("finance_entry_proposals") if isinstance(result.get("finance_entry_proposals"), list) else []
+    if not proposals or not _table_exists(cursor, "finance_import_batches"):
+        return []
+    request_id = str(result.get("request_id") or (refs.get("request_ids") or [""])[0] or "").strip()
+    action_id = str(orchestrator_result.get("action_id") or result.get("action_id") or (refs.get("action_ids") or [""])[0] or "").strip()
+    batch_id = _stable_finance_batch_id(business_id, request_id, action_id, proposals)
+    mapping = result.get("normalized_mapping") if isinstance(result.get("normalized_mapping"), dict) else {}
+    source = str(result.get("source") or "agent_capability").strip()
+    errors = result.get("errors") if isinstance(result.get("errors"), list) else []
+    cursor.execute(
+        """
+        INSERT INTO finance_import_batches
+        (id, business_id, source_type, status, file_name, file_hash, rows_total,
+         mapping_json, error_log)
+        VALUES (%s, %s, 'agent', 'processing', %s, %s, %s, %s, %s)
+        ON CONFLICT (id) DO UPDATE SET
+            status = 'processing',
+            rows_total = EXCLUDED.rows_total,
+            mapping_json = EXCLUDED.mapping_json,
+            error_log = EXCLUDED.error_log,
+            completed_at = NULL
+        """,
+        (
+            batch_id,
+            business_id,
+            f"agent:{source}:{action_id or request_id or batch_id}",
+            request_id or action_id or batch_id,
+            len(proposals),
+            json.dumps(mapping, ensure_ascii=False),
+            json.dumps(errors[:100], ensure_ascii=False),
+        ),
+    )
+    imported = 0
+    skipped = 0
+    import_errors = list(errors[:100])
+    for item in proposals:
+        if not isinstance(item, dict):
+            continue
+        record_type = str(item.get("record_type") or "").strip()
+        duplicate_key = str(item.get("duplicate_key") or "").strip()
+        if _finance_import_duplicate_exists(cursor, business_id, record_type, duplicate_key):
+            skipped += 1
+            continue
+        try:
+            _insert_agent_finance_import_item(cursor, business_id, batch_id, item)
+            imported += 1
+        except Exception:
+            if len(import_errors) < 100:
+                import_errors.append(
+                    {
+                        "row": item.get("row_number"),
+                        "errors": ["finance item insert failed"],
+                    }
+                )
+    failed = len(import_errors)
+    status = "completed" if failed == 0 else "completed_with_errors"
+    cursor.execute(
+        """
+        UPDATE finance_import_batches
+        SET status = %s,
+            rows_imported = %s,
+            rows_skipped = %s,
+            rows_failed = %s,
+            error_log = %s,
+            completed_at = NOW()
+        WHERE id = %s AND business_id = %s
+        """,
+        (
+            status,
+            imported,
+            skipped,
+            failed,
+            json.dumps(import_errors, ensure_ascii=False),
+            batch_id,
+            business_id,
+        ),
+    )
+    ledger_id = _record_executor_ledger(
+        cursor,
+        business_id=business_id,
+        user_id=user_id,
+        run_id=run_id,
+        step_key=step_key,
+        request_id=request_id,
+        action_id=action_id,
+        capability="finance.transaction.create",
+        output_state=status,
+        summary={
+            "batch_id": batch_id,
+            "rows_total": len(proposals),
+            "rows_imported": imported,
+            "rows_skipped": skipped,
+            "rows_failed": failed,
+            "localos_write_performed": imported > 0,
+        },
+    )
+    return [
+        {
+            "kind": "finance_transaction_request",
+            "id": request_id or batch_id,
+            "batch_id": batch_id,
+            "action_id": action_id,
+            "status": status,
+            "apply_state": "applied" if imported else "not_applied",
+            "rows_total": len(proposals),
+            "rows_imported": imported,
+            "rows_skipped": skipped,
+            "rows_failed": failed,
+            "ledger_id": ledger_id,
+            "localos_write_performed": imported > 0,
+            "provider_write_performed": False,
+        }
+    ]
+
+
+def _stable_finance_batch_id(business_id: str, request_id: str, action_id: str, proposals: List[Dict[str, Any]]) -> str:
+    raw = json.dumps(
+        {
+            "business_id": business_id,
+            "request_id": request_id,
+            "action_id": action_id,
+            "duplicates": [str(item.get("duplicate_key") or "") for item in proposals if isinstance(item, dict)],
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+
+
+def _finance_import_duplicate_exists(cursor: Any, business_id: str, record_type: str, duplicate_key: str) -> bool:
+    table_by_type = {
+        "entry": "finance_entries",
+        "service": "finance_service_metrics",
+        "staff": "finance_staff_metrics",
+        "workplace": "finance_workplace_metrics",
+    }
+    table_name = table_by_type.get(record_type)
+    if not table_name or not duplicate_key or not _table_exists(cursor, table_name):
+        return False
+    cursor.execute(
+        f"SELECT 1 FROM {table_name} WHERE business_id = %s AND duplicate_key = %s LIMIT 1",
+        (business_id, duplicate_key),
+    )
+    return cursor.fetchone() is not None
+
+
+def _insert_agent_finance_import_item(cursor: Any, business_id: str, batch_id: str, item: Dict[str, Any]) -> None:
+    record_type = str(item.get("record_type") or "").strip()
+    duplicate_key = str(item.get("duplicate_key") or "").strip() or None
+    external_id = item.get("external_id") or None
+    if record_type == "entry":
+        cursor.execute(
+            """
+            INSERT INTO finance_entries
+            (id, business_id, date, type, category, amount, source, comment,
+             import_batch_id, external_id, duplicate_key)
+            VALUES (%s, %s, %s, %s, %s, %s, 'agent', %s, %s, %s, %s)
+            """,
+            (
+                _stable_finance_item_id(business_id, batch_id, item),
+                business_id,
+                item.get("date"),
+                item.get("type"),
+                item.get("category") or "other",
+                item.get("amount") or 0,
+                item.get("comment") or "",
+                batch_id,
+                external_id,
+                duplicate_key,
+            ),
+        )
+        return
+    raise ValueError("unsupported finance record_type")
+
+
+def _stable_finance_item_id(business_id: str, batch_id: str, item: Dict[str, Any]) -> str:
+    raw = json.dumps(
+        {
+            "business_id": business_id,
+            "batch_id": batch_id,
+            "record_type": item.get("record_type"),
+            "duplicate_key": item.get("duplicate_key"),
+            "row_number": item.get("row_number"),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
 
 
 def _decode_json(value: Any, fallback: Any) -> Any:

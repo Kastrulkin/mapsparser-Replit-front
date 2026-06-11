@@ -23,6 +23,7 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
+  Trash2,
   Upload,
   Users,
   Wrench,
@@ -240,6 +241,7 @@ type AgentRunObservability = {
       created_at?: string;
     }>;
   };
+  integration_preflight?: AgentIntegrationPreflight;
   delivery_status?: {
     state?: string;
     queued_count?: number;
@@ -309,6 +311,44 @@ type AgentRun = {
   observability?: AgentRunObservability;
 };
 
+type AgentMetricsSummary = {
+  schema?: string;
+  compiled?: {
+    candidate_status?: string;
+    validation_status?: string;
+    validation_valid?: boolean;
+    error_count?: number;
+    warning_count?: number;
+    runtime_llm_required?: boolean;
+  };
+  versions?: {
+    total?: number;
+    active_version_id?: string;
+    active_version_number?: number;
+  };
+  runs?: {
+    loaded?: number;
+    by_status?: Record<string, number>;
+    last_run?: Record<string, unknown>;
+  };
+  approvals?: {
+    pending?: number;
+    waiting_reasons?: string[];
+  };
+  cost_tokens?: {
+    reserved_tokens?: number;
+    settled_tokens?: number;
+    released_tokens?: number;
+    inflight_reserved_tokens?: number;
+    total_cost?: number;
+    agent_creation_charged?: number;
+  };
+  setup?: {
+    required_bindings?: number;
+    learning_events?: number;
+  };
+};
+
 type AgentBlueprintDetails = {
   versions: Array<Record<string, unknown>>;
   runs: AgentRun[];
@@ -320,6 +360,8 @@ type AgentBlueprintDetails = {
   version_events?: AgentVersionEvent[];
   feedback_history?: Array<Record<string, unknown>>;
   legacy_migration?: Record<string, unknown>;
+  metrics?: AgentMetricsSummary;
+  activation_gate?: AgentActivationGate;
 };
 
 type AgentVersionDiff = {
@@ -428,6 +470,7 @@ type AgentIntegrationCatalogItem = {
   required_config?: string[];
   default_limits?: Record<string, unknown>;
   status?: string;
+  providers?: Array<{ provider?: string; label?: string; status?: string }>;
 };
 
 type AgentIntegrationBindingStatus = {
@@ -441,6 +484,75 @@ type AgentIntegrationBindingStatus = {
   status: string;
   integration_id?: string;
   missing_config?: string[];
+  resolution?: string;
+};
+
+type AgentIntegrationPreflight = {
+  status?: string;
+  ready?: boolean;
+  missing_count?: number;
+  next_action?: string;
+  items?: AgentIntegrationBindingStatus[];
+  missing?: AgentIntegrationBindingStatus[];
+};
+
+type AgentConnectionPlanItem = {
+  key?: string;
+  provider?: string;
+  title?: string;
+  capability?: string;
+  trigger?: string;
+  direction?: string;
+  binding_status?: string;
+  action?: string;
+  primary_label?: string;
+  explanation?: string;
+  missing_config?: string[];
+  approval_required?: boolean;
+  existing_integrations?: Array<{ id?: string; provider?: string; display_name?: string; status?: string }>;
+  attached_integrations?: Array<{ id?: string; provider?: string; display_name?: string; status?: string }>;
+  provider_paths?: Array<{ provider?: string; label?: string; status?: string }>;
+};
+
+type AgentConnectionPlan = {
+  schema?: string;
+  status?: string;
+  missing_count?: number;
+  items?: AgentConnectionPlanItem[];
+};
+
+type AgentActivationGate = {
+  schema?: string;
+  status?: string;
+  can_activate?: boolean;
+  next_step?: string;
+  active_version_id?: string;
+  blockers?: Array<{ type?: string; provider?: string; message?: string }>;
+  human_blockers?: Array<{ type?: string; provider?: string; title?: string; message?: string; action?: string }>;
+  summary?: string;
+  primary_action_label?: string;
+  connection_plan?: AgentConnectionPlan;
+  preflight?: AgentIntegrationPreflight;
+  compiled_validation?: {
+    ready?: boolean;
+    validation?: {
+      status?: string;
+      errors?: Array<{ field?: string; message?: string }>;
+      warnings?: Array<{ field?: string; message?: string }>;
+    };
+  };
+};
+
+type AgentPostCreateHandoff = {
+  schema?: string;
+  status?: string;
+  next_step?: string;
+  workspace_mode?: AgentWorkspaceMode;
+  title?: string;
+  description?: string;
+  missing_bindings?: AgentIntegrationBindingStatus[];
+  items?: AgentIntegrationBindingStatus[];
+  connection_plan?: AgentConnectionPlan | null;
 };
 
 type AgentReviewSection = {
@@ -542,6 +654,66 @@ type AgentBuilderQuestion = {
   question: string;
 };
 
+type AgentBuilderConnectorPreview = {
+  key?: string;
+  provider?: string;
+  title?: string;
+  status?: string;
+  connection_count?: number;
+  missing_config?: string[];
+  connections?: Array<{ id?: string; display_name?: string; provider?: string }>;
+  action?: {
+    kind?: string;
+    label?: string;
+    description?: string;
+    after_draft?: string;
+  };
+};
+
+type AgentBuilderFeasibility = {
+  status?: string;
+  ready?: boolean;
+  next_action?: string;
+  missing_connections?: AgentBuilderConnectorPreview[];
+  connection_choices?: AgentBuilderConnectorPreview[];
+  ready_bindings?: AgentBuilderConnectorPreview[];
+  forbidden?: Array<{ term?: string; reason?: string }>;
+  unsupported?: Array<{ capability?: string; reason?: string }>;
+};
+
+type AgentBuilderSetupStep = {
+  key?: string;
+  label?: string;
+  status?: string;
+  description?: string;
+  questions?: AgentBuilderQuestion[];
+  missing_connections?: AgentBuilderConnectorPreview[];
+  connection_choices?: AgentBuilderConnectorPreview[];
+};
+
+type AgentBuilderSetupFlow = {
+  schema?: string;
+  status?: string;
+  primary_action?: string;
+  can_create_draft?: boolean;
+  can_activate?: boolean;
+  activation_blockers?: Array<{ type?: string; provider?: string; message?: string }>;
+  steps?: AgentBuilderSetupStep[];
+};
+
+type AgentBuilderPlannerLoop = {
+  schema?: string;
+  status?: string;
+  may_execute_tools?: boolean;
+  catalog_source?: string;
+  capability_plan?: Array<{ capability?: string; openclaw_supported?: boolean; provider_paths?: string[] }>;
+  workflow_proposal?: {
+    openclaw_action_refs?: string[];
+    provider_paths?: Array<{ capability?: string; provider_path?: string }>;
+    policy?: string;
+  };
+};
+
 type AgentBuilderPreview = {
   understood_task?: string;
   category?: string;
@@ -553,6 +725,11 @@ type AgentBuilderPreview = {
   output_format?: string;
   manual_control?: string;
   approval_boundaries?: string[];
+  required_connectors?: AgentBuilderConnectorPreview[];
+  feasibility?: AgentBuilderFeasibility;
+  setup_flow?: AgentBuilderSetupFlow;
+  connection_plan?: AgentConnectionPlan;
+  openclaw_planner_loop?: AgentBuilderPlannerLoop;
   external_dispatch_performed?: boolean;
   cost_preview?: {
     label?: string;
@@ -581,6 +758,114 @@ const getRequestErrorMessage = (requestError: unknown, fallback: string) => {
       .replace(/^Ошибка запроса:\s*/i, '');
   }
   return fallback;
+};
+
+const objectValue = (value: object, key: string): unknown => {
+  const entry = Object.entries(value).find(([entryKey]) => entryKey === key);
+  return entry ? entry[1] : undefined;
+};
+
+const normalizePostCreateHandoff = (value: unknown): AgentPostCreateHandoff | null => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const missingBindings = objectValue(value, 'missing_bindings');
+  const items = objectValue(value, 'items');
+  const connectionPlan = normalizeConnectionPlan(objectValue(value, 'connection_plan'));
+  return {
+    schema: String(objectValue(value, 'schema') || ''),
+    status: String(objectValue(value, 'status') || ''),
+    next_step: String(objectValue(value, 'next_step') || ''),
+    workspace_mode: String(objectValue(value, 'workspace_mode') || ''),
+    title: String(objectValue(value, 'title') || ''),
+    description: String(objectValue(value, 'description') || ''),
+    missing_bindings: Array.isArray(missingBindings) ? missingBindings : [],
+    items: Array.isArray(items) ? items : [],
+    connection_plan: connectionPlan,
+  };
+};
+
+const normalizeAgentIntegrationPreflight = (value: unknown): AgentIntegrationPreflight | undefined => {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+  const missingCount = objectValue(value, 'missing_count');
+  const items = objectValue(value, 'items');
+  const missing = objectValue(value, 'missing');
+  const ready = objectValue(value, 'ready');
+  return {
+    status: String(objectValue(value, 'status') || ''),
+    ready: typeof ready === 'boolean' ? ready : undefined,
+    missing_count: typeof missingCount === 'number' ? missingCount : undefined,
+    next_action: String(objectValue(value, 'next_action') || ''),
+    items: Array.isArray(items) ? items : [],
+    missing: Array.isArray(missing) ? missing : [],
+  };
+};
+
+const normalizeConnectionPlan = (value: unknown): AgentConnectionPlan | null => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const items = objectValue(value, 'items');
+  const missingCount = objectValue(value, 'missing_count');
+  return {
+    schema: String(objectValue(value, 'schema') || ''),
+    status: String(objectValue(value, 'status') || ''),
+    missing_count: typeof missingCount === 'number' ? missingCount : undefined,
+    items: Array.isArray(items) ? items : [],
+  };
+};
+
+const formatPreflightBlock = (preflight?: AgentIntegrationPreflight | null) => {
+  const missing = Array.isArray(preflight?.missing) ? preflight.missing : [];
+  if (!missing.length) {
+    return '';
+  }
+  const items = missing
+    .map((item) => {
+      const label = humanizeMeta(item.provider || item.key || 'integration');
+      const config = item.missing_config?.length ? ` (${item.missing_config.join(', ')})` : '';
+      return `${label}${config}`;
+    })
+    .join(', ');
+  return `Перед запуском нужно подключить: ${items}.`;
+};
+
+const connectorLabel = (provider?: string) => ({
+  google_sheets: 'Google Sheets',
+  telegram: 'Telegram',
+  maton: 'Maton.ai',
+  localos_finance: 'Финансы LocalOS',
+  composio: 'Composio',
+}[provider || ''] || humanizeMeta(provider || 'подключение'));
+
+const bindingResolutionLabel = (binding: AgentIntegrationBindingStatus) => ({
+  native_localos: 'внутри LocalOS',
+  agent_integration: 'подключение бизнеса',
+  blueprint_metadata: 'настройка агента',
+  compiled_default: 'настройка workflow',
+  input_payload: 'данные запуска',
+  missing_integration: 'нужен доступ',
+}[binding.resolution || ''] || humanizeMeta(binding.resolution || binding.provider));
+
+const bindingActionHint = (binding: AgentIntegrationBindingStatus) => {
+  if (binding.status === 'connected' || binding.status === 'ready') {
+    return `${connectorLabel(binding.provider)} готово: ${bindingResolutionLabel(binding)}.`;
+  }
+  if (binding.provider === 'google_sheets') {
+    return 'Выберите существующий Google-доступ или укажите таблицу и лист ниже.';
+  }
+  if (binding.provider === 'telegram') {
+    return 'Выберите режим бота ниже, чтобы агент мог принимать события Telegram.';
+  }
+  if (binding.provider === 'maton') {
+    return 'Используйте сохранённый Maton.ai доступ бизнеса или добавьте ключ в интеграциях.';
+  }
+  if (binding.provider === 'composio') {
+    return 'Composio будет доступен как OAuth-provider позже; пока используйте ручной или native путь.';
+  }
+  return 'Подключите источник или оставьте агент в draft-only режиме.';
 };
 
 const getVersionNumber = (version: Record<string, unknown> | undefined) => {
@@ -777,6 +1062,8 @@ const agentScenarios: AgentBuilderScenario[] = [
 
 const statusTone: Record<string, string> = {
   active: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  connected: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  ready: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   completed: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   running: 'bg-sky-50 text-sky-700 ring-sky-200',
   waiting_approval: 'bg-amber-50 text-amber-700 ring-amber-200',
@@ -788,10 +1075,16 @@ const statusTone: Record<string, string> = {
   paused: 'bg-slate-100 text-slate-700 ring-slate-200',
   queued_for_dispatch: 'bg-amber-50 text-amber-700 ring-amber-200',
   pending: 'bg-amber-50 text-amber-700 ring-amber-200',
+  needs_connection: 'bg-amber-50 text-amber-700 ring-amber-200',
+  needs_choice: 'bg-amber-50 text-amber-700 ring-amber-200',
+  needs_clarification: 'bg-amber-50 text-amber-700 ring-amber-200',
+  blocked: 'bg-rose-50 text-rose-700 ring-rose-200',
 };
 
 const statusLabels: Record<string, string> = {
   active: 'Включён',
+  connected: 'Готово',
+  ready: 'Готово',
   completed: 'Готово',
   running: 'В работе',
   waiting_approval: 'Ждёт решения',
@@ -806,6 +1099,10 @@ const statusLabels: Record<string, string> = {
   generated: 'Подготовлено',
   approved: 'Подтверждено',
   pending: 'Ожидает',
+  needs_connection: 'Подключить',
+  needs_choice: 'Выбрать',
+  needs_clarification: 'Уточнить',
+  blocked: 'Блокер',
 };
 
 const stepLabels: Record<string, string> = {
@@ -868,6 +1165,15 @@ const metaLabels: Record<string, string> = {
   services_optimize: 'услуги',
   telegram: 'Telegram',
   google_sheets: 'Google Sheets',
+  google_sheets_read: 'чтение Google Sheets',
+  google_sheets_append: 'запись в Google Sheets',
+  localos_finance: 'финансы LocalOS',
+  maton: 'Maton.ai',
+  composio: 'Composio',
+  trigger_boundary: 'граница запуска',
+  approved_executor: 'исполнитель после подтверждения',
+  approved_delivery_bridge: 'доставка после подтверждения',
+  approved_localos_write: 'запись в LocalOS после подтверждения',
   'telegram.message.received': 'новое сообщение в Telegram',
   'google_sheets.append': 'запись строки в Google Sheets',
   'outreach.send_batch': 'отправка согласованной пачки',
@@ -1121,6 +1427,7 @@ export const AgentBlueprintsPage = () => {
   const [agentIntegrationCatalog, setAgentIntegrationCatalog] = useState<AgentIntegrationCatalogItem[]>([]);
   const [agentExternalAuthOptions, setAgentExternalAuthOptions] = useState<AgentExternalAuthOption[]>([]);
   const [agentBindingStatus, setAgentBindingStatus] = useState<AgentIntegrationBindingStatus[]>([]);
+  const [agentConnectionPlan, setAgentConnectionPlan] = useState<AgentConnectionPlan | null>(null);
   const [sheetSpreadsheetId, setSheetSpreadsheetId] = useState('');
   const [sheetName, setSheetName] = useState('Sheet1');
   const [sheetAuthRef, setSheetAuthRef] = useState('');
@@ -1136,6 +1443,7 @@ export const AgentBlueprintsPage = () => {
   const [legacyMigrationPlan, setLegacyMigrationPlan] = useState<LegacyMigrationPlan | null>(null);
   const [legacyMigrationNotice, setLegacyMigrationNotice] = useState('');
   const [recentCreatedAgentName, setRecentCreatedAgentName] = useState('');
+  const [recentPostCreateHandoff, setRecentPostCreateHandoff] = useState<AgentPostCreateHandoff | null>(null);
   const [showAdvancedAgentTools, setShowAdvancedAgentTools] = useState(false);
 
   useEffect(() => {
@@ -1362,6 +1670,8 @@ export const AgentBlueprintsPage = () => {
         version_events: Array.isArray(response.data?.version_events) ? response.data.version_events : [],
         feedback_history: Array.isArray(response.data?.feedback_history) ? response.data.feedback_history : [],
         legacy_migration: response.data?.legacy_migration || {},
+        metrics: response.data?.metrics && typeof response.data.metrics === 'object' ? response.data.metrics : undefined,
+        activation_gate: response.data?.activation_gate && typeof response.data.activation_gate === 'object' ? response.data.activation_gate : undefined,
       };
       setBlueprintDetails(details);
     } catch (requestError) {
@@ -1426,12 +1736,14 @@ export const AgentBlueprintsPage = () => {
       const providerCatalog = Array.isArray(response.data?.provider_catalog) ? response.data.provider_catalog : [];
       const authOptions = Array.isArray(response.data?.external_auth_options) ? response.data.external_auth_options : [];
       const bindingStatus = Array.isArray(response.data?.binding_status) ? response.data.binding_status : [];
+      const connectionPlan = normalizeConnectionPlan(response.data?.connection_plan);
       const customProcess = response.data?.custom_process && typeof response.data.custom_process === 'object' ? response.data.custom_process : {};
       setAgentIntegrations(integrations);
       setAvailableAgentIntegrations(available);
       setAgentIntegrationCatalog(providerCatalog);
       setAgentExternalAuthOptions(authOptions);
       setAgentBindingStatus(bindingStatus);
+      setAgentConnectionPlan(connectionPlan);
       if (Array.isArray(customProcess.row_values)) {
         setProcessRowValues(customProcess.row_values.map((item) => String(item || '').trim()).filter(Boolean).join(', '));
       }
@@ -1454,6 +1766,7 @@ export const AgentBlueprintsPage = () => {
       setAgentIntegrationCatalog([]);
       setAgentExternalAuthOptions([]);
       setAgentBindingStatus([]);
+      setAgentConnectionPlan(null);
     }
   }, []);
 
@@ -1495,6 +1808,7 @@ export const AgentBlueprintsPage = () => {
         await loadBlueprintDetails(blueprint.id);
         await loadBlueprintReview(blueprint.id);
         await loadSourceCatalog(blueprint.id);
+        await loadAgentIntegrations(blueprint.id);
         setRecentCreatedAgentName(String(blueprint.name || 'Новый агент'));
       }
     } catch (requestError) {
@@ -1572,21 +1886,27 @@ export const AgentBlueprintsPage = () => {
     setActionLoading(true);
     setError(null);
     try {
-      const response = await api.post(`/agent-builder/sessions/${dialogBuilderSession.id}/create-blueprint`, {});
+      const response = await api.post(`/agent-builder/sessions/${dialogBuilderSession.id}/create-blueprint`, {
+        use_ai_compiler: true,
+      });
       const blueprint = response.data?.blueprint;
+      const handoff = normalizePostCreateHandoff(response.data?.post_create_handoff);
       await loadBlueprints();
       if (blueprint?.id) {
         setSelectedBlueprintId(blueprint.id);
         await loadBlueprintDetails(blueprint.id);
         await loadBlueprintReview(blueprint.id);
         await loadSourceCatalog(blueprint.id);
+        await loadAgentIntegrations(blueprint.id);
         setRecentCreatedAgentName(String(blueprint.name || 'Новый агент'));
+        setRecentPostCreateHandoff(handoff);
       }
       setDialogBuilderInput('');
       setDialogBuilderReply('');
       setDialogBuilderSession(null);
       setCreateWizardOpen(false);
-      setWorkspaceMode('settings');
+      const handoffMode = handoff?.workspace_mode || '';
+      setWorkspaceMode(handoffMode === 'connections' || handoffMode === 'settings' ? handoffMode : (response.data?.next_step === 'connect_required_integrations' ? 'connections' : 'settings'));
     } catch (requestError) {
       console.error(requestError);
       setError(getRequestErrorMessage(requestError, 'Не удалось создать агента из диалога.'));
@@ -1665,16 +1985,27 @@ export const AgentBlueprintsPage = () => {
     setActionLoading(true);
     setError(null);
     try {
+      const runInput = {
+        source: runSource.trim() || 'dashboard',
+        city: runCity.trim(),
+        category: runCategory.trim(),
+        intent: 'client_outreach',
+        business_id: currentBusinessId,
+        limit: Number(runLimit) > 0 ? Math.min(Number(runLimit), 100) : 30,
+      };
+      const preflightResponse = await api.post(`/agent-blueprints/${targetBlueprint.id}/preflight`, {
+        blueprint_version_id: blueprintVersionId || undefined,
+        input: runInput,
+      });
+      const preflight = normalizeAgentIntegrationPreflight(preflightResponse.data?.preflight);
+      if (preflightResponse.data?.can_start === false || preflight?.ready === false) {
+        setError(formatPreflightBlock(preflight) || 'Перед запуском нужно подключить источники агента.');
+        await loadBlueprintDetails(targetBlueprint.id);
+        return;
+      }
       const response = await api.post(`/agent-blueprints/${targetBlueprint.id}/runs`, {
         blueprint_version_id: blueprintVersionId || undefined,
-        input: {
-          source: runSource.trim() || 'dashboard',
-          city: runCity.trim(),
-          category: runCategory.trim(),
-          intent: 'client_outreach',
-          business_id: currentBusinessId,
-          limit: Number(runLimit) > 0 ? Math.min(Number(runLimit), 100) : 30,
-        },
+        input: runInput,
       });
       setActiveRun(response.data?.run || null);
       setWorkspaceMode('results');
@@ -1682,7 +2013,7 @@ export const AgentBlueprintsPage = () => {
       await loadBlueprintReview(targetBlueprint.id);
     } catch (requestError) {
       console.error(requestError);
-      setError('Не удалось запустить агента.');
+      setError(getRequestErrorMessage(requestError, 'Не удалось запустить агента.'));
     } finally {
       setActionLoading(false);
     }
@@ -1713,6 +2044,32 @@ export const AgentBlueprintsPage = () => {
     } catch (requestError) {
       console.error(requestError);
       setError(action === 'rollback' ? 'Не удалось откатить версию агента.' : 'Не удалось активировать версию агента.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const deleteSelectedAgent = async () => {
+    if (!selectedBlueprint) {
+      return;
+    }
+    const confirmed = window.confirm(`Убрать агента “${selectedBlueprint.name}” из списка? История запусков сохранится в архиве.`);
+    if (!confirmed) {
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    try {
+      await api.delete(`/agent-blueprints/${selectedBlueprint.id}`);
+      const remaining = blueprints.filter((item) => item.id !== selectedBlueprint.id);
+      setSelectedBlueprintId(remaining[0]?.id || null);
+      setBlueprintDetails(null);
+      setActiveRun(null);
+      setWorkspaceMode('overview');
+      await loadBlueprints();
+    } catch (requestError) {
+      console.error(requestError);
+      setError(getRequestErrorMessage(requestError, 'Не удалось удалить агента.'));
     } finally {
       setActionLoading(false);
     }
@@ -1860,6 +2217,9 @@ export const AgentBlueprintsPage = () => {
       return;
     }
     const existing = [...agentIntegrations, ...availableAgentIntegrations].find((item) => item.provider === 'google_sheets');
+    const needsRead = agentBindingStatus.some((item) => item.provider === 'google_sheets' && item.capability === 'google_sheets.read_rows');
+    const needsAppend = agentBindingStatus.some((item) => item.provider === 'google_sheets' && item.capability === 'sheets.append_row_request');
+    const operation = needsRead && needsAppend ? 'read_write' : needsRead ? 'read_rows' : 'append_row';
     setActionLoading(true);
     setError(null);
     try {
@@ -1872,6 +2232,7 @@ export const AgentBlueprintsPage = () => {
         config: {
           spreadsheet_id: sheetSpreadsheetId.trim(),
           sheet_name: sheetName.trim() || 'Sheet1',
+          operation,
         },
         limits: {
           daily_append_cap: Number(sheetDailyCap) > 0 ? Number(sheetDailyCap) : 50,
@@ -1914,6 +2275,32 @@ export const AgentBlueprintsPage = () => {
     } catch (requestError) {
       console.error(requestError);
       setError(getRequestErrorMessage(requestError, 'Не удалось подключить Telegram.'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const attachExistingAgentIntegration = async (integration: AgentIntegration) => {
+    if (!selectedBlueprint || !integration?.id || !integration.provider) {
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    try {
+      await api.post(`/agent-blueprints/${selectedBlueprint.id}/integrations`, {
+        integration_id: integration.id,
+        provider: integration.provider,
+        status: 'active',
+        display_name: integration.display_name || integration.provider_label || humanizeMeta(integration.provider),
+        auth_ref: integration.auth_ref || '',
+        config: integration.config || {},
+        limits: integration.limits || {},
+      });
+      await loadAgentIntegrations(selectedBlueprint.id);
+      await loadBlueprintDetails(selectedBlueprint.id);
+    } catch (requestError) {
+      console.error(requestError);
+      setError(getRequestErrorMessage(requestError, 'Не удалось подключить существующий доступ к агенту.'));
     } finally {
       setActionLoading(false);
     }
@@ -2123,16 +2510,34 @@ export const AgentBlueprintsPage = () => {
       ) : null}
 
       {recentCreatedAgentName ? (
-        <DashboardActionPanel
-          title="Агент создан"
-          description={`${recentCreatedAgentName} выбран ниже. Проверьте данные агента, активную версию и запустите его из карточки.`}
-          tone="sky"
-          actions={(
-            <Button type="button" size="sm" variant="outline" onClick={() => setRecentCreatedAgentName('')}>
-              Понятно
-            </Button>
-          )}
-        />
+        <div className="space-y-3">
+          <DashboardActionPanel
+            title={recentPostCreateHandoff?.title || 'Агент создан'}
+            description={recentPostCreateHandoff?.description || `${recentCreatedAgentName} выбран ниже. Проверьте данные агента, активную версию и запустите его из карточки.`}
+            tone={recentPostCreateHandoff?.status === 'needs_connections' ? 'amber' : 'sky'}
+            actions={(
+              <div className="flex flex-wrap gap-2">
+                {recentPostCreateHandoff?.workspace_mode === 'connections' ? (
+                  <Button type="button" size="sm" onClick={() => setWorkspaceMode('connections')}>
+                    Открыть подключения
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setRecentCreatedAgentName('');
+                    setRecentPostCreateHandoff(null);
+                  }}
+                >
+                  Понятно
+                </Button>
+              </div>
+            )}
+          />
+          <AgentConnectionPlanPanel connectionPlan={recentPostCreateHandoff?.connection_plan || agentConnectionPlan} />
+        </div>
       ) : null}
 
       {currentBusinessId ? (
@@ -2258,6 +2663,7 @@ export const AgentBlueprintsPage = () => {
                 agentIntegrationCatalog={agentIntegrationCatalog}
                 agentExternalAuthOptions={agentExternalAuthOptions}
                 agentBindingStatus={agentBindingStatus}
+                agentConnectionPlan={agentConnectionPlan}
                 sheetSpreadsheetId={sheetSpreadsheetId}
                 sheetName={sheetName}
                 sheetAuthRef={sheetAuthRef}
@@ -2277,6 +2683,7 @@ export const AgentBlueprintsPage = () => {
                 onRollbackVersion={(versionId) => activateVersion(versionId, 'rollback')}
                 onApprove={() => decideApproval('approve')}
                 onReject={() => decideApproval('reject')}
+                onDeleteAgent={deleteSelectedAgent}
                 onFeedbackTextChange={setFeedbackText}
                 onFeedbackTriggerChange={setFeedbackTrigger}
                 onSubmitFeedback={sendRunFeedback}
@@ -2305,6 +2712,7 @@ export const AgentBlueprintsPage = () => {
                 onProcessPreviewMessageChange={setProcessPreviewMessage}
                 onSaveSheetIntegration={saveSheetIntegration}
                 onSaveTelegramIntegration={saveTelegramIntegration}
+                onAttachExistingIntegration={attachExistingAgentIntegration}
                 onSaveCustomProcess={saveCustomProcess}
                 onRunCustomProcessPreview={runCustomProcessPreview}
                 onRunSourceChange={setRunSource}
@@ -2726,6 +3134,7 @@ const DialogAgentBuilder = ({
   const questions = session?.missing_questions || [];
   const messages = session?.messages || [];
   const estimatedCredits = Number(preview?.cost_preview?.estimated_credits || 0);
+  const canCreateDraft = preview?.setup_flow?.can_create_draft !== false;
   return (
     <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4">
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
@@ -2811,25 +3220,129 @@ const DialogAgentBuilder = ({
               <PreviewRow label="Правила" value={preview?.processing_rules || 'уточнить'} />
               <PreviewRow label="Результат" value={preview?.output_format || 'уточнить'} />
               <PreviewRow label="Ручной контроль" value={preview?.manual_control || 'перед внешним действием'} />
-              <PreviewRow label="Подключение" value="источники добавляются в карточке агента; внешние действия выключены по умолчанию" />
             </div>
-            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-900">
-              Внешние отправки, публикации, платежи и опасные изменения не запускаются из мастера. Рискованные действия требуют ручного подтверждения.
-            </div>
+            <BuilderSetupFlowPanel setupFlow={preview?.setup_flow} />
+            <BuilderPlannerLoopPanel plannerLoop={preview?.openclaw_planner_loop} />
+            <AgentConnectionPlanPanel connectionPlan={preview?.connection_plan || null} compact />
+            <BuilderFeasibilityPanel feasibility={preview?.feasibility} connectors={preview?.required_connectors} />
+            <CompiledBuilderFlow />
             {estimatedCredits > 0 ? (
               <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-900">
                 Создание агента спишет примерно {estimatedCredits} кредита с баланса. Если кредитов не хватит, предложим пополнить счёт.
               </div>
             ) : null}
             <div className="mt-4 flex justify-end">
-              <Button type="button" onClick={onCreate} disabled={actionLoading}>
+              <Button type="button" onClick={onCreate} disabled={actionLoading || !canCreateDraft}>
                 {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-                Создать после проверки
+                {canCreateDraft ? 'Создать draft агента' : 'Сначала завершите настройку'}
               </Button>
             </div>
           </div>
         </div>
       ) : null}
+    </div>
+  );
+};
+
+const CompiledBuilderFlow = () => (
+  <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-xs leading-5 text-emerald-950">
+    <div className="font-semibold">После создания LocalOS скомпилирует агента</div>
+    <div className="mt-2 grid gap-2 sm:grid-cols-4">
+      {[
+        ['1', 'План', 'задача и шаги'],
+        ['2', 'Проверка', 'capabilities и approvals'],
+        ['3', 'Доступы', 'что нужно подключить'],
+        ['4', 'Запуск', 'только после gate'],
+      ].map(([index, title, text]) => (
+        <div key={title} className="rounded-lg bg-white/70 px-2 py-2 ring-1 ring-emerald-100">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-[11px] text-emerald-800">{index}</span>
+            {title}
+          </div>
+          <div className="mt-1 text-emerald-800">{text}</div>
+        </div>
+      ))}
+    </div>
+    <div className="mt-2 text-emerald-800">
+      Внешние отправки, публикации, платежи и опасные изменения не запускаются из мастера. Рискованные действия требуют ручного подтверждения.
+    </div>
+  </div>
+);
+
+const BuilderSetupFlowPanel = ({ setupFlow }: { setupFlow?: AgentBuilderSetupFlow }) => {
+  const steps = Array.isArray(setupFlow?.steps) ? setupFlow.steps : [];
+  if (!setupFlow || !steps.length) {
+    return null;
+  }
+  const primaryActionLabel = {
+    answer_question: 'Ответьте на вопрос слева',
+    connect_service: 'Подключите сервис',
+    choose_connection: 'Выберите подключение',
+    top_up_balance: 'Пополните баланс',
+    cannot_create: 'Такой агент недоступен',
+    create_draft: 'Можно создать draft',
+  }[setupFlow.primary_action || ''] || 'Проверьте настройку';
+  return (
+    <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs leading-5 text-slate-700">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="font-semibold text-slate-950">Что дальше</div>
+        <span className={cn('rounded-full px-2 py-0.5 font-medium ring-1', statusTone[setupFlow.status || 'pending'] || statusTone.pending)}>
+          {primaryActionLabel}
+        </span>
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-5">
+        {steps.map((step) => {
+          const status = step.status || 'pending';
+          const done = status === 'done' || status === 'ready';
+          const active = status === 'active';
+          const blocked = status === 'blocked';
+          return (
+            <div
+              key={step.key || step.label}
+              className={cn(
+                'min-h-24 rounded-lg px-2 py-2 ring-1',
+                done ? 'bg-emerald-50 text-emerald-950 ring-emerald-100' : '',
+                active ? 'bg-amber-50 text-amber-950 ring-amber-100' : '',
+                blocked ? 'bg-slate-50 text-slate-500 ring-slate-200' : '',
+                !done && !active && !blocked ? 'bg-slate-50 text-slate-700 ring-slate-200' : '',
+              )}
+            >
+              <div className="flex items-center gap-1.5 font-medium">
+                {done ? <CheckCircle2 className="h-3.5 w-3.5" /> : active ? <Clock3 className="h-3.5 w-3.5" /> : blocked ? <AlertTriangle className="h-3.5 w-3.5" /> : <Clock3 className="h-3.5 w-3.5" />}
+                <span>{step.label || humanizeMeta(step.key || 'Шаг')}</span>
+              </div>
+              <div className="mt-1 text-[11px] leading-4 opacity-80">{step.description || statusLabels[status] || humanizeMeta(status)}</div>
+            </div>
+          );
+        })}
+      </div>
+      {setupFlow.activation_blockers?.length ? (
+        <div className="mt-2 text-[11px] leading-4 text-slate-500">
+          Активация будет доступна после: {setupFlow.activation_blockers.slice(0, 3).map((item) => item.message || connectorLabel(item.provider)).join(', ')}.
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+const BuilderPlannerLoopPanel = ({ plannerLoop }: { plannerLoop?: AgentBuilderPlannerLoop }) => {
+  if (!plannerLoop) {
+    return null;
+  }
+  const capabilities = plannerLoop.capability_plan || [];
+  const actionRefs = plannerLoop.workflow_proposal?.openclaw_action_refs || [];
+  const providerPaths = plannerLoop.workflow_proposal?.provider_paths || [];
+  return (
+    <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-600">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="font-semibold text-slate-950">OpenClaw planner</div>
+        <span className="rounded-full bg-slate-50 px-2 py-0.5 font-medium text-slate-600 ring-1 ring-slate-200">
+          {plannerLoop.catalog_source === 'openclaw' ? 'live catalog' : 'fallback catalog'}
+        </span>
+      </div>
+      <div className="mt-1">
+        Проверены {capabilities.length || 0} capabilities, {providerPaths.length || 0} provider paths и {actionRefs.length || 0} action refs. Tools не выполняются в мастере; workflow будет скомпилирован LocalOS.
+      </div>
     </div>
   );
 };
@@ -2840,6 +3353,94 @@ const PreviewRow = ({ label, value }: { label: string; value: string }) => (
     <div className="mt-1 text-slate-800">{value}</div>
   </div>
 );
+
+const BuilderFeasibilityPanel = ({ feasibility, connectors }: { feasibility?: AgentBuilderFeasibility; connectors?: AgentBuilderConnectorPreview[] }) => {
+  const status = feasibility?.status || 'ready';
+  const items = connectors || [];
+  const forbidden = feasibility?.forbidden || [];
+  const unsupported = feasibility?.unsupported || [];
+  const isProblem = status === 'forbidden' || status === 'unsupported';
+  const isReady = status === 'ready';
+  const tone = isReady
+    ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
+    : isProblem
+      ? 'border-red-200 bg-red-50 text-red-950'
+      : 'border-amber-200 bg-amber-50 text-amber-950';
+  const title = status === 'ready'
+    ? 'Подключения готовы'
+    : status === 'needs_choice'
+      ? 'Нужно выбрать подключение'
+      : status === 'needs_connection'
+        ? 'Нужно подключить сервисы'
+        : status === 'forbidden'
+          ? 'Нельзя создать в LocalOS'
+          : status === 'unsupported'
+            ? 'Нет разрешённого способа'
+            : 'Нужно проверить ограничения';
+  if (!items.length && !forbidden.length && !unsupported.length && isReady) {
+    return null;
+  }
+  return (
+    <div className={cn('mt-3 rounded-xl border px-3 py-3 text-xs leading-5', tone)}>
+      <div className="font-semibold">{title}</div>
+      {items.length ? (
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          {items.map((item) => (
+            <div key={`${item.key || item.provider || item.title}`} className="rounded-lg bg-white/70 px-2 py-2 ring-1 ring-black/5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium">{item.title || connectorLabel(item.provider)}</span>
+                <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium ring-1 ring-black/10">
+                  {statusLabels[item.status || ''] || humanizeMeta(item.status || 'ожидает')}
+                </span>
+              </div>
+              {item.status === 'missing' ? (
+                <div className="mt-1 opacity-80">{item.action?.description || 'Подключите доступ перед активацией агента.'}</div>
+              ) : null}
+              {item.status === 'needs_choice' ? (
+                <div className="mt-1 opacity-80">{item.action?.description || `Найдено подключений: ${item.connection_count || 0}. Нужно выбрать одно.`}</div>
+              ) : null}
+              {item.status === 'ready' ? (
+                <div className="mt-1 opacity-80">{item.action?.description || 'Подключение готово.'}</div>
+              ) : null}
+              {item.connections?.length ? (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {item.connections.slice(0, 2).map((connection) => (
+                    <span key={connection.id || connection.display_name} className="rounded-full bg-white px-2 py-0.5 text-[11px] ring-1 ring-black/10">
+                      {connection.display_name || connectorLabel(connection.provider)}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              {item.action?.label && item.status !== 'ready' ? (
+                <div className="mt-2 inline-flex rounded-full bg-white px-2 py-0.5 text-[11px] font-medium ring-1 ring-black/10">
+                  {item.action.label}
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {forbidden.length ? (
+        <div className="mt-2 space-y-2">
+          {forbidden.map((item) => (
+            <div key={`${item.term || item.reason}`} className="rounded-lg bg-white/70 px-2 py-2 ring-1 ring-red-100">
+              {item.reason || 'Действие запрещено политикой LocalOS.'}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {unsupported.length ? (
+        <div className="mt-2 space-y-2">
+          {unsupported.map((item) => (
+            <div key={`${item.capability || item.reason}`} className="rounded-lg bg-white/70 px-2 py-2 ring-1 ring-red-100">
+              {item.reason || 'Нет разрешённого provider path.'}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+};
 
 const SystemAgentCard = ({
   title,
@@ -3213,6 +3814,8 @@ const AgentDetailPanel = ({
   agentIntegrationCatalog,
   agentExternalAuthOptions,
   agentBindingStatus,
+  agentConnectionPlan,
+  postCreateHandoff,
   sheetSpreadsheetId,
   sheetName,
   sheetAuthRef,
@@ -3232,6 +3835,7 @@ const AgentDetailPanel = ({
   onRollbackVersion,
   onApprove,
   onReject,
+  onDeleteAgent,
   onFeedbackTextChange,
   onFeedbackTriggerChange,
   onSubmitFeedback,
@@ -3260,6 +3864,7 @@ const AgentDetailPanel = ({
   onProcessPreviewMessageChange,
   onSaveSheetIntegration,
   onSaveTelegramIntegration,
+  onAttachExistingIntegration,
   onSaveCustomProcess,
   onRunCustomProcessPreview,
   onRunSourceChange,
@@ -3294,6 +3899,8 @@ const AgentDetailPanel = ({
   agentIntegrationCatalog: AgentIntegrationCatalogItem[];
   agentExternalAuthOptions: AgentExternalAuthOption[];
   agentBindingStatus: AgentIntegrationBindingStatus[];
+  agentConnectionPlan: AgentConnectionPlan | null;
+  postCreateHandoff: AgentPostCreateHandoff | null;
   sheetSpreadsheetId: string;
   sheetName: string;
   sheetAuthRef: string;
@@ -3313,6 +3920,7 @@ const AgentDetailPanel = ({
   onRollbackVersion: (versionId: string) => void;
   onApprove: () => void;
   onReject: () => void;
+  onDeleteAgent: () => void;
   onFeedbackTextChange: (value: string) => void;
   onFeedbackTriggerChange: (value: string) => void;
   onSubmitFeedback: () => void;
@@ -3341,6 +3949,7 @@ const AgentDetailPanel = ({
   onProcessPreviewMessageChange: (value: string) => void;
   onSaveSheetIntegration: () => void;
   onSaveTelegramIntegration: () => void;
+  onAttachExistingIntegration: (integration: AgentIntegration) => void;
   onSaveCustomProcess: () => void;
   onRunCustomProcessPreview: () => void;
   onRunSourceChange: (value: string) => void;
@@ -3369,6 +3978,10 @@ const AgentDetailPanel = ({
         {showAdvancedTools ? (
           <Button type="button" size="sm" className="shrink-0" variant={mode === 'advanced' ? 'default' : 'outline'} onClick={() => onModeChange('advanced')}>Advanced</Button>
         ) : null}
+        <Button type="button" size="sm" className="shrink-0 text-red-700 hover:text-red-800" variant="outline" onClick={onDeleteAgent} disabled={actionLoading}>
+          <Trash2 className="mr-2 h-4 w-4" />
+          Удалить
+        </Button>
       </div>
     )}
   >
@@ -3380,8 +3993,12 @@ const AgentDetailPanel = ({
         listStatus={listStatus}
         pendingApproval={pendingApproval}
         review={agentReview}
+        metrics={blueprintDetails?.metrics}
+        activationGate={blueprintDetails?.activation_gate}
+        bindingStatus={agentBindingStatus}
         actionLoading={actionLoading}
         onStartRun={onStartRun}
+        onActivateVersion={onActivateVersion}
         onOpenLogic={() => onModeChange('settings')}
         onOpenResults={() => onModeChange('results')}
         onOpenConnections={() => onModeChange('connections')}
@@ -3434,6 +4051,8 @@ const AgentDetailPanel = ({
         agentIntegrationCatalog={agentIntegrationCatalog}
         agentExternalAuthOptions={agentExternalAuthOptions}
         agentBindingStatus={agentBindingStatus}
+        agentConnectionPlan={agentConnectionPlan}
+        postCreateHandoff={recentPostCreateHandoff}
         sheetSpreadsheetId={sheetSpreadsheetId}
         sheetName={sheetName}
         sheetAuthRef={sheetAuthRef}
@@ -3453,8 +4072,10 @@ const AgentDetailPanel = ({
         onProcessPreviewMessageChange={onProcessPreviewMessageChange}
         onSaveSheetIntegration={onSaveSheetIntegration}
         onSaveTelegramIntegration={onSaveTelegramIntegration}
+        onAttachExistingIntegration={attachExistingAgentIntegration}
         onSaveCustomProcess={onSaveCustomProcess}
         onRunCustomProcessPreview={onRunCustomProcessPreview}
+        onPreviewRun={onStartRun}
       />
     ) : null}
 
@@ -3557,8 +4178,12 @@ const AgentOverviewPanel = ({
   listStatus,
   pendingApproval,
   review,
+  metrics,
+  activationGate,
+  bindingStatus,
   actionLoading,
   onStartRun,
+  onActivateVersion,
   onOpenLogic,
   onOpenResults,
   onOpenConnections,
@@ -3570,8 +4195,12 @@ const AgentOverviewPanel = ({
   listStatus: string;
   pendingApproval: AgentApproval | null;
   review: AgentReview | null;
+  metrics?: AgentMetricsSummary;
+  activationGate?: AgentActivationGate;
+  bindingStatus: AgentIntegrationBindingStatus[];
   actionLoading: boolean;
   onStartRun: () => void;
+  onActivateVersion: (versionId: string) => void;
   onOpenLogic: () => void;
   onOpenResults: () => void;
   onOpenConnections: () => void;
@@ -3579,8 +4208,25 @@ const AgentOverviewPanel = ({
 }) => {
   const needsApproval = Boolean(pendingApproval || blueprint.pending_approvals_count);
   const hasSources = Boolean(blueprint.sources_count);
+  const compiledValid = metrics?.compiled?.validation_valid === true;
+  const compiledKnown = Boolean(metrics?.compiled?.validation_status || metrics?.compiled?.candidate_status);
+  const missingBindings = bindingStatus.filter((binding) => binding.status !== 'connected' && binding.status !== 'ready').length;
+  const requiredBindings = bindingStatus.length || Number(metrics?.setup?.required_bindings || 0);
+  const connectorsReady = requiredBindings === 0 || missingBindings === 0;
+  const canActivate = activationGate?.can_activate === true;
+  const activationVersionId = activationGate?.active_version_id || blueprint.active_version_id || '';
+  const activationSummary = activationGate?.summary || '';
+  const activationPrimaryLabel = activationGate?.primary_action_label || '';
+  const settledTokens = Number(metrics?.cost_tokens?.settled_tokens || 0);
+  const totalCost = Number(metrics?.cost_tokens?.total_cost || 0);
   const nextStep = needsApproval
     ? 'Проверьте решение, которое ждёт человек.'
+    : activationSummary
+      ? activationSummary
+    : compiledKnown && !compiledValid
+      ? 'Логика агента не прошла проверку. Откройте “Логика” и исправьте версию.'
+      : !connectorsReady
+        ? 'Подключите недостающие источники перед активацией или запуском.'
     : !latestVersionNumber
       ? 'Настройте первую версию логики агента.'
       : !hasSources
@@ -3613,6 +4259,12 @@ const AgentOverviewPanel = ({
                 Проверить на примере
               </Button>
             )}
+            {canActivate ? (
+              <Button type="button" variant="outline" onClick={() => onActivateVersion(activationVersionId)} disabled={actionLoading || !activationVersionId}>
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+                Активировать
+              </Button>
+            ) : null}
             <Button type="button" variant="outline" onClick={onOpenLogic}>
               Изменить логику
             </Button>
@@ -3623,9 +4275,44 @@ const AgentOverviewPanel = ({
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <AgentSummaryPill label="Статус" value={humanizeStatus(listStatus)} tone={needsApproval ? 'warning' : 'default'} />
         <AgentSummaryPill label="Последний запуск" value={formatLastRun(blueprint)} />
-        <AgentSummaryPill label="Источники" value={`${blueprint.sources_count || 0} подключено`} tone={hasSources ? 'default' : 'warning'} />
-        <AgentSummaryPill label="Голос" value={voiceName || 'не привязан'} />
+        <AgentSummaryPill label="Compiled" value={compiledKnown ? (compiledValid ? 'проверен' : 'ошибка') : 'черновик'} tone={compiledKnown && !compiledValid ? 'warning' : 'default'} />
+        <AgentSummaryPill label="Подключения" value={requiredBindings ? `${Math.max(requiredBindings - missingBindings, 0)}/${requiredBindings}` : 'не нужны'} tone={connectorsReady ? 'default' : 'warning'} />
       </div>
+
+      {activationGate ? (
+        <div className={cn('rounded-2xl border px-4 py-3 text-sm leading-6', canActivate ? 'border-emerald-200 bg-emerald-50 text-emerald-950' : 'border-amber-200 bg-amber-50 text-amber-950')}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="font-semibold">{canActivate ? 'Версию можно активировать' : 'Активация пока недоступна'}</div>
+              <div className="mt-1 text-xs leading-5">
+                {activationSummary || (canActivate
+                  ? 'Compiled workflow и preflight готовы. Внешние действия всё равно останутся за approval gate.'
+                  : activationGate.human_blockers?.slice(0, 3).map((item) => item.message || item.title || connectorLabel(item.provider)).join(', ') || activationGate.blockers?.slice(0, 3).map((item) => item.message || connectorLabel(item.provider)).join(', ') || 'Проверьте логику и подключения агента.')}
+              </div>
+            </div>
+            {canActivate ? (
+              <Button type="button" size="sm" onClick={() => onActivateVersion(activationVersionId)} disabled={actionLoading || !activationVersionId}>
+                {activationPrimaryLabel || 'Активировать версию'}
+              </Button>
+            ) : activationGate.next_step === 'connect_required_integrations' ? (
+              <Button type="button" size="sm" variant="outline" onClick={onOpenConnections}>
+                {activationPrimaryLabel || 'Открыть подключения'}
+              </Button>
+            ) : activationGate.next_step === 'fix_compiled_workflow' ? (
+              <Button type="button" size="sm" variant="outline" onClick={onOpenLogic}>
+                {activationPrimaryLabel || 'Открыть логику'}
+              </Button>
+            ) : activationGate.next_step === 'create_version' ? (
+              <Button type="button" size="sm" variant="outline" onClick={onOpenLogic}>
+                {activationPrimaryLabel || 'Создать версию'}
+              </Button>
+            ) : null}
+          </div>
+          {!canActivate && activationGate.connection_plan ? (
+            <AgentConnectionPlanPanel connectionPlan={activationGate.connection_plan} compact />
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.55fr)]">
         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
@@ -3653,9 +4340,14 @@ const AgentOverviewPanel = ({
           <div className="text-sm font-semibold text-slate-950">Готовность</div>
           <div className="mt-3 space-y-2 text-sm">
             <ReadinessRow label="Логика" ready={Boolean(latestVersionNumber)} readyText={`v${latestVersionNumber || 1}`} blockedText="нужна версия" />
-            <ReadinessRow label="Данные" ready={hasSources} readyText={`${blueprint.sources_count || 0} источн.`} blockedText="добавить" />
+            <ReadinessRow label="Validation" ready={!compiledKnown || compiledValid} readyText={compiledKnown ? 'пройден' : 'ожидает'} blockedText="исправить" />
+            <ReadinessRow label="Подключения" ready={connectorsReady} readyText={requiredBindings ? 'готовы' : 'не нужны'} blockedText={`нужно ${missingBindings}`} />
             <ReadinessRow label="Ручной контроль" ready blockedText="" readyText="включён" />
             <ReadinessRow label="Результаты" ready={Boolean(review?.has_run || blueprint.last_run_id)} readyText="есть запуск" blockedText="нет запуска" />
+          </div>
+          <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+            {voiceName ? `Голос: ${voiceName}. ` : ''}
+            Запусков загружено: {metrics?.runs?.loaded || 0}. Токены: {settledTokens}. Стоимость: {totalCost ? totalCost.toFixed(2) : '0'}.
           </div>
         </div>
       </div>
@@ -3688,6 +4380,7 @@ const AgentConnectionsPanel = ({
   agentIntegrationCatalog,
   agentExternalAuthOptions,
   agentBindingStatus,
+  agentConnectionPlan,
   sheetSpreadsheetId,
   sheetName,
   sheetAuthRef,
@@ -3707,14 +4400,17 @@ const AgentConnectionsPanel = ({
   onProcessPreviewMessageChange,
   onSaveSheetIntegration,
   onSaveTelegramIntegration,
+  onAttachExistingIntegration,
   onSaveCustomProcess,
   onRunCustomProcessPreview,
+  onPreviewRun,
 }: {
   agentIntegrations: AgentIntegration[];
   availableAgentIntegrations: AgentIntegration[];
   agentIntegrationCatalog: AgentIntegrationCatalogItem[];
   agentExternalAuthOptions: AgentExternalAuthOption[];
   agentBindingStatus: AgentIntegrationBindingStatus[];
+  agentConnectionPlan: AgentConnectionPlan | null;
   sheetSpreadsheetId: string;
   sheetName: string;
   sheetAuthRef: string;
@@ -3734,16 +4430,34 @@ const AgentConnectionsPanel = ({
   onProcessPreviewMessageChange: (value: string) => void;
   onSaveSheetIntegration: () => void;
   onSaveTelegramIntegration: () => void;
+  onAttachExistingIntegration: (integration: AgentIntegration) => void;
   onSaveCustomProcess: () => void;
   onRunCustomProcessPreview: () => void;
+  onPreviewRun: () => void;
 }) => (
   <div className="space-y-4">
+    {postCreateHandoff?.status === 'needs_connections' ? (
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
+        <div className="font-semibold">{postCreateHandoff.title || 'Остались подключения'}</div>
+        <div className="mt-1">{postCreateHandoff.description || 'Заполните обязательные подключения, затем проверьте агента на примере.'}</div>
+        {postCreateHandoff.missing_bindings?.length ? (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {postCreateHandoff.missing_bindings.slice(0, 4).map((binding) => (
+              <span key={binding.key || binding.provider} className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-amber-900 ring-1 ring-amber-200">
+                {connectorLabel(binding.provider)}{binding.missing_config?.length ? `: ${binding.missing_config.join(', ')}` : ''}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    ) : null}
     <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
       <div className="text-sm font-semibold text-slate-950">Подключения агента</div>
       <div className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
         Здесь настраиваются входящие каналы, внешняя запись и безопасный процесс доставки. Логика агента остаётся во вкладке “Логика”.
       </div>
     </div>
+    <AgentConnectionPlanPanel connectionPlan={agentConnectionPlan} />
     <AgentIntegrationsPanel
       integrations={agentIntegrations}
       availableIntegrations={availableAgentIntegrations}
@@ -3767,13 +4481,92 @@ const AgentConnectionsPanel = ({
       onTelegramDailyCapChange={onTelegramDailyCapChange}
       onProcessRowValuesChange={onProcessRowValuesChange}
       onProcessPreviewMessageChange={onProcessPreviewMessageChange}
-      onSaveSheetIntegration={onSaveSheetIntegration}
-      onSaveTelegramIntegration={onSaveTelegramIntegration}
+        onSaveSheetIntegration={onSaveSheetIntegration}
+        onSaveTelegramIntegration={onSaveTelegramIntegration}
+      onAttachExistingIntegration={onAttachExistingIntegration}
       onSaveCustomProcess={onSaveCustomProcess}
       onRunCustomProcessPreview={onRunCustomProcessPreview}
+      onPreviewRun={onPreviewRun}
     />
   </div>
 );
+
+const AgentConnectionPlanPanel = ({ connectionPlan, compact = false }: { connectionPlan: AgentConnectionPlan | null; compact?: boolean }) => {
+  const items = Array.isArray(connectionPlan?.items) ? connectionPlan.items : [];
+  if (!items.length) {
+    return null;
+  }
+  const missingCount = typeof connectionPlan?.missing_count === 'number'
+    ? connectionPlan.missing_count
+    : items.filter((item) => !['ready', 'native_ready'].includes(item.action || '')).length;
+  return (
+    <div className={cn(compact ? 'mt-3 rounded-xl border px-3 py-3' : 'rounded-2xl border px-4 py-4', missingCount ? 'border-amber-200 bg-amber-50/70' : 'border-emerald-200 bg-emerald-50/70')}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-slate-950">План подключений</div>
+          <div className="mt-1 text-xs leading-5 text-slate-600">
+            {missingCount ? 'LocalOS понял, какие доступы нужны агенту. Завершите пункты ниже перед активацией.' : 'Все обязательные доступы готовы для preflight и активации.'}
+          </div>
+        </div>
+        <span className={cn('rounded-full px-2.5 py-1 text-xs font-medium ring-1', missingCount ? 'bg-white text-amber-800 ring-amber-200' : 'bg-white text-emerald-800 ring-emerald-200')}>
+          {missingCount ? `${missingCount} действий` : 'готово'}
+        </span>
+      </div>
+      <div className={cn('mt-3 grid gap-2', compact ? 'sm:grid-cols-1' : 'lg:grid-cols-2')}>
+        {(compact ? items.slice(0, 3) : items).map((item) => (
+          <div key={item.key || item.provider || item.title} className="rounded-xl bg-white px-3 py-3 text-sm ring-1 ring-slate-200">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-semibold text-slate-950">{item.title || connectorLabel(item.provider)}</div>
+                <div className="mt-1 text-xs leading-5 text-slate-500">
+                  {humanizeMeta(item.capability || item.trigger || item.direction || item.provider || 'binding')}
+                </div>
+              </div>
+              <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ring-1', connectionActionTone(item.action || ''))}>
+                {item.primary_label || humanizeMeta(item.action || 'проверить')}
+              </span>
+            </div>
+            <div className="mt-2 text-xs leading-5 text-slate-600">{item.explanation || bindingActionHint({ key: item.key || '', provider: item.provider || '', status: item.binding_status || '' })}</div>
+            {item.existing_integrations?.length ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {item.existing_integrations.slice(0, 3).map((integration) => (
+                  <span key={integration.id || integration.display_name} className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-700 ring-1 ring-sky-100">
+                    {integration.display_name || connectorLabel(integration.provider)}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            {item.provider_paths?.length ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {item.provider_paths.slice(0, 4).map((path) => (
+                  <span key={`${path.provider}-${path.status}`} className="rounded-full bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600 ring-1 ring-slate-200">
+                    {path.label || path.provider}: {humanizeMeta(path.status || 'unknown')}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      {compact && items.length > 3 ? (
+        <div className="mt-2 text-[11px] leading-4 text-slate-500">Ещё {items.length - 3} подключений будут видны после создания draft.</div>
+      ) : null}
+    </div>
+  );
+};
+
+const connectionActionTone = (action: string) => {
+  if (action === 'ready' || action === 'native_ready') {
+    return 'bg-emerald-50 text-emerald-700 ring-emerald-200';
+  }
+  if (action === 'choose_existing') {
+    return 'bg-sky-50 text-sky-700 ring-sky-200';
+  }
+  if (action === 'planned_provider') {
+    return 'bg-slate-50 text-slate-600 ring-slate-200';
+  }
+  return 'bg-amber-50 text-amber-700 ring-amber-200';
+};
 
 const AgentAdvancedPanel = ({
   activeRun,
@@ -4242,8 +5035,10 @@ const AgentIntegrationsPanel = ({
   onProcessPreviewMessageChange,
   onSaveSheetIntegration,
   onSaveTelegramIntegration,
+  onAttachExistingIntegration,
   onSaveCustomProcess,
   onRunCustomProcessPreview,
+  onPreviewRun,
 }: {
   integrations: AgentIntegration[];
   availableIntegrations: AgentIntegration[];
@@ -4269,11 +5064,22 @@ const AgentIntegrationsPanel = ({
   onProcessPreviewMessageChange: (value: string) => void;
   onSaveSheetIntegration: () => void;
   onSaveTelegramIntegration: () => void;
+  onAttachExistingIntegration: (integration: AgentIntegration) => void;
   onSaveCustomProcess: () => void;
   onRunCustomProcessPreview: () => void;
+  onPreviewRun: () => void;
 }) => {
   const sheetIntegration = integrations.find((item) => item.provider === 'google_sheets');
   const telegramIntegration = integrations.find((item) => item.provider === 'telegram');
+  const needsTelegram = bindingStatus.some((binding) => binding.provider === 'telegram');
+  const needsSheetsRead = bindingStatus.some((binding) => binding.provider === 'google_sheets' && binding.capability === 'google_sheets.read_rows');
+  const needsSheetsAppend = bindingStatus.some((binding) => binding.provider === 'google_sheets' && binding.capability === 'sheets.append_row_request');
+  const needsSheets = needsSheetsRead || needsSheetsAppend || bindingStatus.some((binding) => binding.provider === 'google_sheets');
+  const isTelegramToSheetsProcess = needsTelegram && needsSheetsAppend;
+  const sheetsTitle = needsSheetsRead && needsSheetsAppend ? 'Google Sheets read/write' : needsSheetsRead ? 'Google Sheets read' : 'Google Sheets append';
+  const connectedBindings = bindingStatus.filter((binding) => binding.status === 'connected' || binding.status === 'ready').length;
+  const missingBindings = bindingStatus.filter((binding) => binding.status !== 'connected' && binding.status !== 'ready').length;
+  const canPreviewRun = !bindingStatus.length || missingBindings === 0;
   return (
     <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
       <div className="flex items-start justify-between gap-3">
@@ -4281,12 +5087,35 @@ const AgentIntegrationsPanel = ({
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Каналы и действия</div>
           <div className="mt-1 text-xs leading-5 text-slate-500">Что может запускать агента и куда он может записывать результат после подтверждения.</div>
         </div>
-        <span className="shrink-0 text-xs text-slate-400">{integrations.length}/{providerCatalog.length || 2}</span>
+        <span className="shrink-0 text-xs text-slate-400">{bindingStatus.length ? `${connectedBindings}/${bindingStatus.length}` : `${integrations.length}/${providerCatalog.length || 2}`}</span>
+      </div>
+
+      {bindingStatus.length ? (
+        <div className={cn('rounded-lg px-3 py-2 text-xs leading-5 ring-1', missingBindings ? 'bg-amber-50 text-amber-900 ring-amber-200' : 'bg-emerald-50 text-emerald-900 ring-emerald-200')}>
+          {missingBindings ? `Нужно подключить ${missingBindings} ${missingBindings === 1 ? 'доступ' : 'доступа'}, прежде чем активировать агента.` : 'Все обязательные подключения готовы. Можно проверять запуск и активировать версию.'}
+        </div>
+      ) : null}
+
+      <div className={cn('rounded-lg px-3 py-3 ring-1', canPreviewRun ? 'bg-emerald-50 text-emerald-950 ring-emerald-200' : 'bg-slate-50 text-slate-600 ring-slate-200')}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-sm font-semibold">Preflight и preview run</div>
+            <div className="mt-1 text-xs leading-5">
+              {canPreviewRun
+                ? 'Проверим права, лимиты, approvals и выполним тестовый запуск без автономной внешней отправки.'
+                : 'Сначала заполните обязательные подключения. После этого станет доступна проверка на примере.'}
+            </div>
+          </div>
+          <Button type="button" size="sm" onClick={onPreviewRun} disabled={actionLoading || !canPreviewRun}>
+            {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+            Проверить на примере
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-2">
-        <AgentIntegrationStatusItem integration={telegramIntegration} provider="telegram" fallbackTitle="Telegram trigger" />
-        <AgentIntegrationStatusItem integration={sheetIntegration} provider="google_sheets" fallbackTitle="Google Sheets append" />
+        {needsTelegram || !bindingStatus.length ? <AgentIntegrationStatusItem integration={telegramIntegration} provider="telegram" fallbackTitle="Telegram trigger" /> : null}
+        {needsSheets || !bindingStatus.length ? <AgentIntegrationStatusItem integration={sheetIntegration} provider="google_sheets" fallbackTitle={sheetsTitle} /> : null}
       </div>
 
       {bindingStatus.length ? (
@@ -4296,13 +5125,14 @@ const AgentIntegrationsPanel = ({
             <div key={binding.key || binding.provider} className="rounded-lg bg-white px-3 py-2 text-xs ring-1 ring-slate-200">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="font-medium text-slate-900">{humanizeMeta(binding.key || binding.provider)}</div>
+                  <div className="font-medium text-slate-900">{connectorLabel(binding.provider)}</div>
                   <div className="mt-1 text-slate-500">
-                    {humanizeMeta(binding.trigger || binding.capability || binding.direction || binding.provider)}
+                    {humanizeMeta(binding.key || binding.trigger || binding.capability || binding.direction || binding.provider)}
                   </div>
                 </div>
                 <StatusBadge status={binding.status} />
               </div>
+              <div className="mt-1 text-slate-600">{bindingActionHint(binding)}</div>
               {binding.missing_config?.length ? (
                 <div className="mt-1 text-amber-700">Нужно заполнить: {binding.missing_config.join(', ')}</div>
               ) : null}
@@ -4314,6 +5144,7 @@ const AgentIntegrationsPanel = ({
         </div>
       ) : null}
 
+      {isTelegramToSheetsProcess ? (
       <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
         <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
           <Workflow className="h-4 w-4" />
@@ -4343,7 +5174,9 @@ const AgentIntegrationsPanel = ({
           </Button>
         </div>
       </div>
+      ) : null}
 
+      {needsTelegram || !bindingStatus.length ? (
       <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
         <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
           <MessageSquareText className="h-4 w-4" />
@@ -4368,11 +5201,13 @@ const AgentIntegrationsPanel = ({
           Подключить Telegram
         </Button>
       </div>
+      ) : null}
 
+      {needsSheets || !bindingStatus.length ? (
       <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
         <div className="flex items-center gap-2 text-sm font-medium text-slate-950">
           <Database className="h-4 w-4" />
-          Google Sheets
+          {needsSheetsRead && needsSheetsAppend ? 'Google Sheets: чтение и запись' : needsSheetsRead ? 'Google Sheets: чтение строк' : 'Google Sheets: запись строк'}
         </div>
         <input
           className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400"
@@ -4400,7 +5235,7 @@ const AgentIntegrationsPanel = ({
           value={sheetAuthRef}
           onChange={(event) => onSheetAuthRefChange(event.target.value)}
         >
-          <option value="">Доступ подключим позже</option>
+          <option value="">Google-доступ не выбран</option>
           {authOptions.map((option) => (
             <option key={option.id} value={option.id}>
               {option.display_name || humanizeMeta(option.source)} · {option.id.slice(0, 8)}
@@ -4408,15 +5243,21 @@ const AgentIntegrationsPanel = ({
           ))}
         </select>
         <Button type="button" size="sm" onClick={onSaveSheetIntegration} disabled={actionLoading || !sheetSpreadsheetId.trim()}>
-          Подключить таблицу
+          Сохранить таблицу
         </Button>
       </div>
+      ) : null}
 
       {availableIntegrations.length ? (
         <div className="space-y-1">
           <div className="text-xs font-semibold text-slate-700">Уже подключены в бизнесе</div>
           {availableIntegrations.slice(0, 3).map((integration) => (
-            <AgentIntegrationStatusItem key={integration.id} integration={integration} provider={integration.provider} fallbackTitle={integration.display_name || integration.provider_label || integration.provider} />
+            <div key={integration.id} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <AgentIntegrationStatusItem integration={integration} provider={integration.provider} fallbackTitle={integration.display_name || integration.provider_label || integration.provider} />
+              <Button type="button" size="sm" variant="outline" onClick={() => onAttachExistingIntegration(integration)} disabled={actionLoading}>
+                Использовать
+              </Button>
+            </div>
           ))}
         </div>
       ) : null}
@@ -4434,6 +5275,8 @@ const AgentIntegrationStatusItem = ({
   fallbackTitle: string;
 }) => {
   const boundary = integration?.execution_boundary || {};
+  const operation = String(integration?.config?.operation || '');
+  const googleSheetsMode = operation === 'read_rows' ? 'Чтение строк' : operation === 'read_write' ? 'Чтение и запись после подтверждения' : 'Запись после подтверждения';
   const boundaryItems = [
     ...(boundary.triggers || []),
     ...(boundary.capabilities || []),
@@ -4443,7 +5286,7 @@ const AgentIntegrationStatusItem = ({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="truncate text-sm font-medium text-slate-950">{integration?.display_name || integration?.provider_label || fallbackTitle}</div>
-          <div className="mt-1 text-xs text-slate-500">{provider === 'google_sheets' ? 'Запись после подтверждения' : 'Когда запускать и куда отвечать'}</div>
+          <div className="mt-1 text-xs text-slate-500">{provider === 'google_sheets' ? googleSheetsMode : 'Когда запускать и куда отвечать'}</div>
         </div>
         <StatusBadge status={integration?.status || 'draft'} />
       </div>

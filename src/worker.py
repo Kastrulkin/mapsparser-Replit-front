@@ -55,6 +55,7 @@ from core.telegram_network import telegram_urlopen
 from services.operator_apify_settlement import settle_apify_actual_cost
 from services.operator_refresh_recovery import release_failed_refresh_reservation
 from services.operator_refresh_telegram_followup import dispatch_operator_refresh_telegram_followup
+from services.agent_trigger_runtime import dispatch_due_scheduled_agent_blueprints
 
 # Реестр активных Playwright-сессий для human-in-the-loop
 ACTIVE_CAPTCHA_SESSIONS: Dict[str, BrowserSession] = {}
@@ -69,6 +70,7 @@ _LAST_CALLBACK_ALERT_SCAN_AT = 0.0
 _LAST_YOOKASSA_RENEWALS_AT = 0.0
 _LAST_OUTREACH_DISPATCH_AT = 0.0
 _LAST_CARD_AUTOMATION_AT = 0.0
+_LAST_AGENT_SCHEDULE_DISPATCH_AT = 0.0
 
 _EDITORIAL_SERVICE_PATTERNS = (
     "хорошее место",
@@ -1433,6 +1435,49 @@ def _run_card_automation_if_due() -> None:
                 print(f"[CARD_AUTOMATION_DIGEST] failed to send telegram digest to {telegram_id}", flush=True)
     except Exception as e:
         print(f"[CARD_AUTOMATION] error: {e}", flush=True)
+    finally:
+        try:
+            if db:
+                db.close()
+        except Exception:
+            pass
+
+
+def _dispatch_agent_schedules_if_due() -> None:
+    global _LAST_AGENT_SCHEDULE_DISPATCH_AT
+    if not _env_bool("AGENT_SCHEDULE_DISPATCH_ENABLED", False):
+        return
+
+    now = time.time()
+    interval_sec = max(30, int(os.getenv("AGENT_SCHEDULE_DISPATCH_INTERVAL_SEC", "300")))
+    if now - _LAST_AGENT_SCHEDULE_DISPATCH_AT < interval_sec:
+        return
+
+    _LAST_AGENT_SCHEDULE_DISPATCH_AT = now
+    db = None
+    try:
+        db = DatabaseManager()
+        batch_size = max(1, min(int(os.getenv("AGENT_SCHEDULE_DISPATCH_BUSINESS_LIMIT", "50")), 500))
+        result = dispatch_due_scheduled_agent_blueprints(db.conn.cursor(), business_limit=batch_size)
+        db.conn.commit()
+        dispatched_count = int(result.get("dispatched_count") or 0)
+        skipped_count = int(result.get("skipped_count") or 0)
+        if dispatched_count > 0 or skipped_count > 0:
+            print(
+                "[AGENT_SCHEDULE_DISPATCH] "
+                f"checked={int(result.get('checked_businesses') or 0)} "
+                f"dispatched={dispatched_count} skipped={skipped_count}",
+                flush=True,
+            )
+    except Exception:
+        try:
+            if db:
+                db.conn.rollback()
+        except Exception:
+            pass
+        print("[AGENT_SCHEDULE_DISPATCH] error", flush=True)
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
     finally:
         try:
             if db:
@@ -5913,6 +5958,7 @@ if __name__ == "__main__":
         try:
             process_queue()
             _run_card_automation_if_due()
+            _dispatch_agent_schedules_if_due()
             _dispatch_outreach_queue_if_due()
             _dispatch_openclaw_callback_outbox_if_due()
             _check_openclaw_callback_alerts_if_due()

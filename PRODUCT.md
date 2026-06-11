@@ -34,11 +34,50 @@ An agent is a product object, not a technical workflow editor.
 - `Blueprint` is the workflow logic.
 - `Compiled Workflow` is the validated executable plan.
 - `Capability` is a permitted action.
+- `Provider` is the physical connector/executor behind a capability: native LocalOS, Maton.ai, OpenClaw, Composio, or manual handoff.
 - `Run` is one execution.
 - `Approval` is a human gate.
 - `OpenClaw` / `ActionOrchestrator` is the execution boundary.
 
 Communication is a blueprint category, not a separate product entity called "communication agent".
+
+Agents must never bind directly to a provider in user-facing logic. User intent
+compiles to capabilities, and LocalOS resolves the provider behind approval,
+limits, billing, and audit. Existing LocalOS integrations and Maton.ai are
+available provider sources now; Composio is a future provider source for broader
+OAuth/tool coverage.
+
+Reference custom-agent path: "read new payments from Google Sheets and create
+LocalOS finance transactions" compiles to `google_sheets.read_rows` plus
+`finance.transaction.create`. The first capability resolves connector/provider
+access; the second prepares normalized LocalOS Finance proposals. Actual finance
+writes stay behind approval, limits, duplicate checks and audit.
+
+AI may help create or edit an agent, but the product promise is a compiled
+workflow, not a runtime that improvises on every run. GigaChat can extract
+design-time intent and propose sources, destinations, capabilities and required
+connectors. LocalOS must then validate and save deterministic blueprint steps.
+Runtime executes the compiled workflow; runtime LLM calls are allowed only as
+explicit priced/audited steps when the workflow truly needs generation or
+classification.
+
+Compiled workflows pass data through explicit step mappings, not hidden prompt
+memory. For example, a Google Sheets read step can expose
+`orchestrator.result.rows`, and the finance request step maps that value into
+its `rows` payload before policy/orchestrator execution. The saved blueprint is
+the runtime source of truth.
+
+Runs should fail early with a connection preflight when an external source is
+missing. Native LocalOS destinations, such as Finance, are already available
+inside the product boundary and should not be presented as another business
+profile to connect.
+
+Scheduled agents use the same compiled runtime. A `schedule.daily` trigger
+records a scheduler event, runs connection preflight, then starts the saved
+blueprint version through the normal runner. It is not a separate cron script
+that bypasses approvals, audit, limits, billing or recovery. Worker dispatch is
+an explicit opt-in (`AGENT_SCHEDULE_DISPATCH_ENABLED`), so deploying code does
+not silently start customer agents.
 
 ## Mandatory Human Approval
 
@@ -92,4 +131,3 @@ The agents area must make these answers obvious:
 - Where can a superadmin inspect raw technical details?
 
 The first screen should not look like a workflow/debugger.
-

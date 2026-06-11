@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 from core.action_orchestrator import ActionOrchestrator
 from services.agent_domain_request_executors import execute_approved_domain_requests
 from services.agent_blueprint_workspace import build_generic_artifact_payload
+from services.agent_integration_preflight import build_agent_integration_preflight
 
 
 RUNNING_STATUSES = {"running", "waiting_approval"}
@@ -141,6 +142,21 @@ class AgentBlueprintRunner:
         blueprint = self._load_blueprint(str(version.get("blueprint_id") or ""))
         if not blueprint:
             return {"success": False, "error": "blueprint_not_found"}
+        metadata = parse_json_field(blueprint.get("metadata_json"), {})
+        metadata = metadata if isinstance(metadata, dict) else {}
+        preflight = build_agent_integration_preflight(
+            self.cursor,
+            business_id=str(blueprint.get("business_id") or ""),
+            metadata=metadata,
+            input_payload=input_payload or {},
+        )
+        if not preflight.get("ready"):
+            return {
+                "success": False,
+                "error": "agent_integration_preflight_blocked",
+                "code": "AGENT_INTEGRATIONS_REQUIRED",
+                "preflight": preflight,
+            }
 
         run_id = str(uuid.uuid4())
         user_id = str(user_data.get("user_id") or user_data.get("id") or "")
@@ -323,6 +339,10 @@ class AgentBlueprintRunner:
             return self._build_message_drafts_payload(run, base_payload)
         if artifact_type == "outreach_outcomes":
             return self._build_outreach_outcomes_payload(run, base_payload)
+        if artifact_type == "finance_import_preview":
+            return self._build_finance_import_preview_payload(run, base_payload)
+        if artifact_type == "localos_finance_outcome":
+            return self._build_localos_finance_outcome_payload(run, base_payload)
         generic_payload = build_generic_artifact_payload(self.cursor, run, step, base_payload)
         if generic_payload is not None:
             return generic_payload
@@ -628,6 +648,76 @@ class AgentBlueprintRunner:
             "items": rows,
         }
 
+    def _build_finance_import_preview_payload(self, run: Dict[str, Any], base_payload: Dict[str, Any]) -> Dict[str, Any]:
+        source_step = str(base_payload.get("source_step") or "read_google_sheets").strip()
+        source_result = self._step_output_result(str(run.get("id") or ""), source_step)
+        rows = source_result.get("rows") if isinstance(source_result.get("rows"), list) else []
+        count = int(source_result.get("count") or len(rows))
+        return {
+            **base_payload,
+            "status": "ready_for_review" if rows else "waiting_for_source_rows",
+            "source_step": source_step,
+            "rows_read": count,
+            "sample_rows": rows[:5],
+            "normalizer": base_payload.get("normalizer") or "core.finance_imports.normalize_finance_import_rows",
+            "localos_write_performed": False,
+            "side_effects_performed": False,
+        }
+
+    def _build_localos_finance_outcome_payload(self, run: Dict[str, Any], base_payload: Dict[str, Any]) -> Dict[str, Any]:
+        run_id = str(run.get("id") or "")
+        source_step = str(base_payload.get("source_step") or "read_google_sheets").strip()
+        request_step = str(base_payload.get("request_step") or "request_localos_finance").strip()
+        source_result = self._step_output_result(run_id, source_step)
+        request_output = self._latest_completed_step_output(run_id, request_step)
+        orchestrator = request_output.get("orchestrator") if isinstance(request_output.get("orchestrator"), dict) else {}
+        capability_result = orchestrator.get("result") if isinstance(orchestrator.get("result"), dict) else {}
+        approved_executor = request_output.get("approved_executor") if isinstance(request_output.get("approved_executor"), dict) else {}
+        executor_items = approved_executor.get("items") if isinstance(approved_executor.get("items"), list) else []
+        rows = source_result.get("rows") if isinstance(source_result.get("rows"), list) else []
+        proposals = capability_result.get("finance_entry_proposals") if isinstance(capability_result.get("finance_entry_proposals"), list) else []
+        review_rows = capability_result.get("rows_requiring_review") if isinstance(capability_result.get("rows_requiring_review"), list) else []
+        errors = capability_result.get("errors") if isinstance(capability_result.get("errors"), list) else []
+        rows_imported = 0
+        rows_failed = 0
+        rows_skipped = 0
+        for item in executor_items:
+            if not isinstance(item, dict):
+                continue
+            rows_imported += int(item.get("rows_imported") or 0)
+            rows_failed += int(item.get("rows_failed") or 0)
+            rows_skipped += int(item.get("rows_skipped") or 0)
+        localos_write_performed = bool(approved_executor.get("localos_writes_performed")) or rows_imported > 0
+        apply_state = "applied" if localos_write_performed else str(capability_result.get("apply_state") or base_payload.get("apply_state") or "not_applied")
+        return {
+            **base_payload,
+            "status": "applied" if localos_write_performed else str(capability_result.get("status") or base_payload.get("status") or "request_created"),
+            "source_step": source_step,
+            "request_step": request_step,
+            "request_id": capability_result.get("request_id") or "",
+            "action_id": orchestrator.get("action_id") or "",
+            "rows_read": int(source_result.get("count") or len(rows)),
+            "proposal_count": int(capability_result.get("proposal_count") or len(proposals)),
+            "review_count": int(capability_result.get("review_count") or len(review_rows)),
+            "error_count": int(capability_result.get("error_count") or len(errors)),
+            "rows_imported": rows_imported,
+            "rows_skipped": rows_skipped,
+            "rows_failed": rows_failed,
+            "rows_requiring_review": review_rows[:20],
+            "errors": errors[:20],
+            "apply_state": apply_state,
+            "approval_state": capability_result.get("approval_state") or "pending_human",
+            "localos_write_performed": localos_write_performed,
+            "provider_write_performed": False,
+            "side_effects_performed": localos_write_performed,
+            "recovery": {
+                "idempotency": "rerun uses finance duplicate_key checks before inserting rows",
+                "unresolved_rows": "rows with validation errors or review reasons remain pending for human decision",
+                "support_export": f"/api/agent-runs/{run_id}/support-export",
+            },
+            "executor_items": executor_items[:10],
+        }
+
     def _safe_limit(self, value: Any, default: int) -> int:
         try:
             parsed = int(value or default)
@@ -698,11 +788,7 @@ class AgentBlueprintRunner:
             return False
 
         step_id = self._insert_step(run, step, step_index, "running", {}, {})
-        step_payload = step.get("payload") if isinstance(step.get("payload"), dict) else {}
-        run_input = parse_json_field(run.get("input_json"), {})
-        if not isinstance(run_input, dict):
-            run_input = {}
-        payload = {**run_input, **step_payload}
+        payload = self._build_capability_payload(run, step)
         if capability == "outreach.send_batch" and not payload.get("draft_ids"):
             payload["draft_ids"] = self._latest_artifact_item_ids(str(run.get("id") or ""), "message_drafts", "id")
         envelope = {
@@ -794,6 +880,132 @@ class AgentBlueprintRunner:
             ),
         )
         return True
+
+    def _build_capability_payload(self, run: Dict[str, Any], step: Dict[str, Any]) -> Dict[str, Any]:
+        step_payload = step.get("payload") if isinstance(step.get("payload"), dict) else {}
+        run_input = parse_json_field(run.get("input_json"), {})
+        if not isinstance(run_input, dict):
+            run_input = {}
+        payload = {**run_input, **step_payload}
+        self._apply_step_output_references(str(run.get("id") or ""), payload)
+        return payload
+
+    def _apply_step_output_references(self, run_id: str, payload: Dict[str, Any]) -> None:
+        input_mappings = payload.get("input_mappings")
+        if isinstance(input_mappings, list):
+            for mapping in input_mappings:
+                if not isinstance(mapping, dict):
+                    continue
+                source_step = str(mapping.get("from_step") or "").strip()
+                target = str(mapping.get("target") or "").strip()
+                path = str(mapping.get("path") or "").strip()
+                if not source_step or not target:
+                    continue
+                if self._payload_has_target(payload, target):
+                    continue
+                value = self._step_output_value(run_id, source_step, path)
+                if value is not None:
+                    self._set_payload_target(payload, target, value)
+        rows_from_step = str(payload.get("rows_from_step") or "").strip()
+        if rows_from_step and not payload.get("rows"):
+            rows = self._step_output_list(run_id, rows_from_step, "rows")
+            if rows:
+                payload["rows"] = rows
+        payload_from_step = str(payload.get("payload_from_step") or "").strip()
+        if payload_from_step:
+            result = self._step_output_result(run_id, payload_from_step)
+            if result:
+                payload["source_step_payload"] = result
+        payload.pop("input_mappings", None)
+        payload.pop("rows_from_step", None)
+        payload.pop("payload_from_step", None)
+
+    def _payload_has_target(self, payload: Dict[str, Any], target: str) -> bool:
+        current = payload
+        parts = [part for part in target.split(".") if part]
+        if not parts:
+            return False
+        for part in parts[:-1]:
+            next_value = current.get(part)
+            if not isinstance(next_value, dict):
+                return False
+            current = next_value
+        return parts[-1] in current and current.get(parts[-1]) not in (None, "", [])
+
+    def _set_payload_target(self, payload: Dict[str, Any], target: str, value: Any) -> None:
+        current = payload
+        parts = [part for part in target.split(".") if part]
+        if not parts:
+            return
+        for part in parts[:-1]:
+            next_value = current.get(part)
+            if not isinstance(next_value, dict):
+                next_value = {}
+                current[part] = next_value
+            current = next_value
+        current[parts[-1]] = value
+
+    def _step_output_list(self, run_id: str, step_key: str, field: str) -> List[Dict[str, Any]]:
+        result = self._step_output_result(run_id, step_key)
+        items = result.get(field)
+        if not isinstance(items, list):
+            return []
+        rows = []
+        for item in items:
+            if isinstance(item, dict):
+                rows.append(dict(item))
+        return rows
+
+    def _step_output_result(self, run_id: str, step_key: str) -> Dict[str, Any]:
+        output = self._latest_completed_step_output(run_id, step_key)
+        orchestrator = output.get("orchestrator") if isinstance(output.get("orchestrator"), dict) else {}
+        result = orchestrator.get("result") if isinstance(orchestrator.get("result"), dict) else {}
+        if result:
+            return result
+        direct_result = output.get("result") if isinstance(output.get("result"), dict) else {}
+        if direct_result:
+            return direct_result
+        return output
+
+    def _step_output_value(self, run_id: str, step_key: str, path: str) -> Any:
+        output = self._latest_completed_step_output(run_id, step_key)
+        if not output:
+            return None
+        if not path:
+            return self._step_output_result(run_id, step_key)
+        current: Any = output
+        for part in [item for item in path.split(".") if item]:
+            if isinstance(current, dict):
+                current = current.get(part)
+                continue
+            if isinstance(current, list):
+                try:
+                    current = current[int(part)]
+                    continue
+                except Exception:
+                    return None
+            return None
+        return current
+
+    def _latest_completed_step_output(self, run_id: str, step_key: str) -> Dict[str, Any]:
+        self.cursor.execute(
+            """
+            SELECT output_json
+            FROM agent_run_steps
+            WHERE run_id = %s
+              AND step_key = %s
+              AND status = 'completed'
+            ORDER BY step_index DESC
+            LIMIT 1
+            """,
+            (run_id, step_key),
+        )
+        row = self.cursor.fetchone()
+        if not row:
+            return {}
+        value = row.get("output_json") if isinstance(row, dict) else row[0]
+        parsed = parse_json_field(value, {})
+        return parsed if isinstance(parsed, dict) else {}
 
     def _insert_step(
         self,
@@ -988,6 +1200,7 @@ class AgentBlueprintRunner:
         billing_ledger = self._build_billing_ledger(action_observations)
         delivery_status = self._build_delivery_status(artifacts, action_observations)
         domain_requests = self._load_domain_request_observability(run, steps, action_ids)
+        integration_preflight = self._build_run_integration_preflight(run)
         recovery_actions = self._build_recovery_actions(run, step_errors + action_errors, delivery_status, action_ids)
 
         return {
@@ -1036,6 +1249,7 @@ class AgentBlueprintRunner:
                 ),
                 "items": domain_requests,
             },
+            "integration_preflight": integration_preflight,
             "delivery_status": delivery_status,
             "cost_tokens": cost_tokens,
             "billing_ledger": billing_ledger,
@@ -1047,6 +1261,17 @@ class AgentBlueprintRunner:
                 "source": "agent_run_detail",
             },
         }
+
+    def _build_run_integration_preflight(self, run: Dict[str, Any]) -> Dict[str, Any]:
+        blueprint = self._load_blueprint(str(run.get("blueprint_id") or ""))
+        metadata = parse_json_field((blueprint or {}).get("metadata_json"), {})
+        metadata = metadata if isinstance(metadata, dict) else {}
+        return build_agent_integration_preflight(
+            self.cursor,
+            business_id=str(run.get("business_id") or ""),
+            metadata=metadata,
+            input_payload=self._run_input(run),
+        )
 
     def _load_domain_request_observability(
         self,
@@ -1063,6 +1288,7 @@ class AgentBlueprintRunner:
         items.extend(self._load_communication_requests(business_id, refs))
         items.extend(self._load_review_publish_requests(business_id, refs))
         items.extend(self._load_service_optimization_requests(business_id, refs))
+        items.extend(self._load_finance_import_requests(business_id, refs))
         return items[:50]
 
     def _extract_domain_request_refs(self, steps: List[Dict[str, Any]], action_ids: List[str]) -> Dict[str, List[str]]:
@@ -1071,6 +1297,7 @@ class AgentBlueprintRunner:
             "request_ids": [],
             "draft_ids": [],
             "review_ids": [],
+            "batch_ids": [],
         }
         for step in steps:
             output = step.get("output_json") if isinstance(step.get("output_json"), dict) else {}
@@ -1081,7 +1308,13 @@ class AgentBlueprintRunner:
                 "draft_ids": [output.get("draft_id"), nested_result.get("draft_id")],
                 "review_ids": [output.get("review_id"), nested_result.get("review_id")],
                 "action_ids": [output.get("action_id"), orchestrator.get("action_id"), nested_result.get("action_id")],
+                "batch_ids": [],
             }
+            approved_executor = output.get("approved_executor") if isinstance(output.get("approved_executor"), dict) else {}
+            executor_items = approved_executor.get("items") if isinstance(approved_executor.get("items"), list) else []
+            for item in executor_items:
+                if isinstance(item, dict):
+                    candidates["batch_ids"].append(item.get("batch_id"))
             for key, values in candidates.items():
                 for value in values:
                     text = str(value or "").strip()
@@ -1143,6 +1376,61 @@ class AgentBlueprintRunner:
                     "error": row.get("error_text"),
                     "provider_write_performed": bool(row.get("provider_write_performed")),
                     "created_at": row.get("created_at"),
+                }
+            )
+        return result
+
+    def _load_finance_import_requests(self, business_id: str, refs: Dict[str, List[str]]) -> List[Dict[str, Any]]:
+        rows = self._select_domain_request_rows(
+            "finance_import_batches",
+            """
+            SELECT id, business_id, source_type, status, file_name, file_hash, rows_total,
+                   rows_imported, rows_skipped, rows_failed, mapping_json, error_log,
+                   created_at, completed_at
+            FROM finance_import_batches
+            WHERE business_id = %s AND (
+                id = ANY(%s) OR file_hash = ANY(%s)
+            )
+            ORDER BY created_at DESC
+            LIMIT 50
+            """,
+            (business_id, refs.get("batch_ids") or [], (refs.get("request_ids") or []) + (refs.get("action_ids") or [])),
+            bool(refs.get("batch_ids") or refs.get("request_ids") or refs.get("action_ids")),
+        )
+        result = []
+        for row in rows:
+            imported = int(row.get("rows_imported") or 0)
+            skipped = int(row.get("rows_skipped") or 0)
+            failed = int(row.get("rows_failed") or 0)
+            total = int(row.get("rows_total") or 0)
+            status = str(row.get("status") or "").strip()
+            if status == "completed":
+                waiting_reason = "Approved finance import was applied to LocalOS Finance."
+            elif status == "completed_with_errors":
+                waiting_reason = "Approved finance import was partially applied; review failed rows."
+            else:
+                waiting_reason = "Finance import is waiting for approved apply completion."
+            result.append(
+                {
+                    "kind": "finance_transaction_request",
+                    "id": row.get("file_hash") or row.get("id"),
+                    "batch_id": row.get("id"),
+                    "title": "Finance transaction import",
+                    "summary": f"{imported}/{total} finance rows imported · {skipped} skipped · {failed} failed",
+                    "status": status or row.get("status"),
+                    "approval_state": "approved" if status.startswith("completed") else "pending_human",
+                    "apply_state": "applied" if imported else "not_applied",
+                    "why_waiting": waiting_reason,
+                    "rows_total": total,
+                    "rows_imported": imported,
+                    "rows_skipped": skipped,
+                    "rows_failed": failed,
+                    "mapping": parse_json_field(row.get("mapping_json"), {}),
+                    "errors": parse_json_field(row.get("error_log"), []),
+                    "localos_write_performed": imported > 0,
+                    "provider_write_performed": False,
+                    "created_at": row.get("created_at"),
+                    "completed_at": row.get("completed_at"),
                 }
             )
         return result

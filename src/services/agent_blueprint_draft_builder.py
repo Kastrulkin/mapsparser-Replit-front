@@ -3,6 +3,9 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from services.agent_blueprint_runner import default_supervised_outreach_version_payload
+from services.agent_compiled_artifact import build_compiled_artifact_candidate
+from services.agent_compiler_llm import infer_agent_workflow_intent
+from services.agent_openclaw_workflow_refs import annotate_steps_with_openclaw_action_refs
 from services.communication_agent_templates import (
     get_communication_agent_template,
     infer_communication_agent_template_key,
@@ -21,7 +24,7 @@ def _contains_any(text: str, words: List[str]) -> bool:
 
 def infer_blueprint_category(description: str) -> str:
     text = description.lower()
-    if _looks_like_integration_workflow(text):
+    if _infer_integration_intent(text):
         return "custom"
     if _contains_any(
         text,
@@ -58,29 +61,85 @@ def infer_blueprint_category(description: str) -> str:
     return "custom"
 
 
-def build_agent_blueprint_draft(description: str, preferred_category: str = "") -> Dict[str, Any]:
-    return compile_agent_blueprint(description, preferred_category)
+def build_agent_blueprint_draft(
+    description: str,
+    preferred_category: str = "",
+    *,
+    use_ai: bool = False,
+    business_id: str = "",
+    user_id: str = "",
+    planner_context: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    return compile_agent_blueprint(
+        description,
+        preferred_category,
+        use_ai=use_ai,
+        business_id=business_id,
+        user_id=user_id,
+        planner_context=planner_context,
+    )
 
 
 def build_communication_agent_showcase_blueprints() -> List[Dict[str, Any]]:
     return [_communications_compilation(str(template["goal"] or ""), str(template["key"] or "")) for template in list_communication_agent_templates()]
 
 
-def compile_agent_blueprint(description: str, preferred_category: str = "") -> Dict[str, Any]:
+def compile_agent_blueprint(
+    description: str,
+    preferred_category: str = "",
+    *,
+    use_ai: bool = False,
+    business_id: str = "",
+    user_id: str = "",
+    planner_context: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
     request_text = _normalized_text(description)
     category = _normalized_category(preferred_category) or infer_blueprint_category(request_text)
     if category == "communications":
         return _communications_compilation(request_text)
-    if _looks_like_integration_workflow(request_text):
-        return _custom_integration_compilation(request_text)
+    ai_result = {}
+    if use_ai:
+        ai_result = infer_agent_workflow_intent(
+            request_text,
+            business_id=business_id,
+            user_id=user_id,
+            planner_context=planner_context,
+        )
+        ai_intent = _intent_from_llm_result(ai_result)
+        if ai_intent:
+            draft = _source_destination_compilation(request_text, ai_intent)
+            metadata = draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}
+            metadata["compiler_source"] = "gigachat_intent_extractor"
+            metadata["llm_intent"] = {
+                "status": ai_result.get("status"),
+                "source": ai_result.get("source"),
+                "intent": (ai_result.get("intent") if isinstance(ai_result.get("intent"), dict) else {}),
+            }
+            draft["metadata"] = metadata
+            return draft
+    integration_intent = _infer_integration_intent(request_text)
+    if integration_intent:
+        draft = _source_destination_compilation(request_text, integration_intent)
+        if ai_result:
+            metadata = draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}
+            metadata["compiler_source"] = "deterministic_fallback"
+            metadata["llm_intent"] = {
+                "status": ai_result.get("status"),
+                "source": ai_result.get("source"),
+                "error": ai_result.get("error"),
+            }
+            draft["metadata"] = metadata
+        return draft
     if category == "outreach":
         version_payload = default_supervised_outreach_version_payload()
         version_payload["goal"] = request_text or version_payload["goal"]
+        metadata = _metadata(request_text, category, ["prospectingleads", "business_profile"])
+        _attach_compiled_metadata(metadata, version_payload, "compiled_outreach_workflow_v1", "shortlist")
         return {
             "name": _draft_name(request_text, "Агент поиска клиентов"),
             "category": category,
             "description": request_text,
-            "metadata": _metadata(request_text, category, ["prospectingleads", "business_profile"]),
+            "metadata": metadata,
             "version_payload": version_payload,
             "summary": _summary(category, ["prospectingleads", "business_profile"], version_payload["steps"]),
         }
@@ -111,11 +170,13 @@ def compile_agent_blueprint(description: str, preferred_category: str = "") -> D
             },
         },
     }
+    metadata = _metadata(request_text, category, sources)
+    _attach_compiled_metadata(metadata, version_payload, f"compiled_{category}_workflow_v1", "final_output")
     return {
         "name": _draft_name(request_text, _default_name_for_category(category)),
         "category": category,
         "description": request_text,
-        "metadata": _metadata(request_text, category, sources),
+        "metadata": metadata,
         "version_payload": version_payload,
         "summary": _summary(category, sources, version_payload["steps"]),
     }
@@ -203,12 +264,507 @@ def _metadata(description: str, category: str, sources: List[str]) -> Dict[str, 
     }
 
 
-def _looks_like_integration_workflow(text: str) -> bool:
+def _attach_compiled_metadata(metadata: Dict[str, Any], version_payload: Dict[str, Any], schema: str, approval_boundary: str) -> None:
+    metadata["compiled_process"] = {
+        "schema": schema,
+        "trigger": str(version_payload.get("trigger") or "manual.run"),
+        "runtime_truth": "agent_blueprint_versions.steps_json",
+        "approval_boundary": approval_boundary,
+    }
+    metadata["compiler_contract"] = {
+        "llm_usage": "design_time_only",
+        "runtime_truth": "agent_blueprint_versions.steps_json",
+        "runtime_llm_required": False,
+        "runtime_executes_compiled_steps": True,
+    }
+    metadata["compiled_artifact_candidate"] = build_compiled_artifact_candidate(version_payload, metadata)
+    metadata["compiled_validation"] = metadata["compiled_artifact_candidate"]["validation"]
+
+
+SOURCE_SPECS: List[Dict[str, Any]] = [
+    {
+        "key": "telegram",
+        "keywords": ["telegram", "телеграм", "бот", "сообщени", "webhook"],
+        "binding_key": "telegram_trigger",
+        "provider": "telegram",
+        "direction": "trigger",
+        "trigger": "telegram.message.received",
+        "default_capability": "",
+        "default_config": {"bot_mode": "business_bot"},
+        "required_config": ["bot_mode"],
+    },
+    {
+        "key": "google_sheets",
+        "keywords": ["google sheets", "google таблиц", "таблиц", "sheet", "sheets", "spreadsheet", "xlsx", "csv"],
+        "binding_key": "google_sheets_read",
+        "provider": "google_sheets",
+        "direction": "external_read",
+        "trigger": "",
+        "default_capability": "google_sheets.read_rows",
+        "default_config": {"sheet_name": "Sheet1"},
+        "required_config": ["spreadsheet_id", "sheet_name"],
+    },
+]
+
+
+DESTINATION_SPECS: List[Dict[str, Any]] = [
+    {
+        "key": "localos_finance",
+        "keywords": [
+            "финанс",
+            "оплат",
+            "платеж",
+            "платёж",
+            "транзакц",
+            "доход",
+            "расход",
+            "выручк",
+            "finance",
+            "payment",
+            "transaction",
+        ],
+        "binding_key": "localos_finance",
+        "provider": "localos_finance",
+        "direction": "localos_write_request",
+        "capability": "finance.transaction.create",
+        "approval_type": "finance_transaction_import",
+        "default_config": {"transaction_type": "auto_detect"},
+        "required_config": ["transaction_type"],
+        "default_limits": {"daily_transaction_cap": 100},
+    },
+    {
+        "key": "google_sheets",
+        "keywords": ["google sheets", "google таблиц", "таблиц", "sheet", "sheets", "spreadsheet"],
+        "binding_key": "google_sheets_append",
+        "provider": "google_sheets",
+        "direction": "external_write",
+        "capability": "sheets.append_row_request",
+        "approval_type": "sheet_update",
+        "default_config": {"sheet_name": "Leads"},
+        "required_config": ["spreadsheet_id", "sheet_name"],
+        "default_limits": {"daily_append_cap": 50},
+    },
+    {
+        "key": "telegram",
+        "keywords": ["telegram", "телеграм", "пост", "канал", "публикац", "опублику", "сообщение"],
+        "binding_key": "telegram_delivery",
+        "provider": "telegram",
+        "direction": "external_publish_request",
+        "capability": "communications.draft",
+        "approval_type": "telegram_post_approval",
+        "default_config": {"bot_mode": "business_bot"},
+        "required_config": ["bot_mode"],
+        "default_limits": {"daily_post_cap": 10},
+    },
+]
+
+
+def _matching_spec(text: str, specs: List[Dict[str, Any]]) -> Dict[str, Any]:
     lowered = text.lower()
-    trigger_words = ["telegram", "телеграм", "бот", "сообщени", "webhook"]
-    target_words = ["таблиц", "sheet", "sheets", "spreadsheet", "google sheets", "google таблиц"]
-    process_words = ["связ", "процесс", "workflow", "автомат", "редакт", "добав", "строк", "append"]
-    return _contains_any(lowered, trigger_words) and _contains_any(lowered, target_words) and _contains_any(lowered, process_words)
+    for spec in specs:
+        if _contains_any(lowered, list(spec.get("keywords") or [])):
+            return spec
+    return {}
+
+
+def _spec_by_key(key: str, specs: List[Dict[str, Any]]) -> Dict[str, Any]:
+    clean = str(key or "").strip()
+    for spec in specs:
+        if spec.get("key") == clean:
+            return spec
+    return {}
+
+
+def _intent_from_llm_result(ai_result: Dict[str, Any]) -> Dict[str, Any]:
+    intent = ai_result.get("intent") if isinstance(ai_result.get("intent"), dict) else {}
+    if not intent:
+        return {}
+    source = _spec_by_key(str(intent.get("source") or ""), SOURCE_SPECS)
+    destination = _spec_by_key(str(intent.get("destination") or ""), DESTINATION_SPECS)
+    if not source or not destination:
+        return {}
+    source = dict(source)
+    destination = dict(destination)
+    read_capability = str(intent.get("read_capability") or "").strip()
+    write_capability = str(intent.get("write_capability") or "").strip()
+    if read_capability:
+        source["default_capability"] = read_capability
+    if write_capability:
+        destination["capability"] = write_capability
+    trigger = str(intent.get("trigger") or "manual.run")
+    schedule = {"time": "19:00", "timezone": "business_timezone"} if trigger == "schedule.daily" else {}
+    return {
+        "source": source,
+        "destination": destination,
+        "trigger": trigger,
+        "schedule": schedule,
+        "llm_intent": intent,
+    }
+
+
+def _infer_integration_intent(description: str) -> Dict[str, Any]:
+    lowered = description.lower()
+    if (
+        _contains_any(lowered, ["google sheets", "google таблиц", "таблиц", "sheet", "sheets", "spreadsheet"])
+        and _contains_any(lowered, ["telegram", "телеграм"])
+        and _contains_any(lowered, ["пост", "канал", "опублику", "публикац"])
+    ):
+        source = _spec_by_key("google_sheets", SOURCE_SPECS)
+        destination = _spec_by_key("telegram", DESTINATION_SPECS)
+        trigger = "manual.run"
+        schedule = {}
+        if _contains_any(lowered, ["каждый", "ежеднев", "вечер", "утро", "день", "предыдущ", "вчера", "schedule", "daily"]):
+            trigger = "schedule.daily"
+            schedule = {"time": "10:00", "timezone": "business_timezone"}
+        return {
+            "source": source,
+            "destination": destination,
+            "trigger": trigger,
+            "schedule": schedule,
+            "compiled_template_key": "google_sheets_to_telegram_post",
+        }
+    source = _matching_spec(lowered, SOURCE_SPECS)
+    destination = _matching_spec(lowered, DESTINATION_SPECS)
+    if not source or not destination:
+        return {}
+    if source.get("key") == destination.get("key") and source.get("key") != "telegram":
+        return {}
+    action_words = ["связ", "процесс", "workflow", "автомат", "редакт", "добав", "строк", "append", "занос", "созда", "запис", "импорт", "каждый", "ежеднев"]
+    if not _contains_any(lowered, action_words):
+        return {}
+    trigger = str(source.get("trigger") or "")
+    schedule = {}
+    if _contains_any(lowered, ["каждый", "ежеднев", "вечер", "утро", "день", "schedule", "daily"]):
+        trigger = "schedule.daily"
+        schedule = {"time": "19:00", "timezone": "business_timezone"}
+    if not trigger:
+        trigger = "manual.run"
+    return {
+        "source": source,
+        "destination": destination,
+        "trigger": trigger,
+        "schedule": schedule,
+    }
+
+
+def _source_binding(source: Dict[str, Any], trigger: str) -> Dict[str, Any]:
+    binding = {
+        "key": str(source.get("binding_key") or source.get("key") or "source"),
+        "provider": str(source.get("provider") or source.get("key") or ""),
+        "direction": str(source.get("direction") or "external_read"),
+        "required": True,
+        "approval_required": False,
+        "required_config": list(source.get("required_config") or []),
+        "default_config": dict(source.get("default_config") or {}),
+    }
+    capability = str(source.get("default_capability") or "")
+    if capability:
+        binding["capability"] = capability
+    if trigger and trigger != "manual.run":
+        binding["trigger"] = trigger
+    return binding
+
+
+def _destination_binding(destination: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "key": str(destination.get("binding_key") or destination.get("key") or "destination"),
+        "provider": str(destination.get("provider") or destination.get("key") or ""),
+        "direction": str(destination.get("direction") or "request"),
+        "capability": str(destination.get("capability") or ""),
+        "required": True,
+        "approval_required": True,
+        "required_config": list(destination.get("required_config") or []),
+        "default_config": dict(destination.get("default_config") or {}),
+        "default_limits": dict(destination.get("default_limits") or {}),
+    }
+
+
+def _source_step(source: Dict[str, Any], trigger: str) -> Dict[str, Any]:
+    source_key = str(source.get("key") or "source")
+    if source_key == "telegram":
+        return {
+            "key": "capture_telegram_trigger",
+            "type": "artifact",
+            "title": "Принять Telegram-событие",
+            "artifact_type": "integration_trigger_event",
+            "payload": {
+                "trigger": trigger,
+                "integration_binding": str(source.get("binding_key") or "telegram_trigger"),
+                "source": "telegram",
+                "status": "captured",
+                "external_dispatch_performed": False,
+            },
+        }
+    return {
+        "key": f"read_{source_key}",
+        "type": "capability",
+        "title": "Прочитать данные источника",
+        "capability": str(source.get("default_capability") or ""),
+        "requires_approval": False,
+        "payload": {
+            "integration_binding": str(source.get("binding_key") or source_key),
+            "limit": 100,
+            "provider_read_performed": False,
+        },
+        "output_contract": {
+            "rows": "orchestrator.result.rows",
+            "count": "orchestrator.result.count",
+            "source": "orchestrator.result.source",
+        },
+    }
+
+
+def _transform_step(source: Dict[str, Any], destination: Dict[str, Any]) -> Dict[str, Any]:
+    if destination.get("key") == "localos_finance":
+        return {
+            "key": "normalize_finance_rows",
+            "type": "artifact",
+            "title": "Нормализовать финансовые строки",
+            "artifact_type": "finance_import_preview",
+            "payload": {
+                "normalizer": "core.finance_imports.normalize_finance_import_rows",
+                "record_type": "entry",
+                "duplicate_key_required": True,
+                "source_step": f"read_{source.get('key') or 'source'}",
+                "localos_write_performed": False,
+            },
+        }
+    if source.get("key") == "telegram" and destination.get("key") == "google_sheets":
+        return {
+            "key": "prepare_sheet_row",
+            "type": "artifact",
+            "title": "Подготовить строку таблицы",
+            "artifact_type": "sheet_row_draft",
+            "payload": {
+                "status": "draft",
+                "operation": "append_row",
+                "integration_binding": str(destination.get("binding_key") or "google_sheets_append"),
+                "columns": ["received_at", "telegram_username", "message_text"],
+                "row_values": ["{{received_at}}", "{{telegram_username}}", "{{message_text}}"],
+                "provider_write_performed": False,
+            },
+        }
+    if source.get("key") == "google_sheets" and destination.get("key") == "telegram":
+        return {
+            "key": "prepare_telegram_post",
+            "type": "artifact",
+            "title": "Подготовить пост для Telegram",
+            "artifact_type": "telegram_post_draft",
+            "payload": {
+                "status": "draft",
+                "selection_rule": "choose one order from previous day",
+                "style": "наши пассажиры насладились поездкой из {from} в {to}",
+                "source_step": "read_google_sheets",
+                "external_dispatch_performed": False,
+                "delivery_state": "not_dispatched",
+            },
+        }
+    return {
+        "key": "prepare_destination_payload",
+        "type": "artifact",
+        "title": "Подготовить данные для действия",
+        "artifact_type": "capability_payload_preview",
+        "payload": {
+            "source": str(source.get("key") or "source"),
+            "destination": str(destination.get("key") or "destination"),
+            "side_effects_performed": False,
+        },
+    }
+
+
+def _approval_step(destination: Dict[str, Any]) -> Dict[str, Any]:
+    approval_type = str(destination.get("approval_type") or "external_action")
+    reason = "Действие требует подтверждения перед выполнением."
+    if approval_type == "finance_transaction_import":
+        reason = "Новые категории, низкая уверенность и ошибки требуют проверки перед записью в финансы."
+    elif approval_type == "sheet_update":
+        reason = "Внешняя запись в Google Sheets требует подтверждения."
+    return {
+        "key": f"approve_{approval_type}",
+        "type": "approval",
+        "title": "Подтвердить действие",
+        "approval_type": approval_type,
+        "payload": {
+            "reason": reason,
+            "side_effects_performed": False,
+        },
+    }
+
+
+def _destination_capability_step(source: Dict[str, Any], destination: Dict[str, Any]) -> Dict[str, Any]:
+    destination_key = str(destination.get("key") or "destination")
+    capability = str(destination.get("capability") or "")
+    payload = {
+        "source": str(source.get("key") or "source"),
+        "integration_binding": str(destination.get("binding_key") or destination_key),
+        "approval_policy": "first_run",
+        "provider_write_performed": False,
+    }
+    if destination_key == "localos_finance":
+        payload["localos_write_performed"] = False
+        payload["daily_transaction_cap"] = int((destination.get("default_limits") or {}).get("daily_transaction_cap") or 100)
+        payload["rows_from_step"] = f"read_{source.get('key') or 'source'}"
+        payload["input_mappings"] = [
+            {
+                "target": "rows",
+                "from_step": f"read_{source.get('key') or 'source'}",
+                "path": "orchestrator.result.rows",
+                "required": True,
+            }
+        ]
+    if destination_key == "google_sheets":
+        payload["operation"] = "append_row"
+        payload["sheet_name"] = "Leads"
+        payload["row_values"] = ["{{received_at}}", "{{telegram_username}}", "{{message_text}}"]
+        payload["daily_append_cap"] = int((destination.get("default_limits") or {}).get("daily_append_cap") or 50)
+    if destination_key == "telegram":
+        payload["message_type"] = "telegram_post_draft"
+        payload["channel"] = "telegram"
+        payload["daily_post_cap"] = int((destination.get("default_limits") or {}).get("daily_post_cap") or 10)
+        payload["rows_from_step"] = f"read_{source.get('key') or 'source'}"
+        payload["input_mappings"] = [
+            {
+                "target": "rows",
+                "from_step": f"read_{source.get('key') or 'source'}",
+                "path": "orchestrator.result.rows",
+                "required": True,
+            }
+        ]
+    return {
+        "key": f"request_{destination_key}",
+        "type": "capability",
+        "title": "Создать заявку на действие",
+        "capability": capability,
+        "requires_approval": True,
+        "required_approval_type": str(destination.get("approval_type") or "external_action"),
+        "payload": payload,
+    }
+
+
+def _outcome_step(source: Dict[str, Any], destination: Dict[str, Any]) -> Dict[str, Any]:
+    destination_key = str(destination.get("key") or "destination")
+    source_step_key = f"read_{source.get('key') or 'source'}"
+    journal = ["source_data", "request", "approval", "outcome"]
+    if destination_key == "localos_finance":
+        journal = ["rows_read", "proposals", "rows_requiring_review", "errors"]
+    if destination_key == "telegram":
+        journal = ["rows_read", "post_draft", "approval", "publish_request"]
+    return {
+        "key": f"record_{destination_key}_outcome",
+        "type": "artifact",
+        "title": "Записать результат",
+        "artifact_type": f"{destination_key}_outcome",
+        "payload": {
+            "status": "request_created",
+            "apply_state": "not_applied",
+            "journal": journal,
+            "source_step": source_step_key if destination_key == "localos_finance" else "",
+            "request_step": f"request_{destination_key}",
+            "side_effects_performed": False,
+        },
+    }
+
+
+def _source_destination_compilation(description: str, intent: Dict[str, Any]) -> Dict[str, Any]:
+    source = intent.get("source") if isinstance(intent.get("source"), dict) else {}
+    destination = intent.get("destination") if isinstance(intent.get("destination"), dict) else {}
+    trigger = str(intent.get("trigger") or "manual.run")
+    schedule = intent.get("schedule") if isinstance(intent.get("schedule"), dict) else {}
+    source_binding = _source_binding(source, trigger)
+    destination_binding = _destination_binding(destination)
+    steps = [
+        _source_step(source, trigger),
+        _transform_step(source, destination),
+        _approval_step(destination),
+        _destination_capability_step(source, destination),
+        _outcome_step(source, destination),
+    ]
+    steps = annotate_steps_with_openclaw_action_refs(steps)
+    read_capability = str(source.get("default_capability") or "")
+    write_capability = str(destination.get("capability") or "")
+    capability_allowlist = [item for item in [read_capability, write_capability] if item]
+    approval_type = str(destination.get("approval_type") or "external_action")
+    sources = [str(source.get("key") or "source"), str(destination.get("key") or "destination"), "business_profile"]
+    limits = {
+        "max_items_per_run": 100,
+        "autonomous_external_write_allowed": False,
+        "autonomous_localos_write_allowed": False,
+    }
+    limits.update(dict(destination.get("default_limits") or {}))
+    version_payload = {
+        "goal": description,
+        "trigger": trigger,
+        "mode": "approved_capability_request",
+        "inputs_schema": {
+            "type": "object",
+            "properties": {
+                "integration_id": {"type": "string"},
+                "spreadsheet_id": {"type": "string"},
+                "sheet_name": {"type": "string"},
+                "rows": {"type": "array"},
+                "request": {"type": "string"},
+            },
+        },
+        "steps": steps,
+        "capability_allowlist": capability_allowlist,
+        "approval_policy": {
+            "required_for": [approval_type, str(destination.get("direction") or "request")],
+            approval_type: "manual_approval_required",
+            "first_run": "manual_approval_required",
+            "ambiguous_data": "manual_approval_required",
+            "mode": "approved_request_only",
+        },
+        "required_integration_bindings": [source_binding, destination_binding],
+        "limits": limits,
+        "output_schema": {
+            "type": "object",
+            "properties": {
+                "source_items": {"type": "array"},
+                "prepared_request": {"type": "object"},
+                "rows_requiring_review": {"type": "array"},
+                "errors": {"type": "array"},
+                "approval_required": {"type": "boolean"},
+            },
+        },
+        "side_effects_performed": False,
+    }
+    if schedule:
+        version_payload["schedule"] = schedule
+    metadata = _metadata(description, "custom", sources)
+    metadata["custom_process"] = {
+        "kind": "source_destination_workflow",
+        "trigger": trigger,
+        "schedule": schedule,
+        "source": read_capability or str(source.get("key") or ""),
+        "target": write_capability,
+        "runtime": "agent_blueprints",
+        "archetype": f"{source.get('key')}_to_{destination.get('key')}",
+        "binding_status": "requires_user_connection",
+    }
+    metadata["compiled_process"] = {
+        "schema": "compiled_source_destination_workflow_v1",
+        "source_binding": str(source_binding.get("key") or ""),
+        "destination_binding": str(destination_binding.get("key") or ""),
+        "runtime_truth": "agent_blueprint_versions.steps_json",
+        "approval_boundary": approval_type,
+    }
+    metadata["compiler_contract"] = {
+        "llm_usage": "design_time_only",
+        "runtime_truth": "agent_blueprint_versions.steps_json",
+        "runtime_llm_required": False,
+        "runtime_executes_compiled_steps": True,
+    }
+    metadata["required_integration_bindings"] = version_payload["required_integration_bindings"]
+    metadata["compiled_artifact_candidate"] = build_compiled_artifact_candidate(version_payload, metadata)
+    metadata["compiled_validation"] = metadata["compiled_artifact_candidate"]["validation"]
+    return {
+        "name": _draft_name(description, "Кастомный рабочий агент"),
+        "category": "custom",
+        "description": description,
+        "metadata": metadata,
+        "version_payload": version_payload,
+        "summary": _summary("custom", sources, steps),
+    }
 
 
 def _custom_integration_compilation(description: str) -> Dict[str, Any]:
@@ -546,6 +1102,7 @@ def _communications_compilation(request_text: str, preferred_template_key: str =
             },
         },
     ]
+    steps = annotate_steps_with_openclaw_action_refs(steps)
     version_payload = {
         "goal": request_text or "Напоминать клиентам о записи и сообщать про пакетное предложение",
         "inputs_schema": {
@@ -608,6 +1165,20 @@ def _communications_compilation(request_text: str, preferred_template_key: str =
     metadata["limits"] = version_payload["limits"]
     metadata["communication_agent_is_blueprint_category"] = True
     metadata["autonomous_send_allowed"] = False
+    metadata["compiled_process"] = {
+        "schema": "compiled_communications_workflow_v1",
+        "trigger": template["trigger"],
+        "runtime_truth": "agent_blueprint_versions.steps_json",
+        "approval_boundary": template["approval_type"],
+    }
+    metadata["compiler_contract"] = {
+        "llm_usage": "design_time_only",
+        "runtime_truth": "agent_blueprint_versions.steps_json",
+        "runtime_llm_required": False,
+        "runtime_executes_compiled_steps": True,
+    }
+    metadata["compiled_artifact_candidate"] = build_compiled_artifact_candidate(version_payload, metadata)
+    metadata["compiled_validation"] = metadata["compiled_artifact_candidate"]["validation"]
     return {
         "name": _draft_name(request_text, str(template["name"] or "Агент коммуникаций")),
         "category": "communications",

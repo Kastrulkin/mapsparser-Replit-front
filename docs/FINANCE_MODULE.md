@@ -23,6 +23,40 @@
 
 Существующие `financialtransactions`, `financialmetrics` и `roidata` остаются для обратной совместимости.
 
+## Agent Input Boundary
+
+LocalOS agents can prepare finance writes through the controlled capability
+`finance.transaction.create`.
+
+In v1 this capability handler does not insert rows into `finance_entries`. It
+accepts rows from a connector/source such as Google Sheets, normalizes them with
+the same `core.finance_imports` logic used by file/CRM imports, and returns:
+
+- normalized finance entry proposals;
+- rows requiring human review;
+- validation errors;
+- duplicate keys;
+- `approval_state=pending_human`;
+- `apply_state=not_applied`.
+
+When a custom agent reads rows in an earlier step, the compiled blueprint must
+wire those rows through `payload.input_mappings` such as
+`from_step=read_google_sheets`, `path=orchestrator.result.rows`,
+`target=rows`. Runtime uses this saved mapping; it does not call an LLM again to
+decide which table data should become finance proposals.
+
+Actual writes to `finance_entries` happen only after approved execution through
+`agent_domain_request_executor_v1`. The executor creates a
+`finance_import_batches` record with `source_type=agent`, applies duplicate-key
+checks, inserts approved rows with `source=agent`, and writes an audit ledger
+event. This keeps custom agents useful without letting an unreviewed external
+table mutate finance truth silently.
+
+The agent run journal must expose finance import facts from step outputs:
+`rows_read`, `proposal_count`, `review_count`, `error_count`, `rows_imported`,
+`apply_state`, and recovery guidance. This makes the workflow reviewable without
+asking an LLM to explain the run after the fact.
+
 ## Профили
 
 На этапе 1 используется два уровня:

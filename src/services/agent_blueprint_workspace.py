@@ -557,6 +557,24 @@ def _artifact_journal_entry(artifact_type: str, payload: Dict[str, Any]) -> Dict
             "details": _outreach_queue_details(payload),
             "payload": payload,
         }
+    if artifact_type == "finance_import_preview":
+        return {
+            "kind": "finance_preview",
+            "title": "Предпросмотр финансового импорта",
+            "status": payload.get("status") or "ready",
+            "summary": _finance_preview_summary(payload),
+            "details": _finance_preview_details(payload),
+            "payload": payload,
+        }
+    if artifact_type == "localos_finance_outcome":
+        return {
+            "kind": "finance_outcome",
+            "title": "Итог записи в финансы",
+            "status": payload.get("status") or "request_created",
+            "summary": _finance_outcome_summary(payload),
+            "details": _finance_outcome_details(payload),
+            "payload": payload,
+        }
     if artifact_type == "agent_input_plan":
         return {
             "kind": "input",
@@ -701,6 +719,50 @@ def _generic_payload_details(payload: Dict[str, Any]) -> List[Dict[str, str]]:
             ("Источник", payload.get("source")),
             ("Элементов", str(payload.get("count")) if payload.get("count") is not None else ""),
             ("Dispatch", payload.get("dispatch_state")),
+        ]
+    )
+
+
+def _finance_preview_summary(payload: Dict[str, Any]) -> str:
+    rows_read = int(payload.get("rows_read") or 0)
+    if rows_read:
+        return f"Агент прочитал {rows_read} строк и подготовил их к нормализации."
+    return "Агент ждёт строки из подключённого источника."
+
+
+def _finance_preview_details(payload: Dict[str, Any]) -> List[Dict[str, str]]:
+    sample_rows = payload.get("sample_rows") if isinstance(payload.get("sample_rows"), list) else []
+    return _non_empty_details(
+        [
+            ("Источник шага", payload.get("source_step")),
+            ("Прочитано строк", str(payload.get("rows_read")) if payload.get("rows_read") is not None else ""),
+            ("Нормализатор", payload.get("normalizer")),
+            ("Примеров строк", str(len(sample_rows)) if sample_rows else ""),
+            ("Запись в LocalOS", "да" if payload.get("localos_write_performed") else "нет"),
+        ]
+    )
+
+
+def _finance_outcome_summary(payload: Dict[str, Any]) -> str:
+    proposals = int(payload.get("proposal_count") or 0)
+    review_count = int(payload.get("review_count") or 0)
+    imported = int(payload.get("rows_imported") or 0)
+    errors = int(payload.get("error_count") or 0)
+    if imported:
+        return f"Записано {imported} финансовых строк; на проверке {review_count}, ошибок {errors}."
+    return f"Подготовлено {proposals} финансовых предложений; на проверке {review_count}, ошибок {errors}."
+
+
+def _finance_outcome_details(payload: Dict[str, Any]) -> List[Dict[str, str]]:
+    return _non_empty_details(
+        [
+            ("Прочитано строк", str(payload.get("rows_read")) if payload.get("rows_read") is not None else ""),
+            ("Предложений", str(payload.get("proposal_count")) if payload.get("proposal_count") is not None else ""),
+            ("Требует проверки", str(payload.get("review_count")) if payload.get("review_count") is not None else ""),
+            ("Ошибок", str(payload.get("error_count")) if payload.get("error_count") is not None else ""),
+            ("Записано", str(payload.get("rows_imported")) if payload.get("rows_imported") is not None else ""),
+            ("Состояние применения", payload.get("apply_state")),
+            ("Запись в LocalOS", "да" if payload.get("localos_write_performed") else "нет"),
         ]
     )
 

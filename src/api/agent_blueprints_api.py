@@ -15,6 +15,7 @@ from services.agent_blueprint_runner import (
 from services.agent_blueprint_orchestrator import build_agent_blueprint_orchestrator
 from services.agent_blueprint_draft_builder import build_agent_blueprint_draft
 from services.agent_builder_billing import charge_agent_creation_credits
+from services.agent_compiled_artifact import validate_compiled_artifact_candidate
 from services.agent_blueprint_workspace import (
     build_agent_version_diff,
     build_blueprint_review,
@@ -34,6 +35,12 @@ from services.agent_product_layer import (
 from services.agent_legacy_migration import apply_legacy_ai_agent_migration, build_legacy_ai_agent_migration_plan
 from services.agent_source_ingestion import build_agent_source_from_upload
 from services.agent_datahub import build_agent_datahub_catalog
+from services.agent_provider_registry import (
+    integration_execution_boundary,
+    integration_provider_catalog,
+)
+from services.agent_integration_preflight import build_agent_integration_preflight
+from services.agent_metrics import build_agent_metrics_summary
 
 
 agent_blueprints_bp = Blueprint("agent_blueprints_api", __name__)
@@ -182,11 +189,17 @@ def _agent_integration_provider_label(provider: str) -> str:
     labels = {
         "google_sheets": "Google Sheets",
         "telegram": "Telegram",
+        "maton": "Maton.ai",
+        "localos_finance": "Финансы LocalOS",
+        "composio": "Composio",
     }
     return labels.get(provider, provider or "integration")
 
 
 def _agent_integration_execution_boundary(provider: str) -> dict:
+    boundary = integration_execution_boundary(provider)
+    if boundary.get("capabilities"):
+        return boundary
     if provider == "google_sheets":
         return {
             "capabilities": ["sheets.append_row_request", "google_sheets.append_row"],
@@ -211,24 +224,138 @@ def _agent_integration_execution_boundary(provider: str) -> dict:
 
 
 def _agent_integration_provider_catalog() -> list[dict]:
-    return [
-        {
-            "provider": "google_sheets",
-            "title": "Google Sheets",
-            "description": "Controlled append/write boundary для compiled workflows: approval -> provider executor -> ledger.",
-            "required_config": ["spreadsheet_id", "sheet_name"],
-            "default_limits": {"daily_append_cap": 50, "frequency_cap_minutes": 0},
-            "status": "available",
-        },
-        {
-            "provider": "telegram",
-            "title": "Telegram",
-            "description": "Trigger boundary для сообщений в бота и supervised delivery через router.",
-            "required_config": ["bot_mode"],
-            "default_limits": {"daily_message_cap": 50, "frequency_cap_minutes": 30},
-            "status": "available",
-        },
-    ]
+    return integration_provider_catalog()
+
+
+def _agent_connection_plan(
+    binding_status: list[dict],
+    attached_integrations: list[dict],
+    available_integrations: list[dict],
+    provider_catalog: list[dict],
+) -> dict:
+    attached_by_provider = _integrations_by_provider(attached_integrations)
+    available_by_provider = _integrations_by_provider(available_integrations)
+    catalog_by_provider = {
+        str(item.get("provider") or "").strip(): item
+        for item in provider_catalog
+        if isinstance(item, dict) and str(item.get("provider") or "").strip()
+    }
+    items = []
+    for binding in binding_status:
+        if not isinstance(binding, dict):
+            continue
+        provider = str(binding.get("provider") or "").strip()
+        catalog_item = catalog_by_provider.get(provider, {})
+        attached = attached_by_provider.get(provider, [])
+        available = available_by_provider.get(provider, [])
+        status = str(binding.get("status") or "").strip()
+        action = _connection_plan_action(binding, attached, available, catalog_item)
+        items.append(
+            {
+                "key": str(binding.get("key") or provider or ""),
+                "provider": provider,
+                "title": str(catalog_item.get("title") or _agent_integration_provider_label(provider)),
+                "capability": str(binding.get("capability") or ""),
+                "trigger": str(binding.get("trigger") or ""),
+                "direction": str(binding.get("direction") or ""),
+                "binding_status": status,
+                "action": action,
+                "primary_label": _connection_plan_label(action),
+                "explanation": _connection_plan_explanation(binding, action),
+                "missing_config": binding.get("missing_config") if isinstance(binding.get("missing_config"), list) else [],
+                "approval_required": bool(binding.get("approval_required", True)),
+                "existing_integrations": [_connection_plan_integration(item) for item in available[:5]],
+                "attached_integrations": [_connection_plan_integration(item) for item in attached[:5]],
+                "provider_paths": _connection_plan_provider_paths(catalog_item),
+            }
+        )
+    missing_count = len([item for item in items if item.get("action") not in {"ready", "native_ready"}])
+    return {
+        "schema": "localos_agent_connection_plan_v1",
+        "status": "ready" if missing_count == 0 else "needs_action",
+        "missing_count": missing_count,
+        "items": items,
+    }
+
+
+def _integrations_by_provider(values: list[dict]) -> dict:
+    result: dict[str, list[dict]] = {}
+    for item in values:
+        if not isinstance(item, dict):
+            continue
+        provider = str(item.get("provider") or "").strip()
+        if not provider:
+            continue
+        result.setdefault(provider, []).append(item)
+    return result
+
+
+def _connection_plan_action(binding: dict, attached: list[dict], available: list[dict], catalog_item: dict) -> str:
+    status = str(binding.get("status") or "").strip()
+    resolution = str(binding.get("resolution") or "").strip()
+    if status in {"connected", "ready"}:
+        return "native_ready" if resolution == "native_localos" else "ready"
+    if available:
+        return "choose_existing"
+    provider_status = str(catalog_item.get("status") or "").strip()
+    if provider_status == "planned":
+        return "planned_provider"
+    if attached:
+        return "complete_config"
+    return "connect_required"
+
+
+def _connection_plan_label(action: str) -> str:
+    labels = {
+        "ready": "Готово",
+        "native_ready": "Готово в LocalOS",
+        "choose_existing": "Выберите существующее подключение",
+        "complete_config": "Заполните недостающие поля",
+        "connect_required": "Подключите сервис",
+        "planned_provider": "Будет доступно позже",
+    }
+    return labels.get(action, "Проверьте подключение")
+
+
+def _connection_plan_explanation(binding: dict, action: str) -> str:
+    provider = str(binding.get("provider") or "сервис").strip()
+    missing_config = binding.get("missing_config") if isinstance(binding.get("missing_config"), list) else []
+    if action in {"ready", "native_ready"}:
+        return "Подключение готово для preflight и активации."
+    if action == "choose_existing":
+        return "У бизнеса уже есть подходящий доступ. Выберите его для этого агента."
+    if action == "complete_config":
+        return f"Доступ найден, но нужно заполнить: {', '.join([str(item) for item in missing_config])}."
+    if action == "planned_provider":
+        return "Этот provider есть в roadmap, но пока недоступен для активации агента."
+    return f"Подключите {provider}, чтобы агент можно было активировать после preflight."
+
+
+def _connection_plan_provider_paths(catalog_item: dict) -> list[dict]:
+    providers = catalog_item.get("providers") if isinstance(catalog_item.get("providers"), list) else []
+    result = []
+    for item in providers:
+        if not isinstance(item, dict):
+            continue
+        provider = str(item.get("provider") or "").strip()
+        if provider:
+            result.append(
+                {
+                    "provider": provider,
+                    "label": str(item.get("label") or provider),
+                    "status": str(item.get("status") or "unknown"),
+                }
+            )
+    return result
+
+
+def _connection_plan_integration(integration: dict) -> dict:
+    return {
+        "id": str(integration.get("id") or ""),
+        "provider": str(integration.get("provider") or ""),
+        "display_name": str(integration.get("display_name") or integration.get("provider_label") or integration.get("provider") or ""),
+        "status": str(integration.get("status") or ""),
+    }
 
 
 def _agent_integration_ids(metadata: dict) -> list[str]:
@@ -254,6 +381,23 @@ def _agent_integration_binding_status(metadata: dict, integrations: list[dict]) 
             continue
         provider = str(item.get("provider") or "").strip()
         integration = by_provider.get(provider)
+        if provider == "localos_finance" and not integration:
+            result.append(
+                {
+                    "key": str(item.get("key") or ""),
+                    "provider": provider,
+                    "direction": str(item.get("direction") or ""),
+                    "required": bool(item.get("required", True)),
+                    "approval_required": bool(item.get("approval_required", True)),
+                    "capability": str(item.get("capability") or ""),
+                    "trigger": str(item.get("trigger") or ""),
+                    "status": "connected",
+                    "integration_id": "native_localos",
+                    "missing_config": [],
+                    "resolution": "native_localos",
+                }
+            )
+            continue
         config = workspace_parse_json_field((integration or {}).get("config_json"), {})
         if not isinstance(config, dict):
             config = {}
@@ -276,6 +420,7 @@ def _agent_integration_binding_status(metadata: dict, integrations: list[dict]) 
                 "status": status,
                 "integration_id": str((integration or {}).get("id") or ""),
                 "missing_config": missing_config,
+                "resolution": "agent_integration" if status == "connected" else "missing_integration",
             }
         )
     return result
@@ -317,7 +462,7 @@ def _load_agent_external_auth_options(cursor, business_id: str) -> list[dict]:
             FROM externalbusinessaccounts
             WHERE business_id = %s
               AND is_active = TRUE
-              AND source IN ('google_business', 'telegram_app')
+              AND source IN ('google_business', 'telegram_app', 'maton')
             ORDER BY updated_at DESC
             LIMIT 50
             """,
@@ -339,10 +484,13 @@ def _load_agent_external_auth_options(cursor, business_id: str) -> list[dict]:
 def _sanitize_agent_integration_config(provider: str, payload: dict) -> dict:
     source = payload.get("config") if isinstance(payload.get("config"), dict) else payload
     if provider == "google_sheets":
+        operation = str(source.get("operation") or payload.get("operation") or "read_write").strip()
+        if operation not in {"read_rows", "append_row", "read_write"}:
+            operation = "read_write"
         return {
             "spreadsheet_id": str(source.get("spreadsheet_id") or source.get("google_spreadsheet_id") or "").strip(),
             "sheet_name": str(source.get("sheet_name") or source.get("tab") or "Sheet1").strip() or "Sheet1",
-            "operation": "append_row",
+            "operation": operation,
             "mode": "approved_executor",
         }
     if provider == "telegram":
@@ -350,6 +498,21 @@ def _sanitize_agent_integration_config(provider: str, payload: dict) -> dict:
             "bot_mode": str(source.get("bot_mode") or "business_bot").strip() or "business_bot",
             "trigger": "telegram.message.received",
             "mode": "trigger_boundary",
+        }
+    if provider == "maton":
+        return {
+            "channel": str(source.get("channel") or "maton_bridge").strip() or "maton_bridge",
+            "mode": "approved_delivery_bridge",
+        }
+    if provider == "localos_finance":
+        return {
+            "transaction_type": str(source.get("transaction_type") or "auto_detect").strip() or "auto_detect",
+            "mode": "approved_localos_write",
+        }
+    if provider == "composio":
+        return {
+            "toolkit": str(source.get("toolkit") or "").strip(),
+            "mode": "planned_connector_provider",
         }
     return {}
 
@@ -365,6 +528,20 @@ def _sanitize_agent_integration_limits(provider: str, payload: dict) -> dict:
         return {
             "daily_message_cap": _safe_int(source.get("daily_message_cap"), 50, 1, 500),
             "frequency_cap_minutes": _safe_int(source.get("frequency_cap_minutes"), 30, 0, 1440),
+        }
+    if provider == "maton":
+        return {
+            "daily_message_cap": _safe_int(source.get("daily_message_cap"), 50, 1, 500),
+            "frequency_cap_minutes": _safe_int(source.get("frequency_cap_minutes"), 30, 0, 1440),
+        }
+    if provider == "localos_finance":
+        return {
+            "daily_transaction_cap": _safe_int(source.get("daily_transaction_cap"), 100, 1, 1000),
+        }
+    if provider == "composio":
+        return {
+            "daily_action_cap": _safe_int(source.get("daily_action_cap"), 50, 1, 500),
+            "frequency_cap_minutes": _safe_int(source.get("frequency_cap_minutes"), 0, 0, 1440),
         }
     return {}
 
@@ -430,7 +607,7 @@ def _apply_custom_process_to_version_payload(version_payload: dict, custom_proce
                 "columns": columns,
                 "row_values": row_values,
             }
-        if next_step.get("key") == "request_sheet_append":
+        if next_step.get("key") == "request_sheet_append" or next_step.get("capability") == "sheets.append_row_request":
             step_payload = {
                 **step_payload,
                 "sheet_name": sheet_name,
@@ -519,7 +696,7 @@ def _sync_blueprint_integration_metadata(cursor, blueprint: dict, integration: d
             "integration_id": integration_id,
             "spreadsheet_id": str(config.get("spreadsheet_id") or "").strip(),
             "sheet_name": str(config.get("sheet_name") or "Sheet1").strip() or "Sheet1",
-            "operation": "append_row",
+            "operation": str(config.get("operation") or "read_write").strip() or "read_write",
         }
         custom_process["binding_status"] = "connected"
         metadata["custom_process"] = custom_process
@@ -610,6 +787,12 @@ def _require_blueprint_access(cursor, blueprint_id: str, user_data: dict):
     if not allowed:
         return None, error_response
     return blueprint, None
+
+
+def _without_archived_clause(where_sql: str) -> str:
+    if where_sql.strip():
+        return f"{where_sql} AND b.status <> 'archived'"
+    return "WHERE b.status <> 'archived'"
 
 
 def _insert_version(cursor, blueprint_id: str, payload: dict, user_data: dict):
@@ -725,7 +908,7 @@ def list_agent_blueprints():
                 FROM agent_blueprint_versions
                 WHERE blueprint_id = b.id
             ) vs ON TRUE
-            {where_sql}
+            {_without_archived_clause(where_sql)}
             ORDER BY b.created_at DESC
             LIMIT 200
             """,
@@ -818,13 +1001,19 @@ def create_agent_blueprint_draft():
     if not business_id or not description:
         return _json_error("business_id and description are required", 400, "VALIDATION_ERROR")
 
-    draft = build_agent_blueprint_draft(description, str(payload.get("category") or ""))
     db = DatabaseManager()
     cursor = db.conn.cursor()
     try:
         allowed, access_error = _require_business_access(cursor, business_id, user_data)
         if not allowed:
             return access_error
+        draft = build_agent_blueprint_draft(
+            description,
+            str(payload.get("category") or ""),
+            use_ai=bool(payload.get("use_ai_compiler")),
+            business_id=business_id,
+            user_id=_user_id(user_data),
+        )
         blueprint_id = str(uuid.uuid4())
         billing = charge_agent_creation_credits(
             cursor,
@@ -997,6 +1186,13 @@ def get_agent_blueprint(blueprint_id: str):
         version_events = metadata.get("version_events") if isinstance(metadata.get("version_events"), list) else []
         feedback_history = metadata.get("feedback_history") if isinstance(metadata.get("feedback_history"), list) else []
         legacy_migration = metadata.get("legacy_migration") if isinstance(metadata.get("legacy_migration"), dict) else {}
+        metrics = build_agent_metrics_summary(decorated_blueprint, versions, active_version, runs, approval_queue, metadata)
+        activation_gate = _build_activation_gate_summary(
+            cursor,
+            blueprint=blueprint,
+            active_version=active_version,
+            metadata=metadata,
+        )
         return jsonify(
             {
                 "success": True,
@@ -1011,8 +1207,243 @@ def get_agent_blueprint(blueprint_id: str):
                 "version_events": version_events[-50:],
                 "feedback_history": feedback_history[-20:],
                 "legacy_migration": legacy_migration,
+                "metrics": metrics,
+                "activation_gate": activation_gate,
             }
         )
+    finally:
+        db.close()
+
+
+def _build_activation_gate_summary(cursor, blueprint: dict, active_version: dict | None, metadata: dict) -> dict:
+    blockers = []
+    compiled_validation = {}
+    if not active_version:
+        blockers.append({"type": "version", "message": "Создайте или выберите версию агента."})
+    else:
+        compiled_validation = validate_compiled_artifact_candidate(
+            build_version_payload_from_row(active_version),
+            metadata,
+        )
+        if not compiled_validation.get("ready"):
+            blockers.append({"type": "compiled_validation", "message": "Compiled workflow не прошёл проверку."})
+    preflight = build_agent_integration_preflight(
+        cursor,
+        business_id=str(blueprint.get("business_id") or ""),
+        metadata=metadata,
+        input_payload={},
+    )
+    if not preflight.get("ready"):
+        for item in preflight.get("missing") or []:
+            if not isinstance(item, dict):
+                continue
+            blockers.append(
+                {
+                    "type": "connection",
+                    "provider": str(item.get("provider") or ""),
+                    "message": str(item.get("provider") or item.get("key") or "Нужно подключение"),
+                }
+            )
+    ready = bool(active_version) and bool(compiled_validation.get("ready")) and bool(preflight.get("ready"))
+    next_step = "activate_version" if ready else _activation_gate_next_step(blockers)
+    human_blockers = _activation_gate_human_blockers(blockers, preflight, compiled_validation)
+    return {
+        "schema": "localos_agent_activation_gate_v1",
+        "status": "ready" if ready else "blocked",
+        "can_activate": ready,
+        "active_version_id": str((active_version or {}).get("id") or ""),
+        "requires_compiled_validation": True,
+        "requires_preflight_ready": True,
+        "requires_approval_policy": True,
+        "compiled_validation": compiled_validation,
+        "preflight": preflight,
+        "blockers": blockers,
+        "human_blockers": human_blockers,
+        "summary": _activation_gate_summary_text(ready, next_step, human_blockers),
+        "primary_action_label": _activation_gate_primary_action_label(next_step),
+        "connection_plan": _activation_connection_plan_from_preflight(preflight),
+        "next_step": next_step,
+    }
+
+
+def _activation_gate_next_step(blockers: list[dict]) -> str:
+    blocker_types = {str(item.get("type") or "") for item in blockers if isinstance(item, dict)}
+    if "version" in blocker_types:
+        return "create_version"
+    if "compiled_validation" in blocker_types:
+        return "fix_compiled_workflow"
+    if "connection" in blocker_types:
+        return "connect_required_integrations"
+    return "review_blockers"
+
+
+def _activation_gate_human_blockers(blockers: list[dict], preflight: dict, compiled_validation: dict) -> list[dict]:
+    result = []
+    for item in blockers:
+        if not isinstance(item, dict):
+            continue
+        blocker_type = str(item.get("type") or "").strip()
+        if blocker_type == "connection":
+            provider = str(item.get("provider") or "").strip()
+            result.append(
+                {
+                    "type": "connection",
+                    "provider": provider,
+                    "title": _agent_integration_provider_label(provider),
+                    "message": f"Подключите {_agent_integration_provider_label(provider)}, затем запустите preflight ещё раз.",
+                    "action": "open_connections",
+                }
+            )
+        elif blocker_type == "compiled_validation":
+            errors = []
+            validation = compiled_validation.get("validation") if isinstance(compiled_validation.get("validation"), dict) else {}
+            for error in validation.get("errors") if isinstance(validation.get("errors"), list) else []:
+                if isinstance(error, dict):
+                    errors.append(str(error.get("message") or error.get("field") or "").strip())
+            result.append(
+                {
+                    "type": "compiled_validation",
+                    "title": "Логика агента не прошла проверку",
+                    "message": errors[0] if errors and errors[0] else "Откройте логику агента и исправьте compiled workflow.",
+                    "action": "open_logic",
+                }
+            )
+        elif blocker_type == "version":
+            result.append(
+                {
+                    "type": "version",
+                    "title": "Нет активной версии",
+                    "message": "Создайте или выберите версию агента.",
+                    "action": "open_logic",
+                }
+            )
+    if not result and preflight and not preflight.get("ready"):
+        result.append(
+            {
+                "type": "preflight",
+                "title": "Preflight не пройден",
+                "message": "Проверьте подключения, лимиты и обязательные поля агента.",
+                "action": "open_connections",
+            }
+        )
+    return result
+
+
+def _activation_gate_summary_text(ready: bool, next_step: str, human_blockers: list[dict]) -> str:
+    if ready:
+        return "Версию можно активировать: compiled workflow и preflight готовы. Внешние действия останутся за approval gate."
+    if human_blockers:
+        return str(human_blockers[0].get("message") or "")
+    if next_step == "connect_required_integrations":
+        return "Подключите обязательные сервисы перед активацией."
+    if next_step == "fix_compiled_workflow":
+        return "Исправьте логику агента перед активацией."
+    if next_step == "create_version":
+        return "Создайте первую версию агента."
+    return "Проверьте требования активации агента."
+
+
+def _activation_gate_primary_action_label(next_step: str) -> str:
+    labels = {
+        "activate_version": "Активировать версию",
+        "connect_required_integrations": "Открыть подключения",
+        "fix_compiled_workflow": "Открыть логику",
+        "create_version": "Создать версию",
+        "review_blockers": "Проверить требования",
+    }
+    return labels.get(next_step, "Проверить требования")
+
+
+def _activation_connection_plan_from_preflight(preflight: dict) -> dict:
+    items = preflight.get("items") if isinstance(preflight.get("items"), list) else []
+    catalog_by_provider = {
+        str(item.get("provider") or "").strip(): item
+        for item in _agent_integration_provider_catalog()
+        if isinstance(item, dict) and str(item.get("provider") or "").strip()
+    }
+    plan_items = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        provider = str(item.get("provider") or "").strip()
+        catalog_item = catalog_by_provider.get(provider, {})
+        status = str(item.get("status") or "").strip()
+        resolution = str(item.get("resolution") or "").strip()
+        action = "ready" if status == "ready" else "connect_required"
+        if action == "ready" and resolution == "native_localos":
+            action = "native_ready"
+        plan_items.append(
+            {
+                "key": str(item.get("key") or provider or ""),
+                "provider": provider,
+                "title": str(catalog_item.get("title") or _agent_integration_provider_label(provider)),
+                "capability": str(item.get("capability") or ""),
+                "trigger": str(item.get("trigger") or ""),
+                "direction": str(item.get("direction") or ""),
+                "binding_status": status,
+                "action": action,
+                "primary_label": _connection_plan_label(action),
+                "explanation": _activation_connection_explanation(provider, action, item),
+                "missing_config": item.get("missing_config") if isinstance(item.get("missing_config"), list) else [],
+                "approval_required": bool(item.get("required", True)),
+                "existing_integrations": [],
+                "attached_integrations": [],
+                "provider_paths": _connection_plan_provider_paths(catalog_item),
+            }
+        )
+    missing_count = len([item for item in plan_items if item.get("action") not in {"ready", "native_ready"}])
+    return {
+        "schema": "localos_agent_connection_plan_v1",
+        "status": "ready" if missing_count == 0 else "needs_action",
+        "missing_count": missing_count,
+        "items": plan_items,
+    }
+
+
+def _activation_connection_explanation(provider: str, action: str, item: dict) -> str:
+    if action in {"ready", "native_ready"}:
+        return "Подключение готово для активации."
+    missing_config = item.get("missing_config") if isinstance(item.get("missing_config"), list) else []
+    if missing_config:
+        return f"Заполните: {', '.join([str(value) for value in missing_config])}."
+    return f"Подключите {_agent_integration_provider_label(provider)}, чтобы активировать агента."
+
+
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>", methods=["DELETE"])
+def archive_agent_blueprint(blueprint_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        metadata = _blueprint_metadata(blueprint)
+        archived_event = {
+            "action": "archived",
+            "reason": "Archived from agent cockpit",
+            "user_id": _user_id(user_data),
+            "created_at": _utc_now_text(),
+        }
+        events = metadata.get("version_events") if isinstance(metadata.get("version_events"), list) else []
+        metadata["version_events"] = (events + [archived_event])[-50:]
+        cursor.execute(
+            """
+            UPDATE agent_blueprints
+            SET status = 'archived',
+                metadata_json = %s::jsonb,
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (json.dumps(metadata, ensure_ascii=False), str(blueprint.get("id") or blueprint_id)),
+        )
+        db.conn.commit()
+        return jsonify({"success": True, "blueprint_id": str(blueprint.get("id") or blueprint_id), "status": "archived"})
+    except Exception:
+        db.conn.rollback()
+        raise
     finally:
         db.close()
 
@@ -1097,6 +1528,34 @@ def activate_agent_blueprint_version(blueprint_id: str, version_id: str):
         version = _load_blueprint_version_for_blueprint(cursor, str(blueprint.get("id") or ""), version_id)
         if not version:
             return _json_error("Blueprint version not found", 404, "VERSION_NOT_FOUND")
+        compiled_validation = validate_compiled_artifact_candidate(
+            build_version_payload_from_row(version),
+            _blueprint_metadata(blueprint),
+        )
+        if not compiled_validation.get("ready"):
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "Compiled workflow не прошёл проверку перед активацией.",
+                    "code": "AGENT_COMPILED_VALIDATION_FAILED",
+                    "compiled_validation": compiled_validation,
+                }
+            ), 400
+        preflight = build_agent_integration_preflight(
+            cursor,
+            business_id=str(blueprint.get("business_id") or ""),
+            metadata=_blueprint_metadata(blueprint),
+            input_payload={},
+        )
+        if not preflight.get("ready"):
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "Перед активацией нужно подключить источники агента.",
+                    "code": "AGENT_INTEGRATIONS_REQUIRED",
+                    "preflight": preflight,
+                }
+            ), 400
         active_before = _resolve_active_version(cursor, blueprint)
         event = _remember_active_version(cursor, blueprint, version, user_data, "activated", str(payload.get("reason") or ""))
         db.conn.commit()
@@ -1216,17 +1675,20 @@ def list_agent_blueprint_integrations(blueprint_id: str):
             for row in all_rows
             if str(row.get("id") or "") not in attached_lookup
         ]
+        provider_catalog = _agent_integration_provider_catalog()
+        connection_plan = _agent_connection_plan(binding_status, integrations, available, provider_catalog)
         return jsonify(
             {
                 "success": True,
                 "integrations": integrations,
                 "available_integrations": available,
-                "provider_catalog": _agent_integration_provider_catalog(),
+                "provider_catalog": provider_catalog,
                 "external_auth_options": _load_agent_external_auth_options(cursor, business_id),
                 "capability_integrations": metadata.get("capability_integrations") if isinstance(metadata.get("capability_integrations"), dict) else {},
                 "custom_process": metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {},
                 "required_integration_bindings": metadata.get("required_integration_bindings") if isinstance(metadata.get("required_integration_bindings"), list) else [],
                 "binding_status": binding_status,
+                "connection_plan": connection_plan,
             }
         )
     finally:
@@ -1240,7 +1702,7 @@ def save_agent_blueprint_integration(blueprint_id: str):
         return error_response
     payload = request.get_json(silent=True) or {}
     provider = str(payload.get("provider") or "").strip().lower()
-    if provider not in {"google_sheets", "telegram"}:
+    if provider not in {"google_sheets", "telegram", "maton", "localos_finance", "composio"}:
         return _json_error("Unsupported integration provider", 400, "UNSUPPORTED_PROVIDER")
     status = str(payload.get("status") or "active").strip().lower()
     if status not in {"draft", "active", "paused"}:
@@ -1518,6 +1980,59 @@ def review_agent_blueprint(blueprint_id: str):
         db.close()
 
 
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/preflight", methods=["POST"])
+def preflight_agent_blueprint_run(blueprint_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    payload = request.get_json(silent=True) or {}
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        version_id = str(payload.get("blueprint_version_id") or "").strip()
+        version = None
+        if version_id:
+            version = _load_blueprint_version_for_blueprint(cursor, str(blueprint.get("id") or ""), version_id)
+            if not version:
+                return _json_error("Blueprint version does not belong to this blueprint", 400, "VERSION_BLUEPRINT_MISMATCH")
+        else:
+            version = _resolve_active_version(cursor, blueprint)
+        if not version:
+            return _json_error("Blueprint has no version", 400, "NO_VERSION")
+        run_input = payload.get("input") if isinstance(payload.get("input"), dict) else {}
+        metadata = _blueprint_metadata(blueprint)
+        preflight = build_agent_integration_preflight(
+            cursor,
+            business_id=str(blueprint.get("business_id") or ""),
+            metadata=metadata,
+            input_payload=run_input,
+        )
+        preview_run_gate = {
+            "schema": "localos_agent_preview_run_gate_v1",
+            "status": "ready" if bool(preflight.get("ready")) else "blocked",
+            "can_preview_run": bool(preflight.get("ready")),
+            "requires_preflight_ready": True,
+            "external_side_effects_allowed": False,
+            "approval_required_for_external_actions": True,
+            "next_step": "start_preview_run" if bool(preflight.get("ready")) else "connect_required_integrations",
+        }
+        return jsonify(
+            {
+                "success": True,
+                "blueprint_id": str(blueprint.get("id") or ""),
+                "blueprint_version_id": str(version.get("id") or ""),
+                "preflight": preflight,
+                "preview_run_gate": preview_run_gate,
+                "can_start": bool(preflight.get("ready")),
+            }
+        )
+    finally:
+        db.close()
+
+
 @agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/runs", methods=["POST"])
 def start_agent_blueprint_run(blueprint_id: str):
     user_data, error_response = _require_auth()
@@ -1542,6 +2057,8 @@ def start_agent_blueprint_run(blueprint_id: str):
         result = runner.start_run(version_id, payload.get("input") if isinstance(payload.get("input"), dict) else {}, user_data)
         db.conn.commit()
         if not result.get("success"):
+            if result.get("code") == "AGENT_INTEGRATIONS_REQUIRED":
+                return jsonify(result), 400
             return _json_error(str(result.get("error") or "run failed"), 400, "RUN_FAILED")
         return jsonify(result), 201
     except Exception:

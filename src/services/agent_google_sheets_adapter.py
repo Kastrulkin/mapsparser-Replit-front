@@ -55,6 +55,48 @@ class GoogleSheetsAppendAdapter:
             "updated_cells": payload.get("updates", {}).get("updatedCells"),
         }
 
+    def read_rows(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        credentials = _refresh_credentials_if_needed(dict(self.credentials))
+        token = str(credentials.get("token") or "").strip()
+        if not token:
+            raise GoogleSheetsAdapterError("Google Sheets credentials do not include access token.")
+        spreadsheet_id = str(request.get("spreadsheet_id") or "").strip()
+        if not spreadsheet_id:
+            raise GoogleSheetsAdapterError("spreadsheet_id is required for Google Sheets read.")
+        sheet_name = str(request.get("sheet_name") or "Sheet1").strip() or "Sheet1"
+        range_value = str(request.get("range") or request.get("range_name") or "").strip()
+        if not range_value:
+            range_value = f"{sheet_name}!A1:Z"
+        limit = max(1, min(int(request.get("limit") or 100), 500))
+        url = f"https://sheets.googleapis.com/v4/spreadsheets/{quote(spreadsheet_id, safe='')}/values/{quote(range_value, safe='')}"
+        response = requests.get(
+            url,
+            params={"majorDimension": "ROWS"},
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=self.timeout_seconds,
+        )
+        if response.status_code >= 400:
+            raise GoogleSheetsAdapterError(f"Google Sheets read failed with HTTP {response.status_code}: {_response_excerpt(response)}")
+        payload = response.json() if response.content else {}
+        values = payload.get("values") if isinstance(payload.get("values"), list) else []
+        headers = _normalize_headers(values[0]) if values else []
+        rows = []
+        raw_rows = values[1:] if headers else values
+        for index, values_row in enumerate(raw_rows[:limit], start=2 if headers else 1):
+            if headers:
+                rows.append(_values_to_row(headers, values_row, index))
+            else:
+                rows.append({"row_number": index, "values": values_row if isinstance(values_row, list) else []})
+        return {
+            "success": True,
+            "spreadsheet_id": spreadsheet_id,
+            "sheet_name": sheet_name,
+            "range": payload.get("range") or range_value,
+            "headers": headers,
+            "rows": rows,
+            "row_count": len(rows),
+        }
+
 
 def load_google_sheets_append_adapter(cursor: Any, *, business_id: str, integration_id: str = "") -> GoogleSheetsAppendAdapter:
     integration = _load_agent_integration(cursor, business_id=business_id, integration_id=integration_id)
@@ -64,6 +106,28 @@ def load_google_sheets_append_adapter(cursor: Any, *, business_id: str, integrat
     credentials = _load_external_account_credentials(cursor, business_id=business_id, auth_ref=auth_ref)
     _validate_sheets_credentials(credentials)
     return GoogleSheetsAppendAdapter(credentials)
+
+
+def load_google_sheets_read_adapter(cursor: Any, *, business_id: str, integration_id: str = "") -> GoogleSheetsAppendAdapter:
+    return load_google_sheets_append_adapter(cursor, business_id=business_id, integration_id=integration_id)
+
+
+def _normalize_headers(values: Any) -> list[str]:
+    if not isinstance(values, list):
+        return []
+    headers = []
+    for index, item in enumerate(values, start=1):
+        clean = str(item or "").strip()
+        headers.append(clean or f"column_{index}")
+    return headers
+
+
+def _values_to_row(headers: list[str], values: Any, row_number: int) -> Dict[str, Any]:
+    row_values = values if isinstance(values, list) else []
+    row: Dict[str, Any] = {"row_number": row_number}
+    for index, header in enumerate(headers):
+        row[header] = row_values[index] if index < len(row_values) else ""
+    return row
 
 
 def _load_agent_integration(cursor: Any, *, business_id: str, integration_id: str) -> Dict[str, Any]:

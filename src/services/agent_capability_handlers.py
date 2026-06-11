@@ -6,11 +6,14 @@ import uuid
 from typing import Any, Callable, Dict
 
 from database_manager import DatabaseManager
+from core.finance_imports import normalize_finance_import_rows
 from services.operator_credit_reservation import finalize_reserved_action_credits, reserve_paid_action_credits
 from services.outreach_send_capability import (
     OUTREACH_SEND_BATCH_CAPABILITY,
     handle_outreach_send_batch,
 )
+from services.agent_provider_registry import capability_provider_candidates, get_provider_registry
+from services.agent_google_sheets_adapter import GoogleSheetsAdapterError, load_google_sheets_read_adapter
 
 
 CapabilityHandler = Callable[[Dict[str, Any], Dict[str, Any]], Dict[str, Any]]
@@ -77,6 +80,16 @@ CANONICAL_CAPABILITIES: Dict[str, Dict[str, Any]] = {
         "side_effects": "creates a Google Sheets append-row request only",
         "approval_required": True,
     },
+    "google_sheets.read_rows": {
+        "risk": "external_read",
+        "side_effects": "none; provider reads are resolved by the selected connector",
+        "approval_required": False,
+    },
+    "finance.transaction.create": {
+        "risk": "localos_finance_write_request",
+        "side_effects": "normalizes finance transaction proposals; LocalOS write requires a separate approval/apply flow",
+        "approval_required": True,
+    },
     "billing.reserve": {
         "risk": "billing",
         "side_effects": "ledger reservation is controlled by ActionOrchestrator",
@@ -99,6 +112,10 @@ LEGACY_CAPABILITY_ALIASES = {
     "communications.send": "communications.send_reminder",
     "google_sheets.append_row": "sheets.append_row_request",
     "sheets.append_row": "sheets.append_row_request",
+    "google_sheets.read": "google_sheets.read_rows",
+    "finance.create_transaction": "finance.transaction.create",
+    "finance.manual_entry": "finance.transaction.create",
+    "finance.transaction.create_request": "finance.transaction.create",
     "billing.reserve/settle": "billing.reserve",
 }
 
@@ -123,6 +140,7 @@ def build_capability_catalog() -> Dict[str, Any]:
             "billing",
             "payload",
         ],
+        "provider_registry": get_provider_registry(),
         "capabilities": capabilities,
     }
 
@@ -141,6 +159,8 @@ def build_capability_handlers() -> Dict[str, CapabilityHandler]:
         "communications.send_offer": _handle_communications_send_offer,
         "support.export": _handle_support_export,
         "sheets.append_row_request": _handle_sheets_append_row_request,
+        "google_sheets.read_rows": _handle_google_sheets_read_rows,
+        "finance.transaction.create": _handle_finance_transaction_create,
         "billing.reserve": _handle_billing_reserve,
         "billing.settle": _handle_billing_settle,
     }
@@ -161,6 +181,7 @@ def _catalog_item(name: str, meta: Dict[str, Any]) -> Dict[str, Any]:
         "risk": str(meta.get("risk") or "unknown"),
         "side_effects": str(meta.get("side_effects") or "unknown"),
         "approval_required": bool(meta.get("approval_required")),
+        "provider_candidates": capability_provider_candidates(name),
         "timeout_seconds": 30,
         "retry": {
             "mode": "orchestrator_callback_outbox",
@@ -922,6 +943,223 @@ def _handle_support_export(envelope: Dict[str, Any], user_data: Dict[str, Any]) 
             "action_id": str(payload.get("action_id") or envelope.get("action_id") or ""),
             "format": str(payload.get("format") or "json"),
         },
+    )
+
+
+def _extract_inline_rows(payload: Dict[str, Any]) -> list[Dict[str, Any]]:
+    raw = payload.get("rows")
+    if not isinstance(raw, list):
+        raw = payload.get("sheet_rows") if isinstance(payload.get("sheet_rows"), list) else []
+    if not isinstance(raw, list):
+        return []
+    rows: list[Dict[str, Any]] = []
+    for item in raw:
+        if isinstance(item, dict):
+            rows.append(dict(item))
+    return rows
+
+
+def _handle_google_sheets_read_rows(envelope: Dict[str, Any], user_data: Dict[str, Any]) -> Dict[str, Any]:
+    payload = _payload(envelope)
+    tenant_id = str(envelope.get("tenant_id") or "").strip()
+    rows = _extract_inline_rows(payload)
+    integration_id = str(payload.get("integration_id") or payload.get("google_sheets_integration_id") or "").strip()
+    spreadsheet_id = str(payload.get("spreadsheet_id") or payload.get("google_spreadsheet_id") or "").strip()
+    sheet_name = str(payload.get("sheet_name") or payload.get("tab") or "Sheet1").strip()
+    limit = max(1, min(int(payload.get("limit") or 100), 500))
+    if rows:
+        rows = rows[:limit]
+        return _result(
+            "read_completed",
+            source="inline_rows",
+            provider_read_performed=False,
+            integration_id=integration_id,
+            spreadsheet_id=spreadsheet_id,
+            sheet_name=sheet_name,
+            rows=rows,
+            count=len(rows),
+        )
+    if not integration_id and not spreadsheet_id:
+        return _result(
+            "validation_error",
+            error_code="SHEET_CONNECTION_REQUIRED",
+            provider_read_performed=False,
+            source="google_sheets",
+        )
+    if integration_id or spreadsheet_id:
+        db = DatabaseManager()
+        cursor = db.conn.cursor()
+        try:
+            adapter = load_google_sheets_read_adapter(cursor, business_id=tenant_id, integration_id=integration_id)
+            read_result = adapter.read_rows(
+                {
+                    "integration_id": integration_id,
+                    "spreadsheet_id": spreadsheet_id,
+                    "sheet_name": sheet_name,
+                    "range": payload.get("range") or payload.get("range_name"),
+                    "limit": limit,
+                }
+            )
+        except GoogleSheetsAdapterError:
+            return _result(
+                "provider_read_required",
+                source="google_sheets",
+                provider_read_performed=False,
+                integration_id=integration_id,
+                spreadsheet_id=spreadsheet_id,
+                sheet_name=sheet_name,
+                limit=limit,
+                provider_error="GOOGLE_SHEETS_PROVIDER_NOT_READY",
+                next_action="connect_or_repair_google_sheets_provider",
+            )
+        finally:
+            db.close()
+        return _result(
+            "read_completed",
+            source="google_sheets",
+            provider_read_performed=True,
+            integration_id=integration_id,
+            spreadsheet_id=spreadsheet_id,
+            sheet_name=sheet_name,
+            rows=read_result.get("rows") if isinstance(read_result.get("rows"), list) else [],
+            headers=read_result.get("headers") if isinstance(read_result.get("headers"), list) else [],
+            count=int(read_result.get("row_count") or 0),
+            range=read_result.get("range") or "",
+        )
+    return _result(
+        "provider_read_required",
+        source="google_sheets",
+        provider_read_performed=False,
+        integration_id=integration_id,
+        spreadsheet_id=spreadsheet_id,
+        sheet_name=sheet_name,
+        limit=limit,
+        next_action="resolve_provider_and_read_rows",
+    )
+
+
+def _finance_candidate_rows(payload: Dict[str, Any]) -> list[Dict[str, Any]]:
+    rows = _extract_inline_rows(payload)
+    if rows:
+        return rows
+    entries = payload.get("entries")
+    if isinstance(entries, list):
+        result = []
+        for item in entries:
+            if isinstance(item, dict):
+                row = dict(item)
+                row["record_type"] = row.get("record_type") or "entry"
+                result.append(row)
+        return result
+    amount = payload.get("amount")
+    if amount is None:
+        return []
+    return [
+        {
+            "record_type": "entry",
+            "date": payload.get("date") or payload.get("transaction_date"),
+            "type": payload.get("type") or payload.get("transaction_type"),
+            "category": payload.get("category"),
+            "amount": amount,
+            "comment": payload.get("comment") or payload.get("notes") or payload.get("description"),
+            "external_id": payload.get("external_id"),
+        }
+    ]
+
+
+def _finance_alias_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    result = dict(row)
+    operation_type = str(result.get("type") or result.get("transaction_type") or "").strip().lower()
+    if operation_type in {"income", "payment", "paid", "sale", "sales", "выручка", "доход", "оплата"}:
+        result["type"] = "revenue"
+    elif operation_type in {"cost", "spend", "spent", "расход", "затрата"}:
+        result["type"] = "expense"
+    if not result.get("record_type"):
+        result["record_type"] = "entry"
+    return result
+
+
+def _finance_review_reasons(raw: Dict[str, Any], normalized: Dict[str, Any], payload: Dict[str, Any]) -> list[str]:
+    reasons = []
+    category = str(normalized.get("category") or "").strip().lower()
+    raw_category = str(raw.get("category") or raw.get("статья") or raw.get("категория") or "").strip()
+    if normalized.get("record_type") == "entry" and (not raw_category or category == "other"):
+        reasons.append("category_missing_or_default")
+    confidence = payload.get("confidence")
+    if confidence is None:
+        confidence = raw.get("confidence")
+    try:
+        if confidence is not None and float(confidence) < 0.8:
+            reasons.append("low_confidence")
+    except Exception:
+        reasons.append("confidence_not_numeric")
+    if str(payload.get("approval_policy") or "").strip().lower() in {"always", "first_run"}:
+        reasons.append("approval_policy")
+    return reasons
+
+
+def _handle_finance_transaction_create(envelope: Dict[str, Any], user_data: Dict[str, Any]) -> Dict[str, Any]:
+    payload = _payload(envelope)
+    tenant_id = str(envelope.get("tenant_id") or "").strip()
+    rows = [_finance_alias_row(row) for row in _finance_candidate_rows(payload)]
+    if not rows:
+        return _result(
+            "validation_error",
+            error_code="FINANCE_ROWS_REQUIRED",
+            approval_state="not_created",
+            apply_state="not_applied",
+            localos_write_performed=False,
+            provider_write_performed=False,
+        )
+    mapping = payload.get("mapping") if isinstance(payload.get("mapping"), dict) else None
+    normalized = normalize_finance_import_rows(
+        rows,
+        mapping=mapping,
+        period_start=str(payload.get("period_start") or payload.get("from") or "") or None,
+        period_end=str(payload.get("period_end") or payload.get("to") or "") or None,
+    )
+    proposals = normalized.get("rows") if isinstance(normalized.get("rows"), list) else []
+    errors = normalized.get("errors") if isinstance(normalized.get("errors"), list) else []
+    review_items = []
+    for item in proposals:
+        row_number = int(item.get("row_number") or 0)
+        raw = rows[row_number - 1] if row_number and row_number <= len(rows) else {}
+        reasons = _finance_review_reasons(raw, item, payload)
+        if reasons:
+            review_item = dict(item)
+            review_item["review_reasons"] = reasons
+            review_items.append(review_item)
+    if not proposals and errors:
+        return _result(
+            "validation_error",
+            error_code="FINANCE_ROWS_INVALID",
+            request_id=_stable_id("finance.transaction.create", tenant_id, envelope.get("action_id"), rows),
+            normalized=normalized,
+            errors=errors,
+            approval_state="not_created",
+            apply_state="not_applied",
+            localos_write_performed=False,
+            provider_write_performed=False,
+        )
+    request_id = _stable_id("finance.transaction.create", tenant_id, envelope.get("action_id"), proposals)
+    return _result(
+        "finance_transaction_request_created",
+        request_id=request_id,
+        business_id=tenant_id,
+        source=str(payload.get("source") or "agent_capability"),
+        normalized_mapping=normalized.get("mapping") or {},
+        finance_entry_proposals=proposals,
+        rows_requiring_review=review_items,
+        errors=errors,
+        proposal_count=len(proposals),
+        error_count=len(errors),
+        review_count=len(review_items),
+        approval_state="pending_human",
+        apply_state="not_applied",
+        localos_write_performed=False,
+        provider_write_performed=False,
+        manual_apply_required=True,
+        next_action="approve_finance_import",
     )
 
 
