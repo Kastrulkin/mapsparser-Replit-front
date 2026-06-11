@@ -69,6 +69,36 @@ def _binding_preflight_item(
     default_config = binding.get("default_config") if isinstance(binding.get("default_config"), dict) else {}
     metadata_config = _metadata_binding_config(metadata, provider, str(binding.get("key") or ""))
     if metadata_config:
+        route_provider = str(metadata_config.get("route_provider") or "").strip()
+        route_status = str(metadata_config.get("status") or "active").strip()
+        if route_provider == "openclaw" and route_status == "active":
+            return _base_item(
+                binding,
+                "ready",
+                "provider_route_openclaw_boundary",
+                str(metadata_config.get("integration_id") or "openclaw_boundary"),
+                [],
+                "OpenClaw boundary is selected for this binding inside the LocalOS policy envelope.",
+            )
+        if route_provider == "maton" and route_status == "active":
+            external_account_id = str(metadata_config.get("external_account_id") or metadata_config.get("auth_ref") or "").strip()
+            if external_account_id:
+                return _base_item(
+                    binding,
+                    "ready",
+                    "provider_route_maton_external_account",
+                    str(metadata_config.get("integration_id") or external_account_id),
+                    [],
+                    "Maton.ai key is selected as the provider bridge for this binding.",
+                )
+            return _base_item(
+                binding,
+                "needs_config",
+                "provider_route_maton_missing_key",
+                "",
+                ["external_account_id"],
+                "Maton.ai route is selected, but no saved Maton key is bound.",
+            )
         resolved_config = _merge_default_config(default_config, metadata_config)
         missing_metadata_config = [key for key in required_config if not str(resolved_config.get(key) or "").strip()]
         if not missing_metadata_config:

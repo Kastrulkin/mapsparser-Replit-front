@@ -3694,6 +3694,113 @@ def test_agent_preflight_does_not_treat_compiled_defaults_as_external_connection
     assert preflight["items"][0]["provider"] == "telegram"
 
 
+def test_agent_preflight_accepts_openclaw_provider_route_for_binding(monkeypatch):
+    from api import agent_blueprints_api
+    from services.agent_integration_preflight import build_agent_integration_preflight
+
+    class Cursor:
+        def __init__(self):
+            self.saved_metadata = {}
+
+        def execute(self, query, params=None):
+            normalized_query = " ".join(query.split()).lower()
+            if normalized_query.startswith("update agent_blueprints"):
+                self.saved_metadata = json.loads(params[0])
+                return None
+            if "from agent_integrations" in normalized_query:
+                return None
+            raise AssertionError(f"Unhandled SQL: {query}")
+
+        def fetchall(self):
+            return []
+
+    blueprint = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "metadata_json": {
+            "required_integration_bindings": [
+                {
+                    "key": "telegram_delivery",
+                    "provider": "telegram",
+                    "capability": "communications.send_offer",
+                    "required_config": ["bot_mode"],
+                }
+            ],
+        },
+    }
+    monkeypatch.setattr(agent_blueprints_api, "_load_blueprint", lambda _cursor, _blueprint_id: blueprint)
+    cursor = Cursor()
+
+    metadata = agent_blueprints_api._apply_agent_provider_route_metadata(
+        cursor,
+        blueprint,
+        binding_key="telegram_delivery",
+        route_provider="openclaw",
+    )
+    preflight = build_agent_integration_preflight(cursor, business_id="biz1", metadata=metadata, input_payload={})
+    status = agent_blueprints_api._agent_integration_binding_status(metadata, [])
+
+    assert preflight["ready"] is True
+    assert preflight["items"][0]["resolution"] == "provider_route_openclaw_boundary"
+    assert preflight["items"][0]["integration_id"] == "openclaw_boundary"
+    assert status[0]["status"] == "connected"
+    assert status[0]["resolution"] == "provider_route_openclaw"
+
+
+def test_agent_preflight_accepts_maton_provider_route_with_external_account(monkeypatch):
+    from api import agent_blueprints_api
+    from services.agent_integration_preflight import build_agent_integration_preflight
+
+    class Cursor:
+        def __init__(self):
+            self.saved_metadata = {}
+
+        def execute(self, query, params=None):
+            normalized_query = " ".join(query.split()).lower()
+            if normalized_query.startswith("update agent_blueprints"):
+                self.saved_metadata = json.loads(params[0])
+                return None
+            if "from agent_integrations" in normalized_query:
+                return None
+            raise AssertionError(f"Unhandled SQL: {query}")
+
+        def fetchall(self):
+            return []
+
+    blueprint = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "metadata_json": {
+            "required_integration_bindings": [
+                {
+                    "key": "telegram_delivery",
+                    "provider": "telegram",
+                    "capability": "communications.send_offer",
+                    "required_config": ["bot_mode"],
+                }
+            ],
+        },
+    }
+    monkeypatch.setattr(agent_blueprints_api, "_load_blueprint", lambda _cursor, _blueprint_id: blueprint)
+    cursor = Cursor()
+
+    metadata = agent_blueprints_api._apply_agent_provider_route_metadata(
+        cursor,
+        blueprint,
+        binding_key="telegram_delivery",
+        route_provider="maton",
+        external_account={"id": "maton-account-1", "display_name": "Main Maton key"},
+    )
+    preflight = build_agent_integration_preflight(cursor, business_id="biz1", metadata=metadata, input_payload={})
+    status = agent_blueprints_api._agent_integration_binding_status(metadata, [])
+
+    assert preflight["ready"] is True
+    assert preflight["items"][0]["resolution"] == "provider_route_maton_external_account"
+    assert preflight["items"][0]["integration_id"] == "maton-account-1"
+    assert status[0]["status"] == "connected"
+    assert status[0]["route_provider"] == "maton"
+
+
 def test_agent_preflight_reports_active_integration_missing_config():
     from services.agent_integration_preflight import build_agent_integration_preflight
 

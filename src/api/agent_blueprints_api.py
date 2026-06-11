@@ -464,6 +464,7 @@ def _agent_integration_ids(metadata: dict) -> list[str]:
 
 def _agent_integration_binding_status(metadata: dict, integrations: list[dict]) -> list[dict]:
     required = metadata.get("required_integration_bindings") if isinstance(metadata.get("required_integration_bindings"), list) else []
+    provider_routes = metadata.get("agent_binding_provider_routes") if isinstance(metadata.get("agent_binding_provider_routes"), dict) else {}
     by_provider = {}
     for integration in integrations:
         provider = str(integration.get("provider") or "").strip()
@@ -473,12 +474,35 @@ def _agent_integration_binding_status(metadata: dict, integrations: list[dict]) 
     for item in required:
         if not isinstance(item, dict):
             continue
+        binding_key = str(item.get("key") or "")
         provider = str(item.get("provider") or "").strip()
+        selected_route = provider_routes.get(binding_key) if isinstance(provider_routes.get(binding_key), dict) else {}
+        route_provider = str(selected_route.get("route_provider") or "").strip()
+        route_status = str(selected_route.get("status") or "active").strip()
+        if route_provider in {"openclaw", "maton", "manual"} and route_status == "active":
+            result.append(
+                {
+                    "key": binding_key,
+                    "provider": provider,
+                    "direction": str(item.get("direction") or ""),
+                    "required": bool(item.get("required", True)),
+                    "approval_required": bool(item.get("approval_required", True)),
+                    "capability": str(item.get("capability") or ""),
+                    "trigger": str(item.get("trigger") or ""),
+                    "status": "connected",
+                    "integration_id": str(selected_route.get("integration_id") or selected_route.get("external_account_id") or route_provider),
+                    "missing_config": [],
+                    "resolution": f"provider_route_{route_provider}",
+                    "route_provider": route_provider,
+                    "route": selected_route,
+                }
+            )
+            continue
         integration = by_provider.get(provider)
         if provider == "localos_finance" and not integration:
             result.append(
                 {
-                    "key": str(item.get("key") or ""),
+                    "key": binding_key,
                     "provider": provider,
                     "direction": str(item.get("direction") or ""),
                     "required": bool(item.get("required", True)),
@@ -504,7 +528,7 @@ def _agent_integration_binding_status(metadata: dict, integrations: list[dict]) 
         status = "connected" if integration and str(integration.get("status") or "") == "active" and not missing_config else "needs_connection"
         result.append(
             {
-                "key": str(item.get("key") or ""),
+                "key": binding_key,
                 "provider": provider,
                 "direction": str(item.get("direction") or ""),
                 "required": bool(item.get("required", True)),
@@ -969,6 +993,92 @@ def _sync_blueprint_integration_metadata(cursor, blueprint: dict, integration: d
             triggers.append("telegram.message.received")
         metadata["triggers"] = triggers[-10:]
     _save_blueprint_metadata(cursor, blueprint_id, metadata)
+    return metadata
+
+
+def _required_binding_by_key(metadata: dict, binding_key: str) -> dict:
+    binding_key = str(binding_key or "").strip()
+    required = metadata.get("required_integration_bindings") if isinstance(metadata.get("required_integration_bindings"), list) else []
+    for item in required:
+        if isinstance(item, dict) and str(item.get("key") or "").strip() == binding_key:
+            return item
+    return {}
+
+
+def _route_is_allowed_for_binding(binding: dict, route_provider: str) -> bool:
+    route_provider = str(route_provider or "").strip()
+    if not route_provider:
+        return False
+    routes = connector_provider_routes(str(binding.get("provider") or ""), str(binding.get("capability") or ""))
+    return any(str(route.get("provider") or "").strip() == route_provider and str(route.get("state") or "") in {"available", "manual"} for route in routes)
+
+
+def _load_external_auth_option(cursor, business_id: str, source: str, account_id: str) -> dict:
+    if not business_id or not source or not account_id:
+        return {}
+    try:
+        cursor.execute(
+            """
+            SELECT id, source, external_id, display_name, is_active, updated_at
+            FROM externalbusinessaccounts
+            WHERE business_id = %s
+              AND source = %s
+              AND id = %s
+              AND is_active = TRUE
+            LIMIT 1
+            """,
+            (business_id, source, account_id),
+        )
+        row = cursor.fetchone()
+    except Exception:
+        row = None
+    return dict(row) if row else {}
+
+
+def _apply_agent_provider_route_metadata(
+    cursor,
+    blueprint: dict,
+    *,
+    binding_key: str,
+    route_provider: str,
+    external_account: dict | None = None,
+) -> dict:
+    metadata = _blueprint_metadata(_load_blueprint(cursor, str(blueprint.get("id") or "")) or blueprint)
+    routes = metadata.get("agent_binding_provider_routes") if isinstance(metadata.get("agent_binding_provider_routes"), dict) else {}
+    external_account = external_account if isinstance(external_account, dict) else {}
+    route_payload = {
+        "binding_key": binding_key,
+        "route_provider": route_provider,
+        "status": "active",
+        "selected_at": _utc_now_text(),
+        "selected_by": "user",
+    }
+    if route_provider == "openclaw":
+        route_payload.update(
+            {
+                "integration_id": "openclaw_boundary",
+                "execution_boundary": "localos_policy_envelope",
+                "requires_external_credentials": False,
+            }
+        )
+    if route_provider == "maton":
+        route_payload.update(
+            {
+                "integration_id": str(external_account.get("id") or ""),
+                "external_account_id": str(external_account.get("id") or ""),
+                "auth_ref": str(external_account.get("id") or ""),
+                "display_name": str(external_account.get("display_name") or "Maton.ai"),
+                "execution_boundary": "localos_policy_envelope",
+                "requires_external_credentials": True,
+            }
+        )
+    routes[binding_key] = route_payload
+    metadata["agent_binding_provider_routes"] = routes
+
+    binding_integrations = metadata.get("agent_binding_integrations") if isinstance(metadata.get("agent_binding_integrations"), dict) else {}
+    binding_integrations[binding_key] = dict(route_payload)
+    metadata["agent_binding_integrations"] = binding_integrations
+    _save_blueprint_metadata(cursor, str(blueprint.get("id") or ""), metadata)
     return metadata
 
 
@@ -2269,6 +2379,92 @@ def save_agent_blueprint_integration(blueprint_id: str):
                 "next_step": str(post_connect_handoff.get("next_step") or ""),
             }
         ), 201
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@agent_blueprints_bp.route("/api/agent-blueprints/<blueprint_id>/provider-routes", methods=["POST"])
+def choose_agent_blueprint_provider_route(blueprint_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    payload = request.get_json(silent=True) or {}
+    binding_key = str(payload.get("binding_key") or "").strip()
+    route_provider = str(payload.get("route_provider") or payload.get("provider") or "").strip().lower()
+    if not binding_key:
+        return _json_error("binding_key is required", 400, "BINDING_KEY_REQUIRED")
+    if route_provider not in {"openclaw", "maton", "manual"}:
+        return _json_error("Unsupported provider route", 400, "UNSUPPORTED_PROVIDER_ROUTE")
+
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        blueprint, access_error = _require_blueprint_access(cursor, blueprint_id, user_data)
+        if access_error:
+            return access_error
+        business_id = str(blueprint.get("business_id") or "")
+        metadata = _blueprint_metadata(blueprint)
+        binding = _required_binding_by_key(metadata, binding_key)
+        if not binding:
+            return _json_error("Binding was not found on this agent", 404, "BINDING_NOT_FOUND")
+        if not _route_is_allowed_for_binding(binding, route_provider):
+            return _json_error("Provider route is not allowed for this binding", 400, "PROVIDER_ROUTE_NOT_ALLOWED")
+
+        external_account = {}
+        if route_provider == "maton":
+            external_account_id = str(payload.get("external_account_id") or payload.get("auth_ref") or "").strip()
+            external_account = _load_external_auth_option(cursor, business_id, "maton", external_account_id)
+            if not external_account:
+                return _json_error("Active Maton key was not found for this business", 400, "MATON_KEY_REQUIRED")
+
+        metadata = _apply_agent_provider_route_metadata(
+            cursor,
+            blueprint,
+            binding_key=binding_key,
+            route_provider=route_provider,
+            external_account=external_account,
+        )
+        attached_ids = _agent_integration_ids(metadata)
+        attached_rows = _load_agent_integrations(cursor, business_id, attached_ids) if attached_ids else []
+        all_rows = _load_agent_integrations(cursor, business_id)
+        attached_lookup = {str(row.get("id") or "") for row in attached_rows}
+        attached_integrations = [_normalize_agent_integration(row, attached=True) for row in attached_rows]
+        available_integrations = [
+            _normalize_agent_integration(row, attached=False)
+            for row in all_rows
+            if str(row.get("id") or "") not in attached_lookup
+        ]
+        binding_status = _agent_integration_binding_status(metadata, attached_rows)
+        connection_plan = _agent_connection_plan(
+            binding_status,
+            attached_integrations,
+            available_integrations,
+            _agent_integration_provider_catalog(),
+        )
+        preflight = build_agent_integration_preflight(
+            cursor,
+            business_id=business_id,
+            metadata=metadata,
+            input_payload={},
+        )
+        post_connect_handoff = _build_agent_post_connect_handoff(connection_plan)
+        db.conn.commit()
+        return jsonify(
+            {
+                "success": True,
+                "binding_key": binding_key,
+                "route_provider": route_provider,
+                "provider_route": metadata.get("agent_binding_provider_routes", {}).get(binding_key, {}),
+                "binding_status": binding_status,
+                "connection_plan": connection_plan,
+                "preflight": preflight,
+                "post_connect_handoff": post_connect_handoff,
+                "next_step": str(post_connect_handoff.get("next_step") or ""),
+            }
+        )
     except Exception:
         db.conn.rollback()
         raise
