@@ -15,6 +15,7 @@ ssh_options=(
 )
 server_ssh_prefix=(ssh "${ssh_options[@]}" "${server_host}")
 server_scp_prefix=(scp "${ssh_options[@]}")
+server_rsync_ssh="ssh -i ${HOME}/.ssh/localos_prod -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=6"
 server_project_dir="/opt/seo-app"
 remote_tmp="/tmp/localos_backend_src_deploy"
 public_domain="${PUBLIC_DOMAIN:-https://localos.pro}"
@@ -100,8 +101,8 @@ retry_command() {
 
 echo "Deploying backend source to ${server_host}:${server_project_dir}"
 retry_command "remote temp dir prepare" remote_exec "rm -rf ${remote_tmp} && mkdir -p ${remote_tmp}/src ${remote_tmp}/alembic_migrations"
-retry_command "upload src" "${server_scp_prefix[@]}" -r "${local_bundle_dir}/src/." "${server_host}:${remote_tmp}/src/"
-retry_command "upload alembic migrations" "${server_scp_prefix[@]}" -r "${local_bundle_dir}/alembic_migrations/." "${server_host}:${remote_tmp}/alembic_migrations/"
+retry_command "upload src" rsync -a --delete -e "${server_rsync_ssh}" "${local_bundle_dir}/src/" "${server_host}:${remote_tmp}/src/"
+retry_command "upload alembic migrations" rsync -a --delete -e "${server_rsync_ssh}" "${local_bundle_dir}/alembic_migrations/" "${server_host}:${remote_tmp}/alembic_migrations/"
 retry_command "upload entrypoint" "${server_scp_prefix[@]}" "${local_bundle_dir}/entrypoint.sh" "${server_host}:${remote_tmp}/entrypoint.sh"
 
 retry_command "sync backend source on server" remote_exec "\
