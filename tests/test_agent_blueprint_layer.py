@@ -1495,6 +1495,16 @@ def test_agent_builder_session_preview_includes_feasibility_for_required_connect
     assert preview["connection_readiness"]["missing_services"][0]["recommended_route"]["provider"] == "openclaw"
     assert preview["connection_readiness"]["ready_services"][0]["provider"] == "telegram"
     assert preview["connection_readiness"]["services"][0]["provider_route_cta"]
+    assert preview["connection_resolver"]["schema"] == "localos_agent_connection_resolver_v1"
+    assert preview["connection_resolver"]["next_action"] == "resolve_connections"
+    assert preview["connection_resolver"]["required_count"] == 2
+    assert preview["connection_resolver"]["unresolved_count"] == 1
+    assert preview["connection_resolver"]["items"][0]["role_label"] == "Источник данных"
+    assert preview["connection_resolver"]["items"][0]["service_label"] == "Google Sheets"
+    assert preview["connection_resolver"]["items"][0]["recommended_provider"] == "openclaw"
+    assert "OpenClaw boundary" in preview["connection_resolver"]["items"][0]["explanation"]
+    assert preview["connection_resolver"]["items"][1]["role_label"] == "Куда подготовить результат"
+    assert preview["connection_resolver"]["items"][1]["state"] == "ready"
     assert preview["connector_intelligence"]["schema"] == "localos_agent_connector_intelligence_v1"
     assert preview["connector_intelligence"]["status"] == "needs_connection"
     assert preview["connector_intelligence"]["can_compile_draft"] is True
@@ -1562,6 +1572,9 @@ def test_agent_builder_setup_flow_points_ready_connectors_to_preview_run():
     assert state["preview"]["connection_readiness"]["post_create_workspace"] == "run"
     assert state["preview"]["connection_readiness"]["can_run_preview_after_create"] is True
     assert state["preview"]["connection_readiness"]["ready_count"] == 2
+    assert state["preview"]["connection_resolver"]["next_action"] == "run_safe_preview"
+    assert state["preview"]["connection_resolver"]["resolved_count"] == 2
+    assert state["preview"]["connection_resolver"]["unresolved_count"] == 0
 
 
 def test_compiled_agent_creation_contract_google_sheets_to_telegram():
@@ -5036,6 +5049,10 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "detailsBlueprint={blueprintDetails?.blueprint}" in agents_page_source
     assert "BuilderConnectionReadinessPanel" in agents_page_source
     assert "Что нужно агенту для работы" in agents_page_source
+    assert "BuilderConnectionResolverPanel" in agents_page_source
+    assert "Как LocalOS подключит сервисы" in agents_page_source
+    assert "connection_resolver" in agents_page_source
+    assert "resolverStateTone" in agents_page_source
     assert "connection_readiness" in agents_page_source
     assert "setup_cta" in agents_page_source
     assert "Настроить подключение" in agents_page_source
@@ -5044,6 +5061,8 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "_build_preview_connection_plan" in Path("src/services/agent_builder_session.py").read_text(encoding="utf-8")
     assert "_build_connection_readiness" in Path("src/services/agent_builder_session.py").read_text(encoding="utf-8")
     assert "localos_agent_connection_readiness_v1" in Path("src/services/agent_builder_session.py").read_text(encoding="utf-8")
+    assert "_build_connection_resolver" in Path("src/services/agent_builder_session.py").read_text(encoding="utf-8")
+    assert "localos_agent_connection_resolver_v1" in Path("src/services/agent_builder_session.py").read_text(encoding="utf-8")
     assert "_build_connection_summary" in Path("src/services/agent_builder_session.py").read_text(encoding="utf-8")
     assert "localos_agent_connection_summary_v1" in Path("src/services/agent_builder_session.py").read_text(encoding="utf-8")
     assert "_build_connector_intelligence" in Path("src/services/agent_builder_session.py").read_text(encoding="utf-8")

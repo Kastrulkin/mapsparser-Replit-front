@@ -221,6 +221,7 @@ def _build_preview(
         "required_connectors": _connector_preview_items(feasibility),
         "connection_plan": _build_preview_connection_plan(feasibility),
         "connection_readiness": _build_connection_readiness(feasibility),
+        "connection_resolver": _build_connection_resolver(feasibility),
         "connection_summary": _build_connection_summary(feasibility),
         "limits": summary.get("limits") if isinstance(summary.get("limits"), dict) else {},
         "output_schema": summary.get("output_schema") if isinstance(summary.get("output_schema"), dict) else {},
@@ -789,6 +790,239 @@ def _build_connection_readiness(feasibility: Dict[str, Any]) -> Dict[str, Any]:
         "forbidden": forbidden,
         "unsupported": unsupported,
     }
+
+
+def _build_connection_resolver(feasibility: Dict[str, Any]) -> Dict[str, Any]:
+    bindings = feasibility.get("bindings") if isinstance(feasibility.get("bindings"), list) else []
+    forbidden = feasibility.get("forbidden") if isinstance(feasibility.get("forbidden"), list) else []
+    unsupported = feasibility.get("unsupported") if isinstance(feasibility.get("unsupported"), list) else []
+    status = str(feasibility.get("status") or "ready")
+    items = [_connection_resolver_item(item) for item in bindings if isinstance(item, dict)]
+    unresolved = [
+        item
+        for item in items
+        if str(item.get("state") or "") not in {"ready", "native_ready"}
+    ]
+    blocked = [
+        item
+        for item in items
+        if str(item.get("state") or "") in {"planned_provider", "unsupported", "forbidden"}
+    ]
+    next_action = _connection_resolver_next_action(status, unresolved, blocked, forbidden, unsupported)
+    return {
+        "schema": "localos_agent_connection_resolver_v1",
+        "status": status,
+        "title": _connection_resolver_title(items, unresolved, blocked, forbidden, unsupported),
+        "summary": _connection_resolver_summary(items, unresolved, blocked, forbidden, unsupported),
+        "next_action": next_action,
+        "next_action_label": _connection_resolver_next_action_label(next_action),
+        "can_continue": status not in {"forbidden", "unsupported", "needs_payment"} and not blocked,
+        "required_count": len(items),
+        "resolved_count": len(items) - len(unresolved),
+        "unresolved_count": len(unresolved),
+        "blocked_count": len(blocked) + len(forbidden) + len(unsupported),
+        "items": items,
+        "forbidden": forbidden,
+        "unsupported": unsupported,
+    }
+
+
+def _connection_resolver_item(binding: Dict[str, Any]) -> Dict[str, Any]:
+    provider = str(binding.get("provider") or "").strip()
+    catalog_item = _catalog_item_by_provider(provider)
+    action = _preview_connection_action(binding, catalog_item)
+    provider_routes = _provider_routes(binding.get("provider_routes"))
+    route = _recommended_provider_route(provider_routes, action, provider)
+    connections = binding.get("connections") if isinstance(binding.get("connections"), list) else []
+    state = _connection_resolver_state(action, route)
+    return {
+        "key": str(binding.get("key") or provider or ""),
+        "role": _connection_resolver_role(binding),
+        "role_label": _connection_resolver_role_label(binding),
+        "provider": provider,
+        "service_label": str(binding.get("provider_title") or catalog_item.get("title") or provider),
+        "capability": str(binding.get("capability") or ""),
+        "direction": str(binding.get("direction") or ""),
+        "state": state,
+        "state_label": _connection_resolver_state_label(state),
+        "recommended_provider": str(route.get("provider") or ""),
+        "recommended_label": str(route.get("label") or route.get("provider") or ""),
+        "recommended_cta": str(route.get("primary_cta") or ""),
+        "connect_mode": str(route.get("connect_mode") or ""),
+        "explanation": _connection_resolver_explanation(binding, action, route, connections),
+        "resolution_hint": _connection_resolver_resolution_hint(binding, action, route, connections),
+        "connection_count": len(connections),
+        "connections": connections[:5],
+        "missing_config": binding.get("missing_config") if isinstance(binding.get("missing_config"), list) else [],
+        "provider_routes": provider_routes,
+        "recommended_route": route,
+    }
+
+
+def _connection_resolver_role(binding: Dict[str, Any]) -> str:
+    direction = str(binding.get("direction") or "").strip()
+    capability = str(binding.get("capability") or "").strip()
+    provider = str(binding.get("provider") or "").strip()
+    if direction == "read" or capability.endswith(".read") or ".read_" in capability:
+        return "source"
+    if direction == "write" and provider.startswith("localos"):
+        return "localos_record"
+    if direction == "write" or "communications." in capability or "send" in capability or "draft" in capability:
+        return "destination"
+    if provider in {"business_profile", "localos_finance"}:
+        return "localos_data"
+    return "service"
+
+
+def _connection_resolver_role_label(binding: Dict[str, Any]) -> str:
+    role = _connection_resolver_role(binding)
+    labels = {
+        "source": "Источник данных",
+        "destination": "Куда подготовить результат",
+        "localos_record": "Запись в LocalOS",
+        "localos_data": "Данные LocalOS",
+        "service": "Сервис",
+    }
+    return labels.get(role, "Сервис")
+
+
+def _connection_resolver_state(action: str, route: Dict[str, str]) -> str:
+    if action in {"ready", "native_ready"}:
+        return action
+    route_state = str(route.get("state") or route.get("status") or "").strip()
+    if action == "choose_existing":
+        return "choose_existing"
+    if action == "planned_provider" or route_state == "planned":
+        return "planned_provider"
+    if route_state in {"available", "manual", "connected"}:
+        return "available"
+    return "connect_required"
+
+
+def _connection_resolver_state_label(state: str) -> str:
+    labels = {
+        "ready": "Уже подключено",
+        "native_ready": "Уже есть в LocalOS",
+        "choose_existing": "Нужно выбрать доступ",
+        "available": "Можно подключить",
+        "connect_required": "Нужно подключить",
+        "planned_provider": "Пока недоступно",
+        "unsupported": "Не поддерживается",
+        "forbidden": "Запрещено policy",
+    }
+    return labels.get(state, "Проверить")
+
+
+def _connection_resolver_explanation(
+    binding: Dict[str, Any],
+    action: str,
+    route: Dict[str, str],
+    connections: List[Dict[str, Any]],
+) -> str:
+    service = str(binding.get("provider_title") or binding.get("provider") or "сервис")
+    route_provider = str(route.get("provider") or "").strip()
+    if action in {"ready", "native_ready"}:
+        if connections:
+            return f"{service} уже подключён к бизнесу и может быть выбран для агента."
+        return f"{service} доступен внутри LocalOS без внешнего ключа."
+    if action == "choose_existing":
+        return f"Найдено несколько доступов {service}. Выберите, какой использовать в плане агента."
+    if route_provider == "openclaw":
+        return f"{service} можно выполнить через OpenClaw boundary под правилами LocalOS."
+    if route_provider == "maton":
+        return f"{service} можно подключить через Maton.ai key, если у бизнеса сохранён такой доступ."
+    if route_provider == "manual":
+        return f"{service} можно оставить ручным шагом: LocalOS подготовит результат, человек выполнит внешнее действие."
+    if route_provider == "native_localos":
+        return f"{service} доступен как нативный домен LocalOS."
+    if route_provider == "composio":
+        return f"{service} есть как будущий OAuth route через Composio, но пока не активирует агента."
+    return f"Для {service} нужен разрешённый способ подключения."
+
+
+def _connection_resolver_resolution_hint(
+    binding: Dict[str, Any],
+    action: str,
+    route: Dict[str, str],
+    connections: List[Dict[str, Any]],
+) -> str:
+    if action in {"ready", "native_ready"}:
+        return "Можно переходить к safe preview после создания агента."
+    if action == "choose_existing":
+        return "Выберите один из существующих доступов перед созданием агента."
+    route_provider = str(route.get("provider") or "").strip()
+    if route_provider == "openclaw":
+        return "Выберите OpenClaw как способ выполнения и подтвердите подключения."
+    if route_provider == "maton":
+        return "Выберите сохранённый Maton.ai key или добавьте его в интеграциях."
+    if route_provider == "manual":
+        return "Агент останется draft-only до ручного внешнего действия."
+    if route_provider == "native_localos":
+        return "Дополнительный внешний доступ не нужен."
+    if route_provider == "composio":
+        return "Пока нельзя активировать через этот путь; можно вернуться позже."
+    if connections:
+        return "Проверьте настройки сохранённого доступа."
+    return "Подключите сервис или выберите доступный provider route."
+
+
+def _connection_resolver_next_action(
+    status: str,
+    unresolved: List[Dict[str, Any]],
+    blocked: List[Dict[str, Any]],
+    forbidden: List[Dict[str, Any]],
+    unsupported: List[Dict[str, Any]],
+) -> str:
+    if status in {"forbidden", "unsupported"} or blocked or forbidden or unsupported:
+        return "blocked"
+    if status == "needs_payment":
+        return "top_up_balance"
+    if unresolved:
+        return "resolve_connections"
+    return "run_safe_preview"
+
+
+def _connection_resolver_next_action_label(next_action: str) -> str:
+    labels = {
+        "blocked": "Нельзя активировать",
+        "top_up_balance": "Пополнить баланс",
+        "resolve_connections": "Выбрать подключения",
+        "run_safe_preview": "Перейти к safe preview",
+    }
+    return labels.get(next_action, "Проверить подключения")
+
+
+def _connection_resolver_title(
+    items: List[Dict[str, Any]],
+    unresolved: List[Dict[str, Any]],
+    blocked: List[Dict[str, Any]],
+    forbidden: List[Dict[str, Any]],
+    unsupported: List[Dict[str, Any]],
+) -> str:
+    if blocked or forbidden or unsupported:
+        return "Часть подключений недоступна"
+    if unresolved:
+        return "Нужно выбрать подключения"
+    if items:
+        return "Подключения понятны"
+    return "Внешние подключения не нужны"
+
+
+def _connection_resolver_summary(
+    items: List[Dict[str, Any]],
+    unresolved: List[Dict[str, Any]],
+    blocked: List[Dict[str, Any]],
+    forbidden: List[Dict[str, Any]],
+    unsupported: List[Dict[str, Any]],
+) -> str:
+    if blocked or forbidden or unsupported:
+        return "LocalOS покажет, какие части задачи нельзя выполнить через разрешённые provider paths."
+    if unresolved:
+        names = ", ".join([str(item.get("service_label") or item.get("provider") or "") for item in unresolved[:3]])
+        return f"Перед созданием агента выберите способ подключения для: {names}."
+    if items:
+        return "Все нужные сервисы сопоставлены с безопасными способами выполнения."
+    return "Агент использует только данные и действия внутри LocalOS."
 
 
 def _connection_readiness_service(binding: Dict[str, Any]) -> Dict[str, Any]:

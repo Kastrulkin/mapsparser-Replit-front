@@ -943,6 +943,46 @@ type AgentConnectionReadiness = {
   unsupported?: Array<{ capability?: string; reason?: string }>;
 };
 
+type AgentConnectionResolverItem = {
+  key?: string;
+  role?: string;
+  role_label?: string;
+  provider?: string;
+  service_label?: string;
+  capability?: string;
+  direction?: string;
+  state?: string;
+  state_label?: string;
+  recommended_provider?: string;
+  recommended_label?: string;
+  recommended_cta?: string;
+  connect_mode?: string;
+  explanation?: string;
+  resolution_hint?: string;
+  connection_count?: number;
+  connections?: Array<{ id?: string; display_name?: string; provider?: string }>;
+  missing_config?: string[];
+  provider_routes?: AgentProviderRoute[];
+  recommended_route?: AgentProviderRoute | null;
+};
+
+type AgentConnectionResolver = {
+  schema?: string;
+  status?: string;
+  title?: string;
+  summary?: string;
+  next_action?: string;
+  next_action_label?: string;
+  can_continue?: boolean;
+  required_count?: number;
+  resolved_count?: number;
+  unresolved_count?: number;
+  blocked_count?: number;
+  items?: AgentConnectionResolverItem[];
+  forbidden?: Array<{ term?: string; reason?: string }>;
+  unsupported?: Array<{ capability?: string; reason?: string }>;
+};
+
 type AgentBuilderPreview = {
   understood_task?: string;
   category?: string;
@@ -958,6 +998,7 @@ type AgentBuilderPreview = {
   feasibility?: AgentBuilderFeasibility;
   connector_intelligence?: AgentConnectorIntelligence;
   connection_readiness?: AgentConnectionReadiness;
+  connection_resolver?: AgentConnectionResolver;
   connection_summary?: AgentConnectionSummary;
   setup_flow?: AgentBuilderSetupFlow;
   connection_plan?: AgentConnectionPlan;
@@ -4188,6 +4229,7 @@ const DialogAgentBuilder = ({
               onAcceptProviderRoutes={onAcceptProviderRoutes}
               onSelectProviderRoute={onSelectProviderRoute}
             />
+            <BuilderConnectionResolverPanel resolver={preview?.connection_resolver} />
             <BuilderSetupFlowPanel setupFlow={preview?.setup_flow} />
             <BuilderConnectionSummaryPanel
               summary={preview?.connection_summary}
@@ -4744,6 +4786,89 @@ const BuilderConnectionReadinessPanel = ({
       ) : null}
     </div>
   );
+};
+
+const BuilderConnectionResolverPanel = ({ resolver }: { resolver?: AgentConnectionResolver }) => {
+  const items = resolver?.items || [];
+  if (!resolver || !items.length) {
+    return null;
+  }
+  const blocked = Boolean((resolver.blocked_count || 0) > 0);
+  const unresolved = Boolean((resolver.unresolved_count || 0) > 0);
+  return (
+    <div className={cn(
+      'mt-3 rounded-xl border px-3 py-3 text-xs leading-5',
+      blocked ? 'border-rose-200 bg-rose-50 text-rose-950' : unresolved ? 'border-amber-200 bg-amber-50 text-amber-950' : 'border-emerald-200 bg-emerald-50 text-emerald-950',
+    )}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="font-semibold">Как LocalOS подключит сервисы</div>
+          <div className="mt-1 max-w-2xl">{resolver.summary || 'LocalOS сопоставил части задачи с доступными сервисами и безопасными способами выполнения.'}</div>
+        </div>
+        <span className="rounded-full bg-white px-2 py-0.5 font-medium ring-1 ring-current/10">
+          {resolver.next_action_label || resolver.title || 'проверить'}
+        </span>
+      </div>
+      <div className="mt-3 grid gap-2 md:grid-cols-2">
+        {items.slice(0, 6).map((item) => {
+          const state = item.state || '';
+          const route = item.recommended_route || null;
+          const routeProvider = item.recommended_provider || route?.provider || '';
+          return (
+            <div key={item.key || `${item.provider}:${item.role}`} className="rounded-lg bg-white px-3 py-2 ring-1 ring-current/10">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <div className="text-[11px] font-semibold uppercase text-slate-500">{item.role_label || 'Сервис'}</div>
+                  <div className="font-medium text-slate-950">{item.service_label || connectorLabel(item.provider)}</div>
+                </div>
+                <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium ring-1', resolverStateTone(state))}>
+                  {item.state_label || humanizeMeta(state || 'проверить')}
+                </span>
+              </div>
+              <div className="mt-1 text-[11px] leading-4 text-slate-600">
+                {item.explanation || 'LocalOS проверит этот сервис перед safe preview.'}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {routeProvider ? (
+                  <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] text-sky-700 ring-1 ring-sky-100">
+                    {item.recommended_label || connectorLabel(routeProvider)}
+                  </span>
+                ) : null}
+                {item.connection_count ? (
+                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700 ring-1 ring-emerald-100">
+                    {item.connection_count} доступ
+                  </span>
+                ) : null}
+                {item.missing_config?.length ? (
+                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700 ring-1 ring-amber-100">
+                    нужны настройки
+                  </span>
+                ) : null}
+              </div>
+              {item.resolution_hint ? (
+                <div className="mt-2 rounded-lg bg-slate-50 px-2 py-1.5 text-[11px] leading-4 text-slate-700 ring-1 ring-slate-200">
+                  {item.resolution_hint}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const resolverStateTone = (state: string) => {
+  if (state === 'ready' || state === 'native_ready') {
+    return 'bg-emerald-50 text-emerald-700 ring-emerald-200';
+  }
+  if (state === 'available' || state === 'choose_existing') {
+    return 'bg-sky-50 text-sky-700 ring-sky-200';
+  }
+  if (state === 'planned_provider') {
+    return 'bg-slate-50 text-slate-600 ring-slate-200';
+  }
+  return 'bg-amber-50 text-amber-700 ring-amber-200';
 };
 
 const BuilderSetupFlowPanel = ({ setupFlow }: { setupFlow?: AgentBuilderSetupFlow }) => {
