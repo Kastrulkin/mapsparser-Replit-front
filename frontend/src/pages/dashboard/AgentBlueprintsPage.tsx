@@ -1193,6 +1193,33 @@ const autoSelectBuilderProviderRoutes = (preview?: AgentBuilderPreview | null): 
   return selected;
 };
 
+const builderRouteIsUsable = (route?: AgentProviderRoute | null): boolean => {
+  const provider = String(route?.provider || '').trim();
+  const state = String(route?.state || route?.status || '').trim();
+  return Boolean(provider && ['available', 'connected', 'manual'].includes(state) && route?.provider_action?.available !== false);
+};
+
+const builderRequiredProviderRouteKeys = (preview?: AgentBuilderPreview | null): string[] => {
+  const keys = new Set<string>();
+  const inspect = (key?: string, route?: AgentProviderRoute | null, routes?: AgentProviderRoute[]) => {
+    const bindingKey = String(key || '').trim();
+    if (!bindingKey) {
+      return;
+    }
+    const candidates = [route, ...(routes || [])];
+    if (candidates.some((candidate) => builderRouteIsUsable(candidate))) {
+      keys.add(bindingKey);
+    }
+  };
+  (preview?.connection_readiness?.services || []).forEach((service) => {
+    inspect(service.key, service.recommended_route || null, undefined);
+  });
+  (preview?.connection_plan?.items || []).forEach((item) => {
+    inspect(item.key, item.recommended_route || null, item.provider_routes || []);
+  });
+  return Array.from(keys);
+};
+
 const bindingResolutionLabel = (binding: AgentIntegrationBindingStatus) => ({
   native_localos: 'внутри LocalOS',
   agent_integration: 'подключение бизнеса',
@@ -2020,6 +2047,7 @@ export const AgentBlueprintsPage = () => {
   const [selectedBuilderConnectionBindings, setSelectedBuilderConnectionBindings] = useState<Record<string, string>>({});
   const [selectedBuilderProviderRoutes, setSelectedBuilderProviderRoutes] = useState<Record<string, string>>({});
   const [acceptedBuilderCompilerPlan, setAcceptedBuilderCompilerPlan] = useState(false);
+  const [acceptedBuilderProviderRoutes, setAcceptedBuilderProviderRoutes] = useState(false);
   const [agentReview, setAgentReview] = useState<AgentReview | null>(null);
   const [sourceCatalog, setSourceCatalog] = useState<AgentSourceCatalogItem[]>([]);
   const [setupDataSources, setSetupDataSources] = useState('профиль бизнеса, ручной контекст');
@@ -2478,6 +2506,7 @@ export const AgentBlueprintsPage = () => {
       setSelectedBuilderConnectionBindings(autoSelectBuilderConnectionBindings(response.data?.session?.preview || null));
       setSelectedBuilderProviderRoutes(autoSelectBuilderProviderRoutes(response.data?.session?.preview || null));
       setAcceptedBuilderCompilerPlan(false);
+      setAcceptedBuilderProviderRoutes(false);
       setAgentPrompt(dialogBuilderInput.trim());
       const preview = response.data?.session?.preview || {};
       if (typeof preview.category === 'string') {
@@ -2521,6 +2550,7 @@ export const AgentBlueprintsPage = () => {
       setSelectedBuilderConnectionBindings(autoSelectBuilderConnectionBindings(response.data?.session?.preview || null));
       setSelectedBuilderProviderRoutes(autoSelectBuilderProviderRoutes(response.data?.session?.preview || null));
       setAcceptedBuilderCompilerPlan(false);
+      setAcceptedBuilderProviderRoutes(false);
       setDialogBuilderReply('');
     } catch (requestError) {
       console.error(requestError);
@@ -2542,6 +2572,7 @@ export const AgentBlueprintsPage = () => {
         selected_connection_bindings: selectedBuilderConnectionBindings,
         selected_provider_routes: selectedBuilderProviderRoutes,
         accepted_compiler_plan: acceptedBuilderCompilerPlan,
+        accepted_provider_routes: acceptedBuilderProviderRoutes,
       });
       const blueprint = response.data?.blueprint;
       const handoff = normalizePostCreateHandoff(response.data?.post_create_handoff);
@@ -2566,6 +2597,7 @@ export const AgentBlueprintsPage = () => {
       setSelectedBuilderConnectionBindings({});
       setSelectedBuilderProviderRoutes({});
       setAcceptedBuilderCompilerPlan(false);
+      setAcceptedBuilderProviderRoutes(false);
       setCreateWizardOpen(false);
       const handoffMode = handoff?.workspace_mode || '';
       setWorkspaceMode(
@@ -3236,7 +3268,9 @@ export const AgentBlueprintsPage = () => {
             selectedConnectionBindings={selectedBuilderConnectionBindings}
             selectedProviderRoutes={selectedBuilderProviderRoutes}
             acceptedCompilerPlan={acceptedBuilderCompilerPlan}
+            acceptedProviderRoutes={acceptedBuilderProviderRoutes}
             onAcceptCompilerPlan={() => setAcceptedBuilderCompilerPlan(true)}
+            onAcceptProviderRoutes={() => setAcceptedBuilderProviderRoutes(true)}
             onSelectConnectionBinding={(bindingKey, integrationId) => {
               setSelectedBuilderConnectionBindings((current) => ({
                 ...current,
@@ -3244,6 +3278,7 @@ export const AgentBlueprintsPage = () => {
               }));
             }}
             onSelectProviderRoute={(bindingKey, routeProvider) => {
+              setAcceptedBuilderProviderRoutes(false);
               setSelectedBuilderProviderRoutes((current) => ({
                 ...current,
                 [bindingKey]: routeProvider,
@@ -3956,7 +3991,9 @@ const DialogAgentBuilder = ({
   selectedConnectionBindings,
   selectedProviderRoutes,
   acceptedCompilerPlan,
+  acceptedProviderRoutes,
   onAcceptCompilerPlan,
+  onAcceptProviderRoutes,
   onSelectConnectionBinding,
   onSelectProviderRoute,
 }: {
@@ -3972,7 +4009,9 @@ const DialogAgentBuilder = ({
   selectedConnectionBindings: Record<string, string>;
   selectedProviderRoutes: Record<string, string>;
   acceptedCompilerPlan: boolean;
+  acceptedProviderRoutes: boolean;
   onAcceptCompilerPlan: () => void;
+  onAcceptProviderRoutes: () => void;
   onSelectConnectionBinding: (bindingKey: string, integrationId: string) => void;
   onSelectProviderRoute: (bindingKey: string, routeProvider: string) => void;
 }) => {
@@ -3985,7 +4024,14 @@ const DialogAgentBuilder = ({
   const missingConnectionChoices = requiredConnectionChoices.filter((item) => !selectedConnectionBindings[item.key || '']);
   const compilerPlanRequiresConfirmation = builderCompilerPlanRequiresConfirmation(preview);
   const missingCompilerPlanConfirmation = compilerPlanRequiresConfirmation && !acceptedCompilerPlan;
-  const canCreateDraft = preview?.setup_flow?.can_create_draft !== false && !missingConnectionChoices.length && !missingCompilerPlanConfirmation;
+  const requiredProviderRouteKeys = builderRequiredProviderRouteKeys(preview);
+  const missingProviderRouteKeys = requiredProviderRouteKeys.filter((key) => !selectedProviderRoutes[key]);
+  const providerRoutesRequireConfirmation = requiredProviderRouteKeys.length > 0;
+  const missingProviderRouteConfirmation = providerRoutesRequireConfirmation && (!acceptedProviderRoutes || missingProviderRouteKeys.length > 0);
+  const canCreateDraft = preview?.setup_flow?.can_create_draft !== false
+    && !missingConnectionChoices.length
+    && !missingCompilerPlanConfirmation
+    && !missingProviderRouteConfirmation;
   const createBlockers: Array<{ key: string; label: string }> = [];
   const addCreateBlocker = (key: string, label: string) => {
     const cleanKey = key.trim();
@@ -4003,6 +4049,11 @@ const DialogAgentBuilder = ({
   });
   if (missingCompilerPlanConfirmation) {
     addCreateBlocker('compiler_plan_confirmation', 'Подтвердите план агента перед созданием draft.');
+  }
+  if (missingProviderRouteKeys.length) {
+    addCreateBlocker('provider_route_selection', `Выберите provider route для шагов: ${missingProviderRouteKeys.join(', ')}.`);
+  } else if (providerRoutesRequireConfirmation && !acceptedProviderRoutes) {
+    addCreateBlocker('provider_route_confirmation', 'Подтвердите выбранные provider routes перед созданием draft.');
   }
   preview?.setup_flow?.activation_blockers?.slice(0, 4).forEach((item) => {
     addCreateBlocker(`blocker:${item.type || item.provider || item.message}`, item.message || connectorLabel(item.provider));
@@ -4132,6 +4183,9 @@ const DialogAgentBuilder = ({
             <BuilderConnectionReadinessPanel
               readiness={preview?.connection_readiness}
               selectedProviderRoutes={selectedProviderRoutes}
+              acceptedProviderRoutes={acceptedProviderRoutes}
+              missingProviderRouteKeys={missingProviderRouteKeys}
+              onAcceptProviderRoutes={onAcceptProviderRoutes}
               onSelectProviderRoute={onSelectProviderRoute}
             />
             <BuilderSetupFlowPanel setupFlow={preview?.setup_flow} />
@@ -4507,10 +4561,16 @@ const RecommendedProviderRouteNote = ({
 const BuilderConnectionReadinessPanel = ({
   readiness,
   selectedProviderRoutes = {},
+  acceptedProviderRoutes = false,
+  missingProviderRouteKeys = [],
+  onAcceptProviderRoutes,
   onSelectProviderRoute,
 }: {
   readiness?: AgentConnectionReadiness;
   selectedProviderRoutes?: Record<string, string>;
+  acceptedProviderRoutes?: boolean;
+  missingProviderRouteKeys?: string[];
+  onAcceptProviderRoutes?: () => void;
   onSelectProviderRoute?: (bindingKey: string, routeProvider: string) => void;
 }) => {
   const services = readiness?.services || [];
@@ -4522,6 +4582,10 @@ const BuilderConnectionReadinessPanel = ({
   const blocked = Boolean((readiness.blocked_count || 0) > 0 || forbidden.length || unsupported.length);
   const needsAction = Boolean((readiness.missing_count || 0) > 0 || (readiness.choice_count || 0) > 0);
   const ready = !blocked && !needsAction;
+  const selectableRouteKeys = services
+    .map((service) => service.key || '')
+    .filter((key) => key && selectedProviderRoutes[key]);
+  const canConfirmRoutes = Boolean(selectableRouteKeys.length && !missingProviderRouteKeys.length && onAcceptProviderRoutes);
   return (
     <div className={cn(
       'mt-3 rounded-xl border px-3 py-3 text-xs leading-5',
@@ -4604,6 +4668,34 @@ const BuilderConnectionReadinessPanel = ({
               })()}
             </div>
           ))}
+        </div>
+      ) : null}
+      {selectableRouteKeys.length ? (
+        <div className={cn(
+          'mt-3 rounded-lg bg-white px-3 py-2 ring-1',
+          acceptedProviderRoutes ? 'text-emerald-800 ring-emerald-200' : missingProviderRouteKeys.length ? 'text-amber-900 ring-amber-200' : 'text-slate-700 ring-slate-200',
+        )}>
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+            <div className="text-[11px] leading-4">
+              {acceptedProviderRoutes
+                ? 'Provider routes подтверждены и будут сохранены в compiled workflow.'
+                : missingProviderRouteKeys.length
+                ? `Не выбран route для: ${missingProviderRouteKeys.join(', ')}.`
+                : 'Подтвердите, что LocalOS должен использовать выбранные provider routes для draft.'}
+            </div>
+            {onAcceptProviderRoutes ? (
+              <Button
+                type="button"
+                size="sm"
+                variant={acceptedProviderRoutes ? 'outline' : 'default'}
+                disabled={acceptedProviderRoutes || !canConfirmRoutes}
+                onClick={onAcceptProviderRoutes}
+              >
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+                {acceptedProviderRoutes ? 'Routes подтверждены' : 'Подтвердить routes'}
+              </Button>
+            ) : null}
+          </div>
         </div>
       ) : null}
     </div>

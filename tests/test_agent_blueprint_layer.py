@@ -1938,7 +1938,13 @@ def test_agent_builder_create_blueprint_endpoint_returns_ready_preview_handoff(m
     request_context = app.test_request_context(
         "/api/agent-builder/sessions/session-1/create-blueprint",
         method="POST",
-        json={},
+        json={
+            "selected_provider_routes": {
+                "google_sheets_read": "openclaw",
+                "telegram_delivery": "openclaw",
+            },
+            "accepted_provider_routes": True,
+        },
     )
     request_context.push()
     try:
@@ -1959,13 +1965,15 @@ def test_agent_builder_create_blueprint_endpoint_returns_ready_preview_handoff(m
     assert payload["post_create_handoff"]["workspace_mode"] == "run"
     assert payload["connection_preflight"]["ready"] is True
     assert {item["provider"]: item["resolution"] for item in payload["connection_preflight"]["items"]} == {
-        "google_sheets": "blueprint_metadata",
-        "telegram": "blueprint_metadata",
+        "google_sheets": "provider_route_openclaw_boundary",
+        "telegram": "provider_route_openclaw_boundary",
     }
     assert payload["session"]["status"] == "blueprint_created"
     assert payload["session"]["blueprint_id"] == blueprint_id
     assert metadata["builder_selected_connection_bindings"]["google_sheets_read"]["selection_source"] == "auto_single_connection"
-    assert metadata["agent_binding_integrations"]["telegram_delivery"]["integration_id"] == "telegram-1"
+    assert metadata["builder_provider_routes_accepted"] is True
+    assert metadata["agent_binding_provider_routes"]["telegram_delivery"]["integration_id"] == "openclaw_boundary"
+    assert metadata["agent_binding_provider_routes"]["telegram_delivery"]["execution_boundary"] == "localos_policy_envelope"
     assert metadata["openclaw_planner_loop"]["may_execute_tools"] is False
     assert payload["version"]["capability_allowlist_json"] == ["google_sheets.read_rows", "communications.draft"]
 
@@ -2338,6 +2346,38 @@ def test_agent_builder_api_requires_compiler_plan_confirmation_only_for_reviewab
             "compiler_unsupported_requests": [{"reason": "No approved provider path"}],
         }
     ) is True
+
+
+def test_agent_builder_api_requires_selected_provider_routes_for_required_bindings():
+    from api.agent_builder_api import _missing_required_provider_routes, _required_provider_route_bindings
+
+    preview = {
+        "connection_readiness": {
+            "services": [
+                {
+                    "key": "google_sheets_read",
+                    "recommended_route": {
+                        "provider": "openclaw",
+                        "state": "available",
+                        "provider_action": {"available": True},
+                    },
+                },
+                {
+                    "key": "telegram_delivery",
+                    "recommended_route": {
+                        "provider": "composio",
+                        "state": "planned",
+                    },
+                },
+            ]
+        }
+    }
+
+    required = _required_provider_route_bindings(preview)
+
+    assert required == [{"key": "google_sheets_read", "available_routes": ["openclaw"]}]
+    assert _missing_required_provider_routes(preview, {}) == required
+    assert _missing_required_provider_routes(preview, {"google_sheets_read": {"provider": "openclaw"}}) == []
 
 
 def test_agent_builder_connector_intelligence_blocks_forbidden_provider_path():
@@ -5039,8 +5079,16 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "RecommendedProviderRouteNote" in agents_page_source
     assert "recommended_route_reason" in agents_page_source
     assert "selected_provider_routes: selectedBuilderProviderRoutes" in agents_page_source
+    assert "accepted_provider_routes: acceptedBuilderProviderRoutes" in agents_page_source
+    assert "acceptedBuilderProviderRoutes" in agents_page_source
+    assert "builderRequiredProviderRouteKeys" in agents_page_source
+    assert "Подтвердить routes" in agents_page_source
+    assert "Routes подтверждены" in agents_page_source
     assert "autoSelectBuilderProviderRoutes" in agents_page_source
     assert "Route выбран для draft" in agents_page_source
+    assert "AGENT_PROVIDER_ROUTE_REQUIRED" in builder_api_source
+    assert "AGENT_PROVIDER_ROUTES_CONFIRMATION_REQUIRED" in builder_api_source
+    assert "builder_provider_routes_accepted" in builder_api_source
     assert "chooseProviderRoute" in agents_page_source
     assert "/provider-routes" in agents_page_source
     assert "onChooseProviderRoute" in agents_page_source

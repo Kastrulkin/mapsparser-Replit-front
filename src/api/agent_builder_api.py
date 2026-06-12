@@ -334,6 +334,39 @@ def _allowed_provider_routes_by_binding(preview: dict) -> dict:
     return result
 
 
+def _required_provider_route_bindings(preview: dict) -> list[dict]:
+    allowed = _allowed_provider_routes_by_binding(preview)
+    result = []
+    for binding_key, routes in allowed.items():
+        usable_routes = []
+        for route in routes.values():
+            if not isinstance(route, dict):
+                continue
+            provider = str(route.get("provider") or "").strip()
+            state = str(route.get("state") or route.get("status") or "").strip()
+            action = route.get("provider_action") if isinstance(route.get("provider_action"), dict) else {}
+            if provider and state in {"available", "connected", "manual"} and action.get("available") is not False:
+                usable_routes.append(provider)
+        if usable_routes:
+            result.append(
+                {
+                    "key": binding_key,
+                    "available_routes": sorted(set(usable_routes)),
+                }
+            )
+    return result
+
+
+def _missing_required_provider_routes(preview: dict, selected_provider_routes: dict) -> list[dict]:
+    selected_keys = set(selected_provider_routes.keys()) if isinstance(selected_provider_routes, dict) else set()
+    missing = []
+    for item in _required_provider_route_bindings(preview):
+        binding_key = str(item.get("key") or "").strip()
+        if binding_key and binding_key not in selected_keys:
+            missing.append(item)
+    return missing
+
+
 def _apply_selected_provider_routes(metadata: dict, selected_provider_routes: dict) -> dict:
     if not selected_provider_routes:
         return metadata
@@ -657,6 +690,29 @@ def create_blueprint_from_agent_builder_session(session_id: str):
         connection_inventory = _load_builder_connection_inventory(cursor, business_id)
         selected_bindings = _selected_connection_bindings(payload, preview, connection_inventory)
         selected_provider_routes = _selected_provider_routes(payload, preview)
+        missing_provider_routes = _missing_required_provider_routes(preview, selected_provider_routes)
+        if missing_provider_routes:
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "Выберите provider route для обязательных шагов агента.",
+                    "code": "AGENT_PROVIDER_ROUTE_REQUIRED",
+                    "missing_provider_routes": missing_provider_routes,
+                    "connection_readiness": preview.get("connection_readiness") if isinstance(preview.get("connection_readiness"), dict) else {},
+                }
+            ), 400
+        if _required_provider_route_bindings(preview) and not bool(payload.get("accepted_provider_routes")):
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "Подтвердите выбранные provider routes перед созданием draft.",
+                    "code": "AGENT_PROVIDER_ROUTES_CONFIRMATION_REQUIRED",
+                    "selected_provider_routes": selected_provider_routes,
+                    "connection_readiness": preview.get("connection_readiness") if isinstance(preview.get("connection_readiness"), dict) else {},
+                    "next_step": "accept_provider_routes",
+                    "next_step_title": "Подтвердите routes агента",
+                }
+            ), 400
         missing_connection_choices = _missing_required_connection_choices(preview, selected_bindings)
         if missing_connection_choices:
             return jsonify(
@@ -710,6 +766,7 @@ def create_blueprint_from_agent_builder_session(session_id: str):
         metadata["agent_setup"] = preview_to_setup(preview)
         metadata["setup_completed"] = True
         metadata["builder_compiler_plan_accepted"] = bool(payload.get("accepted_compiler_plan"))
+        metadata["builder_provider_routes_accepted"] = bool(payload.get("accepted_provider_routes"))
         metadata = _apply_selected_connection_bindings(metadata, selected_bindings)
         metadata = _apply_selected_provider_routes(metadata, selected_provider_routes)
         metadata["builder_selected_connection_bindings"] = selected_bindings
