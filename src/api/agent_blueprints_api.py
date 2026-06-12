@@ -44,6 +44,12 @@ from services.agent_provider_registry import (
 )
 from services.agent_integration_preflight import build_agent_integration_preflight
 from services.agent_metrics import build_agent_metrics_summary
+from api.agent_builder_api import (
+    _apply_selected_provider_routes,
+    _missing_required_provider_routes,
+    _required_provider_route_bindings,
+    _selected_provider_routes,
+)
 
 
 agent_blueprints_bp = Blueprint("agent_blueprints_api", __name__)
@@ -1649,6 +1655,32 @@ def create_agent_blueprint_draft():
                     "setup_flow": setup_flow,
                 }
             ), 400
+        selected_provider_routes = _selected_provider_routes(payload, preview)
+        missing_provider_routes = _missing_required_provider_routes(preview, selected_provider_routes)
+        if missing_provider_routes:
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "Выберите provider route для обязательных шагов агента.",
+                    "code": "AGENT_PROVIDER_ROUTE_REQUIRED",
+                    "missing_provider_routes": missing_provider_routes,
+                    "connection_readiness": preview.get("connection_readiness") if isinstance(preview.get("connection_readiness"), dict) else {},
+                    "setup_flow": setup_flow,
+                }
+            ), 400
+        if _required_provider_route_bindings(preview) and not bool(payload.get("accepted_provider_routes")):
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "Подтвердите выбранные provider routes перед созданием draft.",
+                    "code": "AGENT_PROVIDER_ROUTES_CONFIRMATION_REQUIRED",
+                    "selected_provider_routes": selected_provider_routes,
+                    "connection_readiness": preview.get("connection_readiness") if isinstance(preview.get("connection_readiness"), dict) else {},
+                    "setup_flow": setup_flow,
+                    "next_step": "accept_provider_routes",
+                    "next_step_title": "Подтвердите routes агента",
+                }
+            ), 400
         planner_context = preview.get("openclaw_planner_context") if isinstance(preview.get("openclaw_planner_context"), dict) else {}
         planner_loop = preview.get("openclaw_planner_loop") if isinstance(preview.get("openclaw_planner_loop"), dict) else {}
         draft = build_agent_blueprint_draft(
@@ -1691,7 +1723,10 @@ def create_agent_blueprint_draft():
         metadata["setup_completed"] = bool(setup_flow.get("can_create_draft"))
         metadata["billing"] = billing
         metadata = _apply_direct_selected_connection_bindings(metadata, selected_bindings)
+        metadata = _apply_selected_provider_routes(metadata, selected_provider_routes)
         metadata["builder_selected_connection_bindings"] = selected_bindings
+        metadata["builder_selected_provider_routes"] = selected_provider_routes
+        metadata["builder_provider_routes_accepted"] = bool(payload.get("accepted_provider_routes"))
         cursor.execute(
             """
             INSERT INTO agent_blueprints (
@@ -1739,6 +1774,7 @@ def create_agent_blueprint_draft():
                 "connector_intelligence": preview.get("connector_intelligence") if isinstance(preview.get("connector_intelligence"), dict) else {},
                 "openclaw_planner_loop": planner_loop,
                 "selected_connection_bindings": selected_bindings,
+                "selected_provider_routes": selected_provider_routes,
                 "connection_preflight": connection_preflight,
                 "connection_plan": connection_plan,
                 "post_create_handoff": post_create_handoff,

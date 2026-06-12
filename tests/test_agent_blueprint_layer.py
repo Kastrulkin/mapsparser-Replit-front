@@ -4797,7 +4797,13 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "_direct_selected_connection_bindings" in api_source
     assert "_direct_missing_required_connection_choices" in api_source
     assert "_apply_direct_selected_connection_bindings" in api_source
+    assert "_selected_provider_routes" in api_source
+    assert "_missing_required_provider_routes" in api_source
+    assert "_required_provider_route_bindings" in api_source
+    assert "_apply_selected_provider_routes" in api_source
     assert "AGENT_CONNECTION_CHOICE_REQUIRED" in api_source
+    assert "AGENT_PROVIDER_ROUTE_REQUIRED" in api_source
+    assert "AGENT_PROVIDER_ROUTES_CONFIRMATION_REQUIRED" in api_source
     assert "\"post_create_handoff\": post_create_handoff" in api_source
     assert "metadata[\"agent_builder_preview\"] = preview" in api_source
     assert "metadata[\"openclaw_planner_context\"] = planner_context" in api_source
@@ -4893,7 +4899,12 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "connection_inventory = _load_direct_builder_connection_inventory" in direct_draft_endpoint
     assert "selected_bindings = _direct_selected_connection_bindings" in direct_draft_endpoint
     assert "missing_connection_choices = _direct_missing_required_connection_choices" in direct_draft_endpoint
+    assert "selected_provider_routes = _selected_provider_routes" in direct_draft_endpoint
+    assert "missing_provider_routes = _missing_required_provider_routes" in direct_draft_endpoint
+    assert "accepted_provider_routes" in direct_draft_endpoint
     assert "metadata = _apply_direct_selected_connection_bindings" in direct_draft_endpoint
+    assert "metadata = _apply_selected_provider_routes" in direct_draft_endpoint
+    assert "metadata[\"builder_provider_routes_accepted\"]" in direct_draft_endpoint
     assert "connection_preflight = build_agent_integration_preflight" in direct_draft_endpoint
     assert "post_create_handoff = _build_agent_post_connect_handoff" in direct_draft_endpoint
     assert "analyze_table_with_llm" in workspace_source
