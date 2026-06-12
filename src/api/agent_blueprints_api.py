@@ -261,6 +261,7 @@ def _agent_connection_plan(
         action = _connection_plan_action(binding, attached, available, catalog_item)
         provider_routes = connector_provider_routes(provider, str(binding.get("capability") or ""))
         route_state = "connected" if action in {"ready", "native_ready"} else best_provider_route_state(provider_routes)
+        recommended_route = _preferred_provider_route(provider_routes)
         items.append(
             {
                 "key": str(binding.get("key") or provider or ""),
@@ -282,6 +283,8 @@ def _agent_connection_plan(
                 "policy_summary": str(binding.get("policy_summary") or ""),
                 "next_action_label": str(binding.get("next_action_label") or ""),
                 "provider_routes": provider_routes,
+                "recommended_route": recommended_route,
+                "recommended_route_reason": _connection_plan_recommended_route_reason(action, recommended_route),
                 "missing_config": binding.get("missing_config") if isinstance(binding.get("missing_config"), list) else [],
                 "approval_required": bool(binding.get("approval_required", True)),
                 "existing_integrations": [_connection_plan_integration(item) for item in available[:5]],
@@ -360,11 +363,48 @@ def _connection_plan_item_by_key(connection_plan: dict, binding_key: str) -> dic
 
 def _preferred_connection_plan_route(plan_item: dict) -> dict:
     routes = plan_item.get("provider_routes") if isinstance(plan_item.get("provider_routes"), list) else []
+    return _preferred_provider_route(routes)
+
+
+def _preferred_provider_route(routes: list) -> dict:
+    for provider, state in [
+        ("openclaw", "available"),
+        ("openclaw", "connected"),
+        ("maton", "available"),
+        ("maton", "connected"),
+        ("native_localos", "available"),
+        ("manual", "manual"),
+        ("manual", "available"),
+        ("composio", "planned"),
+    ]:
+        for route in routes:
+            if not isinstance(route, dict):
+                continue
+            route_provider = str(route.get("provider") or "").strip()
+            route_state = str(route.get("state") or route.get("status") or "").strip()
+            if route_provider == provider and route_state == state:
+                return route
     for state in ["available", "manual", "planned", "connected"]:
         for route in routes:
             if isinstance(route, dict) and str(route.get("state") or route.get("status") or "") == state:
                 return route
     return routes[0] if routes and isinstance(routes[0], dict) else {}
+
+
+def _connection_plan_recommended_route_reason(action: str, route: dict) -> str:
+    if not route:
+        return ""
+    provider = str(route.get("provider") or "").strip()
+    label = str(route.get("label") or provider or "provider route").strip()
+    if action in {"ready", "native_ready"}:
+        return f"{label} уже закрывает этот binding."
+    if provider == "openclaw":
+        return "OpenClaw можно использовать как execution boundary под LocalOS policy envelope."
+    if provider == "maton":
+        return "Maton можно использовать как provider bridge после выбора сохранённого ключа."
+    if provider == "manual":
+        return "Manual fallback оставит агента в draft/handoff режиме до действия человека."
+    return f"{label} доступен как provider route для этого binding."
 
 
 def _integrations_by_provider(values: list[dict]) -> dict:
@@ -2013,17 +2053,18 @@ def _build_activation_gate_summary(cursor, blueprint: dict, active_version: dict
         metadata=metadata,
         input_payload={},
     )
+    connection_plan = _activation_connection_plan_from_preflight(preflight)
+    connection_plan_items = connection_plan.get("items") if isinstance(connection_plan.get("items"), list) else []
+    connection_plan_by_key = {
+        str(item.get("key") or ""): item
+        for item in connection_plan_items
+        if isinstance(item, dict)
+    }
     if not preflight.get("ready"):
         for item in preflight.get("missing") or []:
             if not isinstance(item, dict):
                 continue
-            blockers.append(
-                {
-                    "type": "connection",
-                    "provider": str(item.get("provider") or ""),
-                    "message": str(item.get("provider") or item.get("key") or "Нужно подключение"),
-                }
-            )
+            blockers.append(_activation_connection_blocker(item, connection_plan_by_key.get(str(item.get("key") or ""))))
     if active_version and not preview_run_status.get("ready"):
         blockers.append({"type": "preview_run", "message": "Запустите безопасный preview run перед активацией."})
     ready = (
@@ -2035,7 +2076,6 @@ def _build_activation_gate_summary(cursor, blueprint: dict, active_version: dict
     )
     next_step = "activate_version" if ready else _activation_gate_next_step(blockers)
     human_blockers = _activation_gate_human_blockers(blockers, preflight, compiled_validation)
-    connection_plan = _activation_connection_plan_from_preflight(preflight)
     return {
         "schema": "localos_agent_activation_gate_v1",
         "status": "ready" if ready else "blocked",
@@ -2056,6 +2096,36 @@ def _build_activation_gate_summary(cursor, blueprint: dict, active_version: dict
         "connection_plan": connection_plan,
         "next_binding_key": _connection_plan_next_binding_key(connection_plan),
         "next_step": next_step,
+    }
+
+
+def _activation_connection_blocker(preflight_item: dict, plan_item: dict | None = None) -> dict:
+    plan_item = plan_item if isinstance(plan_item, dict) else {}
+    provider = str(preflight_item.get("provider") or plan_item.get("provider") or "").strip()
+    binding_key = str(preflight_item.get("key") or plan_item.get("key") or provider or "").strip()
+    missing_config = preflight_item.get("missing_config") if isinstance(preflight_item.get("missing_config"), list) else []
+    provider_routes = plan_item.get("provider_routes") if isinstance(plan_item.get("provider_routes"), list) else []
+    preferred_route = _preferred_connection_plan_route(plan_item)
+    message = str(plan_item.get("explanation") or preflight_item.get("summary") or "").strip()
+    if not message:
+        if missing_config:
+            message = f"Заполните настройки {_agent_integration_provider_label(provider)}: {', '.join([str(value) for value in missing_config])}."
+        else:
+            message = f"Подключите {_agent_integration_provider_label(provider)} или выберите provider route."
+    return {
+        "type": "connection",
+        "provider": provider,
+        "binding_key": binding_key,
+        "message": message,
+        "missing_config": missing_config,
+        "binding_status": str(preflight_item.get("status") or plan_item.get("binding_status") or ""),
+        "resolution": str(preflight_item.get("resolution") or ""),
+        "action": str(plan_item.get("action") or "connect_required"),
+        "route_state": str(plan_item.get("route_state") or ""),
+        "route_summary": str(plan_item.get("route_summary") or ""),
+        "primary_label": str(plan_item.get("primary_label") or _connection_plan_label(str(plan_item.get("action") or "connect_required"))),
+        "preferred_route": preferred_route,
+        "provider_routes": provider_routes[:6],
     }
 
 
@@ -2223,13 +2293,20 @@ def _activation_gate_human_blockers(blockers: list[dict], preflight: dict, compi
         blocker_type = str(item.get("type") or "").strip()
         if blocker_type == "connection":
             provider = str(item.get("provider") or "").strip()
+            message = str(item.get("message") or "").strip()
             result.append(
                 {
                     "type": "connection",
                     "provider": provider,
+                    "binding_key": str(item.get("binding_key") or ""),
                     "title": _agent_integration_provider_label(provider),
-                    "message": f"Подключите {_agent_integration_provider_label(provider)}, затем запустите preflight ещё раз.",
+                    "message": message or f"Подключите {_agent_integration_provider_label(provider)}, затем запустите preflight ещё раз.",
                     "action": "open_connections",
+                    "missing_config": item.get("missing_config") if isinstance(item.get("missing_config"), list) else [],
+                    "route_state": str(item.get("route_state") or ""),
+                    "route_summary": str(item.get("route_summary") or ""),
+                    "preferred_route": item.get("preferred_route") if isinstance(item.get("preferred_route"), dict) else {},
+                    "provider_routes": item.get("provider_routes") if isinstance(item.get("provider_routes"), list) else [],
                 }
             )
         elif blocker_type == "compiled_validation":
@@ -2333,6 +2410,7 @@ def _activation_connection_plan_from_preflight(preflight: dict) -> dict:
             action = "native_ready"
         provider_routes = connector_provider_routes(provider, str(item.get("capability") or ""))
         route_state = "connected" if action in {"ready", "native_ready"} else best_provider_route_state(provider_routes)
+        recommended_route = _preferred_provider_route(provider_routes)
         plan_items.append(
             {
                 "key": str(item.get("key") or provider or ""),
@@ -2354,6 +2432,8 @@ def _activation_connection_plan_from_preflight(preflight: dict) -> dict:
                 "policy_summary": str(item.get("policy_summary") or ""),
                 "next_action_label": str(item.get("next_action_label") or ""),
                 "provider_routes": provider_routes,
+                "recommended_route": recommended_route,
+                "recommended_route_reason": _connection_plan_recommended_route_reason(action, recommended_route),
                 "missing_config": item.get("missing_config") if isinstance(item.get("missing_config"), list) else [],
                 "approval_required": bool(item.get("required", True)),
                 "existing_integrations": [],
@@ -2375,7 +2455,7 @@ def _activation_connection_explanation(provider: str, action: str, item: dict) -
         return "Подключение готово для активации."
     missing_config = item.get("missing_config") if isinstance(item.get("missing_config"), list) else []
     if missing_config:
-        return f"Заполните: {', '.join([str(value) for value in missing_config])}."
+        return f"{_agent_integration_provider_label(provider)}: заполните {', '.join([str(value) for value in missing_config])}."
     return f"Подключите {_agent_integration_provider_label(provider)}, чтобы активировать агента."
 
 

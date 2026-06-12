@@ -306,8 +306,25 @@ def _metadata_binding_config(metadata: Dict[str, Any], provider: str, binding_ke
     candidates.append(binding_integrations.get(binding_key))
     for candidate in candidates:
         if isinstance(candidate, dict):
+            has_connection_anchor = _metadata_candidate_has_connection_anchor(candidate)
+            if not has_connection_anchor:
+                continue
+            answer_config = candidate.get("answer_config") if isinstance(candidate.get("answer_config"), dict) else {}
+            if answer_config:
+                merged = dict(candidate)
+                for key, value in answer_config.items():
+                    if not str(merged.get(str(key)) or "").strip():
+                        merged[str(key)] = value
+                return merged
             return candidate
     return {}
+
+
+def _metadata_candidate_has_connection_anchor(candidate: Dict[str, Any]) -> bool:
+    for key in ["integration_id", "route_provider", "external_account_id", "auth_ref"]:
+        if str(candidate.get(key) or "").strip():
+            return True
+    return False
 
 
 def _missing_config_summary(provider: str, missing_config: List[str]) -> str:

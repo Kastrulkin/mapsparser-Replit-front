@@ -4097,6 +4097,125 @@ def test_agent_preflight_reports_selected_binding_missing_config():
     assert "spreadsheet_id" in preflight["items"][0]["summary"]
 
 
+def test_agent_preflight_does_not_treat_answer_config_as_external_connection():
+    from services.agent_integration_preflight import build_agent_integration_preflight
+
+    class Cursor:
+        def execute(self, query, params=None):
+            return None
+
+        def fetchall(self):
+            return []
+
+    metadata = {
+        "required_integration_bindings": [
+            {
+                "key": "google_sheets_read",
+                "provider": "google_sheets",
+                "capability": "google_sheets.read_rows",
+                "required_config": ["spreadsheet_id", "sheet_name"],
+            }
+        ],
+        "agent_binding_integrations": {
+            "google_sheets_read": {
+                "answer_config": {
+                    "spreadsheet_id": "spreadsheet-from-dialog",
+                    "sheet_name": "Orders",
+                }
+            }
+        },
+        "custom_process": {
+            "google_sheets_read": {
+                "spreadsheet_id": "spreadsheet-from-dialog",
+                "sheet_name": "Orders",
+            },
+            "google_sheets": {
+                "spreadsheet_id": "spreadsheet-from-dialog",
+                "sheet_name": "Orders",
+            },
+        },
+    }
+
+    preflight = build_agent_integration_preflight(Cursor(), business_id="biz1", metadata=metadata, input_payload={})
+
+    assert preflight["ready"] is False
+    assert preflight["status"] == "blocked"
+    assert preflight["items"][0]["status"] == "needs_connection"
+    assert preflight["items"][0]["resolution"] == "missing_integration"
+    assert preflight["items"][0]["provider"] == "google_sheets"
+
+
+def test_agent_preflight_merges_answer_config_into_selected_connection():
+    from services.agent_integration_preflight import build_agent_integration_preflight
+
+    class Cursor:
+        def execute(self, query, params=None):
+            return None
+
+        def fetchall(self):
+            return []
+
+    metadata = {
+        "required_integration_bindings": [
+            {
+                "key": "google_sheets_read",
+                "provider": "google_sheets",
+                "capability": "google_sheets.read_rows",
+                "required_config": ["spreadsheet_id", "sheet_name"],
+            }
+        ],
+        "agent_binding_integrations": {
+            "google_sheets_read": {
+                "integration_id": "sheets-1",
+                "provider": "google_sheets",
+                "answer_config": {
+                    "spreadsheet_id": "spreadsheet-from-dialog",
+                    "sheet_name": "Orders",
+                },
+            }
+        },
+    }
+
+    preflight = build_agent_integration_preflight(Cursor(), business_id="biz1", metadata=metadata, input_payload={})
+
+    assert preflight["ready"] is True
+    assert preflight["items"][0]["status"] == "ready"
+    assert preflight["items"][0]["resolution"] == "blueprint_metadata"
+    assert preflight["items"][0]["integration_id"] == "sheets-1"
+
+
+def test_activation_connection_blocker_keeps_binding_route_context():
+    from api import agent_blueprints_api
+
+    preflight = {
+        "items": [
+            {
+                "key": "google_sheets_read",
+                "provider": "google_sheets",
+                "capability": "google_sheets.read_rows",
+                "status": "needs_connection",
+                "resolution": "missing_integration",
+                "required": True,
+                "missing_config": ["spreadsheet_id", "sheet_name"],
+            }
+        ],
+    }
+
+    connection_plan = agent_blueprints_api._activation_connection_plan_from_preflight(preflight)
+    plan_item = connection_plan["items"][0]
+    blocker = agent_blueprints_api._activation_connection_blocker(preflight["items"][0], plan_item)
+    human_blockers = agent_blueprints_api._activation_gate_human_blockers([blocker], preflight, {})
+
+    assert blocker["binding_key"] == "google_sheets_read"
+    assert blocker["missing_config"] == ["spreadsheet_id", "sheet_name"]
+    assert blocker["route_state"] == "available"
+    assert blocker["preferred_route"]["provider"] == "openclaw"
+    assert any(item["provider"] == "openclaw" for item in blocker["provider_routes"])
+    assert human_blockers[0]["binding_key"] == "google_sheets_read"
+    assert human_blockers[0]["preferred_route"]["provider"] == "openclaw"
+    assert "Google Sheets" in human_blockers[0]["message"]
+
+
 def test_agent_preflight_does_not_treat_compiled_defaults_as_external_connection():
     from services.agent_integration_preflight import build_agent_integration_preflight
 
@@ -4579,9 +4698,11 @@ def test_activation_gate_summary_explains_missing_connector(monkeypatch):
     assert gate["next_step"] == "connect_required_integrations"
     assert gate["primary_action_label"] == "Открыть подключения"
     assert gate["human_blockers"][0]["provider"] == "google_sheets"
-    assert "Подключите" in gate["summary"]
+    assert "Google Sheets" in gate["summary"]
+    assert "spreadsheet_id" in gate["summary"]
     assert gate["connection_plan"]["schema"] == "localos_agent_connection_plan_v1"
     assert gate["connection_plan"]["items"][0]["action"] == "connect_required"
+    assert gate["connection_plan"]["items"][0]["recommended_route"]["provider"] == "openclaw"
     assert gate["next_binding_key"] == "google_sheets_read"
 
 
