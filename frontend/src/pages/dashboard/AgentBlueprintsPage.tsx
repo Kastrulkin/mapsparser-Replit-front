@@ -2509,6 +2509,7 @@ export const AgentBlueprintsPage = () => {
         category: builderCategory,
       });
       const blueprint = response.data?.blueprint;
+      const handoff = normalizePostCreateHandoff(response.data?.post_create_handoff);
       await loadBlueprints();
       if (blueprint?.id) {
         await api.post(`/agent-blueprints/${blueprint.id}/setup`, {
@@ -2541,7 +2542,20 @@ export const AgentBlueprintsPage = () => {
         await loadBlueprintDetails(blueprint.id);
         await loadBlueprintReview(blueprint.id);
         await loadSourceCatalog(blueprint.id);
+        await loadAgentIntegrations(blueprint.id);
         setRecentCreatedAgentName(String(blueprint.name || 'Новый агент'));
+        setRecentPostCreateHandoff(handoff);
+        if (handoff?.workspace_mode === 'connections') {
+          setWorkspaceMode('connections');
+          if (handoff.next_binding_key) {
+            setSelectedConnectionBindingKey(handoff.next_binding_key);
+          }
+        } else if (handoff?.workspace_mode === 'run') {
+          setWorkspaceMode('run');
+          setSelectedConnectionBindingKey('');
+        } else {
+          setWorkspaceMode('settings');
+        }
       }
       setAgentPrompt('');
       setBuilderSourceName('');
@@ -2549,7 +2563,6 @@ export const AgentBlueprintsPage = () => {
       setBuilderFileSource(null);
       setCreateWizardOpen(false);
       setCreateWizardStep(0);
-      setWorkspaceMode('settings');
     } catch (requestError) {
       console.error(requestError);
       setError(getRequestErrorMessage(requestError, 'Не удалось собрать черновик агента.'));

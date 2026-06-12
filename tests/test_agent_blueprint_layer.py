@@ -3564,6 +3564,66 @@ def test_agent_integration_binding_status_treats_localos_finance_as_native_ready
     assert status[0]["missing_config"] == []
 
 
+def test_direct_agent_draft_auto_selects_single_connection_and_requires_ambiguous_choice():
+    from api import agent_blueprints_api
+
+    preview = {
+        "connection_summary": {
+            "items": [
+                {
+                    "key": "telegram_delivery",
+                    "provider": "telegram",
+                    "title": "Telegram",
+                    "action": "choose_existing",
+                    "connections": [{"id": "tg1", "display_name": "Бот бизнеса"}],
+                },
+                {
+                    "key": "google_sheets_read",
+                    "provider": "google_sheets",
+                    "title": "Google Sheets",
+                    "action": "choose_existing",
+                    "connections": [
+                        {"id": "sheet1", "display_name": "Orders"},
+                        {"id": "sheet2", "display_name": "Archive"},
+                    ],
+                },
+            ]
+        }
+    }
+    inventory = [
+        {"id": "tg1", "provider": "telegram", "display_name": "Бот бизнеса", "config": {"bot_mode": "business_bot"}},
+        {"id": "sheet1", "provider": "google_sheets", "display_name": "Orders", "config": {"sheet_name": "Sheet1"}},
+        {"id": "sheet2", "provider": "google_sheets", "display_name": "Archive", "config": {"sheet_name": "Archive"}},
+    ]
+
+    selected = agent_blueprints_api._direct_selected_connection_bindings({}, preview, inventory)
+    missing = agent_blueprints_api._direct_missing_required_connection_choices(preview, selected)
+
+    assert selected["telegram_delivery"]["integration_id"] == "tg1"
+    assert selected["telegram_delivery"]["selection_source"] == "auto_single_connection"
+    assert "google_sheets_read" not in selected
+    assert missing == [
+        {
+            "key": "google_sheets_read",
+            "provider": "google_sheets",
+            "title": "Google Sheets",
+            "connection_count": 2,
+        }
+    ]
+
+    selected = agent_blueprints_api._direct_selected_connection_bindings(
+        {"selected_connection_bindings": {"google_sheets_read": "sheet2"}},
+        preview,
+        inventory,
+    )
+    metadata = agent_blueprints_api._apply_direct_selected_connection_bindings({}, selected)
+
+    assert selected["google_sheets_read"]["integration_id"] == "sheet2"
+    assert agent_blueprints_api._direct_missing_required_connection_choices(preview, selected) == []
+    assert metadata["agent_binding_integrations"]["google_sheets_read"]["provider"] == "google_sheets"
+    assert metadata["custom_process"]["google_sheets"]["sheet_name"] == "Archive"
+
+
 def test_sync_blueprint_integration_metadata_records_selected_binding(monkeypatch):
     from api import agent_blueprints_api
     from services.agent_integration_preflight import build_agent_integration_preflight
@@ -4367,6 +4427,11 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "/api/agent-blueprints/draft" in api_source
     assert "build_agent_builder_state" in api_source
     assert "direct_draft_envelope" in api_source
+    assert "_direct_selected_connection_bindings" in api_source
+    assert "_direct_missing_required_connection_choices" in api_source
+    assert "_apply_direct_selected_connection_bindings" in api_source
+    assert "AGENT_CONNECTION_CHOICE_REQUIRED" in api_source
+    assert "\"post_create_handoff\": post_create_handoff" in api_source
     assert "metadata[\"agent_builder_preview\"] = preview" in api_source
     assert "metadata[\"openclaw_planner_context\"] = planner_context" in api_source
     assert "\"connection_summary\": preview.get(\"connection_summary\")" in api_source
@@ -4455,6 +4520,15 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "candidate_version" in custom_process_endpoint
     assert "_build_activation_gate_summary" in custom_process_endpoint
     assert "_remember_active_version" not in custom_process_endpoint
+
+    direct_draft_start = api_source.index("def create_agent_blueprint_draft")
+    direct_draft_endpoint = api_source[direct_draft_start:api_source.index("@agent_blueprints_bp.route", direct_draft_start + 1)]
+    assert "connection_inventory = _load_direct_builder_connection_inventory" in direct_draft_endpoint
+    assert "selected_bindings = _direct_selected_connection_bindings" in direct_draft_endpoint
+    assert "missing_connection_choices = _direct_missing_required_connection_choices" in direct_draft_endpoint
+    assert "metadata = _apply_direct_selected_connection_bindings" in direct_draft_endpoint
+    assert "connection_preflight = build_agent_integration_preflight" in direct_draft_endpoint
+    assert "post_create_handoff = _build_agent_post_connect_handoff" in direct_draft_endpoint
     assert "analyze_table_with_llm" in workspace_source
     assert "analyze_text_with_gigachat" in document_llm_source
     assert "agent_email_draft" in email_llm_source

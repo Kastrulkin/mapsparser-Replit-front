@@ -647,6 +647,134 @@ def _load_direct_builder_connection_inventory(cursor, business_id: str) -> list[
     return result
 
 
+def _direct_selected_connection_bindings(payload: dict, preview: dict, inventory: list[dict]) -> dict:
+    raw = payload.get("selected_connection_bindings")
+    if not isinstance(raw, dict):
+        raw = payload.get("selected_bindings")
+    if not isinstance(raw, dict):
+        raw = {}
+    summary = preview.get("connection_summary") if isinstance(preview.get("connection_summary"), dict) else {}
+    summary_items = summary.get("items") if isinstance(summary.get("items"), list) else []
+    allowed_by_key: dict[str, set[str]] = {}
+    provider_by_key: dict[str, str] = {}
+    single_connection_by_key: dict[str, str] = {}
+    for item in summary_items:
+        if not isinstance(item, dict):
+            continue
+        binding_key = str(item.get("key") or "").strip()
+        provider = str(item.get("provider") or "").strip()
+        if not binding_key:
+            continue
+        provider_by_key[binding_key] = provider
+        allowed = set()
+        connections = item.get("connections") if isinstance(item.get("connections"), list) else []
+        for connection in connections:
+            if isinstance(connection, dict) and str(connection.get("id") or "").strip():
+                allowed.add(str(connection.get("id") or "").strip())
+        allowed_by_key[binding_key] = allowed
+        if len(allowed) == 1:
+            single_connection_by_key[binding_key] = next(iter(allowed))
+    inventory_by_id = {
+        str(item.get("id") or "").strip(): item
+        for item in inventory
+        if isinstance(item, dict) and str(item.get("id") or "").strip()
+    }
+    result = {}
+    for key, value in raw.items():
+        binding_key = str(key or "").strip()
+        integration_id = str(value or "").strip()
+        if not binding_key or not integration_id or binding_key not in allowed_by_key:
+            continue
+        allowed_ids = allowed_by_key.get(binding_key) or set()
+        if allowed_ids and integration_id not in allowed_ids:
+            continue
+        integration = inventory_by_id.get(integration_id)
+        if not integration:
+            continue
+        provider = provider_by_key.get(binding_key) or str(integration.get("provider") or "")
+        result[binding_key] = {
+            "integration_id": integration_id,
+            "provider": provider,
+            "display_name": str(integration.get("display_name") or provider),
+            "config": integration.get("config") if isinstance(integration.get("config"), dict) else {},
+        }
+    for binding_key, integration_id in single_connection_by_key.items():
+        if binding_key in result:
+            continue
+        integration = inventory_by_id.get(integration_id)
+        if not integration:
+            continue
+        provider = provider_by_key.get(binding_key) or str(integration.get("provider") or "")
+        result[binding_key] = {
+            "integration_id": integration_id,
+            "provider": provider,
+            "display_name": str(integration.get("display_name") or provider),
+            "config": integration.get("config") if isinstance(integration.get("config"), dict) else {},
+            "selection_source": "auto_single_connection",
+        }
+    return result
+
+
+def _direct_missing_required_connection_choices(preview: dict, selected_bindings: dict) -> list[dict]:
+    summary = preview.get("connection_summary") if isinstance(preview.get("connection_summary"), dict) else {}
+    items = summary.get("items") if isinstance(summary.get("items"), list) else []
+    missing = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        binding_key = str(item.get("key") or "").strip()
+        action = str(item.get("action") or "").strip()
+        connections = item.get("connections") if isinstance(item.get("connections"), list) else []
+        if binding_key and action == "choose_existing" and len(connections) > 1 and binding_key not in selected_bindings:
+            missing.append(
+                {
+                    "key": binding_key,
+                    "provider": str(item.get("provider") or ""),
+                    "title": str(item.get("title") or item.get("provider") or binding_key),
+                    "connection_count": len(connections),
+                }
+            )
+    return missing
+
+
+def _apply_direct_selected_connection_bindings(metadata: dict, selected_bindings: dict) -> dict:
+    if not selected_bindings:
+        return metadata
+    integration_ids = metadata.get("agent_integration_ids") if isinstance(metadata.get("agent_integration_ids"), list) else []
+    capability_integrations = metadata.get("capability_integrations") if isinstance(metadata.get("capability_integrations"), dict) else {}
+    binding_integrations = metadata.get("agent_binding_integrations") if isinstance(metadata.get("agent_binding_integrations"), dict) else {}
+    custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+    for binding_key, selected in selected_bindings.items():
+        if not isinstance(selected, dict):
+            continue
+        integration_id = str(selected.get("integration_id") or "").strip()
+        provider = str(selected.get("provider") or "").strip()
+        if not integration_id or not provider:
+            continue
+        if integration_id not in integration_ids:
+            integration_ids.append(integration_id)
+        capability_integrations[provider] = integration_id
+        binding_integrations[str(binding_key)] = {
+            "integration_id": integration_id,
+            "provider": provider,
+            "source": "direct_agent_draft",
+        }
+        config = selected.get("config") if isinstance(selected.get("config"), dict) else {}
+        binding_config = {"integration_id": integration_id}
+        for key, value in config.items():
+            binding_config[str(key)] = value
+        custom_process[str(binding_key)] = binding_config
+        if provider == "google_sheets":
+            custom_process["google_sheets"] = dict(binding_config)
+        if provider == "telegram":
+            custom_process["telegram"] = dict(binding_config)
+    metadata["agent_integration_ids"] = integration_ids[-25:]
+    metadata["capability_integrations"] = capability_integrations
+    metadata["agent_binding_integrations"] = binding_integrations
+    metadata["custom_process"] = custom_process
+    return metadata
+
+
 def _load_agent_external_auth_options(cursor, business_id: str) -> list[dict]:
     try:
         cursor.execute(
@@ -1471,13 +1599,14 @@ def create_agent_blueprint_draft():
         allowed, access_error = _require_business_access(cursor, business_id, user_data)
         if not allowed:
             return access_error
+        connection_inventory = _load_direct_builder_connection_inventory(cursor, business_id)
         builder_state = build_agent_builder_state(
             [{"role": "user", "content": description}],
             str(payload.get("category") or ""),
             use_ai=False,
             business_id=business_id,
             user_id=_user_id(user_data),
-            connected_integrations=_load_direct_builder_connection_inventory(cursor, business_id),
+            connected_integrations=connection_inventory,
         )
         preview = builder_state.get("preview") if isinstance(builder_state.get("preview"), dict) else {}
         feasibility = preview.get("feasibility") if isinstance(preview.get("feasibility"), dict) else {}
@@ -1489,6 +1618,19 @@ def create_agent_blueprint_draft():
                     "error": "Такой агент не может быть создан в рамках политики LocalOS.",
                     "code": "AGENT_REQUEST_FORBIDDEN",
                     "feasibility": feasibility,
+                    "setup_flow": setup_flow,
+                }
+            ), 400
+        selected_bindings = _direct_selected_connection_bindings(payload, preview, connection_inventory)
+        missing_connection_choices = _direct_missing_required_connection_choices(preview, selected_bindings)
+        if missing_connection_choices:
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "Выберите, какие существующие подключения использовать для агента.",
+                    "code": "AGENT_CONNECTION_CHOICE_REQUIRED",
+                    "missing_connection_choices": missing_connection_choices,
+                    "connection_summary": preview.get("connection_summary") if isinstance(preview.get("connection_summary"), dict) else {},
                     "setup_flow": setup_flow,
                 }
             ), 400
@@ -1533,6 +1675,8 @@ def create_agent_blueprint_draft():
         metadata["agent_setup"] = preview_to_setup(preview)
         metadata["setup_completed"] = bool(setup_flow.get("can_create_draft"))
         metadata["billing"] = billing
+        metadata = _apply_direct_selected_connection_bindings(metadata, selected_bindings)
+        metadata["builder_selected_connection_bindings"] = selected_bindings
         cursor.execute(
             """
             INSERT INTO agent_blueprints (
@@ -1554,6 +1698,14 @@ def create_agent_blueprint_draft():
         version_payload = draft.get("version_payload") if isinstance(draft.get("version_payload"), dict) else {}
         version = _insert_version(cursor, blueprint_id, version_payload, user_data)
         _remember_active_version(cursor, {"id": blueprint_id, "metadata_json": metadata}, version, user_data, "created")
+        connection_preflight = build_agent_integration_preflight(
+            cursor,
+            business_id=business_id,
+            metadata=metadata,
+            input_payload={},
+        )
+        connection_plan = _activation_connection_plan_from_preflight(connection_preflight)
+        post_create_handoff = _build_agent_post_connect_handoff(connection_plan)
         db.conn.commit()
         blueprint = _load_blueprint(cursor, blueprint_id)
         return jsonify(
@@ -1571,6 +1723,10 @@ def create_agent_blueprint_draft():
                 "connection_summary": preview.get("connection_summary") if isinstance(preview.get("connection_summary"), dict) else {},
                 "connector_intelligence": preview.get("connector_intelligence") if isinstance(preview.get("connector_intelligence"), dict) else {},
                 "openclaw_planner_loop": planner_loop,
+                "selected_connection_bindings": selected_bindings,
+                "connection_preflight": connection_preflight,
+                "connection_plan": connection_plan,
+                "post_create_handoff": post_create_handoff,
                 "next_step": str(setup_flow.get("post_create_next_step") or setup_flow.get("next_step") or ""),
             }
         ), 201
