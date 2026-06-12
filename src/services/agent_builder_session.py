@@ -607,6 +607,8 @@ def _build_preview_connection_plan(feasibility: Dict[str, Any]) -> Dict[str, Any
         provider = str(binding.get("provider") or "").strip()
         catalog_item = catalog_by_provider.get(provider, {})
         action = _preview_connection_action(binding, catalog_item)
+        provider_routes = _provider_routes(binding.get("provider_routes"))
+        recommended_route = _recommended_provider_route(provider_routes, action, provider)
         items.append(
             {
                 "key": str(binding.get("key") or provider or ""),
@@ -619,6 +621,11 @@ def _build_preview_connection_plan(feasibility: Dict[str, Any]) -> Dict[str, Any
                 "action": action,
                 "primary_label": _preview_connection_label(action),
                 "explanation": _preview_connection_explanation(binding, action),
+                "route_state": str(binding.get("route_state") or ""),
+                "route_summary": str(binding.get("route_summary") or ""),
+                "provider_routes": provider_routes,
+                "recommended_route": recommended_route,
+                "recommended_route_reason": _recommended_provider_route_reason(recommended_route, action, provider),
                 "missing_config": binding.get("missing_config") if isinstance(binding.get("missing_config"), list) else [],
                 "approval_required": bool(binding.get("approval_required", True)),
                 "existing_integrations": binding.get("connections") if isinstance(binding.get("connections"), list) else [],
@@ -726,7 +733,7 @@ def _connection_readiness_service(binding: Dict[str, Any]) -> Dict[str, Any]:
     action = _preview_connection_action(binding, catalog_item)
     connections = binding.get("connections") if isinstance(binding.get("connections"), list) else []
     provider_routes = _provider_routes(binding.get("provider_routes"))
-    route = _preferred_provider_route(provider_routes)
+    route = _recommended_provider_route(provider_routes, action, provider)
     return {
         "key": str(binding.get("key") or provider or ""),
         "provider": provider,
@@ -740,6 +747,8 @@ def _connection_readiness_service(binding: Dict[str, Any]) -> Dict[str, Any]:
         "explanation": _preview_connection_explanation(binding, action),
         "provider_route_label": str(route.get("label") or ""),
         "provider_route_cta": str(route.get("primary_cta") or ""),
+        "recommended_route": route,
+        "recommended_route_reason": _recommended_provider_route_reason(route, action, provider),
         "connect_mode": str(route.get("connect_mode") or ""),
         "connections": connections[:5],
         "connection_count": len(connections),
@@ -748,12 +757,45 @@ def _connection_readiness_service(binding: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _preferred_provider_route(routes: List[Dict[str, str]]) -> Dict[str, str]:
+def _recommended_provider_route(routes: List[Dict[str, str]], action: str, provider: str) -> Dict[str, str]:
+    if not routes:
+        return {}
+    provider_key = str(provider or "").strip()
+    action_key = str(action or "").strip()
+    if action_key in {"ready", "native_ready"}:
+        for route in routes:
+            if str(route.get("state") or route.get("status") or "") == "connected":
+                return route
+    preferred_providers = ["openclaw", "maton", "native_localos", "manual", "composio"]
+    if provider_key in {"localos_finance", "business_profile"} or action_key == "native_ready":
+        preferred_providers = ["native_localos", "openclaw", "manual", "maton", "composio"]
+    for candidate in preferred_providers:
+        for route in routes:
+            state = str(route.get("state") or route.get("status") or "")
+            if str(route.get("provider") or "") == candidate and state in {"available", "connected", "manual"}:
+                return route
     for state in ["connected", "available", "manual", "planned"]:
         for route in routes:
             if str(route.get("state") or route.get("status") or "") == state:
                 return route
     return routes[0] if routes else {}
+
+
+def _recommended_provider_route_reason(route: Dict[str, str], action: str, provider: str) -> str:
+    route_provider = str(route.get("provider") or "").strip()
+    if not route_provider:
+        return ""
+    if route_provider == "openclaw":
+        return "Рекомендуем OpenClaw: он даёт planner/execution boundary, а LocalOS держит policy, billing, audit и approvals."
+    if route_provider == "maton":
+        return "Рекомендуем Maton, если нужен сохранённый API key для connector bridge внутри LocalOS policy."
+    if route_provider == "native_localos":
+        return "Рекомендуем нативный маршрут LocalOS для доменных данных и действий, которые уже живут внутри продукта."
+    if route_provider == "manual":
+        return "Ручной fallback подходит для draft-only режима: LocalOS подготовит результат, внешний шаг выполнит человек."
+    if route_provider == "composio":
+        return "Composio пока planned route: можно показать будущий OAuth path, но не активировать агента через него."
+    return f"Provider route {route_provider} будет проверен через LocalOS preflight."
 
 
 def _connection_readiness_next_action(
@@ -901,6 +943,8 @@ def _connector_intelligence_binding(binding: Dict[str, Any]) -> Dict[str, Any]:
     status = str(binding.get("status") or "").strip()
     catalog_item = _catalog_item_by_provider(provider)
     action = _preview_connection_action(binding, catalog_item)
+    provider_routes = _provider_routes(binding.get("provider_routes"))
+    recommended_route = _recommended_provider_route(provider_routes, action, provider)
     return {
         "key": str(binding.get("key") or provider or ""),
         "provider": provider,
@@ -917,7 +961,9 @@ def _connector_intelligence_binding(binding: Dict[str, Any]) -> Dict[str, Any]:
         "connection_count": binding.get("connection_count") if isinstance(binding.get("connection_count"), int) else 0,
         "missing_config": binding.get("missing_config") if isinstance(binding.get("missing_config"), list) else [],
         "connections": binding.get("connections") if isinstance(binding.get("connections"), list) else [],
-        "provider_routes": _provider_routes(binding.get("provider_routes")),
+        "provider_routes": provider_routes,
+        "recommended_route": recommended_route,
+        "recommended_route_reason": _recommended_provider_route_reason(recommended_route, action, provider),
         "provider_paths": _preview_provider_paths(catalog_item),
     }
 

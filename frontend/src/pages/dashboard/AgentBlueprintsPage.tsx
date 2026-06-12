@@ -554,6 +554,8 @@ type AgentConnectionPlanItem = {
   attached_integrations?: Array<{ id?: string; provider?: string; display_name?: string; status?: string }>;
   provider_routes?: AgentProviderRoute[];
   provider_paths?: Array<{ provider?: string; label?: string; status?: string }>;
+  recommended_route?: AgentProviderRoute | null;
+  recommended_route_reason?: string;
 };
 
 type AgentConnectionPlan = {
@@ -821,6 +823,8 @@ type AgentConnectorIntelligence = {
     missing_config?: string[];
     connections?: Array<{ id?: string; display_name?: string; provider?: string }>;
     provider_routes?: AgentProviderRoute[];
+    recommended_route?: AgentProviderRoute | null;
+    recommended_route_reason?: string;
     provider_paths?: Array<{ provider?: string; label?: string; status?: string; source?: string }>;
   }>;
   capabilities?: Array<{
@@ -878,6 +882,8 @@ type AgentConnectionReadinessService = {
   explanation?: string;
   provider_route_label?: string;
   provider_route_cta?: string;
+  recommended_route?: AgentProviderRoute | null;
+  recommended_route_reason?: string;
   connect_mode?: string;
   connection_count?: number;
   missing_config?: string[];
@@ -1041,6 +1047,7 @@ const normalizeConnectionPlanItem = (value: unknown): AgentConnectionPlanItem | 
   }
   const providerRoutes = objectValue(value, 'provider_routes');
   const providerPaths = objectValue(value, 'provider_paths');
+  const recommendedRoute = normalizeProviderRoute(objectValue(value, 'recommended_route'));
   const missingConfig = objectValue(value, 'missing_config');
   const existingIntegrations = objectValue(value, 'existing_integrations');
   const attachedIntegrations = objectValue(value, 'attached_integrations');
@@ -1063,6 +1070,8 @@ const normalizeConnectionPlanItem = (value: unknown): AgentConnectionPlanItem | 
     attached_integrations: Array.isArray(attachedIntegrations) ? attachedIntegrations : [],
     provider_routes: Array.isArray(providerRoutes) ? providerRoutes : [],
     provider_paths: Array.isArray(providerPaths) ? providerPaths : [],
+    recommended_route: recommendedRoute,
+    recommended_route_reason: String(objectValue(value, 'recommended_route_reason') || ''),
   };
 };
 
@@ -4217,6 +4226,27 @@ const BuilderCreationDecisionBanner = ({
   );
 };
 
+const RecommendedProviderRouteNote = ({
+  route,
+  reason,
+}: {
+  route?: AgentProviderRoute | null;
+  reason?: string;
+}) => {
+  if (!route && !reason) {
+    return null;
+  }
+  return (
+    <div className="mt-2 rounded-lg bg-white px-2 py-1.5 text-[11px] leading-4 text-slate-700 ring-1 ring-slate-200">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="font-medium text-slate-950">Рекомендуемый route</span>
+        {route ? <ProviderActionPill route={route} /> : null}
+      </div>
+      {reason ? <div className="mt-1">{reason}</div> : null}
+    </div>
+  );
+};
+
 const BuilderConnectionReadinessPanel = ({ readiness }: { readiness?: AgentConnectionReadiness }) => {
   const services = readiness?.services || [];
   const forbidden = readiness?.forbidden || [];
@@ -4272,6 +4302,10 @@ const BuilderConnectionReadinessPanel = ({ readiness }: { readiness?: AgentConne
                   {service.provider_route_cta || providerRouteLabel(service.route_state || '')}
                 </div>
               ) : null}
+              <RecommendedProviderRouteNote
+                route={service.recommended_route}
+                reason={service.recommended_route_reason}
+              />
               {service.connections?.length ? (
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {service.connections.slice(0, 3).map((connection) => (
@@ -4515,6 +4549,10 @@ const ConnectorIntelligencePanel = ({ intelligence }: { intelligence?: AgentConn
                   ))}
                 </div>
               ) : null}
+              <RecommendedProviderRouteNote
+                route={item.recommended_route}
+                reason={item.recommended_route_reason}
+              />
             </div>
           ))}
         </div>
@@ -6133,6 +6171,10 @@ const AgentConnectionPlanPanel = ({
                 ))}
               </div>
             ) : null}
+            <RecommendedProviderRouteNote
+              route={item.recommended_route}
+              reason={item.recommended_route_reason}
+            />
             {item.existing_integrations?.length ? (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {item.existing_integrations.slice(0, 3).map((integration) => (

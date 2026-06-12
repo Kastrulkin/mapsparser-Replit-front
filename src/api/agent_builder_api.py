@@ -674,6 +674,7 @@ def _build_handoff_connection_plan(items: list) -> dict:
         action = _handoff_connection_action(status, resolution, catalog_item)
         provider_routes = connector_provider_routes(provider, str(item.get("capability") or ""))
         route_state = "connected" if action in {"ready", "native_ready"} else best_provider_route_state(provider_routes)
+        recommended_route = _recommended_handoff_route(provider_routes, action, provider)
         plan_items.append(
             {
                 "key": str(item.get("key") or provider or ""),
@@ -689,6 +690,8 @@ def _build_handoff_connection_plan(items: list) -> dict:
                 "route_state": route_state,
                 "route_summary": _handoff_connection_route_summary(provider, action, route_state, item),
                 "provider_routes": provider_routes,
+                "recommended_route": recommended_route,
+                "recommended_route_reason": _recommended_handoff_route_reason(recommended_route, action, provider),
                 "missing_config": item.get("missing_config") if isinstance(item.get("missing_config"), list) else [],
                 "approval_required": bool(item.get("required", True)),
                 "existing_integrations": [],
@@ -741,11 +744,51 @@ def _connection_plan_item_by_key(connection_plan: dict, binding_key: str) -> dic
 
 def _preferred_handoff_route(plan_item: dict) -> dict:
     routes = plan_item.get("provider_routes") if isinstance(plan_item.get("provider_routes"), list) else []
+    recommended_route = plan_item.get("recommended_route") if isinstance(plan_item.get("recommended_route"), dict) else {}
+    if recommended_route:
+        return recommended_route
     for state in ["available", "manual", "planned", "connected"]:
         for route in routes:
             if isinstance(route, dict) and str(route.get("state") or route.get("status") or "") == state:
                 return route
     return routes[0] if routes and isinstance(routes[0], dict) else {}
+
+
+def _recommended_handoff_route(routes: list, action: str, provider: str) -> dict:
+    if not routes:
+        return {}
+    provider_key = str(provider or "").strip()
+    action_key = str(action or "").strip()
+    preferred = ["openclaw", "maton", "native_localos", "manual", "composio"]
+    if provider_key in {"localos_finance", "business_profile"} or action_key == "native_ready":
+        preferred = ["native_localos", "openclaw", "manual", "maton", "composio"]
+    for candidate in preferred:
+        for route in routes:
+            if not isinstance(route, dict):
+                continue
+            state = str(route.get("state") or route.get("status") or "")
+            if str(route.get("provider") or "") == candidate and state in {"available", "connected", "manual"}:
+                return route
+    for state in ["available", "manual", "planned", "connected"]:
+        for route in routes:
+            if isinstance(route, dict) and str(route.get("state") or route.get("status") or "") == state:
+                return route
+    return routes[0] if routes and isinstance(routes[0], dict) else {}
+
+
+def _recommended_handoff_route_reason(route: dict, action: str, provider: str) -> str:
+    route_provider = str(route.get("provider") or "").strip()
+    if route_provider == "openclaw":
+        return "Рекомендуем OpenClaw: он даёт planner/execution boundary, а LocalOS держит policy, billing, audit и approvals."
+    if route_provider == "maton":
+        return "Рекомендуем Maton, если нужен сохранённый API key для connector bridge внутри LocalOS policy."
+    if route_provider == "native_localos":
+        return "Рекомендуем нативный маршрут LocalOS для доменных данных и действий, которые уже живут внутри продукта."
+    if route_provider == "manual":
+        return "Ручной fallback подходит для draft-only режима: LocalOS подготовит результат, внешний шаг выполнит человек."
+    if route_provider == "composio":
+        return "Composio пока planned route: можно показать будущий OAuth path, но не активировать агента через него."
+    return ""
 
 
 def _handoff_connection_explanation(provider: str, action: str, item: dict) -> str:

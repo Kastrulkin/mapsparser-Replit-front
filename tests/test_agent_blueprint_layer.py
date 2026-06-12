@@ -1419,6 +1419,8 @@ def test_agent_builder_session_preview_includes_feasibility_for_required_connect
     assert preview["connection_plan"]["schema"] == "localos_agent_connection_plan_v1"
     assert preview["connection_plan"]["status"] == "needs_action"
     assert preview["connection_plan"]["items"][0]["action"] == "connect_required"
+    assert preview["connection_plan"]["items"][0]["recommended_route"]["provider"] == "openclaw"
+    assert "OpenClaw" in preview["connection_plan"]["items"][0]["recommended_route_reason"]
     assert preview["connection_plan"]["items"][1]["action"] == "ready"
     assert preview["connection_summary"]["schema"] == "localos_agent_connection_summary_v1"
     assert preview["connection_summary"]["status"] == "needs_connection"
@@ -1436,6 +1438,7 @@ def test_agent_builder_session_preview_includes_feasibility_for_required_connect
     assert preview["connection_readiness"]["missing_count"] == 1
     assert preview["connection_readiness"]["ready_count"] == 1
     assert preview["connection_readiness"]["missing_services"][0]["provider"] == "google_sheets"
+    assert preview["connection_readiness"]["missing_services"][0]["recommended_route"]["provider"] == "openclaw"
     assert preview["connection_readiness"]["ready_services"][0]["provider"] == "telegram"
     assert preview["connection_readiness"]["services"][0]["provider_route_cta"]
     assert preview["connector_intelligence"]["schema"] == "localos_agent_connector_intelligence_v1"
@@ -1444,6 +1447,7 @@ def test_agent_builder_session_preview_includes_feasibility_for_required_connect
     assert preview["connector_intelligence"]["can_preview_after_connections"] is False
     assert preview["connector_intelligence"]["bindings"][0]["action"] == "connect_required"
     assert preview["connector_intelligence"]["bindings"][0]["route_state"] == "available"
+    assert preview["connector_intelligence"]["bindings"][0]["recommended_route"]["provider"] == "openclaw"
     assert any(item["provider"] == "native_localos" for item in preview["connector_intelligence"]["bindings"][0]["provider_routes"])
     assert preview["connector_intelligence"]["bindings"][0]["setup_cta"]["mode"] == "post_create_connections"
     assert preview["connector_intelligence"]["bindings"][1]["action"] == "ready"
@@ -4114,7 +4118,9 @@ def test_agent_builder_post_create_handoff_contains_connection_plan():
     assert handoff["next_binding"]["title"] == "Google Sheets"
     assert handoff["next_binding"]["route_state"] == "available"
     assert handoff["next_binding"]["route_summary"]
-    assert handoff["next_route"]["provider"] == "native_localos"
+    assert handoff["next_binding"]["recommended_route"]["provider"] == "openclaw"
+    assert "OpenClaw" in handoff["next_binding"]["recommended_route_reason"]
+    assert handoff["next_route"]["provider"] == "openclaw"
     assert handoff["next_route"]["primary_cta"]
     assert handoff["connection_plan"]["schema"] == "localos_agent_connection_plan_v1"
     assert handoff["connection_plan"]["missing_count"] == 1
@@ -4773,6 +4779,8 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "['openclaw', 'maton', 'manual'].includes(route.provider || '')" in agents_page_source
     assert "agentPolicyFacts(item)" in agents_page_source
     assert "item.policy_summary" in agents_page_source
+    assert "RecommendedProviderRouteNote" in agents_page_source
+    assert "recommended_route_reason" in agents_page_source
     assert "chooseProviderRoute" in agents_page_source
     assert "/provider-routes" in agents_page_source
     assert "onChooseProviderRoute" in agents_page_source
