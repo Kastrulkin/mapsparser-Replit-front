@@ -497,6 +497,7 @@ type AgentIntegrationBindingStatus = {
   approval_state?: string;
   policy_summary?: string;
   next_action_label?: string;
+  answer_config?: Record<string, unknown>;
 };
 
 type AgentIntegrationPreflight = {
@@ -1002,6 +1003,7 @@ type AgentBuilderPreview = {
   connector_intelligence?: AgentConnectorIntelligence;
   connection_readiness?: AgentConnectionReadiness;
   connection_resolver?: AgentConnectionResolver;
+  connection_answer_bindings?: Record<string, Record<string, unknown>>;
   connection_summary?: AgentConnectionSummary;
   setup_flow?: AgentBuilderSetupFlow;
   connection_plan?: AgentConnectionPlan;
@@ -1295,6 +1297,36 @@ const bindingActionHint = (binding: AgentIntegrationBindingStatus) => {
     return 'Composio будет доступен как OAuth-provider позже; пока используйте ручной или native путь.';
   }
   return 'Подключите источник или оставьте агент в draft-only режиме.';
+};
+
+const connectionResourceFacts = (provider?: string, config?: Record<string, unknown> | null): string[] => {
+  const data = config || {};
+  if (!Object.keys(data).length) {
+    return [];
+  }
+  if (provider === 'google_sheets') {
+    return [
+      String(data.spreadsheet_id || data.spreadsheet_url || '').trim() ? `таблица: ${String(data.spreadsheet_id || data.spreadsheet_url).trim()}` : '',
+      String(data.sheet_name || '').trim() ? `лист: ${String(data.sheet_name).trim()}` : '',
+      String(data.gid || '').trim() ? `gid: ${String(data.gid).trim()}` : '',
+    ].filter(Boolean);
+  }
+  if (provider === 'telegram') {
+    return [
+      String(data.telegram_target || data.chat_id || '').trim() ? `канал: ${String(data.telegram_target || data.chat_id).trim()}` : '',
+      String(data.target_type || '').trim() ? humanizeMeta(String(data.target_type).trim()) : '',
+    ].filter(Boolean);
+  }
+  if (provider === 'maton') {
+    return [
+      String(data.channel || '').trim() ? `канал: ${String(data.channel).trim()}` : '',
+      String(data.auth_ref || '').trim() ? 'ключ выбран' : '',
+    ].filter(Boolean);
+  }
+  return Object.entries(data)
+    .slice(0, 3)
+    .map(([key, value]) => String(value || '').trim() ? `${humanizeMeta(key)}: ${String(value).trim()}` : '')
+    .filter(Boolean);
 };
 
 const isReadyConnectionAction = (action?: string) => action === 'ready' || action === 'native_ready';
@@ -4231,6 +4263,7 @@ const DialogAgentBuilder = ({
             />
             <BuilderConnectionReadinessPanel
               readiness={preview?.connection_readiness}
+              answerBindings={preview?.connection_answer_bindings}
               selectedProviderRoutes={selectedProviderRoutes}
               acceptedProviderRoutes={acceptedProviderRoutes}
               missingProviderRouteKeys={missingProviderRouteKeys}
@@ -4647,6 +4680,7 @@ const builderConnectionNextStepCopy = (service: AgentConnectionReadinessService,
 
 const BuilderConnectionReadinessPanel = ({
   readiness,
+  answerBindings = {},
   selectedProviderRoutes = {},
   acceptedProviderRoutes = false,
   missingProviderRouteKeys = [],
@@ -4654,6 +4688,7 @@ const BuilderConnectionReadinessPanel = ({
   onSelectProviderRoute,
 }: {
   readiness?: AgentConnectionReadiness;
+  answerBindings?: Record<string, Record<string, unknown>>;
   selectedProviderRoutes?: Record<string, string>;
   acceptedProviderRoutes?: boolean;
   missingProviderRouteKeys?: string[];
@@ -4711,6 +4746,7 @@ const BuilderConnectionReadinessPanel = ({
                 const selected = Boolean(bindingKey && routeProvider && selectedProviderRoutes[bindingKey] === routeProvider);
                 const statusCopy = builderConnectionStatusCopy(service);
                 const nextStepCopy = builderConnectionNextStepCopy(service, selected);
+                const resourceFacts = connectionResourceFacts(service.provider, bindingKey ? answerBindings[bindingKey] : null);
                 return (
                   <>
               <div className="flex flex-wrap items-start justify-between gap-2">
@@ -4725,6 +4761,11 @@ const BuilderConnectionReadinessPanel = ({
               <div className="mt-1 text-[11px] leading-4 text-slate-600">
                 {nextStepCopy}
               </div>
+              {resourceFacts.length ? (
+                <div className="mt-2 rounded-lg bg-emerald-50 px-2 py-1.5 text-[11px] leading-4 text-emerald-800 ring-1 ring-emerald-100">
+                  Поняли ресурс: {resourceFacts.join(' · ')}
+                </div>
+              ) : null}
               {service.provider_route_label || service.provider_route_cta ? (
                 <div className="mt-2 rounded-lg bg-slate-50 px-2 py-1.5 text-[11px] leading-4 text-slate-700 ring-1 ring-slate-200">
                   {service.provider_route_label ? `${service.provider_route_label}: ` : ''}
@@ -7561,14 +7602,16 @@ const AgentIntegrationsPanel = ({
       {bindingStatus.length ? (
         <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Что нужно подключить</div>
-          {bindingStatus.map((binding) => (
-            <div
-              key={binding.key || binding.provider}
-              className={cn(
-                'rounded-lg bg-white px-3 py-2 text-xs ring-1',
-                selectedBindingKey && binding.key === selectedBindingKey ? 'ring-sky-300' : 'ring-slate-200',
-              )}
-            >
+          {bindingStatus.map((binding) => {
+            const resourceFacts = connectionResourceFacts(binding.provider, binding.answer_config || null);
+            return (
+              <div
+                key={binding.key || binding.provider}
+                className={cn(
+                  'rounded-lg bg-white px-3 py-2 text-xs ring-1',
+                  selectedBindingKey && binding.key === selectedBindingKey ? 'ring-sky-300' : 'ring-slate-200',
+                )}
+              >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="font-medium text-slate-900">{connectorLabel(binding.provider)}</div>
@@ -7579,6 +7622,11 @@ const AgentIntegrationsPanel = ({
                 <StatusBadge status={binding.status} />
               </div>
               <div className="mt-1 text-slate-600">{bindingActionHint(binding)}</div>
+              {resourceFacts.length ? (
+                <div className="mt-2 rounded-lg bg-emerald-50 px-2 py-1.5 text-emerald-800 ring-1 ring-emerald-100">
+                  Ресурс из диалога: {resourceFacts.join(' · ')}
+                </div>
+              ) : null}
               {binding.missing_config?.length ? (
                 <div className="mt-1 text-amber-700">Нужно заполнить: {binding.missing_config.join(', ')}</div>
               ) : null}
@@ -7597,8 +7645,9 @@ const AgentIntegrationsPanel = ({
                   Настроить этот доступ
                 </Button>
               ) : null}
-            </div>
-          ))}
+              </div>
+            );
+          })}
         </div>
       ) : null}
 

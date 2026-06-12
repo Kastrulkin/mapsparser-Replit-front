@@ -325,6 +325,15 @@ def test_agent_preview_run_input_is_safe_and_compiled_workflow_aware():
         "Каждый день бери заказ из Google Sheets за вчера и готовь пост в Telegram. "
         "Результат нужен как черновик поста. Перед публикацией человек проверяет результат."
     )
+    draft["metadata"]["custom_process"]["google_sheets"] = {
+        "spreadsheet_id": "spreadsheet-1",
+        "sheet_name": "Orders",
+        "gid": "0",
+    }
+    draft["metadata"]["custom_process"]["telegram"] = {
+        "telegram_target": "@riderra_updates",
+        "target_type": "chat_or_channel",
+    }
     version_payload = draft["version_payload"]
     blueprint = {
         "id": "bp1",
@@ -356,9 +365,13 @@ def test_agent_preview_run_input_is_safe_and_compiled_workflow_aware():
     assert preview_input["approval_required_for_external_actions"] is True
     assert preview_input["source_event"]["preview"] is True
     assert preview_input["google_sheets"]["read_only"] is True
+    assert preview_input["google_sheets"]["spreadsheet_id"] == "spreadsheet-1"
+    assert preview_input["google_sheets"]["sheet_name"] == "Orders"
+    assert preview_input["google_sheets"]["gid"] == "0"
     assert preview_input["google_sheets"]["sample_rows"][0]["route"] == "Los Angeles airport → Santa Barbara"
     assert preview_input["telegram"]["draft_only"] is True
     assert preview_input["telegram"]["external_publish_performed"] is False
+    assert preview_input["telegram"]["telegram_target"] == "@riderra_updates"
     assert [item["provider"] for item in preview_input["provider_bindings"]] == ["google_sheets", "telegram"]
 
 
@@ -3869,7 +3882,12 @@ def test_agent_integration_binding_status_tracks_required_compiled_bindings():
                 "capability": "sheets.append_row_request",
                 "required_config": ["spreadsheet_id", "sheet_name"],
             },
-        ]
+        ],
+        "agent_binding_integrations": {
+            "google_sheets_append": {
+                "answer_config": {"spreadsheet_id": "spreadsheet-1", "sheet_name": "Leads"},
+            }
+        },
     }
     rows = [
         {
@@ -3891,6 +3909,7 @@ def test_agent_integration_binding_status_tracks_required_compiled_bindings():
     assert [item["status"] for item in status] == ["connected", "connected"]
     assert status[1]["integration_id"] == "sheets-1"
     assert status[1]["missing_config"] == []
+    assert status[1]["answer_config"]["sheet_name"] == "Leads"
 
 
 def test_agent_integration_binding_status_treats_localos_finance_as_native_ready():
@@ -4855,6 +4874,10 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "_apply_answer_connection_bindings" in builder_api_source
     assert "builder_answer_connection_bindings" in builder_api_source
     assert "connection_answer_bindings" in Path("src/services/agent_builder_session.py").read_text(encoding="utf-8")
+    assert "answer_config" in api_source
+    assert "connectionResourceFacts" in agents_page_source
+    assert "Ресурс из диалога" in agents_page_source
+    assert "Поняли ресурс" in agents_page_source
     assert "AGENT_CONNECTION_CHOICE_REQUIRED" in api_source
     assert "AGENT_PROVIDER_ROUTE_REQUIRED" in api_source
     assert "AGENT_PROVIDER_ROUTES_CONFIRMATION_REQUIRED" in api_source

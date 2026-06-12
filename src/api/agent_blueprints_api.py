@@ -478,6 +478,7 @@ def _agent_integration_ids(metadata: dict) -> list[str]:
 def _agent_integration_binding_status(metadata: dict, integrations: list[dict]) -> list[dict]:
     required = metadata.get("required_integration_bindings") if isinstance(metadata.get("required_integration_bindings"), list) else []
     provider_routes = metadata.get("agent_binding_provider_routes") if isinstance(metadata.get("agent_binding_provider_routes"), dict) else {}
+    binding_integrations = metadata.get("agent_binding_integrations") if isinstance(metadata.get("agent_binding_integrations"), dict) else {}
     by_provider = {}
     for integration in integrations:
         provider = str(integration.get("provider") or "").strip()
@@ -490,6 +491,8 @@ def _agent_integration_binding_status(metadata: dict, integrations: list[dict]) 
         binding_key = str(item.get("key") or "")
         provider = str(item.get("provider") or "").strip()
         selected_route = provider_routes.get(binding_key) if isinstance(provider_routes.get(binding_key), dict) else {}
+        binding_metadata = binding_integrations.get(binding_key) if isinstance(binding_integrations.get(binding_key), dict) else {}
+        answer_config = binding_metadata.get("answer_config") if isinstance(binding_metadata.get("answer_config"), dict) else {}
         route_provider = str(selected_route.get("route_provider") or "").strip()
         route_status = str(selected_route.get("status") or "active").strip()
         if route_provider in {"openclaw", "maton", "manual"} and route_status == "active":
@@ -508,6 +511,7 @@ def _agent_integration_binding_status(metadata: dict, integrations: list[dict]) 
                     "resolution": f"provider_route_{route_provider}",
                     "route_provider": route_provider,
                     "route": selected_route,
+                    "answer_config": answer_config,
                 }
             )
             continue
@@ -526,6 +530,7 @@ def _agent_integration_binding_status(metadata: dict, integrations: list[dict]) 
                     "integration_id": "native_localos",
                     "missing_config": [],
                     "resolution": "native_localos",
+                    "answer_config": answer_config,
                 }
             )
             continue
@@ -552,6 +557,7 @@ def _agent_integration_binding_status(metadata: dict, integrations: list[dict]) 
                 "integration_id": str((integration or {}).get("id") or ""),
                 "missing_config": missing_config,
                 "resolution": "agent_integration" if status == "connected" else "missing_integration",
+                "answer_config": answer_config,
             }
         )
     return result
@@ -1022,6 +1028,8 @@ def _build_agent_preview_run_input(blueprint: dict, version: dict | None, payloa
     received_at = _utc_now_text()
     sample_rows = _preview_sample_rows(custom_process, user_input)
     provider_bindings = _preview_provider_bindings(required_bindings)
+    google_sheets_config = custom_process.get("google_sheets") if isinstance(custom_process.get("google_sheets"), dict) else {}
+    telegram_config = custom_process.get("telegram") if isinstance(custom_process.get("telegram"), dict) else {}
     preview_input = {
         **user_input,
         "schema": "localos_agent_preview_input_v1",
@@ -1060,12 +1068,29 @@ def _build_agent_preview_run_input(blueprint: dict, version: dict | None, payloa
             "selected_row_strategy": "previous_day_sample",
             "read_only": True,
         }
+    if _has_provider(required_bindings, "google_sheets") or google_sheets_config:
+        google_sheets_preview = preview_input.get("google_sheets") if isinstance(preview_input.get("google_sheets"), dict) else {}
+        google_sheets_preview.update(
+            {
+                "preview": True,
+                "read_only": True,
+                "integration_id": str(google_sheets_config.get("integration_id") or "").strip(),
+                "spreadsheet_id": str(google_sheets_config.get("spreadsheet_id") or "").strip(),
+                "spreadsheet_url": str(google_sheets_config.get("spreadsheet_url") or "").strip(),
+                "sheet_name": str(google_sheets_config.get("sheet_name") or "").strip(),
+                "gid": str(google_sheets_config.get("gid") or "").strip(),
+            }
+        )
+        preview_input["google_sheets"] = google_sheets_preview
     if _has_provider(required_bindings, "telegram") or "telegram" in custom_process.get("archetype", ""):
         preview_input["telegram"] = {
             "preview": True,
             "draft_only": True,
             "external_publish_performed": False,
             "message_style": _preview_message_style(preview, custom_process),
+            "integration_id": str(telegram_config.get("integration_id") or "").strip(),
+            "telegram_target": str(telegram_config.get("telegram_target") or telegram_config.get("chat_id") or "").strip(),
+            "target_type": str(telegram_config.get("target_type") or "").strip(),
         }
     return preview_input
 
