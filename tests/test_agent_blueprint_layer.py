@@ -5015,6 +5015,11 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "OpenClaw actions в safe preview" in agents_page_source
     assert "OpenClawPreviewActionPlanPanel" in agents_page_source
     assert "side effects выключены" in agents_page_source
+    assert "BuilderRequiredConnectionsPanel" in agents_page_source
+    assert "Доступы перед созданием агента" in agents_page_source
+    assert "Ресурс из диалога" in agents_page_source
+    assert "способ выбран" in agents_page_source
+    assert "builderConnectionCardStatus" in agents_page_source
     assert "AGENT_CONNECTION_CHOICE_REQUIRED" in api_source
     assert "AGENT_PROVIDER_ROUTE_REQUIRED" in api_source
     assert "AGENT_PROVIDER_ROUTES_CONFIRMATION_REQUIRED" in api_source

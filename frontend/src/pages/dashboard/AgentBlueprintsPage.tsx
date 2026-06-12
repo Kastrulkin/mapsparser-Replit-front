@@ -4266,6 +4266,11 @@ const DialogAgentBuilder = ({
               onSendReply={onSendReply}
               onCreate={onCreate}
             />
+            <BuilderRequiredConnectionsPanel
+              preview={preview}
+              selectedProviderRoutes={selectedProviderRoutes}
+              onSelectProviderRoute={onSelectProviderRoute}
+            />
             <BuilderCompilerPolicyReviewPanel
               review={preview?.compiler_policy_review}
               workflowDraft={preview?.compiler_workflow_draft}
@@ -4473,6 +4478,185 @@ const BuilderCreationDecisionBanner = ({
       </div>
     </div>
   );
+};
+
+const BuilderRequiredConnectionsPanel = ({
+  preview,
+  selectedProviderRoutes = {},
+  onSelectProviderRoute,
+}: {
+  preview?: AgentBuilderPreview | null;
+  selectedProviderRoutes?: Record<string, string>;
+  onSelectProviderRoute?: (bindingKey: string, routeProvider: string) => void;
+}) => {
+  const planItems = preview?.connection_plan?.items || [];
+  const readinessServices = preview?.connection_readiness?.services || [];
+  const answerBindings = preview?.connection_answer_bindings || {};
+  const items = planItems.length
+    ? planItems.map((item) => ({
+      key: item.key || '',
+      provider: item.provider || '',
+      title: item.title || connectorLabel(item.provider),
+      capability: item.capability || item.trigger || item.direction || '',
+      action: item.action || '',
+      status: item.binding_status || '',
+      route_summary: item.route_summary || item.explanation || '',
+      missing_config: item.missing_config || [],
+      provider_routes: item.provider_routes || [],
+      recommended_route: item.recommended_route || null,
+      recommended_route_reason: item.recommended_route_reason || '',
+      policy_summary: item.policy_summary || '',
+    }))
+    : readinessServices.map((service) => ({
+      key: service.key || '',
+      provider: service.provider || '',
+      title: service.title || connectorLabel(service.provider),
+      capability: service.capability || '',
+      action: service.action || service.status || '',
+      status: service.status || '',
+      route_summary: service.route_summary || service.explanation || '',
+      missing_config: service.missing_config || [],
+      provider_routes: [],
+      recommended_route: service.recommended_route || null,
+      recommended_route_reason: service.recommended_route_reason || '',
+      policy_summary: '',
+    }));
+  if (!preview || !items.length) {
+    return null;
+  }
+  const actionable = items.filter((item) => !['ready', 'native_ready'].includes(item.action));
+  const blocked = actionable.some((item) => ['forbidden', 'unsupported', 'planned_provider'].includes(item.action));
+  const ready = actionable.length === 0;
+  const toneClass = blocked
+    ? 'border-rose-200 bg-rose-50 text-rose-950'
+    : ready
+    ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
+    : 'border-amber-200 bg-amber-50 text-amber-950';
+  const badgeText = ready
+    ? 'доступы готовы'
+    : blocked
+    ? 'есть блокер'
+    : `${actionable.length} нужно закрыть`;
+  return (
+    <div className={cn('mt-3 rounded-xl border px-3 py-3 text-xs leading-5', toneClass)}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="font-semibold">Доступы перед созданием агента</div>
+          <div className="mt-1 max-w-2xl">
+            LocalOS понял, какие сервисы нужны workflow. Ресурс из диалога сохраняется отдельно от доступа: перед preview нужно выбрать provider route или подключение.
+          </div>
+        </div>
+        <span className="rounded-full bg-white px-2 py-0.5 font-medium ring-1 ring-current/10">
+          {badgeText}
+        </span>
+      </div>
+
+      <div className="mt-3 grid gap-2 md:grid-cols-2">
+        {items.slice(0, 4).map((item) => {
+          const bindingKey = item.key || item.provider || '';
+          const recommendedProvider = item.recommended_route?.provider || '';
+          const selected = Boolean(bindingKey && recommendedProvider && selectedProviderRoutes[bindingKey] === recommendedProvider);
+          const resourceFacts = connectionResourceFacts(item.provider, bindingKey ? answerBindings[bindingKey] : null);
+          const missingConfig = item.missing_config || [];
+          return (
+            <div key={`${bindingKey}-${item.provider}-${item.capability}`} className="rounded-lg bg-white px-3 py-2 text-slate-700 ring-1 ring-current/10">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="font-medium text-slate-950">{item.title || connectorLabel(item.provider)}</div>
+                  <div className="mt-0.5 text-[11px] leading-4 text-slate-500">{humanizeMeta(item.capability || item.provider || 'binding')}</div>
+                </div>
+                <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium ring-1', connectionActionTone(item.action || item.status || ''))}>
+                  {builderConnectionCardStatus(item.action, selected)}
+                </span>
+              </div>
+              {resourceFacts.length ? (
+                <div className="mt-2 rounded-lg bg-emerald-50 px-2 py-1.5 text-[11px] leading-4 text-emerald-800 ring-1 ring-emerald-100">
+                  Ресурс из диалога: {resourceFacts.join(' · ')}
+                </div>
+              ) : null}
+              <div className="mt-2 text-[11px] leading-4 text-slate-600">
+                {item.route_summary || builderConnectionCardHint(item.action, item.provider)}
+              </div>
+              {missingConfig.length ? (
+                <div className="mt-2 rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] leading-4 text-amber-800 ring-1 ring-amber-100">
+                  Не хватает настроек: {missingConfig.join(', ')}
+                </div>
+              ) : null}
+              <RecommendedProviderRouteNote
+                route={item.recommended_route}
+                reason={item.recommended_route_reason}
+              />
+              {item.policy_summary ? (
+                <div className="mt-2 rounded-lg bg-slate-50 px-2 py-1.5 text-[11px] leading-4 text-slate-600 ring-1 ring-slate-100">
+                  {item.policy_summary}
+                </div>
+              ) : null}
+              {item.provider_routes.length ? (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {item.provider_routes.slice(0, 4).map((route) => (
+                    <ProviderActionPill
+                      key={`${bindingKey}-${route.provider}-${route.role}`}
+                      route={route}
+                      onChoose={onSelectProviderRoute && bindingKey ? () => onSelectProviderRoute(bindingKey, route.provider || '') : undefined}
+                    />
+                  ))}
+                </div>
+              ) : null}
+              {bindingKey && recommendedProvider && onSelectProviderRoute && !selected ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="mt-2 h-7 bg-white px-2 text-[11px]"
+                  onClick={() => onSelectProviderRoute(bindingKey, recommendedProvider)}
+                >
+                  Использовать {connectorLabel(recommendedProvider)}
+                </Button>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const builderConnectionCardStatus = (action: string, selected: boolean) => {
+  if (selected) {
+    return 'способ выбран';
+  }
+  if (action === 'ready' || action === 'native_ready') {
+    return 'готово';
+  }
+  if (action === 'choose_existing') {
+    return 'выбрать доступ';
+  }
+  if (action === 'connect_required') {
+    return 'нужен способ';
+  }
+  if (action === 'planned_provider') {
+    return 'позже';
+  }
+  if (action === 'forbidden' || action === 'unsupported') {
+    return 'невозможно';
+  }
+  return humanizeMeta(action || 'проверить');
+};
+
+const builderConnectionCardHint = (action: string, provider: string) => {
+  if (action === 'ready' || action === 'native_ready') {
+    return 'Этот доступ уже можно использовать в safe preview.';
+  }
+  if (action === 'choose_existing') {
+    return 'У бизнеса есть несколько подходящих подключений. Выберите одно для compiled workflow.';
+  }
+  if (action === 'connect_required') {
+    return `${connectorLabel(provider)} нужен workflow, но доступ ещё не выбран.`;
+  }
+  if (action === 'planned_provider') {
+    return 'Этот provider path запланирован, но пока недоступен для activation.';
+  }
+  return 'LocalOS проверит этот доступ перед safe preview.';
 };
 
 const compilerPolicyItemLabel = (item?: AgentCompilerPolicyItem | null): string => {
