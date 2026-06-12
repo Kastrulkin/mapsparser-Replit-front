@@ -4986,7 +4986,7 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "Выбрано автоматически" in agents_page_source
     assert "missingConnectionChoices" in agents_page_source
     assert "Сначала выберите подключение" in agents_page_source
-    assert "Почему draft пока нельзя создать" in agents_page_source
+    assert "Почему агента пока нельзя создать" in agents_page_source
     assert "createBlockers" in agents_page_source
     assert "LocalOS должен собрать проверяемый workflow" in agents_page_source
     assert "provider_routes" in agents_page_source
@@ -5035,7 +5035,7 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "getBlueprintBuilderPreview" in agents_page_source
     assert "detailsBlueprint={blueprintDetails?.blueprint}" in agents_page_source
     assert "BuilderConnectionReadinessPanel" in agents_page_source
-    assert "Готовность подключений" in agents_page_source
+    assert "Что нужно агенту для работы" in agents_page_source
     assert "connection_readiness" in agents_page_source
     assert "setup_cta" in agents_page_source
     assert "Настроить подключение" in agents_page_source
@@ -5093,10 +5093,14 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "accepted_provider_routes: acceptedBuilderProviderRoutes" in agents_page_source
     assert "acceptedBuilderProviderRoutes" in agents_page_source
     assert "builderRequiredProviderRouteKeys" in agents_page_source
-    assert "Подтвердить routes" in agents_page_source
-    assert "Routes подтверждены" in agents_page_source
+    assert "Подтвердить подключения" in agents_page_source
+    assert "Подключения подтверждены" in agents_page_source
+    assert "Что нужно агенту для работы" in agents_page_source
+    assert "Использовать этот способ" in agents_page_source
+    assert "Способ выбран" in agents_page_source
     assert "autoSelectBuilderProviderRoutes" in agents_page_source
-    assert "Route выбран для draft" in agents_page_source
+    assert "builderConnectionStatusCopy" in agents_page_source
+    assert "builderConnectionNextStepCopy" in agents_page_source
     assert "AGENT_PROVIDER_ROUTE_REQUIRED" in builder_api_source
     assert "AGENT_PROVIDER_ROUTES_CONFIRMATION_REQUIRED" in builder_api_source
     assert "builder_provider_routes_accepted" in builder_api_source
@@ -5127,7 +5131,7 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "compiled workflow candidate" in agents_page_source
     assert "Что нужно изменить в логике" in agents_page_source
     assert "Ответьте на уточнение" in agents_page_source
-    assert "Можно создать draft и открыть preview" in agents_page_source
+    assert "Создать агента и открыть preview" in agents_page_source
     assert "У бизнеса уже есть несколько подходящих коннектов" in agents_page_source
     assert "Подключения готовы" in agents_page_source
     assert "Запустите safe preview run" in agents_page_source

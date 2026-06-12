@@ -4048,12 +4048,12 @@ const DialogAgentBuilder = ({
     addCreateBlocker(`choice:${item.key || item.provider}`, `Выберите подключение ${item.title || connectorLabel(item.provider)}.`);
   });
   if (missingCompilerPlanConfirmation) {
-    addCreateBlocker('compiler_plan_confirmation', 'Подтвердите план агента перед созданием draft.');
+    addCreateBlocker('compiler_plan_confirmation', 'Подтвердите план перед созданием агента.');
   }
   if (missingProviderRouteKeys.length) {
-    addCreateBlocker('provider_route_selection', `Выберите provider route для шагов: ${missingProviderRouteKeys.join(', ')}.`);
+    addCreateBlocker('provider_route_selection', `Выберите способ подключения для шагов: ${missingProviderRouteKeys.join(', ')}.`);
   } else if (providerRoutesRequireConfirmation && !acceptedProviderRoutes) {
-    addCreateBlocker('provider_route_confirmation', 'Подтвердите выбранные provider routes перед созданием draft.');
+    addCreateBlocker('provider_route_confirmation', 'Подтвердите выбранные способы подключения перед созданием агента.');
   }
   preview?.setup_flow?.activation_blockers?.slice(0, 4).forEach((item) => {
     addCreateBlocker(`blocker:${item.type || item.provider || item.message}`, item.message || connectorLabel(item.provider));
@@ -4065,12 +4065,12 @@ const DialogAgentBuilder = ({
     addCreateBlocker(`unsupported:${item.capability || item.reason}`, item.reason || 'Нет разрешённого provider path.');
   });
   const createDraftLabel = preview?.setup_flow?.post_create_status === 'ready_for_preview'
-    ? 'Создать draft и открыть preview'
+    ? 'Создать агента и открыть preview'
     : missingConnectionChoices.length
       ? 'Сначала выберите подключение'
       : preview?.setup_flow?.post_create_status === 'needs_connection' || preview?.setup_flow?.post_create_status === 'needs_connection_choice'
-      ? 'Создать draft и подключить сервисы'
-      : 'Создать draft агента';
+      ? 'Создать агента и подключить сервисы'
+      : 'Создать агента';
   const builderDecision = buildBuilderCreationDecision({
     preview,
     questions,
@@ -4213,7 +4213,7 @@ const DialogAgentBuilder = ({
             ) : null}
             {!canCreateDraft && createBlockers.length ? (
               <div className="mt-3 rounded-xl border border-amber-200 bg-white px-3 py-3 text-xs leading-5 text-amber-950">
-                <div className="font-semibold">Почему draft пока нельзя создать</div>
+                <div className="font-semibold">Почему агента пока нельзя создать</div>
                 <div className="mt-1 text-[11px] leading-4 text-amber-800">
                   LocalOS должен собрать проверяемый workflow до создания агента.
                 </div>
@@ -4550,12 +4550,49 @@ const RecommendedProviderRouteNote = ({
   return (
     <div className="mt-2 rounded-lg bg-white px-2 py-1.5 text-[11px] leading-4 text-slate-700 ring-1 ring-slate-200">
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className="font-medium text-slate-950">Рекомендуемый route</span>
+        <span className="font-medium text-slate-950">Рекомендуемый способ</span>
         {route ? <ProviderActionPill route={route} /> : null}
       </div>
       {reason ? <div className="mt-1">{reason}</div> : null}
     </div>
   );
+};
+
+const builderConnectionStatusCopy = (service: AgentConnectionReadinessService) => {
+  const action = String(service.action || service.status || '').trim();
+  if (action === 'ready' || action === 'native_ready') {
+    return 'Можно использовать';
+  }
+  if (action === 'choose_existing') {
+    return 'Выберите доступ';
+  }
+  if (action === 'planned_provider') {
+    return 'Подключим позже';
+  }
+  if (action === 'forbidden' || action === 'unsupported') {
+    return 'Невозможно';
+  }
+  if (action === 'connect_required') {
+    return 'Нужно подключить';
+  }
+  return service.action_label || humanizeMeta(action || 'проверить');
+};
+
+const builderConnectionNextStepCopy = (service: AgentConnectionReadinessService, selected: boolean) => {
+  if (selected) {
+    return 'Этот способ будет сохранён в плане агента.';
+  }
+  const routeDescription = providerActionDescription(service.recommended_route || null);
+  if (routeDescription) {
+    return routeDescription;
+  }
+  if (service.connections?.length) {
+    return 'Можно использовать уже сохранённое подключение бизнеса.';
+  }
+  if (service.provider_route_cta) {
+    return service.provider_route_cta;
+  }
+  return service.route_summary || service.explanation || 'LocalOS проверит доступ перед safe preview.';
 };
 
 const BuilderConnectionReadinessPanel = ({
@@ -4586,6 +4623,11 @@ const BuilderConnectionReadinessPanel = ({
     .map((service) => service.key || '')
     .filter((key) => key && selectedProviderRoutes[key]);
   const canConfirmRoutes = Boolean(selectableRouteKeys.length && !missingProviderRouteKeys.length && onAcceptProviderRoutes);
+  const readyCopy = ready
+    ? 'Все нужные сервисы можно использовать. После создания агента запустите safe preview.'
+    : needsAction
+    ? 'Выберите, как LocalOS будет подключаться к нужным сервисам.'
+    : 'LocalOS проверяет, какие сервисы доступны для этого агента.';
   return (
     <div className={cn(
       'mt-3 rounded-xl border px-3 py-3 text-xs leading-5',
@@ -4596,17 +4638,17 @@ const BuilderConnectionReadinessPanel = ({
     )}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="font-semibold">Готовность подключений</div>
-          <div className="mt-1 max-w-2xl">{readiness.description || readiness.title || 'LocalOS понял, какие сервисы нужны агенту.'}</div>
+          <div className="font-semibold">Что нужно агенту для работы</div>
+          <div className="mt-1 max-w-2xl">{readiness.description || readyCopy}</div>
         </div>
         <span className="rounded-full bg-white px-2 py-0.5 font-medium ring-1 ring-current/10">
-          {readiness.title || 'Проверить доступы'}
+          {readiness.title || (ready ? 'готово к preview' : 'нужны подключения')}
         </span>
       </div>
       <div className="mt-3 grid gap-2 sm:grid-cols-4">
         <AgentMiniMetric label="Нужно" value={String(readiness.required_count || 0)} />
         <AgentMiniMetric label="Готово" value={String(readiness.ready_count || 0)} />
-        <AgentMiniMetric label="Действие" value={String((readiness.missing_count || 0) + (readiness.choice_count || 0))} />
+        <AgentMiniMetric label="Выбрать" value={String((readiness.missing_count || 0) + (readiness.choice_count || 0))} />
         <AgentMiniMetric label="Блокеры" value={String(readiness.blocked_count || 0)} />
       </div>
       {services.length ? (
@@ -4617,6 +4659,8 @@ const BuilderConnectionReadinessPanel = ({
                 const bindingKey = service.key || '';
                 const routeProvider = service.recommended_route?.provider || '';
                 const selected = Boolean(bindingKey && routeProvider && selectedProviderRoutes[bindingKey] === routeProvider);
+                const statusCopy = builderConnectionStatusCopy(service);
+                const nextStepCopy = builderConnectionNextStepCopy(service, selected);
                 return (
                   <>
               <div className="flex flex-wrap items-start justify-between gap-2">
@@ -4625,11 +4669,11 @@ const BuilderConnectionReadinessPanel = ({
                   <div className="mt-0.5 text-[11px] leading-4 text-slate-500">{humanizeMeta(service.capability || service.provider || 'service')}</div>
                 </div>
                 <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium ring-1', connectionActionTone(service.action || ''))}>
-                  {service.action_label || humanizeMeta(service.action || service.status || '')}
+                  {statusCopy}
                 </span>
               </div>
               <div className="mt-1 text-[11px] leading-4 text-slate-600">
-                {service.route_summary || service.explanation || 'Будет проверено перед safe preview.'}
+                {nextStepCopy}
               </div>
               {service.provider_route_label || service.provider_route_cta ? (
                 <div className="mt-2 rounded-lg bg-slate-50 px-2 py-1.5 text-[11px] leading-4 text-slate-700 ring-1 ring-slate-200">
@@ -4650,7 +4694,7 @@ const BuilderConnectionReadinessPanel = ({
                     className={cn('h-7 px-2 text-[11px]', selected ? '' : 'bg-white')}
                     onClick={() => onSelectProviderRoute(bindingKey, routeProvider)}
                   >
-                    {selected ? 'Route выбран для draft' : 'Использовать этот route'}
+                    {selected ? 'Способ выбран' : 'Использовать этот способ'}
                   </Button>
                 </div>
               ) : null}
@@ -4678,10 +4722,10 @@ const BuilderConnectionReadinessPanel = ({
           <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
             <div className="text-[11px] leading-4">
               {acceptedProviderRoutes
-                ? 'Provider routes подтверждены и будут сохранены в compiled workflow.'
+                ? 'Способы подключения подтверждены и будут сохранены в плане агента.'
                 : missingProviderRouteKeys.length
-                ? `Не выбран route для: ${missingProviderRouteKeys.join(', ')}.`
-                : 'Подтвердите, что LocalOS должен использовать выбранные provider routes для draft.'}
+                ? `Не выбран способ подключения для: ${missingProviderRouteKeys.join(', ')}.`
+                : 'Подтвердите, что LocalOS должен использовать выбранные способы подключения для этого агента.'}
             </div>
             {onAcceptProviderRoutes ? (
               <Button
@@ -4692,7 +4736,7 @@ const BuilderConnectionReadinessPanel = ({
                 onClick={onAcceptProviderRoutes}
               >
                 <CheckCircle2 className="mr-2 h-4 w-4" />
-                {acceptedProviderRoutes ? 'Routes подтверждены' : 'Подтвердить routes'}
+                {acceptedProviderRoutes ? 'Подключения подтверждены' : 'Подтвердить подключения'}
               </Button>
             ) : null}
           </div>
