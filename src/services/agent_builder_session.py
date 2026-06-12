@@ -109,7 +109,9 @@ def build_agent_builder_state(
     planner_loop = build_openclaw_planner_loop(planner_context)
     preview["openclaw_planner_context"] = planner_context
     preview["openclaw_planner_loop"] = planner_loop
-    questions = _merge_questions(_missing_questions(description, category), planner_loop)
+    compiler_questions = _compiler_questions(draft)
+    preview["compiler_questions"] = compiler_questions
+    questions = _merge_questions(_missing_questions(description, category), compiler_questions, planner_loop)
     preview["setup_flow"] = _build_setup_flow(preview, questions)
     assistant_message = _assistant_message(preview, questions)
     return {
@@ -144,6 +146,7 @@ def preview_to_setup(preview: Dict[str, Any]) -> Dict[str, Any]:
         "approval_boundaries": ["final_output", "external_delivery"],
         "manual_control": _clean_text(preview.get("manual_control")) or "Итог проверяет человек перед внешним действием.",
         "setup_flow": preview.get("setup_flow") if isinstance(preview.get("setup_flow"), dict) else {},
+        "compiler_questions": preview.get("compiler_questions") if isinstance(preview.get("compiler_questions"), list) else [],
     }
 
 
@@ -239,10 +242,29 @@ def _missing_questions(description: str, category: str) -> List[Dict[str, str]]:
     return questions[:3]
 
 
-def _merge_questions(local_questions: List[Dict[str, str]], planner_loop: Dict[str, Any]) -> List[Dict[str, str]]:
+def _compiler_questions(draft: Dict[str, Any]) -> List[Dict[str, str]]:
+    metadata = draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}
+    llm_intent = metadata.get("llm_intent") if isinstance(metadata.get("llm_intent"), dict) else {}
+    intent = llm_intent.get("intent") if isinstance(llm_intent.get("intent"), dict) else {}
+    raw_questions = intent.get("clarifying_questions") if isinstance(intent.get("clarifying_questions"), list) else []
+    result: List[Dict[str, str]] = []
+    for index, question in enumerate(raw_questions):
+        clean = _clean_text(question)
+        if clean:
+            result.append(
+                {
+                    "key": f"compiler_question_{index + 1}",
+                    "question": clean,
+                    "reason": "compiled_intent_clarification",
+                }
+            )
+    return result[:3]
+
+
+def _merge_questions(local_questions: List[Dict[str, str]], compiler_questions: List[Dict[str, str]], planner_loop: Dict[str, Any]) -> List[Dict[str, str]]:
     result: List[Dict[str, str]] = []
     seen = set()
-    for item in local_questions:
+    for item in compiler_questions + local_questions:
         key = str(item.get("key") or item.get("question") or "").strip()
         if not key or key in seen:
             continue

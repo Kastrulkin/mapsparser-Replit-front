@@ -2438,6 +2438,7 @@ export const AgentBlueprintsPage = () => {
       const response = await api.post('/agent-builder/sessions', {
         business_id: currentBusinessId,
         message: dialogBuilderInput.trim(),
+        use_ai_compiler: true,
       });
       setDialogBuilderSession(response.data?.session || null);
       setSelectedBuilderConnectionBindings(autoSelectBuilderConnectionBindings(response.data?.session?.preview || null));
@@ -2479,6 +2480,7 @@ export const AgentBlueprintsPage = () => {
     try {
       const response = await api.post(`/agent-builder/sessions/${dialogBuilderSession.id}/message`, {
         message: dialogBuilderReply.trim(),
+        use_ai_compiler: true,
       });
       setDialogBuilderSession(response.data?.session || null);
       setSelectedBuilderConnectionBindings(autoSelectBuilderConnectionBindings(response.data?.session?.preview || null));

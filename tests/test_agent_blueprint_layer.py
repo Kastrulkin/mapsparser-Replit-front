@@ -2105,6 +2105,91 @@ def test_agent_builder_setup_flow_blocks_draft_until_clarification_is_answered()
     assert any(item["type"] == "clarification" for item in setup_flow["activation_blockers"])
 
 
+def test_agent_builder_setup_flow_surfaces_compiler_clarifying_questions(monkeypatch):
+    from services import agent_builder_session
+
+    def fake_compile_agent_blueprint(description, category="", **kwargs):
+        return {
+            "name": "Google Sheets -> Telegram",
+            "category": "custom",
+            "description": description,
+            "metadata": {
+                "llm_intent": {
+                    "status": "compiled_intent",
+                    "source": "gigachat",
+                    "intent": {
+                        "clarifying_questions": [
+                            "Какую вкладку Google Sheets читать?",
+                            "В какой Telegram-канал готовить пост?",
+                        ],
+                    },
+                },
+                "required_integration_bindings": [
+                    {
+                        "key": "google_sheets_read",
+                        "provider": "google_sheets",
+                        "capability": "google_sheets.read_rows",
+                        "required_config": ["spreadsheet_id", "sheet_name"],
+                    },
+                    {
+                        "key": "telegram_delivery",
+                        "provider": "telegram",
+                        "capability": "communications.draft",
+                        "required_config": ["bot_mode"],
+                    },
+                ],
+            },
+            "version_payload": {
+                "steps": [],
+                "capability_allowlist": ["google_sheets.read_rows", "communications.draft"],
+                "required_integration_bindings": [
+                    {
+                        "key": "google_sheets_read",
+                        "provider": "google_sheets",
+                        "capability": "google_sheets.read_rows",
+                        "required_config": ["spreadsheet_id", "sheet_name"],
+                    },
+                    {
+                        "key": "telegram_delivery",
+                        "provider": "telegram",
+                        "capability": "communications.draft",
+                        "required_config": ["bot_mode"],
+                    },
+                ],
+            },
+            "summary": {
+                "sources": ["google_sheets", "telegram", "business_profile"],
+                "capability_allowlist": ["google_sheets.read_rows", "communications.draft"],
+            },
+        }
+
+    monkeypatch.setattr(agent_builder_session, "compile_agent_blueprint", fake_compile_agent_blueprint)
+
+    state = agent_builder_session.build_agent_builder_state(
+        [
+            {
+                "role": "user",
+                "content": "Каждый день бери заказ из Google Sheets и готовь пост в Telegram.",
+            }
+        ],
+        use_ai=True,
+    )
+
+    assert state["missing_questions"][0]["question"] == "Какую вкладку Google Sheets читать?"
+    assert state["missing_questions"][0]["reason"] == "compiled_intent_clarification"
+    assert state["preview"]["compiler_questions"][1]["question"] == "В какой Telegram-канал готовить пост?"
+    assert state["preview"]["setup_flow"]["steps"][1]["questions"][0]["key"] == "compiler_question_1"
+    assert state["preview"]["setup_flow"]["can_create_draft"] is False
+
+
+def test_agent_builder_api_uses_ai_compiler_by_default():
+    from api.agent_builder_api import _use_ai_compiler
+
+    assert _use_ai_compiler({}) is True
+    assert _use_ai_compiler({"use_ai_compiler": False}) is False
+    assert _use_ai_compiler({"use_ai_compiler": True}) is True
+
+
 def test_agent_builder_connector_intelligence_blocks_forbidden_provider_path():
     from services.agent_builder_session import build_agent_builder_state
 

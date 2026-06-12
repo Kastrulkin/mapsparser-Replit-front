@@ -41,6 +41,12 @@ def _require_business_access(cursor, business_id: str, user_data: dict):
     return True, None
 
 
+def _use_ai_compiler(payload: dict) -> bool:
+    if "use_ai_compiler" not in payload:
+        return True
+    return bool(payload.get("use_ai_compiler"))
+
+
 def _normalize_session(row: dict) -> dict:
     result = dict(row)
     result["messages"] = parse_json_field(result.pop("messages_json", []), [])
@@ -500,7 +506,7 @@ def create_agent_builder_session():
         state = build_agent_builder_state(
             [{"role": "user", "content": message}],
             str(payload.get("category") or ""),
-            use_ai=bool(payload.get("use_ai_compiler")),
+            use_ai=_use_ai_compiler(payload),
             business_id=business_id,
             user_id=_user_id(user_data),
             connected_integrations=_load_builder_connection_inventory(cursor, business_id),
@@ -558,7 +564,7 @@ def add_agent_builder_message(session_id: str):
         state = build_agent_builder_state(
             messages,
             str(payload.get("category") or session.get("category") or ""),
-            use_ai=bool(payload.get("use_ai_compiler")),
+            use_ai=_use_ai_compiler(payload),
             business_id=str(session.get("business_id") or ""),
             user_id=_user_id(user_data),
             connected_integrations=_load_builder_connection_inventory(cursor, str(session.get("business_id") or "")),
@@ -657,7 +663,7 @@ def create_blueprint_from_agent_builder_session(session_id: str):
         draft = compile_agent_blueprint(
             description,
             category,
-            use_ai=bool(payload.get("use_ai_compiler")),
+            use_ai=_use_ai_compiler(payload),
             business_id=business_id,
             user_id=_user_id(user_data),
             planner_context=planner_context,
