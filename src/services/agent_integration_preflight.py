@@ -99,6 +99,15 @@ def _binding_preflight_item(
                 ["external_account_id"],
                 "Maton.ai route is selected, but no saved Maton key is bound.",
             )
+        if route_provider == "manual" and route_status == "active":
+            return _base_item(
+                binding,
+                "ready",
+                "provider_route_manual_fallback",
+                str(metadata_config.get("integration_id") or "manual_fallback"),
+                [],
+                "Manual fallback is selected: LocalOS will prepare draft artifacts and require a human-operated external action.",
+            )
         resolved_config = _merge_default_config(default_config, metadata_config)
         missing_metadata_config = [key for key in required_config if not str(resolved_config.get(key) or "").strip()]
         if not missing_metadata_config:

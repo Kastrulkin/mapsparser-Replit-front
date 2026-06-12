@@ -1275,6 +1275,15 @@ def _apply_agent_provider_route_metadata(
                 "requires_external_credentials": True,
             }
         )
+    if route_provider == "manual":
+        route_payload.update(
+            {
+                "integration_id": "manual_fallback",
+                "execution_boundary": "human_operated_fallback",
+                "requires_external_credentials": False,
+                "draft_only_until_human_action": True,
+            }
+        )
     routes[binding_key] = route_payload
     metadata["agent_binding_provider_routes"] = routes
 

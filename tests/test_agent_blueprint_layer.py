@@ -3861,6 +3861,59 @@ def test_agent_preflight_accepts_maton_provider_route_with_external_account(monk
     assert status[0]["route_provider"] == "maton"
 
 
+def test_agent_preflight_accepts_manual_provider_route_as_human_fallback(monkeypatch):
+    from api import agent_blueprints_api
+    from services.agent_integration_preflight import build_agent_integration_preflight
+
+    class Cursor:
+        def __init__(self):
+            self.saved_metadata = {}
+
+        def execute(self, query, params=None):
+            normalized_query = " ".join(query.split()).lower()
+            if normalized_query.startswith("update agent_blueprints"):
+                self.saved_metadata = json.loads(params[0])
+                return None
+            if "from agent_integrations" in normalized_query:
+                return None
+            raise AssertionError(f"Unhandled SQL: {query}")
+
+        def fetchall(self):
+            return []
+
+    blueprint = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "metadata_json": {
+            "required_integration_bindings": [
+                {
+                    "key": "google_sheets_read",
+                    "provider": "google_sheets",
+                    "capability": "google_sheets.read_rows",
+                    "required_config": ["spreadsheet_id", "sheet_name"],
+                }
+            ],
+        },
+    }
+    monkeypatch.setattr(agent_blueprints_api, "_load_blueprint", lambda _cursor, _blueprint_id: blueprint)
+    cursor = Cursor()
+
+    metadata = agent_blueprints_api._apply_agent_provider_route_metadata(
+        cursor,
+        blueprint,
+        binding_key="google_sheets_read",
+        route_provider="manual",
+    )
+    preflight = build_agent_integration_preflight(cursor, business_id="biz1", metadata=metadata, input_payload={})
+    status = agent_blueprints_api._agent_integration_binding_status(metadata, [])
+
+    assert preflight["ready"] is True
+    assert preflight["items"][0]["resolution"] == "provider_route_manual_fallback"
+    assert status[0]["status"] == "connected"
+    assert status[0]["route_provider"] == "manual"
+    assert metadata["agent_binding_provider_routes"]["google_sheets_read"]["draft_only_until_human_action"] is True
+
+
 def test_agent_preflight_reports_active_integration_missing_config():
     from services.agent_integration_preflight import build_agent_integration_preflight
 
@@ -4706,6 +4759,7 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "ProviderActionPill" in agents_page_source
     assert "providerActionLabel" in agents_page_source
     assert "providerActionDescription" in agents_page_source
+    assert "['openclaw', 'maton', 'manual'].includes(route.provider || '')" in agents_page_source
     assert "chooseProviderRoute" in agents_page_source
     assert "/provider-routes" in agents_page_source
     assert "onChooseProviderRoute" in agents_page_source

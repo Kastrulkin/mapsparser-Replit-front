@@ -6237,7 +6237,7 @@ const ProviderActionPill = ({
     return null;
   }
   const state = route.state || route.status || '';
-  const canChoose = Boolean(onChoose && ['openclaw', 'maton'].includes(route.provider || '') && route.provider_action?.available !== false && ['available', 'connected'].includes(state));
+  const canChoose = Boolean(onChoose && ['openclaw', 'maton', 'manual'].includes(route.provider || '') && route.provider_action?.available !== false && ['available', 'connected', 'manual'].includes(state));
   const className = cn(
     'rounded-full px-2 py-0.5 text-[11px] font-medium ring-1',
     providerRouteTone(state),
