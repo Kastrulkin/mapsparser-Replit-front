@@ -800,6 +800,35 @@ type AgentBuilderPlannerLoop = {
   };
 };
 
+type AgentCompilerPolicyItem = {
+  key?: string;
+  title?: string;
+  type?: string;
+  request?: string;
+  reason?: string;
+  capability?: string;
+  provider?: string;
+  message?: string;
+  text?: string;
+};
+
+type AgentCompilerWorkflowDraft = {
+  trigger?: string;
+  steps?: AgentCompilerPolicyItem[];
+  outputs?: AgentCompilerPolicyItem[];
+  output?: AgentCompilerPolicyItem[];
+  limits?: Record<string, unknown>;
+};
+
+type AgentCompilerPolicyReview = {
+  schema?: string;
+  source?: string;
+  status?: string;
+  workflow_draft?: AgentCompilerWorkflowDraft;
+  approval_points?: AgentCompilerPolicyItem[];
+  unsupported_requests?: AgentCompilerPolicyItem[];
+};
+
 type AgentConnectorIntelligence = {
   schema?: string;
   status?: string;
@@ -933,6 +962,10 @@ type AgentBuilderPreview = {
   setup_flow?: AgentBuilderSetupFlow;
   connection_plan?: AgentConnectionPlan;
   openclaw_planner_loop?: AgentBuilderPlannerLoop;
+  compiler_policy_review?: AgentCompilerPolicyReview;
+  compiler_workflow_draft?: AgentCompilerWorkflowDraft;
+  compiler_approval_points?: AgentCompilerPolicyItem[];
+  compiler_unsupported_requests?: AgentCompilerPolicyItem[];
   external_dispatch_performed?: boolean;
   cost_preview?: {
     label?: string;
@@ -4072,6 +4105,12 @@ const DialogAgentBuilder = ({
               onSendReply={onSendReply}
               onCreate={onCreate}
             />
+            <BuilderCompilerPolicyReviewPanel
+              review={preview?.compiler_policy_review}
+              workflowDraft={preview?.compiler_workflow_draft}
+              approvalPoints={preview?.compiler_approval_points}
+              unsupportedRequests={preview?.compiler_unsupported_requests}
+            />
             <BuilderConnectionReadinessPanel
               readiness={preview?.connection_readiness}
               selectedProviderRoutes={selectedProviderRoutes}
@@ -4263,6 +4302,133 @@ const BuilderCreationDecisionBanner = ({
           </Button>
         ) : null}
       </div>
+    </div>
+  );
+};
+
+const compilerPolicyItemLabel = (item?: AgentCompilerPolicyItem | null): string => {
+  if (!item) {
+    return '';
+  }
+  return String(
+    item.title
+    || item.message
+    || item.reason
+    || item.request
+    || item.capability
+    || item.provider
+    || item.type
+    || item.key
+    || item.text
+    || '',
+  ).trim();
+};
+
+const BuilderCompilerPolicyReviewPanel = ({
+  review,
+  workflowDraft,
+  approvalPoints,
+  unsupportedRequests,
+}: {
+  review?: AgentCompilerPolicyReview;
+  workflowDraft?: AgentCompilerWorkflowDraft;
+  approvalPoints?: AgentCompilerPolicyItem[];
+  unsupportedRequests?: AgentCompilerPolicyItem[];
+}) => {
+  const draft = workflowDraft || review?.workflow_draft || {};
+  const steps = Array.isArray(draft.steps) ? draft.steps : [];
+  const approvals = approvalPoints || review?.approval_points || [];
+  const blockers = unsupportedRequests || review?.unsupported_requests || [];
+  const hasContent = Boolean(
+    review
+    || steps.length
+    || approvals.length
+    || blockers.length
+    || draft.trigger,
+  );
+  if (!hasContent) {
+    return null;
+  }
+  const blocked = blockers.length > 0 || review?.status === 'blocked';
+  const needsApproval = approvals.length > 0 || review?.status === 'needs_approval';
+  const toneClass = blocked
+    ? 'border-rose-200 bg-rose-50 text-rose-950'
+    : needsApproval
+    ? 'border-amber-200 bg-amber-50 text-amber-950'
+    : 'border-emerald-200 bg-emerald-50 text-emerald-950';
+  const badgeClass = blocked
+    ? 'bg-white text-rose-700 ring-rose-200'
+    : needsApproval
+    ? 'bg-white text-amber-700 ring-amber-200'
+    : 'bg-white text-emerald-700 ring-emerald-200';
+  const statusLabel = blocked ? 'есть блокер' : needsApproval ? 'нужны approvals' : 'план допустим';
+  return (
+    <div className={cn('mt-3 rounded-xl border px-3 py-3 text-xs leading-5', toneClass)}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="font-semibold">План агента</div>
+          <div className="mt-1 max-w-2xl">
+            LocalOS сохранит этот план как compiled workflow candidate и проверит его перед preview run.
+          </div>
+        </div>
+        <span className={cn('rounded-full px-2 py-0.5 font-medium ring-1', badgeClass)}>
+          {statusLabel}
+        </span>
+      </div>
+
+      <div className="mt-3 grid gap-2 md:grid-cols-3">
+        <AgentMiniMetric label="Trigger" value={humanizeMeta(draft.trigger || 'manual.run')} />
+        <AgentMiniMetric label="Шаги" value={String(steps.length || 0)} />
+        <AgentMiniMetric label="Approval" value={String(approvals.length || 0)} />
+      </div>
+
+      {steps.length ? (
+        <div className="mt-3 grid gap-2">
+          {steps.slice(0, 4).map((step, index) => {
+            const label = compilerPolicyItemLabel(step) || `Шаг ${index + 1}`;
+            const detail = step.capability || step.provider || step.type || step.key || '';
+            return (
+              <div key={`${label}-${index}`} className="rounded-lg bg-white px-3 py-2 text-slate-700 ring-1 ring-current/10">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-700">
+                    {index + 1}
+                  </span>
+                  <span className="font-medium text-slate-950">{label}</span>
+                </div>
+                {detail ? <div className="mt-1 pl-7 text-[11px] leading-4 text-slate-500">{humanizeMeta(detail)}</div> : null}
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {approvals.length ? (
+        <div className="mt-3 rounded-lg bg-white px-3 py-2 text-amber-950 ring-1 ring-current/10">
+          <div className="font-semibold">Где человек должен подтвердить</div>
+          <div className="mt-2 space-y-1">
+            {approvals.slice(0, 3).map((item, index) => (
+              <div key={`${compilerPolicyItemLabel(item)}-${index}`} className="flex gap-2 text-[11px] leading-4">
+                <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{compilerPolicyItemLabel(item) || 'Ручное подтверждение перед действием'}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {blockers.length ? (
+        <div className="mt-3 rounded-lg bg-white px-3 py-2 text-rose-950 ring-1 ring-current/10">
+          <div className="font-semibold">Что нужно изменить в логике</div>
+          <div className="mt-2 space-y-1">
+            {blockers.slice(0, 3).map((item, index) => (
+              <div key={`${compilerPolicyItemLabel(item)}-${index}`} className="flex gap-2 text-[11px] leading-4">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{compilerPolicyItemLabel(item) || 'Часть запроса выходит за policy envelope'}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };

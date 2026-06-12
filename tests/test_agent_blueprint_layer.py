@@ -5025,6 +5025,14 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "buildAgentConnectionDecision" in agents_page_source
     assert "BuilderCreationDecisionBanner" in agents_page_source
     assert "buildBuilderCreationDecision" in agents_page_source
+    assert "BuilderCompilerPolicyReviewPanel" in agents_page_source
+    assert "compiler_policy_review" in agents_page_source
+    assert "compiler_workflow_draft" in agents_page_source
+    assert "compiler_approval_points" in agents_page_source
+    assert "compiler_unsupported_requests" in agents_page_source
+    assert "План агента" in agents_page_source
+    assert "compiled workflow candidate" in agents_page_source
+    assert "Что нужно изменить в логике" in agents_page_source
     assert "Ответьте на уточнение" in agents_page_source
     assert "Можно создать draft и открыть preview" in agents_page_source
     assert "У бизнеса уже есть несколько подходящих коннектов" in agents_page_source
