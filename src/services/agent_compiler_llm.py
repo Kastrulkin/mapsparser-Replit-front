@@ -92,6 +92,9 @@ def _build_agent_compiler_prompt(description: str, *, planner_context: dict[str,
             '  "read_capability": "google_sheets.read_rows | communications.draft | empty string",',
             '  "write_capability": "finance.transaction.create | sheets.append_row_request | communications.draft | communications.send_reminder | communications.send_offer | empty string",',
             '  "required_connectors": ["google_sheets"],',
+            '  "workflow_draft": {"trigger": "...", "steps": [{"key": "...", "capability": "..."}]},',
+            '  "approval_points": [{"key": "external_publish", "reason": "..."}],',
+            '  "unsupported_requests": [{"request": "...", "reason": "..."}],',
             '  "approval_reasons": ["external_write", "localos_finance_write", "mass_send", "ambiguous_data"],',
             '  "limits": {"max_items_per_run": 100},',
             '  "clarifying_questions": ["..."],',
@@ -113,6 +116,9 @@ def _build_agent_compiler_prompt(description: str, *, planner_context: dict[str,
             "- Для сообщений клиентам используй communications.draft и send capability только если пользователь просит отправку.",
             "- Любая запись, отправка, публикация, платеж и массовое действие требует approval_reasons.",
             "- Если нужны подключения, перечисли business-facing providers: google_sheets, telegram, localos_finance, maton, composio.",
+            "- workflow_draft должен быть планом, а не выполнением: trigger, inputs, steps, outputs, limits.",
+            "- approval_points перечисляет места, где LocalOS обязан остановить выполнение до решения человека.",
+            "- unsupported_requests перечисляет части запроса, которые нельзя выполнить через LocalOS/OpenClaw policy envelope.",
             "- Если данных не хватает, добавь clarifying_questions, но всё равно заполни лучший безопасный draft intent.",
             "- Если envelope показывает missing_connections, не считай агента готовым: добавь clarifying_questions или required_connectors.",
             "- Если envelope показывает forbidden/unsupported, не придумывай обходные инструменты.",
@@ -175,6 +181,45 @@ def _sanitize_list(value: Any) -> list[str]:
     return result[:12]
 
 
+def _sanitize_dict(value: Any, *, allowed_keys: set[str], max_items_per_list: int = 12) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    result: dict[str, Any] = {}
+    for key, raw in value.items():
+        clean_key = str(key or "").strip()
+        if clean_key not in allowed_keys:
+            continue
+        if isinstance(raw, dict):
+            nested = _sanitize_dict(raw, allowed_keys=allowed_keys, max_items_per_list=max_items_per_list)
+            if nested:
+                result[clean_key] = nested
+        elif isinstance(raw, list):
+            clean_list = _sanitize_object_list(raw, allowed_keys=allowed_keys, max_items=max_items_per_list)
+            if clean_list:
+                result[clean_key] = clean_list
+        else:
+            clean_value = str(raw or "").strip()
+            if clean_value:
+                result[clean_key] = clean_value[:1000]
+    return result
+
+
+def _sanitize_object_list(value: Any, *, allowed_keys: set[str], max_items: int = 12) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    result: list[dict[str, Any]] = []
+    for item in value[:max_items]:
+        if isinstance(item, dict):
+            clean = _sanitize_dict(item, allowed_keys=allowed_keys, max_items_per_list=max_items)
+            if clean:
+                result.append(clean)
+        else:
+            clean_text = str(item or "").strip()
+            if clean_text:
+                result.append({"text": clean_text[:1000]})
+    return result
+
+
 def _sanitize_int(value: Any, default: int = 0) -> int:
     try:
         return int(value)
@@ -232,6 +277,40 @@ def _sanitize_intent(parsed: dict[str, Any]) -> dict[str, Any]:
     approval_reasons = _sanitize_list(parsed.get("approval_reasons"))
     if template and not approval_reasons:
         approval_reasons = [str(item) for item in (template.get("approval_reasons") or []) if str(item or "").strip()]
+    workflow_allowed_keys = {
+        "trigger",
+        "inputs",
+        "input",
+        "steps",
+        "key",
+        "title",
+        "type",
+        "capability",
+        "provider",
+        "binding",
+        "source",
+        "destination",
+        "approval_required",
+        "approval",
+        "outputs",
+        "output",
+        "limits",
+        "reason",
+        "description",
+    }
+    review_allowed_keys = {
+        "key",
+        "type",
+        "request",
+        "reason",
+        "capability",
+        "provider",
+        "action_class",
+        "message",
+        "risk",
+        "requires",
+        "text",
+    }
     return {
         "trigger": trigger,
         "compiled_template_key": template_key,
@@ -241,6 +320,9 @@ def _sanitize_intent(parsed: dict[str, Any]) -> dict[str, Any]:
         "write_capability": write_capability,
         "required_connectors": connectors,
         "approval_reasons": approval_reasons,
+        "workflow_draft": _sanitize_dict(parsed.get("workflow_draft"), allowed_keys=workflow_allowed_keys),
+        "approval_points": _sanitize_object_list(parsed.get("approval_points"), allowed_keys=review_allowed_keys, max_items=8),
+        "unsupported_requests": _sanitize_object_list(parsed.get("unsupported_requests"), allowed_keys=review_allowed_keys, max_items=8),
         "limits": {"max_items_per_run": max_items},
         "clarifying_questions": _sanitize_list(parsed.get("clarifying_questions"))[:3],
         "confidence": confidence,

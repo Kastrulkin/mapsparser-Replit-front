@@ -147,6 +147,7 @@ def preview_to_setup(preview: Dict[str, Any]) -> Dict[str, Any]:
         "manual_control": _clean_text(preview.get("manual_control")) or "Итог проверяет человек перед внешним действием.",
         "setup_flow": preview.get("setup_flow") if isinstance(preview.get("setup_flow"), dict) else {},
         "compiler_questions": preview.get("compiler_questions") if isinstance(preview.get("compiler_questions"), list) else [],
+        "compiler_policy_review": preview.get("compiler_policy_review") if isinstance(preview.get("compiler_policy_review"), dict) else {},
     }
 
 
@@ -189,6 +190,7 @@ def _build_preview(
     required_bindings = metadata.get("required_integration_bindings") if isinstance(metadata.get("required_integration_bindings"), list) else []
     if not required_bindings:
         required_bindings = version_payload.get("required_integration_bindings") if isinstance(version_payload.get("required_integration_bindings"), list) else []
+    compiler_review = _compiler_policy_review(metadata)
     feasibility = resolve_agent_feasibility(
         description=description,
         required_capabilities=[str(item) for item in capability_allowlist],
@@ -211,6 +213,10 @@ def _build_preview(
         "capability_allowlist": capability_allowlist,
         "required_integration_bindings": required_bindings,
         "feasibility": feasibility,
+        "compiler_workflow_draft": compiler_review["workflow_draft"],
+        "compiler_approval_points": compiler_review["approval_points"],
+        "compiler_unsupported_requests": compiler_review["unsupported_requests"],
+        "compiler_policy_review": compiler_review,
         "connector_intelligence": _build_connector_intelligence(feasibility),
         "required_connectors": _connector_preview_items(feasibility),
         "connection_plan": _build_preview_connection_plan(feasibility),
@@ -261,6 +267,24 @@ def _compiler_questions(draft: Dict[str, Any]) -> List[Dict[str, str]]:
     return result[:3]
 
 
+def _compiler_policy_review(metadata: Dict[str, Any]) -> Dict[str, Any]:
+    llm_intent = metadata.get("llm_intent") if isinstance(metadata.get("llm_intent"), dict) else {}
+    intent = llm_intent.get("intent") if isinstance(llm_intent.get("intent"), dict) else {}
+    workflow_draft = intent.get("workflow_draft") if isinstance(intent.get("workflow_draft"), dict) else {}
+    approval_points = intent.get("approval_points") if isinstance(intent.get("approval_points"), list) else []
+    unsupported_requests = intent.get("unsupported_requests") if isinstance(intent.get("unsupported_requests"), list) else []
+    clean_approval_points = [item for item in approval_points if isinstance(item, dict)][:8]
+    clean_unsupported = [item for item in unsupported_requests if isinstance(item, dict)][:8]
+    return {
+        "schema": "localos_agent_compiler_policy_review_v1",
+        "source": str(llm_intent.get("source") or ""),
+        "status": "blocked" if clean_unsupported else ("needs_approval" if clean_approval_points else "ok"),
+        "workflow_draft": workflow_draft,
+        "approval_points": clean_approval_points,
+        "unsupported_requests": clean_unsupported,
+    }
+
+
 def _merge_questions(local_questions: List[Dict[str, str]], compiler_questions: List[Dict[str, str]], planner_loop: Dict[str, Any]) -> List[Dict[str, str]]:
     result: List[Dict[str, str]] = []
     seen = set()
@@ -296,7 +320,12 @@ def _assistant_message(preview: Dict[str, Any], questions: List[Dict[str, str]])
     feasibility_status = str(feasibility.get("status") or "")
     missing_connections = feasibility.get("missing_connections") if isinstance(feasibility.get("missing_connections"), list) else []
     connection_choices = feasibility.get("connection_choices") if isinstance(feasibility.get("connection_choices"), list) else []
-    if feasibility_status == "forbidden":
+    compiler_review = preview.get("compiler_policy_review") if isinstance(preview.get("compiler_policy_review"), dict) else {}
+    compiler_unsupported = compiler_review.get("unsupported_requests") if isinstance(compiler_review.get("unsupported_requests"), list) else []
+    if compiler_unsupported:
+        reason = str(compiler_unsupported[0].get("reason") or compiler_unsupported[0].get("request") or "часть запроса выходит за policy envelope")
+        content = f"Понял задачу как: {preview['understood_task']} Но такой агент нельзя создать без изменения логики: {reason}"
+    elif feasibility_status == "forbidden":
         content = f"Понял задачу как: {preview['understood_task']} Но такой агент не может быть создан в рамках политики LocalOS."
     elif questions:
         question_text = " ".join([item["question"] for item in questions[:2]])
@@ -325,15 +354,18 @@ def _build_setup_flow(preview: Dict[str, Any], questions: List[Dict[str, str]]) 
     connection_choices = feasibility.get("connection_choices") if isinstance(feasibility.get("connection_choices"), list) else []
     unsupported = feasibility.get("unsupported") if isinstance(feasibility.get("unsupported"), list) else []
     forbidden = feasibility.get("forbidden") if isinstance(feasibility.get("forbidden"), list) else []
-    can_create_draft = not questions and status not in {"forbidden", "unsupported", "needs_payment"}
+    compiler_review = preview.get("compiler_policy_review") if isinstance(preview.get("compiler_policy_review"), dict) else {}
+    compiler_unsupported = compiler_review.get("unsupported_requests") if isinstance(compiler_review.get("unsupported_requests"), list) else []
+    compiler_blocked = bool(compiler_unsupported)
+    can_create_draft = not questions and status not in {"forbidden", "unsupported", "needs_payment"} and not compiler_blocked
     can_run_preview = can_create_draft and status == "ready"
     can_activate = False
-    next_step = _setup_next_step(status, questions, missing_connections, connection_choices)
+    next_step = "cannot_create" if compiler_blocked else _setup_next_step(status, questions, missing_connections, connection_choices)
     post_create_status = _post_create_status(status, missing_connections, connection_choices)
     return {
         "schema": "localos_agent_builder_setup_flow_v1",
-        "status": _setup_flow_status(status, questions),
-        "primary_action": _setup_primary_action(status, questions, missing_connections, connection_choices),
+        "status": "blocked" if compiler_blocked else _setup_flow_status(status, questions),
+        "primary_action": "cannot_create" if compiler_blocked else _setup_primary_action(status, questions, missing_connections, connection_choices),
         "next_step": next_step,
         "next_step_title": _setup_next_step_title(next_step),
         "next_step_description": _setup_next_step_description(next_step, missing_connections, connection_choices),
@@ -343,7 +375,7 @@ def _build_setup_flow(preview: Dict[str, Any], questions: List[Dict[str, str]]) 
         "post_create_status": post_create_status,
         "post_create_next_step": _post_create_next_step(post_create_status),
         "post_create_description": _post_create_description(post_create_status, missing_connections, connection_choices),
-        "activation_blockers": _activation_blockers(status, questions, missing_connections, connection_choices, forbidden, unsupported),
+        "activation_blockers": _activation_blockers(status, questions, missing_connections, connection_choices, forbidden, unsupported, compiler_unsupported),
         "steps": [
             {
                 "key": "understand",
@@ -369,10 +401,11 @@ def _build_setup_flow(preview: Dict[str, Any], questions: List[Dict[str, str]]) 
             {
                 "key": "policy",
                 "label": "Проверить ограничения",
-                "status": "blocked" if forbidden or unsupported else "done",
+                "status": "blocked" if forbidden or unsupported or compiler_blocked else "done",
                 "description": _policy_step_description(status),
                 "forbidden": forbidden,
                 "unsupported": unsupported,
+                "compiler_unsupported": compiler_unsupported,
             },
             {
                 "key": "create",
@@ -565,6 +598,7 @@ def _activation_blockers(
     connection_choices: List[Dict[str, Any]],
     forbidden: List[Dict[str, Any]],
     unsupported: List[Dict[str, Any]],
+    compiler_unsupported: List[Dict[str, Any]] | None = None,
 ) -> List[Dict[str, str]]:
     blockers: List[Dict[str, str]] = []
     if questions:
@@ -589,6 +623,14 @@ def _activation_blockers(
         blockers.append({"type": "forbidden", "message": str(item.get("reason") or "Запрещено политикой LocalOS.")})
     for item in unsupported:
         blockers.append({"type": "unsupported", "message": str(item.get("reason") or "Нет разрешённого provider path.")})
+    for item in compiler_unsupported or []:
+        if isinstance(item, dict):
+            blockers.append(
+                {
+                    "type": "compiler_unsupported",
+                    "message": str(item.get("reason") or item.get("message") or item.get("request") or "Compiler считает часть запроса неподдерживаемой."),
+                }
+            )
     if feasibility_status == "needs_payment":
         blockers.append({"type": "billing", "message": "Недостаточно доступного баланса или подписки."})
     return blockers

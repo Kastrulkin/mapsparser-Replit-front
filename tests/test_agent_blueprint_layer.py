@@ -922,6 +922,60 @@ def test_agent_compiler_llm_prompt_includes_localos_openclaw_planner_context():
     assert result["intent"]["clarifying_questions"] == ["Какую вкладку Google Sheets читать?"]
 
 
+def test_agent_compiler_llm_returns_planner_artifact_inside_policy_envelope():
+    from services.agent_compiler_llm import infer_agent_workflow_intent
+
+    def fake_generator(prompt, business_id, user_id):
+        assert "workflow_draft" in prompt
+        assert "approval_points" in prompt
+        assert "unsupported_requests" in prompt
+        return """
+        {
+          "compiled_template_key": "google_sheets_to_telegram_post",
+          "source": "google_sheets",
+          "destination": "telegram",
+          "read_capability": "google_sheets.read_rows",
+          "write_capability": "communications.draft",
+          "required_connectors": ["google_sheets", "telegram", "unknown_provider"],
+          "workflow_draft": {
+            "trigger": "schedule.daily",
+            "steps": [
+              {"key": "read_orders", "capability": "google_sheets.read_rows", "secret": "drop"},
+              {"key": "prepare_post", "type": "artifact"}
+            ],
+            "outputs": [{"key": "telegram_post_draft"}]
+          },
+          "approval_points": [
+            {"key": "publish", "reason": "external publish", "raw_token": "drop"}
+          ],
+          "unsupported_requests": [
+            {"request": "bypass approval", "reason": "LocalOS policy requires approval"}
+          ],
+          "approval_reasons": ["external_publish"],
+          "limits": {"max_items_per_run": 15},
+          "clarifying_questions": [],
+          "confidence": 0.8
+        }
+        """
+
+    result = infer_agent_workflow_intent(
+        "Каждый день бери заказ из Google Sheets и готовь пост в Telegram",
+        business_id="biz1",
+        user_id="user1",
+        intent_generator=fake_generator,
+    )
+
+    intent = result["intent"]
+    assert result["status"] == "compiled_intent"
+    assert intent["required_connectors"] == ["google_sheets", "telegram"]
+    assert intent["workflow_draft"]["trigger"] == "schedule.daily"
+    assert intent["workflow_draft"]["steps"][0]["key"] == "read_orders"
+    assert "secret" not in intent["workflow_draft"]["steps"][0]
+    assert intent["approval_points"][0]["reason"] == "external publish"
+    assert "raw_token" not in intent["approval_points"][0]
+    assert intent["unsupported_requests"][0]["reason"] == "LocalOS policy requires approval"
+
+
 def test_agent_compiler_registry_drives_llm_template_selection():
     from services.agent_compiler_llm import infer_agent_workflow_intent
     from services.agent_compiler_registry import compiled_template_prompt_lines, get_compiled_agent_template
@@ -2180,6 +2234,73 @@ def test_agent_builder_setup_flow_surfaces_compiler_clarifying_questions(monkeyp
     assert state["preview"]["compiler_questions"][1]["question"] == "В какой Telegram-канал готовить пост?"
     assert state["preview"]["setup_flow"]["steps"][1]["questions"][0]["key"] == "compiler_question_1"
     assert state["preview"]["setup_flow"]["can_create_draft"] is False
+
+
+def test_agent_builder_setup_flow_blocks_compiler_unsupported_request(monkeypatch):
+    from services import agent_builder_session
+
+    def fake_compile_agent_blueprint(description, category="", **kwargs):
+        return {
+            "name": "Unsafe external workflow",
+            "category": "custom",
+            "description": description,
+            "metadata": {
+                "llm_intent": {
+                    "status": "compiled_intent",
+                    "source": "gigachat",
+                    "intent": {
+                        "workflow_draft": {
+                            "trigger": "schedule.daily",
+                            "steps": [{"key": "read_source", "capability": "google_sheets.read_rows"}],
+                        },
+                        "approval_points": [{"key": "external_action", "reason": "external action requires approval"}],
+                        "unsupported_requests": [
+                            {
+                                "request": "send without approval",
+                                "reason": "Нельзя отправлять внешние сообщения без approval gate.",
+                            }
+                        ],
+                        "clarifying_questions": [],
+                    },
+                },
+            },
+            "version_payload": {
+                "steps": [],
+                "capability_allowlist": [],
+                "required_integration_bindings": [],
+            },
+            "summary": {
+                "sources": ["manual_context", "business_profile"],
+                "capability_allowlist": [],
+            },
+        }
+
+    monkeypatch.setattr(agent_builder_session, "compile_agent_blueprint", fake_compile_agent_blueprint)
+
+    state = agent_builder_session.build_agent_builder_state(
+        [
+            {
+                "role": "user",
+                "content": (
+                    "Из Google Sheets извлеки заказы, подготовь отчёт, "
+                    "человек проверяет результат перед действием."
+                ),
+            }
+        ],
+        use_ai=True,
+    )
+
+    setup_flow = state["preview"]["setup_flow"]
+    review = state["preview"]["compiler_policy_review"]
+
+    assert review["schema"] == "localos_agent_compiler_policy_review_v1"
+    assert review["status"] == "blocked"
+    assert review["workflow_draft"]["trigger"] == "schedule.daily"
+    assert setup_flow["status"] == "blocked"
+    assert setup_flow["next_step"] == "cannot_create"
+    assert setup_flow["can_create_draft"] is False
+    assert setup_flow["steps"][3]["status"] == "blocked"
+    assert setup_flow["activation_blockers"][0]["type"] == "compiler_unsupported"
 
 
 def test_agent_builder_api_uses_ai_compiler_by_default():
