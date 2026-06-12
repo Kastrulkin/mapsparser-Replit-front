@@ -1528,6 +1528,32 @@ def test_agent_builder_session_preview_includes_feasibility_for_required_connect
     assert "Google Sheets" in state["messages"][-1]["content"]
 
 
+def test_agent_builder_session_extracts_connection_answers_into_bindings():
+    from services.agent_builder_session import build_agent_builder_state
+
+    state = build_agent_builder_state(
+        [
+            {
+                "role": "user",
+                "content": (
+                    "Каждый день бери заказ из Google Sheets за вчера и готовь пост в Telegram. "
+                    "Результат нужен как черновик поста. Перед публикацией человек проверяет результат. "
+                    "Таблица https://docs.google.com/spreadsheets/d/1s79gWCm7A8X1drwN6yAscetf0adpRkamHCJyHCKyIqY/edit?gid=0#gid=0, "
+                    "вкладка Sheet1. Telegram канал @riderra_updates"
+                ),
+            }
+        ],
+    )
+
+    answer_bindings = state["preview"]["connection_answer_bindings"]
+
+    assert answer_bindings["google_sheets_read"]["spreadsheet_id"] == "1s79gWCm7A8X1drwN6yAscetf0adpRkamHCJyHCKyIqY"
+    assert answer_bindings["google_sheets_read"]["sheet_name"] == "Sheet1"
+    assert answer_bindings["google_sheets_read"]["gid"] == "0"
+    assert answer_bindings["telegram_delivery"]["telegram_target"] == "@riderra_updates"
+    assert answer_bindings["telegram_delivery"]["target_type"] == "chat_or_channel"
+
+
 def test_agent_builder_setup_flow_points_ready_connectors_to_preview_run():
     from services.agent_builder_session import build_agent_builder_state
 
@@ -1587,7 +1613,9 @@ def test_compiled_agent_creation_contract_google_sheets_to_telegram():
 
     prompt = (
         "Каждый день бери заказ из Google Sheets за вчера и готовь пост в Telegram. "
-        "Результат нужен как черновик поста. Перед публикацией человек проверяет результат."
+        "Результат нужен как черновик поста. Перед публикацией человек проверяет результат. "
+        "Таблица https://docs.google.com/spreadsheets/d/1s79gWCm7A8X1drwN6yAscetf0adpRkamHCJyHCKyIqY/edit?gid=0#gid=0, "
+        "вкладка Sheet1. Telegram канал @riderra_updates"
     )
     connected_integrations = [
         {
@@ -1761,7 +1789,9 @@ def test_agent_builder_create_blueprint_endpoint_returns_ready_preview_handoff(m
 
     prompt = (
         "Каждый день бери заказ из Google Sheets за вчера и готовь пост в Telegram. "
-        "Результат нужен как черновик поста. Перед публикацией человек проверяет результат."
+        "Результат нужен как черновик поста. Перед публикацией человек проверяет результат. "
+        "Таблица https://docs.google.com/spreadsheets/d/1s79gWCm7A8X1drwN6yAscetf0adpRkamHCJyHCKyIqY/edit?gid=0#gid=0, "
+        "вкладка Sheet1. Telegram канал @riderra_updates"
     )
     connected_integrations = [
         {
@@ -1989,6 +2019,12 @@ def test_agent_builder_create_blueprint_endpoint_returns_ready_preview_handoff(m
     assert metadata["builder_provider_routes_accepted"] is True
     assert metadata["agent_binding_provider_routes"]["telegram_delivery"]["integration_id"] == "openclaw_boundary"
     assert metadata["agent_binding_provider_routes"]["telegram_delivery"]["execution_boundary"] == "localos_policy_envelope"
+    assert metadata["builder_answer_connection_bindings"]["google_sheets_read"]["spreadsheet_id"] == "1s79gWCm7A8X1drwN6yAscetf0adpRkamHCJyHCKyIqY"
+    assert metadata["builder_answer_connection_bindings"]["telegram_delivery"]["telegram_target"] == "@riderra_updates"
+    assert metadata["agent_binding_integrations"]["google_sheets_read"]["answer_config"]["sheet_name"] == "Sheet1"
+    assert metadata["agent_binding_integrations"]["telegram_delivery"]["answer_config"]["telegram_target"] == "@riderra_updates"
+    assert metadata["custom_process"]["google_sheets"]["spreadsheet_id"] == "1s79gWCm7A8X1drwN6yAscetf0adpRkamHCJyHCKyIqY"
+    assert metadata["custom_process"]["telegram"]["telegram_target"] == "@riderra_updates"
     assert metadata["openclaw_planner_loop"]["may_execute_tools"] is False
     assert payload["version"]["capability_allowlist_json"] == ["google_sheets.read_rows", "communications.draft"]
 
@@ -4816,6 +4852,9 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "_missing_required_provider_routes" in api_source
     assert "_required_provider_route_bindings" in api_source
     assert "_apply_selected_provider_routes" in api_source
+    assert "_apply_answer_connection_bindings" in builder_api_source
+    assert "builder_answer_connection_bindings" in builder_api_source
+    assert "connection_answer_bindings" in Path("src/services/agent_builder_session.py").read_text(encoding="utf-8")
     assert "AGENT_CONNECTION_CHOICE_REQUIRED" in api_source
     assert "AGENT_PROVIDER_ROUTE_REQUIRED" in api_source
     assert "AGENT_PROVIDER_ROUTES_CONFIRMATION_REQUIRED" in api_source

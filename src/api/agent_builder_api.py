@@ -439,6 +439,45 @@ def _apply_selected_provider_routes(metadata: dict, selected_provider_routes: di
     return metadata
 
 
+def _apply_answer_connection_bindings(metadata: dict, answer_bindings: dict) -> dict:
+    if not isinstance(answer_bindings, dict) or not answer_bindings:
+        return metadata
+    binding_integrations = metadata.get("agent_binding_integrations") if isinstance(metadata.get("agent_binding_integrations"), dict) else {}
+    custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+    provider_by_binding = _provider_by_binding_key(metadata)
+    clean_answers = {}
+    for binding_key, raw_config in answer_bindings.items():
+        if not isinstance(raw_config, dict):
+            continue
+        clean_key = str(binding_key or "").strip()
+        if not clean_key:
+            continue
+        clean_config = {}
+        for key, value in raw_config.items():
+            clean_value = str(value or "").strip()
+            if clean_value:
+                clean_config[str(key)] = clean_value
+        if not clean_config:
+            continue
+        binding_process = custom_process.get(clean_key) if isinstance(custom_process.get(clean_key), dict) else {}
+        binding_process.update(clean_config)
+        custom_process[clean_key] = binding_process
+        binding_payload = binding_integrations.get(clean_key) if isinstance(binding_integrations.get(clean_key), dict) else {}
+        binding_payload["answer_config"] = dict(clean_config)
+        binding_integrations[clean_key] = binding_payload
+        provider = provider_by_binding.get(clean_key) or ""
+        if provider:
+            provider_process = custom_process.get(provider) if isinstance(custom_process.get(provider), dict) else {}
+            provider_process.update(clean_config)
+            custom_process[provider] = provider_process
+        clean_answers[clean_key] = clean_config
+    if clean_answers:
+        metadata["builder_answer_connection_bindings"] = clean_answers
+        metadata["agent_binding_integrations"] = binding_integrations
+        metadata["custom_process"] = custom_process
+    return metadata
+
+
 def _provider_by_binding_key(metadata: dict) -> dict:
     result = {}
     bindings = metadata.get("required_integration_bindings") if isinstance(metadata.get("required_integration_bindings"), list) else []
@@ -769,6 +808,8 @@ def create_blueprint_from_agent_builder_session(session_id: str):
         metadata["builder_provider_routes_accepted"] = bool(payload.get("accepted_provider_routes"))
         metadata = _apply_selected_connection_bindings(metadata, selected_bindings)
         metadata = _apply_selected_provider_routes(metadata, selected_provider_routes)
+        answer_bindings = preview.get("connection_answer_bindings") if isinstance(preview.get("connection_answer_bindings"), dict) else {}
+        metadata = _apply_answer_connection_bindings(metadata, answer_bindings)
         metadata["builder_selected_connection_bindings"] = selected_bindings
         metadata["builder_selected_provider_routes"] = selected_provider_routes
         blueprint_id = str(uuid.uuid4())

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List
 
 from services.agent_blueprint_draft_builder import compile_agent_blueprint, infer_blueprint_category
@@ -224,6 +225,10 @@ def _build_preview(
         "connection_plan": _build_preview_connection_plan(feasibility),
         "connection_readiness": _build_connection_readiness(feasibility),
         "connection_resolver": _build_connection_resolver(feasibility),
+        "connection_answer_bindings": _extract_connection_answer_bindings(
+            description,
+            [item for item in required_bindings if isinstance(item, dict)],
+        ),
         "connection_summary": _build_connection_summary(feasibility),
         "limits": summary.get("limits") if isinstance(summary.get("limits"), dict) else {},
         "output_schema": summary.get("output_schema") if isinstance(summary.get("output_schema"), dict) else {},
@@ -347,6 +352,96 @@ def _connection_resolver_question_text(item: Dict[str, Any]) -> str:
     if recommended:
         return f"Используем {recommended} как способ подключения для {service} в роли «{role_label}»?"
     return f"Как подключить {service} для роли «{role_label}»?"
+
+
+def _extract_connection_answer_bindings(description: str, required_bindings: List[Dict[str, Any]]) -> Dict[str, Dict[str, str]]:
+    text = _clean_text(description)
+    if not text or not required_bindings:
+        return {}
+    google_sheets_config = _extract_google_sheets_answer_config(text)
+    telegram_config = _extract_telegram_answer_config(text)
+    result: Dict[str, Dict[str, str]] = {}
+    for binding in required_bindings:
+        binding_key = _clean_text(binding.get("key"))
+        provider = _clean_text(binding.get("provider"))
+        if not binding_key:
+            continue
+        if provider == "google_sheets" and google_sheets_config:
+            result[binding_key] = dict(google_sheets_config)
+        if provider == "telegram" and telegram_config:
+            result[binding_key] = dict(telegram_config)
+    return result
+
+
+def _extract_google_sheets_answer_config(text: str) -> Dict[str, str]:
+    config: Dict[str, str] = {}
+    spreadsheet_id = _first_regex_group(
+        text,
+        [
+            r"https?://docs\.google\.com/spreadsheets/d/([A-Za-z0-9_-]+)",
+            r"(?:\?|&)key=([A-Za-z0-9_-]+)",
+        ],
+    )
+    if spreadsheet_id:
+        config["spreadsheet_id"] = spreadsheet_id
+    spreadsheet_url = _first_regex_group(text, [r"(https?://docs\.google\.com/spreadsheets/[^\s,;]+)"])
+    if spreadsheet_url:
+        config["spreadsheet_url"] = spreadsheet_url.rstrip(").]")
+    sheet_name = _extract_sheet_name(text)
+    if sheet_name:
+        config["sheet_name"] = sheet_name
+    gid = _first_regex_group(text, [r"(?:\?|&|#)gid=(\d+)"])
+    if gid:
+        config["gid"] = gid
+    return config
+
+
+def _extract_sheet_name(text: str) -> str:
+    sheet_name = _first_regex_group(
+        text,
+        [
+            r"(?:лист|вкладка|sheet|sheet_name|tab)\s*[:=]\s*['\"]?([^'\"\n,;]+)",
+            r"\b(Sheet\s*\d+)\b",
+        ],
+    )
+    return _clean_resource_value(sheet_name)
+
+
+def _extract_telegram_answer_config(text: str) -> Dict[str, str]:
+    target = _first_regex_group(
+        text,
+        [
+            r"https?://t\.me/([A-Za-z0-9_]{3,})",
+            r"(?<![\w])@([A-Za-z0-9_]{3,})",
+            r"(?:telegram|телеграм|канал|чат|бот)\s*[:=]\s*(@?[A-Za-z0-9_\-]{3,})",
+        ],
+    )
+    target = _clean_resource_value(target)
+    if not target:
+        return {}
+    if target.startswith("@") or target.lstrip("-").isdigit():
+        telegram_target = target
+    else:
+        telegram_target = f"@{target}"
+    return {
+        "telegram_target": telegram_target,
+        "target_type": "chat_or_channel",
+    }
+
+
+def _first_regex_group(text: str, patterns: List[str]) -> str:
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            return str(match.group(1) or "").strip()
+    return ""
+
+
+def _clean_resource_value(value: str) -> str:
+    cleaned = _clean_text(value).strip(" \t\r\n'\"`.,;")
+    if cleaned.endswith(")"):
+        cleaned = cleaned[:-1].strip()
+    return cleaned
 
 
 def _merge_questions(
