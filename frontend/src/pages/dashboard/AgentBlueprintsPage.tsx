@@ -487,6 +487,8 @@ type AgentIntegrationBindingStatus = {
   integration_id?: string;
   missing_config?: string[];
   resolution?: string;
+  route_provider?: string;
+  route?: AgentProviderRoute;
 };
 
 type AgentIntegrationPreflight = {
@@ -1106,6 +1108,11 @@ const bindingResolutionLabel = (binding: AgentIntegrationBindingStatus) => ({
   native_localos: 'внутри LocalOS',
   agent_integration: 'подключение бизнеса',
   blueprint_metadata: 'настройка агента',
+  provider_route_openclaw: 'OpenClaw boundary',
+  provider_route_maton: 'Maton.ai bridge',
+  provider_route_manual: 'ручной режим',
+  provider_route_openclaw_boundary: 'OpenClaw boundary',
+  provider_route_maton_external_account: 'Maton.ai bridge',
   compiled_default: 'настройка workflow',
   input_payload: 'данные запуска',
   missing_integration: 'нужен доступ',
@@ -2900,6 +2907,36 @@ export const AgentBlueprintsPage = () => {
     }
   };
 
+  const chooseProviderRoute = async (bindingKey: string, route: AgentProviderRoute) => {
+    if (!selectedBlueprint || !bindingKey || !route.provider) {
+      return;
+    }
+    if (route.provider === 'maton' && !matonAuthRef.trim()) {
+      setSelectedConnectionBindingKey(bindingKey);
+      setWorkspaceMode('connections');
+      setError('Выберите сохранённый Maton.ai key для этого шага.');
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    try {
+      const response = await api.post(`/agent-blueprints/${selectedBlueprint.id}/provider-routes`, {
+        binding_key: bindingKey,
+        route_provider: route.provider,
+        external_account_id: route.provider === 'maton' ? matonAuthRef.trim() : '',
+      });
+      await loadAgentIntegrations(selectedBlueprint.id);
+      await loadBlueprintDetails(selectedBlueprint.id);
+      await loadBlueprintReview(selectedBlueprint.id);
+      applyPostConnectHandoff(response.data?.post_connect_handoff);
+    } catch (requestError) {
+      console.error(requestError);
+      setError(getRequestErrorMessage(requestError, 'Не удалось выбрать provider route для агента.'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const attachExistingAgentIntegration = async (integration: AgentIntegration, bindingKey = '') => {
     if (!selectedBlueprint || !integration?.id || !integration.provider) {
       return;
@@ -3180,7 +3217,11 @@ export const AgentBlueprintsPage = () => {
 	              </div>
 	              {recentPostCreateHandoff.next_route?.label || recentPostCreateHandoff.next_route?.primary_cta ? (
 	                <div className="mt-2 rounded-lg bg-white/80 px-2 py-1.5 text-amber-900 ring-1 ring-amber-100">
-	                  <ProviderActionPill route={recentPostCreateHandoff.next_route} />
+	                  <ProviderActionPill
+	                    route={recentPostCreateHandoff.next_route}
+	                    disabled={actionLoading || !recentPostCreateHandoff.next_binding_key}
+	                    onChoose={recentPostCreateHandoff.next_binding_key ? () => chooseProviderRoute(recentPostCreateHandoff.next_binding_key || '', recentPostCreateHandoff.next_route || {}) : undefined}
+	                  />
 	                  {providerActionDescription(recentPostCreateHandoff.next_route) ? (
 	                    <div className="mt-1">{providerActionDescription(recentPostCreateHandoff.next_route)}</div>
 	                  ) : null}
@@ -3193,6 +3234,8 @@ export const AgentBlueprintsPage = () => {
             availableIntegrations={availableAgentIntegrations}
             actionLoading={actionLoading}
             onAttachExistingIntegration={attachExistingAgentIntegration}
+            onConfigureBinding={setSelectedConnectionBindingKey}
+            onChooseProviderRoute={chooseProviderRoute}
           />
         </div>
       ) : null}
@@ -3377,6 +3420,7 @@ export const AgentBlueprintsPage = () => {
                 onSaveSheetIntegration={saveSheetIntegration}
                 onSaveTelegramIntegration={saveTelegramIntegration}
                 onSaveMatonIntegration={saveMatonIntegration}
+                onChooseProviderRoute={chooseProviderRoute}
                 onAttachExistingIntegration={attachExistingAgentIntegration}
                 onSelectConnectionBinding={setSelectedConnectionBindingKey}
                 onSaveCustomProcess={saveCustomProcess}
@@ -5006,6 +5050,7 @@ const AgentDetailPanel = ({
   onSaveSheetIntegration,
   onSaveTelegramIntegration,
   onSaveMatonIntegration,
+  onChooseProviderRoute,
   onAttachExistingIntegration,
   onSelectConnectionBinding,
   onSaveCustomProcess,
@@ -5100,6 +5145,7 @@ const AgentDetailPanel = ({
   onSaveSheetIntegration: () => void;
   onSaveTelegramIntegration: () => void;
   onSaveMatonIntegration: () => void;
+  onChooseProviderRoute: (bindingKey: string, route: AgentProviderRoute) => void;
   onAttachExistingIntegration: (integration: AgentIntegration, bindingKey?: string) => void;
   onSelectConnectionBinding: (bindingKey: string) => void;
   onSaveCustomProcess: () => void;
@@ -5263,7 +5309,8 @@ const AgentDetailPanel = ({
         onSaveSheetIntegration={onSaveSheetIntegration}
         onSaveTelegramIntegration={onSaveTelegramIntegration}
         onSaveMatonIntegration={onSaveMatonIntegration}
-        onAttachExistingIntegration={attachExistingAgentIntegration}
+        onChooseProviderRoute={onChooseProviderRoute}
+        onAttachExistingIntegration={onAttachExistingIntegration}
         onSelectConnectionBinding={onSelectConnectionBinding}
         onSaveCustomProcess={onSaveCustomProcess}
         onRunCustomProcessPreview={onRunCustomProcessPreview}
@@ -5711,6 +5758,7 @@ const AgentConnectionsPanel = ({
   onSaveSheetIntegration,
   onSaveTelegramIntegration,
   onSaveMatonIntegration,
+  onChooseProviderRoute,
   onAttachExistingIntegration,
   onSelectConnectionBinding,
   onSaveCustomProcess,
@@ -5750,6 +5798,7 @@ const AgentConnectionsPanel = ({
   onSaveSheetIntegration: () => void;
   onSaveTelegramIntegration: () => void;
   onSaveMatonIntegration: () => void;
+  onChooseProviderRoute: (bindingKey: string, route: AgentProviderRoute) => void;
   onAttachExistingIntegration: (integration: AgentIntegration, bindingKey?: string) => void;
   onSelectConnectionBinding: (bindingKey: string) => void;
   onSaveCustomProcess: () => void;
@@ -5784,6 +5833,7 @@ const AgentConnectionsPanel = ({
       actionLoading={actionLoading}
       onAttachExistingIntegration={onAttachExistingIntegration}
       onConfigureBinding={onSelectConnectionBinding}
+      onChooseProviderRoute={onChooseProviderRoute}
     />
     <AgentIntegrationsPanel
       integrations={agentIntegrations}
@@ -5819,6 +5869,7 @@ const AgentConnectionsPanel = ({
         onSaveSheetIntegration={onSaveSheetIntegration}
         onSaveTelegramIntegration={onSaveTelegramIntegration}
         onSaveMatonIntegration={onSaveMatonIntegration}
+        onChooseProviderRoute={onChooseProviderRoute}
       onAttachExistingIntegration={onAttachExistingIntegration}
       onSelectBinding={onSelectConnectionBinding}
       onSaveCustomProcess={onSaveCustomProcess}
@@ -5835,6 +5886,7 @@ const AgentConnectionPlanPanel = ({
   actionLoading = false,
   onAttachExistingIntegration,
   onConfigureBinding,
+  onChooseProviderRoute,
 }: {
   connectionPlan: AgentConnectionPlan | null;
   compact?: boolean;
@@ -5842,6 +5894,7 @@ const AgentConnectionPlanPanel = ({
   actionLoading?: boolean;
   onAttachExistingIntegration?: (integration: AgentIntegration, bindingKey?: string) => void;
   onConfigureBinding?: (bindingKey: string) => void;
+  onChooseProviderRoute?: (bindingKey: string, route: AgentProviderRoute) => void;
 }) => {
   const items = Array.isArray(connectionPlan?.items) ? connectionPlan.items : [];
   if (!items.length) {
@@ -5885,7 +5938,12 @@ const AgentConnectionPlanPanel = ({
             {item.provider_routes?.length ? (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {item.provider_routes.slice(0, 5).map((route) => (
-                  <ProviderActionPill key={`${item.key}-${route.provider}-${route.role}`} route={route} />
+                  <ProviderActionPill
+                    key={`${item.key}-${route.provider}-${route.role}`}
+                    route={route}
+                    disabled={actionLoading || !item.key}
+                    onChoose={compact ? undefined : onChooseProviderRoute ? () => onChooseProviderRoute(item.key || '', route) : undefined}
+                  />
                 ))}
               </div>
             ) : null}
@@ -6006,14 +6064,36 @@ const providerActionDescription = (route?: AgentProviderRoute | null) => {
   return '';
 };
 
-const ProviderActionPill = ({ route }: { route?: AgentProviderRoute | null }) => {
+const ProviderActionPill = ({
+  route,
+  onChoose,
+  disabled = false,
+}: {
+  route?: AgentProviderRoute | null;
+  onChoose?: () => void;
+  disabled?: boolean;
+}) => {
   if (!route) {
     return null;
   }
   const state = route.state || route.status || '';
+  const canChoose = Boolean(onChoose && ['openclaw', 'maton'].includes(route.provider || '') && route.provider_action?.available !== false && ['available', 'connected'].includes(state));
+  const className = cn(
+    'rounded-full px-2 py-0.5 text-[11px] font-medium ring-1',
+    providerRouteTone(state),
+    canChoose ? 'transition hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-60' : '',
+  );
+  const label = `${route.label || connectorLabel(route.provider)} · ${providerActionLabel(route)}`;
+  if (canChoose) {
+    return (
+      <button type="button" className={className} onClick={onChoose} disabled={disabled}>
+        {label}
+      </button>
+    );
+  }
   return (
-    <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium ring-1', providerRouteTone(state))}>
-      {route.label || connectorLabel(route.provider)} · {providerActionLabel(route)}
+    <span className={className}>
+      {label}
     </span>
   );
 };
@@ -6566,6 +6646,7 @@ const AgentIntegrationsPanel = ({
   onSaveSheetIntegration,
   onSaveTelegramIntegration,
   onSaveMatonIntegration,
+  onChooseProviderRoute,
   onAttachExistingIntegration,
   onSelectBinding,
   onSaveCustomProcess,
@@ -6605,6 +6686,7 @@ const AgentIntegrationsPanel = ({
   onSaveSheetIntegration: () => void;
   onSaveTelegramIntegration: () => void;
   onSaveMatonIntegration: () => void;
+  onChooseProviderRoute: (bindingKey: string, route: AgentProviderRoute) => void;
   onAttachExistingIntegration: (integration: AgentIntegration, bindingKey?: string) => void;
   onSelectBinding: (bindingKey: string) => void;
   onSaveCustomProcess: () => void;
@@ -6733,7 +6815,12 @@ const AgentIntegrationsPanel = ({
           {selectedPlanItem?.provider_routes?.length ? (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {selectedPlanItem.provider_routes.slice(0, 5).map((route) => (
-                <ProviderActionPill key={`${selectedPlanItem.key}-${route.provider}-${route.role}`} route={route} />
+                <ProviderActionPill
+                  key={`${selectedPlanItem.key}-${route.provider}-${route.role}`}
+                  route={route}
+                  disabled={actionLoading || !selectedPlanItem.key}
+                  onChoose={() => onChooseProviderRoute(selectedPlanItem.key || '', route)}
+                />
               ))}
             </div>
           ) : null}

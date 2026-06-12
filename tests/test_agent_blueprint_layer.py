@@ -4591,6 +4591,10 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "ProviderActionPill" in agents_page_source
     assert "providerActionLabel" in agents_page_source
     assert "providerActionDescription" in agents_page_source
+    assert "chooseProviderRoute" in agents_page_source
+    assert "/provider-routes" in agents_page_source
+    assert "onChooseProviderRoute" in agents_page_source
+    assert "Выберите сохранённый Maton.ai key для этого шага." in agents_page_source
     assert "route?.primary_cta" in agents_page_source
     assert "saveMatonIntegration" in agents_page_source
     assert "Maton.ai bridge" in agents_page_source
