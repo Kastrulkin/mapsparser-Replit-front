@@ -1212,6 +1212,22 @@ def _remember_active_version(cursor, blueprint: dict, version: dict, user_data: 
     return event
 
 
+def _version_was_active_before(blueprint: dict, version: dict) -> bool:
+    version_id = str((version or {}).get("id") or "").strip()
+    if not version_id:
+        return False
+    metadata = _blueprint_metadata(blueprint)
+    if str(metadata.get("active_version_id") or "").strip() == version_id:
+        return True
+    events = metadata.get("version_events") if isinstance(metadata.get("version_events"), list) else []
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        if str(event.get("active_version_id") or "").strip() == version_id:
+            return True
+    return False
+
+
 def _decorate_versions(cursor, blueprint: dict, versions: list[dict]) -> tuple[list[dict], dict | None]:
     active_version = _resolve_active_version(cursor, blueprint)
     active_version_id = str((active_version or {}).get("id") or "")
@@ -2145,9 +2161,19 @@ def create_agent_blueprint_version(blueprint_id: str):
         if access_error:
             return access_error
         version = _insert_version(cursor, str(blueprint.get("id")), payload, user_data)
-        event = _remember_active_version(cursor, blueprint, version, user_data, "created")
         db.conn.commit()
-        return jsonify({"success": True, "version": version, "active_version": version, "version_event": event}), 201
+        active_version_id = str(_blueprint_metadata(blueprint).get("active_version_id") or "").strip()
+        active_version = _load_blueprint_version_for_blueprint(cursor, str(blueprint.get("id") or ""), active_version_id) if active_version_id else None
+        return jsonify(
+            {
+                "success": True,
+                "version": version,
+                "candidate_version": version,
+                "active_version": _normalize_json_row(active_version) if active_version else None,
+                "version_event": None,
+                "activation_state": "candidate_requires_preview",
+            }
+        ), 201
     except Exception:
         db.conn.rollback()
         raise
@@ -2263,6 +2289,23 @@ def rollback_agent_blueprint_version(blueprint_id: str, version_id: str):
         if active_before and str(active_before.get("id") or "") == str(version.get("id") or ""):
             return _json_error("Version is already active", 400, "VERSION_ALREADY_ACTIVE")
         reason = str(payload.get("reason") or "rollback").strip()
+        rollback_gate = {}
+        if not _version_was_active_before(blueprint, version):
+            rollback_gate = _build_activation_gate_summary(
+                cursor,
+                blueprint=blueprint,
+                active_version=version,
+                metadata=_blueprint_metadata(blueprint),
+            )
+            if not rollback_gate.get("can_activate"):
+                return jsonify(
+                    {
+                        "success": False,
+                        "error": str(rollback_gate.get("summary") or "Эта версия не была активной раньше. Сначала нужен safe preview."),
+                        "code": "AGENT_ROLLBACK_GATE_BLOCKED",
+                        "rollback_gate": rollback_gate,
+                    }
+                ), 400
         event = _remember_active_version(cursor, blueprint, version, user_data, "rollback", reason)
         db.conn.commit()
         return jsonify(
@@ -2272,6 +2315,7 @@ def rollback_agent_blueprint_version(blueprint_id: str, version_id: str):
                 "previous_active_version": _normalize_json_row(active_before) if active_before else None,
                 "diff": build_agent_version_diff(active_before, version),
                 "version_event": event,
+                "rollback_gate": rollback_gate,
             }
         )
     except Exception:
@@ -2309,10 +2353,29 @@ def setup_agent_blueprint(blueprint_id: str):
             output_schema["human_review"] = True
             version_payload["output_schema"] = output_schema
             version = _insert_version(cursor, blueprint_id, version_payload, user_data)
-            _remember_active_version(cursor, blueprint, version, user_data, "setup_updated")
         db.conn.commit()
         refreshed = _load_blueprint(cursor, blueprint_id)
-        return jsonify({"success": True, "blueprint": _normalize_json_row(refreshed), "setup": setup, "version": version})
+        activation_gate = (
+            _build_activation_gate_summary(
+                cursor,
+                blueprint=refreshed or blueprint,
+                active_version=version,
+                metadata=_blueprint_metadata(refreshed or blueprint),
+            )
+            if version
+            else {}
+        )
+        return jsonify(
+            {
+                "success": True,
+                "blueprint": _normalize_json_row(refreshed),
+                "setup": setup,
+                "version": version,
+                "candidate_version": version,
+                "version_event": None,
+                "activation_gate": activation_gate,
+            }
+        )
     except Exception:
         db.conn.rollback()
         raise
@@ -2611,19 +2674,31 @@ def save_agent_blueprint_custom_process(blueprint_id: str):
         _save_blueprint_metadata(cursor, blueprint_id, metadata)
         latest_version = _load_latest_blueprint_version(cursor, blueprint_id)
         version = None
-        event = None
         if latest_version:
             version_payload = build_version_payload_from_row(latest_version)
             version_payload = _apply_custom_process_to_version_payload(version_payload, custom_process)
             version = _insert_version(cursor, blueprint_id, version_payload, user_data)
-            event = _remember_active_version(cursor, blueprint, version, user_data, "custom_process_updated")
         db.conn.commit()
+        refreshed = _load_blueprint(cursor, blueprint_id)
+        activation_gate = (
+            _build_activation_gate_summary(
+                cursor,
+                blueprint=refreshed or blueprint,
+                active_version=version,
+                metadata=_blueprint_metadata(refreshed or blueprint),
+            )
+            if version
+            else {}
+        )
         return jsonify(
             {
                 "success": True,
                 "custom_process": custom_process,
                 "version": version,
-                "version_event": event,
+                "candidate_version": version,
+                "version_event": None,
+                "activation_gate": activation_gate,
+                "activation_state": "candidate_requires_preview" if version else "",
             }
         )
     except Exception:

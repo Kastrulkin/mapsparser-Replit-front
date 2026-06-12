@@ -4418,6 +4418,9 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "/api/agent-blueprints/<blueprint_id>/versions/<version_id>/rollback" in api_source
     assert "_resolve_active_version" in api_source
     assert "_remember_active_version" in api_source
+    assert "_version_was_active_before" in api_source
+    assert "AGENT_ROLLBACK_GATE_BLOCKED" in api_source
+    assert "candidate_requires_preview" in api_source
     assert "Запустите безопасный preview run перед активацией." in api_source
     assert "build_agent_version_diff" in workspace_source
     assert "agent_learning_loop_v1" in workspace_source
@@ -4435,6 +4438,23 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     remember_position = feedback_endpoint.index("_remember_active_version")
     assert gate_position < gate_check_position < remember_position
     assert "build_learning_loop_summary(feedback, version, new_version, diff, auto_activation_applied)" in feedback_endpoint
+
+    create_version_start = api_source.index("def create_agent_blueprint_version")
+    create_version_endpoint = api_source[create_version_start:api_source.index("@agent_blueprints_bp.route", create_version_start + 1)]
+    assert "candidate_version" in create_version_endpoint
+    assert "_remember_active_version" not in create_version_endpoint
+
+    setup_start = api_source.index("def setup_agent_blueprint")
+    setup_endpoint = api_source[setup_start:api_source.index("@agent_blueprints_bp.route", setup_start + 1)]
+    assert "candidate_version" in setup_endpoint
+    assert "_build_activation_gate_summary" in setup_endpoint
+    assert "_remember_active_version" not in setup_endpoint
+
+    custom_process_start = api_source.index("def save_agent_blueprint_custom_process")
+    custom_process_endpoint = api_source[custom_process_start:api_source.index("@agent_blueprints_bp.route", custom_process_start + 1)]
+    assert "candidate_version" in custom_process_endpoint
+    assert "_build_activation_gate_summary" in custom_process_endpoint
+    assert "_remember_active_version" not in custom_process_endpoint
     assert "analyze_table_with_llm" in workspace_source
     assert "analyze_text_with_gigachat" in document_llm_source
     assert "agent_email_draft" in email_llm_source
