@@ -4547,6 +4547,9 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "BuilderConnectionSummaryPanel" in agents_page_source
     assert "Подключения для агента" in agents_page_source
     assert "connection_summary" in agents_page_source
+    assert "AgentProductCockpit" in agents_page_source
+    assert "getBlueprintBuilderPreview" in agents_page_source
+    assert "detailsBlueprint={blueprintDetails?.blueprint}" in agents_page_source
     assert "BuilderConnectionReadinessPanel" in agents_page_source
     assert "Готовность подключений" in agents_page_source
     assert "connection_readiness" in agents_page_source

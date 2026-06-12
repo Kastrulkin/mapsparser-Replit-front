@@ -81,6 +81,7 @@ type AgentBlueprint = {
   sources_count?: number;
   journal_entries_count?: number;
   versions_count?: number;
+  metadata_json?: Record<string, unknown>;
 };
 
 type AgentVoicePersona = {
@@ -352,6 +353,7 @@ type AgentMetricsSummary = {
 };
 
 type AgentBlueprintDetails = {
+  blueprint?: AgentBlueprint;
   versions: Array<Record<string, unknown>>;
   runs: AgentRun[];
   approval_queue?: AgentApproval[];
@@ -946,6 +948,20 @@ const getRequestErrorMessage = (requestError: unknown, fallback: string) => {
 const objectValue = (value: object, key: string): unknown => {
   const entry = Object.entries(value).find(([entryKey]) => entryKey === key);
   return entry ? entry[1] : undefined;
+};
+
+const recordValue = (value: unknown): Record<string, unknown> | null => (
+  value && typeof value === 'object' && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : null
+);
+
+const getBlueprintMetadata = (blueprint?: AgentBlueprint | null): Record<string, unknown> => (
+  recordValue(blueprint?.metadata_json) || {}
+);
+
+const getBlueprintBuilderPreview = (blueprint?: AgentBlueprint | null): AgentBuilderPreview | null => {
+  const metadata = getBlueprintMetadata(blueprint);
+  const preview = recordValue(metadata.agent_builder_preview);
+  return preview ? { ...preview } : null;
 };
 
 const normalizePostCreateHandoff = (value: unknown): AgentPostCreateHandoff | null => {
@@ -2181,6 +2197,7 @@ export const AgentBlueprintsPage = () => {
       const params = runStatusFilter === 'all' ? {} : { run_status: runStatusFilter };
       const response = await api.get(`/agent-blueprints/${blueprintId}`, { params });
       const details = {
+        blueprint: response.data?.blueprint && typeof response.data.blueprint === 'object' ? response.data.blueprint : undefined,
         versions: Array.isArray(response.data?.versions) ? response.data.versions : [],
         runs: Array.isArray(response.data?.runs) ? response.data.runs : [],
         approval_queue: Array.isArray(response.data?.approval_queue) ? response.data.approval_queue : [],
@@ -5216,6 +5233,7 @@ const AgentDetailPanel = ({
     {mode === 'overview' ? (
       <AgentOverviewPanel
         blueprint={blueprint}
+        detailsBlueprint={blueprintDetails?.blueprint}
         latestVersionNumber={latestVersionNumber}
         voiceName={voiceName}
         listStatus={listStatus}
@@ -5429,6 +5447,7 @@ const AgentDetailPanel = ({
 
 const AgentOverviewPanel = ({
   blueprint,
+  detailsBlueprint,
   latestVersionNumber,
   voiceName,
   listStatus,
@@ -5447,6 +5466,7 @@ const AgentOverviewPanel = ({
   onDeleteAgent,
 }: {
   blueprint: AgentBlueprint;
+  detailsBlueprint?: AgentBlueprint;
   latestVersionNumber: number | null;
   voiceName: string;
   listStatus: string;
@@ -5474,6 +5494,7 @@ const AgentOverviewPanel = ({
   const activationVersionId = activationGate?.active_version_id || blueprint.active_version_id || '';
   const settledTokens = Number(metrics?.cost_tokens?.settled_tokens || 0);
   const totalCost = Number(metrics?.cost_tokens?.total_cost || 0);
+  const builderPreview = getBlueprintBuilderPreview(detailsBlueprint || blueprint);
 
   return (
     <div className="space-y-4">
@@ -5509,6 +5530,19 @@ const AgentOverviewPanel = ({
         <AgentSummaryPill label="Compiled" value={compiledKnown ? (compiledValid ? 'проверен' : 'ошибка') : 'черновик'} tone={compiledKnown && !compiledValid ? 'warning' : 'default'} />
         <AgentSummaryPill label="Подключения" value={requiredBindings ? `${Math.max(requiredBindings - missingBindings, 0)}/${requiredBindings}` : 'не нужны'} tone={connectorsReady ? 'default' : 'warning'} />
       </div>
+
+      <AgentProductCockpit
+        blueprint={blueprint}
+        preview={builderPreview}
+        activationGate={activationGate}
+        connectorsReady={connectorsReady}
+        compiledReady={!compiledKnown || compiledValid}
+        previewReady={previewReady}
+        actionLoading={actionLoading}
+        onOpenConnections={onOpenConnections}
+        onOpenLogic={onOpenLogic}
+        onStartRun={onStartRun}
+      />
 
       {activationGate ? (
         <ActivationGateDecisionCard
@@ -5568,6 +5602,119 @@ const AgentOverviewPanel = ({
     </div>
   );
 };
+
+const AgentProductCockpit = ({
+  blueprint,
+  preview,
+  activationGate,
+  connectorsReady,
+  compiledReady,
+  previewReady,
+  actionLoading,
+  onOpenConnections,
+  onOpenLogic,
+  onStartRun,
+}: {
+  blueprint: AgentBlueprint;
+  preview: AgentBuilderPreview | null;
+  activationGate?: AgentActivationGate;
+  connectorsReady: boolean;
+  compiledReady: boolean;
+  previewReady: boolean;
+  actionLoading: boolean;
+  onOpenConnections: () => void;
+  onOpenLogic: () => void;
+  onStartRun: () => void;
+}) => {
+  const summary = preview?.connection_summary;
+  const missingItems = (summary?.items || []).filter((item) => item.action && !['ready', 'native_ready'].includes(item.action));
+  const readyItems = (summary?.items || []).filter((item) => item.action === 'ready' || item.action === 'native_ready');
+  const setupFlow = preview?.setup_flow;
+  const nextStep = activationGate?.next_step || setupFlow?.post_create_next_step || setupFlow?.next_step || '';
+  const needsConnections = !connectorsReady || missingItems.length > 0 || nextStep === 'connect_required_integrations';
+  const needsLogic = !compiledReady || nextStep === 'fix_compiled_workflow';
+  const canPreview = connectorsReady && compiledReady && !previewReady;
+  const primaryLabel = needsConnections
+    ? 'Подключить сервисы'
+    : canPreview
+      ? 'Проверить на примере'
+      : needsLogic
+        ? 'Открыть логику'
+        : 'Открыть запуски';
+  const PrimaryIcon = needsConnections ? Database : canPreview ? Play : needsLogic ? Workflow : Play;
+  const primaryAction = needsConnections ? onOpenConnections : canPreview ? onStartRun : needsLogic ? onOpenLogic : onStartRun;
+  const primaryVariant: 'default' | 'outline' = needsConnections || canPreview || needsLogic ? 'default' : 'outline';
+  const task = preview?.understood_task || blueprint.description || blueprint.active_goal || blueprint.latest_goal || 'Настройте задачу агента.';
+  const dataText = preview?.data_sources?.length
+    ? preview.data_sources.map((item) => humanizeMeta(item)).join(', ')
+    : readyItems.length
+      ? readyItems.map((item) => item.title || connectorLabel(item.provider)).join(', ')
+      : 'будет видно после настройки';
+  const requiredText = missingItems.length
+    ? missingItems.map((item) => item.title || connectorLabel(item.provider)).join(', ')
+    : connectorsReady
+      ? 'подключения готовы'
+      : 'проверить подключения';
+  const flowStatus = setupFlow?.status || (activationGate?.can_activate ? 'ready' : 'draft');
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-sm font-semibold text-slate-950">Рабочая карточка агента</div>
+            <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
+              {humanizeMeta(flowStatus)}
+            </span>
+          </div>
+          <div className="mt-2 text-sm leading-7 text-slate-700">{task}</div>
+        </div>
+        <Button type="button" variant={primaryVariant} onClick={primaryAction} disabled={actionLoading} className="shrink-0">
+          {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PrimaryIcon className="mr-2 h-4 w-4" />}
+          {primaryLabel}
+        </Button>
+      </div>
+      <div className="mt-4 grid gap-2 md:grid-cols-3">
+        <AgentCockpitFact icon={Database} label="Данные" value={dataText} ready={Boolean(preview?.data_sources?.length || readyItems.length)} />
+        <AgentCockpitFact icon={ShieldCheck} label="Доступы" value={requiredText} ready={!needsConnections} />
+        <AgentCockpitFact icon={Play} label="Preview" value={previewReady ? 'пройден' : canPreview ? 'готов к проверке' : 'после preflight'} ready={previewReady} />
+      </div>
+      {missingItems.length ? (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {missingItems.slice(0, 4).map((item) => (
+            <button
+              key={item.key || item.provider || item.title}
+              type="button"
+              onClick={onOpenConnections}
+              className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 ring-1 ring-amber-200 transition hover:bg-amber-100"
+            >
+              {item.setup_cta?.label || `Подключить ${item.title || connectorLabel(item.provider)}`}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+const AgentCockpitFact = ({
+  icon: Icon,
+  label,
+  value,
+  ready,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+  ready: boolean;
+}) => (
+  <div className="rounded-xl bg-slate-50 px-3 py-3 ring-1 ring-slate-200">
+    <div className="flex items-center gap-2 text-xs font-semibold uppercase text-slate-500">
+      <Icon className={cn('h-4 w-4', ready ? 'text-emerald-600' : 'text-amber-600')} />
+      {label}
+    </div>
+    <div className="mt-1 text-sm leading-6 text-slate-800">{value}</div>
+  </div>
+);
 
 const ActivationGateDecisionCard = ({
   gate,
