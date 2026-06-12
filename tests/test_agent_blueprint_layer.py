@@ -4365,6 +4365,12 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "sources_count" in api_source
     assert "versions_count" in api_source
     assert "/api/agent-blueprints/draft" in api_source
+    assert "build_agent_builder_state" in api_source
+    assert "direct_draft_envelope" in api_source
+    assert "metadata[\"agent_builder_preview\"] = preview" in api_source
+    assert "metadata[\"openclaw_planner_context\"] = planner_context" in api_source
+    assert "\"connection_summary\": preview.get(\"connection_summary\")" in api_source
+    assert "_load_direct_builder_connection_inventory" in api_source
     assert "/api/agent-blueprints/legacy-migration/apply" in api_source
     assert "apply_legacy_ai_agent_migration" in api_source
     assert "learning_events" in api_source

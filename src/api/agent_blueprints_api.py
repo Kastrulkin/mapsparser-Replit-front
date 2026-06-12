@@ -15,6 +15,7 @@ from services.agent_blueprint_runner import (
 from services.agent_blueprint_orchestrator import build_agent_blueprint_orchestrator
 from services.agent_blueprint_draft_builder import build_agent_blueprint_draft
 from services.agent_builder_billing import charge_agent_creation_credits
+from services.agent_builder_session import build_agent_builder_state, preview_to_setup
 from services.agent_compiled_artifact import validate_compiled_artifact_candidate
 from services.agent_blueprint_workspace import (
     build_agent_version_diff,
@@ -570,6 +571,80 @@ def _load_agent_integrations(cursor, business_id: str, integration_ids: list[str
             (business_id,),
         )
     return [dict(row) for row in cursor.fetchall() or []]
+
+
+def _load_direct_builder_connection_inventory(cursor, business_id: str) -> list[dict]:
+    result: list[dict] = []
+    for row in _load_agent_integrations(cursor, business_id):
+        config = parse_json_field(row.get("config_json"), {})
+        result.append(
+            {
+                "id": str(row.get("id") or ""),
+                "provider": str(row.get("provider") or ""),
+                "status": str(row.get("status") or "active"),
+                "display_name": str(row.get("display_name") or row.get("provider") or ""),
+                "config": config if isinstance(config, dict) else {},
+            }
+        )
+    try:
+        cursor.execute(
+            """
+            SELECT id, source, display_name
+            FROM externalbusinessaccounts
+            WHERE business_id = %s
+              AND is_active = TRUE
+              AND source IN ('maton', 'google_sheets', 'telegram_app')
+            ORDER BY updated_at DESC
+            LIMIT 50
+            """,
+            (business_id,),
+        )
+    except Exception:
+        return result
+    for row in cursor.fetchall() or []:
+        item = dict(row)
+        source = str(item.get("source") or "").strip()
+        provider = source
+        config: dict = {}
+        if source == "telegram_app":
+            provider = "telegram"
+            config = {"bot_mode": "business_bot"}
+        elif source == "maton":
+            provider = "maton"
+            config = {"channel": "maton_bridge"}
+        result.append(
+            {
+                "id": str(item.get("id") or ""),
+                "provider": provider,
+                "status": "active",
+                "display_name": str(item.get("display_name") or source or provider),
+                "config": config,
+            }
+        )
+    try:
+        cursor.execute(
+            """
+            SELECT telegram_bot_token
+            FROM Businesses
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (business_id,),
+        )
+        business = cursor.fetchone() or {}
+    except Exception:
+        business = {}
+    if str(dict(business).get("telegram_bot_token") or "").strip():
+        result.append(
+            {
+                "id": "business_telegram_bot",
+                "provider": "telegram",
+                "status": "active",
+                "display_name": "Бот бизнеса",
+                "config": {"bot_mode": "business_bot"},
+            }
+        )
+    return result
 
 
 def _load_agent_external_auth_options(cursor, business_id: str) -> list[dict]:
@@ -1380,12 +1455,36 @@ def create_agent_blueprint_draft():
         allowed, access_error = _require_business_access(cursor, business_id, user_data)
         if not allowed:
             return access_error
+        builder_state = build_agent_builder_state(
+            [{"role": "user", "content": description}],
+            str(payload.get("category") or ""),
+            use_ai=False,
+            business_id=business_id,
+            user_id=_user_id(user_data),
+            connected_integrations=_load_direct_builder_connection_inventory(cursor, business_id),
+        )
+        preview = builder_state.get("preview") if isinstance(builder_state.get("preview"), dict) else {}
+        feasibility = preview.get("feasibility") if isinstance(preview.get("feasibility"), dict) else {}
+        setup_flow = preview.get("setup_flow") if isinstance(preview.get("setup_flow"), dict) else {}
+        if feasibility.get("status") == "forbidden":
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "Такой агент не может быть создан в рамках политики LocalOS.",
+                    "code": "AGENT_REQUEST_FORBIDDEN",
+                    "feasibility": feasibility,
+                    "setup_flow": setup_flow,
+                }
+            ), 400
+        planner_context = preview.get("openclaw_planner_context") if isinstance(preview.get("openclaw_planner_context"), dict) else {}
+        planner_loop = preview.get("openclaw_planner_loop") if isinstance(preview.get("openclaw_planner_loop"), dict) else {}
         draft = build_agent_blueprint_draft(
             description,
             str(payload.get("category") or ""),
             use_ai=bool(payload.get("use_ai_compiler")),
             business_id=business_id,
             user_id=_user_id(user_data),
+            planner_context=planner_context,
         )
         blueprint_id = str(uuid.uuid4())
         billing = charge_agent_creation_credits(
@@ -1407,6 +1506,16 @@ def create_agent_blueprint_draft():
                 }
             ), 402
         metadata = draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}
+        metadata["builder"] = str(metadata.get("builder") or "direct_description_builder_v1")
+        metadata["direct_draft_envelope"] = "localos_openclaw_policy_envelope_v1"
+        metadata["agent_builder_preview"] = preview
+        metadata["feasibility"] = feasibility
+        metadata["openclaw_planner_context"] = planner_context
+        metadata["openclaw_planner_loop"] = planner_loop
+        metadata["required_connectors"] = preview.get("required_connectors") if isinstance(preview.get("required_connectors"), list) else []
+        metadata["builder_setup_flow"] = setup_flow
+        metadata["agent_setup"] = preview_to_setup(preview)
+        metadata["setup_completed"] = bool(setup_flow.get("can_create_draft"))
         metadata["billing"] = billing
         cursor.execute(
             """
@@ -1441,6 +1550,12 @@ def create_agent_blueprint_draft():
                     "summary": draft.get("summary") if isinstance(draft.get("summary"), dict) else {},
                 },
                 "billing": billing,
+                "setup_flow": setup_flow,
+                "feasibility": feasibility,
+                "connection_summary": preview.get("connection_summary") if isinstance(preview.get("connection_summary"), dict) else {},
+                "connector_intelligence": preview.get("connector_intelligence") if isinstance(preview.get("connector_intelligence"), dict) else {},
+                "openclaw_planner_loop": planner_loop,
+                "next_step": str(setup_flow.get("post_create_next_step") or setup_flow.get("next_step") or ""),
             }
         ), 201
     except Exception:
