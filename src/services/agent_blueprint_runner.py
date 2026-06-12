@@ -1322,6 +1322,14 @@ class AgentBlueprintRunner:
                         "provider_write_performed": bool(item.get("provider_write_performed")),
                     }
                 )
+        openclaw_action_plan = self._preview_summary_openclaw_action_plan(run_input.get("openclaw_action_plan"))
+        policy_envelope = self._preview_summary_policy_envelope(run_input.get("policy_envelope"), safe_preview)
+        approval_gate = {
+            "pending_approvals_count": len(pending_approvals),
+            "waiting_actions_count": len(waiting_actions),
+            "external_actions_performed": self._external_actions_performed(domain_requests),
+            "reason": "LocalOS approval gate останавливает внешние записи и отправки до решения человека.",
+        }
         next_step = self._preview_next_step(run, integration_preflight, pending_approvals, waiting_actions)
         return {
             "schema": "localos_agent_preview_summary_v1",
@@ -1337,12 +1345,60 @@ class AgentBlueprintRunner:
             "pending_approvals": pending_approvals,
             "waiting_actions": waiting_actions[:6],
             "preflight_ready": bool(integration_preflight.get("ready")),
+            "openclaw_action_plan": openclaw_action_plan,
+            "openclaw_action_count": len(openclaw_action_plan),
+            "policy_envelope": policy_envelope,
+            "approval_gate": approval_gate,
             "external_side_effects_allowed": bool(run_input.get("external_side_effects_allowed")),
-            "external_actions_performed": self._external_actions_performed(domain_requests),
+            "external_actions_performed": approval_gate["external_actions_performed"],
             "activation_hint": self._preview_activation_hint(run, integration_preflight, pending_approvals, waiting_actions),
             "next_step": next_step,
             "next_step_label": self._preview_next_step_label(next_step),
             "next_step_description": self._preview_next_step_description(next_step),
+        }
+
+    def _preview_summary_openclaw_action_plan(self, value: Any) -> List[Dict[str, Any]]:
+        if not isinstance(value, list):
+            return []
+        result = []
+        for item in value:
+            if not isinstance(item, dict):
+                continue
+            result.append(
+                {
+                    "step_key": str(item.get("step_key") or item.get("key") or ""),
+                    "title": str(item.get("title") or item.get("step_key") or item.get("capability") or "OpenClaw action"),
+                    "capability": str(item.get("capability") or ""),
+                    "provider": str(item.get("provider") or ""),
+                    "provider_action_ref": str(item.get("provider_action_ref") or item.get("provider_action") or ""),
+                    "provider_policy": str(item.get("provider_policy") or "localos_envelope"),
+                    "risk_class": str(item.get("risk_class") or ""),
+                    "approval_class": str(item.get("approval_class") or ""),
+                    "requires_approval": bool(item.get("requires_approval")),
+                }
+            )
+            if len(result) >= 12:
+                break
+        return result
+
+    def _preview_summary_policy_envelope(self, value: Any, safe_preview: bool) -> Dict[str, Any]:
+        if not isinstance(value, dict):
+            return {
+                "execution_boundary": "openclaw_action_orchestrator",
+                "external_side_effects_allowed_in_preview": False,
+                "approval_owner": "LocalOS",
+                "billing_owner": "LocalOS",
+                "audit_owner": "LocalOS",
+                "safe_preview": safe_preview,
+            }
+        return {
+            "execution_boundary": str(value.get("execution_boundary") or "openclaw_action_orchestrator"),
+            "external_side_effects_allowed_in_preview": bool(value.get("external_side_effects_allowed_in_preview")) is True,
+            "approval_owner": str(value.get("approval_owner") or "LocalOS"),
+            "billing_owner": str(value.get("billing_owner") or "LocalOS"),
+            "audit_owner": str(value.get("audit_owner") or "LocalOS"),
+            "cost_owner": str(value.get("cost_owner") or value.get("billing_owner") or "LocalOS"),
+            "safe_preview": safe_preview,
         }
 
     def _artifact_summary(self, payload: Dict[str, Any]) -> str:

@@ -4887,6 +4887,13 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "OpenClaw action refs" in agents_page_source
     assert "openclaw_action_plan" in api_source
     assert "_preview_openclaw_action_plan" in api_source
+    runner_source = Path("src/services/agent_blueprint_runner.py").read_text(encoding="utf-8")
+    assert "_preview_summary_openclaw_action_plan" in runner_source
+    assert "_preview_summary_policy_envelope" in runner_source
+    assert "\"approval_gate\": approval_gate" in runner_source
+    assert "OpenClaw actions в safe preview" in agents_page_source
+    assert "OpenClawPreviewActionPlanPanel" in agents_page_source
+    assert "side effects выключены" in agents_page_source
     assert "AGENT_CONNECTION_CHOICE_REQUIRED" in api_source
     assert "AGENT_PROVIDER_ROUTE_REQUIRED" in api_source
     assert "AGENT_PROVIDER_ROUTES_CONFIRMATION_REQUIRED" in api_source
@@ -6837,6 +6844,30 @@ def test_runner_load_run_includes_observability_envelope_for_openclaw_actions():
             }
 
     cursor = FakeCursor()
+    preview_openclaw_action_plan = [
+        {
+            "step_key": "read_sheet",
+            "title": "Read Google Sheets rows",
+            "capability": "sheets.read_rows",
+            "provider": "openclaw",
+            "provider_action_ref": "openclaw.google_sheets.read_rows",
+            "provider_policy": "localos_envelope",
+            "risk_class": "read",
+            "approval_class": "none",
+            "requires_approval": False,
+        },
+        {
+            "step_key": "append_sheet",
+            "title": "Prepare approved append request",
+            "capability": "sheets.append_row_request",
+            "provider": "openclaw",
+            "provider_action_ref": "openclaw.google_sheets.append_row",
+            "provider_policy": "localos_envelope",
+            "risk_class": "external_write",
+            "approval_class": "human_before_write",
+            "requires_approval": True,
+        },
+    ]
     cursor.tables["agent_runs"]["run1"] = {
         "id": "run1",
         "blueprint_id": "bp1",
@@ -6847,6 +6878,14 @@ def test_runner_load_run_includes_observability_envelope_for_openclaw_actions():
             "preview_mode": True,
             "external_side_effects_allowed": False,
             "goal": "Проверить таблицу и подготовить действие",
+            "openclaw_action_plan": preview_openclaw_action_plan,
+            "policy_envelope": {
+                "execution_boundary": "openclaw_action_orchestrator",
+                "external_side_effects_allowed_in_preview": False,
+                "approval_owner": "LocalOS",
+                "billing_owner": "LocalOS",
+                "audit_owner": "LocalOS",
+            },
             "preview_context": {
                 "understood_task": "Проверить Google Sheets и показать append request",
                 "data_sources": ["Google Sheets", "Telegram"],
@@ -6899,6 +6938,13 @@ def test_runner_load_run_includes_observability_envelope_for_openclaw_actions():
     assert observability["preview_summary"]["safe_preview"] is True
     assert observability["preview_summary"]["understood_task"] == "Проверить Google Sheets и показать append request"
     assert observability["preview_summary"]["external_actions_performed"] is False
+    assert observability["preview_summary"]["openclaw_action_count"] == 2
+    assert observability["preview_summary"]["openclaw_action_plan"][0]["provider_action_ref"] == "openclaw.google_sheets.read_rows"
+    assert observability["preview_summary"]["openclaw_action_plan"][1]["requires_approval"] is True
+    assert observability["preview_summary"]["policy_envelope"]["execution_boundary"] == "openclaw_action_orchestrator"
+    assert observability["preview_summary"]["policy_envelope"]["approval_owner"] == "LocalOS"
+    assert observability["preview_summary"]["approval_gate"]["waiting_actions_count"] == 1
+    assert observability["preview_summary"]["approval_gate"]["external_actions_performed"] is False
     assert "approval" in observability["preview_summary"]["activation_hint"].lower()
     assert observability["preview_summary"]["next_step"] == "review_approvals"
     assert observability["preview_summary"]["next_step_label"] == "Проверить approval"

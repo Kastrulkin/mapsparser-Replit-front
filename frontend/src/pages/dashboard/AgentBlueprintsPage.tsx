@@ -8916,6 +8916,11 @@ const PreviewRunSummaryPanel = ({
   const artifacts = Array.isArray(summary?.artifacts) ? summary.artifacts : [];
   const pendingApprovals = Array.isArray(summary?.pending_approvals) ? summary.pending_approvals : [];
   const waitingActions = Array.isArray(summary?.waiting_actions) ? summary.waiting_actions : [];
+  const summaryActionPlan = Array.isArray(summary?.openclaw_action_plan) ? summary.openclaw_action_plan : [];
+  const inputActionPlan = Array.isArray(runInput.openclaw_action_plan) ? runInput.openclaw_action_plan : [];
+  const openClawActionPlan = summaryActionPlan.length ? summaryActionPlan : inputActionPlan;
+  const policyEnvelope = toRecordOrNull(summary?.policy_envelope) || toRecordOrNull(runInput.policy_envelope) || {};
+  const approvalGate = toRecordOrNull(summary?.approval_gate) || {};
   const providerBindings = Array.isArray(runInput.provider_bindings) ? runInput.provider_bindings : [];
   const understoodTask = String(summary?.understood_task || objectValue(inputPreviewContext, 'understood_task') || objectValue(runInput, 'goal') || 'LocalOS проверяет compiled workflow на безопасном примере.');
   const manualControl = String(summary?.manual_control || objectValue(inputPreviewContext, 'manual_control') || 'Перед внешним действием нужен approval.');
@@ -8991,6 +8996,13 @@ const PreviewRunSummaryPanel = ({
 
       <CompiledPreviewSimulationPanel steps={simulationSteps} safePreview={safePreview} externalActionsPerformed={Boolean(summary?.external_actions_performed)} />
 
+      <OpenClawPreviewActionPlanPanel
+        actions={openClawActionPlan}
+        policyEnvelope={policyEnvelope}
+        approvalGate={approvalGate}
+        safePreview={safePreview}
+      />
+
       <div className="mt-3 grid gap-2 lg:grid-cols-3">
         <PreviewSummaryList
           title="Шаги"
@@ -9044,6 +9056,81 @@ const PreviewRunSummaryPanel = ({
           ) : null}
         </div>
       </div>
+    </div>
+  );
+};
+
+const OpenClawPreviewActionPlanPanel = ({
+  actions,
+  policyEnvelope,
+  approvalGate,
+  safePreview,
+}: {
+  actions: unknown[];
+  policyEnvelope: Record<string, unknown>;
+  approvalGate: Record<string, unknown>;
+  safePreview: boolean;
+}) => {
+  const boundary = String(policyEnvelope.execution_boundary || 'openclaw_action_orchestrator');
+  const approvalOwner = String(policyEnvelope.approval_owner || 'LocalOS');
+  const billingOwner = String(policyEnvelope.billing_owner || policyEnvelope.cost_owner || 'LocalOS');
+  const externalSideEffectsAllowed = policyEnvelope.external_side_effects_allowed_in_preview === true;
+  const waitingCount = Number(approvalGate.waiting_actions_count || 0);
+  const pendingApprovalsCount = Number(approvalGate.pending_approvals_count || 0);
+  const visibleActions = actions.slice(0, 4).map((item) => toRecordOrNull(item) || {});
+  if (!visibleActions.length && !Object.keys(policyEnvelope).length) {
+    return null;
+  }
+  return (
+    <div className="mt-3 rounded-xl bg-white px-3 py-3 text-xs leading-5 text-sky-800 ring-1 ring-sky-100">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <div className="font-semibold text-sky-950">OpenClaw actions в safe preview</div>
+          <div className="mt-1 text-sky-700">
+            LocalOS показывает будущие tool calls, но оставляет исполнение за policy, limits, billing и audit.
+          </div>
+        </div>
+        <span className={cn('rounded-full px-2 py-0.5 font-medium ring-1', safePreview && !externalSideEffectsAllowed ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-amber-50 text-amber-700 ring-amber-200')}>
+          {safePreview && !externalSideEffectsAllowed ? 'side effects выключены' : 'нужна проверка side effects'}
+        </span>
+      </div>
+
+      <div className="mt-3 grid gap-2 md:grid-cols-3">
+        <PreviewRunFact label="Boundary" value={boundary} />
+        <PreviewRunFact label="Approval / billing" value={`${approvalOwner} approvals · ${billingOwner} billing`} />
+        <PreviewRunFact label="Gate" value={`${pendingApprovalsCount} approvals · ${waitingCount} действий ждут`} />
+      </div>
+
+      {visibleActions.length ? (
+        <div className="mt-3 grid gap-2 md:grid-cols-2">
+          {visibleActions.map((action, index) => {
+            const title = String(action.title || action.provider_action_ref || action.capability || `OpenClaw action ${index + 1}`);
+            const meta = [
+              action.provider_action_ref ? String(action.provider_action_ref) : '',
+              action.capability ? String(action.capability) : '',
+              action.provider_policy ? String(action.provider_policy) : 'localos_envelope',
+            ].filter(Boolean).join(' · ');
+            const requiresApproval = action.requires_approval === true || Boolean(action.approval_class);
+            return (
+              <div key={`${title}-${index}`} className="rounded-lg bg-sky-50 px-2.5 py-2 ring-1 ring-sky-100">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="line-clamp-1 font-semibold text-sky-950">{title}</div>
+                    <div className="mt-1 line-clamp-2 text-sky-700">{meta || 'OpenClaw action за LocalOS envelope'}</div>
+                  </div>
+                  <span className={cn('shrink-0 rounded-full px-2 py-0.5 font-medium ring-1', requiresApproval ? 'bg-amber-50 text-amber-700 ring-amber-200' : 'bg-emerald-50 text-emerald-700 ring-emerald-200')}>
+                    {requiresApproval ? 'approval' : 'safe'}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="mt-3 rounded-lg bg-sky-50 px-2.5 py-2 text-sky-700 ring-1 ring-sky-100">
+          OpenClaw action plan появится после компиляции workflow или повторного safe preview.
+        </div>
+      )}
     </div>
   );
 };
