@@ -1522,6 +1522,8 @@ def test_agent_builder_session_preview_includes_feasibility_for_required_connect
     assert preview["openclaw_planner_loop"]["may_execute_tools"] is False
     assert "openclaw.google_sheets.read_rows" in preview["openclaw_planner_loop"]["workflow_proposal"]["openclaw_action_refs"]
     assert any(item["key"] == "google_sheets_target" for item in state["missing_questions"])
+    assert any(item["reason"] == "connection_resolver" and item["provider"] == "google_sheets" for item in state["missing_questions"])
+    assert state["preview"]["connection_resolver_questions"][0]["key"] == "google_sheets_target"
     assert any("таблиц" in item["question"].lower() for item in state["missing_questions"])
     assert "Google Sheets" in state["messages"][-1]["content"]
 
@@ -5150,6 +5152,8 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "compiled workflow candidate" in agents_page_source
     assert "Что нужно изменить в логике" in agents_page_source
     assert "Ответьте на уточнение" in agents_page_source
+    assert "connection_resolver" in agents_page_source
+    assert "подключение" in agents_page_source
     assert "Создать агента и открыть preview" in agents_page_source
     assert "У бизнеса уже есть несколько подходящих коннектов" in agents_page_source
     assert "Подключения готовы" in agents_page_source

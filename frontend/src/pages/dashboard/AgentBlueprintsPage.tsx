@@ -731,6 +731,9 @@ type AgentBuilderMessage = {
 type AgentBuilderQuestion = {
   key?: string;
   question: string;
+  reason?: string;
+  provider?: string;
+  role?: string;
 };
 
 type AgentBuilderConnectorPreview = {
@@ -4157,7 +4160,12 @@ const DialogAgentBuilder = ({
                 <div className="mt-2 space-y-1">
                   {questions.map((question) => (
                     <div key={question.key || question.question} className="text-sm leading-6 text-amber-900">
-                      {question.question}
+                      <span>{question.question}</span>
+                      {question.reason === 'connection_resolver' ? (
+                        <span className="ml-2 rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-amber-800 ring-1 ring-amber-200">
+                          подключение
+                        </span>
+                      ) : null}
                     </div>
                   ))}
                 </div>

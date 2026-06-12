@@ -111,7 +111,9 @@ def build_agent_builder_state(
     preview["openclaw_planner_loop"] = planner_loop
     compiler_questions = _compiler_questions(draft)
     preview["compiler_questions"] = compiler_questions
-    questions = _merge_questions(_missing_questions(description, category), compiler_questions, planner_loop)
+    resolver_questions = _connection_resolver_questions(preview)
+    preview["connection_resolver_questions"] = resolver_questions
+    questions = _merge_questions(_missing_questions(description, category), compiler_questions, planner_loop, resolver_questions)
     preview["setup_flow"] = _build_setup_flow(preview, questions)
     assistant_message = _assistant_message(preview, questions)
     return {
@@ -286,14 +288,86 @@ def _compiler_policy_review(metadata: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _merge_questions(local_questions: List[Dict[str, str]], compiler_questions: List[Dict[str, str]], planner_loop: Dict[str, Any]) -> List[Dict[str, str]]:
+def _connection_resolver_questions(preview: Dict[str, Any]) -> List[Dict[str, str]]:
+    resolver = preview.get("connection_resolver") if isinstance(preview.get("connection_resolver"), dict) else {}
+    items = resolver.get("items") if isinstance(resolver.get("items"), list) else []
+    result: List[Dict[str, str]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        state = str(item.get("state") or "").strip()
+        if state in {"ready", "native_ready"}:
+            continue
+        question = _connection_resolver_question_text(item)
+        if not question:
+            continue
+        provider = str(item.get("provider") or "").strip()
+        key = _connection_resolver_question_key(item)
+        result.append(
+            {
+                "key": key,
+                "question": question,
+                "reason": "connection_resolver",
+                "provider": provider,
+                "role": str(item.get("role") or ""),
+            }
+        )
+    return result[:3]
+
+
+def _connection_resolver_question_key(item: Dict[str, Any]) -> str:
+    provider = str(item.get("provider") or "").strip()
+    role = str(item.get("role") or "").strip()
+    if provider == "google_sheets":
+        return "google_sheets_target"
+    if provider == "telegram":
+        return "telegram_destination"
+    if provider == "localos_finance":
+        return "localos_finance_target"
+    if provider == "maton":
+        return "maton_key"
+    clean_provider = provider or str(item.get("key") or "service").strip()
+    return f"connection_{clean_provider}_{role or 'service'}"
+
+
+def _connection_resolver_question_text(item: Dict[str, Any]) -> str:
+    provider = str(item.get("provider") or "").strip()
+    service = str(item.get("service_label") or provider or "сервис").strip()
+    role_label = str(item.get("role_label") or "шаг агента").strip()
+    state = str(item.get("state") or "").strip()
+    recommended = str(item.get("recommended_label") or item.get("recommended_provider") or "").strip()
+    if state == "choose_existing":
+        return f"Какой сохранённый доступ {service} использовать для роли «{role_label}»?"
+    if provider == "google_sheets":
+        return "Какую Google таблицу и вкладку использовать как источник данных?"
+    if provider == "telegram":
+        return "В какой Telegram-канал, чат или бот готовить результат?"
+    if provider == "localos_finance":
+        return "В какой раздел финансов LocalOS записывать результат и какие поля обязательны?"
+    if recommended:
+        return f"Используем {recommended} как способ подключения для {service} в роли «{role_label}»?"
+    return f"Как подключить {service} для роли «{role_label}»?"
+
+
+def _merge_questions(
+    local_questions: List[Dict[str, str]],
+    compiler_questions: List[Dict[str, str]],
+    planner_loop: Dict[str, Any],
+    resolver_questions: List[Dict[str, str]] | None = None,
+) -> List[Dict[str, str]]:
     result: List[Dict[str, str]] = []
     seen = set()
-    for item in compiler_questions + local_questions:
+    seen_questions = set()
+    resolver_questions = resolver_questions if isinstance(resolver_questions, list) else []
+    for item in compiler_questions + resolver_questions + local_questions:
         key = str(item.get("key") or item.get("question") or "").strip()
-        if not key or key in seen:
+        question = str(item.get("question") or "").strip()
+        question_key = question.lower()
+        if not key or key in seen or (question_key and question_key in seen_questions):
             continue
         seen.add(key)
+        if question_key:
+            seen_questions.add(question_key)
         result.append(item)
     planner_questions = planner_loop.get("clarifying_questions") if isinstance(planner_loop.get("clarifying_questions"), list) else []
     for item in planner_questions:
@@ -304,9 +378,11 @@ def _merge_questions(local_questions: List[Dict[str, str]], compiler_questions: 
             continue
         key = str(item.get("key") or item.get("question") or "").strip()
         question = str(item.get("question") or "").strip()
-        if not key or not question or key in seen:
+        question_key = question.lower()
+        if not key or not question or key in seen or question_key in seen_questions:
             continue
         seen.add(key)
+        seen_questions.add(question_key)
         result.append(
             {
                 "key": key,
