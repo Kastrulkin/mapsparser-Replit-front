@@ -2019,6 +2019,7 @@ export const AgentBlueprintsPage = () => {
   const [dialogBuilderSession, setDialogBuilderSession] = useState<AgentBuilderSession | null>(null);
   const [selectedBuilderConnectionBindings, setSelectedBuilderConnectionBindings] = useState<Record<string, string>>({});
   const [selectedBuilderProviderRoutes, setSelectedBuilderProviderRoutes] = useState<Record<string, string>>({});
+  const [acceptedBuilderCompilerPlan, setAcceptedBuilderCompilerPlan] = useState(false);
   const [agentReview, setAgentReview] = useState<AgentReview | null>(null);
   const [sourceCatalog, setSourceCatalog] = useState<AgentSourceCatalogItem[]>([]);
   const [setupDataSources, setSetupDataSources] = useState('профиль бизнеса, ручной контекст');
@@ -2476,6 +2477,7 @@ export const AgentBlueprintsPage = () => {
       setDialogBuilderSession(response.data?.session || null);
       setSelectedBuilderConnectionBindings(autoSelectBuilderConnectionBindings(response.data?.session?.preview || null));
       setSelectedBuilderProviderRoutes(autoSelectBuilderProviderRoutes(response.data?.session?.preview || null));
+      setAcceptedBuilderCompilerPlan(false);
       setAgentPrompt(dialogBuilderInput.trim());
       const preview = response.data?.session?.preview || {};
       if (typeof preview.category === 'string') {
@@ -2518,6 +2520,7 @@ export const AgentBlueprintsPage = () => {
       setDialogBuilderSession(response.data?.session || null);
       setSelectedBuilderConnectionBindings(autoSelectBuilderConnectionBindings(response.data?.session?.preview || null));
       setSelectedBuilderProviderRoutes(autoSelectBuilderProviderRoutes(response.data?.session?.preview || null));
+      setAcceptedBuilderCompilerPlan(false);
       setDialogBuilderReply('');
     } catch (requestError) {
       console.error(requestError);
@@ -2538,6 +2541,7 @@ export const AgentBlueprintsPage = () => {
         use_ai_compiler: true,
         selected_connection_bindings: selectedBuilderConnectionBindings,
         selected_provider_routes: selectedBuilderProviderRoutes,
+        accepted_compiler_plan: acceptedBuilderCompilerPlan,
       });
       const blueprint = response.data?.blueprint;
       const handoff = normalizePostCreateHandoff(response.data?.post_create_handoff);
@@ -2561,6 +2565,7 @@ export const AgentBlueprintsPage = () => {
       setDialogBuilderSession(null);
       setSelectedBuilderConnectionBindings({});
       setSelectedBuilderProviderRoutes({});
+      setAcceptedBuilderCompilerPlan(false);
       setCreateWizardOpen(false);
       const handoffMode = handoff?.workspace_mode || '';
       setWorkspaceMode(
@@ -3230,6 +3235,8 @@ export const AgentBlueprintsPage = () => {
             onCreate={createAgentFromDialogSession}
             selectedConnectionBindings={selectedBuilderConnectionBindings}
             selectedProviderRoutes={selectedBuilderProviderRoutes}
+            acceptedCompilerPlan={acceptedBuilderCompilerPlan}
+            onAcceptCompilerPlan={() => setAcceptedBuilderCompilerPlan(true)}
             onSelectConnectionBinding={(bindingKey, integrationId) => {
               setSelectedBuilderConnectionBindings((current) => ({
                 ...current,
@@ -3948,6 +3955,8 @@ const DialogAgentBuilder = ({
   onCreate,
   selectedConnectionBindings,
   selectedProviderRoutes,
+  acceptedCompilerPlan,
+  onAcceptCompilerPlan,
   onSelectConnectionBinding,
   onSelectProviderRoute,
 }: {
@@ -3962,6 +3971,8 @@ const DialogAgentBuilder = ({
   onCreate: () => void;
   selectedConnectionBindings: Record<string, string>;
   selectedProviderRoutes: Record<string, string>;
+  acceptedCompilerPlan: boolean;
+  onAcceptCompilerPlan: () => void;
   onSelectConnectionBinding: (bindingKey: string, integrationId: string) => void;
   onSelectProviderRoute: (bindingKey: string, routeProvider: string) => void;
 }) => {
@@ -3972,7 +3983,9 @@ const DialogAgentBuilder = ({
   const connectionSummaryItems = preview?.connection_summary?.items || [];
   const requiredConnectionChoices = connectionSummaryItems.filter((item) => item.action === 'choose_existing' && item.key && (item.connections?.length || 0) > 1);
   const missingConnectionChoices = requiredConnectionChoices.filter((item) => !selectedConnectionBindings[item.key || '']);
-  const canCreateDraft = preview?.setup_flow?.can_create_draft !== false && !missingConnectionChoices.length;
+  const compilerPlanRequiresConfirmation = builderCompilerPlanRequiresConfirmation(preview);
+  const missingCompilerPlanConfirmation = compilerPlanRequiresConfirmation && !acceptedCompilerPlan;
+  const canCreateDraft = preview?.setup_flow?.can_create_draft !== false && !missingConnectionChoices.length && !missingCompilerPlanConfirmation;
   const createBlockers: Array<{ key: string; label: string }> = [];
   const addCreateBlocker = (key: string, label: string) => {
     const cleanKey = key.trim();
@@ -3988,6 +4001,9 @@ const DialogAgentBuilder = ({
   missingConnectionChoices.slice(0, 4).forEach((item) => {
     addCreateBlocker(`choice:${item.key || item.provider}`, `Выберите подключение ${item.title || connectorLabel(item.provider)}.`);
   });
+  if (missingCompilerPlanConfirmation) {
+    addCreateBlocker('compiler_plan_confirmation', 'Подтвердите план агента перед созданием draft.');
+  }
   preview?.setup_flow?.activation_blockers?.slice(0, 4).forEach((item) => {
     addCreateBlocker(`blocker:${item.type || item.provider || item.message}`, item.message || connectorLabel(item.provider));
   });
@@ -4110,6 +4126,8 @@ const DialogAgentBuilder = ({
               workflowDraft={preview?.compiler_workflow_draft}
               approvalPoints={preview?.compiler_approval_points}
               unsupportedRequests={preview?.compiler_unsupported_requests}
+              accepted={acceptedCompilerPlan}
+              onAccept={onAcceptCompilerPlan}
             />
             <BuilderConnectionReadinessPanel
               readiness={preview?.connection_readiness}
@@ -4324,16 +4342,29 @@ const compilerPolicyItemLabel = (item?: AgentCompilerPolicyItem | null): string 
   ).trim();
 };
 
+const builderCompilerPlanRequiresConfirmation = (preview?: AgentBuilderPreview | null): boolean => {
+  const review = preview?.compiler_policy_review || null;
+  const draft = preview?.compiler_workflow_draft || review?.workflow_draft || {};
+  const steps = Array.isArray(draft.steps) ? draft.steps : [];
+  const approvals = preview?.compiler_approval_points || review?.approval_points || [];
+  const blockers = preview?.compiler_unsupported_requests || review?.unsupported_requests || [];
+  return Boolean(draft.trigger || steps.length || approvals.length || blockers.length);
+};
+
 const BuilderCompilerPolicyReviewPanel = ({
   review,
   workflowDraft,
   approvalPoints,
   unsupportedRequests,
+  accepted,
+  onAccept,
 }: {
   review?: AgentCompilerPolicyReview;
   workflowDraft?: AgentCompilerWorkflowDraft;
   approvalPoints?: AgentCompilerPolicyItem[];
   unsupportedRequests?: AgentCompilerPolicyItem[];
+  accepted?: boolean;
+  onAccept?: () => void;
 }) => {
   const draft = workflowDraft || review?.workflow_draft || {};
   const steps = Array.isArray(draft.steps) ? draft.steps : [];
@@ -4426,6 +4457,25 @@ const BuilderCompilerPolicyReviewPanel = ({
                 <span>{compilerPolicyItemLabel(item) || 'Часть запроса выходит за policy envelope'}</span>
               </div>
             ))}
+          </div>
+        </div>
+      ) : null}
+
+      {!blockers.length && onAccept ? (
+        <div className={cn(
+          'mt-3 rounded-lg px-3 py-2 ring-1',
+          accepted ? 'bg-white text-emerald-800 ring-emerald-200' : 'bg-white text-slate-700 ring-slate-200',
+        )}>
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+            <div className="text-[11px] leading-4">
+              {accepted
+                ? 'План подтверждён. LocalOS сможет создать draft и сохранить workflow candidate.'
+                : 'Перед созданием draft подтвердите, что этот план соответствует задаче.'}
+            </div>
+            <Button type="button" size="sm" variant={accepted ? 'outline' : 'default'} onClick={onAccept} disabled={accepted}>
+              <CheckCircle2 className="mr-2 h-4 w-4" />
+              {accepted ? 'План принят' : 'Принять план'}
+            </Button>
           </div>
         </div>
       ) : null}

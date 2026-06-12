@@ -47,6 +47,23 @@ def _use_ai_compiler(payload: dict) -> bool:
     return bool(payload.get("use_ai_compiler"))
 
 
+def _compiler_plan_requires_confirmation(preview: dict) -> bool:
+    if not isinstance(preview, dict):
+        return False
+    review = preview.get("compiler_policy_review") if isinstance(preview.get("compiler_policy_review"), dict) else {}
+    workflow_draft = preview.get("compiler_workflow_draft") if isinstance(preview.get("compiler_workflow_draft"), dict) else {}
+    if not workflow_draft:
+        workflow_draft = review.get("workflow_draft") if isinstance(review.get("workflow_draft"), dict) else {}
+    approval_points = preview.get("compiler_approval_points") if isinstance(preview.get("compiler_approval_points"), list) else []
+    if not approval_points:
+        approval_points = review.get("approval_points") if isinstance(review.get("approval_points"), list) else []
+    unsupported_requests = preview.get("compiler_unsupported_requests") if isinstance(preview.get("compiler_unsupported_requests"), list) else []
+    if not unsupported_requests:
+        unsupported_requests = review.get("unsupported_requests") if isinstance(review.get("unsupported_requests"), list) else []
+    steps = workflow_draft.get("steps") if isinstance(workflow_draft.get("steps"), list) else []
+    return bool(workflow_draft.get("trigger") or steps or approval_points or unsupported_requests)
+
+
 def _normalize_session(row: dict) -> dict:
     result = dict(row)
     result["messages"] = parse_json_field(result.pop("messages_json", []), [])
@@ -625,6 +642,18 @@ def create_blueprint_from_agent_builder_session(session_id: str):
                     "next_step_title": str(setup_flow.get("next_step_title") or ""),
                 }
             ), 400
+        if _compiler_plan_requires_confirmation(preview) and not bool(payload.get("accepted_compiler_plan")):
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "Сначала подтвердите compiled workflow plan агента.",
+                    "code": "AGENT_COMPILER_PLAN_CONFIRMATION_REQUIRED",
+                    "compiler_policy_review": preview.get("compiler_policy_review") if isinstance(preview.get("compiler_policy_review"), dict) else {},
+                    "setup_flow": setup_flow,
+                    "next_step": "accept_compiler_plan",
+                    "next_step_title": "Подтвердите план агента",
+                }
+            ), 400
         connection_inventory = _load_builder_connection_inventory(cursor, business_id)
         selected_bindings = _selected_connection_bindings(payload, preview, connection_inventory)
         selected_provider_routes = _selected_provider_routes(payload, preview)
@@ -680,6 +709,7 @@ def create_blueprint_from_agent_builder_session(session_id: str):
         metadata["builder_setup_flow"] = setup_flow
         metadata["agent_setup"] = preview_to_setup(preview)
         metadata["setup_completed"] = True
+        metadata["builder_compiler_plan_accepted"] = bool(payload.get("accepted_compiler_plan"))
         metadata = _apply_selected_connection_bindings(metadata, selected_bindings)
         metadata = _apply_selected_provider_routes(metadata, selected_provider_routes)
         metadata["builder_selected_connection_bindings"] = selected_bindings

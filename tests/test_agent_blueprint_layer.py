@@ -2311,6 +2311,35 @@ def test_agent_builder_api_uses_ai_compiler_by_default():
     assert _use_ai_compiler({"use_ai_compiler": True}) is True
 
 
+def test_agent_builder_api_requires_compiler_plan_confirmation_only_for_reviewable_plan():
+    from api.agent_builder_api import _compiler_plan_requires_confirmation
+
+    assert _compiler_plan_requires_confirmation({}) is False
+    assert _compiler_plan_requires_confirmation({"compiler_policy_review": {"status": "ok"}}) is False
+    assert _compiler_plan_requires_confirmation(
+        {
+            "compiler_policy_review": {
+                "workflow_draft": {
+                    "trigger": "schedule.daily",
+                    "steps": [{"key": "read_orders"}],
+                }
+            }
+        }
+    ) is True
+    assert _compiler_plan_requires_confirmation(
+        {
+            "compiler_policy_review": {
+                "approval_points": [{"key": "publish", "reason": "external publish"}],
+            }
+        }
+    ) is True
+    assert _compiler_plan_requires_confirmation(
+        {
+            "compiler_unsupported_requests": [{"reason": "No approved provider path"}],
+        }
+    ) is True
+
+
 def test_agent_builder_connector_intelligence_blocks_forbidden_provider_path():
     from services.agent_builder_session import build_agent_builder_state
 
@@ -5030,6 +5059,11 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "compiler_workflow_draft" in agents_page_source
     assert "compiler_approval_points" in agents_page_source
     assert "compiler_unsupported_requests" in agents_page_source
+    assert "accepted_compiler_plan: acceptedBuilderCompilerPlan" in agents_page_source
+    assert "builderCompilerPlanRequiresConfirmation" in agents_page_source
+    assert "acceptedBuilderCompilerPlan" in agents_page_source
+    assert "Принять план" in agents_page_source
+    assert "План принят" in agents_page_source
     assert "План агента" in agents_page_source
     assert "compiled workflow candidate" in agents_page_source
     assert "Что нужно изменить в логике" in agents_page_source
