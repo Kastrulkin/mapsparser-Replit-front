@@ -1141,6 +1141,25 @@ const autoSelectBuilderConnectionBindings = (preview?: AgentBuilderPreview | nul
   return selected;
 };
 
+const autoSelectBuilderProviderRoutes = (preview?: AgentBuilderPreview | null): Record<string, string> => {
+  const selected: Record<string, string> = {};
+  const addRoute = (key?: string, route?: AgentProviderRoute | null) => {
+    const bindingKey = String(key || '').trim();
+    const provider = String(route?.provider || '').trim();
+    const state = String(route?.state || route?.status || '').trim();
+    if (bindingKey && provider && ['available', 'connected', 'manual'].includes(state)) {
+      selected[bindingKey] = provider;
+    }
+  };
+  (preview?.connection_readiness?.services || []).forEach((service) => {
+    addRoute(service.key, service.recommended_route);
+  });
+  (preview?.connection_plan?.items || []).forEach((item) => {
+    addRoute(item.key, item.recommended_route);
+  });
+  return selected;
+};
+
 const bindingResolutionLabel = (binding: AgentIntegrationBindingStatus) => ({
   native_localos: 'внутри LocalOS',
   agent_integration: 'подключение бизнеса',
@@ -1966,6 +1985,7 @@ export const AgentBlueprintsPage = () => {
   const [dialogBuilderReply, setDialogBuilderReply] = useState('');
   const [dialogBuilderSession, setDialogBuilderSession] = useState<AgentBuilderSession | null>(null);
   const [selectedBuilderConnectionBindings, setSelectedBuilderConnectionBindings] = useState<Record<string, string>>({});
+  const [selectedBuilderProviderRoutes, setSelectedBuilderProviderRoutes] = useState<Record<string, string>>({});
   const [agentReview, setAgentReview] = useState<AgentReview | null>(null);
   const [sourceCatalog, setSourceCatalog] = useState<AgentSourceCatalogItem[]>([]);
   const [setupDataSources, setSetupDataSources] = useState('профиль бизнеса, ручной контекст');
@@ -2421,6 +2441,7 @@ export const AgentBlueprintsPage = () => {
       });
       setDialogBuilderSession(response.data?.session || null);
       setSelectedBuilderConnectionBindings(autoSelectBuilderConnectionBindings(response.data?.session?.preview || null));
+      setSelectedBuilderProviderRoutes(autoSelectBuilderProviderRoutes(response.data?.session?.preview || null));
       setAgentPrompt(dialogBuilderInput.trim());
       const preview = response.data?.session?.preview || {};
       if (typeof preview.category === 'string') {
@@ -2461,6 +2482,7 @@ export const AgentBlueprintsPage = () => {
       });
       setDialogBuilderSession(response.data?.session || null);
       setSelectedBuilderConnectionBindings(autoSelectBuilderConnectionBindings(response.data?.session?.preview || null));
+      setSelectedBuilderProviderRoutes(autoSelectBuilderProviderRoutes(response.data?.session?.preview || null));
       setDialogBuilderReply('');
     } catch (requestError) {
       console.error(requestError);
@@ -2480,6 +2502,7 @@ export const AgentBlueprintsPage = () => {
       const response = await api.post(`/agent-builder/sessions/${dialogBuilderSession.id}/create-blueprint`, {
         use_ai_compiler: true,
         selected_connection_bindings: selectedBuilderConnectionBindings,
+        selected_provider_routes: selectedBuilderProviderRoutes,
       });
       const blueprint = response.data?.blueprint;
       const handoff = normalizePostCreateHandoff(response.data?.post_create_handoff);
@@ -2502,6 +2525,7 @@ export const AgentBlueprintsPage = () => {
       setDialogBuilderReply('');
       setDialogBuilderSession(null);
       setSelectedBuilderConnectionBindings({});
+      setSelectedBuilderProviderRoutes({});
       setCreateWizardOpen(false);
       const handoffMode = handoff?.workspace_mode || '';
       setWorkspaceMode(
@@ -3170,10 +3194,17 @@ export const AgentBlueprintsPage = () => {
             onSendReply={sendDialogBuilderReply}
             onCreate={createAgentFromDialogSession}
             selectedConnectionBindings={selectedBuilderConnectionBindings}
+            selectedProviderRoutes={selectedBuilderProviderRoutes}
             onSelectConnectionBinding={(bindingKey, integrationId) => {
               setSelectedBuilderConnectionBindings((current) => ({
                 ...current,
                 [bindingKey]: integrationId,
+              }));
+            }}
+            onSelectProviderRoute={(bindingKey, routeProvider) => {
+              setSelectedBuilderProviderRoutes((current) => ({
+                ...current,
+                [bindingKey]: routeProvider,
               }));
             }}
           />
@@ -3881,7 +3912,9 @@ const DialogAgentBuilder = ({
   onSendReply,
   onCreate,
   selectedConnectionBindings,
+  selectedProviderRoutes,
   onSelectConnectionBinding,
+  onSelectProviderRoute,
 }: {
   input: string;
   reply: string;
@@ -3893,7 +3926,9 @@ const DialogAgentBuilder = ({
   onSendReply: () => void;
   onCreate: () => void;
   selectedConnectionBindings: Record<string, string>;
+  selectedProviderRoutes: Record<string, string>;
   onSelectConnectionBinding: (bindingKey: string, integrationId: string) => void;
+  onSelectProviderRoute: (bindingKey: string, routeProvider: string) => void;
 }) => {
   const preview = session?.preview || null;
   const questions = session?.missing_questions || [];
@@ -4035,7 +4070,11 @@ const DialogAgentBuilder = ({
               onSendReply={onSendReply}
               onCreate={onCreate}
             />
-            <BuilderConnectionReadinessPanel readiness={preview?.connection_readiness} />
+            <BuilderConnectionReadinessPanel
+              readiness={preview?.connection_readiness}
+              selectedProviderRoutes={selectedProviderRoutes}
+              onSelectProviderRoute={onSelectProviderRoute}
+            />
             <BuilderSetupFlowPanel setupFlow={preview?.setup_flow} />
             <BuilderConnectionSummaryPanel
               summary={preview?.connection_summary}
@@ -4247,7 +4286,15 @@ const RecommendedProviderRouteNote = ({
   );
 };
 
-const BuilderConnectionReadinessPanel = ({ readiness }: { readiness?: AgentConnectionReadiness }) => {
+const BuilderConnectionReadinessPanel = ({
+  readiness,
+  selectedProviderRoutes = {},
+  onSelectProviderRoute,
+}: {
+  readiness?: AgentConnectionReadiness;
+  selectedProviderRoutes?: Record<string, string>;
+  onSelectProviderRoute?: (bindingKey: string, routeProvider: string) => void;
+}) => {
   const services = readiness?.services || [];
   const forbidden = readiness?.forbidden || [];
   const unsupported = readiness?.unsupported || [];
@@ -4284,6 +4331,12 @@ const BuilderConnectionReadinessPanel = ({ readiness }: { readiness?: AgentConne
         <div className="mt-3 grid gap-2 md:grid-cols-2">
           {services.slice(0, 4).map((service) => (
             <div key={service.key || service.provider || service.title} className="rounded-lg bg-white px-3 py-2 ring-1 ring-current/10">
+              {(() => {
+                const bindingKey = service.key || '';
+                const routeProvider = service.recommended_route?.provider || '';
+                const selected = Boolean(bindingKey && routeProvider && selectedProviderRoutes[bindingKey] === routeProvider);
+                return (
+                  <>
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <div className="font-medium text-slate-950">{service.title || connectorLabel(service.provider)}</div>
@@ -4306,6 +4359,19 @@ const BuilderConnectionReadinessPanel = ({ readiness }: { readiness?: AgentConne
                 route={service.recommended_route}
                 reason={service.recommended_route_reason}
               />
+              {bindingKey && routeProvider && onSelectProviderRoute ? (
+                <div className="mt-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={selected ? 'default' : 'outline'}
+                    className={cn('h-7 px-2 text-[11px]', selected ? '' : 'bg-white')}
+                    onClick={() => onSelectProviderRoute(bindingKey, routeProvider)}
+                  >
+                    {selected ? 'Route выбран для draft' : 'Использовать этот route'}
+                  </Button>
+                </div>
+              ) : null}
               {service.connections?.length ? (
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {service.connections.slice(0, 3).map((connection) => (
@@ -4315,6 +4381,9 @@ const BuilderConnectionReadinessPanel = ({ readiness }: { readiness?: AgentConne
                   ))}
                 </div>
               ) : null}
+                  </>
+                );
+              })()}
             </div>
           ))}
         </div>

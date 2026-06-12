@@ -1661,6 +1661,28 @@ def test_compiled_agent_creation_contract_google_sheets_to_telegram():
     assert activation_gate["can_activate"] is True
     assert activation_gate["next_step"] == "activate_version"
 
+    selected_provider_routes = agent_builder_api._selected_provider_routes(
+        {"selected_provider_routes": {"google_sheets_read": "openclaw"}},
+        preview,
+    )
+    route_metadata = agent_builder_api._apply_selected_provider_routes(dict(draft["metadata"]), selected_provider_routes)
+    route_preflight = build_agent_integration_preflight(
+        Cursor(),
+        business_id="biz1",
+        metadata=route_metadata,
+        input_payload={},
+    )
+
+    assert selected_provider_routes["google_sheets_read"]["provider"] == "openclaw"
+    assert route_metadata["agent_binding_provider_routes"]["google_sheets_read"]["route_provider"] == "openclaw"
+    assert route_preflight["ready"] is True
+    route_items = {
+        item["key"]: item
+        for item in route_preflight["items"]
+        if isinstance(item, dict)
+    }
+    assert route_items["google_sheets_read"]["resolution"] == "provider_route_openclaw_boundary"
+
 
 def test_agent_builder_create_blueprint_endpoint_returns_ready_preview_handoff(monkeypatch):
     from flask import Flask
@@ -4781,6 +4803,9 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "item.policy_summary" in agents_page_source
     assert "RecommendedProviderRouteNote" in agents_page_source
     assert "recommended_route_reason" in agents_page_source
+    assert "selected_provider_routes: selectedBuilderProviderRoutes" in agents_page_source
+    assert "autoSelectBuilderProviderRoutes" in agents_page_source
+    assert "Route выбран для draft" in agents_page_source
     assert "chooseProviderRoute" in agents_page_source
     assert "/provider-routes" in agents_page_source
     assert "onChooseProviderRoute" in agents_page_source
