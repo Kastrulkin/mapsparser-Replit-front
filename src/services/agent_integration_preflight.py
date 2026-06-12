@@ -89,7 +89,7 @@ def _binding_preflight_item(
                     "provider_route_maton_external_account",
                     str(metadata_config.get("integration_id") or external_account_id),
                     [],
-                    "Maton.ai key is selected as the provider bridge for this binding.",
+                "Maton.ai key is selected for the provider bridge on this binding.",
                 )
             return _base_item(
                 binding,
@@ -174,6 +174,7 @@ def _base_item(
     missing_config: List[str],
     summary: str,
 ) -> Dict[str, Any]:
+    policy = _policy_explanation(binding, status, resolution, missing_config)
     return {
         "key": str(binding.get("key") or ""),
         "provider": str(binding.get("provider") or ""),
@@ -186,7 +187,92 @@ def _base_item(
         "integration_id": integration_id,
         "missing_config": missing_config,
         "summary": summary,
+        "execution_boundary": policy["execution_boundary"],
+        "autonomy_level": policy["autonomy_level"],
+        "credential_state": policy["credential_state"],
+        "approval_state": policy["approval_state"],
+        "policy_summary": policy["policy_summary"],
+        "next_action_label": policy["next_action_label"],
     }
+
+
+def _policy_explanation(
+    binding: Dict[str, Any],
+    status: str,
+    resolution: str,
+    missing_config: List[str],
+) -> Dict[str, str]:
+    provider = str(binding.get("provider") or "provider").strip()
+    capability = str(binding.get("capability") or "").strip()
+    approval_required = binding.get("approval_required", True) is not False
+    write_like = _capability_is_write_like(capability)
+    if resolution == "provider_route_openclaw_boundary":
+        return {
+            "execution_boundary": "openclaw_inside_localos_policy",
+            "autonomy_level": "supervised",
+            "credential_state": "localos_managed_boundary",
+            "approval_state": "approval_required" if approval_required or write_like else "preflight_only",
+            "policy_summary": "OpenClaw выполнит маршрут внутри лимитов, аудита и approval gate LocalOS.",
+            "next_action_label": "Запустить safe preview",
+        }
+    if resolution == "provider_route_maton_external_account":
+        return {
+            "execution_boundary": "maton_bridge_inside_localos_policy",
+            "autonomy_level": "supervised",
+            "credential_state": "external_account_bound",
+            "approval_state": "approval_required" if approval_required or write_like else "preflight_only",
+            "policy_summary": "Maton key выбран как provider bridge; LocalOS оставляет policy, billing и audit у себя.",
+            "next_action_label": "Запустить safe preview",
+        }
+    if resolution == "provider_route_manual_fallback":
+        return {
+            "execution_boundary": "human_operated_fallback",
+            "autonomy_level": "draft_only",
+            "credential_state": "no_external_credentials",
+            "approval_state": "human_action_required",
+            "policy_summary": "LocalOS подготовит черновик или handoff, но внешнее действие выполнит человек.",
+            "next_action_label": "Проверить черновик",
+        }
+    if resolution == "native_localos":
+        return {
+            "execution_boundary": "localos_native_domain",
+            "autonomy_level": "supervised",
+            "credential_state": "localos_native",
+            "approval_state": "approval_required" if approval_required or write_like else "preflight_only",
+            "policy_summary": "Домен LocalOS доступен нативно; запись остаётся за limits и approval gate.",
+            "next_action_label": "Запустить safe preview",
+        }
+    if status == "ready":
+        return {
+            "execution_boundary": "connected_provider",
+            "autonomy_level": "supervised",
+            "credential_state": "connected",
+            "approval_state": "approval_required" if approval_required or write_like else "preflight_only",
+            "policy_summary": f"{provider} подключён; runtime пройдёт через preflight, audit и approval policy.",
+            "next_action_label": "Запустить safe preview",
+        }
+    if status == "needs_config":
+        return {
+            "execution_boundary": "blocked_until_configured",
+            "autonomy_level": "not_runnable",
+            "credential_state": "missing_config",
+            "approval_state": "blocked",
+            "policy_summary": f"{provider} найден, но не хватает настроек: {', '.join(missing_config)}.",
+            "next_action_label": "Заполнить настройки",
+        }
+    return {
+        "execution_boundary": "blocked_until_connected",
+        "autonomy_level": "not_runnable",
+        "credential_state": "missing_connection",
+        "approval_state": "blocked",
+        "policy_summary": f"{provider} нужен агенту, но пока не подключён и не выбран provider route.",
+        "next_action_label": "Подключить сервис",
+    }
+
+
+def _capability_is_write_like(capability: str) -> bool:
+    markers = [".create", ".send", ".publish", ".settle", ".reserve", "append_row", "send_"]
+    return any(marker in capability for marker in markers)
 
 
 def _input_resolution(provider: str, required_config: List[str], input_payload: Dict[str, Any]) -> Dict[str, Any]:

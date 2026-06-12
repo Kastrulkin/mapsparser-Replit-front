@@ -3803,6 +3803,10 @@ def test_agent_preflight_accepts_openclaw_provider_route_for_binding(monkeypatch
     assert preflight["ready"] is True
     assert preflight["items"][0]["resolution"] == "provider_route_openclaw_boundary"
     assert preflight["items"][0]["integration_id"] == "openclaw_boundary"
+    assert preflight["items"][0]["execution_boundary"] == "openclaw_inside_localos_policy"
+    assert preflight["items"][0]["autonomy_level"] == "supervised"
+    assert preflight["items"][0]["approval_state"] == "approval_required"
+    assert "OpenClaw" in preflight["items"][0]["policy_summary"]
     assert status[0]["status"] == "connected"
     assert status[0]["resolution"] == "provider_route_openclaw"
 
@@ -3857,6 +3861,9 @@ def test_agent_preflight_accepts_maton_provider_route_with_external_account(monk
     assert preflight["ready"] is True
     assert preflight["items"][0]["resolution"] == "provider_route_maton_external_account"
     assert preflight["items"][0]["integration_id"] == "maton-account-1"
+    assert preflight["items"][0]["execution_boundary"] == "maton_bridge_inside_localos_policy"
+    assert preflight["items"][0]["credential_state"] == "external_account_bound"
+    assert "Maton" in preflight["items"][0]["policy_summary"]
     assert status[0]["status"] == "connected"
     assert status[0]["route_provider"] == "maton"
 
@@ -3909,6 +3916,10 @@ def test_agent_preflight_accepts_manual_provider_route_as_human_fallback(monkeyp
 
     assert preflight["ready"] is True
     assert preflight["items"][0]["resolution"] == "provider_route_manual_fallback"
+    assert preflight["items"][0]["execution_boundary"] == "human_operated_fallback"
+    assert preflight["items"][0]["autonomy_level"] == "draft_only"
+    assert preflight["items"][0]["approval_state"] == "human_action_required"
+    assert "человек" in preflight["items"][0]["policy_summary"]
     assert status[0]["status"] == "connected"
     assert status[0]["route_provider"] == "manual"
     assert metadata["agent_binding_provider_routes"]["google_sheets_read"]["draft_only_until_human_action"] is True
@@ -4760,6 +4771,8 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "providerActionLabel" in agents_page_source
     assert "providerActionDescription" in agents_page_source
     assert "['openclaw', 'maton', 'manual'].includes(route.provider || '')" in agents_page_source
+    assert "agentPolicyFacts(item)" in agents_page_source
+    assert "item.policy_summary" in agents_page_source
     assert "chooseProviderRoute" in agents_page_source
     assert "/provider-routes" in agents_page_source
     assert "onChooseProviderRoute" in agents_page_source

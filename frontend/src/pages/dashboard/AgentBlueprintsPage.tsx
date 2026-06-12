@@ -491,6 +491,12 @@ type AgentIntegrationBindingStatus = {
   resolution?: string;
   route_provider?: string;
   route?: AgentProviderRoute;
+  execution_boundary?: string;
+  autonomy_level?: string;
+  credential_state?: string;
+  approval_state?: string;
+  policy_summary?: string;
+  next_action_label?: string;
 };
 
 type AgentIntegrationPreflight = {
@@ -536,6 +542,12 @@ type AgentConnectionPlanItem = {
   explanation?: string;
   route_state?: string;
   route_summary?: string;
+  execution_boundary?: string;
+  autonomy_level?: string;
+  credential_state?: string;
+  approval_state?: string;
+  policy_summary?: string;
+  next_action_label?: string;
   missing_config?: string[];
   approval_required?: boolean;
   existing_integrations?: Array<{ id?: string; provider?: string; display_name?: string; status?: string }>;
@@ -6095,6 +6107,20 @@ const AgentConnectionPlanPanel = ({
               </span>
             </div>
             <div className="mt-2 text-xs leading-5 text-slate-600">{item.route_summary || item.explanation || bindingActionHint({ key: item.key || '', provider: item.provider || '', status: item.binding_status || '' })}</div>
+            {item.policy_summary ? (
+              <div className="mt-2 rounded-lg bg-slate-50 px-2.5 py-2 text-xs leading-5 text-slate-700 ring-1 ring-slate-100">
+                {item.policy_summary}
+              </div>
+            ) : null}
+            {agentPolicyFacts(item).length ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {agentPolicyFacts(item).map((fact) => (
+                  <span key={`${item.key}-${fact}`} className="rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
+                    {humanizeMeta(fact)}
+                  </span>
+                ))}
+              </div>
+            ) : null}
             {item.provider_routes?.length ? (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {item.provider_routes.slice(0, 5).map((route) => (
@@ -6176,6 +6202,24 @@ const connectionActionTone = (action: string) => {
     return 'bg-slate-50 text-slate-600 ring-slate-200';
   }
   return 'bg-amber-50 text-amber-700 ring-amber-200';
+};
+
+const agentPolicyFacts = (item: AgentConnectionPlanItem) => {
+  const rawFacts = [
+    item.autonomy_level,
+    item.execution_boundary,
+    item.credential_state,
+    item.approval_state,
+    item.next_action_label,
+  ];
+  const facts: string[] = [];
+  rawFacts.forEach((fact) => {
+    const normalized = String(fact || '').trim();
+    if (normalized && !facts.includes(normalized)) {
+      facts.push(normalized);
+    }
+  });
+  return facts.slice(0, 5);
 };
 
 const providerRouteLabel = (state: string) => ({
