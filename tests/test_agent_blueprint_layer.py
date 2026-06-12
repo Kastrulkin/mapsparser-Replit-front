@@ -373,6 +373,10 @@ def test_agent_preview_run_input_is_safe_and_compiled_workflow_aware():
     assert preview_input["telegram"]["external_publish_performed"] is False
     assert preview_input["telegram"]["telegram_target"] == "@riderra_updates"
     assert [item["provider"] for item in preview_input["provider_bindings"]] == ["google_sheets", "telegram"]
+    assert preview_input["policy_envelope"]["execution_boundary"] == "openclaw_action_orchestrator"
+    assert preview_input["policy_envelope"]["external_side_effects_allowed_in_preview"] is False
+    assert preview_input["openclaw_action_plan"][0]["provider_action_ref"] == "openclaw.google_sheets.read_rows"
+    assert preview_input["openclaw_action_plan"][0]["provider_policy"] == "localos_envelope"
 
 
 def test_openclaw_and_capability_routes_are_registered():
@@ -4878,6 +4882,11 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "connectionResourceFacts" in agents_page_source
     assert "Ресурс из диалога" in agents_page_source
     assert "Поняли ресурс" in agents_page_source
+    assert "BuilderExecutionBoundaryPanel" in agents_page_source
+    assert "Execution boundary" in agents_page_source
+    assert "OpenClaw action refs" in agents_page_source
+    assert "openclaw_action_plan" in api_source
+    assert "_preview_openclaw_action_plan" in api_source
     assert "AGENT_CONNECTION_CHOICE_REQUIRED" in api_source
     assert "AGENT_PROVIDER_ROUTE_REQUIRED" in api_source
     assert "AGENT_PROVIDER_ROUTES_CONFIRMATION_REQUIRED" in api_source

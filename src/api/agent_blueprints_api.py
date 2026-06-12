@@ -1028,6 +1028,7 @@ def _build_agent_preview_run_input(blueprint: dict, version: dict | None, payloa
     received_at = _utc_now_text()
     sample_rows = _preview_sample_rows(custom_process, user_input)
     provider_bindings = _preview_provider_bindings(required_bindings)
+    openclaw_action_plan = _preview_openclaw_action_plan(steps)
     google_sheets_config = custom_process.get("google_sheets") if isinstance(custom_process.get("google_sheets"), dict) else {}
     telegram_config = custom_process.get("telegram") if isinstance(custom_process.get("telegram"), dict) else {}
     preview_input = {
@@ -1046,6 +1047,13 @@ def _build_agent_preview_run_input(blueprint: dict, version: dict | None, payloa
         "capability_allowlist": [str(item) for item in capability_allowlist],
         "required_connectors": _preview_required_connectors(metadata, required_bindings),
         "provider_bindings": provider_bindings,
+        "openclaw_action_plan": openclaw_action_plan,
+        "policy_envelope": {
+            "runtime": "localos_compiled_workflow",
+            "execution_boundary": "openclaw_action_orchestrator",
+            "external_side_effects_allowed_in_preview": False,
+            "approval_required_for_external_actions": True,
+        },
         "source_event": {
             "id": trigger_event_id,
             "source": "agent_preview",
@@ -1125,6 +1133,32 @@ def _preview_provider_bindings(required_bindings: list) -> list[dict]:
                 "provider": str(item.get("provider") or ""),
                 "capability": str(item.get("capability") or ""),
                 "required_config": [str(value) for value in item.get("required_config", []) if str(value or "").strip()],
+            }
+        )
+    return result
+
+
+def _preview_openclaw_action_plan(steps: list) -> list[dict]:
+    result = []
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        action_ref = str(step.get("provider_action_ref") or "").strip()
+        provider = str(step.get("provider") or "").strip()
+        capability = str(step.get("capability") or "").strip()
+        if not action_ref and provider != "openclaw":
+            continue
+        result.append(
+            {
+                "step_key": str(step.get("key") or ""),
+                "title": str(step.get("title") or step.get("key") or ""),
+                "capability": capability,
+                "provider": provider or ("openclaw" if action_ref.startswith("openclaw.") else ""),
+                "provider_action_ref": action_ref,
+                "provider_policy": str(step.get("provider_policy") or "localos_envelope"),
+                "risk_class": str(step.get("provider_risk_class") or ""),
+                "approval_class": str(step.get("provider_approval_class") or ""),
+                "requires_approval": bool(step.get("requires_approval")),
             }
         )
     return result

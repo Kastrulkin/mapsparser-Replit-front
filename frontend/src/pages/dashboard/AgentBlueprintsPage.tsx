@@ -795,12 +795,25 @@ type AgentBuilderPlannerLoop = {
   schema?: string;
   status?: string;
   may_execute_tools?: boolean;
+  must_compile_in_localos?: boolean;
   catalog_source?: string;
-  capability_plan?: Array<{ capability?: string; openclaw_supported?: boolean; provider_paths?: string[] }>;
+  capability_plan?: Array<{
+    capability?: string;
+    openclaw_supported?: boolean;
+    provider_paths?: string[];
+    openclaw_actions?: Array<{ service?: string; action?: string; openclaw_action_ref?: string }>;
+  }>;
   workflow_proposal?: {
     openclaw_action_refs?: string[];
     provider_paths?: Array<{ capability?: string; provider_path?: string }>;
     policy?: string;
+  };
+  planner_contract?: {
+    execution_mode?: string;
+    tool_execution_allowed?: boolean;
+    external_side_effects_allowed?: boolean;
+    compiled_workflow_owner?: string;
+    must_not?: string[];
   };
 };
 
@@ -4272,6 +4285,7 @@ const DialogAgentBuilder = ({
             />
             <BuilderConnectionResolverPanel resolver={preview?.connection_resolver} />
             <BuilderSetupFlowPanel setupFlow={preview?.setup_flow} />
+            <BuilderExecutionBoundaryPanel plannerLoop={preview?.openclaw_planner_loop} />
             <BuilderConnectionSummaryPanel
               summary={preview?.connection_summary}
               selectedBindings={selectedConnectionBindings}
@@ -5198,6 +5212,73 @@ const BuilderPlannerLoopPanel = ({ plannerLoop }: { plannerLoop?: AgentBuilderPl
       <div className="mt-1">
         Проверены {capabilities.length || 0} capabilities, {providerPaths.length || 0} provider paths и {actionRefs.length || 0} action refs. Tools не выполняются в мастере; workflow будет скомпилирован LocalOS.
       </div>
+    </div>
+  );
+};
+
+const BuilderExecutionBoundaryPanel = ({ plannerLoop }: { plannerLoop?: AgentBuilderPlannerLoop }) => {
+  if (!plannerLoop) {
+    return null;
+  }
+  const actionRefs = plannerLoop.workflow_proposal?.openclaw_action_refs || [];
+  const providerPaths = plannerLoop.workflow_proposal?.provider_paths || [];
+  const capabilities = plannerLoop.capability_plan || [];
+  const contract = plannerLoop.planner_contract || {};
+  if (!actionRefs.length && !capabilities.length && !providerPaths.length) {
+    return null;
+  }
+  const mayExecuteTools = plannerLoop.may_execute_tools === true || contract.tool_execution_allowed === true;
+  const externalSideEffects = contract.external_side_effects_allowed === true;
+  return (
+    <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-xs leading-5 text-sky-950">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="font-semibold">Execution boundary</div>
+          <div className="mt-1 max-w-2xl text-sky-800">
+            OpenClaw может предложить и исполнить действия только за LocalOS policy, billing, audit и approval gate.
+          </div>
+        </div>
+        <span className="rounded-full bg-white px-2 py-0.5 font-medium text-sky-700 ring-1 ring-sky-200">
+          {plannerLoop.catalog_source === 'openclaw' ? 'OpenClaw catalog' : 'fallback catalog'}
+        </span>
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        <AgentMiniMetric label="Tools" value={mayExecuteTools ? 'разрешены' : 'запрещены'} />
+        <AgentMiniMetric label="Side effects" value={externalSideEffects ? 'есть риск' : 'нет в preview'} />
+        <AgentMiniMetric label="Owner" value={contract.compiled_workflow_owner || (plannerLoop.must_compile_in_localos ? 'LocalOS' : 'LocalOS')} />
+      </div>
+      {actionRefs.length ? (
+        <div className="mt-3 rounded-lg bg-white px-2 py-2 ring-1 ring-sky-100">
+          <div className="font-semibold text-sky-900">OpenClaw action refs</div>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {actionRefs.slice(0, 6).map((actionRef) => (
+              <span key={actionRef} className="rounded-full bg-slate-50 px-2 py-0.5 font-mono text-[11px] text-slate-700 ring-1 ring-slate-200">
+                {actionRef}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {capabilities.length ? (
+        <div className="mt-2 grid gap-2 md:grid-cols-2">
+          {capabilities.slice(0, 4).map((item) => {
+            const refs = item.openclaw_actions?.map((action) => action.openclaw_action_ref).filter(Boolean) || [];
+            return (
+              <div key={item.capability || refs.join(':')} className="rounded-lg bg-white px-2 py-2 ring-1 ring-sky-100">
+                <div className="font-medium text-slate-950">{humanizeMeta(item.capability || 'capability')}</div>
+                <div className="mt-1 text-[11px] leading-4 text-slate-600">
+                  {refs.length ? refs.slice(0, 2).join(' · ') : 'OpenClaw action не выбран'}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+      {contract.must_not?.length ? (
+        <div className="mt-2 rounded-lg bg-white/80 px-2 py-1.5 text-[11px] leading-4 text-sky-800 ring-1 ring-sky-100">
+          Нельзя: {contract.must_not.slice(0, 4).map((item) => humanizeMeta(item)).join(', ')}.
+        </div>
+      ) : null}
     </div>
   );
 };
