@@ -2947,11 +2947,30 @@ def create_agent_run_feedback(run_id: str):
         new_version = _insert_version(cursor, str(blueprint.get("id") or ""), version_payload, user_data)
         diff = build_agent_version_diff(version, new_version)
         event = None
+        auto_activation_gate = {}
+        auto_activation_applied = False
         if auto_activate:
-            event = _remember_active_version(cursor, blueprint, new_version, user_data, "feedback_applied", feedback_text)
+            candidate_blueprint = _load_blueprint(cursor, str(blueprint.get("id") or "")) or blueprint
+            auto_activation_gate = _build_activation_gate_summary(
+                cursor,
+                blueprint=candidate_blueprint,
+                active_version=new_version,
+                metadata=_blueprint_metadata(candidate_blueprint),
+            )
+            if auto_activation_gate.get("can_activate"):
+                event = _remember_active_version(cursor, candidate_blueprint, new_version, user_data, "feedback_applied", feedback_text)
+                auto_activation_applied = True
         refreshed_blueprint = _load_blueprint(cursor, str(blueprint.get("id") or ""))
         refreshed_metadata = _blueprint_metadata(refreshed_blueprint or blueprint)
-        learning_summary = build_learning_loop_summary(feedback, version, new_version, diff, auto_activate)
+        learning_summary = build_learning_loop_summary(feedback, version, new_version, diff, auto_activation_applied)
+        if auto_activate and not auto_activation_applied:
+            learning_summary["activation_state"] = "candidate_requires_preview"
+            learning_summary["human_gate_required"] = True
+            learning_summary["auto_activation_blocked"] = True
+            learning_summary["auto_activation_blocked_reason"] = str(
+                auto_activation_gate.get("summary") or "Перед активацией новой версии нужно пройти activation gate."
+            )
+            learning_summary["activation_gate"] = auto_activation_gate
         learning_events = refreshed_metadata.get("learning_events") if isinstance(refreshed_metadata.get("learning_events"), list) else learning_events
         learning_events.append(
             {
@@ -2962,6 +2981,8 @@ def create_agent_run_feedback(run_id: str):
                 "candidate_version_id": str(new_version.get("id") or ""),
                 "candidate_version_number": _version_number(new_version),
                 "activation_state": learning_summary["activation_state"],
+                "auto_activation_requested": auto_activate,
+                "auto_activation_applied": auto_activation_applied,
                 "created_by_user_id": _user_id(user_data),
                 "created_at": feedback["created_at"],
             }
@@ -2978,6 +2999,9 @@ def create_agent_run_feedback(run_id: str):
                 "diff": diff,
                 "learning": learning_summary,
                 "version_event": event,
+                "auto_activation_requested": auto_activate,
+                "auto_activation_applied": auto_activation_applied,
+                "auto_activation_gate": auto_activation_gate if auto_activate else {},
             }
         ), 201
     except Exception:

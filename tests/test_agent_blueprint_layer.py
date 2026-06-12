@@ -4396,6 +4396,10 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "/api/agent-runs/<run_id>/feedback" in api_source
     assert "trigger_type" in api_source
     assert "auto_activate" in api_source
+    assert "auto_activation_gate = _build_activation_gate_summary" in api_source
+    assert "if auto_activation_gate.get(\"can_activate\")" in api_source
+    assert "auto_activation_blocked" in api_source
+    assert "auto_activation_applied" in api_source
     assert "SET status = 'active'" in api_source
     assert "build_learning_loop_summary" in api_source
     assert "/api/agent-runs/<run_id>/support-export" in api_source
@@ -4423,6 +4427,14 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "analyze_document_sources_with_llm" in workspace_source
     assert "draft_email_with_llm" in workspace_source
     assert "draft_review_replies_with_llm" in workspace_source
+
+    feedback_endpoint_start = api_source.index("def create_agent_run_feedback")
+    feedback_endpoint = api_source[feedback_endpoint_start:api_source.index("@agent_blueprints_bp.route", feedback_endpoint_start + 1)]
+    gate_position = feedback_endpoint.index("auto_activation_gate = _build_activation_gate_summary")
+    gate_check_position = feedback_endpoint.index("if auto_activation_gate.get(\"can_activate\")")
+    remember_position = feedback_endpoint.index("_remember_active_version")
+    assert gate_position < gate_check_position < remember_position
+    assert "build_learning_loop_summary(feedback, version, new_version, diff, auto_activation_applied)" in feedback_endpoint
     assert "analyze_table_with_llm" in workspace_source
     assert "analyze_text_with_gigachat" in document_llm_source
     assert "agent_email_draft" in email_llm_source
