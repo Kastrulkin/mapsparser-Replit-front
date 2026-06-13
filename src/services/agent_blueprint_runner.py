@@ -3,6 +3,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from core.action_orchestrator import ActionOrchestrator
+from core.channel_router import dispatch_with_routing, load_business_channel_context
 from services.agent_domain_request_executors import execute_approved_domain_requests
 from services.agent_blueprint_workspace import build_generic_artifact_payload
 from services.agent_integration_preflight import build_agent_integration_preflight
@@ -882,6 +883,8 @@ class AgentBlueprintRunner:
         payload = self._build_capability_payload(run, step)
         if capability == "outreach.send_batch" and not payload.get("draft_ids"):
             payload["draft_ids"] = self._latest_artifact_item_ids(str(run.get("id") or ""), "message_drafts", "id")
+        if self._is_maton_delivery_step(run, capability):
+            return self._execute_maton_delivery_step(run, step, step_id, capability, payload)
         envelope = {
             "tenant_id": str(run.get("business_id") or ""),
             "actor": {
@@ -971,6 +974,194 @@ class AgentBlueprintRunner:
             ),
         )
         return True
+
+    def _is_maton_delivery_step(self, run: Dict[str, Any], capability: str) -> bool:
+        if capability not in {"communications.send", "communications.send_reminder", "communications.send_offer"}:
+            return False
+        return bool(self._maton_delivery_contract(run))
+
+    def _maton_delivery_contract(self, run: Dict[str, Any]) -> Dict[str, Any]:
+        blueprint = self._load_blueprint(str(run.get("blueprint_id") or ""))
+        metadata = parse_json_field((blueprint or {}).get("metadata_json"), {})
+        if not isinstance(metadata, dict):
+            return {}
+        handlers = metadata.get("connector_action_handlers") if isinstance(metadata.get("connector_action_handlers"), dict) else {}
+        routes = metadata.get("agent_binding_provider_routes") if isinstance(metadata.get("agent_binding_provider_routes"), dict) else {}
+        for binding_key, handler in handlers.items():
+            if not isinstance(handler, dict):
+                continue
+            if str(handler.get("handler") or "") != "maton_external_account_bridge":
+                continue
+            route = routes.get(binding_key) if isinstance(routes.get(binding_key), dict) else {}
+            return {
+                **handler,
+                "binding_key": str(binding_key or handler.get("binding_key") or ""),
+                "route": route,
+                "external_account_id": str(handler.get("external_account_id") or route.get("external_account_id") or ""),
+            }
+        return {}
+
+    def _execute_maton_delivery_step(
+        self,
+        run: Dict[str, Any],
+        step: Dict[str, Any],
+        step_id: str,
+        capability: str,
+        payload: Dict[str, Any],
+    ) -> bool:
+        contract = self._maton_delivery_contract(run)
+        message = self._maton_delivery_message(payload)
+        run_input = self._run_input(run)
+        safe_preview = self._is_safe_preview_input(run_input) or self._is_safe_preview_input(payload)
+        dispatch_requested = (
+            str(payload.get("dispatch_mode") or "").strip() == "send_after_approval"
+            and payload.get("external_side_effects_allowed") is True
+            and not safe_preview
+        )
+        if not message:
+            self._complete_maton_delivery_step(
+                run,
+                step,
+                step_id,
+                capability,
+                payload,
+                contract,
+                {
+                    "status": "blocked",
+                    "delivery_state": "message_missing",
+                    "external_dispatch_performed": False,
+                    "error": "message is empty",
+                },
+            )
+            return True
+        router_result: Dict[str, Any] = {}
+        delivery_state = "draft_ready"
+        status = "draft_created"
+        external_dispatch_performed = False
+        if dispatch_requested:
+            ctx = load_business_channel_context(self.cursor, str(run.get("business_id") or ""))
+            router_result = dispatch_with_routing(
+                ctx,
+                message,
+                preferred_provider="maton",
+                force_channel_id="maton_bridge",
+            )
+            external_dispatch_performed = bool(router_result.get("success"))
+            delivery_state = "sent" if external_dispatch_performed else "dispatch_failed"
+            status = "sent" if external_dispatch_performed else "dispatch_failed"
+        elif safe_preview:
+            delivery_state = "preview_draft_only"
+            status = "preview_draft_created"
+        else:
+            delivery_state = "queued_after_approval"
+            status = "request_created"
+        self._complete_maton_delivery_step(
+            run,
+            step,
+            step_id,
+            capability,
+            payload,
+            contract,
+            {
+                "status": status,
+                "delivery_state": delivery_state,
+                "message": message,
+                "external_dispatch_performed": external_dispatch_performed,
+                "router_result": router_result,
+            },
+        )
+        return True
+
+    def _maton_delivery_message(self, payload: Dict[str, Any]) -> str:
+        for key in ("message", "text", "draft_text", "post_text", "message_template"):
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        source_payload = payload.get("source_step_payload") if isinstance(payload.get("source_step_payload"), dict) else {}
+        for key in ("message", "text", "draft_text", "post_text", "summary"):
+            value = source_payload.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return ""
+
+    def _complete_maton_delivery_step(
+        self,
+        run: Dict[str, Any],
+        step: Dict[str, Any],
+        step_id: str,
+        capability: str,
+        payload: Dict[str, Any],
+        contract: Dict[str, Any],
+        result: Dict[str, Any],
+    ) -> None:
+        artifact_payload = {
+            "schema": "localos_maton_delivery_request_v1",
+            "status": str(result.get("status") or "request_created"),
+            "capability": capability,
+            "provider": "maton",
+            "handler": "maton_external_account_bridge",
+            "binding_key": str(contract.get("binding_key") or ""),
+            "external_account_id": str(contract.get("external_account_id") or ""),
+            "approval_required": True,
+            "delivery_state": str(result.get("delivery_state") or ""),
+            "message": str(result.get("message") or ""),
+            "recipient": self._maton_delivery_recipient(payload),
+            "external_dispatch_performed": bool(result.get("external_dispatch_performed")),
+            "router_result": result.get("router_result") if isinstance(result.get("router_result"), dict) else {},
+            "policy": {
+                "approval_owner": "LocalOS",
+                "execution_boundary": "maton_bridge_inside_localos_policy",
+                "external_side_effects_allowed": payload.get("external_side_effects_allowed") is True,
+                "dispatch_mode": str(payload.get("dispatch_mode") or "draft_or_request"),
+            },
+        }
+        artifact_id = str(uuid.uuid4())
+        self.cursor.execute(
+            """
+            INSERT INTO agent_artifacts (id, run_id, step_id, artifact_type, title, payload_json)
+            VALUES (%s, %s, %s, %s, %s, %s::jsonb)
+            """,
+            (
+                artifact_id,
+                run.get("id"),
+                step_id,
+                "maton_delivery_request",
+                str(step.get("title") or "Maton delivery request"),
+                json.dumps(artifact_payload, ensure_ascii=False, default=str),
+            ),
+        )
+        output_payload = {
+            "capability": capability,
+            "provider": "maton",
+            "handler": "maton_external_account_bridge",
+            "result": artifact_payload,
+        }
+        if result.get("error"):
+            output_payload["error"] = str(result.get("error") or "")
+        self.cursor.execute(
+            """
+            UPDATE agent_run_steps
+            SET status = 'completed',
+                output_json = %s::jsonb,
+                completed_at = NOW()
+            WHERE id = %s
+            """,
+            (json.dumps(output_payload, ensure_ascii=False, default=str), step_id),
+        )
+
+    def _maton_delivery_recipient(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        recipients = payload.get("recipients") if isinstance(payload.get("recipients"), list) else []
+        first = recipients[0] if recipients and isinstance(recipients[0], dict) else {}
+        target = (
+            str(payload.get("recipient") or "").strip()
+            or str(payload.get("target") or "").strip()
+            or str(payload.get("telegram_target") or "").strip()
+            or str(first.get("recipient_key") or first.get("phone") or first.get("telegram") or "").strip()
+        )
+        return {
+            "target": target or "business_owner_or_maton_auto_route",
+            "channel": str(payload.get("channel") or first.get("channel") or "maton").strip() or "maton",
+        }
 
     def _build_capability_payload(self, run: Dict[str, Any], step: Dict[str, Any]) -> Dict[str, Any]:
         step_payload = step.get("payload") if isinstance(step.get("payload"), dict) else {}

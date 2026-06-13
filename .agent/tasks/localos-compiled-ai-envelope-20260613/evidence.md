@@ -2,55 +2,57 @@
 
 ## Summary
 - Overall status: PASS for current phase scope.
-- Last updated: 2026-06-13T14:35:00+03:00
-- Current phase: Phase 4, OpenClaw preview execution artifact.
+- Last updated: 2026-06-13T14:55:00+03:00
+- Current phase: Phase 5, Maton delivery draft/send route handler.
 
 ## Acceptance criteria evidence
 
 ### AC1
 - Status: PASS
 - Proof:
-  - `src/api/agent_blueprints_api.py::_build_agent_preview_run_input` now includes `connector_action_handlers`.
-  - `tests/test_agent_blueprint_layer.py::test_agent_preview_run_input_is_safe_and_compiled_workflow_aware` asserts the OpenClaw handler appears in preview input.
+  - `src/services/agent_blueprint_runner.py::_is_maton_delivery_step` recognizes communications send capabilities.
+  - `_maton_delivery_contract` reads `maton_external_account_bridge` from blueprint metadata.
 
 ### AC2
 - Status: PASS
 - Proof:
-  - `src/api/agent_blueprints_api.py::_preview_openclaw_route_plan` turns selected `openclaw_policy_boundary` handlers into `openclaw_preview_routes`.
-  - `_dedupe_preview_openclaw_action_plan` merges route-derived plans into `openclaw_action_plan`.
+  - `_execute_maton_delivery_step` treats safe preview as draft-only.
+  - `tests/test_agent_blueprint_layer.py::test_runner_creates_maton_delivery_preview_draft_without_dispatch` fails if dispatch is called and asserts no external dispatch occurred.
 
 ### AC3
 - Status: PASS
 - Proof:
-  - `src/services/agent_blueprint_runner.py::_create_openclaw_preview_observations` creates the `openclaw_preview_observations` artifact during safe preview.
-  - Regression test asserts the artifact is present after preview run.
+  - Existing runner approval gate blocks dangerous `send` capabilities without approved approval.
+  - Maton dispatch additionally requires `dispatch_mode=send_after_approval`, `external_side_effects_allowed: true`, and non-preview input.
 
 ### AC4
 - Status: PASS
 - Proof:
-  - The artifact schema is `localos_openclaw_preview_observations_v1` and records `external_actions_executed: false`, `external_side_effects_allowed: false`, and per-observation `external_action_executed: false`.
+  - Approved Maton dispatch calls `load_business_channel_context` and `dispatch_with_routing`.
+  - Regression test asserts `preferred_provider == "maton"` and `force_channel_id == "maton_bridge"`.
 
 ### AC5
 - Status: PASS
 - Proof:
-  - Regression test uses `CountingOrchestrator` and asserts `orchestrator.calls == 0` for the dry-run route observation.
+  - Artifact schema is `localos_maton_delivery_request_v1`.
+  - Artifact records provider, handler, binding key, external account id, delivery state, router result, policy, and `external_dispatch_performed`.
 
 ### AC6
 - Status: PASS
 - Proof:
-  - Focused OpenClaw preview tests passed: 3 tests.
-  - Full agent blueprint suite passed: 149 tests.
+  - Focused Maton/OpenClaw runner tests passed: 4 tests.
+  - Full agent blueprint suite passed: 151 tests.
   - Frontend production build passed.
 
 ## Commands run
-- `PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'preview_run_input_is_safe or openclaw_preview_observations or preview_run_and_activation' -x`
+- `PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'maton_delivery or openclaw_preview_observations or creates_drafts_after_shortlist' -x`
 - `PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -x`
 - `npm --prefix frontend run build`
 
 ## Raw artifacts
-- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase4-openclaw-preview-tests.txt`
-- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase4-agent-blueprint-tests.txt`
-- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase4-frontend-build.txt`
+- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase5-maton-delivery-tests.txt`
+- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase5-agent-blueprint-tests.txt`
+- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase5-frontend-build.txt`
 
 ## Known gaps
-- Full objective remains active: real OpenClaw execution beyond dry-run observations, Maton delivery draft/send with approval, Google Sheets read, LocalOS finance write, and billing ledger expansion still require later phases.
+- Full objective remains active: Google Sheets read, LocalOS finance write, wider billing ledger expansion, and more real provider handlers still require later phases.

@@ -6822,6 +6822,201 @@ def test_runner_creates_drafts_after_shortlist_approval_and_queues_after_drafts_
     assert orchestrator.last_envelope["payload"]["daily_limit"] == 10
 
 
+def test_runner_creates_maton_delivery_preview_draft_without_dispatch(monkeypatch):
+    from services import agent_blueprint_runner
+    from services.agent_blueprint_runner import AgentBlueprintRunner
+
+    def _fail_dispatch(*args, **kwargs):
+        raise AssertionError("Maton dispatch must not run during safe preview")
+
+    monkeypatch.setattr(agent_blueprint_runner, "dispatch_with_routing", _fail_dispatch)
+
+    cursor = FakeCursor()
+    cursor.tables["agent_blueprints"]["bp1"] = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "name": "Maton delivery",
+        "category": "communications",
+        "metadata_json": {
+            "connector_action_handlers": {
+                "telegram_delivery": {
+                    "handler": "maton_external_account_bridge",
+                    "external_account_id": "maton-account-1",
+                },
+            },
+            "agent_binding_provider_routes": {
+                "telegram_delivery": {
+                    "provider": "maton",
+                    "external_account_id": "maton-account-1",
+                },
+            },
+        },
+    }
+    cursor.tables["agent_blueprint_versions"]["ver1"] = {
+        "id": "ver1",
+        "blueprint_id": "bp1",
+        "steps_json": [],
+        "capability_allowlist_json": ["communications.send_offer"],
+    }
+    cursor.tables["agent_runs"]["run1"] = {
+        "id": "run1",
+        "blueprint_id": "bp1",
+        "blueprint_version_id": "ver1",
+        "business_id": "biz1",
+        "status": "running",
+        "input_json": {"preview_mode": True, "external_side_effects_allowed": False},
+        "output_json": {},
+        "created_by_user_id": "user1",
+    }
+    cursor.tables["agent_approvals"]["approval1"] = {
+        "id": "approval1",
+        "run_id": "run1",
+        "step_id": "approval-step",
+        "status": "approved",
+        "approval_type": "communications_send",
+        "title": "Approve send",
+        "payload_json": {},
+        "requested_by_user_id": "user1",
+    }
+    orchestrator = CountingOrchestrator()
+    step = {
+        "key": "send_offer",
+        "type": "capability",
+        "capability": "communications.send_offer",
+        "requires_approval": True,
+        "required_approval_type": "communications_send",
+        "payload": {
+            "message": "Пакетное предложение для клиента",
+            "channel": "telegram",
+            "telegram_target": "@client",
+        },
+    }
+
+    completed = AgentBlueprintRunner(cursor, orchestrator=orchestrator)._execute_capability_step(
+        cursor.tables["agent_runs"]["run1"],
+        cursor.tables["agent_blueprint_versions"]["ver1"],
+        step,
+        1,
+        {"user_id": "user1"},
+    )
+
+    assert completed is True
+    assert orchestrator.calls == 0
+    artifact = next(item for item in cursor.tables["agent_artifacts"].values() if item["artifact_type"] == "maton_delivery_request")
+    payload = artifact["payload_json"]
+    assert payload["schema"] == "localos_maton_delivery_request_v1"
+    assert payload["status"] == "preview_draft_created"
+    assert payload["delivery_state"] == "preview_draft_only"
+    assert payload["external_dispatch_performed"] is False
+    assert payload["external_account_id"] == "maton-account-1"
+
+
+def test_runner_sends_maton_delivery_only_after_approval_and_explicit_dispatch(monkeypatch):
+    from services import agent_blueprint_runner
+    from services.agent_blueprint_runner import AgentBlueprintRunner
+
+    captured = {}
+
+    def _fake_load_context(cursor, business_id):
+        captured["business_id"] = business_id
+        return {"id": business_id, "name": "Riderra", "maton_api_key": "key", "maton_bridge_enabled": True}
+
+    def _fake_dispatch(ctx, text, *, preferred_provider="telegram", force_channel_id=None):
+        captured["text"] = text
+        captured["preferred_provider"] = preferred_provider
+        captured["force_channel_id"] = force_channel_id
+        return {
+            "success": True,
+            "selected_channel_id": "maton_bridge",
+            "selected_provider": "maton",
+            "attempts": [{"channel_id": "maton_bridge", "provider": "maton", "success": True}],
+        }
+
+    monkeypatch.setattr(agent_blueprint_runner, "load_business_channel_context", _fake_load_context)
+    monkeypatch.setattr(agent_blueprint_runner, "dispatch_with_routing", _fake_dispatch)
+
+    cursor = FakeCursor()
+    cursor.tables["agent_blueprints"]["bp1"] = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "name": "Maton delivery",
+        "category": "communications",
+        "metadata_json": {
+            "connector_action_handlers": {
+                "telegram_delivery": {
+                    "handler": "maton_external_account_bridge",
+                    "external_account_id": "maton-account-1",
+                },
+            },
+            "agent_binding_provider_routes": {
+                "telegram_delivery": {
+                    "provider": "maton",
+                    "external_account_id": "maton-account-1",
+                },
+            },
+        },
+    }
+    cursor.tables["agent_blueprint_versions"]["ver1"] = {
+        "id": "ver1",
+        "blueprint_id": "bp1",
+        "steps_json": [],
+        "capability_allowlist_json": ["communications.send_offer"],
+    }
+    cursor.tables["agent_runs"]["run1"] = {
+        "id": "run1",
+        "blueprint_id": "bp1",
+        "blueprint_version_id": "ver1",
+        "business_id": "biz1",
+        "status": "running",
+        "input_json": {},
+        "output_json": {},
+        "created_by_user_id": "user1",
+    }
+    cursor.tables["agent_approvals"]["approval1"] = {
+        "id": "approval1",
+        "run_id": "run1",
+        "step_id": "approval-step",
+        "status": "approved",
+        "approval_type": "communications_send",
+        "title": "Approve send",
+        "payload_json": {},
+        "requested_by_user_id": "user1",
+    }
+    step = {
+        "key": "send_offer",
+        "type": "capability",
+        "capability": "communications.send_offer",
+        "requires_approval": True,
+        "required_approval_type": "communications_send",
+        "payload": {
+            "message": "Пакетное предложение для клиента",
+            "dispatch_mode": "send_after_approval",
+            "external_side_effects_allowed": True,
+            "telegram_target": "@client",
+        },
+    }
+
+    completed = AgentBlueprintRunner(cursor, orchestrator=CountingOrchestrator())._execute_capability_step(
+        cursor.tables["agent_runs"]["run1"],
+        cursor.tables["agent_blueprint_versions"]["ver1"],
+        step,
+        1,
+        {"user_id": "user1"},
+    )
+
+    assert completed is True
+    assert captured["business_id"] == "biz1"
+    assert captured["text"] == "Пакетное предложение для клиента"
+    assert captured["preferred_provider"] == "maton"
+    assert captured["force_channel_id"] == "maton_bridge"
+    artifact = next(item for item in cursor.tables["agent_artifacts"].values() if item["artifact_type"] == "maton_delivery_request")
+    payload = artifact["payload_json"]
+    assert payload["status"] == "sent"
+    assert payload["delivery_state"] == "sent"
+    assert payload["external_dispatch_performed"] is True
+    assert payload["router_result"]["selected_channel_id"] == "maton_bridge"
+
+
 def test_runner_passes_compiled_step_rows_to_next_capability_without_runtime_ai():
     from services.agent_blueprint_runner import AgentBlueprintRunner
 

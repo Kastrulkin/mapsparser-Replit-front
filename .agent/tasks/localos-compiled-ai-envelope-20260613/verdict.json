@@ -1,32 +1,32 @@
 {
   "task_id": "localos-compiled-ai-envelope-20260613",
   "overall_verdict": "PASS",
-  "phase": "phase_4_openclaw_preview_execution_artifact",
+  "phase": "phase_5_maton_delivery_route_handler",
   "criteria": [
     {
       "id": "AC1",
       "status": "PASS",
-      "reason": "Preview input now carries connector_action_handlers from selected provider-route contracts."
+      "reason": "Runner recognizes Maton external account bridge contracts from blueprint metadata."
     },
     {
       "id": "AC2",
       "status": "PASS",
-      "reason": "OpenClaw policy-bound routes are converted into openclaw_preview_routes and deduped into openclaw_action_plan."
+      "reason": "Safe preview creates a Maton delivery artifact without calling dispatch."
     },
     {
       "id": "AC3",
       "status": "PASS",
-      "reason": "Safe preview runs create localos_openclaw_preview_observations_v1 artifacts."
+      "reason": "Production dispatch requires prior approval plus explicit dispatch mode and side-effect permission."
     },
     {
       "id": "AC4",
       "status": "PASS",
-      "reason": "The preview artifact records that external side effects are disallowed and no external action executed."
+      "reason": "Approved dispatch uses the existing channel router Maton bridge."
     },
     {
       "id": "AC5",
       "status": "PASS",
-      "reason": "Dry-run OpenClaw route observation does not call the ActionOrchestrator."
+      "reason": "Maton delivery artifacts record route, policy, router result, and external dispatch status."
     },
     {
       "id": "AC6",
@@ -35,7 +35,7 @@
     }
   ],
   "commands_run": [
-    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'preview_run_input_is_safe or openclaw_preview_observations or preview_run_and_activation' -x",
+    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'maton_delivery or openclaw_preview_observations or creates_drafts_after_shortlist' -x",
     "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -x",
     "npm --prefix frontend run build"
   ],
@@ -43,9 +43,9 @@
     ".agent/tasks/localos-compiled-ai-envelope-20260613/spec.md",
     ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.md",
     ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.json",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase4-openclaw-preview-tests.txt",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase4-agent-blueprint-tests.txt",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase4-frontend-build.txt"
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase5-maton-delivery-tests.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase5-agent-blueprint-tests.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase5-frontend-build.txt"
   ],
   "remaining_goal_status": "IN_PROGRESS"
 }
