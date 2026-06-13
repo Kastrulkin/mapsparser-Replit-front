@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 
 from core.action_orchestrator import ActionOrchestrator
 from core.channel_router import dispatch_with_routing, load_business_channel_context
+from services.agent_capability_handlers import build_capability_handlers
 from services.agent_domain_request_executors import execute_approved_domain_requests
 from services.agent_blueprint_workspace import build_generic_artifact_payload
 from services.agent_integration_preflight import build_agent_integration_preflight
@@ -134,7 +135,7 @@ def default_supervised_outreach_version_payload() -> Dict[str, Any]:
 class AgentBlueprintRunner:
     def __init__(self, cursor, orchestrator: Optional[ActionOrchestrator] = None):
         self.cursor = cursor
-        self.orchestrator = orchestrator or ActionOrchestrator({})
+        self.orchestrator = orchestrator or ActionOrchestrator(build_capability_handlers())
 
     def start_run(self, blueprint_version_id: str, input_payload: Dict[str, Any], user_data: Dict[str, Any]) -> Dict[str, Any]:
         version = self._load_version(blueprint_version_id)

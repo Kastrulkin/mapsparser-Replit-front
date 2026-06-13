@@ -7017,6 +7017,15 @@ def test_runner_sends_maton_delivery_only_after_approval_and_explicit_dispatch(m
     assert payload["router_result"]["selected_channel_id"] == "maton_bridge"
 
 
+def test_default_runner_is_wired_to_real_google_sheets_and_finance_handlers():
+    from services.agent_blueprint_runner import AgentBlueprintRunner
+
+    runner = AgentBlueprintRunner(FakeCursor())
+
+    assert "google_sheets.read_rows" in runner.orchestrator.handlers
+    assert "finance.transaction.create" in runner.orchestrator.handlers
+
+
 def test_runner_passes_compiled_step_rows_to_next_capability_without_runtime_ai():
     from services.agent_blueprint_runner import AgentBlueprintRunner
 

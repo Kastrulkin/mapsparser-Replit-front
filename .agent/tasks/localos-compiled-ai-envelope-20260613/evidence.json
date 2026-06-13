@@ -1,55 +1,50 @@
 {
   "task_id": "localos-compiled-ai-envelope-20260613",
   "overall_status": "PASS",
-  "phase": "phase_5_maton_delivery_route_handler",
+  "phase": "phase_6_sheets_finance_handler_wiring",
   "acceptance_criteria": [
     {
       "id": "AC1",
-      "text": "Runner recognizes maton_external_account_bridge contracts for communications.send capabilities.",
+      "text": "Default AgentBlueprintRunner uses the real capability map.",
       "status": "PASS",
       "proof": [
-        "src/services/agent_blueprint_runner.py::_is_maton_delivery_step",
-        "src/services/agent_blueprint_runner.py::_maton_delivery_contract"
+        "src/services/agent_blueprint_runner.py::AgentBlueprintRunner.__init__"
       ],
       "gaps": []
     },
     {
       "id": "AC2",
-      "text": "Safe preview creates a Maton delivery request artifact without calling dispatch.",
+      "text": "Default runner exposes google_sheets.read_rows.",
       "status": "PASS",
       "proof": [
-        "src/services/agent_blueprint_runner.py::_execute_maton_delivery_step",
-        "tests/test_agent_blueprint_layer.py::test_runner_creates_maton_delivery_preview_draft_without_dispatch"
+        "tests/test_agent_blueprint_layer.py::test_default_runner_is_wired_to_real_google_sheets_and_finance_handlers"
       ],
       "gaps": []
     },
     {
       "id": "AC3",
-      "text": "Production Maton send requires approved approval and explicit dispatch flags.",
+      "text": "Default runner exposes finance.transaction.create.",
       "status": "PASS",
       "proof": [
-        "AgentBlueprintRunner existing approval gate",
-        "dispatch_mode=send_after_approval",
-        "external_side_effects_allowed true"
+        "tests/test_agent_blueprint_layer.py::test_default_runner_is_wired_to_real_google_sheets_and_finance_handlers"
       ],
       "gaps": []
     },
     {
       "id": "AC4",
-      "text": "Approved dispatch uses the existing channel router Maton bridge.",
+      "text": "Google Sheets read handler remains covered and safe.",
       "status": "PASS",
       "proof": [
-        "src/services/agent_blueprint_runner.py::_execute_maton_delivery_step",
-        "tests/test_agent_blueprint_layer.py::test_runner_sends_maton_delivery_only_after_approval_and_explicit_dispatch"
+        "tests/test_agent_blueprint_layer.py::test_google_sheets_read_rows_capability_uses_native_provider"
       ],
       "gaps": []
     },
     {
       "id": "AC5",
-      "text": "Maton delivery artifacts are auditable and record policy state.",
+      "text": "Finance transaction handler remains request/proposal-only without direct LocalOS write.",
       "status": "PASS",
       "proof": [
-        "localos_maton_delivery_request_v1 artifact schema"
+        "tests/test_agent_blueprint_layer.py::test_finance_transaction_create_capability_normalizes_rows_without_localos_write"
       ],
       "gaps": []
     },
@@ -58,8 +53,8 @@
       "text": "Agent-related tests and frontend production build pass.",
       "status": "PASS",
       "proof": [
-        "4 focused Maton/OpenClaw runner tests passed",
-        "151 agent blueprint tests passed",
+        "5 focused sheets/finance/Maton tests passed",
+        "152 agent blueprint tests passed",
         "frontend build passed"
       ],
       "gaps": []
@@ -70,19 +65,19 @@
     ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.md",
     ".agent/tasks/localos-compiled-ai-envelope-20260613/spec.md",
     ".agent/tasks/localos-compiled-ai-envelope-20260613/verdict.json",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase5-agent-blueprint-tests.txt",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase5-frontend-build.txt",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase5-maton-delivery-tests.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase6-agent-blueprint-tests.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase6-frontend-build.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase6-sheets-finance-tests.txt",
     "src/services/agent_blueprint_runner.py",
     "tests/test_agent_blueprint_layer.py"
   ],
   "commands_for_fresh_verifier": [
-    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'maton_delivery or openclaw_preview_observations or creates_drafts_after_shortlist' -x",
+    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'default_runner_is_wired or google_sheets_read_rows_capability_uses_native_provider or finance_transaction_create_capability_normalizes_rows_without_localos_write or maton_delivery' -x",
     "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -x",
     "npm --prefix frontend run build"
   ],
   "known_gaps": [
     "Full LocalOS compiled AI envelope objective remains active.",
-    "Google Sheets read, LocalOS finance write, broader billing ledger expansion, and additional provider handlers remain later phases."
+    "Provider UX for choosing real Google credentials, finance apply UI, billing ledger expansion, and additional provider handlers remain later phases."
   ]
 }

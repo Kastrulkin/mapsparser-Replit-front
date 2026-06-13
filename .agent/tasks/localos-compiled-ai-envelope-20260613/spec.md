@@ -15,35 +15,35 @@
 Сделать LocalOS product/policy envelope поверх OpenClaw: пользователь описывает агента обычным языком, система уточняет детали, понимает нужные сервисы, компилирует workflow в проверяемый executable plan, показывает подключения/стоимость/риски, требует approval и запускает safe preview перед активацией в рамках лимитов подписки.
 
 ## Current phase scope
-Phase 5 of the remaining implementation: Maton delivery draft/send route handler.
+Phase 6 of the remaining implementation: Google Sheets read / LocalOS finance handler wiring.
 
-Selected Maton provider-route contracts must become a real LocalOS runtime handler behind the compiled workflow contract:
-- safe preview creates only a delivery draft/request artifact;
-- approved production run may dispatch through the existing channel router and Maton bridge;
-- no Maton send happens from prompt text, preview mode, or missing approval;
-- the run stores an auditable delivery artifact.
+The project already had native capability handlers for:
+- `google_sheets.read_rows`;
+- `finance.transaction.create`.
+
+This phase closes the runtime wiring gap: a plain `AgentBlueprintRunner` must default to the real capability map, so compiled workflows can execute reads and finance request creation through the same LocalOS ActionOrchestrator/policy/ledger boundary used by API and trigger runtime.
 
 ## Acceptance criteria
-- AC1: Runner recognizes `maton_external_account_bridge` contracts from blueprint metadata for `communications.send*` capabilities.
-- AC2: Safe preview Maton delivery creates a `maton_delivery_request` artifact and does not call `dispatch_with_routing`.
-- AC3: Production Maton dispatch requires prior approved approval and explicit `dispatch_mode=send_after_approval` plus `external_side_effects_allowed=true`.
-- AC4: Approved dispatch uses the existing `load_business_channel_context` + `dispatch_with_routing` route with `preferred_provider=maton` and `force_channel_id=maton_bridge`.
-- AC5: Maton delivery artifacts record provider, handler, binding, external account, delivery state, router result, policy envelope, and whether external dispatch was performed.
+- AC1: Default `AgentBlueprintRunner()` uses `ActionOrchestrator(build_capability_handlers())`, not an empty orchestrator.
+- AC2: Default runner exposes `google_sheets.read_rows` handler.
+- AC3: Default runner exposes `finance.transaction.create` handler.
+- AC4: Existing Google Sheets read handler still supports native provider read and inline rows without provider write.
+- AC5: Existing finance handler still creates finance transaction requests/proposals without direct LocalOS write.
 - AC6: Agent-related tests and frontend production build pass.
 
 ## Constraints
-- Do not introduce a second Maton integration path.
-- Do not allow autonomous sends without LocalOS approval gate.
-- Do not change production schema in this phase.
-- Do not create a new communication-agent entity; communication remains a blueprint category/capability.
+- Do not bypass ActionOrchestrator policy, ledger, billing, or approval checks.
+- Do not introduce schema changes.
+- Do not perform production data writes.
+- Finance capability may create proposals/request payloads; actual finance apply remains behind approval/apply executor.
 
 ## Non-goals
-- Full customer-recipient routing UX.
-- Bulk Maton campaigns.
-- Google Sheets read or LocalOS finance write; those remain next phases.
-- Production schema migration.
+- New Google OAuth UX.
+- New finance import schema.
+- Bulk finance auto-apply.
+- Provider-specific Google Sheets read UI polish.
 
 ## Verification plan
-- Focused Maton/OpenClaw runner tests: `PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'maton_delivery or openclaw_preview_observations or creates_drafts_after_shortlist' -x`
+- Focused handler wiring tests: `PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'default_runner_is_wired or google_sheets_read_rows_capability_uses_native_provider or finance_transaction_create_capability_normalizes_rows_without_localos_write or maton_delivery' -x`
 - Unit/integration tests: `PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -x`
 - Frontend build: `npm --prefix frontend run build`

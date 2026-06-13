@@ -1,32 +1,32 @@
 {
   "task_id": "localos-compiled-ai-envelope-20260613",
   "overall_verdict": "PASS",
-  "phase": "phase_5_maton_delivery_route_handler",
+  "phase": "phase_6_sheets_finance_handler_wiring",
   "criteria": [
     {
       "id": "AC1",
       "status": "PASS",
-      "reason": "Runner recognizes Maton external account bridge contracts from blueprint metadata."
+      "reason": "Default AgentBlueprintRunner now builds ActionOrchestrator with build_capability_handlers."
     },
     {
       "id": "AC2",
       "status": "PASS",
-      "reason": "Safe preview creates a Maton delivery artifact without calling dispatch."
+      "reason": "Default runner exposes google_sheets.read_rows."
     },
     {
       "id": "AC3",
       "status": "PASS",
-      "reason": "Production dispatch requires prior approval plus explicit dispatch mode and side-effect permission."
+      "reason": "Default runner exposes finance.transaction.create."
     },
     {
       "id": "AC4",
       "status": "PASS",
-      "reason": "Approved dispatch uses the existing channel router Maton bridge."
+      "reason": "Google Sheets read handler tests still pass."
     },
     {
       "id": "AC5",
       "status": "PASS",
-      "reason": "Maton delivery artifacts record route, policy, router result, and external dispatch status."
+      "reason": "Finance transaction create remains proposal/request-only without direct LocalOS write."
     },
     {
       "id": "AC6",
@@ -35,7 +35,7 @@
     }
   ],
   "commands_run": [
-    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'maton_delivery or openclaw_preview_observations or creates_drafts_after_shortlist' -x",
+    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'default_runner_is_wired or google_sheets_read_rows_capability_uses_native_provider or finance_transaction_create_capability_normalizes_rows_without_localos_write or maton_delivery' -x",
     "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -x",
     "npm --prefix frontend run build"
   ],
@@ -43,9 +43,9 @@
     ".agent/tasks/localos-compiled-ai-envelope-20260613/spec.md",
     ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.md",
     ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.json",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase5-maton-delivery-tests.txt",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase5-agent-blueprint-tests.txt",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase5-frontend-build.txt"
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase6-sheets-finance-tests.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase6-agent-blueprint-tests.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase6-frontend-build.txt"
   ],
   "remaining_goal_status": "IN_PROGRESS"
 }
