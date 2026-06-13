@@ -1,65 +1,69 @@
 {
   "task_id": "localos-compiled-ai-envelope-20260613",
   "overall_status": "PASS",
-  "phase": "phase_8_finance_apply_after_approval",
+  "phase": "phase_9_real_connector_selection_ux",
   "acceptance_criteria": [
     {
       "id": "AC1",
-      "text": "Finance capability execution creates a proposal/request without writing LocalOS Finance entries automatically.",
+      "text": "Builder preview distinguishes service availability from execution route selection for Google, Telegram, and Maton.",
       "status": "PASS",
       "proof": [
-        "src/services/agent_blueprint_runner.py::_execute_capability_step",
-        "tests/test_agent_blueprint_layer.py::test_runner_passes_compiled_step_rows_to_next_capability_without_runtime_ai"
+        "src/services/agent_builder_session.py::_preview_connection_action",
+        "tests/test_agent_blueprint_layer.py::test_agent_builder_session_preview_includes_feasibility_for_required_connectors"
       ],
       "gaps": []
     },
     {
       "id": "AC2",
-      "text": "Approved finance proposal appears in run observability as apply-ready with a concrete apply endpoint.",
+      "text": "Google Sheets -> Telegram asks for two binding routes and cannot proceed to preview/activation without explicit route selection.",
       "status": "PASS",
       "proof": [
-        "src/services/agent_blueprint_runner.py::_load_pending_finance_requests_from_steps",
-        "tests/test_agent_blueprint_layer.py::test_runner_applies_finance_requests_only_after_explicit_apply"
+        "src/api/agent_builder_api.py::create_agent_blueprint_from_session",
+        "tests/test_agent_blueprint_layer.py::test_agent_builder_api_requires_selected_provider_routes_for_required_bindings",
+        "tests/test_agent_blueprint_layer.py::test_compiled_agent_creation_contract_google_sheets_to_telegram"
       ],
       "gaps": []
     },
     {
       "id": "AC3",
-      "text": "Agents UI shows an explicit apply action for approved finance requests.",
+      "text": "Preflight combines selected config/credentials with selected provider route and blocks when route is missing.",
       "status": "PASS",
       "proof": [
-        "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx::DomainRequestItem",
-        "frontend build passed"
+        "src/services/agent_integration_preflight.py::_metadata_binding_config",
+        "tests/test_agent_blueprint_layer.py::test_compiled_agent_creation_contract_google_sheets_to_telegram",
+        "tests/test_agent_blueprint_layer.py::test_agent_preflight_accepts_openclaw_provider_route_for_binding"
       ],
       "gaps": []
     },
     {
       "id": "AC4",
-      "text": "Explicit apply writes finance entries, records ledger, updates step output, and returns refreshed run state.",
+      "text": "Activation gate and post-create handoff point users to route selection for route blockers.",
       "status": "PASS",
       "proof": [
-        "src/services/agent_blueprint_runner.py::apply_finance_requests",
-        "src/api/agent_blueprints_api.py::apply_agent_run_finance_requests",
-        "tests/test_agent_blueprint_layer.py::test_runner_applies_finance_requests_only_after_explicit_apply"
+        "src/api/agent_blueprints_api.py::_activation_gate_next_step",
+        "src/api/agent_builder_api.py::_build_post_create_handoff",
+        "tests/test_agent_blueprint_layer.py::test_agent_preview_run_and_activation_endpoints_enforce_safe_gate"
       ],
       "gaps": []
     },
     {
       "id": "AC5",
-      "text": "Regression suite for compiled agent layer passes.",
+      "text": "Agents UI requires explicit route selection and confirmation instead of auto-selecting recommended routes.",
       "status": "PASS",
       "proof": [
-        "153 agent blueprint tests passed"
+        "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx::autoSelectBuilderProviderRoutes",
+        "frontend build passed"
       ],
       "gaps": []
     },
     {
       "id": "AC6",
-      "text": "No schema migration is introduced and diff is clean.",
+      "text": "Regression suite, frontend build, and diff checks pass without schema migration.",
       "status": "PASS",
       "proof": [
-        "git diff --check passed",
-        "frontend build passed"
+        "153 agent blueprint tests passed",
+        "frontend build passed",
+        "git diff --check passed"
       ],
       "gaps": []
     }
@@ -68,14 +72,14 @@
     ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.json",
     ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.md",
     ".agent/tasks/localos-compiled-ai-envelope-20260613/verdict.json",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase8-agent-blueprint-tests.txt",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase8-diff-check.txt",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase8-finance-apply-focused-tests.txt",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase8-frontend-build.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase9-connector-selection-agent-blueprint-tests.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase9-connector-selection-diff-check.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase9-connector-selection-frontend-build.txt",
     "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
     "src/api/agent_blueprints_api.py",
-    "src/services/agent_blueprint_runner.py",
-    "src/services/agent_domain_request_executors.py",
+    "src/api/agent_builder_api.py",
+    "src/services/agent_builder_session.py",
+    "src/services/agent_integration_preflight.py",
     "tests/test_agent_blueprint_layer.py"
   ],
   "commands_for_fresh_verifier": [
@@ -85,6 +89,7 @@
   ],
   "known_gaps": [
     "Full LocalOS compiled AI envelope objective remains active.",
-    "More production provider write handlers, live visual QA on production, and broader billing ledger coverage for compile/preview/run remain later phases."
+    "Live provider-specific selection UI can still be polished.",
+    "More production provider write handlers and billing ledger coverage for compile/preview/run remain later phases."
   ]
 }

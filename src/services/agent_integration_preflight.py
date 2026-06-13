@@ -5,6 +5,7 @@ from typing import Any, Dict, List
 
 
 NATIVE_READY_PROVIDERS = {"localos_finance"}
+ROUTE_REQUIRED_PROVIDERS = {"google_sheets", "telegram", "maton"}
 
 
 def parse_json_field(value: Any, fallback: Any) -> Any:
@@ -110,6 +111,15 @@ def _binding_preflight_item(
             )
         resolved_config = _merge_default_config(default_config, metadata_config)
         missing_metadata_config = [key for key in required_config if not str(resolved_config.get(key) or "").strip()]
+        if provider in ROUTE_REQUIRED_PROVIDERS and not route_provider and not missing_metadata_config:
+            return _base_item(
+                binding,
+                "needs_connection",
+                "provider_route_required",
+                str(metadata_config.get("integration_id") or ""),
+                [],
+                "Resource or credential is selected; choose the execution route before preview or activation.",
+            )
         if not missing_metadata_config:
             return _base_item(
                 binding,
@@ -154,6 +164,15 @@ def _binding_preflight_item(
         resolved_config = _merge_default_config(default_config, config)
         missing_config = [key for key in required_config if not str(resolved_config.get(key) or "").strip()]
         if not missing_config:
+            if provider in ROUTE_REQUIRED_PROVIDERS:
+                return _base_item(
+                    binding,
+                    "needs_connection",
+                    "agent_integration_needs_provider_route",
+                    str(integration.get("id") or ""),
+                    [],
+                    "Connection exists; choose the execution route before preview or activation.",
+                )
             return _base_item(
                 binding,
                 "ready",
@@ -281,6 +300,15 @@ def _policy_explanation(
             "policy_summary": f"{provider} найден, но не хватает настроек: {', '.join(missing_config)}.",
             "next_action_label": "Заполнить настройки",
         }
+    if resolution in {"provider_route_required", "agent_integration_needs_provider_route", "builder_answer_needs_provider_route"}:
+        return {
+            "execution_boundary": "blocked_until_route_selected",
+            "autonomy_level": "not_runnable",
+            "credential_state": "route_not_selected",
+            "approval_state": "blocked",
+            "policy_summary": f"{provider} найден, но LocalOS ещё не знает, выполнять шаг через OpenClaw, Maton, LocalOS или ручной fallback.",
+            "next_action_label": "Выбрать маршрут выполнения",
+        }
     return {
         "execution_boundary": "blocked_until_connected",
         "autonomy_level": "not_runnable",
@@ -318,6 +346,12 @@ def _metadata_binding_config(metadata: Dict[str, Any], provider: str, binding_ke
         if isinstance(metadata.get("agent_binding_integrations"), dict)
         else {}
     )
+    provider_routes = (
+        metadata.get("agent_binding_provider_routes")
+        if isinstance(metadata.get("agent_binding_provider_routes"), dict)
+        else {}
+    )
+    route_config = provider_routes.get(binding_key) if isinstance(provider_routes.get(binding_key), dict) else {}
     candidates = [
         custom_process.get(provider),
         custom_process.get(binding_key),
@@ -330,14 +364,19 @@ def _metadata_binding_config(metadata: Dict[str, Any], provider: str, binding_ke
             has_connection_anchor = _metadata_candidate_has_connection_anchor(candidate)
             if not has_connection_anchor:
                 continue
+            candidate_with_route = dict(candidate)
+            for key, value in route_config.items():
+                candidate_with_route[str(key)] = value
             answer_config = candidate.get("answer_config") if isinstance(candidate.get("answer_config"), dict) else {}
             if answer_config:
-                merged = dict(candidate)
+                merged = dict(candidate_with_route)
                 for key, value in answer_config.items():
                     if not str(merged.get(str(key)) or "").strip():
                         merged[str(key)] = value
                 return merged
-            return candidate
+            return candidate_with_route
+    if route_config:
+        return dict(route_config)
     return {}
 
 

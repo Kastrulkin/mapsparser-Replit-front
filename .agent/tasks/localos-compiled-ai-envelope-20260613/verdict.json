@@ -1,41 +1,40 @@
 {
   "task_id": "localos-compiled-ai-envelope-20260613",
   "overall_verdict": "PASS",
-  "phase": "phase_8_finance_apply_after_approval",
+  "phase": "phase_9_real_connector_selection_ux",
   "criteria": [
     {
       "id": "AC1",
       "status": "PASS",
-      "reason": "Finance capability creates an approved proposal/request but does not write LocalOS Finance entries automatically."
+      "reason": "Builder preview now separates service availability from route selection for route-required providers."
     },
     {
       "id": "AC2",
       "status": "PASS",
-      "reason": "Approved finance proposal appears in observability as apply-ready with a concrete apply endpoint."
+      "reason": "Google Sheets -> Telegram requires both binding routes before preview/activation."
     },
     {
       "id": "AC3",
       "status": "PASS",
-      "reason": "Agents UI renders a dedicated apply button only for approved, apply-ready finance requests."
+      "reason": "Preflight merges selected resource config with selected provider route and blocks when route is missing."
     },
     {
       "id": "AC4",
       "status": "PASS",
-      "reason": "Explicit apply writes finance entries, records ledger, updates step output, and returns refreshed run state."
+      "reason": "Activation gate and post-create handoff now point route blockers to route selection."
     },
     {
       "id": "AC5",
       "status": "PASS",
-      "reason": "Full compiled-agent regression suite passed."
+      "reason": "Agents UI no longer auto-selects recommended routes and blocks creation until routes are selected and confirmed."
     },
     {
       "id": "AC6",
       "status": "PASS",
-      "reason": "No schema migration; frontend build and diff check passed."
+      "reason": "Full agent blueprint suite, frontend build, and diff check passed without schema migration."
     }
   ],
   "commands_run": [
-    "venv/bin/python -m pytest tests/test_agent_blueprint_layer.py::test_agent_blueprint_routes_are_owned_by_blueprint tests/test_agent_blueprint_layer.py::test_runner_passes_compiled_step_rows_to_next_capability_without_runtime_ai tests/test_agent_blueprint_layer.py::test_runner_applies_finance_requests_only_after_explicit_apply tests/test_agent_blueprint_layer.py::test_approved_domain_executor_applies_finance_transactions_after_human_gate -q",
     "venv/bin/python -m pytest tests/test_agent_blueprint_layer.py -q",
     "npm run build from frontend/",
     "git diff --check"
@@ -44,10 +43,9 @@
     ".agent/tasks/localos-compiled-ai-envelope-20260613/spec.md",
     ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.md",
     ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.json",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase8-finance-apply-focused-tests.txt",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase8-agent-blueprint-tests.txt",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase8-frontend-build.txt",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase8-diff-check.txt"
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase9-connector-selection-agent-blueprint-tests.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase9-connector-selection-frontend-build.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase9-connector-selection-diff-check.txt"
   ],
   "remaining_goal_status": "IN_PROGRESS"
 }

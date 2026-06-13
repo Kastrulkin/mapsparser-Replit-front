@@ -1498,10 +1498,10 @@ def test_agent_builder_session_preview_includes_feasibility_for_required_connect
     assert feasibility["ready_bindings"][0]["provider"] == "telegram"
     assert preview["setup_flow"]["schema"] == "localos_agent_builder_setup_flow_v1"
     assert preview["setup_flow"]["status"] == "needs_connection"
-    assert preview["setup_flow"]["primary_action"] == "connect_service"
-    assert preview["setup_flow"]["next_step"] == "create_draft_then_connect"
-    assert preview["setup_flow"]["post_create_status"] == "needs_connection"
-    assert preview["setup_flow"]["post_create_next_step"] == "connect_required_integrations"
+    assert preview["setup_flow"]["primary_action"] == "choose_route"
+    assert preview["setup_flow"]["next_step"] == "create_draft_then_choose_route"
+    assert preview["setup_flow"]["post_create_status"] == "needs_provider_route"
+    assert preview["setup_flow"]["post_create_next_step"] == "choose_provider_route"
     assert preview["setup_flow"]["can_create_draft"] is True
     assert preview["setup_flow"]["can_activate"] is False
     assert preview["setup_flow"]["steps"][1]["key"] == "clarify"
@@ -1512,49 +1512,52 @@ def test_agent_builder_session_preview_includes_feasibility_for_required_connect
     assert any(item["type"] == "connection" and item["provider"] == "google_sheets" for item in preview["setup_flow"]["activation_blockers"])
     assert preview["connection_plan"]["schema"] == "localos_agent_connection_plan_v1"
     assert preview["connection_plan"]["status"] == "needs_action"
-    assert preview["connection_plan"]["items"][0]["action"] == "connect_required"
+    assert preview["connection_plan"]["items"][0]["action"] == "choose_route"
     assert preview["connection_plan"]["items"][0]["recommended_route"]["provider"] == "openclaw"
     assert "OpenClaw" in preview["connection_plan"]["items"][0]["recommended_route_reason"]
-    assert preview["connection_plan"]["items"][1]["action"] == "ready"
+    assert preview["connection_plan"]["items"][1]["action"] == "choose_route"
     assert preview["connection_summary"]["schema"] == "localos_agent_connection_summary_v1"
     assert preview["connection_summary"]["status"] == "needs_connection"
-    assert preview["connection_summary"]["missing_count"] == 1
-    assert preview["connection_summary"]["ready_count"] == 1
-    assert preview["connection_summary"]["next_action"] == "connect_required_integrations"
-    assert preview["connection_summary"]["items"][0]["action"] == "connect_required"
-    assert preview["connection_summary"]["items"][0]["setup_cta"]["mode"] == "post_create_connections"
-    assert "Google Sheets" in preview["connection_summary"]["items"][0]["setup_cta"]["label"]
-    assert preview["connection_summary"]["items"][1]["action"] == "ready"
+    assert preview["connection_summary"]["missing_count"] == 0
+    assert preview["connection_summary"]["route_count"] == 2
+    assert preview["connection_summary"]["ready_count"] == 0
+    assert preview["connection_summary"]["next_action"] == "choose_provider_routes"
+    assert preview["connection_summary"]["items"][0]["action"] == "choose_route"
+    assert preview["connection_summary"]["items"][0]["setup_cta"]["mode"] == "choose_route"
+    assert "маршрут" in preview["connection_summary"]["items"][0]["setup_cta"]["label"].lower()
+    assert preview["connection_summary"]["items"][1]["action"] == "choose_route"
     assert preview["connection_readiness"]["schema"] == "localos_agent_connection_readiness_v1"
-    assert preview["connection_readiness"]["next_action"] == "connect_missing_services"
+    assert preview["connection_readiness"]["next_action"] == "choose_provider_routes"
     assert preview["connection_readiness"]["post_create_workspace"] == "connections"
     assert preview["connection_readiness"]["required_count"] == 2
-    assert preview["connection_readiness"]["missing_count"] == 1
-    assert preview["connection_readiness"]["ready_count"] == 1
-    assert preview["connection_readiness"]["missing_services"][0]["provider"] == "google_sheets"
-    assert preview["connection_readiness"]["missing_services"][0]["recommended_route"]["provider"] == "openclaw"
-    assert preview["connection_readiness"]["ready_services"][0]["provider"] == "telegram"
+    assert preview["connection_readiness"]["missing_count"] == 0
+    assert preview["connection_readiness"]["route_count"] == 2
+    assert preview["connection_readiness"]["ready_count"] == 0
+    assert preview["connection_readiness"]["missing_services"] == []
+    assert preview["connection_readiness"]["route_services"][0]["provider"] == "google_sheets"
+    assert preview["connection_readiness"]["route_services"][0]["recommended_route"]["provider"] == "openclaw"
+    assert preview["connection_readiness"]["ready_services"] == []
     assert preview["connection_readiness"]["services"][0]["provider_route_cta"]
     assert preview["connection_resolver"]["schema"] == "localos_agent_connection_resolver_v1"
     assert preview["connection_resolver"]["next_action"] == "resolve_connections"
     assert preview["connection_resolver"]["required_count"] == 2
-    assert preview["connection_resolver"]["unresolved_count"] == 1
+    assert preview["connection_resolver"]["unresolved_count"] == 2
     assert preview["connection_resolver"]["items"][0]["role_label"] == "Источник данных"
     assert preview["connection_resolver"]["items"][0]["service_label"] == "Google Sheets"
     assert preview["connection_resolver"]["items"][0]["recommended_provider"] == "openclaw"
     assert "OpenClaw boundary" in preview["connection_resolver"]["items"][0]["explanation"]
     assert preview["connection_resolver"]["items"][1]["role_label"] == "Куда подготовить результат"
-    assert preview["connection_resolver"]["items"][1]["state"] == "ready"
+    assert preview["connection_resolver"]["items"][1]["state"] == "choose_route"
     assert preview["connector_intelligence"]["schema"] == "localos_agent_connector_intelligence_v1"
     assert preview["connector_intelligence"]["status"] == "needs_connection"
     assert preview["connector_intelligence"]["can_compile_draft"] is True
     assert preview["connector_intelligence"]["can_preview_after_connections"] is False
-    assert preview["connector_intelligence"]["bindings"][0]["action"] == "connect_required"
+    assert preview["connector_intelligence"]["bindings"][0]["action"] == "choose_route"
     assert preview["connector_intelligence"]["bindings"][0]["route_state"] == "available"
     assert preview["connector_intelligence"]["bindings"][0]["recommended_route"]["provider"] == "openclaw"
     assert any(item["provider"] == "native_localos" for item in preview["connector_intelligence"]["bindings"][0]["provider_routes"])
-    assert preview["connector_intelligence"]["bindings"][0]["setup_cta"]["mode"] == "post_create_connections"
-    assert preview["connector_intelligence"]["bindings"][1]["action"] == "ready"
+    assert preview["connector_intelligence"]["bindings"][0]["setup_cta"]["mode"] == "choose_route"
+    assert preview["connector_intelligence"]["bindings"][1]["action"] == "choose_route"
     assert preview["connector_intelligence"]["bindings"][1]["route_state"] == "connected"
     assert preview["connector_intelligence"]["capabilities"][0]["route_state"] == "available"
     assert any(item["label"] == "OpenClaw" for item in preview["connector_intelligence"]["provider_paths"])
@@ -1562,17 +1565,17 @@ def test_agent_builder_session_preview_includes_feasibility_for_required_connect
     assert preview["service_intelligence"]["status"] == "needs_connection"
     assert preview["service_intelligence"]["can_create_draft"] is True
     assert preview["service_intelligence"]["can_activate"] is False
-    assert preview["service_intelligence"]["state_counts"]["connectable"] >= 1
-    assert preview["service_intelligence"]["state_counts"]["already_connected"] == 1
+    assert preview["service_intelligence"]["state_counts"]["route_choice"] == 2
+    assert preview["service_intelligence"]["state_counts"].get("already_connected", 0) == 0
     service_states = {
         item["provider"]: item["state"]
         for item in preview["service_intelligence"]["items"]
         if item.get("kind") == "binding"
     }
-    assert service_states["google_sheets"] == "connectable"
-    assert service_states["telegram"] == "already_connected"
+    assert service_states["google_sheets"] == "route_choice"
+    assert service_states["telegram"] == "route_choice"
     assert any(
-        item["provider"] == "google_sheets" and item["next_action"] == "use_openclaw_boundary"
+        item["provider"] == "google_sheets" and item["next_action"] == "choose_provider_route"
         for item in preview["service_intelligence"]["items"]
     )
     assert preview["openclaw_planner_loop"]["schema"] == "localos_openclaw_planner_loop_v1"
@@ -1664,7 +1667,7 @@ def test_agent_builder_answer_resources_allow_draft_but_not_preview_without_prov
     }
 
     assert preview["setup_flow"]["can_create_draft"] is True
-    assert preview["setup_flow"]["post_create_status"] == "needs_connection"
+    assert preview["setup_flow"]["post_create_status"] == "needs_provider_route"
     assert state["missing_questions"]
     assert metadata["builder_answer_connection_bindings"]["google_sheets_read"]["spreadsheet_id"] == "1s79gWCm7A8X1drwN6yAscetf0adpRkamHCJyHCKyIqY"
     assert metadata["builder_answer_connection_bindings"]["telegram_delivery"]["telegram_target"] == "@riderra_updates"
@@ -1711,21 +1714,22 @@ def test_agent_builder_setup_flow_points_ready_connectors_to_preview_run():
     setup_flow = state["preview"]["setup_flow"]
 
     assert setup_flow["status"] == "ready_for_draft"
-    assert setup_flow["next_step"] == "create_draft_then_preview"
-    assert setup_flow["post_create_status"] == "ready_for_preview"
-    assert setup_flow["post_create_next_step"] == "run_preview"
+    assert setup_flow["next_step"] == "create_draft_then_choose_route"
+    assert setup_flow["post_create_status"] == "needs_provider_route"
+    assert setup_flow["post_create_next_step"] == "choose_provider_route"
     assert setup_flow["can_create_draft"] is True
-    assert setup_flow["can_run_preview"] is True
+    assert setup_flow["can_run_preview"] is False
     assert setup_flow["can_activate"] is False
-    assert setup_flow["steps"][-2]["status"] == "next"
-    assert "preview run" in setup_flow["post_create_description"]
-    assert state["preview"]["connection_readiness"]["next_action"] == "create_draft_then_preview"
-    assert state["preview"]["connection_readiness"]["post_create_workspace"] == "run"
-    assert state["preview"]["connection_readiness"]["can_run_preview_after_create"] is True
-    assert state["preview"]["connection_readiness"]["ready_count"] == 2
-    assert state["preview"]["connection_resolver"]["next_action"] == "run_safe_preview"
-    assert state["preview"]["connection_resolver"]["resolved_count"] == 2
-    assert state["preview"]["connection_resolver"]["unresolved_count"] == 0
+    assert setup_flow["steps"][-2]["status"] == "blocked"
+    assert "маршрут" in setup_flow["post_create_description"].lower()
+    assert state["preview"]["connection_readiness"]["next_action"] == "choose_provider_routes"
+    assert state["preview"]["connection_readiness"]["post_create_workspace"] == "connections"
+    assert state["preview"]["connection_readiness"]["can_run_preview_after_create"] is False
+    assert state["preview"]["connection_readiness"]["ready_count"] == 0
+    assert [item["action"] for item in state["preview"]["connection_summary"]["items"]] == ["choose_route", "choose_route"]
+    assert state["preview"]["connection_resolver"]["next_action"] == "resolve_connections"
+    assert state["preview"]["connection_resolver"]["resolved_count"] == 0
+    assert state["preview"]["connection_resolver"]["unresolved_count"] == 2
 
 
 def test_compiled_agent_creation_contract_google_sheets_to_telegram():
@@ -1766,12 +1770,16 @@ def test_compiled_agent_creation_contract_google_sheets_to_telegram():
     preview = state["preview"]
     setup_flow = preview["setup_flow"]
 
-    assert state["missing_questions"] == []
+    assert [item["reason"] for item in state["missing_questions"]] == [
+        "connection_resolver",
+        "connection_resolver",
+    ]
+    assert [item["provider"] for item in state["missing_questions"]] == ["google_sheets", "telegram"]
     assert setup_flow["status"] == "ready_for_draft"
-    assert setup_flow["next_step"] == "create_draft_then_preview"
-    assert setup_flow["post_create_next_step"] == "run_preview"
+    assert setup_flow["next_step"] == "create_draft_then_choose_route"
+    assert setup_flow["post_create_next_step"] == "choose_provider_route"
     assert preview["connector_intelligence"]["status"] == "ready"
-    assert [item["action"] for item in preview["connection_summary"]["items"]] == ["ready", "ready"]
+    assert [item["action"] for item in preview["connection_summary"]["items"]] == ["choose_route", "choose_route"]
     assert preview["openclaw_planner_loop"]["may_execute_tools"] is False
     assert "openclaw.google_sheets.read_rows" in preview["openclaw_planner_loop"]["workflow_proposal"]["openclaw_action_refs"]
 
@@ -1866,26 +1874,26 @@ def test_compiled_agent_creation_contract_google_sheets_to_telegram():
     assert selected_bindings["telegram_delivery"]["selection_source"] == "auto_single_connection"
     assert metadata["agent_binding_integrations"]["google_sheets_read"]["integration_id"] == "sheets-1"
     assert metadata["agent_binding_integrations"]["telegram_delivery"]["integration_id"] == "telegram-1"
-    assert preflight["ready"] is True
+    assert preflight["ready"] is False
     assert {item["provider"]: item["resolution"] for item in preflight["items"]} == {
-        "google_sheets": "blueprint_metadata",
-        "telegram": "blueprint_metadata",
+        "google_sheets": "provider_route_required",
+        "telegram": "provider_route_required",
     }
-    assert post_create_handoff["status"] == "ready_for_preview"
-    assert post_create_handoff["next_step"] == "run_preview"
+    assert post_create_handoff["status"] == "needs_provider_route"
+    assert post_create_handoff["next_step"] == "choose_provider_route"
     assert preview_input["schema"] == "localos_agent_preview_input_v1"
     assert preview_input["preview_mode"] is True
     assert preview_input["external_side_effects_allowed"] is False
     assert preview_input["google_sheets"]["read_only"] is True
     assert preview_input["telegram"]["draft_only"] is True
-    assert activation_gate["can_activate"] is True
-    assert activation_gate["next_step"] == "activate_version"
+    assert activation_gate["can_activate"] is False
+    assert activation_gate["next_step"] == "choose_provider_route"
 
     selected_provider_routes = agent_builder_api._selected_provider_routes(
-        {"selected_provider_routes": {"google_sheets_read": "openclaw"}},
+        {"selected_provider_routes": {"google_sheets_read": "openclaw", "telegram_delivery": "openclaw"}},
         preview,
     )
-    route_metadata = agent_builder_api._apply_selected_provider_routes(dict(draft["metadata"]), selected_provider_routes)
+    route_metadata = agent_builder_api._apply_selected_provider_routes(dict(metadata), selected_provider_routes)
     route_preflight = build_agent_integration_preflight(
         Cursor(),
         business_id="biz1",
@@ -1894,7 +1902,9 @@ def test_compiled_agent_creation_contract_google_sheets_to_telegram():
     )
 
     assert selected_provider_routes["google_sheets_read"]["provider"] == "openclaw"
+    assert selected_provider_routes["telegram_delivery"]["provider"] == "openclaw"
     assert route_metadata["agent_binding_provider_routes"]["google_sheets_read"]["route_provider"] == "openclaw"
+    assert route_metadata["agent_binding_provider_routes"]["telegram_delivery"]["route_provider"] == "openclaw"
     assert route_preflight["ready"] is True
     route_items = {
         item["key"]: item
@@ -1902,6 +1912,7 @@ def test_compiled_agent_creation_contract_google_sheets_to_telegram():
         if isinstance(item, dict)
     }
     assert route_items["google_sheets_read"]["resolution"] == "provider_route_openclaw_boundary"
+    assert route_items["telegram_delivery"]["resolution"] == "provider_route_openclaw_boundary"
 
 
 def test_agent_builder_create_blueprint_endpoint_returns_ready_preview_handoff(monkeypatch):
@@ -2192,6 +2203,20 @@ def test_agent_preview_run_and_activation_endpoints_enforce_safe_gate(monkeypatc
         "telegram_delivery": {
             "integration_id": "telegram-1",
             "provider": "telegram",
+        },
+    }
+    metadata["agent_binding_provider_routes"] = {
+        "google_sheets_read": {
+            "route_provider": "openclaw",
+            "provider": "openclaw",
+            "status": "active",
+            "integration_id": "openclaw_boundary",
+        },
+        "telegram_delivery": {
+            "route_provider": "openclaw",
+            "provider": "openclaw",
+            "status": "active",
+            "integration_id": "openclaw_boundary",
         },
     }
     cursor = FakeCursor()
@@ -2523,9 +2548,9 @@ def test_agent_builder_service_intelligence_marks_multiple_existing_routes():
     )
 
     assert state["preview"]["feasibility"]["status"] == "needs_choice"
-    assert telegram_item["state"] == "multiple_routes"
-    assert telegram_item["state_label"] == "Есть несколько вариантов"
-    assert telegram_item["next_action"] == "choose_existing_connection"
+    assert telegram_item["state"] == "route_choice"
+    assert telegram_item["state_label"] == "Нужно выбрать маршрут"
+    assert telegram_item["next_action"] == "choose_provider_route"
     assert telegram_item["connection_count"] == 2
 
 
@@ -4315,8 +4340,8 @@ def test_sync_blueprint_integration_metadata_records_selected_binding(monkeypatc
 
     assert metadata["agent_binding_integrations"]["google_sheets_read"]["integration_id"] == "sheets-1"
     assert metadata["custom_process"]["google_sheets_read"]["spreadsheet_id"] == "spreadsheet-1"
-    assert preflight["ready"] is True
-    assert preflight["items"][0]["resolution"] == "blueprint_metadata"
+    assert preflight["ready"] is False
+    assert preflight["items"][0]["resolution"] == "provider_route_required"
     assert preflight["items"][0]["integration_id"] == "sheets-1"
 
 
@@ -4441,9 +4466,9 @@ def test_agent_preflight_merges_answer_config_into_selected_connection():
 
     preflight = build_agent_integration_preflight(Cursor(), business_id="biz1", metadata=metadata, input_payload={})
 
-    assert preflight["ready"] is True
-    assert preflight["items"][0]["status"] == "ready"
-    assert preflight["items"][0]["resolution"] == "blueprint_metadata"
+    assert preflight["ready"] is False
+    assert preflight["items"][0]["status"] == "needs_connection"
+    assert preflight["items"][0]["resolution"] == "provider_route_required"
     assert preflight["items"][0]["integration_id"] == "sheets-1"
 
 

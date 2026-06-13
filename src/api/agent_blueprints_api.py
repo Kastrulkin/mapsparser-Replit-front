@@ -424,6 +424,8 @@ def _integrations_by_provider(values: list[dict]) -> dict:
 def _connection_plan_action(binding: dict, attached: list[dict], available: list[dict], catalog_item: dict) -> str:
     status = str(binding.get("status") or "").strip()
     resolution = str(binding.get("resolution") or "").strip()
+    if resolution in {"provider_route_required", "agent_integration_needs_provider_route", "builder_answer_needs_provider_route"}:
+        return "choose_route"
     if status in {"connected", "ready"}:
         return "native_ready" if resolution == "native_localos" else "ready"
     if available:
@@ -440,6 +442,7 @@ def _connection_plan_label(action: str) -> str:
     labels = {
         "ready": "Готово",
         "native_ready": "Готово в LocalOS",
+        "choose_route": "Выберите маршрут выполнения",
         "choose_existing": "Выберите существующее подключение",
         "complete_config": "Заполните недостающие поля",
         "connect_required": "Подключите сервис",
@@ -453,6 +456,8 @@ def _connection_plan_explanation(binding: dict, action: str) -> str:
     missing_config = binding.get("missing_config") if isinstance(binding.get("missing_config"), list) else []
     if action in {"ready", "native_ready"}:
         return "Подключение готово для preflight и активации."
+    if action == "choose_route":
+        return "Выберите маршрут выполнения для этого шага: существующий доступ, OpenClaw boundary, Maton key или ручной fallback."
     if action == "choose_existing":
         return "У бизнеса уже есть подходящий доступ. Выберите его для этого агента."
     if action == "complete_config":
@@ -467,6 +472,8 @@ def _connection_plan_route_summary(binding: dict, action: str, route_state: str)
     title = _agent_integration_provider_label(provider)
     if action in {"ready", "native_ready"}:
         return f"{title} уже подключён для этого агента."
+    if action == "choose_route":
+        return f"{title}: выберите route выполнения, прежде чем запускать preview или активацию."
     if action == "choose_existing":
         return f"У бизнеса уже есть подключение {title}; выберите его для шага workflow."
     if action == "complete_config":
@@ -486,6 +493,8 @@ def _connection_plan_why_blocked(binding: dict, action: str, route_state: str) -
     provider = str(binding.get("provider") or "").strip()
     title = _agent_integration_provider_label(provider)
     missing_config = binding.get("missing_config") if isinstance(binding.get("missing_config"), list) else []
+    if action == "choose_route":
+        return f"{title} найден или описан, но route выполнения ещё не выбран."
     if action == "choose_existing":
         return f"Есть сохранённый доступ {title}, но он ещё не выбран для этого агента."
     if action == "complete_config":
@@ -503,6 +512,15 @@ def _connection_plan_setup_cta(binding: dict, action: str, route_state: str, rec
     title = _agent_integration_provider_label(provider)
     if action in {"ready", "native_ready"}:
         return {"label": "Готово", "action": "none", "binding_key": binding_key, "provider": provider}
+    if action == "choose_route":
+        route_provider = str((recommended_route or {}).get("provider") or "").strip()
+        return {
+            "label": f"Выбрать route {title}",
+            "action": "choose_route",
+            "binding_key": binding_key,
+            "provider": provider,
+            "route_provider": route_provider,
+        }
     if action == "choose_existing":
         return {"label": f"Выбрать доступ {title}", "action": "choose_existing", "binding_key": binding_key, "provider": provider}
     if action == "complete_config":
@@ -1914,7 +1932,7 @@ def create_agent_blueprint_draft():
                     "setup_flow": setup_flow,
                 }
             ), 400
-        selected_provider_routes = _selected_provider_routes(payload, preview)
+        selected_provider_routes = _selected_provider_routes(payload, preview, connection_inventory)
         missing_provider_routes = _missing_required_provider_routes(preview, selected_provider_routes)
         if missing_provider_routes:
             return jsonify(
@@ -2284,15 +2302,16 @@ def _activation_connection_blocker(preflight_item: dict, plan_item: dict | None 
             message = f"Заполните настройки {_agent_integration_provider_label(provider)}: {', '.join([str(value) for value in missing_config])}."
         else:
             message = f"Подключите {_agent_integration_provider_label(provider)} или выберите provider route."
+    action = str(plan_item.get("action") or "connect_required")
     return {
-        "type": "connection",
+        "type": "route" if action == "choose_route" else "connection",
         "provider": provider,
         "binding_key": binding_key,
         "message": message,
         "missing_config": missing_config,
         "binding_status": str(preflight_item.get("status") or plan_item.get("binding_status") or ""),
         "resolution": str(preflight_item.get("resolution") or ""),
-        "action": str(plan_item.get("action") or "connect_required"),
+        "action": action,
         "route_state": str(plan_item.get("route_state") or ""),
         "route_summary": str(plan_item.get("route_summary") or ""),
         "primary_label": str(plan_item.get("primary_label") or _connection_plan_label(str(plan_item.get("action") or "connect_required"))),
@@ -2450,6 +2469,8 @@ def _activation_gate_next_step(blockers: list[dict]) -> str:
         return "create_version"
     if "compiled_validation" in blocker_types or "approval_policy" in blocker_types:
         return "fix_compiled_workflow"
+    if "route" in blocker_types:
+        return "choose_provider_route"
     if "connection" in blocker_types:
         return "connect_required_integrations"
     if "preview_run" in blocker_types:
@@ -2463,17 +2484,22 @@ def _activation_gate_human_blockers(blockers: list[dict], preflight: dict, compi
         if not isinstance(item, dict):
             continue
         blocker_type = str(item.get("type") or "").strip()
-        if blocker_type == "connection":
+        if blocker_type in {"connection", "route"}:
             provider = str(item.get("provider") or "").strip()
             message = str(item.get("message") or "").strip()
+            route_blocker = blocker_type == "route"
             result.append(
                 {
-                    "type": "connection",
+                    "type": blocker_type,
                     "provider": provider,
                     "binding_key": str(item.get("binding_key") or ""),
                     "title": _agent_integration_provider_label(provider),
-                    "message": message or f"Подключите {_agent_integration_provider_label(provider)}, затем запустите preflight ещё раз.",
-                    "action": "open_connections",
+                    "message": message or (
+                        f"Выберите маршрут выполнения для {_agent_integration_provider_label(provider)}, затем запустите preflight ещё раз."
+                        if route_blocker
+                        else f"Подключите {_agent_integration_provider_label(provider)}, затем запустите preflight ещё раз."
+                    ),
+                    "action": "choose_provider_route" if route_blocker else "open_connections",
                     "missing_config": item.get("missing_config") if isinstance(item.get("missing_config"), list) else [],
                     "route_state": str(item.get("route_state") or ""),
                     "route_summary": str(item.get("route_summary") or ""),
@@ -2541,6 +2567,8 @@ def _activation_gate_summary_text(ready: bool, next_step: str, human_blockers: l
         return str(human_blockers[0].get("message") or "")
     if next_step == "connect_required_integrations":
         return "Подключите обязательные сервисы перед активацией."
+    if next_step == "choose_provider_route":
+        return "Выберите маршруты выполнения перед активацией."
     if next_step == "fix_compiled_workflow":
         return "Исправьте логику агента перед активацией."
     if next_step == "create_version":
@@ -2554,6 +2582,7 @@ def _activation_gate_primary_action_label(next_step: str) -> str:
     labels = {
         "activate_version": "Активировать версию",
         "connect_required_integrations": "Открыть подключения",
+        "choose_provider_route": "Выбрать маршрут",
         "fix_compiled_workflow": "Открыть логику",
         "create_version": "Создать версию",
         "run_preview": "Запустить preview",
@@ -2585,6 +2614,8 @@ def _activation_connection_plan_from_preflight(
         status = str(item.get("status") or "").strip()
         resolution = str(item.get("resolution") or "").strip()
         action = "ready" if status == "ready" else "connect_required"
+        if resolution in {"provider_route_required", "agent_integration_needs_provider_route", "builder_answer_needs_provider_route"}:
+            action = "choose_route"
         if action == "ready" and resolution == "native_localos":
             action = "native_ready"
         attached = attached_by_provider.get(provider, [])
@@ -2640,6 +2671,8 @@ def _activation_connection_plan_from_preflight(
 def _activation_connection_explanation(provider: str, action: str, item: dict) -> str:
     if action in {"ready", "native_ready"}:
         return "Подключение готово для активации."
+    if action == "choose_route":
+        return "Выберите route выполнения: существующий доступ, OpenClaw boundary, Maton key или ручной fallback."
     missing_config = item.get("missing_config") if isinstance(item.get("missing_config"), list) else []
     if missing_config:
         return f"{_agent_integration_provider_label(provider)}: заполните {', '.join([str(value) for value in missing_config])}."

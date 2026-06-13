@@ -526,6 +526,7 @@ def _build_setup_flow(preview: Dict[str, Any], questions: List[Dict[str, str]]) 
     status = str(feasibility.get("status") or "ready")
     missing_connections = feasibility.get("missing_connections") if isinstance(feasibility.get("missing_connections"), list) else []
     connection_choices = feasibility.get("connection_choices") if isinstance(feasibility.get("connection_choices"), list) else []
+    route_choices = _route_choice_bindings(feasibility)
     unsupported = feasibility.get("unsupported") if isinstance(feasibility.get("unsupported"), list) else []
     forbidden = feasibility.get("forbidden") if isinstance(feasibility.get("forbidden"), list) else []
     compiler_review = preview.get("compiler_policy_review") if isinstance(preview.get("compiler_policy_review"), dict) else {}
@@ -533,14 +534,14 @@ def _build_setup_flow(preview: Dict[str, Any], questions: List[Dict[str, str]]) 
     compiler_blocked = bool(compiler_unsupported)
     blocking_questions = _blocking_clarification_questions(questions)
     can_create_draft = not blocking_questions and status not in {"forbidden", "unsupported", "needs_payment"} and not compiler_blocked
-    can_run_preview = can_create_draft and status == "ready"
+    can_run_preview = can_create_draft and status == "ready" and not route_choices
     can_activate = False
-    next_step = "cannot_create" if compiler_blocked else _setup_next_step(status, blocking_questions, missing_connections, connection_choices)
-    post_create_status = _post_create_status(status, missing_connections, connection_choices)
+    next_step = "cannot_create" if compiler_blocked else _setup_next_step(status, blocking_questions, missing_connections, connection_choices, route_choices)
+    post_create_status = _post_create_status(status, missing_connections, connection_choices, route_choices)
     return {
         "schema": "localos_agent_builder_setup_flow_v1",
         "status": "blocked" if compiler_blocked else _setup_flow_status(status, blocking_questions),
-        "primary_action": "cannot_create" if compiler_blocked else _setup_primary_action(status, blocking_questions, missing_connections, connection_choices),
+        "primary_action": "cannot_create" if compiler_blocked else _setup_primary_action(status, blocking_questions, missing_connections, connection_choices, route_choices),
         "next_step": next_step,
         "next_step_title": _setup_next_step_title(next_step),
         "next_step_description": _setup_next_step_description(next_step, missing_connections, connection_choices),
@@ -549,8 +550,8 @@ def _build_setup_flow(preview: Dict[str, Any], questions: List[Dict[str, str]]) 
         "can_activate": can_activate,
         "post_create_status": post_create_status,
         "post_create_next_step": _post_create_next_step(post_create_status),
-        "post_create_description": _post_create_description(post_create_status, missing_connections, connection_choices),
-        "activation_blockers": _activation_blockers(status, blocking_questions, missing_connections, connection_choices, forbidden, unsupported, compiler_unsupported),
+        "post_create_description": _post_create_description(post_create_status, missing_connections, connection_choices, route_choices),
+        "activation_blockers": _activation_blockers(status, blocking_questions, missing_connections, connection_choices, route_choices, forbidden, unsupported, compiler_unsupported),
         "steps": [
             {
                 "key": "understand",
@@ -569,10 +570,11 @@ def _build_setup_flow(preview: Dict[str, Any], questions: List[Dict[str, str]]) 
             {
                 "key": "connect",
                 "label": "Подключить сервисы",
-                "status": _connector_step_status(questions, missing_connections, connection_choices),
-                "description": _connector_step_description(missing_connections, connection_choices),
+                "status": _connector_step_status(questions, missing_connections, connection_choices, route_choices),
+                "description": _connector_step_description(missing_connections, connection_choices, route_choices),
                 "missing_connections": missing_connections,
                 "connection_choices": connection_choices,
+                "route_choices": route_choices,
             },
             {
                 "key": "policy",
@@ -610,6 +612,7 @@ def _setup_next_step(
     questions: List[Dict[str, str]],
     missing_connections: List[Dict[str, Any]],
     connection_choices: List[Dict[str, Any]],
+    route_choices: List[Dict[str, Any]],
 ) -> str:
     if feasibility_status in {"forbidden", "unsupported"}:
         return "cannot_create"
@@ -619,6 +622,8 @@ def _setup_next_step(
         return "top_up_balance"
     if connection_choices:
         return "create_draft_then_choose_connection"
+    if route_choices:
+        return "create_draft_then_choose_route"
     if missing_connections:
         return "create_draft_then_connect"
     return "create_draft_then_preview"
@@ -647,11 +652,25 @@ def _blocking_clarification_questions(questions: List[Dict[str, str]]) -> List[D
     return result
 
 
+def _route_choice_bindings(feasibility: Dict[str, Any]) -> List[Dict[str, Any]]:
+    bindings = feasibility.get("bindings") if isinstance(feasibility.get("bindings"), list) else []
+    result: List[Dict[str, Any]] = []
+    for item in bindings:
+        if not isinstance(item, dict):
+            continue
+        provider = str(item.get("provider") or "").strip()
+        catalog_item = _catalog_item_by_provider(provider)
+        if _preview_connection_action(item, catalog_item) == "choose_route":
+            result.append(item)
+    return result
+
+
 def _setup_next_step_title(next_step: str) -> str:
     labels = {
         "answer_clarification": "Ответьте на уточнение",
         "create_draft_then_connect": "Создайте draft, затем подключите сервисы",
         "create_draft_then_choose_connection": "Создайте draft, затем выберите доступ",
+        "create_draft_then_choose_route": "Создайте draft, затем выберите маршрут",
         "create_draft_then_preview": "Создайте draft и проверьте preview run",
         "top_up_balance": "Пополните баланс",
         "cannot_create": "Такой агент недоступен",
@@ -672,6 +691,8 @@ def _setup_next_step_description(
     if next_step == "create_draft_then_choose_connection":
         names = ", ".join([str(item.get("provider_title") or item.get("provider") or "") for item in connection_choices[:3]])
         return f"Draft можно создать сейчас. После создания выберите, какой доступ использовать: {names or 'подключение'}."
+    if next_step == "create_draft_then_choose_route":
+        return "Draft можно создать сейчас. После создания выберите execution route: OpenClaw, Maton, LocalOS или ручной fallback."
     if next_step == "create_draft_then_preview":
         return "Подключения выглядят готовыми. После создания откроем preview run: он проверит workflow без внешних действий."
     if next_step == "top_up_balance":
@@ -685,11 +706,14 @@ def _post_create_status(
     feasibility_status: str,
     missing_connections: List[Dict[str, Any]],
     connection_choices: List[Dict[str, Any]],
+    route_choices: List[Dict[str, Any]],
 ) -> str:
     if feasibility_status in {"forbidden", "unsupported", "needs_payment"}:
         return "blocked"
     if connection_choices:
         return "needs_connection_choice"
+    if route_choices:
+        return "needs_provider_route"
     if missing_connections:
         return "needs_connection"
     return "ready_for_preview"
@@ -699,6 +723,7 @@ def _post_create_next_step(post_create_status: str) -> str:
     values = {
         "needs_connection": "connect_required_integrations",
         "needs_connection_choice": "choose_existing_connection",
+        "needs_provider_route": "choose_provider_route",
         "ready_for_preview": "run_preview",
         "blocked": "review_blockers",
     }
@@ -709,6 +734,7 @@ def _post_create_description(
     post_create_status: str,
     missing_connections: List[Dict[str, Any]],
     connection_choices: List[Dict[str, Any]],
+    route_choices: List[Dict[str, Any]],
 ) -> str:
     if post_create_status == "ready_for_preview":
         return "После создания откроем preview run. Он покажет входные данные, шаги, artifacts и approval gate без внешних действий."
@@ -718,6 +744,9 @@ def _post_create_description(
     if post_create_status == "needs_connection":
         names = ", ".join([str(item.get("provider_title") or item.get("provider") or "") for item in missing_connections[:3]])
         return f"После создания нужно подключить: {names or 'обязательные сервисы'}."
+    if post_create_status == "needs_provider_route":
+        names = ", ".join([str(item.get("provider_title") or item.get("provider") or "") for item in route_choices[:3]])
+        return f"После создания нужно выбрать маршрут выполнения: {names or 'обязательные сервисы'}."
     return "Перед продолжением нужно разобраться с блокерами."
 
 
@@ -735,19 +764,27 @@ def _connector_step_status(
     questions: List[Dict[str, str]],
     missing_connections: List[Dict[str, Any]],
     connection_choices: List[Dict[str, Any]],
+    route_choices: List[Dict[str, Any]],
 ) -> str:
-    if missing_connections or connection_choices:
+    if missing_connections or connection_choices or route_choices:
         return "blocked" if questions else "active"
     return "done"
 
 
-def _connector_step_description(missing_connections: List[Dict[str, Any]], connection_choices: List[Dict[str, Any]]) -> str:
+def _connector_step_description(
+    missing_connections: List[Dict[str, Any]],
+    connection_choices: List[Dict[str, Any]],
+    route_choices: List[Dict[str, Any]],
+) -> str:
     if missing_connections:
         names = ", ".join([str(item.get("provider_title") or item.get("provider") or "") for item in missing_connections[:3]])
         return f"Нужно подключить: {names}."
     if connection_choices:
         names = ", ".join([str(item.get("provider_title") or item.get("provider") or "") for item in connection_choices[:3]])
         return f"Нужно выбрать доступ: {names}."
+    if route_choices:
+        names = ", ".join([str(item.get("provider_title") or item.get("provider") or "") for item in route_choices[:3]])
+        return f"Нужно выбрать маршрут выполнения: {names}."
     return "Обязательные подключения готовы или будут проверены на preflight."
 
 
@@ -776,6 +813,7 @@ def _setup_primary_action(
     questions: List[Dict[str, str]],
     missing_connections: List[Dict[str, Any]],
     connection_choices: List[Dict[str, Any]],
+    route_choices: List[Dict[str, Any]],
 ) -> str:
     if feasibility_status in {"forbidden", "unsupported"}:
         return "cannot_create"
@@ -783,6 +821,8 @@ def _setup_primary_action(
         return "answer_question"
     if connection_choices:
         return "choose_connection"
+    if route_choices:
+        return "choose_route"
     if missing_connections:
         return "connect_service"
     if feasibility_status == "needs_payment":
@@ -795,6 +835,7 @@ def _activation_blockers(
     questions: List[Dict[str, str]],
     missing_connections: List[Dict[str, Any]],
     connection_choices: List[Dict[str, Any]],
+    route_choices: List[Dict[str, Any]],
     forbidden: List[Dict[str, Any]],
     unsupported: List[Dict[str, Any]],
     compiler_unsupported: List[Dict[str, Any]] | None = None,
@@ -816,6 +857,14 @@ def _activation_blockers(
                 "type": "choice",
                 "provider": str(item.get("provider") or ""),
                 "message": str(item.get("provider_title") or item.get("provider") or "Нужно выбрать подключение"),
+            }
+        )
+    for item in route_choices:
+        blockers.append(
+            {
+                "type": "route",
+                "provider": str(item.get("provider") or ""),
+                "message": str(item.get("provider_title") or item.get("provider") or "Нужно выбрать маршрут выполнения"),
             }
         )
     for item in forbidden:
@@ -962,18 +1011,20 @@ def _build_connection_summary(feasibility: Dict[str, Any]) -> Dict[str, Any]:
     items = [_connection_summary_item(item) for item in bindings if isinstance(item, dict)]
     missing_count = len([item for item in items if item.get("action") == "connect_required"])
     choice_count = len([item for item in items if item.get("action") == "choose_existing"])
+    route_count = len([item for item in items if item.get("action") == "choose_route"])
     ready_count = len([item for item in items if item.get("action") in {"ready", "native_ready"}])
     blocked_count = len([item for item in items if item.get("action") == "planned_provider"]) + len(forbidden) + len(unsupported)
-    next_action = _connection_summary_next_action(status, missing_count, choice_count, blocked_count)
+    next_action = _connection_summary_next_action(status, missing_count, choice_count, route_count, blocked_count)
     return {
         "schema": "localos_agent_connection_summary_v1",
         "status": status,
-        "headline": _connection_summary_headline(status, missing_count, choice_count, ready_count, blocked_count),
+        "headline": _connection_summary_headline(status, missing_count, choice_count, route_count, ready_count, blocked_count),
         "next_action": next_action,
         "next_action_label": _connection_summary_next_action_label(next_action),
         "ready_count": ready_count,
         "missing_count": missing_count,
         "choice_count": choice_count,
+        "route_count": route_count,
         "blocked_count": blocked_count,
         "items": items,
         "forbidden": forbidden,
@@ -989,27 +1040,30 @@ def _build_connection_readiness(feasibility: Dict[str, Any]) -> Dict[str, Any]:
     services = [_connection_readiness_service(item) for item in bindings if isinstance(item, dict)]
     missing = [item for item in services if item.get("action") == "connect_required"]
     choices = [item for item in services if item.get("action") == "choose_existing"]
+    route_choices = [item for item in services if item.get("action") == "choose_route"]
     ready = [item for item in services if item.get("action") in {"ready", "native_ready"}]
     blocked = [item for item in services if item.get("action") == "planned_provider"]
-    next_action = _connection_readiness_next_action(status, missing, choices, blocked, forbidden, unsupported)
+    next_action = _connection_readiness_next_action(status, missing, choices, route_choices, blocked, forbidden, unsupported)
     return {
         "schema": "localos_agent_connection_readiness_v1",
         "status": status,
         "next_action": next_action,
-        "title": _connection_readiness_title(next_action, missing, choices, ready, blocked, forbidden, unsupported),
-        "description": _connection_readiness_description(next_action, missing, choices, ready, blocked, forbidden, unsupported),
+        "title": _connection_readiness_title(next_action, missing, choices, route_choices, ready, blocked, forbidden, unsupported),
+        "description": _connection_readiness_description(next_action, missing, choices, route_choices, ready, blocked, forbidden, unsupported),
         "required_count": len(services),
         "ready_count": len(ready),
         "missing_count": len(missing),
         "choice_count": len(choices),
+        "route_count": len(route_choices),
         "blocked_count": len(blocked) + len(forbidden) + len(unsupported),
         "can_create_draft": status not in {"forbidden", "unsupported", "needs_payment"},
-        "can_run_preview_after_create": status == "ready",
+        "can_run_preview_after_create": status == "ready" and not route_choices,
         "post_create_workspace": _connection_readiness_post_create_workspace(next_action),
         "services": services,
         "ready_services": ready,
         "missing_services": missing,
         "choice_services": choices,
+        "route_services": route_choices,
         "blocked_services": blocked,
         "forbidden": forbidden,
         "unsupported": unsupported,
@@ -1116,6 +1170,8 @@ def _connection_resolver_state(action: str, route: Dict[str, str]) -> str:
     route_state = str(route.get("state") or route.get("status") or "").strip()
     if action == "choose_existing":
         return "choose_existing"
+    if action == "choose_route":
+        return "choose_route"
     if action == "planned_provider" or route_state == "planned":
         return "planned_provider"
     if route_state in {"available", "manual", "connected"}:
@@ -1128,6 +1184,7 @@ def _connection_resolver_state_label(state: str) -> str:
         "ready": "Уже подключено",
         "native_ready": "Уже есть в LocalOS",
         "choose_existing": "Нужно выбрать доступ",
+        "choose_route": "Нужно выбрать маршрут",
         "available": "Можно подключить",
         "connect_required": "Нужно подключить",
         "planned_provider": "Пока недоступно",
@@ -1234,6 +1291,8 @@ def _service_intelligence_state(binding: Dict[str, Any], action: str, route: Dic
         return "already_connected" if action == "ready" else "localos_native"
     if action == "choose_existing":
         return "multiple_routes"
+    if action == "choose_route":
+        return "route_choice"
     route_state = str(route.get("state") or route.get("status") or "").strip()
     if action == "planned_provider" or route_state == "planned":
         return "planned"
@@ -1250,6 +1309,7 @@ def _service_intelligence_state_label(state: str) -> str:
         "localos_native": "Есть в LocalOS",
         "connectable": "Можно подключить",
         "multiple_routes": "Есть несколько вариантов",
+        "route_choice": "Нужно выбрать маршрут",
         "available_route": "Маршрут доступен",
         "planned": "Позже",
         "impossible": "Невозможно",
@@ -1273,6 +1333,8 @@ def _service_intelligence_explanation(
         return f"{service} доступен внутри LocalOS и проверяется policy/preflight."
     if state == "multiple_routes":
         return f"Для {service} найдено несколько подключений; выберите одно для compiled workflow."
+    if state == "route_choice":
+        return f"Для {service} выберите execution route: существующий доступ, OpenClaw, Maton или ручной fallback."
     if state == "planned":
         return f"{service} есть в provider registry, но этот маршрут пока не активирует агента."
     if state == "impossible":
@@ -1296,6 +1358,8 @@ def _service_intelligence_next_action(state: str, route: Dict[str, str]) -> str:
         return "safe_preview"
     if state == "multiple_routes":
         return "choose_existing_connection"
+    if state == "route_choice":
+        return "choose_provider_route"
     if state == "connectable":
         route_provider = str(route.get("provider") or "")
         if route_provider == "openclaw":
@@ -1319,6 +1383,8 @@ def _service_intelligence_headline(status: str, state_counts: Dict[str, int]) ->
         return "Перед запуском нужно решить вопрос с тарифом или балансом."
     if state_counts.get("multiple_routes"):
         return "Есть несколько подходящих подключений; нужно выбрать маршрут."
+    if state_counts.get("route_choice"):
+        return "Нужно выбрать маршруты выполнения для сервисов агента."
     if state_counts.get("connectable"):
         return "Часть сервисов можно подключить перед preview и активацией."
     if state_counts.get("planned") or state_counts.get("impossible"):
@@ -1517,6 +1583,7 @@ def _connection_readiness_next_action(
     status: str,
     missing: List[Dict[str, Any]],
     choices: List[Dict[str, Any]],
+    route_choices: List[Dict[str, Any]],
     blocked: List[Dict[str, Any]],
     forbidden: List[Dict[str, Any]],
     unsupported: List[Dict[str, Any]],
@@ -1529,11 +1596,13 @@ def _connection_readiness_next_action(
         return "choose_existing_connections"
     if missing:
         return "connect_missing_services"
+    if route_choices:
+        return "choose_provider_routes"
     return "create_draft_then_preview"
 
 
 def _connection_readiness_post_create_workspace(next_action: str) -> str:
-    if next_action in {"choose_existing_connections", "connect_missing_services"}:
+    if next_action in {"choose_existing_connections", "connect_missing_services", "choose_provider_routes"}:
         return "connections"
     if next_action == "create_draft_then_preview":
         return "run"
@@ -1544,6 +1613,7 @@ def _connection_readiness_title(
     next_action: str,
     missing: List[Dict[str, Any]],
     choices: List[Dict[str, Any]],
+    route_choices: List[Dict[str, Any]],
     ready: List[Dict[str, Any]],
     blocked: List[Dict[str, Any]],
     forbidden: List[Dict[str, Any]],
@@ -1557,6 +1627,8 @@ def _connection_readiness_title(
         return f"Нужно выбрать подключение: {len(choices)}"
     if next_action == "connect_missing_services":
         return f"Нужно подключить сервисы: {len(missing)}"
+    if next_action == "choose_provider_routes":
+        return f"Нужно выбрать маршруты выполнения: {len(route_choices)}"
     if ready:
         return f"Все подключения готовы: {len(ready)}"
     if not missing and not choices and not blocked and not forbidden and not unsupported:
@@ -1568,6 +1640,7 @@ def _connection_readiness_description(
     next_action: str,
     missing: List[Dict[str, Any]],
     choices: List[Dict[str, Any]],
+    route_choices: List[Dict[str, Any]],
     ready: List[Dict[str, Any]],
     blocked: List[Dict[str, Any]],
     forbidden: List[Dict[str, Any]],
@@ -1586,6 +1659,9 @@ def _connection_readiness_description(
     if next_action == "connect_missing_services":
         names = ", ".join([str(item.get("title") or item.get("provider") or "") for item in missing[:3]])
         return f"Draft можно создать, но preview и активация будут заблокированы, пока не подключены: {names}."
+    if next_action == "choose_provider_routes":
+        names = ", ".join([str(item.get("title") or item.get("provider") or "") for item in route_choices[:3]])
+        return f"Draft можно создать, но preview и активация будут заблокированы, пока не выбран маршрут выполнения: {names}."
     if ready:
         names = ", ".join([str(item.get("title") or item.get("provider") or "") for item in ready[:3]])
         return f"После создания LocalOS откроет safe preview run. Готовые доступы: {names}."
@@ -1614,7 +1690,7 @@ def _connection_summary_item(binding: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _connection_summary_next_action(status: str, missing_count: int, choice_count: int, blocked_count: int) -> str:
+def _connection_summary_next_action(status: str, missing_count: int, choice_count: int, route_count: int, blocked_count: int) -> str:
     if status in {"forbidden", "unsupported"} or blocked_count:
         return "review_blockers"
     if status == "needs_payment":
@@ -1623,6 +1699,8 @@ def _connection_summary_next_action(status: str, missing_count: int, choice_coun
         return "choose_existing_connection"
     if missing_count:
         return "connect_required_integrations"
+    if route_count:
+        return "choose_provider_routes"
     return "create_draft_then_preview"
 
 
@@ -1632,12 +1710,13 @@ def _connection_summary_next_action_label(next_action: str) -> str:
         "top_up_balance": "Пополнить баланс",
         "choose_existing_connection": "Выбрать подключение",
         "connect_required_integrations": "Подключить сервисы",
+        "choose_provider_routes": "Выбрать маршруты выполнения",
         "create_draft_then_preview": "Создать draft и открыть preview",
     }
     return labels.get(next_action, "Проверить подключения")
 
 
-def _connection_summary_headline(status: str, missing_count: int, choice_count: int, ready_count: int, blocked_count: int) -> str:
+def _connection_summary_headline(status: str, missing_count: int, choice_count: int, route_count: int, ready_count: int, blocked_count: int) -> str:
     if status == "forbidden":
         return "Запрос нельзя выполнить в LocalOS policy envelope."
     if status == "unsupported":
@@ -1650,6 +1729,8 @@ def _connection_summary_headline(status: str, missing_count: int, choice_count: 
         return f"Нужно выбрать существующее подключение: {choice_count}."
     if missing_count:
         return f"Нужно подключить сервисы: {missing_count}. Уже готово: {ready_count}."
+    if route_count:
+        return f"Нужно выбрать маршруты выполнения: {route_count}."
     return f"Все нужные подключения готовы: {ready_count}."
 
 
@@ -1815,15 +1896,30 @@ def _provider_label_from_catalog(provider: str) -> str:
     return provider
 
 
+def _provider_route_is_usable(route: Dict[str, Any]) -> bool:
+    provider = str(route.get("provider") or "").strip()
+    state = str(route.get("state") or route.get("status") or "").strip()
+    action = route.get("provider_action") if isinstance(route.get("provider_action"), dict) else {}
+    return bool(provider and state in {"available", "connected", "manual"} and action.get("available") is not False)
+
+
 def _preview_connection_action(binding: Dict[str, Any], catalog_item: Dict[str, Any]) -> str:
     status = str(binding.get("status") or "").strip()
     resolution = str(binding.get("resolution") or "").strip()
+    provider_routes = _provider_routes(binding.get("provider_routes"))
+    route_required = bool(provider_routes) and any(_provider_route_is_usable(route) for route in provider_routes)
     if status == "ready":
-        return "native_ready" if resolution == "native_localos" else "ready"
+        if resolution == "native_localos":
+            return "native_ready"
+        if route_required:
+            return "choose_route"
+        return "ready"
     if status == "needs_choice":
-        return "choose_existing"
+        return "choose_route" if route_required else "choose_existing"
     if str(catalog_item.get("status") or "").strip() == "planned":
         return "planned_provider"
+    if route_required:
+        return "choose_route"
     return "connect_required"
 
 
@@ -1831,6 +1927,7 @@ def _preview_connection_label(action: str) -> str:
     labels = {
         "ready": "Готово",
         "native_ready": "Готово в LocalOS",
+        "choose_route": "Выберите маршрут выполнения",
         "choose_existing": "Выберите существующее подключение",
         "connect_required": "Подключите сервис",
         "planned_provider": "Будет доступно позже",
@@ -1842,6 +1939,8 @@ def _preview_connection_explanation(binding: Dict[str, Any], action: str) -> str
     provider_title = str(binding.get("provider_title") or binding.get("provider") or "подключение")
     if action in {"ready", "native_ready"}:
         return f"{provider_title} уже можно использовать в агенте."
+    if action == "choose_route":
+        return f"Выберите, как LocalOS будет выполнять шаг {provider_title}: существующий доступ, OpenClaw, Maton или ручной fallback."
     if action == "choose_existing":
         count = binding.get("connection_count") if isinstance(binding.get("connection_count"), int) else 0
         return f"У бизнеса уже есть доступы {provider_title}. Выберите один после создания draft. Найдено: {count}."
@@ -1861,6 +1960,12 @@ def _preview_connection_setup_cta(binding: Dict[str, Any], action: str) -> Dict[
             "mode": "none",
             "label": "Готово",
             "description": f"{provider_title} уже доступен для safe preview.",
+        }
+    if action == "choose_route":
+        return {
+            "mode": "choose_route",
+            "label": "Выбрать маршрут выполнения",
+            "description": f"Выберите route для {provider_title}: существующий доступ, OpenClaw, Maton или ручной fallback.",
         }
     if action == "choose_existing":
         return {

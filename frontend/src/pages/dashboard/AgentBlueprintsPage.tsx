@@ -1301,23 +1301,8 @@ const autoSelectBuilderConnectionBindings = (preview?: AgentBuilderPreview | nul
   return selected;
 };
 
-const autoSelectBuilderProviderRoutes = (preview?: AgentBuilderPreview | null): Record<string, string> => {
-  const selected: Record<string, string> = {};
-  const addRoute = (key?: string, route?: AgentProviderRoute | null) => {
-    const bindingKey = String(key || '').trim();
-    const provider = String(route?.provider || '').trim();
-    const state = String(route?.state || route?.status || '').trim();
-    if (bindingKey && provider && ['available', 'connected', 'manual'].includes(state)) {
-      selected[bindingKey] = provider;
-    }
-  };
-  (preview?.connection_readiness?.services || []).forEach((service) => {
-    addRoute(service.key, service.recommended_route);
-  });
-  (preview?.connection_plan?.items || []).forEach((item) => {
-    addRoute(item.key, item.recommended_route);
-  });
-  return selected;
+const autoSelectBuilderProviderRoutes = (_preview?: AgentBuilderPreview | null): Record<string, string> => {
+  return {};
 };
 
 const builderRouteIsUsable = (route?: AgentProviderRoute | null): boolean => {
@@ -1471,12 +1456,16 @@ const buildBuilderCreationDecision = ({
   preview,
   questions,
   missingConnectionChoices,
+  missingProviderRouteKeys,
+  missingProviderRouteConfirmation,
   canCreateDraft,
   createDraftLabel,
 }: {
   preview: AgentBuilderPreview | null;
   questions: AgentBuilderQuestion[];
   missingConnectionChoices: Array<AgentConnectionSummary['items'] extends Array<infer Item> ? Item : never>;
+  missingProviderRouteKeys: string[];
+  missingProviderRouteConfirmation: boolean;
   canCreateDraft: boolean;
   createDraftLabel: string;
 }): AgentConnectionDecision => {
@@ -1511,6 +1500,25 @@ const buildBuilderCreationDecision = ({
       action: 'choose',
       cta: 'Выбрать ниже',
       bindingKey: missingConnectionChoices[0]?.key || '',
+    };
+  }
+  if (missingProviderRouteKeys.length) {
+    return {
+      tone: 'choice',
+      title: 'Выберите маршруты выполнения',
+      description: `Для compiled workflow нужно явно выбрать route: ${missingProviderRouteKeys.join(', ')}.`,
+      action: 'choose',
+      cta: 'Выбрать ниже',
+      bindingKey: missingProviderRouteKeys[0] || '',
+    };
+  }
+  if (missingProviderRouteConfirmation) {
+    return {
+      tone: 'choice',
+      title: 'Подтвердите маршруты выполнения',
+      description: 'LocalOS зафиксирует выбранные routes в версии агента и будет проверять их через preflight, limits, audit и approvals.',
+      action: 'choose',
+      cta: 'Подтвердить ниже',
     };
   }
   if (canCreateDraft) {
@@ -4217,10 +4225,12 @@ const DialogAgentBuilder = ({
   const requiredProviderRouteKeys = builderRequiredProviderRouteKeys(preview);
   const missingProviderRouteKeys = requiredProviderRouteKeys.filter((key) => !selectedProviderRoutes[key]);
   const providerRoutesRequireConfirmation = requiredProviderRouteKeys.length > 0;
-  const missingProviderRouteConfirmation = providerRoutesRequireConfirmation && acceptedProviderRoutes && missingProviderRouteKeys.length > 0;
+  const missingProviderRouteConfirmation = providerRoutesRequireConfirmation && (!acceptedProviderRoutes || missingProviderRouteKeys.length > 0);
   const canCreateDraft = preview?.setup_flow?.can_create_draft !== false
     && !missingConnectionChoices.length
-    && !missingCompilerPlanConfirmation;
+    && !missingCompilerPlanConfirmation
+    && !missingProviderRouteKeys.length
+    && !missingProviderRouteConfirmation;
   const createBlockers: Array<{ key: string; label: string }> = [];
   const addCreateBlocker = (key: string, label: string) => {
     const cleanKey = key.trim();
@@ -4239,8 +4249,10 @@ const DialogAgentBuilder = ({
   if (missingCompilerPlanConfirmation) {
     addCreateBlocker('compiler_plan_confirmation', 'Подтвердите план перед созданием агента.');
   }
-  if (missingProviderRouteConfirmation) {
+  if (missingProviderRouteKeys.length) {
     addCreateBlocker('provider_route_selection', `Выберите способ подключения для шагов: ${missingProviderRouteKeys.join(', ')}.`);
+  } else if (missingProviderRouteConfirmation) {
+    addCreateBlocker('provider_route_confirmation', 'Подтвердите выбранные маршруты выполнения.');
   }
   preview?.setup_flow?.activation_blockers?.slice(0, 4).forEach((item) => {
     addCreateBlocker(`blocker:${item.type || item.provider || item.message}`, item.message || connectorLabel(item.provider));
@@ -4255,13 +4267,19 @@ const DialogAgentBuilder = ({
     ? 'Создать агента и открыть preview'
     : missingConnectionChoices.length
       ? 'Сначала выберите подключение'
-      : preview?.setup_flow?.post_create_status === 'needs_connection' || preview?.setup_flow?.post_create_status === 'needs_connection_choice'
+      : missingProviderRouteKeys.length
+        ? 'Сначала выберите маршруты'
+        : missingProviderRouteConfirmation
+          ? 'Подтвердите маршруты'
+          : preview?.setup_flow?.post_create_status === 'needs_connection' || preview?.setup_flow?.post_create_status === 'needs_connection_choice'
       ? 'Создать агента и подключить сервисы'
       : 'Создать агента';
   const builderDecision = buildBuilderCreationDecision({
     preview,
     questions,
     missingConnectionChoices,
+    missingProviderRouteKeys,
+    missingProviderRouteConfirmation,
     canCreateDraft,
     createDraftLabel,
   });
@@ -4734,6 +4752,9 @@ const builderConnectionCardStatus = (action: string, selected: boolean) => {
   if (action === 'choose_existing') {
     return 'выбрать доступ';
   }
+  if (action === 'choose_route') {
+    return 'выбрать маршрут';
+  }
   if (action === 'connect_required') {
     return 'нужен способ';
   }
@@ -4752,6 +4773,9 @@ const builderConnectionCardHint = (action: string, provider: string) => {
   }
   if (action === 'choose_existing') {
     return 'У бизнеса есть несколько подходящих подключений. Выберите одно для compiled workflow.';
+  }
+  if (action === 'choose_route') {
+    return 'Выберите маршрут выполнения: существующий доступ, OpenClaw boundary, Maton key или ручной fallback.';
   }
   if (action === 'connect_required') {
     return `${connectorLabel(provider)} нужен workflow, но доступ ещё не выбран.`;
@@ -4949,6 +4973,9 @@ const builderConnectionStatusCopy = (service: AgentConnectionReadinessService) =
   }
   if (action === 'choose_existing') {
     return 'Выберите доступ';
+  }
+  if (action === 'choose_route') {
+    return 'Выберите маршрут';
   }
   if (action === 'planned_provider') {
     return 'Пока недоступно';
@@ -7369,7 +7396,7 @@ const connectionActionTone = (action: string) => {
   if (action === 'ready' || action === 'native_ready') {
     return 'bg-emerald-50 text-emerald-700 ring-emerald-200';
   }
-  if (action === 'choose_existing') {
+  if (action === 'choose_existing' || action === 'choose_route') {
     return 'bg-sky-50 text-sky-700 ring-sky-200';
   }
   if (action === 'planned_provider') {

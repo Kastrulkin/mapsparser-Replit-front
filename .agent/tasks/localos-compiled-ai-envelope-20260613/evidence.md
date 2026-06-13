@@ -2,58 +2,61 @@
 
 ## Summary
 - Overall status: PASS for current phase scope.
-- Last updated: 2026-06-13T16:05:00+03:00
-- Current phase: Phase 8, finance apply UI after approval.
+- Last updated: 2026-06-13T16:45:00+03:00
+- Current phase: Phase 9, real connector selection UX.
 
 ## Acceptance criteria evidence
 
 ### AC1
 - Status: PASS
 - Proof:
-  - `finance.transaction.create` capability execution now creates the approved proposal/request without writing LocalOS Finance entries automatically.
-  - `tests/test_agent_blueprint_layer.py::test_runner_passes_compiled_step_rows_to_next_capability_without_runtime_ai`
+  - Builder preview now treats Google Sheets, Telegram, and Maton as route-required providers.
+  - `tests/test_agent_blueprint_layer.py::test_agent_builder_session_preview_includes_feasibility_for_required_connectors`
 
 ### AC2
 - Status: PASS
 - Proof:
-  - Agent run observability exposes a finance transaction request after approval with `apply_state = apply_ready`, `can_apply = true`, and an apply endpoint.
-  - `tests/test_agent_blueprint_layer.py::test_runner_applies_finance_requests_only_after_explicit_apply`
+  - Google Sheets -> Telegram creation requires two provider route bindings and blocks create/preview flow until routes are selected and confirmed.
+  - `tests/test_agent_blueprint_layer.py::test_agent_builder_api_requires_selected_provider_routes_for_required_bindings`
+  - `tests/test_agent_blueprint_layer.py::test_compiled_agent_creation_contract_google_sheets_to_telegram`
 
 ### AC3
 - Status: PASS
 - Proof:
-  - `/dashboard/agents` advanced run detail renders “Применить в финансы” only for approved, apply-ready finance requests.
-  - Frontend production build passed.
+  - Preflight merges selected resource/credential config with `agent_binding_provider_routes`; without route it reports `provider_route_required`, with route it becomes ready.
+  - `tests/test_agent_blueprint_layer.py::test_compiled_agent_creation_contract_google_sheets_to_telegram`
+  - `tests/test_agent_blueprint_layer.py::test_agent_preflight_accepts_openclaw_provider_route_for_binding`
 
 ### AC4
 - Status: PASS
 - Proof:
-  - Explicit apply writes LocalOS Finance entries, records `agent_action_ledger`, updates step output, and returns the refreshed run.
-  - `tests/test_agent_blueprint_layer.py::test_runner_applies_finance_requests_only_after_explicit_apply`
+  - Activation gate and post-create handoff now return `choose_provider_route` for route blockers instead of generic connection steps.
+  - `tests/test_agent_blueprint_layer.py::test_compiled_agent_creation_contract_google_sheets_to_telegram`
+  - `tests/test_agent_blueprint_layer.py::test_agent_preview_run_and_activation_endpoints_enforce_safe_gate`
 
 ### AC5
 - Status: PASS
 - Proof:
-  - Full agent blueprint suite passed: 153 tests.
+  - `/dashboard/agents` builder no longer auto-selects recommended routes; user must explicitly choose and confirm provider routes before draft creation.
   - Frontend production build passed.
 
 ### AC6
 - Status: PASS
 - Proof:
+  - Full agent blueprint suite passed: 153 tests.
+  - Frontend production build passed.
   - No schema migration was added.
   - `git diff --check` passed.
 
 ## Commands run
-- `venv/bin/python -m pytest tests/test_agent_blueprint_layer.py::test_agent_blueprint_routes_are_owned_by_blueprint tests/test_agent_blueprint_layer.py::test_runner_passes_compiled_step_rows_to_next_capability_without_runtime_ai tests/test_agent_blueprint_layer.py::test_runner_applies_finance_requests_only_after_explicit_apply tests/test_agent_blueprint_layer.py::test_approved_domain_executor_applies_finance_transactions_after_human_gate -q`
 - `venv/bin/python -m pytest tests/test_agent_blueprint_layer.py -q`
 - `npm run build` from `frontend/`
 - `git diff --check`
 
 ## Raw artifacts
-- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase8-finance-apply-focused-tests.txt`
-- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase8-agent-blueprint-tests.txt`
-- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase8-frontend-build.txt`
-- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase8-diff-check.txt`
+- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase9-connector-selection-agent-blueprint-tests.txt`
+- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase9-connector-selection-frontend-build.txt`
+- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase9-connector-selection-diff-check.txt`
 
 ## Known gaps
-- Full objective remains active: more production provider write handlers, live visual QA on production, and broader billing ledger coverage for compile/preview/run remain later phases.
+- Full objective remains active: live provider-specific selection screens can still be polished, more production provider write handlers remain later phases, and billing ledger coverage for compile/preview/run should continue.

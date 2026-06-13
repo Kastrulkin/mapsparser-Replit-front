@@ -879,8 +879,7 @@ def create_blueprint_from_agent_builder_session(session_id: str):
         selected_provider_routes = _selected_provider_routes(payload, preview, connection_inventory)
         missing_provider_routes = _missing_required_provider_routes(preview, selected_provider_routes)
         provider_route_errors = _provider_route_selection_errors(selected_provider_routes)
-        enforce_provider_routes = bool(payload.get("enforce_provider_routes"))
-        if enforce_provider_routes and missing_provider_routes:
+        if missing_provider_routes:
             return jsonify(
                 {
                     "success": False,
@@ -1088,16 +1087,22 @@ def _build_post_create_handoff(connection_preflight: dict) -> dict:
     labels = [provider.replace("_", " ") for provider in providers[:3]]
     next_binding_key = _first_missing_binding_key(missing)
     next_binding = _connection_plan_item_by_key(connection_plan, next_binding_key)
+    next_action = str(next_binding.get("action") or "").strip()
+    route_required = next_action == "choose_route"
     return {
         "schema": "localos_agent_post_create_handoff_v1",
-        "status": "needs_connections",
-        "next_step": "connect_required_integrations",
+        "status": "needs_provider_route" if route_required else "needs_connections",
+        "next_step": "choose_provider_route" if route_required else "connect_required_integrations",
         "workspace_mode": "connections",
         "next_binding_key": next_binding_key,
         "next_binding": next_binding,
         "next_route": _preferred_handoff_route(next_binding),
-        "title": "Draft агента создан. Остались подключения",
-        "description": f"Подключите {', '.join(labels) if labels else 'обязательные источники'}, затем запустите preflight и preview run.",
+        "title": "Draft агента создан. Выберите маршрут" if route_required else "Draft агента создан. Остались подключения",
+        "description": (
+            f"Выберите, как LocalOS выполнит шаги для: {', '.join(labels) if labels else 'обязательные источники'}, затем запустите preflight и preview run."
+            if route_required
+            else f"Подключите {', '.join(labels) if labels else 'обязательные источники'}, затем запустите preflight и preview run."
+        ),
         "missing_bindings": missing,
         "items": items,
         "connection_plan": connection_plan,
@@ -1166,6 +1171,8 @@ def _build_handoff_connection_plan(items: list) -> dict:
 
 
 def _handoff_connection_action(status: str, resolution: str, catalog_item: dict) -> str:
+    if resolution in {"provider_route_required", "agent_integration_needs_provider_route", "builder_answer_needs_provider_route"}:
+        return "choose_route"
     if status == "ready":
         return "native_ready" if resolution == "native_localos" else "ready"
     if str(catalog_item.get("status") or "").strip() == "planned":
@@ -1177,6 +1184,7 @@ def _handoff_connection_label(action: str) -> str:
     labels = {
         "ready": "Готово",
         "native_ready": "Готово в LocalOS",
+        "choose_route": "Выберите маршрут выполнения",
         "connect_required": "Подключите сервис",
         "planned_provider": "Будет доступно позже",
     }
@@ -1251,6 +1259,8 @@ def _recommended_handoff_route_reason(route: dict, action: str, provider: str) -
 def _handoff_connection_explanation(provider: str, action: str, item: dict) -> str:
     if action in {"ready", "native_ready"}:
         return "Подключение готово для preflight и активации."
+    if action == "choose_route":
+        return "Выберите route выполнения: существующий доступ, OpenClaw boundary, Maton key или ручной fallback."
     if action == "planned_provider":
         return "Этот provider есть в roadmap, но пока недоступен для активации агента."
     missing_config = item.get("missing_config") if isinstance(item.get("missing_config"), list) else []
@@ -1263,6 +1273,8 @@ def _handoff_connection_route_summary(provider: str, action: str, route_state: s
     if action in {"ready", "native_ready"}:
         return "Provider route готов, можно переходить к safe preview."
     title = provider.replace("_", " ") or "подключение"
+    if action == "choose_route":
+        return f"{title}: выберите route выполнения перед safe preview."
     missing_config = item.get("missing_config") if isinstance(item.get("missing_config"), list) else []
     if missing_config:
         return f"{title}: заполните настройки {', '.join([str(value) for value in missing_config])}."
