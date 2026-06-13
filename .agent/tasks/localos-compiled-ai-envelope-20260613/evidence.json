@@ -1,60 +1,62 @@
 {
   "task_id": "localos-compiled-ai-envelope-20260613",
   "overall_status": "PASS",
-  "phase": "phase_6_sheets_finance_handler_wiring",
+  "phase": "phase_7_real_connector_ux_billing_breakdown",
   "acceptance_criteria": [
     {
       "id": "AC1",
-      "text": "Default AgentBlueprintRunner uses the real capability map.",
+      "text": "Activation/preflight connection plans include existing integrations and user-facing blockers.",
       "status": "PASS",
       "proof": [
-        "src/services/agent_blueprint_runner.py::AgentBlueprintRunner.__init__"
+        "src/api/agent_blueprints_api.py::_activation_connection_plan_from_preflight",
+        "tests/test_agent_blueprint_layer.py::test_activation_connection_blocker_keeps_binding_route_context"
       ],
       "gaps": []
     },
     {
       "id": "AC2",
-      "text": "Default runner exposes google_sheets.read_rows.",
+      "text": "Existing Google/Maton/LocalOS connections become explicit choose-existing actions.",
       "status": "PASS",
       "proof": [
-        "tests/test_agent_blueprint_layer.py::test_default_runner_is_wired_to_real_google_sheets_and_finance_handlers"
+        "tests/test_agent_blueprint_layer.py::test_agent_connection_plan_turns_bindings_into_user_next_actions"
       ],
       "gaps": []
     },
     {
       "id": "AC3",
-      "text": "Default runner exposes finance.transaction.create.",
+      "text": "Agents UI renders missing preflight reason and setup CTA instead of raw binding state.",
       "status": "PASS",
       "proof": [
-        "tests/test_agent_blueprint_layer.py::test_default_runner_is_wired_to_real_google_sheets_and_finance_handlers"
+        "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx::AgentConnectionPlanPanel",
+        "frontend build passed"
       ],
       "gaps": []
     },
     {
       "id": "AC4",
-      "text": "Google Sheets read handler remains covered and safe.",
+      "text": "Agent metrics expose product billing categories for compile, preview, run, external actions, and operator chat.",
       "status": "PASS",
       "proof": [
-        "tests/test_agent_blueprint_layer.py::test_google_sheets_read_rows_capability_uses_native_provider"
+        "src/services/agent_metrics.py::_build_billing_breakdown",
+        "tests/test_agent_blueprint_layer.py::test_agent_metrics_summary_reports_compiled_runtime_health"
       ],
       "gaps": []
     },
     {
       "id": "AC5",
-      "text": "Finance transaction handler remains request/proposal-only without direct LocalOS write.",
+      "text": "Regression suite for compiled agent layer passes.",
       "status": "PASS",
       "proof": [
-        "tests/test_agent_blueprint_layer.py::test_finance_transaction_create_capability_normalizes_rows_without_localos_write"
+        "152 agent blueprint tests passed"
       ],
       "gaps": []
     },
     {
       "id": "AC6",
-      "text": "Agent-related tests and frontend production build pass.",
+      "text": "No schema migration is introduced and diff is clean.",
       "status": "PASS",
       "proof": [
-        "5 focused sheets/finance/Maton tests passed",
-        "152 agent blueprint tests passed",
+        "git diff --check passed",
         "frontend build passed"
       ],
       "gaps": []
@@ -63,21 +65,23 @@
   "changed_files": [
     ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.json",
     ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.md",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/spec.md",
     ".agent/tasks/localos-compiled-ai-envelope-20260613/verdict.json",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase6-agent-blueprint-tests.txt",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase6-frontend-build.txt",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase6-sheets-finance-tests.txt",
-    "src/services/agent_blueprint_runner.py",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase7-agent-blueprint-tests.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase7-diff-check.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase7-focused-tests.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase7-frontend-build.txt",
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
+    "src/api/agent_blueprints_api.py",
+    "src/services/agent_metrics.py",
     "tests/test_agent_blueprint_layer.py"
   ],
   "commands_for_fresh_verifier": [
-    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'default_runner_is_wired or google_sheets_read_rows_capability_uses_native_provider or finance_transaction_create_capability_normalizes_rows_without_localos_write or maton_delivery' -x",
-    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -x",
-    "npm --prefix frontend run build"
+    "venv/bin/python -m pytest tests/test_agent_blueprint_layer.py -q",
+    "cd frontend && npm run build",
+    "git diff --check"
   ],
   "known_gaps": [
     "Full LocalOS compiled AI envelope objective remains active.",
-    "Provider UX for choosing real Google credentials, finance apply UI, billing ledger expansion, and additional provider handlers remain later phases."
+    "Deeper finance apply approval UI, more production provider write handlers, and live visual QA on production remain later phases."
   ]
 }

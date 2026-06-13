@@ -1,0 +1,5 @@
+Command:
+venv/bin/python -m pytest tests/test_agent_blueprint_layer.py::test_agent_preview_run_and_activation_endpoints_enforce_safe_gate tests/test_agent_blueprint_layer.py::test_activation_connection_blocker_keeps_binding_route_context tests/test_agent_blueprint_layer.py::test_agent_metrics_summary_reports_compiled_runtime_health tests/test_agent_blueprint_layer.py::test_agent_connection_plan_turns_bindings_into_user_next_actions -q
+
+Result:
+4 passed in 0.54s

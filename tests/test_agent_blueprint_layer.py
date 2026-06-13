@@ -795,6 +795,9 @@ def test_agent_metrics_summary_reports_compiled_runtime_health():
     assert metrics["approvals"]["pending"] == 1
     assert metrics["cost_tokens"]["reserved_tokens"] == 10
     assert metrics["cost_tokens"]["total_cost"] == 0.14
+    assert metrics["billing_breakdown"]["schema"] == "localos_agent_billing_breakdown_v1"
+    assert metrics["billing_breakdown"]["items"][0]["key"] == "agent_creation"
+    assert any(item["key"] == "external_actions" for item in metrics["cost_tokens"]["breakdown"])
 
 
 def test_existing_agent_templates_publish_compiled_artifact_candidate():
@@ -4458,7 +4461,18 @@ def test_activation_connection_blocker_keeps_binding_route_context():
         ],
     }
 
-    connection_plan = agent_blueprints_api._activation_connection_plan_from_preflight(preflight)
+    connection_plan = agent_blueprints_api._activation_connection_plan_from_preflight(
+        preflight,
+        available_integrations=[
+            {
+                "id": "sheet-existing",
+                "provider": "google_sheets",
+                "status": "active",
+                "display_name": "Orders sheet",
+            }
+        ],
+        provider_catalog=agent_blueprints_api._agent_integration_provider_catalog(),
+    )
     plan_item = connection_plan["items"][0]
     blocker = agent_blueprints_api._activation_connection_blocker(preflight["items"][0], plan_item)
     human_blockers = agent_blueprints_api._activation_gate_human_blockers([blocker], preflight, {})
@@ -4467,6 +4481,10 @@ def test_activation_connection_blocker_keeps_binding_route_context():
     assert blocker["missing_config"] == ["spreadsheet_id", "sheet_name"]
     assert blocker["route_state"] == "available"
     assert blocker["preferred_route"]["provider"] == "openclaw"
+    assert plan_item["action"] == "choose_existing"
+    assert plan_item["setup_cta"]["action"] == "choose_existing"
+    assert "Orders sheet" == plan_item["existing_integrations"][0]["display_name"]
+    assert "сохранённый доступ" in plan_item["why_blocked"]
     assert any(item["provider"] == "openclaw" for item in blocker["provider_routes"])
     assert human_blockers[0]["binding_key"] == "google_sheets_read"
     assert human_blockers[0]["preferred_route"]["provider"] == "openclaw"
@@ -4772,6 +4790,8 @@ def test_agent_connection_plan_turns_bindings_into_user_next_actions():
     assert plan["items"][0]["action"] == "choose_existing"
     assert plan["items"][0]["route_state"] == "available"
     assert "выберите" in plan["items"][0]["route_summary"].lower()
+    assert plan["items"][0]["setup_cta"]["action"] == "choose_existing"
+    assert "сохранённый доступ" in plan["items"][0]["why_blocked"]
     assert plan["items"][0]["existing_integrations"][0]["display_name"] == "Orders sheet"
     assert any(item["provider"] == "openclaw" for item in plan["items"][0]["provider_routes"])
     assert any(item["provider"] == "native_localos" for item in plan["items"][0]["provider_paths"])

@@ -276,6 +276,8 @@ def _agent_connection_plan(
                 "explanation": _connection_plan_explanation(binding, action),
                 "route_state": route_state,
                 "route_summary": _connection_plan_route_summary(binding, action, route_state),
+                "why_blocked": _connection_plan_why_blocked(binding, action, route_state),
+                "setup_cta": _connection_plan_setup_cta(binding, action, route_state, recommended_route),
                 "execution_boundary": str(binding.get("execution_boundary") or ""),
                 "autonomy_level": str(binding.get("autonomy_level") or ""),
                 "credential_state": str(binding.get("credential_state") or ""),
@@ -478,6 +480,50 @@ def _connection_plan_route_summary(binding: dict, action: str, route_state: str)
     return f"Для {title} нет разрешённого provider route."
 
 
+def _connection_plan_why_blocked(binding: dict, action: str, route_state: str) -> str:
+    if action in {"ready", "native_ready"}:
+        return ""
+    provider = str(binding.get("provider") or "").strip()
+    title = _agent_integration_provider_label(provider)
+    missing_config = binding.get("missing_config") if isinstance(binding.get("missing_config"), list) else []
+    if action == "choose_existing":
+        return f"Есть сохранённый доступ {title}, но он ещё не выбран для этого агента."
+    if action == "complete_config":
+        return f"{title} выбран, но не хватает настроек: {', '.join([str(item) for item in missing_config])}."
+    if action == "planned_provider":
+        return f"{title} есть в каталоге, но provider route пока не доступен для production-запуска."
+    if route_state in {"available", "manual"}:
+        return f"Нужно выбрать разрешённый route или добавить доступ {title} перед preview."
+    return f"У LocalOS нет разрешённого подключения для {title}."
+
+
+def _connection_plan_setup_cta(binding: dict, action: str, route_state: str, recommended_route: dict) -> dict:
+    provider = str(binding.get("provider") or "").strip()
+    binding_key = str(binding.get("key") or provider or "").strip()
+    title = _agent_integration_provider_label(provider)
+    if action in {"ready", "native_ready"}:
+        return {"label": "Готово", "action": "none", "binding_key": binding_key, "provider": provider}
+    if action == "choose_existing":
+        return {"label": f"Выбрать доступ {title}", "action": "choose_existing", "binding_key": binding_key, "provider": provider}
+    if action == "complete_config":
+        return {"label": f"Заполнить {title}", "action": "complete_config", "binding_key": binding_key, "provider": provider}
+    route_provider = str((recommended_route or {}).get("provider") or "").strip()
+    if route_provider:
+        route_label = str((recommended_route or {}).get("label") or route_provider).strip()
+        return {
+            "label": f"Выбрать route: {route_label}",
+            "action": "choose_route",
+            "binding_key": binding_key,
+            "provider": provider,
+            "route_provider": route_provider,
+        }
+    if action == "planned_provider":
+        return {"label": "Недоступно сейчас", "action": "planned", "binding_key": binding_key, "provider": provider}
+    if route_state == "manual":
+        return {"label": "Оставить ручной fallback", "action": "choose_route", "binding_key": binding_key, "provider": provider, "route_provider": "manual"}
+    return {"label": f"Подключить {title}", "action": "connect", "binding_key": binding_key, "provider": provider}
+
+
 def _connection_plan_provider_paths(catalog_item: dict) -> list[dict]:
     providers = catalog_item.get("providers") if isinstance(catalog_item.get("providers"), list) else []
     result = []
@@ -513,6 +559,28 @@ def _agent_integration_ids(metadata: dict) -> list[str]:
         if item_id and item_id not in result:
             result.append(item_id)
     return result
+
+
+def _agent_connection_context(cursor, business_id: str, metadata: dict) -> dict:
+    attached_ids = _agent_integration_ids(metadata)
+    try:
+        attached_rows = _load_agent_integrations(cursor, business_id, attached_ids) if attached_ids else []
+        all_rows = _load_agent_integrations(cursor, business_id)
+    except Exception:
+        attached_rows = []
+        all_rows = []
+    attached_lookup = {str(row.get("id") or "") for row in attached_rows}
+    return {
+        "attached_rows": attached_rows,
+        "all_rows": all_rows,
+        "attached_integrations": [_normalize_agent_integration(row, attached=True) for row in attached_rows],
+        "available_integrations": [
+            _normalize_agent_integration(row, attached=False)
+            for row in all_rows
+            if str(row.get("id") or "") not in attached_lookup
+        ],
+        "provider_catalog": _agent_integration_provider_catalog(),
+    }
 
 
 def _agent_integration_binding_status(metadata: dict, integrations: list[dict]) -> list[dict]:
@@ -1945,7 +2013,13 @@ def create_agent_blueprint_draft():
             metadata=metadata,
             input_payload={},
         )
-        connection_plan = _activation_connection_plan_from_preflight(connection_preflight)
+        connection_context = _agent_connection_context(cursor, business_id, metadata)
+        connection_plan = _activation_connection_plan_from_preflight(
+            connection_preflight,
+            attached_integrations=connection_context["attached_integrations"],
+            available_integrations=connection_context["available_integrations"],
+            provider_catalog=connection_context["provider_catalog"],
+        )
         post_create_handoff = _build_agent_post_connect_handoff(connection_plan)
         db.conn.commit()
         blueprint = _load_blueprint(cursor, blueprint_id)
@@ -2145,7 +2219,13 @@ def _build_activation_gate_summary(cursor, blueprint: dict, active_version: dict
         metadata=metadata,
         input_payload={},
     )
-    connection_plan = _activation_connection_plan_from_preflight(preflight)
+    connection_context = _agent_connection_context(cursor, str(blueprint.get("business_id") or ""), metadata)
+    connection_plan = _activation_connection_plan_from_preflight(
+        preflight,
+        attached_integrations=connection_context["attached_integrations"],
+        available_integrations=connection_context["available_integrations"],
+        provider_catalog=connection_context["provider_catalog"],
+    )
     connection_plan_items = connection_plan.get("items") if isinstance(connection_plan.get("items"), list) else []
     connection_plan_by_key = {
         str(item.get("key") or ""): item
@@ -2482,11 +2562,18 @@ def _activation_gate_primary_action_label(next_step: str) -> str:
     return labels.get(next_step, "Проверить требования")
 
 
-def _activation_connection_plan_from_preflight(preflight: dict) -> dict:
+def _activation_connection_plan_from_preflight(
+    preflight: dict,
+    attached_integrations: list[dict] | None = None,
+    available_integrations: list[dict] | None = None,
+    provider_catalog: list[dict] | None = None,
+) -> dict:
     items = preflight.get("items") if isinstance(preflight.get("items"), list) else []
+    attached_by_provider = _integrations_by_provider(attached_integrations or [])
+    available_by_provider = _integrations_by_provider(available_integrations or [])
     catalog_by_provider = {
         str(item.get("provider") or "").strip(): item
-        for item in _agent_integration_provider_catalog()
+        for item in (provider_catalog or _agent_integration_provider_catalog())
         if isinstance(item, dict) and str(item.get("provider") or "").strip()
     }
     plan_items = []
@@ -2500,6 +2587,12 @@ def _activation_connection_plan_from_preflight(preflight: dict) -> dict:
         action = "ready" if status == "ready" else "connect_required"
         if action == "ready" and resolution == "native_localos":
             action = "native_ready"
+        attached = attached_by_provider.get(provider, [])
+        available = available_by_provider.get(provider, [])
+        if action == "connect_required" and available:
+            action = "choose_existing"
+        elif action == "connect_required" and attached:
+            action = "complete_config"
         provider_routes = connector_provider_routes(provider, str(item.get("capability") or ""))
         route_state = "connected" if action in {"ready", "native_ready"} else best_provider_route_state(provider_routes)
         recommended_route = _preferred_provider_route(provider_routes)
@@ -2517,6 +2610,8 @@ def _activation_connection_plan_from_preflight(preflight: dict) -> dict:
                 "explanation": _activation_connection_explanation(provider, action, item),
                 "route_state": route_state,
                 "route_summary": _connection_plan_route_summary(item, action, route_state),
+                "why_blocked": _connection_plan_why_blocked(item, action, route_state),
+                "setup_cta": _connection_plan_setup_cta(item, action, route_state, recommended_route),
                 "execution_boundary": str(item.get("execution_boundary") or ""),
                 "autonomy_level": str(item.get("autonomy_level") or ""),
                 "credential_state": str(item.get("credential_state") or ""),
@@ -2528,8 +2623,8 @@ def _activation_connection_plan_from_preflight(preflight: dict) -> dict:
                 "recommended_route_reason": _connection_plan_recommended_route_reason(action, recommended_route),
                 "missing_config": item.get("missing_config") if isinstance(item.get("missing_config"), list) else [],
                 "approval_required": bool(item.get("required", True)),
-                "existing_integrations": [],
-                "attached_integrations": [],
+                "existing_integrations": [_connection_plan_integration(value) for value in available[:5]],
+                "attached_integrations": [_connection_plan_integration(value) for value in attached[:5]],
                 "provider_paths": _connection_plan_provider_paths(catalog_item),
             }
         )
@@ -3315,7 +3410,13 @@ def preflight_agent_blueprint_run(blueprint_id: str):
             "approval_required_for_external_actions": True,
             "next_step": "start_preview_run" if bool(preflight.get("ready")) else "connect_required_integrations",
         }
-        connection_plan = _activation_connection_plan_from_preflight(preflight)
+        connection_context = _agent_connection_context(cursor, str(blueprint.get("business_id") or ""), metadata)
+        connection_plan = _activation_connection_plan_from_preflight(
+            preflight,
+            attached_integrations=connection_context["attached_integrations"],
+            available_integrations=connection_context["available_integrations"],
+            provider_catalog=connection_context["provider_catalog"],
+        )
         return jsonify(
             {
                 "success": True,

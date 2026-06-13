@@ -2,54 +2,57 @@
 
 ## Summary
 - Overall status: PASS for current phase scope.
-- Last updated: 2026-06-13T15:08:00+03:00
-- Current phase: Phase 6, Google Sheets read / LocalOS finance handler wiring.
+- Last updated: 2026-06-13T15:11:21+03:00
+- Current phase: Phase 7, real connector UX, preflight clarity, and billing breakdown.
 
 ## Acceptance criteria evidence
 
 ### AC1
 - Status: PASS
 - Proof:
-  - `src/services/agent_blueprint_runner.py::AgentBlueprintRunner.__init__` now defaults to `ActionOrchestrator(build_capability_handlers())`.
+  - Activation/preflight connection plans now include existing/attached integrations, `why_blocked`, and `setup_cta`.
+  - `tests/test_agent_blueprint_layer.py::test_activation_connection_blocker_keeps_binding_route_context`
 
 ### AC2
 - Status: PASS
 - Proof:
-  - `tests/test_agent_blueprint_layer.py::test_default_runner_is_wired_to_real_google_sheets_and_finance_handlers` asserts `google_sheets.read_rows` exists in the default runner handler map.
+  - `tests/test_agent_blueprint_layer.py::test_agent_connection_plan_turns_bindings_into_user_next_actions` asserts an existing Google Sheets connection becomes `choose_existing`.
 
 ### AC3
 - Status: PASS
 - Proof:
-  - The same regression asserts `finance.transaction.create` exists in the default runner handler map.
+  - `/dashboard/agents` renders missing preflight reason text from `why_blocked` and CTA labels from `setup_cta`.
+  - Frontend production build passed.
 
 ### AC4
 - Status: PASS
 - Proof:
-  - Existing `test_google_sheets_read_rows_capability_uses_native_provider` still passes.
-  - Handler returns `provider_read_performed` for native reads and supports inline rows without provider write.
+  - Agent metrics now expose `billing_breakdown` and `cost_tokens.breakdown` with categories for creation, preview, production run, external actions, and operator chat.
+  - `tests/test_agent_blueprint_layer.py::test_agent_metrics_summary_reports_compiled_runtime_health`
 
 ### AC5
 - Status: PASS
 - Proof:
-  - Existing `test_finance_transaction_create_capability_normalizes_rows_without_localos_write` still passes.
-  - Handler creates proposals/request state and records `localos_write_performed: false`.
+  - Full agent blueprint suite passed: 152 tests.
+  - Frontend production build passed.
 
 ### AC6
 - Status: PASS
 - Proof:
-  - Focused sheets/finance/Maton tests passed: 5 tests.
-  - Full agent blueprint suite passed: 152 tests.
-  - Frontend production build passed.
+  - No schema migration was added.
+  - `git diff --check` passed.
 
 ## Commands run
-- `PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'default_runner_is_wired or google_sheets_read_rows_capability_uses_native_provider or finance_transaction_create_capability_normalizes_rows_without_localos_write or maton_delivery' -x`
-- `PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -x`
-- `npm --prefix frontend run build`
+- `venv/bin/python -m pytest tests/test_agent_blueprint_layer.py::test_agent_preview_run_and_activation_endpoints_enforce_safe_gate tests/test_agent_blueprint_layer.py::test_activation_connection_blocker_keeps_binding_route_context tests/test_agent_blueprint_layer.py::test_agent_metrics_summary_reports_compiled_runtime_health tests/test_agent_blueprint_layer.py::test_agent_connection_plan_turns_bindings_into_user_next_actions -q`
+- `venv/bin/python -m pytest tests/test_agent_blueprint_layer.py -q`
+- `npm run build` from `frontend/`
+- `git diff --check`
 
 ## Raw artifacts
-- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase6-sheets-finance-tests.txt`
-- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase6-agent-blueprint-tests.txt`
-- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase6-frontend-build.txt`
+- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase7-focused-tests.txt`
+- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase7-agent-blueprint-tests.txt`
+- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase7-frontend-build.txt`
+- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase7-diff-check.txt`
 
 ## Known gaps
-- Full objective remains active: provider UX for choosing real Google credentials, finance apply UI, billing ledger expansion, and additional provider handlers still require later phases.
+- Full objective remains active: deeper finance apply approval UI, more production provider write handlers, and live visual QA on production remain later phases.

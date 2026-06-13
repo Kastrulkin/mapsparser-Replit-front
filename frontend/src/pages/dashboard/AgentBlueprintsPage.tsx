@@ -345,11 +345,29 @@ type AgentMetricsSummary = {
     inflight_reserved_tokens?: number;
     total_cost?: number;
     agent_creation_charged?: number;
+    breakdown?: AgentBillingBreakdownItem[];
+  };
+  billing_breakdown?: {
+    schema?: string;
+    total_items?: number;
+    items?: AgentBillingBreakdownItem[];
   };
   setup?: {
     required_bindings?: number;
     learning_events?: number;
   };
+};
+
+type AgentBillingBreakdownItem = {
+  key?: string;
+  label?: string;
+  count?: number;
+  estimated_credits?: number;
+  charged_credits?: number;
+  settled_tokens?: number;
+  total_cost?: number;
+  ledger_entries?: number;
+  status?: string;
 };
 
 type AgentBlueprintDetails = {
@@ -543,6 +561,14 @@ type AgentConnectionPlanItem = {
   explanation?: string;
   route_state?: string;
   route_summary?: string;
+  why_blocked?: string;
+  setup_cta?: {
+    label?: string;
+    action?: string;
+    binding_key?: string;
+    provider?: string;
+    route_provider?: string;
+  };
   execution_boundary?: string;
   autonomy_level?: string;
   credential_state?: string;
@@ -4894,7 +4920,7 @@ const builderConnectionStatusCopy = (service: AgentConnectionReadinessService) =
     return 'Выберите доступ';
   }
   if (action === 'planned_provider') {
-    return 'Подключим позже';
+    return 'Пока недоступно';
   }
   if (action === 'forbidden' || action === 'unsupported') {
     return 'Невозможно';
@@ -6682,6 +6708,7 @@ const AgentOverviewPanel = ({
             {voiceName ? `Голос: ${voiceName}. ` : ''}
             Запусков загружено: {metrics?.runs?.loaded || 0}. Токены: {settledTokens}. Стоимость: {totalCost ? totalCost.toFixed(2) : '0'}.
           </div>
+          <AgentBillingBreakdownPanel metrics={metrics} />
         </div>
       </div>
     </div>
@@ -6956,6 +6983,52 @@ const ReadinessRow = ({
   </div>
 );
 
+const AgentBillingBreakdownPanel = ({ metrics }: { metrics?: AgentMetricsSummary }) => {
+  const items = metrics?.billing_breakdown?.items || metrics?.cost_tokens?.breakdown || [];
+  const visibleItems = items.filter((item) => Boolean(item.count || item.charged_credits || item.estimated_credits || item.settled_tokens || item.total_cost));
+  if (!visibleItems.length) {
+    return (
+      <div className="mt-3 rounded-xl bg-white px-3 py-2 text-xs leading-5 text-slate-500 ring-1 ring-slate-200">
+        Расходы появятся после compile, preview или production run.
+      </div>
+    );
+  }
+  return (
+    <div className="mt-3 rounded-xl bg-white px-3 py-3 ring-1 ring-slate-200">
+      <div className="flex items-center gap-2 text-xs font-semibold uppercase text-slate-500">
+        <ReceiptText className="h-4 w-4 text-slate-500" />
+        Расходы
+      </div>
+      <div className="mt-2 space-y-1.5">
+        {visibleItems.slice(0, 5).map((item) => (
+          <div key={item.key || item.label} className="flex items-center justify-between gap-3 text-xs leading-5">
+            <span className="min-w-0 truncate text-slate-600">{item.label || humanizeMeta(item.key || 'cost')}</span>
+            <span className="shrink-0 font-medium text-slate-900">
+              {formatBillingBreakdownValue(item)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const formatBillingBreakdownValue = (item: AgentBillingBreakdownItem) => {
+  if (item.charged_credits) {
+    return `${item.charged_credits} кр.`;
+  }
+  if (item.total_cost) {
+    return item.total_cost.toFixed(2);
+  }
+  if (item.settled_tokens) {
+    return `${item.settled_tokens} ток.`;
+  }
+  if (item.estimated_credits) {
+    return `~${item.estimated_credits} кр.`;
+  }
+  return `${item.count || 0}`;
+};
+
 const AgentConnectionsPanel = ({
   agentIntegrations,
   availableAgentIntegrations,
@@ -7167,6 +7240,11 @@ const AgentConnectionPlanPanel = ({
               </span>
             </div>
             <div className="mt-2 text-xs leading-5 text-slate-600">{item.route_summary || item.explanation || bindingActionHint({ key: item.key || '', provider: item.provider || '', status: item.binding_status || '' })}</div>
+            {item.why_blocked && item.action !== 'ready' && item.action !== 'native_ready' ? (
+              <div className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-xs leading-5 text-amber-900 ring-1 ring-amber-100">
+                Чего не хватает: {item.why_blocked}
+              </div>
+            ) : null}
             {item.policy_summary ? (
               <div className="mt-2 rounded-lg bg-slate-50 px-2.5 py-2 text-xs leading-5 text-slate-700 ring-1 ring-slate-100">
                 {item.policy_summary}
@@ -7231,7 +7309,7 @@ const AgentConnectionPlanPanel = ({
                   onClick={() => onConfigureBinding(item.key || '')}
                   disabled={actionLoading || !item.key}
                 >
-                  Настроить {connectorLabel(item.provider)}
+                  {item.setup_cta?.label || `Настроить ${connectorLabel(item.provider)}`}
                 </Button>
               </div>
             ) : null}

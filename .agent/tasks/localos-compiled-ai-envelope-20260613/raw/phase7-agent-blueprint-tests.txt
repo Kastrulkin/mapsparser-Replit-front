@@ -1,0 +1,5 @@
+Command:
+venv/bin/python -m pytest tests/test_agent_blueprint_layer.py -q
+
+Result:
+152 passed in 8.23s
