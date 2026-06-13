@@ -221,6 +221,7 @@ def _build_preview(
         "compiler_unsupported_requests": compiler_review["unsupported_requests"],
         "compiler_policy_review": compiler_review,
         "connector_intelligence": _build_connector_intelligence(feasibility),
+        "service_intelligence": _build_service_intelligence(feasibility),
         "required_connectors": _connector_preview_items(feasibility),
         "connection_plan": _build_preview_connection_plan(feasibility),
         "connection_readiness": _build_connection_readiness(feasibility),
@@ -927,6 +928,32 @@ def _build_connector_intelligence(feasibility: Dict[str, Any]) -> Dict[str, Any]
     }
 
 
+def _build_service_intelligence(feasibility: Dict[str, Any]) -> Dict[str, Any]:
+    bindings = feasibility.get("bindings") if isinstance(feasibility.get("bindings"), list) else []
+    capabilities = feasibility.get("capabilities") if isinstance(feasibility.get("capabilities"), list) else []
+    forbidden = feasibility.get("forbidden") if isinstance(feasibility.get("forbidden"), list) else []
+    unsupported = feasibility.get("unsupported") if isinstance(feasibility.get("unsupported"), list) else []
+    status = str(feasibility.get("status") or "ready")
+    binding_items = [_service_intelligence_binding(item) for item in bindings if isinstance(item, dict)]
+    capability_items = [_service_intelligence_capability(item) for item in capabilities if isinstance(item, dict)]
+    forbidden_items = [_service_intelligence_forbidden(item) for item in forbidden if isinstance(item, dict)]
+    unsupported_items = [_service_intelligence_unsupported(item) for item in unsupported if isinstance(item, dict)]
+    items = binding_items + capability_items + forbidden_items + unsupported_items
+    state_counts: Dict[str, int] = {}
+    for item in items:
+        state = str(item.get("state") or "unknown")
+        state_counts[state] = state_counts.get(state, 0) + 1
+    return {
+        "schema": "localos_agent_service_intelligence_v1",
+        "status": status,
+        "headline": _service_intelligence_headline(status, state_counts),
+        "can_create_draft": status not in {"forbidden", "unsupported", "needs_payment"},
+        "can_activate": status == "ready",
+        "state_counts": state_counts,
+        "items": items,
+    }
+
+
 def _build_connection_summary(feasibility: Dict[str, Any]) -> Dict[str, Any]:
     bindings = feasibility.get("bindings") if isinstance(feasibility.get("bindings"), list) else []
     forbidden = feasibility.get("forbidden") if isinstance(feasibility.get("forbidden"), list) else []
@@ -1108,6 +1135,199 @@ def _connection_resolver_state_label(state: str) -> str:
         "forbidden": "Запрещено policy",
     }
     return labels.get(state, "Проверить")
+
+
+def _service_intelligence_binding(binding: Dict[str, Any]) -> Dict[str, Any]:
+    provider = str(binding.get("provider") or "").strip()
+    catalog_item = _catalog_item_by_provider(provider)
+    action = _preview_connection_action(binding, catalog_item)
+    provider_routes = _provider_routes(binding.get("provider_routes"))
+    route = _recommended_provider_route(provider_routes, action, provider)
+    state = _service_intelligence_state(binding, action, route)
+    connections = binding.get("connections") if isinstance(binding.get("connections"), list) else []
+    return {
+        "kind": "binding",
+        "key": str(binding.get("key") or provider or ""),
+        "provider": provider,
+        "service_label": str(binding.get("provider_title") or catalog_item.get("title") or provider),
+        "capability": str(binding.get("capability") or ""),
+        "direction": str(binding.get("direction") or ""),
+        "state": state,
+        "state_label": _service_intelligence_state_label(state),
+        "explanation": _service_intelligence_explanation(binding, state, route, connections),
+        "next_action": _service_intelligence_next_action(state, route),
+        "recommended_provider": str(route.get("provider") or ""),
+        "recommended_label": str(route.get("label") or route.get("provider") or ""),
+        "recommended_route": route,
+        "provider_routes": provider_routes,
+        "connection_count": len(connections),
+        "connections": connections[:5],
+        "missing_config": binding.get("missing_config") if isinstance(binding.get("missing_config"), list) else [],
+    }
+
+
+def _service_intelligence_capability(capability_item: Dict[str, Any]) -> Dict[str, Any]:
+    capability = str(capability_item.get("capability") or "").strip()
+    if not capability:
+        return {}
+    provider_routes = _provider_routes(capability_item.get("provider_routes"))
+    route = _recommended_provider_route(provider_routes, "connect_required", "")
+    status = str(capability_item.get("status") or "")
+    state = "available_route" if status == "supported" else "impossible"
+    return {
+        "kind": "capability",
+        "key": capability,
+        "provider": "",
+        "service_label": humanize_meta(capability),
+        "capability": capability,
+        "state": state,
+        "state_label": _service_intelligence_state_label(state),
+        "explanation": _service_intelligence_capability_explanation(capability_item, route),
+        "next_action": _service_intelligence_next_action(state, route),
+        "recommended_provider": str(route.get("provider") or ""),
+        "recommended_label": str(route.get("label") or route.get("provider") or ""),
+        "recommended_route": route,
+        "provider_routes": provider_routes,
+    }
+
+
+def _service_intelligence_forbidden(item: Dict[str, Any]) -> Dict[str, Any]:
+    term = str(item.get("term") or "").strip()
+    return {
+        "kind": "policy",
+        "key": term or "forbidden",
+        "provider": "",
+        "service_label": term or "Запрещённый запрос",
+        "capability": "",
+        "state": "impossible",
+        "state_label": _service_intelligence_state_label("impossible"),
+        "explanation": str(item.get("reason") or "Запрос выходит за policy envelope LocalOS."),
+        "next_action": "explain_policy_boundary",
+        "recommended_provider": "",
+        "recommended_label": "",
+        "recommended_route": {},
+        "provider_routes": [],
+    }
+
+
+def _service_intelligence_unsupported(item: Dict[str, Any]) -> Dict[str, Any]:
+    capability = str(item.get("capability") or "").strip()
+    return {
+        "kind": "unsupported_capability",
+        "key": capability or "unsupported",
+        "provider": "",
+        "service_label": humanize_meta(capability or "unsupported"),
+        "capability": capability,
+        "state": "impossible",
+        "state_label": _service_intelligence_state_label("impossible"),
+        "explanation": str(item.get("reason") or "Нет разрешённого provider path."),
+        "next_action": "explain_unsupported_capability",
+        "recommended_provider": "",
+        "recommended_label": "",
+        "recommended_route": {},
+        "provider_routes": [],
+    }
+
+
+def _service_intelligence_state(binding: Dict[str, Any], action: str, route: Dict[str, str]) -> str:
+    if action in {"ready", "native_ready"}:
+        return "already_connected" if action == "ready" else "localos_native"
+    if action == "choose_existing":
+        return "multiple_routes"
+    route_state = str(route.get("state") or route.get("status") or "").strip()
+    if action == "planned_provider" or route_state == "planned":
+        return "planned"
+    if route_state in {"available", "manual"}:
+        return "connectable"
+    if str(binding.get("route_state") or "") == "unavailable":
+        return "impossible"
+    return "connectable"
+
+
+def _service_intelligence_state_label(state: str) -> str:
+    labels = {
+        "already_connected": "Уже подключено",
+        "localos_native": "Есть в LocalOS",
+        "connectable": "Можно подключить",
+        "multiple_routes": "Есть несколько вариантов",
+        "available_route": "Маршрут доступен",
+        "planned": "Позже",
+        "impossible": "Невозможно",
+    }
+    return labels.get(state, "Проверить")
+
+
+def _service_intelligence_explanation(
+    binding: Dict[str, Any],
+    state: str,
+    route: Dict[str, str],
+    connections: List[Dict[str, Any]],
+) -> str:
+    service = str(binding.get("provider_title") or binding.get("provider") or "сервис")
+    if state == "already_connected":
+        if connections:
+            names = ", ".join([str(item.get("display_name") or item.get("provider") or "") for item in connections[:2]])
+            return f"{service} уже подключён: {names}."
+        return f"{service} уже подключён и готов для агента."
+    if state == "localos_native":
+        return f"{service} доступен внутри LocalOS и проверяется policy/preflight."
+    if state == "multiple_routes":
+        return f"Для {service} найдено несколько подключений; выберите одно для compiled workflow."
+    if state == "planned":
+        return f"{service} есть в provider registry, но этот маршрут пока не активирует агента."
+    if state == "impossible":
+        return f"Для {service} нет разрешённого provider path внутри LocalOS."
+    route_label = str(route.get("label") or route.get("provider") or "provider route")
+    return f"{service} можно подключить через {route_label}; до активации будет preflight и approval."
+
+
+def _service_intelligence_capability_explanation(capability_item: Dict[str, Any], route: Dict[str, str]) -> str:
+    capability = str(capability_item.get("capability") or "capability")
+    if str(capability_item.get("status") or "") == "unsupported":
+        return f"{capability} не сопоставлен с разрешённым LocalOS/OpenClaw provider path."
+    if route:
+        label = str(route.get("label") or route.get("provider") or "provider route")
+        return f"{capability} поддерживается через {label} внутри policy envelope."
+    return f"{capability} поддерживается каталогом OpenClaw или LocalOS."
+
+
+def _service_intelligence_next_action(state: str, route: Dict[str, str]) -> str:
+    if state in {"already_connected", "localos_native", "available_route"}:
+        return "safe_preview"
+    if state == "multiple_routes":
+        return "choose_existing_connection"
+    if state == "connectable":
+        route_provider = str(route.get("provider") or "")
+        if route_provider == "openclaw":
+            return "use_openclaw_boundary"
+        if route_provider == "maton":
+            return "select_maton_key"
+        if route_provider == "manual":
+            return "use_manual_fallback"
+        return "connect_provider"
+    if state == "planned":
+        return "wait_for_provider_route"
+    return "cannot_execute"
+
+
+def _service_intelligence_headline(status: str, state_counts: Dict[str, int]) -> str:
+    if status == "forbidden":
+        return "Запрос невозможен: он выходит за policy envelope LocalOS."
+    if status == "unsupported":
+        return "Часть действий невозможна: нет разрешённого provider path."
+    if status == "needs_payment":
+        return "Перед запуском нужно решить вопрос с тарифом или балансом."
+    if state_counts.get("multiple_routes"):
+        return "Есть несколько подходящих подключений; нужно выбрать маршрут."
+    if state_counts.get("connectable"):
+        return "Часть сервисов можно подключить перед preview и активацией."
+    if state_counts.get("planned") or state_counts.get("impossible"):
+        return "Есть сервисы, которые пока нельзя активировать."
+    return "Все нужные сервисы понятны и готовы к safe preview."
+
+
+def humanize_meta(value: str) -> str:
+    return str(value or "").replace("_", " ").replace(".", " ").strip().title()
 
 
 def _connection_resolver_explanation(

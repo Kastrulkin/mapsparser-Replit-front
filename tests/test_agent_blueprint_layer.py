@@ -1535,6 +1535,23 @@ def test_agent_builder_session_preview_includes_feasibility_for_required_connect
     assert preview["connector_intelligence"]["bindings"][1]["route_state"] == "connected"
     assert preview["connector_intelligence"]["capabilities"][0]["route_state"] == "available"
     assert any(item["label"] == "OpenClaw" for item in preview["connector_intelligence"]["provider_paths"])
+    assert preview["service_intelligence"]["schema"] == "localos_agent_service_intelligence_v1"
+    assert preview["service_intelligence"]["status"] == "needs_connection"
+    assert preview["service_intelligence"]["can_create_draft"] is True
+    assert preview["service_intelligence"]["can_activate"] is False
+    assert preview["service_intelligence"]["state_counts"]["connectable"] >= 1
+    assert preview["service_intelligence"]["state_counts"]["already_connected"] == 1
+    service_states = {
+        item["provider"]: item["state"]
+        for item in preview["service_intelligence"]["items"]
+        if item.get("kind") == "binding"
+    }
+    assert service_states["google_sheets"] == "connectable"
+    assert service_states["telegram"] == "already_connected"
+    assert any(
+        item["provider"] == "google_sheets" and item["next_action"] == "use_openclaw_boundary"
+        for item in preview["service_intelligence"]["items"]
+    )
     assert preview["openclaw_planner_loop"]["schema"] == "localos_openclaw_planner_loop_v1"
     assert preview["openclaw_planner_loop"]["may_execute_tools"] is False
     assert "openclaw.google_sheets.read_rows" in preview["openclaw_planner_loop"]["workflow_proposal"]["openclaw_action_refs"]
@@ -2443,6 +2460,72 @@ def test_agent_builder_setup_flow_blocks_compiler_unsupported_request(monkeypatc
     assert setup_flow["can_create_draft"] is False
     assert setup_flow["steps"][3]["status"] == "blocked"
     assert setup_flow["activation_blockers"][0]["type"] == "compiler_unsupported"
+
+
+def test_agent_builder_service_intelligence_marks_multiple_existing_routes():
+    from services.agent_builder_session import build_agent_builder_state
+
+    state = build_agent_builder_state(
+        [
+            {
+                "role": "user",
+                "content": (
+                    "Каждый день бери заказ из Google Sheets и готовь пост в Telegram. "
+                    "Человек проверяет перед публикацией."
+                ),
+            }
+        ],
+        connected_integrations=[
+            {
+                "id": "telegram-1",
+                "provider": "telegram",
+                "status": "active",
+                "display_name": "Business bot",
+                "config": {"bot_mode": "business_bot"},
+            },
+            {
+                "id": "telegram-2",
+                "provider": "telegram",
+                "status": "active",
+                "display_name": "Marketing channel",
+                "config": {"bot_mode": "business_bot"},
+            },
+        ],
+    )
+
+    telegram_item = next(
+        item
+        for item in state["preview"]["service_intelligence"]["items"]
+        if item.get("kind") == "binding" and item.get("provider") == "telegram"
+    )
+
+    assert state["preview"]["feasibility"]["status"] == "needs_choice"
+    assert telegram_item["state"] == "multiple_routes"
+    assert telegram_item["state_label"] == "Есть несколько вариантов"
+    assert telegram_item["next_action"] == "choose_existing_connection"
+    assert telegram_item["connection_count"] == 2
+
+
+def test_agent_builder_service_intelligence_marks_forbidden_request_impossible():
+    from services.agent_builder_session import build_agent_builder_state
+
+    state = build_agent_builder_state(
+        [
+            {
+                "role": "user",
+                "content": "Сделай агента, который подключается к компьютерам Роскосмоса и скачивает файлы.",
+            }
+        ],
+    )
+    intelligence = state["preview"]["service_intelligence"]
+
+    assert intelligence["status"] == "forbidden"
+    assert intelligence["can_create_draft"] is False
+    assert intelligence["state_counts"]["impossible"] >= 1
+    assert any(
+        item["kind"] == "policy" and item["state"] == "impossible" and item["next_action"] == "explain_policy_boundary"
+        for item in intelligence["items"]
+    )
 
 
 def test_agent_builder_api_uses_ai_compiler_by_default():

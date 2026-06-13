@@ -1,63 +1,62 @@
 {
   "task_id": "localos-compiled-ai-envelope-20260613",
   "overall_status": "PASS",
+  "phase": "phase_2_service_capability_intelligence",
   "acceptance_criteria": [
     {
       "id": "AC1",
-      "text": "A Google Sheets -> Telegram request with a concrete sheet URL and Telegram target can create a draft even when no saved integrations exist.",
+      "text": "Builder preview exposes a normalized service_intelligence artifact from existing feasibility/provider registry data.",
       "status": "PASS",
-      "proof": ["tests/test_agent_blueprint_layer.py::test_agent_builder_answer_resources_allow_draft_but_not_preview_without_provider_route"],
+      "proof": ["src/services/agent_builder_session.py::_build_service_intelligence", "localos_agent_service_intelligence_v1"],
       "gaps": []
     },
     {
       "id": "AC2",
-      "text": "The compiler/builder persists dialog resource facts into blueprint metadata and version required bindings.",
+      "text": "Google Sheets -> Telegram reports Telegram as already_connected and Google Sheets as connectable.",
       "status": "PASS",
-      "proof": ["src/api/agent_builder_api.py::_apply_answer_connection_bindings", "src/api/agent_builder_api.py::_apply_answer_bindings_to_version_payload"],
+      "proof": ["tests/test_agent_blueprint_layer.py::test_agent_builder_session_preview_includes_feasibility_for_required_connectors"],
       "gaps": []
     },
     {
       "id": "AC3",
-      "text": "Preflight keeps dialog resource facts separate from live credentials/connections.",
+      "text": "Multiple existing Telegram connections report multiple_routes and require explicit choice.",
       "status": "PASS",
-      "proof": ["src/services/agent_integration_preflight.py resolution builder_answer_needs_provider_route"],
+      "proof": ["tests/test_agent_blueprint_layer.py::test_agent_builder_service_intelligence_marks_multiple_existing_routes"],
       "gaps": []
     },
     {
       "id": "AC4",
-      "text": "Provider route selection is optional before draft creation and only sent after explicit acceptance.",
+      "text": "Forbidden/impossible requests report impossible and block draft creation.",
       "status": "PASS",
-      "proof": ["src/api/agent_builder_api.py optional enforce_provider_routes", "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx acceptedBuilderProviderRoutes gate"],
+      "proof": ["tests/test_agent_blueprint_layer.py::test_agent_builder_service_intelligence_marks_forbidden_request_impossible"],
       "gaps": []
     },
     {
       "id": "AC5",
-      "text": "Existing safety gates remain for preview, activation, approvals, and connection choices.",
+      "text": "The UI shows a compact Что возможно panel using normalized states.",
       "status": "PASS",
-      "proof": ["tests/test_agent_blueprint_layer.py full suite passed"],
+      "proof": ["frontend/src/pages/dashboard/AgentBlueprintsPage.tsx::BuilderServiceIntelligencePanel"],
       "gaps": []
     },
     {
       "id": "AC6",
       "text": "Agent-related tests and frontend production build pass.",
       "status": "PASS",
-      "proof": ["144 agent blueprint tests passed", "2 billing tests passed", "frontend build passed"],
+      "proof": ["6 focused service intelligence tests passed", "146 agent blueprint tests passed", "frontend build passed"],
       "gaps": []
     }
   ],
   "changed_files": [
-    "AGENTS.md",
-    "agents/autonomous_development_brief.md",
-    "agents/skills/repo-task-proof-loop/SKILL.md",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.json",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.md",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/spec.md",
     "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
-    "src/api/agent_builder_api.py",
     "src/services/agent_builder_session.py",
-    "src/services/agent_integration_preflight.py",
     "tests/test_agent_blueprint_layer.py"
   ],
   "commands_for_fresh_verifier": [
+    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'service_intelligence or required_connectors or forbidden' -x",
     "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -x",
-    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_builder_billing.py -x",
     "npm --prefix frontend run build"
   ],
   "known_gaps": [

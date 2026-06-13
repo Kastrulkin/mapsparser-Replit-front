@@ -15,16 +15,22 @@
 Сделать LocalOS product/policy envelope поверх OpenClaw: пользователь описывает агента обычным языком, система уточняет детали, понимает нужные сервисы, компилирует workflow в проверяемый executable plan, показывает подключения/стоимость/риски, требует approval и запускает safe preview перед активацией в рамках лимитов подписки.
 
 ## Current phase scope
-Phase 1 of the remaining implementation: make the builder loop draft-first for connector work.
+Phase 2 of the remaining implementation: service/capability intelligence for the builder loop.
 
-When LocalOS understands the agent workflow but required external services are not connected yet, the user must be able to create a draft compiled agent. The draft must preserve resource facts from the dialog, then block preview/activation at preflight until a provider route, saved integration, or allowed fallback is selected.
+The builder must explicitly distinguish provider states before the user creates or activates an agent:
+- already connected;
+- can be connected through an allowed provider route;
+- impossible or forbidden by LocalOS policy;
+- multiple existing routes/connections require user choice.
+
+This phase builds on Phase 1, where connector facts from the dialog became draft-safe and preflight-blocked until a real route/access is selected.
 
 ## Acceptance criteria
-- AC1: A Google Sheets -> Telegram request with a concrete sheet URL and Telegram target can create a draft even when no saved integrations exist.
-- AC2: The compiler/builder persists dialog resource facts into blueprint metadata and version required bindings, not only preview text.
-- AC3: Preflight does not treat dialog resource facts as credentials or a live external connection; it returns a blocked state with a clear provider-route/access reason.
-- AC4: Provider route selection is optional before draft creation. If a route is selected, it must still be explicitly accepted before being sent to the API.
-- AC5: Existing safety gates remain: activation still requires preflight/preview/approval, and connection choice among multiple existing integrations is still explicit.
+- AC1: Builder preview exposes a normalized `service_intelligence` artifact from existing feasibility/provider registry data.
+- AC2: Google Sheets -> Telegram with one connected Telegram and no Google Sheets access reports Telegram as `already_connected` and Google Sheets as `connectable`.
+- AC3: Multiple existing Telegram connections report `multiple_routes` and require explicit choice.
+- AC4: Forbidden/impossible requests, for example unsafe Roscosmos computer access, report `impossible` and block draft creation.
+- AC5: The UI shows a compact "Что возможно" panel using the normalized states before detailed connector/preflight panels.
 - AC6: Agent-related tests and frontend production build pass.
 
 ## Constraints
@@ -41,6 +47,6 @@ When LocalOS understands the agent workflow but required external services are n
 - Production deploy, unless explicitly requested after this phase.
 
 ## Verification plan
+- Focused service intelligence tests: `PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'service_intelligence or required_connectors or forbidden' -x`
 - Unit/integration tests: `PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -x`
-- Billing tests: `PYTHONPATH=src python3 -m pytest -q tests/test_agent_builder_billing.py -x`
 - Frontend build: `npm --prefix frontend run build`

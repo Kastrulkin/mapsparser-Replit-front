@@ -1000,6 +1000,36 @@ type AgentConnectionResolver = {
   unsupported?: Array<{ capability?: string; reason?: string }>;
 };
 
+type AgentServiceIntelligenceItem = {
+  kind?: string;
+  key?: string;
+  provider?: string;
+  service_label?: string;
+  capability?: string;
+  direction?: string;
+  state?: string;
+  state_label?: string;
+  explanation?: string;
+  next_action?: string;
+  recommended_provider?: string;
+  recommended_label?: string;
+  recommended_route?: AgentProviderRoute | null;
+  provider_routes?: AgentProviderRoute[];
+  connection_count?: number;
+  connections?: Array<{ id?: string; display_name?: string; provider?: string }>;
+  missing_config?: string[];
+};
+
+type AgentServiceIntelligence = {
+  schema?: string;
+  status?: string;
+  headline?: string;
+  can_create_draft?: boolean;
+  can_activate?: boolean;
+  state_counts?: Record<string, number>;
+  items?: AgentServiceIntelligenceItem[];
+};
+
 type AgentBuilderPreview = {
   understood_task?: string;
   category?: string;
@@ -1014,6 +1044,7 @@ type AgentBuilderPreview = {
   required_connectors?: AgentBuilderConnectorPreview[];
   feasibility?: AgentBuilderFeasibility;
   connector_intelligence?: AgentConnectorIntelligence;
+  service_intelligence?: AgentServiceIntelligence;
   connection_readiness?: AgentConnectionReadiness;
   connection_resolver?: AgentConnectionResolver;
   connection_answer_bindings?: Record<string, Record<string, unknown>>;
@@ -4289,6 +4320,7 @@ const DialogAgentBuilder = ({
               accepted={acceptedCompilerPlan}
               onAccept={onAcceptCompilerPlan}
             />
+            <BuilderServiceIntelligencePanel intelligence={preview?.service_intelligence} />
             <BuilderConnectionReadinessPanel
               readiness={preview?.connection_readiness}
               answerBindings={preview?.connection_answer_bindings}
@@ -4884,6 +4916,89 @@ const builderConnectionNextStepCopy = (service: AgentConnectionReadinessService,
     return service.provider_route_cta;
   }
   return service.route_summary || service.explanation || 'LocalOS проверит доступ перед safe preview.';
+};
+
+const BuilderServiceIntelligencePanel = ({ intelligence }: { intelligence?: AgentServiceIntelligence }) => {
+  const items = intelligence?.items || [];
+  if (!intelligence || !items.length) {
+    return null;
+  }
+  const blocked = items.some((item) => item.state === 'impossible');
+  const needsChoice = items.some((item) => item.state === 'multiple_routes');
+  const needsConnection = items.some((item) => item.state === 'connectable' || item.state === 'planned');
+  return (
+    <div className={cn(
+      'mt-3 rounded-xl border px-3 py-3 text-xs leading-5',
+      blocked ? 'border-rose-200 bg-rose-50 text-rose-950' : '',
+      !blocked && (needsChoice || needsConnection) ? 'border-amber-200 bg-amber-50 text-amber-950' : '',
+      !blocked && !needsChoice && !needsConnection ? 'border-emerald-200 bg-emerald-50 text-emerald-950' : '',
+    )}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="font-semibold">Что возможно</div>
+          <div className="mt-1 max-w-2xl">{intelligence.headline || 'LocalOS сопоставил задачу с доступными сервисами и policy.'}</div>
+        </div>
+        <span className="rounded-full bg-white px-2 py-0.5 font-medium ring-1 ring-current/10">
+          {intelligence.can_activate ? 'можно preview' : intelligence.can_create_draft ? 'можно draft' : 'нельзя создать'}
+        </span>
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        {items.slice(0, 8).map((item) => {
+          const state = item.state || '';
+          const provider = item.recommended_provider || item.provider || '';
+          return (
+            <div key={`${item.kind || 'item'}-${item.key || item.provider || item.capability}`} className="rounded-lg bg-white px-3 py-2 ring-1 ring-current/10">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <div className="font-medium text-slate-950">{item.service_label || connectorLabel(item.provider)}</div>
+                  {item.capability ? <div className="mt-0.5 text-[11px] leading-4 text-slate-500">{humanizeMeta(item.capability)}</div> : null}
+                </div>
+                <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium ring-1', serviceIntelligenceTone(state))}>
+                  {item.state_label || humanizeMeta(state || 'проверить')}
+                </span>
+              </div>
+              <div className="mt-1 text-[11px] leading-4 text-slate-600">
+                {item.explanation || 'LocalOS проверит этот сервис перед safe preview.'}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {provider ? (
+                  <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] text-sky-700 ring-1 ring-sky-100">
+                    {item.recommended_label || connectorLabel(provider)}
+                  </span>
+                ) : null}
+                {item.connection_count ? (
+                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700 ring-1 ring-emerald-100">
+                    {item.connection_count} доступ
+                  </span>
+                ) : null}
+                {item.next_action ? (
+                  <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600 ring-1 ring-slate-200">
+                    {humanizeMeta(item.next_action)}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const serviceIntelligenceTone = (state: string) => {
+  if (state === 'already_connected' || state === 'localos_native' || state === 'available_route') {
+    return 'bg-emerald-50 text-emerald-700 ring-emerald-200';
+  }
+  if (state === 'multiple_routes') {
+    return 'bg-sky-50 text-sky-700 ring-sky-200';
+  }
+  if (state === 'planned') {
+    return 'bg-slate-50 text-slate-600 ring-slate-200';
+  }
+  if (state === 'impossible') {
+    return 'bg-rose-50 text-rose-700 ring-rose-200';
+  }
+  return 'bg-amber-50 text-amber-700 ring-amber-200';
 };
 
 const BuilderConnectionReadinessPanel = ({

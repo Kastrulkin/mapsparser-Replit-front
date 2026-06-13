@@ -1,17 +1,18 @@
 {
   "task_id": "localos-compiled-ai-envelope-20260613",
   "overall_verdict": "PASS",
+  "phase": "phase_2_service_capability_intelligence",
   "criteria": [
-    {"id": "AC1", "status": "PASS", "reason": "Regression test covers draft creation when dialog includes Google Sheets and Telegram resources without saved integrations."},
-    {"id": "AC2", "status": "PASS", "reason": "Metadata and version payload both receive answer-derived binding config."},
-    {"id": "AC3", "status": "PASS", "reason": "Preflight remains blocked and distinguishes resource facts from provider access."},
-    {"id": "AC4", "status": "PASS", "reason": "Provider routes are optional before draft and only posted from UI after acceptance."},
-    {"id": "AC5", "status": "PASS", "reason": "Existing agent blueprint suite still passes."},
-    {"id": "AC6", "status": "PASS", "reason": "Required tests and frontend build passed."}
+    {"id": "AC1", "status": "PASS", "reason": "Builder preview now emits localos_agent_service_intelligence_v1 from feasibility/provider registry data."},
+    {"id": "AC2", "status": "PASS", "reason": "Regression test covers already_connected Telegram plus connectable Google Sheets with OpenClaw boundary next action."},
+    {"id": "AC3", "status": "PASS", "reason": "Regression test covers multiple Telegram connections and requires explicit choice."},
+    {"id": "AC4", "status": "PASS", "reason": "Forbidden Roscosmos computer access is represented as impossible and blocks draft creation."},
+    {"id": "AC5", "status": "PASS", "reason": "Agent builder UI now renders the compact Что возможно panel before detailed connector panels."},
+    {"id": "AC6", "status": "PASS", "reason": "Focused tests, full agent blueprint suite, and frontend build passed."}
   ],
   "commands_run": [
+    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'service_intelligence or required_connectors or forbidden' -x",
     "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -x",
-    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_builder_billing.py -x",
     "npm --prefix frontend run build"
   ],
   "artifacts_used": [
