@@ -1424,11 +1424,12 @@ const buildBuilderCreationDecision = ({
       cta: '',
     };
   }
-  if (questions.length) {
+  const blockingQuestions = builderBlockingQuestions(questions);
+  if (blockingQuestions.length) {
     return {
       tone: 'needs_action',
       title: 'Ответьте на уточнение',
-      description: questions[0]?.question || 'LocalOS/OpenClaw нужно больше деталей, чтобы скомпилировать workflow без догадок.',
+      description: blockingQuestions[0]?.question || 'LocalOS/OpenClaw нужно больше деталей, чтобы скомпилировать workflow без догадок.',
       action: 'answer',
       cta: 'Отправить ответ',
     };
@@ -1463,6 +1464,18 @@ const buildBuilderCreationDecision = ({
     cta: '',
   };
 };
+
+const builderBlockingQuestions = (questions: AgentBuilderQuestion[]) => questions.filter((question) => {
+  const reason = String(question.reason || '').trim();
+  const key = String(question.key || '').trim();
+  if (['connection_resolver', 'binding_config_needed', 'required_connection_missing', 'required_connection_missing_config', 'multiple_connections_available'].includes(reason)) {
+    return false;
+  }
+  if (key.startsWith('connect_') || key.startsWith('choose_')) {
+    return false;
+  }
+  return true;
+});
 
 const activationBlockerText = (gate?: AgentActivationGate) => {
   const humanBlockers = gate?.human_blockers || [];
@@ -2659,7 +2672,7 @@ export const AgentBlueprintsPage = () => {
       const response = await api.post(`/agent-builder/sessions/${dialogBuilderSession.id}/create-blueprint`, {
         use_ai_compiler: true,
         selected_connection_bindings: selectedBuilderConnectionBindings,
-        selected_provider_routes: selectedBuilderProviderRoutes,
+        selected_provider_routes: acceptedBuilderProviderRoutes ? selectedBuilderProviderRoutes : {},
         accepted_compiler_plan: acceptedBuilderCompilerPlan,
         accepted_provider_routes: acceptedBuilderProviderRoutes,
       });
@@ -4116,11 +4129,10 @@ const DialogAgentBuilder = ({
   const requiredProviderRouteKeys = builderRequiredProviderRouteKeys(preview);
   const missingProviderRouteKeys = requiredProviderRouteKeys.filter((key) => !selectedProviderRoutes[key]);
   const providerRoutesRequireConfirmation = requiredProviderRouteKeys.length > 0;
-  const missingProviderRouteConfirmation = providerRoutesRequireConfirmation && (!acceptedProviderRoutes || missingProviderRouteKeys.length > 0);
+  const missingProviderRouteConfirmation = providerRoutesRequireConfirmation && acceptedProviderRoutes && missingProviderRouteKeys.length > 0;
   const canCreateDraft = preview?.setup_flow?.can_create_draft !== false
     && !missingConnectionChoices.length
-    && !missingCompilerPlanConfirmation
-    && !missingProviderRouteConfirmation;
+    && !missingCompilerPlanConfirmation;
   const createBlockers: Array<{ key: string; label: string }> = [];
   const addCreateBlocker = (key: string, label: string) => {
     const cleanKey = key.trim();
@@ -4139,10 +4151,8 @@ const DialogAgentBuilder = ({
   if (missingCompilerPlanConfirmation) {
     addCreateBlocker('compiler_plan_confirmation', 'Подтвердите план перед созданием агента.');
   }
-  if (missingProviderRouteKeys.length) {
+  if (missingProviderRouteConfirmation) {
     addCreateBlocker('provider_route_selection', `Выберите способ подключения для шагов: ${missingProviderRouteKeys.join(', ')}.`);
-  } else if (providerRoutesRequireConfirmation && !acceptedProviderRoutes) {
-    addCreateBlocker('provider_route_confirmation', 'Подтвердите выбранные способы подключения перед созданием агента.');
   }
   preview?.setup_flow?.activation_blockers?.slice(0, 4).forEach((item) => {
     addCreateBlocker(`blocker:${item.type || item.provider || item.message}`, item.message || connectorLabel(item.provider));

@@ -444,6 +444,7 @@ def _apply_answer_connection_bindings(metadata: dict, answer_bindings: dict) -> 
         return metadata
     binding_integrations = metadata.get("agent_binding_integrations") if isinstance(metadata.get("agent_binding_integrations"), dict) else {}
     custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+    required_bindings = metadata.get("required_integration_bindings") if isinstance(metadata.get("required_integration_bindings"), list) else []
     provider_by_binding = _provider_by_binding_key(metadata)
     clean_answers = {}
     for binding_key, raw_config in answer_bindings.items():
@@ -463,18 +464,33 @@ def _apply_answer_connection_bindings(metadata: dict, answer_bindings: dict) -> 
         binding_process.update(clean_config)
         custom_process[clean_key] = binding_process
         binding_payload = binding_integrations.get(clean_key) if isinstance(binding_integrations.get(clean_key), dict) else {}
+        provider = provider_by_binding.get(clean_key) or ""
+        if provider:
+            binding_payload["provider"] = provider
+            binding_payload["source"] = "agent_builder_answer"
         binding_payload["answer_config"] = dict(clean_config)
         binding_integrations[clean_key] = binding_payload
-        provider = provider_by_binding.get(clean_key) or ""
         if provider:
             provider_process = custom_process.get(provider) if isinstance(custom_process.get(provider), dict) else {}
             provider_process.update(clean_config)
             custom_process[provider] = provider_process
+        for binding in required_bindings:
+            if not isinstance(binding, dict):
+                continue
+            if str(binding.get("key") or "").strip() != clean_key:
+                continue
+            default_config = binding.get("default_config") if isinstance(binding.get("default_config"), dict) else {}
+            merged_config = dict(default_config)
+            for config_key, config_value in clean_config.items():
+                merged_config[str(config_key)] = config_value
+            binding["default_config"] = merged_config
+            binding["answer_configured"] = True
         clean_answers[clean_key] = clean_config
     if clean_answers:
         metadata["builder_answer_connection_bindings"] = clean_answers
         metadata["agent_binding_integrations"] = binding_integrations
         metadata["custom_process"] = custom_process
+        metadata["required_integration_bindings"] = required_bindings
     return metadata
 
 
@@ -489,6 +505,30 @@ def _provider_by_binding_key(metadata: dict) -> dict:
         if binding_key and provider:
             result[binding_key] = provider
     return result
+
+
+def _apply_answer_bindings_to_version_payload(version_payload: dict, answer_bindings: dict) -> dict:
+    if not isinstance(version_payload, dict):
+        return {}
+    if not isinstance(answer_bindings, dict) or not answer_bindings:
+        return version_payload
+    bindings = version_payload.get("required_integration_bindings") if isinstance(version_payload.get("required_integration_bindings"), list) else []
+    for binding in bindings:
+        if not isinstance(binding, dict):
+            continue
+        binding_key = str(binding.get("key") or "").strip()
+        answer_config = answer_bindings.get(binding_key)
+        if not isinstance(answer_config, dict):
+            continue
+        default_config = binding.get("default_config") if isinstance(binding.get("default_config"), dict) else {}
+        merged_config = dict(default_config)
+        for key, value in answer_config.items():
+            clean_value = str(value or "").strip()
+            if clean_value:
+                merged_config[str(key)] = clean_value
+        binding["default_config"] = merged_config
+        binding["answer_configured"] = True
+    return version_payload
 
 
 def _missing_required_connection_choices(preview: dict, selected_bindings: dict) -> list[dict]:
@@ -730,7 +770,8 @@ def create_blueprint_from_agent_builder_session(session_id: str):
         selected_bindings = _selected_connection_bindings(payload, preview, connection_inventory)
         selected_provider_routes = _selected_provider_routes(payload, preview)
         missing_provider_routes = _missing_required_provider_routes(preview, selected_provider_routes)
-        if missing_provider_routes:
+        enforce_provider_routes = bool(payload.get("enforce_provider_routes"))
+        if enforce_provider_routes and missing_provider_routes:
             return jsonify(
                 {
                     "success": False,
@@ -740,7 +781,7 @@ def create_blueprint_from_agent_builder_session(session_id: str):
                     "connection_readiness": preview.get("connection_readiness") if isinstance(preview.get("connection_readiness"), dict) else {},
                 }
             ), 400
-        if _required_provider_route_bindings(preview) and not bool(payload.get("accepted_provider_routes")):
+        if selected_provider_routes and not bool(payload.get("accepted_provider_routes")):
             return jsonify(
                 {
                     "success": False,
@@ -806,12 +847,14 @@ def create_blueprint_from_agent_builder_session(session_id: str):
         metadata["setup_completed"] = True
         metadata["builder_compiler_plan_accepted"] = bool(payload.get("accepted_compiler_plan"))
         metadata["builder_provider_routes_accepted"] = bool(payload.get("accepted_provider_routes"))
+        answer_bindings = preview.get("connection_answer_bindings") if isinstance(preview.get("connection_answer_bindings"), dict) else {}
+        metadata = _apply_answer_connection_bindings(metadata, answer_bindings)
         metadata = _apply_selected_connection_bindings(metadata, selected_bindings)
         metadata = _apply_selected_provider_routes(metadata, selected_provider_routes)
-        answer_bindings = preview.get("connection_answer_bindings") if isinstance(preview.get("connection_answer_bindings"), dict) else {}
         metadata = _apply_answer_connection_bindings(metadata, answer_bindings)
         metadata["builder_selected_connection_bindings"] = selected_bindings
         metadata["builder_selected_provider_routes"] = selected_provider_routes
+        metadata["builder_missing_provider_routes"] = missing_provider_routes
         blueprint_id = str(uuid.uuid4())
         metadata["billing"] = billing
         cursor.execute(
@@ -833,6 +876,7 @@ def create_blueprint_from_agent_builder_session(session_id: str):
             ),
         )
         version_payload = draft.get("version_payload") if isinstance(draft.get("version_payload"), dict) else {}
+        version_payload = _apply_answer_bindings_to_version_payload(version_payload, answer_bindings)
         version = _insert_version(cursor, blueprint_id, version_payload, user_data)
         _save_session_state(
             cursor,

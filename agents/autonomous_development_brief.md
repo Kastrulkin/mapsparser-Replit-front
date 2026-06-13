@@ -85,6 +85,93 @@ For tasks that change agent runtime, orchestrator behavior, Agent API, tools/cap
 - Evals or targeted tests cover at least one happy path and one safety/failure path, such as approval bypass, invalid arguments, missing scope, malformed tool result, or budget exhaustion.
 - Public docs do not imply unsupported MCP, provider write support, autonomous publishing/sending/payment, or direct external-system action.
 
+## 9.2) Supergoal-Inspired Goal Execution
+For large, multi-phase product or engineering tasks, use a goal-first workflow inspired by Supergoal, while keeping the repo-local proof loop as the canonical execution mechanism.
+
+### Goal First
+- Preserve the user's original end-state as the primary objective.
+- Do not shrink the goal to the easiest shippable subset.
+- Every phase must move the current state measurably closer to the original goal.
+- If the goal is broad, decompose it; do not replace it.
+
+### Recon Before Phase Planning
+Before implementing a large task:
+- read canonical repo guidance;
+- inspect current implementation and docs;
+- identify existing reusable blocks;
+- identify risky areas, migrations, external services, UI surfaces, and deployment impact.
+
+Output a short recon summary before the first substantial edit.
+
+### Adaptive Phases
+- Choose the number of phases from the work itself; do not force a fixed count.
+- Each phase must have:
+  - purpose;
+  - deliverables;
+  - measurable acceptance criteria;
+  - required checks;
+  - evidence needed for completion.
+- The last phase must be polish, hardening, or audit when the task affects product UX, runtime behavior, integrations, billing, approvals, or data.
+
+### Preflight
+Before executing a large phase:
+- run the smallest baseline checks that prove the current repo/server state is usable;
+- identify already-broken checks separately from changes introduced by the current task;
+- do not let a broken baseline create fake failure loops.
+
+For LocalOS production/server work, preflight must respect:
+- Docker/Postgres runtime;
+- `/opt/seo-app` server cwd;
+- backup before schema changes;
+- partial deploy preference.
+
+### Phase Verification
+A phase is not done until:
+- implementation is present in the current worktree;
+- relevant commands pass or failures are explained as pre-existing/unrelated;
+- acceptance criteria are checked independently;
+- evidence is recorded in the proof bundle or final report.
+
+Do not rely on builder narrative as proof.
+
+### Recovery Policy
+When a phase fails:
+- first failure: diagnose and retry with a focused hypothesis;
+- second failure: write a minimal fix spec and execute it;
+- third repeated failure on the same blocker: stop with a handoff summary unless another safe path exists.
+
+Do not loop indefinitely.
+
+### Final Audit
+Before final sign-off:
+- re-read the original goal and acceptance criteria;
+- verify every explicit requirement against current files, command output, runtime behavior, or deployed state;
+- re-run aggregated mandatory checks where practical;
+- check that deliverables exist in the working tree, not only in the plan;
+- list residual risks honestly.
+
+Only claim completion when the audit proves the original goal is satisfied.
+
+### Memory / Learning Writeback
+At the end of a large task, capture non-obvious learnings:
+- project constraints discovered;
+- commands that worked or failed;
+- deployment quirks;
+- user product preferences;
+- reusable implementation patterns.
+
+Store them in the task proof artifacts or project docs when they will help future work.
+
+### Product-Agent Tasks Addendum
+For LocalOS AI-agent work, every phase must preserve the product model:
+- LocalOS is the product/policy/billing/audit envelope.
+- OpenClaw is an execution/runtime boundary, not the product source of truth.
+- Compiled workflow is runtime truth, not free-form prompt text.
+- Risky external actions require approval outside prompt text.
+- Required connectors/bindings must be explicit before activation.
+- Safe preview must happen before active execution.
+- Run history, action ledger, costs, errors, and recovery actions must be observable.
+
 ## 10) Task Template
 Use this template when starting autonomous work:
 

@@ -1474,18 +1474,18 @@ def test_agent_builder_session_preview_includes_feasibility_for_required_connect
     assert [item["provider"] for item in feasibility["missing_connections"]] == ["google_sheets"]
     assert feasibility["ready_bindings"][0]["provider"] == "telegram"
     assert preview["setup_flow"]["schema"] == "localos_agent_builder_setup_flow_v1"
-    assert preview["setup_flow"]["status"] == "needs_clarification"
-    assert preview["setup_flow"]["primary_action"] == "answer_question"
-    assert preview["setup_flow"]["next_step"] == "answer_clarification"
+    assert preview["setup_flow"]["status"] == "needs_connection"
+    assert preview["setup_flow"]["primary_action"] == "connect_service"
+    assert preview["setup_flow"]["next_step"] == "create_draft_then_connect"
     assert preview["setup_flow"]["post_create_status"] == "needs_connection"
     assert preview["setup_flow"]["post_create_next_step"] == "connect_required_integrations"
-    assert preview["setup_flow"]["can_create_draft"] is False
+    assert preview["setup_flow"]["can_create_draft"] is True
     assert preview["setup_flow"]["can_activate"] is False
     assert preview["setup_flow"]["steps"][1]["key"] == "clarify"
-    assert preview["setup_flow"]["steps"][1]["status"] == "active"
+    assert preview["setup_flow"]["steps"][1]["status"] == "done"
     assert preview["setup_flow"]["steps"][-2]["key"] == "preview"
     assert preview["setup_flow"]["steps"][-1]["key"] == "activate"
-    assert any(item["type"] == "clarification" for item in preview["setup_flow"]["activation_blockers"])
+    assert not any(item["type"] == "clarification" for item in preview["setup_flow"]["activation_blockers"])
     assert any(item["type"] == "connection" and item["provider"] == "google_sheets" for item in preview["setup_flow"]["activation_blockers"])
     assert preview["connection_plan"]["schema"] == "localos_agent_connection_plan_v1"
     assert preview["connection_plan"]["status"] == "needs_action"
@@ -1569,6 +1569,72 @@ def test_agent_builder_session_extracts_connection_answers_into_bindings():
     assert answer_bindings["google_sheets_read"]["gid"] == "0"
     assert answer_bindings["telegram_delivery"]["telegram_target"] == "@riderra_updates"
     assert answer_bindings["telegram_delivery"]["target_type"] == "chat_or_channel"
+
+
+def test_agent_builder_answer_resources_allow_draft_but_not_preview_without_provider_route():
+    from api import agent_builder_api
+    from services.agent_blueprint_draft_builder import compile_agent_blueprint
+    from services.agent_builder_session import build_agent_builder_state
+    from services.agent_integration_preflight import build_agent_integration_preflight
+
+    prompt = (
+        "Каждый день бери заказ из Google Sheets за вчера и готовь пост в Telegram. "
+        "Результат нужен как черновик поста. Перед публикацией человек проверяет результат. "
+        "Таблица https://docs.google.com/spreadsheets/d/1s79gWCm7A8X1drwN6yAscetf0adpRkamHCJyHCKyIqY/edit?gid=0#gid=0, "
+        "вкладка Sheet1. Telegram канал @riderra_updates"
+    )
+    state = build_agent_builder_state([{"role": "user", "content": prompt}], business_id="biz1", user_id="user1")
+    preview = state["preview"]
+    draft = compile_agent_blueprint(
+        preview["understood_task"],
+        preview["category"],
+        business_id="biz1",
+        user_id="user1",
+        planner_context=preview["openclaw_planner_context"],
+    )
+    answer_bindings = preview["connection_answer_bindings"]
+    metadata = agent_builder_api._apply_answer_connection_bindings(dict(draft["metadata"]), answer_bindings)
+    version_payload = agent_builder_api._apply_answer_bindings_to_version_payload(dict(draft["version_payload"]), answer_bindings)
+
+    class Cursor:
+        def __init__(self):
+            self.rows = []
+
+        def execute(self, query, params=None):
+            self.rows = []
+
+        def fetchall(self):
+            return self.rows
+
+    preflight = build_agent_integration_preflight(
+        Cursor(),
+        business_id="biz1",
+        metadata=metadata,
+        input_payload={},
+    )
+    preflight_by_key = {
+        item["key"]: item
+        for item in preflight["items"]
+        if isinstance(item, dict)
+    }
+    version_bindings = {
+        item["key"]: item
+        for item in version_payload["required_integration_bindings"]
+        if isinstance(item, dict)
+    }
+
+    assert preview["setup_flow"]["can_create_draft"] is True
+    assert preview["setup_flow"]["post_create_status"] == "needs_connection"
+    assert state["missing_questions"]
+    assert metadata["builder_answer_connection_bindings"]["google_sheets_read"]["spreadsheet_id"] == "1s79gWCm7A8X1drwN6yAscetf0adpRkamHCJyHCKyIqY"
+    assert metadata["builder_answer_connection_bindings"]["telegram_delivery"]["telegram_target"] == "@riderra_updates"
+    assert version_bindings["google_sheets_read"]["default_config"]["spreadsheet_id"] == "1s79gWCm7A8X1drwN6yAscetf0adpRkamHCJyHCKyIqY"
+    assert version_bindings["google_sheets_read"]["answer_configured"] is True
+    assert version_bindings["telegram_delivery"]["default_config"]["telegram_target"] == "@riderra_updates"
+    assert preflight["ready"] is False
+    assert preflight_by_key["google_sheets_read"]["resolution"] == "builder_answer_needs_provider_route"
+    assert preflight_by_key["google_sheets_read"]["missing_config"] == []
+    assert preflight_by_key["telegram_delivery"]["resolution"] == "builder_answer_needs_provider_route"
 
 
 def test_agent_builder_setup_flow_points_ready_connectors_to_preview_run():
@@ -4141,7 +4207,8 @@ def test_agent_preflight_does_not_treat_answer_config_as_external_connection():
     assert preflight["ready"] is False
     assert preflight["status"] == "blocked"
     assert preflight["items"][0]["status"] == "needs_connection"
-    assert preflight["items"][0]["resolution"] == "missing_integration"
+    assert preflight["items"][0]["resolution"] == "builder_answer_needs_provider_route"
+    assert preflight["items"][0]["missing_config"] == []
     assert preflight["items"][0]["provider"] == "google_sheets"
 
 
@@ -5314,7 +5381,7 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "item.policy_summary" in agents_page_source
     assert "RecommendedProviderRouteNote" in agents_page_source
     assert "recommended_route_reason" in agents_page_source
-    assert "selected_provider_routes: selectedBuilderProviderRoutes" in agents_page_source
+    assert "selected_provider_routes: acceptedBuilderProviderRoutes ? selectedBuilderProviderRoutes : {}" in agents_page_source
     assert "accepted_provider_routes: acceptedBuilderProviderRoutes" in agents_page_source
     assert "acceptedBuilderProviderRoutes" in agents_page_source
     assert "builderRequiredProviderRouteKeys" in agents_page_source

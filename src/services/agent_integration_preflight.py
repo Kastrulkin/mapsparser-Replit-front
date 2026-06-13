@@ -127,6 +127,27 @@ def _binding_preflight_item(
             missing_metadata_config,
             _missing_config_summary(provider, missing_metadata_config),
         )
+    answer_config = _metadata_answer_config(metadata, provider, str(binding.get("key") or ""))
+    if answer_config:
+        resolved_answer_config = _merge_default_config(default_config, answer_config)
+        missing_answer_config = [key for key in required_config if not str(resolved_answer_config.get(key) or "").strip()]
+        if missing_answer_config:
+            return _base_item(
+                binding,
+                "needs_config",
+                "builder_answer_missing_config",
+                "",
+                missing_answer_config,
+                _missing_config_summary(provider, missing_answer_config),
+            )
+        return _base_item(
+            binding,
+            "needs_connection",
+            "builder_answer_needs_provider_route",
+            "",
+            [],
+            "User supplied the resource target in the builder dialog; choose or connect a provider route before preview.",
+        )
     for integration in active_integrations:
         config = parse_json_field(integration.get("config_json"), {})
         config = config if isinstance(config, dict) else {}
@@ -325,6 +346,35 @@ def _metadata_candidate_has_connection_anchor(candidate: Dict[str, Any]) -> bool
         if str(candidate.get(key) or "").strip():
             return True
     return False
+
+
+def _metadata_answer_config(metadata: Dict[str, Any], provider: str, binding_key: str) -> Dict[str, Any]:
+    binding_integrations = (
+        metadata.get("agent_binding_integrations")
+        if isinstance(metadata.get("agent_binding_integrations"), dict)
+        else {}
+    )
+    custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+    candidates = [
+        binding_integrations.get(binding_key),
+        custom_process.get(binding_key),
+        custom_process.get(provider),
+    ]
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        answer_config = candidate.get("answer_config") if isinstance(candidate.get("answer_config"), dict) else {}
+        if answer_config:
+            return answer_config
+        if not _metadata_candidate_has_connection_anchor(candidate):
+            clean_candidate = {
+                str(key): value
+                for key, value in candidate.items()
+                if str(value or "").strip()
+            }
+            if clean_candidate:
+                return clean_candidate
+    return {}
 
 
 def _missing_config_summary(provider: str, missing_config: List[str]) -> str:

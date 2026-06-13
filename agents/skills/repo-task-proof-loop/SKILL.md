@@ -182,6 +182,15 @@ The fixer must:
 - regenerate `evidence.md`, `evidence.json`, and raw artifacts
 - stop without writing final sign-off
 
+## Goal-oriented large task mode
+
+For large tasks, the proof loop should behave as a phase executor for the original user goal:
+
+- freeze the original goal into measurable acceptance criteria;
+- split implementation into independently verifiable phases;
+- run preflight before large edits;
+- perform final audit against the original goal, not against the latest implementation summary.
+
 ## Validation
 
 Before claiming the workflow is correctly initialized or the artifact set is complete, run:

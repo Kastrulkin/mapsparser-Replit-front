@@ -1,0 +1,23 @@
+{
+  "task_id": "localos-compiled-ai-envelope-20260613",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {"id": "AC1", "status": "PASS", "reason": "Regression test covers draft creation when dialog includes Google Sheets and Telegram resources without saved integrations."},
+    {"id": "AC2", "status": "PASS", "reason": "Metadata and version payload both receive answer-derived binding config."},
+    {"id": "AC3", "status": "PASS", "reason": "Preflight remains blocked and distinguishes resource facts from provider access."},
+    {"id": "AC4", "status": "PASS", "reason": "Provider routes are optional before draft and only posted from UI after acceptance."},
+    {"id": "AC5", "status": "PASS", "reason": "Existing agent blueprint suite still passes."},
+    {"id": "AC6", "status": "PASS", "reason": "Required tests and frontend build passed."}
+  ],
+  "commands_run": [
+    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -x",
+    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_builder_billing.py -x",
+    "npm --prefix frontend run build"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/spec.md",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.md",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.json"
+  ],
+  "remaining_goal_status": "IN_PROGRESS"
+}

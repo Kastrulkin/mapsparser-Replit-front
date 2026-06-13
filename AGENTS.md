@@ -121,6 +121,12 @@ Legacy details remain in git history and must not be used as default runbook.
   - Run: `scripts/proof_loop.sh validate <TASK_ID>`
   - Return `valid/invalid` and exact missing files/errors when invalid.
 
+## 11.2 Goal-Oriented Autonomous Development
+- For broad implementation goals, keep the original user objective intact and decompose it into measurable phases.
+- Use `agents/autonomous_development_brief.md` as canonical execution behavior.
+- Apply the Supergoal-inspired rules there for recon, adaptive phases, preflight, recovery, final audit, and learning writeback.
+- Do not introduce a second competing workflow state outside `.agent/tasks/<TASK_ID>/` unless explicitly requested.
+
 ## 12. Curated Subagent Profiles
 - Curated third-party profiles are stored in `agents/subagents/`.
 - Source snapshot used: `Kastrulkin/awesome-codex-subagents`.

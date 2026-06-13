@@ -482,6 +482,7 @@ def _merge_questions(
             {
                 "key": key,
                 "question": question,
+                "reason": reason,
             }
         )
     return result[:5]
@@ -529,15 +530,16 @@ def _build_setup_flow(preview: Dict[str, Any], questions: List[Dict[str, str]]) 
     compiler_review = preview.get("compiler_policy_review") if isinstance(preview.get("compiler_policy_review"), dict) else {}
     compiler_unsupported = compiler_review.get("unsupported_requests") if isinstance(compiler_review.get("unsupported_requests"), list) else []
     compiler_blocked = bool(compiler_unsupported)
-    can_create_draft = not questions and status not in {"forbidden", "unsupported", "needs_payment"} and not compiler_blocked
+    blocking_questions = _blocking_clarification_questions(questions)
+    can_create_draft = not blocking_questions and status not in {"forbidden", "unsupported", "needs_payment"} and not compiler_blocked
     can_run_preview = can_create_draft and status == "ready"
     can_activate = False
-    next_step = "cannot_create" if compiler_blocked else _setup_next_step(status, questions, missing_connections, connection_choices)
+    next_step = "cannot_create" if compiler_blocked else _setup_next_step(status, blocking_questions, missing_connections, connection_choices)
     post_create_status = _post_create_status(status, missing_connections, connection_choices)
     return {
         "schema": "localos_agent_builder_setup_flow_v1",
-        "status": "blocked" if compiler_blocked else _setup_flow_status(status, questions),
-        "primary_action": "cannot_create" if compiler_blocked else _setup_primary_action(status, questions, missing_connections, connection_choices),
+        "status": "blocked" if compiler_blocked else _setup_flow_status(status, blocking_questions),
+        "primary_action": "cannot_create" if compiler_blocked else _setup_primary_action(status, blocking_questions, missing_connections, connection_choices),
         "next_step": next_step,
         "next_step_title": _setup_next_step_title(next_step),
         "next_step_description": _setup_next_step_description(next_step, missing_connections, connection_choices),
@@ -547,7 +549,7 @@ def _build_setup_flow(preview: Dict[str, Any], questions: List[Dict[str, str]]) 
         "post_create_status": post_create_status,
         "post_create_next_step": _post_create_next_step(post_create_status),
         "post_create_description": _post_create_description(post_create_status, missing_connections, connection_choices),
-        "activation_blockers": _activation_blockers(status, questions, missing_connections, connection_choices, forbidden, unsupported, compiler_unsupported),
+        "activation_blockers": _activation_blockers(status, blocking_questions, missing_connections, connection_choices, forbidden, unsupported, compiler_unsupported),
         "steps": [
             {
                 "key": "understand",
@@ -558,9 +560,10 @@ def _build_setup_flow(preview: Dict[str, Any], questions: List[Dict[str, str]]) 
             {
                 "key": "clarify",
                 "label": "Уточнить детали",
-                "status": "active" if questions else "done",
-                "description": questions[0]["question"] if questions else "Деталей достаточно для первой версии.",
+                "status": "active" if blocking_questions else "done",
+                "description": blocking_questions[0]["question"] if blocking_questions else "Деталей достаточно для первой версии.",
                 "questions": questions,
+                "blocking_questions": blocking_questions,
             },
             {
                 "key": "connect",
@@ -618,6 +621,29 @@ def _setup_next_step(
     if missing_connections:
         return "create_draft_then_connect"
     return "create_draft_then_preview"
+
+
+def _blocking_clarification_questions(questions: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    result: List[Dict[str, str]] = []
+    for item in questions:
+        if not isinstance(item, dict):
+            continue
+        reason = str(item.get("reason") or "").strip()
+        key = str(item.get("key") or "").strip()
+        if reason in {
+            "connection_resolver",
+            "binding_config_needed",
+            "required_connection_missing",
+            "required_connection_missing_config",
+            "multiple_connections_available",
+        }:
+            continue
+        if key in {"google_sheets_target", "telegram_target", "telegram_destination", "localos_finance_target", "maton_key"}:
+            continue
+        if key.startswith("connect_") or key.startswith("choose_"):
+            continue
+        result.append(item)
+    return result
 
 
 def _setup_next_step_title(next_step: str) -> str:
