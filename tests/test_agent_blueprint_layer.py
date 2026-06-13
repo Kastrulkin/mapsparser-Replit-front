@@ -764,6 +764,12 @@ def test_agent_metrics_summary_reports_compiled_runtime_health():
     draft = compile_agent_blueprint(
         "Каждый вечер проверяй Google Sheets, бери новые оплаты и создавай транзакции в финансах LocalOS"
     )
+    metadata = dict(draft["metadata"])
+    metadata["billing"] = {
+        "estimated_credits": 3,
+        "actual_credits": 3,
+        "idempotency_key": "charge1",
+    }
     metrics = build_agent_metrics_summary(
         {"id": "bp1", "status": "draft"},
         [{"id": "ver1", "version_number": 1}],
@@ -772,6 +778,7 @@ def test_agent_metrics_summary_reports_compiled_runtime_health():
             {
                 "id": "run1",
                 "status": "completed",
+                "input_json": {"preview_mode": True},
                 "output_json": {
                     "observability": {
                         "cost_tokens": {
@@ -780,14 +787,25 @@ def test_agent_metrics_summary_reports_compiled_runtime_health():
                             "released_tokens": 3,
                             "inflight_reserved_tokens": 0,
                             "total_cost": 0.14,
-                        }
+                        },
+                        "billing_ledger": {
+                            "actions": [
+                                {
+                                    "action_id": "action1",
+                                    "capability": "localos.finance.write",
+                                    "settled_tokens": 42,
+                                    "total_cost": 0.012,
+                                }
+                            ],
+                            "entries": [],
+                        },
                     }
                 },
             },
             {"id": "run2", "status": "failed", "output_json": {}},
         ],
         [{"id": "approval1", "approval_type": "finance_transaction_import"}],
-        draft["metadata"],
+        metadata,
     )
 
     assert metrics["schema"] == "agent_metrics_summary_v1"
@@ -800,7 +818,33 @@ def test_agent_metrics_summary_reports_compiled_runtime_health():
     assert metrics["cost_tokens"]["total_cost"] == 0.14
     assert metrics["billing_breakdown"]["schema"] == "localos_agent_billing_breakdown_v1"
     assert metrics["billing_breakdown"]["items"][0]["key"] == "agent_creation"
-    assert any(item["key"] == "external_actions" for item in metrics["cost_tokens"]["breakdown"])
+    assert any(item["key"] == "external_action" for item in metrics["cost_tokens"]["breakdown"])
+    assert metrics["unified_billing_ledger"]["schema"] == "localos_agent_unified_billing_ledger_v1"
+    assert metrics["unified_billing_ledger"]["summary"]["estimated_credits"] == 4
+    assert metrics["unified_billing_ledger"]["summary"]["actual_credits"] == 3
+    assert metrics["unified_billing_ledger"]["summary"]["actual_tokens"] == 49
+    assert metrics["unified_billing_ledger"]["items"][0]["key"] == "agent_creation"
+    assert any(item["key"] == "preview_run" and item["actual_tokens"] == 7 for item in metrics["unified_billing_ledger"]["items"])
+    assert any(item["key"] == "external_action" and item["actual_tokens"] == 42 for item in metrics["unified_billing_ledger"]["items"])
+
+
+def test_agent_creation_cost_preview_exposes_unified_ledger_estimate_items():
+    from services.agent_builder_billing import build_agent_creation_cost_preview
+
+    preview = build_agent_creation_cost_preview()
+
+    assert preview["schema"] == "localos_agent_billing_estimate_v1"
+    assert preview["total_estimated_credits"] == 4
+    assert preview["total_estimated_tokens"] == 8500
+    assert [item["key"] for item in preview["items"]] == [
+        "agent_creation",
+        "preview_run",
+        "production_run",
+        "external_action",
+        "operator_chat",
+    ]
+    assert preview["items"][0]["billing_mode"] == "reserve_then_charge"
+    assert preview["items"][3]["billing_mode"] == "action_orchestrator_reserve_settle"
 
 
 def test_existing_agent_templates_publish_compiled_artifact_candidate():
@@ -5741,7 +5785,7 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "Мои агенты" in agents_page_source
     assert "getAgentListStatus" in agents_page_source
     assert "AgentSummaryPill" in agents_page_source
-    assert "Последний запуск" in agents_page_source
+    assert "Последний run" in agents_page_source
     assert "решений" in agents_page_source
     assert "Данные агента" in agents_page_source
     assert "изменить логику" in agents_page_source
@@ -5764,6 +5808,15 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "нужно подключить" in agents_page_source
     assert "activationBlockerText" in agents_page_source
     assert "Ждёт решения человека" in agents_page_source
+    assert "AgentFourAnswerStrip" in agents_page_source
+    assert "Что делает" in agents_page_source
+    assert "Готов ли" in agents_page_source
+    assert "Чего не хватает" in agents_page_source
+    assert "Последний run" in agents_page_source
+    assert "Единый billing ledger" in agents_page_source
+    assert "Оценка до запуска" in agents_page_source
+    assert "Факт после запуска" in agents_page_source
+    assert "unified_billing_ledger" in agents_page_source
     assert "без решения человека агент не продолжит внешний шаг" in agents_page_source
     assert "Почему ждём" in agents_page_source
     assert "Preview: {gate.preview_run_status?.ready ? 'пройден' : 'нужен'}" in agents_page_source
@@ -7903,6 +7956,13 @@ def test_runner_load_run_includes_observability_envelope_for_openclaw_actions():
     assert observability["billing_ledger"]["actions"][0]["entry_count"] == 1
     assert observability["billing_ledger"]["entries"][0]["entry_type"] == "settle"
     assert observability["billing_ledger"]["entries"][0]["tokens_out"] == 42
+    assert observability["unified_billing_ledger"]["schema"] == "localos_agent_run_unified_billing_ledger_v1"
+    assert observability["unified_billing_ledger"]["summary"]["actual_tokens"] == 42
+    assert observability["unified_billing_ledger"]["summary"]["external_action_count"] == 1
+    assert observability["unified_billing_ledger"]["items"][0]["key"] == "preview_run"
+    assert observability["unified_billing_ledger"]["items"][0]["actual_tokens"] == 0
+    assert observability["unified_billing_ledger"]["items"][1]["key"] == "external_action"
+    assert observability["unified_billing_ledger"]["items"][1]["actual_tokens"] == 42
     assert observability["delivery_status"]["state"] == "delivered"
     assert observability["cost_tokens"]["total_cost"] == 0.012
     assert observability["domain_requests"]["count"] == 1

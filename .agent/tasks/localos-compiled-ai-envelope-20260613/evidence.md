@@ -2,78 +2,65 @@
 
 ## Summary
 - Overall status: PASS for current phase scope.
-- Last updated: 2026-06-13T17:10:47+03:00
-- Current phase: Phase 10, OpenClaw planner loop + production action runtime contracts.
+- Last updated: 2026-06-13T17:32:41+03:00
+- Current phase: Phase 11, billing ledger end-to-end + simplified Agents cockpit.
 
 ## Acceptance criteria evidence
 
 ### AC1
 - Status: PASS
 - Proof:
-  - Builder preview now treats Google Sheets, Telegram, and Maton as route-required providers.
-  - `tests/test_agent_blueprint_layer.py::test_agent_builder_session_preview_includes_feasibility_for_required_connectors`
+  - Agent creation cost preview now exposes `localos_agent_billing_estimate_v1`.
+  - Estimate rows cover compile, preview run, production run, external action, and operator chat.
+  - `tests/test_agent_blueprint_layer.py::test_agent_creation_cost_preview_exposes_unified_ledger_estimate_items`
 
 ### AC2
 - Status: PASS
 - Proof:
-  - Google Sheets -> Telegram creation requires two provider route bindings and blocks create/preview flow until routes are selected and confirmed.
-  - `tests/test_agent_blueprint_layer.py::test_agent_builder_api_requires_selected_provider_routes_for_required_bindings`
-  - `tests/test_agent_blueprint_layer.py::test_compiled_agent_creation_contract_google_sheets_to_telegram`
+  - Agent metrics now expose `localos_agent_unified_billing_ledger_v1`.
+  - The ledger combines estimate and fact rows for compile, preview, run, external action, and operator chat.
+  - Agent creation fact reads both `credits_charged` and legacy/current `actual_credits`.
+  - `tests/test_agent_blueprint_layer.py::test_agent_metrics_summary_reports_compiled_runtime_health`
 
 ### AC3
 - Status: PASS
 - Proof:
-  - Preflight merges selected resource/credential config with `agent_binding_provider_routes`; without route it reports `provider_route_required`, with route it becomes ready.
-  - `tests/test_agent_blueprint_layer.py::test_compiled_agent_creation_contract_google_sheets_to_telegram`
-  - `tests/test_agent_blueprint_layer.py::test_agent_preflight_accepts_openclaw_provider_route_for_binding`
+  - Run observability now exposes `localos_agent_run_unified_billing_ledger_v1`.
+  - Action boundary billing remains separate and does not double-count run totals.
+  - `tests/test_agent_blueprint_layer.py::test_runner_load_run_includes_observability_envelope_for_openclaw_actions`
 
 ### AC4
 - Status: PASS
 - Proof:
-  - Activation gate and post-create handoff now return `choose_provider_route` for route blockers instead of generic connection steps.
-  - `tests/test_agent_blueprint_layer.py::test_compiled_agent_creation_contract_google_sheets_to_telegram`
-  - `tests/test_agent_blueprint_layer.py::test_agent_preview_run_and_activation_endpoints_enforce_safe_gate`
+  - `/dashboard/agents` top cockpit now answers four product questions: what the agent does, whether it is ready, what is missing, and the last run.
+  - Technical readiness rows were removed from the first screen.
+  - `tests/test_agent_blueprint_layer.py::test_agent_blueprint_api_guards_version_blueprint_mismatch`
 
 ### AC5
 - Status: PASS
 - Proof:
-  - `/dashboard/agents` builder no longer auto-selects recommended routes; user must explicitly choose and confirm provider routes before draft creation.
+  - Agents UI billing panel now displays `Единый billing ledger`, `Оценка до запуска`, and `Факт после запуска`.
+  - Run detail billing also renders unified ledger items when present.
   - Frontend production build passed.
 
 ### AC6
 - Status: PASS
 - Proof:
-  - Full agent blueprint suite passed: 155 tests.
-  - Production action output now includes `localos_production_action_contract_v1` with preflight, approval policy, ledger, limits, recovery, and side-effect flags.
-  - No schema migration was added.
+  - Full agent blueprint suite passed: 156 tests.
+  - Frontend production build passed.
   - `git diff --check` passed.
-
-### AC7
-- Status: PASS
-- Proof:
-  - OpenClaw planner loop now emits blocking `openclaw_workflow_detail_missing` questions for missing Google Sheets target, Telegram target, schedule/trigger, and post format.
-  - Builder setup flow refuses to create draft when these workflow details are missing.
-  - `tests/test_agent_blueprint_layer.py::test_openclaw_planner_loop_requires_workflow_details_before_draft`
-  - `tests/test_agent_blueprint_layer.py::test_agent_builder_blocks_empty_google_sheets_to_telegram_workflow`
-
-### AC8
-- Status: PASS
-- Proof:
-  - Maton delivery preview and finance transaction request steps expose the production action runtime contract.
-  - `tests/test_agent_blueprint_layer.py::test_runner_creates_maton_delivery_preview_draft_without_dispatch`
-  - `tests/test_agent_blueprint_layer.py::test_runner_passes_compiled_step_rows_to_next_capability_without_runtime_ai`
+  - No schema migration was added.
 
 ## Commands run
 - `PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py`
+- `cd frontend && npm run build`
 - `git diff --check`
 
 ## Raw artifacts
-- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase9-connector-selection-agent-blueprint-tests.txt`
-- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase9-connector-selection-frontend-build.txt`
-- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase9-connector-selection-diff-check.txt`
-- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase10-planner-loop-action-contract-tests.txt`
-- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase10-diff-check.txt`
+- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase11-billing-cockpit-agent-blueprint-tests.txt`
+- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase11-billing-cockpit-frontend-build.txt`
+- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase11-billing-cockpit-diff-check.txt`
 
 ## Known gaps
-- Full objective remains active: the builder still uses deterministic completeness heuristics for some workflow details; live OpenClaw/GigaChat planning should progressively replace/augment these rules.
-- More provider-specific production handlers can be deepened, especially real Telegram post handoff, review publish provider handoff, and compile/preview/run billing ledger coverage.
+- Full objective remains active: live OpenClaw/GigaChat planning should keep replacing deterministic compiler heuristics where it can do better.
+- More provider-specific production handlers can still be deepened: real Telegram post handoff, review publish provider handoff, and richer external provider billing facts.

@@ -16,6 +16,9 @@ TOKENS_PER_CREDIT = 1000
 
 OPERATOR_CHAT_USAGE_CATEGORY = "operator_chat"
 OPERATOR_CHAT_ESTIMATED_CREDITS = 1
+AGENT_PREVIEW_RUN_ESTIMATED_TOKENS = 500
+AGENT_PRODUCTION_RUN_ESTIMATED_TOKENS = 2000
+AGENT_EXTERNAL_ACTION_ESTIMATED_TOKENS = 2000
 
 
 def _stable_id(*parts: Any) -> str:
@@ -24,6 +27,7 @@ def _stable_id(*parts: Any) -> str:
 
 
 def build_agent_creation_cost_preview() -> dict[str, Any]:
+    items = build_agent_billing_estimate_items()
     return {
         "action_key": AGENT_CREATION_ACTION_KEY,
         "task_type": AGENT_CREATION_TASK_TYPE,
@@ -33,7 +37,56 @@ def build_agent_creation_cost_preview() -> dict[str, Any]:
         "cost_source": "model_tokens",
         "billing_url": BILLING_URL,
         "copy": "Оценка: примерно 3 кредита за компиляцию агента.",
+        "schema": "localos_agent_billing_estimate_v1",
+        "items": items,
+        "total_estimated_credits": sum(int(item.get("estimated_credits") or 0) for item in items),
+        "total_estimated_tokens": sum(int(item.get("estimated_tokens") or 0) for item in items),
     }
+
+
+def build_agent_billing_estimate_items() -> list[dict[str, Any]]:
+    return [
+        {
+            "key": "agent_creation",
+            "label": "Создание агента",
+            "phase": "compile",
+            "estimated_credits": AGENT_CREATION_ESTIMATED_CREDITS,
+            "estimated_tokens": AGENT_CREATION_ESTIMATED_CREDITS * TOKENS_PER_CREDIT,
+            "billing_mode": "reserve_then_charge",
+        },
+        {
+            "key": "preview_run",
+            "label": "Preview run",
+            "phase": "preview",
+            "estimated_credits": 0,
+            "estimated_tokens": AGENT_PREVIEW_RUN_ESTIMATED_TOKENS,
+            "billing_mode": "meter_after_run",
+        },
+        {
+            "key": "production_run",
+            "label": "Production run",
+            "phase": "run",
+            "estimated_credits": 0,
+            "estimated_tokens": AGENT_PRODUCTION_RUN_ESTIMATED_TOKENS,
+            "billing_mode": "meter_after_run",
+        },
+        {
+            "key": "external_action",
+            "label": "Внешнее действие",
+            "phase": "external_action",
+            "estimated_credits": 0,
+            "estimated_tokens": AGENT_EXTERNAL_ACTION_ESTIMATED_TOKENS,
+            "billing_mode": "action_orchestrator_reserve_settle",
+        },
+        {
+            "key": "operator_chat",
+            "label": "Чат оператора",
+            "phase": "operator_chat",
+            "estimated_credits": OPERATOR_CHAT_ESTIMATED_CREDITS,
+            "estimated_tokens": OPERATOR_CHAT_ESTIMATED_CREDITS * TOKENS_PER_CREDIT,
+            "billing_mode": "reserve_then_charge",
+        },
+    ]
 
 
 def _row_value(row: Any, key: str, index: int = 0) -> Any:

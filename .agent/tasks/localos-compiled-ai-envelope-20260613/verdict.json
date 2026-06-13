@@ -1,59 +1,51 @@
 {
   "task_id": "localos-compiled-ai-envelope-20260613",
   "overall_verdict": "PASS",
-  "phase": "phase_10_openclaw_planner_loop_action_contracts",
+  "phase": "phase_11_billing_ledger_cockpit",
   "criteria": [
     {
       "id": "AC1",
       "status": "PASS",
-      "reason": "Builder preview now separates service availability from route selection for route-required providers."
+      "reason": "Agent creation preview now exposes a unified estimate for compile, preview, run, external action, and operator chat."
     },
     {
       "id": "AC2",
       "status": "PASS",
-      "reason": "Google Sheets -> Telegram requires both binding routes before preview/activation."
+      "reason": "Agent metrics expose actual billing facts in the same ledger shape as the estimate."
     },
     {
       "id": "AC3",
       "status": "PASS",
-      "reason": "Preflight merges selected resource config with selected provider route and blocks when route is missing."
+      "reason": "Run observability exposes unified billing facts and avoids double-counting action boundary tokens."
     },
     {
       "id": "AC4",
       "status": "PASS",
-      "reason": "Activation gate and post-create handoff now point route blockers to route selection."
+      "reason": "Agents cockpit now answers what the agent does, whether it is ready, what is missing, and the last run."
     },
     {
       "id": "AC5",
       "status": "PASS",
-      "reason": "Agents UI no longer auto-selects recommended routes and blocks creation until routes are selected and confirmed."
+      "reason": "Agents UI shows estimate before launch and actual fact after launch in the billing panel."
     },
     {
       "id": "AC6",
       "status": "PASS",
-      "reason": "Full agent blueprint suite and diff check passed without schema migration."
-    },
-    {
-      "id": "AC7",
-      "status": "PASS",
-      "reason": "Incomplete Google Sheets -> Telegram descriptions now produce blocking workflow-detail questions and cannot create an empty draft."
-    },
-    {
-      "id": "AC8",
-      "status": "PASS",
-      "reason": "Production capability outputs include preflight, approval, ledger, limits, recovery, and side-effect contract evidence."
+      "reason": "Full agent blueprint suite, frontend build, and diff check passed without schema migration."
     }
   ],
   "commands_run": [
     "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "cd frontend && npm run build",
     "git diff --check"
   ],
   "artifacts_used": [
     ".agent/tasks/localos-compiled-ai-envelope-20260613/spec.md",
     ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.md",
     ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.json",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase10-planner-loop-action-contract-tests.txt",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase10-diff-check.txt"
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase11-billing-cockpit-agent-blueprint-tests.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase11-billing-cockpit-frontend-build.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase11-billing-cockpit-diff-check.txt"
   ],
   "remaining_goal_status": "IN_PROGRESS"
 }

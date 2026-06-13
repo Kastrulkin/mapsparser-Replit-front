@@ -1,58 +1,56 @@
 {
   "task_id": "localos-compiled-ai-envelope-20260613",
   "overall_status": "PASS",
-  "phase": "phase_10_openclaw_planner_loop_action_contracts",
+  "phase": "phase_11_billing_ledger_cockpit",
   "acceptance_criteria": [
     {
       "id": "AC1",
-      "text": "Builder preview distinguishes service availability from execution route selection for Google, Telegram, and Maton.",
+      "text": "Before agent launch, the user can see a unified estimate for compile, preview, run, external action, and operator chat.",
       "status": "PASS",
       "proof": [
-        "src/services/agent_builder_session.py::_preview_connection_action",
-        "tests/test_agent_blueprint_layer.py::test_agent_builder_session_preview_includes_feasibility_for_required_connectors"
+        "src/services/agent_builder_billing.py::build_agent_creation_cost_preview",
+        "src/services/agent_builder_billing.py::build_agent_billing_estimate_items",
+        "tests/test_agent_blueprint_layer.py::test_agent_creation_cost_preview_exposes_unified_ledger_estimate_items"
       ],
       "gaps": []
     },
     {
       "id": "AC2",
-      "text": "Google Sheets -> Telegram asks for two binding routes and cannot proceed to preview/activation without explicit route selection.",
+      "text": "After runs, agent metrics expose actual billing facts in the same ledger shape as the estimate.",
       "status": "PASS",
       "proof": [
-        "src/api/agent_builder_api.py::create_agent_blueprint_from_session",
-        "tests/test_agent_blueprint_layer.py::test_agent_builder_api_requires_selected_provider_routes_for_required_bindings",
-        "tests/test_agent_blueprint_layer.py::test_compiled_agent_creation_contract_google_sheets_to_telegram"
+        "src/services/agent_metrics.py::_build_unified_billing_ledger",
+        "tests/test_agent_blueprint_layer.py::test_agent_metrics_summary_reports_compiled_runtime_health"
       ],
       "gaps": []
     },
     {
       "id": "AC3",
-      "text": "Preflight combines selected config/credentials with selected provider route and blocks when route is missing.",
+      "text": "Run observability exposes unified billing facts without double-counting action boundary tokens.",
       "status": "PASS",
       "proof": [
-        "src/services/agent_integration_preflight.py::_metadata_binding_config",
-        "tests/test_agent_blueprint_layer.py::test_compiled_agent_creation_contract_google_sheets_to_telegram",
-        "tests/test_agent_blueprint_layer.py::test_agent_preflight_accepts_openclaw_provider_route_for_binding"
+        "src/services/agent_blueprint_runner.py::_build_run_unified_billing_ledger",
+        "tests/test_agent_blueprint_layer.py::test_runner_load_run_includes_observability_envelope_for_openclaw_actions"
       ],
       "gaps": []
     },
     {
       "id": "AC4",
-      "text": "Activation gate and post-create handoff point users to route selection for route blockers.",
+      "text": "Agents cockpit answers the four top user questions and hides technical readiness from the first screen.",
       "status": "PASS",
       "proof": [
-        "src/api/agent_blueprints_api.py::_activation_gate_next_step",
-        "src/api/agent_builder_api.py::_build_post_create_handoff",
-        "tests/test_agent_blueprint_layer.py::test_agent_preview_run_and_activation_endpoints_enforce_safe_gate"
+        "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx::AgentFourAnswerStrip",
+        "tests/test_agent_blueprint_layer.py::test_agent_blueprint_api_guards_version_blueprint_mismatch"
       ],
       "gaps": []
     },
     {
       "id": "AC5",
-      "text": "Agents UI requires explicit route selection and confirmation instead of auto-selecting recommended routes.",
+      "text": "Agents UI shows estimate before launch and actual fact after launch in the billing panel.",
       "status": "PASS",
       "proof": [
-        "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx::autoSelectBuilderProviderRoutes",
-        "frontend build passed"
+        "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx::AgentBillingBreakdownPanel",
+        "frontend production build passed"
       ],
       "gaps": []
     },
@@ -61,32 +59,9 @@
       "text": "Regression suite and diff checks pass without schema migration.",
       "status": "PASS",
       "proof": [
-        "155 agent blueprint tests passed",
-        "production action runtime contract covered by Maton and finance runner tests",
+        "156 agent blueprint tests passed",
+        "frontend production build passed",
         "git diff --check passed"
-      ],
-      "gaps": []
-    },
-    {
-      "id": "AC7",
-      "text": "OpenClaw planner loop asks blocking workflow-detail questions before draft creation when the user description is incomplete.",
-      "status": "PASS",
-      "proof": [
-        "src/services/agent_openclaw_planner_loop.py::_questions_for_workflow_details",
-        "src/services/agent_builder_session.py::_blocking_clarification_questions",
-        "tests/test_agent_blueprint_layer.py::test_openclaw_planner_loop_requires_workflow_details_before_draft",
-        "tests/test_agent_blueprint_layer.py::test_agent_builder_blocks_empty_google_sheets_to_telegram_workflow"
-      ],
-      "gaps": []
-    },
-    {
-      "id": "AC8",
-      "text": "Production capability steps expose preflight, approval, ledger, limit, recovery, and side-effect contract evidence.",
-      "status": "PASS",
-      "proof": [
-        "src/services/agent_blueprint_runner.py::_production_action_runtime_contract",
-        "tests/test_agent_blueprint_layer.py::test_runner_creates_maton_delivery_preview_draft_without_dispatch",
-        "tests/test_agent_blueprint_layer.py::test_runner_passes_compiled_step_rows_to_next_capability_without_runtime_ai"
       ],
       "gaps": []
     }
@@ -95,24 +70,23 @@
     ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.json",
     ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.md",
     ".agent/tasks/localos-compiled-ai-envelope-20260613/verdict.json",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase9-connector-selection-agent-blueprint-tests.txt",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase9-connector-selection-diff-check.txt",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase9-connector-selection-frontend-build.txt",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase10-planner-loop-action-contract-tests.txt",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase10-diff-check.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase11-billing-cockpit-agent-blueprint-tests.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase11-billing-cockpit-diff-check.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase11-billing-cockpit-frontend-build.txt",
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
     "src/services/agent_blueprint_runner.py",
-    "src/services/agent_builder_session.py",
-    "src/services/agent_openclaw_planner_context.py",
-    "src/services/agent_openclaw_planner_loop.py",
+    "src/services/agent_builder_billing.py",
+    "src/services/agent_metrics.py",
     "tests/test_agent_blueprint_layer.py"
   ],
   "commands_for_fresh_verifier": [
     "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py",
+    "cd frontend && npm run build",
     "git diff --check"
   ],
   "known_gaps": [
     "Full LocalOS compiled AI envelope objective remains active.",
-    "Planner completeness still uses deterministic heuristics for some details until live OpenClaw/GigaChat loop is wired deeper.",
-    "More provider-specific production handlers and billing ledger coverage for compile/preview/run remain later phases."
+    "Live OpenClaw/GigaChat planning should keep replacing deterministic compiler heuristics where it can do better.",
+    "More provider-specific production handlers can still be deepened: real Telegram post handoff, review publish provider handoff, and richer external provider billing facts."
   ]
 }

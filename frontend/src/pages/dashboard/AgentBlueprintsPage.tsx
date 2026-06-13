@@ -272,6 +272,7 @@ type AgentRunObservability = {
     total_cost?: number;
   };
   billing_ledger?: {
+    schema?: string;
     summary?: {
       reserved_tokens?: number;
       settled_tokens?: number;
@@ -292,6 +293,7 @@ type AgentRunObservability = {
       created_at?: string;
     }>;
   };
+  unified_billing_ledger?: AgentUnifiedBillingLedger;
   errors?: Array<{
     source?: string;
     step_key?: string;
@@ -363,6 +365,7 @@ type AgentMetricsSummary = {
     total_items?: number;
     items?: AgentBillingBreakdownItem[];
   };
+  unified_billing_ledger?: AgentUnifiedBillingLedger;
   setup?: {
     required_bindings?: number;
     learning_events?: number;
@@ -372,13 +375,35 @@ type AgentMetricsSummary = {
 type AgentBillingBreakdownItem = {
   key?: string;
   label?: string;
+  phase?: string;
   count?: number;
   estimated_credits?: number;
+  estimated_tokens?: number;
   charged_credits?: number;
+  actual_credits?: number;
+  actual_tokens?: number;
+  actual_cost?: number;
   settled_tokens?: number;
   total_cost?: number;
   ledger_entries?: number;
   status?: string;
+  billing_mode?: string;
+  source?: string;
+  fact_ref?: string;
+};
+
+type AgentUnifiedBillingLedger = {
+  schema?: string;
+  summary?: {
+    estimated_credits?: number;
+    estimated_tokens?: number;
+    actual_credits?: number;
+    actual_tokens?: number;
+    actual_cost?: number;
+    has_actuals?: boolean;
+    external_action_count?: number;
+  };
+  items?: AgentBillingBreakdownItem[];
 };
 
 type AgentBlueprintDetails = {
@@ -6662,9 +6687,30 @@ const AgentOverviewPanel = ({
   const connectorsReady = requiredBindings === 0 || missingBindings === 0;
   const previewReady = activationGate?.preview_run_status?.ready === true;
   const activationVersionId = activationGate?.active_version_id || blueprint.active_version_id || '';
-  const settledTokens = Number(metrics?.cost_tokens?.settled_tokens || 0);
-  const totalCost = Number(metrics?.cost_tokens?.total_cost || 0);
   const builderPreview = getBlueprintBuilderPreview(detailsBlueprint || blueprint);
+  const taskAnswer = builderPreview?.understood_task || blueprint.description || blueprint.active_goal || blueprint.latest_goal || 'Настройте задачу агента.';
+  const readyAnswer = needsApproval
+    ? 'ждёт решения человека'
+    : !connectorsReady
+      ? 'нужно подключить сервисы'
+      : compiledKnown && !compiledValid
+        ? 'нужно исправить логику'
+        : !previewReady
+          ? 'готов к preview'
+          : activationGate?.can_activate
+            ? 'готов к запуску'
+            : humanizeStatus(listStatus);
+  const readyTone: 'default' | 'warning' = needsApproval || !connectorsReady || (compiledKnown && !compiledValid) ? 'warning' : 'default';
+  const missingAnswer = needsApproval
+    ? 'одобрение перед внешним действием'
+    : !connectorsReady
+      ? `${missingBindings} из ${requiredBindings} подключений`
+      : compiledKnown && !compiledValid
+        ? 'валидный compiled workflow'
+        : !previewReady
+          ? 'безопасная проверка на примере'
+          : 'ничего критичного';
+  const lastRunAnswer = formatLastRun(blueprint);
 
   return (
     <div className="space-y-4">
@@ -6694,12 +6740,14 @@ const AgentOverviewPanel = ({
       </div>
       ) : null}
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <AgentSummaryPill label="Статус" value={humanizeStatus(listStatus)} tone={needsApproval ? 'warning' : 'default'} />
-        <AgentSummaryPill label="Последний запуск" value={formatLastRun(blueprint)} />
-        <AgentSummaryPill label="Compiled" value={compiledKnown ? (compiledValid ? 'проверен' : 'ошибка') : 'черновик'} tone={compiledKnown && !compiledValid ? 'warning' : 'default'} />
-        <AgentSummaryPill label="Подключения" value={requiredBindings ? `${Math.max(requiredBindings - missingBindings, 0)}/${requiredBindings}` : 'не нужны'} tone={connectorsReady ? 'default' : 'warning'} />
-      </div>
+      <AgentFourAnswerStrip
+        task={taskAnswer}
+        ready={readyAnswer}
+        missing={missingAnswer}
+        lastRun={lastRunAnswer}
+        readyTone={readyTone}
+        missingTone={missingAnswer === 'ничего критичного' ? 'default' : 'warning'}
+      />
 
       <AgentProductCockpit
         blueprint={blueprint}
@@ -6729,9 +6777,9 @@ const AgentOverviewPanel = ({
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.55fr)]">
         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
-          <div className="text-sm font-semibold text-slate-950">Что делает агент</div>
+          <div className="text-sm font-semibold text-slate-950">Управление</div>
           <div className="mt-2 text-sm leading-7 text-slate-700">
-            {blueprint.description || blueprint.active_goal || blueprint.latest_goal || 'Описание появится после настройки логики агента.'}
+            Основные действия собраны здесь. Технические версии, DSL и observability открываются из запусков и advanced-раздела.
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             <Button type="button" size="sm" variant="outline" onClick={onOpenLogic}>
@@ -6754,18 +6802,10 @@ const AgentOverviewPanel = ({
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
-          <div className="text-sm font-semibold text-slate-950">Готовность</div>
-          <div className="mt-3 space-y-2 text-sm">
-            <ReadinessRow label="Логика" ready={Boolean(latestVersionNumber)} readyText={`v${latestVersionNumber || 1}`} blockedText="нужна версия" />
-            <ReadinessRow label="Validation" ready={!compiledKnown || compiledValid} readyText={compiledKnown ? 'пройден' : 'ожидает'} blockedText="исправить" />
-            <ReadinessRow label="Подключения" ready={connectorsReady} readyText={requiredBindings ? 'готовы' : 'не нужны'} blockedText={`нужно ${missingBindings}`} />
-            <ReadinessRow label="Preview" ready={previewReady} readyText="пройден" blockedText="нужен запуск" />
-            <ReadinessRow label="Ручной контроль" ready blockedText="" readyText="включён" />
-            <ReadinessRow label="Результаты" ready={Boolean(review?.has_run || blueprint.last_run_id)} readyText="есть запуск" blockedText="нет запуска" />
-          </div>
-          <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+          <div className="text-sm font-semibold text-slate-950">Стоимость</div>
+          <div className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
             {voiceName ? `Голос: ${voiceName}. ` : ''}
-            Запусков загружено: {metrics?.runs?.loaded || 0}. Токены: {settledTokens}. Стоимость: {totalCost ? totalCost.toFixed(2) : '0'}.
+            До запуска показываем оценку, после запуска — фактическое списание по compile, preview, run, external action и operator chat.
           </div>
           <AgentBillingBreakdownPanel metrics={metrics} />
         </div>
@@ -6866,6 +6906,52 @@ const AgentProductCockpit = ({
     </div>
   );
 };
+
+const AgentFourAnswerStrip = ({
+  task,
+  ready,
+  missing,
+  lastRun,
+  readyTone,
+  missingTone,
+}: {
+  task: string;
+  ready: string;
+  missing: string;
+  lastRun: string;
+  readyTone: 'default' | 'warning';
+  missingTone: 'default' | 'warning';
+}) => (
+  <div className="grid gap-3 xl:grid-cols-4">
+    <AgentAnswerCard label="Что делает" value={task} />
+    <AgentAnswerCard label="Готов ли" value={ready} tone={readyTone} />
+    <AgentAnswerCard label="Чего не хватает" value={missing} tone={missingTone} />
+    <AgentAnswerCard label="Последний run" value={lastRun} />
+  </div>
+);
+
+const AgentAnswerCard = ({
+  label,
+  value,
+  tone = 'default',
+}: {
+  label: string;
+  value: string;
+  tone?: 'default' | 'warning';
+}) => (
+  <div className={cn(
+    'rounded-2xl border px-4 py-3',
+    tone === 'warning' ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-white',
+  )}>
+    <div className={cn(
+      'text-xs font-semibold uppercase',
+      tone === 'warning' ? 'text-amber-700' : 'text-slate-500',
+    )}>
+      {label}
+    </div>
+    <div className="mt-1 line-clamp-3 text-sm font-semibold leading-6 text-slate-950">{value}</div>
+  </div>
+);
 
 const AgentCockpitFact = ({
   icon: Icon,
@@ -7023,48 +7109,46 @@ const AgentActivationPathStrip = ({ steps }: { steps: AgentActivationPathStep[] 
   </div>
 );
 
-const ReadinessRow = ({
-  label,
-  ready,
-  readyText,
-  blockedText,
-}: {
-  label: string;
-  ready: boolean;
-  readyText: string;
-  blockedText: string;
-}) => (
-  <div className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2">
-    <span className="text-slate-600">{label}</span>
-    <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium ring-1', ready ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-amber-50 text-amber-800 ring-amber-200')}>
-      {ready ? readyText : blockedText}
-    </span>
-  </div>
-);
-
 const AgentBillingBreakdownPanel = ({ metrics }: { metrics?: AgentMetricsSummary }) => {
-  const items = metrics?.billing_breakdown?.items || metrics?.cost_tokens?.breakdown || [];
-  const visibleItems = items.filter((item) => Boolean(item.count || item.charged_credits || item.estimated_credits || item.settled_tokens || item.total_cost));
+  const ledger = metrics?.unified_billing_ledger;
+  const items = ledger?.items || metrics?.billing_breakdown?.items || metrics?.cost_tokens?.breakdown || [];
+  const visibleItems = items.filter((item) => Boolean(
+    item.count
+    || item.charged_credits
+    || item.actual_credits
+    || item.estimated_credits
+    || item.estimated_tokens
+    || item.actual_tokens
+    || item.settled_tokens
+    || item.actual_cost
+    || item.total_cost,
+  ));
   if (!visibleItems.length) {
     return (
       <div className="mt-3 rounded-xl bg-white px-3 py-2 text-xs leading-5 text-slate-500 ring-1 ring-slate-200">
-        Расходы появятся после compile, preview или production run.
+        Единый billing ledger появится после compile, preview или production run.
       </div>
     );
   }
   return (
     <div className="mt-3 rounded-xl bg-white px-3 py-3 ring-1 ring-slate-200">
-      <div className="flex items-center gap-2 text-xs font-semibold uppercase text-slate-500">
-        <ReceiptText className="h-4 w-4 text-slate-500" />
-        Расходы
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase text-slate-500">
+          <ReceiptText className="h-4 w-4 text-slate-500" />
+          Единый billing ledger
+        </div>
+        <div className="text-xs leading-5 text-slate-500">
+          Оценка до запуска: {formatBillingEstimateSummary(ledger)}
+          <span className="mx-1 text-slate-300">/</span>
+          Факт после запуска: {formatBillingActualSummary(ledger)}
+        </div>
       </div>
       <div className="mt-2 space-y-1.5">
         {visibleItems.slice(0, 5).map((item) => (
-          <div key={item.key || item.label} className="flex items-center justify-between gap-3 text-xs leading-5">
-            <span className="min-w-0 truncate text-slate-600">{item.label || humanizeMeta(item.key || 'cost')}</span>
-            <span className="shrink-0 font-medium text-slate-900">
-              {formatBillingBreakdownValue(item)}
-            </span>
+          <div key={item.key || item.label} className="grid gap-1 rounded-lg bg-slate-50 px-2.5 py-2 text-xs leading-5 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
+            <span className="min-w-0 truncate font-medium text-slate-700">{item.label || humanizeMeta(item.key || 'cost')}</span>
+            <span className="text-slate-500">оценка {formatBillingEstimateValue(item)}</span>
+            <span className="font-semibold text-slate-950">факт {formatBillingActualValue(item)}</span>
           </div>
         ))}
       </div>
@@ -7072,20 +7156,53 @@ const AgentBillingBreakdownPanel = ({ metrics }: { metrics?: AgentMetricsSummary
   );
 };
 
-const formatBillingBreakdownValue = (item: AgentBillingBreakdownItem) => {
-  if (item.charged_credits) {
-    return `${item.charged_credits} кр.`;
+const formatBillingEstimateSummary = (ledger?: AgentUnifiedBillingLedger) => {
+  const summary = ledger?.summary || {};
+  const credits = Number(summary.estimated_credits || 0);
+  const tokens = Number(summary.estimated_tokens || 0);
+  if (!credits && !tokens) {
+    return 'нет';
   }
-  if (item.total_cost) {
-    return item.total_cost.toFixed(2);
+  return `${credits} кр. / ${tokens} ток.`;
+};
+
+const formatBillingActualSummary = (ledger?: AgentUnifiedBillingLedger) => {
+  const summary = ledger?.summary || {};
+  const credits = Number(summary.actual_credits || 0);
+  const tokens = Number(summary.actual_tokens || 0);
+  const cost = Number(summary.actual_cost || 0);
+  if (!credits && !tokens && !cost) {
+    return 'нет списаний';
   }
-  if (item.settled_tokens) {
-    return `${item.settled_tokens} ток.`;
+  return `${credits} кр. / ${tokens} ток. / ${cost.toFixed(2)}`;
+};
+
+const formatBillingEstimateValue = (item: AgentBillingBreakdownItem) => {
+  const credits = Number(item.estimated_credits || 0);
+  const tokens = Number(item.estimated_tokens || 0);
+  if (credits && tokens) {
+    return `${credits} кр., ${tokens} ток.`;
   }
-  if (item.estimated_credits) {
-    return `~${item.estimated_credits} кр.`;
+  if (credits) {
+    return `${credits} кр.`;
   }
-  return `${item.count || 0}`;
+  if (tokens) {
+    return `${tokens} ток.`;
+  }
+  return '0';
+};
+
+const formatBillingActualValue = (item: AgentBillingBreakdownItem) => {
+  const credits = Number(item.actual_credits || item.charged_credits || 0);
+  const tokens = Number(item.actual_tokens || item.settled_tokens || 0);
+  const cost = Number(item.actual_cost || item.total_cost || 0);
+  if (credits) {
+    return `${credits} кр.`;
+  }
+  if (tokens || cost) {
+    return `${tokens} ток. / ${cost.toFixed(2)}`;
+  }
+  return item.count ? `${item.count} событий` : '0';
 };
 
 const AgentConnectionsPanel = ({
@@ -9209,6 +9326,7 @@ const AgentRunObservabilityPanel = ({
   const observability = run.observability || {};
   const costTokens = observability.cost_tokens || {};
   const billingLedger = observability.billing_ledger || {};
+  const unifiedBillingLedger = observability.unified_billing_ledger || {};
   const billingActions = billingLedger.actions || [];
   const billingEntries = billingLedger.entries || [];
   const delivery = observability.delivery_status || {};
@@ -9271,10 +9389,18 @@ const AgentRunObservabilityPanel = ({
             />
           ))}
         </RunColumn>
-        <RunColumn title="Billing" icon={ReceiptText}>
-          {billingActions.map((item) => (
-            <BillingActionItem key={item.action_id || item.capability || 'billing'} item={item} />
-          ))}
+	        <RunColumn title="Billing" icon={ReceiptText}>
+	          {(unifiedBillingLedger.items || []).map((item) => (
+	            <TimelineItem
+	              key={item.key || item.label || 'unified-billing'}
+	              title={item.label || humanizeMeta(item.key || 'billing')}
+	              meta={`оценка ${formatBillingEstimateValue(item)} · факт ${formatBillingActualValue(item)}`}
+	              status={item.status || 'billing'}
+	            />
+	          ))}
+	          {billingActions.map((item) => (
+	            <BillingActionItem key={item.action_id || item.capability || 'billing'} item={item} />
+	          ))}
           {billingEntries.slice(0, 3).map((entry, index) => (
             <TimelineItem
               key={`${entry.action_id || 'entry'}-${entry.entry_type || index}-${entry.created_at || index}`}

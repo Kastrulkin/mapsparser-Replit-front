@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
+from services.agent_builder_billing import build_agent_billing_estimate_items
+
 
 def build_agent_metrics_summary(
     blueprint: Dict[str, Any],
@@ -22,6 +24,7 @@ def build_agent_metrics_summary(
 
     cost_tokens = _aggregate_cost_tokens_from_runs(runs, metadata)
     billing_breakdown = _build_billing_breakdown(runs, metadata, cost_tokens)
+    unified_billing_ledger = _build_unified_billing_ledger(runs, metadata)
     cost_tokens["breakdown"] = billing_breakdown["items"]
     return {
         "schema": "agent_metrics_summary_v1",
@@ -51,6 +54,7 @@ def build_agent_metrics_summary(
         },
         "cost_tokens": cost_tokens,
         "billing_breakdown": billing_breakdown,
+        "unified_billing_ledger": unified_billing_ledger,
         "setup": {
             "required_bindings": len(metadata.get("required_integration_bindings") or []) if isinstance(metadata.get("required_integration_bindings"), list) else 0,
             "learning_events": len(metadata.get("learning_events") or []) if isinstance(metadata.get("learning_events"), list) else 0,
@@ -87,7 +91,10 @@ def _aggregate_cost_tokens_from_runs(runs: List[Dict[str, Any]], metadata: Dict[
         "released_tokens": 0,
         "inflight_reserved_tokens": 0,
         "total_cost": 0.0,
-        "agent_creation_charged": _safe_int(((metadata.get("billing") or {}) if isinstance(metadata.get("billing"), dict) else {}).get("credits_charged")),
+        "agent_creation_charged": _safe_int(
+            ((metadata.get("billing") or {}) if isinstance(metadata.get("billing"), dict) else {}).get("credits_charged")
+            or ((metadata.get("billing") or {}) if isinstance(metadata.get("billing"), dict) else {}).get("actual_credits")
+        ),
     }
     for run in runs:
         output = run.get("output_json") if isinstance(run.get("output_json"), dict) else {}
@@ -104,7 +111,7 @@ def _aggregate_cost_tokens_from_runs(runs: List[Dict[str, Any]], metadata: Dict[
 
 def _build_billing_breakdown(runs: List[Dict[str, Any]], metadata: Dict[str, Any], totals: Dict[str, Any]) -> Dict[str, Any]:
     billing = metadata.get("billing") if isinstance(metadata.get("billing"), dict) else {}
-    creation_charged = _safe_int(billing.get("credits_charged"))
+    creation_charged = _safe_int(billing.get("credits_charged") or billing.get("actual_credits"))
     creation_estimated = _safe_int(billing.get("estimated_credits"))
     preview_runs = 0
     production_runs = 0
@@ -161,7 +168,7 @@ def _build_billing_breakdown(runs: List[Dict[str, Any]], metadata: Dict[str, Any
             "status": "metered_after_run",
         },
         {
-            "key": "external_actions",
+            "key": "external_action",
             "label": "Внешние действия",
             "count": external_actions,
             "ledger_entries": external_entries,
@@ -182,6 +189,139 @@ def _build_billing_breakdown(runs: List[Dict[str, Any]], metadata: Dict[str, Any
         "total_items": len(items),
         "items": items,
     }
+
+
+def _build_unified_billing_ledger(runs: List[Dict[str, Any]], metadata: Dict[str, Any]) -> Dict[str, Any]:
+    estimate_items = build_agent_billing_estimate_items()
+    estimate_by_key = {str(item.get("key") or ""): item for item in estimate_items}
+    billing = metadata.get("billing") if isinstance(metadata.get("billing"), dict) else {}
+    preview_actual = _run_phase_totals(runs, preview=True)
+    production_actual = _run_phase_totals(runs, preview=False)
+    external_actual = _external_action_totals(runs)
+    rows = [
+        _ledger_row(
+            estimate_by_key.get("agent_creation", {}),
+            actual_credits=_safe_int(billing.get("credits_charged") or billing.get("actual_credits")),
+            estimated_credits=_safe_int(billing.get("estimated_credits")) or None,
+            status="charged" if _safe_int(billing.get("credits_charged") or billing.get("actual_credits")) else "estimate",
+            source="agent_blueprint.metadata.billing",
+            fact_ref=str(billing.get("reservation_id") or billing.get("idempotency_key") or ""),
+        ),
+        _ledger_row(
+            estimate_by_key.get("preview_run", {}),
+            count=preview_actual["count"],
+            actual_tokens=preview_actual["settled_tokens"],
+            actual_cost=preview_actual["total_cost"],
+            status="settled" if preview_actual["settled_tokens"] or preview_actual["count"] else "estimate",
+            source="agent_runs.preview.observability",
+        ),
+        _ledger_row(
+            estimate_by_key.get("production_run", {}),
+            count=production_actual["count"],
+            actual_tokens=production_actual["settled_tokens"],
+            actual_cost=production_actual["total_cost"],
+            status="settled" if production_actual["settled_tokens"] or production_actual["count"] else "estimate",
+            source="agent_runs.production.observability",
+        ),
+        _ledger_row(
+            estimate_by_key.get("external_action", {}),
+            count=external_actual["count"],
+            actual_tokens=external_actual["settled_tokens"],
+            actual_cost=external_actual["total_cost"],
+            status="settled" if external_actual["settled_tokens"] or external_actual["count"] else "approval_required",
+            source="action_orchestrator.billing_ledger",
+        ),
+        _ledger_row(
+            estimate_by_key.get("operator_chat", {}),
+            actual_credits=_safe_int(billing.get("operator_chat_credits_charged")),
+            status="charged" if _safe_int(billing.get("operator_chat_credits_charged")) else "estimate",
+            source="operator_chat.credit_reservation",
+        ),
+    ]
+    actual_credits = sum(_safe_int(item.get("actual_credits")) for item in rows)
+    actual_tokens = sum(_safe_int(item.get("actual_tokens")) for item in rows)
+    actual_cost = round(sum(_safe_float(item.get("actual_cost")) for item in rows), 6)
+    estimated_credits = sum(_safe_int(item.get("estimated_credits")) for item in rows)
+    estimated_tokens = sum(_safe_int(item.get("estimated_tokens")) for item in rows)
+    return {
+        "schema": "localos_agent_unified_billing_ledger_v1",
+        "summary": {
+            "estimated_credits": estimated_credits,
+            "estimated_tokens": estimated_tokens,
+            "actual_credits": actual_credits,
+            "actual_tokens": actual_tokens,
+            "actual_cost": actual_cost,
+            "has_actuals": bool(actual_credits or actual_tokens or actual_cost),
+        },
+        "items": rows,
+    }
+
+
+def _ledger_row(
+    estimate: Dict[str, Any],
+    *,
+    count: int = 0,
+    actual_credits: int = 0,
+    actual_tokens: int = 0,
+    actual_cost: float = 0.0,
+    estimated_credits: int | None = None,
+    status: str = "estimate",
+    source: str = "",
+    fact_ref: str = "",
+) -> Dict[str, Any]:
+    key = str(estimate.get("key") or "")
+    return {
+        "key": key,
+        "label": str(estimate.get("label") or key),
+        "phase": str(estimate.get("phase") or key),
+        "count": count,
+        "estimated_credits": _safe_int(estimate.get("estimated_credits") if estimated_credits is None else estimated_credits),
+        "estimated_tokens": _safe_int(estimate.get("estimated_tokens")),
+        "actual_credits": actual_credits,
+        "actual_tokens": actual_tokens,
+        "actual_cost": round(actual_cost, 6),
+        "status": status,
+        "billing_mode": str(estimate.get("billing_mode") or ""),
+        "source": source,
+        "fact_ref": fact_ref,
+    }
+
+
+def _run_phase_totals(runs: List[Dict[str, Any]], *, preview: bool) -> Dict[str, Any]:
+    count = 0
+    settled_tokens = 0
+    total_cost = 0.0
+    for run in runs:
+        input_json = run.get("input_json") if isinstance(run.get("input_json"), dict) else {}
+        if bool(input_json.get("preview_mode")) != preview:
+            continue
+        count += 1
+        output = run.get("output_json") if isinstance(run.get("output_json"), dict) else {}
+        observability = output.get("observability") if isinstance(output.get("observability"), dict) else {}
+        cost_tokens = observability.get("cost_tokens") if isinstance(observability.get("cost_tokens"), dict) else {}
+        billing_ledger = observability.get("billing_ledger") if isinstance(observability.get("billing_ledger"), dict) else {}
+        billing_summary = billing_ledger.get("summary") if isinstance(billing_ledger.get("summary"), dict) else {}
+        settled_tokens += max(_safe_int(cost_tokens.get("settled_tokens")) - _safe_int(billing_summary.get("settled_tokens")), 0)
+        total_cost += max(_safe_float(cost_tokens.get("total_cost")) - _safe_float(billing_summary.get("total_cost")), 0.0)
+    return {"count": count, "settled_tokens": settled_tokens, "total_cost": round(total_cost, 6)}
+
+
+def _external_action_totals(runs: List[Dict[str, Any]]) -> Dict[str, Any]:
+    count = 0
+    settled_tokens = 0
+    total_cost = 0.0
+    for run in runs:
+        output = run.get("output_json") if isinstance(run.get("output_json"), dict) else {}
+        observability = output.get("observability") if isinstance(output.get("observability"), dict) else {}
+        billing_ledger = observability.get("billing_ledger") if isinstance(observability.get("billing_ledger"), dict) else {}
+        actions = billing_ledger.get("actions") if isinstance(billing_ledger.get("actions"), list) else []
+        count += len(actions)
+        for item in actions:
+            if not isinstance(item, dict):
+                continue
+            settled_tokens += _safe_int(item.get("settled_tokens"))
+            total_cost += _safe_float(item.get("total_cost"))
+    return {"count": count, "settled_tokens": settled_tokens, "total_cost": round(total_cost, 6)}
 
 
 def _safe_int(value: Any) -> int:
