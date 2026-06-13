@@ -239,6 +239,17 @@ type AgentRunObservability = {
       };
       provider_handoff?: Record<string, unknown>;
       error?: string | null;
+      rows_requiring_review?: Array<Record<string, unknown>>;
+      proposal_count?: number;
+      review_count?: number;
+      error_count?: number;
+      rows_total?: number;
+      rows_imported?: number;
+      rows_skipped?: number;
+      rows_failed?: number;
+      localos_write_performed?: boolean;
+      can_apply?: boolean;
+      apply_endpoint?: string;
       provider_write_performed?: boolean;
       created_at?: string;
     }>;
@@ -2980,6 +2991,26 @@ export const AgentBlueprintsPage = () => {
     } catch (requestError) {
       console.error(requestError);
       setError('Не удалось применить решение.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const applyFinanceRequests = async (runId: string) => {
+    setActionLoading(true);
+    setError(null);
+    try {
+      const response = await api.post(`/agent-runs/${runId}/finance-requests/apply`, {
+        reason: 'Applied from agent run dashboard',
+      });
+      setActiveRun(response.data?.run || null);
+      if (selectedBlueprint?.id) {
+        await loadBlueprintDetails(selectedBlueprint.id);
+        await loadBlueprintReview(selectedBlueprint.id);
+      }
+    } catch (requestError) {
+      console.error(requestError);
+      setError(getRequestErrorMessage(requestError, 'Не удалось применить операции в финансы.'));
     } finally {
       setActionLoading(false);
     }
@@ -6550,6 +6581,7 @@ const AgentDetailPanel = ({
         actionLoading={actionLoading}
         onPreviewNextStepAction={handlePreviewNextStep}
         onActivateVersion={onActivateVersion}
+        onApplyFinanceRequests={applyFinanceRequests}
       />
     ) : null}
   </DashboardSection>
@@ -7451,6 +7483,7 @@ const AgentAdvancedPanel = ({
   actionLoading,
   onPreviewNextStepAction,
   onActivateVersion,
+  onApplyFinanceRequests,
 }: {
   activeRun: AgentRun | null;
   versions: Array<Record<string, unknown>>;
@@ -7458,6 +7491,7 @@ const AgentAdvancedPanel = ({
   actionLoading: boolean;
   onPreviewNextStepAction: (nextStep: string) => void;
   onActivateVersion: (versionId: string) => void;
+  onApplyFinanceRequests: (runId: string) => void;
 }) => (
   <div className="space-y-4">
     <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
@@ -7474,6 +7508,7 @@ const AgentAdvancedPanel = ({
           actionLoading={actionLoading}
           onPreviewNextStepAction={onPreviewNextStepAction}
           onActivateVersion={onActivateVersion}
+          onApplyFinanceRequests={onApplyFinanceRequests}
         />
         <div className="grid gap-4 xl:grid-cols-3">
           <RunColumn title="Шаги runtime" icon={Clock3}>
@@ -9134,12 +9169,14 @@ const AgentRunObservabilityPanel = ({
   actionLoading,
   onPreviewNextStepAction,
   onActivateVersion,
+  onApplyFinanceRequests,
 }: {
   run: AgentRun;
   activationGate?: AgentActivationGate;
   actionLoading: boolean;
   onPreviewNextStepAction: (nextStep: string) => void;
   onActivateVersion: (versionId: string) => void;
+  onApplyFinanceRequests: (runId: string) => void;
 }) => {
   const [downloading, setDownloading] = useState(false);
   const observability = run.observability || {};
@@ -9222,7 +9259,13 @@ const AgentRunObservabilityPanel = ({
         </RunColumn>
         <RunColumn title="Ожидают approval" icon={ShieldCheck}>
           {domainRequests.map((item) => (
-            <DomainRequestItem key={`${item.kind || 'request'}-${item.id || item.action_id || item.review_id || item.title}`} item={item} />
+            <DomainRequestItem
+              key={`${item.kind || 'request'}-${item.id || item.action_id || item.review_id || item.title}`}
+              item={item}
+              runId={run.id}
+              actionLoading={actionLoading}
+              onApplyFinanceRequests={onApplyFinanceRequests}
+            />
           ))}
         </RunColumn>
         <RunColumn title="Ошибки и статусы" icon={AlertTriangle}>
@@ -9251,11 +9294,25 @@ const AgentRunObservabilityPanel = ({
 
 const DomainRequestItem = ({
   item,
+  runId,
+  actionLoading,
+  onApplyFinanceRequests,
 }: {
   item: NonNullable<NonNullable<AgentRunObservability['domain_requests']>['items']>[number];
+  runId: string;
+  actionLoading: boolean;
+  onApplyFinanceRequests: (runId: string) => void;
 }) => {
+  const isFinanceRequest = item.kind === 'finance_transaction_request';
+  const canApplyFinance = isFinanceRequest && item.can_apply === true && item.apply_state === 'apply_ready';
   const detailEntries = [
     item.why_waiting ? ['why_waiting', item.why_waiting] : null,
+    isFinanceRequest ? ['finance_rows', {
+      prepared: item.proposal_count || item.rows_total || 0,
+      imported: item.rows_imported || 0,
+      skipped: item.rows_skipped || 0,
+      failed: item.rows_failed || 0,
+    }] : null,
     item.limits ? ['limits', item.limits] : null,
     item.consent ? ['consent', item.consent] : null,
     item.delivery_journal ? ['delivery_journal', item.delivery_journal] : null,
@@ -9282,6 +9339,22 @@ const DomainRequestItem = ({
               <span className="font-medium text-slate-800">{humanizeMeta(key)}:</span> {formatPayloadValue(value)}
             </div>
           ))}
+        </div>
+      ) : null}
+      {canApplyFinance ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => onApplyFinanceRequests(runId)}
+            disabled={actionLoading}
+          >
+            {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ReceiptText className="mr-2 h-4 w-4" />}
+            Применить в финансы
+          </Button>
+          <span className="text-[11px] leading-4 text-slate-500">
+            Запись в LocalOS Finance выполнится только после этого действия.
+          </span>
         </div>
       ) : null}
     </div>

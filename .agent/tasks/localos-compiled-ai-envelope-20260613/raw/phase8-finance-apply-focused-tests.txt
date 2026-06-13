@@ -1,0 +1,5 @@
+Command:
+venv/bin/python -m pytest tests/test_agent_blueprint_layer.py::test_agent_blueprint_routes_are_owned_by_blueprint tests/test_agent_blueprint_layer.py::test_runner_passes_compiled_step_rows_to_next_capability_without_runtime_ai tests/test_agent_blueprint_layer.py::test_runner_applies_finance_requests_only_after_explicit_apply tests/test_agent_blueprint_layer.py::test_approved_domain_executor_applies_finance_transactions_after_human_gate -q
+
+Result:
+4 passed in 2.08s

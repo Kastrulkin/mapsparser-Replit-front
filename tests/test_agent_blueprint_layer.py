@@ -82,6 +82,9 @@ def test_agent_blueprint_routes_are_owned_by_blueprint():
         "/api/agent-runs/<run_id>/support-export": {
             "GET": "agent_blueprints_api.get_agent_run_support_export",
         },
+        "/api/agent-runs/<run_id>/finance-requests/apply": {
+            "POST": "agent_blueprints_api.apply_agent_run_finance_requests",
+        },
         "/api/agent-runs/<run_id>/feedback": {
             "POST": "agent_blueprints_api.create_agent_run_feedback",
         },
@@ -7157,6 +7160,126 @@ def test_runner_passes_compiled_step_rows_to_next_capability_without_runtime_ai(
     assert "input_mappings" not in orchestrator.calls[0]["payload"]
     assert "rows_from_step" not in orchestrator.calls[0]["payload"]
     assert "gigachat" not in json.dumps(orchestrator.calls[0], ensure_ascii=False).lower()
+    finance_step = next(
+        step
+        for step in cursor.tables["agent_run_steps"].values()
+        if step["step_key"] == "request_localos_finance"
+    )
+    assert finance_step["output_json"]["approved_executor"]["localos_writes_performed"] is False
+    assert cursor.tables["finance_entries"] == {}
+
+
+def test_runner_applies_finance_requests_only_after_explicit_apply():
+    from services.agent_blueprint_runner import AgentBlueprintRunner
+
+    class FinanceProposalOrchestrator:
+        def execute(self, envelope, user_data, *, allow_execute_when_approved=False):
+            return {
+                "success": True,
+                "status": "completed",
+                "action_id": "action-finance-1",
+                "result": {
+                    "status": "finance_transaction_request_created",
+                    "request_id": "finance-request-1",
+                    "source": "google_sheets",
+                    "normalized_mapping": {"amount": "amount"},
+                    "proposal_count": 1,
+                    "finance_entry_proposals": [
+                        {
+                            "record_type": "entry",
+                            "date": "2026-06-09",
+                            "type": "revenue",
+                            "category": "sales",
+                            "amount": 12000,
+                            "comment": "Оплата по таблице",
+                            "row_number": 1,
+                            "duplicate_key": "finance-dup-apply-1",
+                        }
+                    ],
+                    "rows_requiring_review": [],
+                    "errors": [],
+                    "approval_state": "pending_human",
+                    "apply_state": "not_applied",
+                    "localos_write_performed": False,
+                },
+            }
+
+        def get_action_support_package(self, action_id, user_data, limit=100, full=False):
+            return {
+                "action_id": action_id,
+                "action": {"status": "completed", "capability": "finance.transaction.create"},
+                "timeline": {"count": 0, "events": []},
+                "billing_summary": {},
+                "delivery_stats": {},
+            }
+
+    cursor = FakeCursor()
+    cursor.tables["agent_runs"]["run1"] = {
+        "id": "run1",
+        "blueprint_id": "bp1",
+        "blueprint_version_id": "ver1",
+        "business_id": "biz1",
+        "status": "running",
+        "input_json": {"preview_mode": False},
+        "output_json": {},
+        "created_by_user_id": "user1",
+    }
+    cursor.tables["agent_blueprint_versions"]["ver1"] = {
+        "id": "ver1",
+        "blueprint_id": "bp1",
+        "steps_json": [],
+        "capability_allowlist_json": ["finance.transaction.create"],
+    }
+    cursor.tables["agent_approvals"]["approval1"] = {
+        "id": "approval1",
+        "run_id": "run1",
+        "step_id": "approval-step",
+        "status": "approved",
+        "approval_type": "finance_transaction_import",
+        "title": "Approved",
+        "payload_json": {},
+        "requested_by_user_id": "user1",
+    }
+    step = {
+        "key": "request_localos_finance",
+        "type": "capability",
+        "capability": "finance.transaction.create",
+        "requires_approval": True,
+        "required_approval_type": "finance_transaction_import",
+        "payload": {"rows": [{"amount": 12000}]},
+    }
+    runner = AgentBlueprintRunner(cursor, orchestrator=FinanceProposalOrchestrator())
+
+    completed = runner._execute_capability_step(
+        cursor.tables["agent_runs"]["run1"],
+        cursor.tables["agent_blueprint_versions"]["ver1"],
+        step,
+        1,
+        {"user_id": "user1"},
+    )
+    run_before_apply = runner.load_run("run1", {"user_id": "user1"})
+    finance_request = run_before_apply["observability"]["domain_requests"]["items"][0]
+
+    assert completed is True
+    assert cursor.tables["finance_entries"] == {}
+    assert finance_request["kind"] == "finance_transaction_request"
+    assert finance_request["approval_state"] == "approved"
+    assert finance_request["apply_state"] == "apply_ready"
+    assert finance_request["can_apply"] is True
+
+    result = runner.apply_finance_requests("run1", {"user_id": "user1"})
+
+    assert result["success"] is True
+    assert result["items"][0]["apply_state"] == "applied"
+    assert len(cursor.tables["finance_entries"]) == 1
+    assert next(iter(cursor.tables["finance_entries"].values()))["duplicate_key"] == "finance-dup-apply-1"
+    assert cursor.ledger_entries[0]["capability"] == "finance.transaction.create"
+    finance_step = next(
+        step
+        for step in cursor.tables["agent_run_steps"].values()
+        if step["step_key"] == "request_localos_finance"
+    )
+    assert finance_step["output_json"]["approved_executor"]["localos_writes_performed"] is True
 
 
 def test_runner_builds_finance_outcome_artifact_from_compiled_step_outputs():
@@ -7693,9 +7816,13 @@ class FakeCursor:
             "reviewreplydrafts": {},
             "agent_review_publish_requests": {},
             "agent_service_optimization_requests": {},
+            "finance_import_batches": {},
+            "finance_entries": {},
+            "agent_action_ledger": {},
         }
         self.last_result = None
         self.last_results = []
+        self.ledger_entries = []
 
     def execute(self, query, params=None):
         normalized_query = " ".join(query.split()).lower()
@@ -7703,6 +7830,12 @@ class FakeCursor:
         if normalized_query.startswith("select to_regclass"):
             table_name = params[0]
             self.last_result = {"table_name": table_name if table_name in self.tables else None}
+            return None
+        if normalized_query.startswith("create table if not exists"):
+            return None
+        if normalized_query.startswith("create unique index if not exists"):
+            return None
+        if normalized_query.startswith("create index if not exists"):
             return None
         if "from agent_sheet_operation_requests" in normalized_query:
             business_id = params[0]
@@ -7753,6 +7886,28 @@ class FakeCursor:
                 for row in self.tables["agent_service_optimization_requests"].values()
                 if row.get("business_id") == business_id and (row.get("id") in request_ids or row.get("action_id") in action_ids)
             ]
+            return None
+        if "from finance_import_batches" in normalized_query:
+            business_id = params[0]
+            batch_ids = set(params[1])
+            file_hashes = set(params[2])
+            self.last_results = [
+                row
+                for row in self.tables["finance_import_batches"].values()
+                if row.get("business_id") == business_id and (row.get("id") in batch_ids or row.get("file_hash") in file_hashes)
+            ]
+            return None
+        if "from finance_entries" in normalized_query and "duplicate_key" in normalized_query:
+            business_id = params[0]
+            duplicate_key = params[1]
+            self.last_result = next(
+                (
+                    row
+                    for row in self.tables["finance_entries"].values()
+                    if row.get("business_id") == business_id and row.get("duplicate_key") == duplicate_key
+                ),
+                None,
+            )
             return None
         if normalized_query.startswith("select * from agent_blueprint_versions where id"):
             self.last_result = self.tables["agent_blueprint_versions"].get(params[0])
@@ -7853,6 +8008,9 @@ class FakeCursor:
             self.tables["agent_run_steps"][params[2]]["output_json"] = json.loads(params[0])
             self.tables["agent_run_steps"][params[2]]["error_text"] = params[1]
             return None
+        if normalized_query.startswith("update agent_run_steps set output_json"):
+            self.tables["agent_run_steps"][params[1]]["output_json"] = json.loads(params[0])
+            return None
         if normalized_query.startswith("select * from agent_run_steps"):
             run_id = params[0]
             self.last_results = sorted(
@@ -7894,6 +8052,61 @@ class FakeCursor:
                 if item["run_id"] == run_id and item["artifact_type"] == artifact_type
             ]
             self.last_result = {"payload_json": matches[-1]["payload_json"]} if matches else None
+            return None
+        if normalized_query.startswith("insert into finance_import_batches"):
+            self.tables["finance_import_batches"][params[0]] = {
+                "id": params[0],
+                "business_id": params[1],
+                "source_type": "agent",
+                "status": "processing",
+                "file_name": params[2],
+                "file_hash": params[3],
+                "rows_total": params[4],
+                "rows_imported": 0,
+                "rows_skipped": 0,
+                "rows_failed": 0,
+                "mapping_json": json.loads(params[5]),
+                "error_log": json.loads(params[6]),
+            }
+            return None
+        if normalized_query.startswith("insert into finance_entries"):
+            self.tables["finance_entries"][params[0]] = {
+                "id": params[0],
+                "business_id": params[1],
+                "date": params[2],
+                "type": params[3],
+                "category": params[4],
+                "amount": params[5],
+                "source": "agent",
+                "comment": params[6],
+                "import_batch_id": params[7],
+                "external_id": params[8],
+                "duplicate_key": params[9],
+            }
+            return None
+        if normalized_query.startswith("update finance_import_batches"):
+            batch = self.tables["finance_import_batches"].get(params[5])
+            if batch and batch.get("business_id") == params[6]:
+                batch["status"] = params[0]
+                batch["rows_imported"] = params[1]
+                batch["rows_skipped"] = params[2]
+                batch["rows_failed"] = params[3]
+                batch["error_log"] = json.loads(params[4])
+            return None
+        if normalized_query.startswith("insert into agent_action_ledger"):
+            metadata = json.loads(params[14])
+            entry = {
+                "id": params[0],
+                "action_type": params[3],
+                "capability": params[4],
+                "risk_level": params[6],
+                "output_summary": json.loads(params[8]),
+                "status": params[10],
+                "reason_code": params[11],
+                "metadata": metadata,
+            }
+            self.ledger_entries.append(entry)
+            self.tables["agent_action_ledger"][params[0]] = entry
             return None
         if normalized_query.startswith("select 1 from agent_approvals"):
             run_id = params[0]

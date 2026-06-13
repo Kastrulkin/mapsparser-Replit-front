@@ -1,0 +1,6 @@
+Command:
+npm run build
+
+Result:
+vite build completed successfully.
+Output included existing Browserslist age warning and Rollup PURE annotation warnings from @pbe/react-yandex-maps.

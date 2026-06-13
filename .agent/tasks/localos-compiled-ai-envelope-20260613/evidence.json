@@ -1,44 +1,46 @@
 {
   "task_id": "localos-compiled-ai-envelope-20260613",
   "overall_status": "PASS",
-  "phase": "phase_7_real_connector_ux_billing_breakdown",
+  "phase": "phase_8_finance_apply_after_approval",
   "acceptance_criteria": [
     {
       "id": "AC1",
-      "text": "Activation/preflight connection plans include existing integrations and user-facing blockers.",
+      "text": "Finance capability execution creates a proposal/request without writing LocalOS Finance entries automatically.",
       "status": "PASS",
       "proof": [
-        "src/api/agent_blueprints_api.py::_activation_connection_plan_from_preflight",
-        "tests/test_agent_blueprint_layer.py::test_activation_connection_blocker_keeps_binding_route_context"
+        "src/services/agent_blueprint_runner.py::_execute_capability_step",
+        "tests/test_agent_blueprint_layer.py::test_runner_passes_compiled_step_rows_to_next_capability_without_runtime_ai"
       ],
       "gaps": []
     },
     {
       "id": "AC2",
-      "text": "Existing Google/Maton/LocalOS connections become explicit choose-existing actions.",
+      "text": "Approved finance proposal appears in run observability as apply-ready with a concrete apply endpoint.",
       "status": "PASS",
       "proof": [
-        "tests/test_agent_blueprint_layer.py::test_agent_connection_plan_turns_bindings_into_user_next_actions"
+        "src/services/agent_blueprint_runner.py::_load_pending_finance_requests_from_steps",
+        "tests/test_agent_blueprint_layer.py::test_runner_applies_finance_requests_only_after_explicit_apply"
       ],
       "gaps": []
     },
     {
       "id": "AC3",
-      "text": "Agents UI renders missing preflight reason and setup CTA instead of raw binding state.",
+      "text": "Agents UI shows an explicit apply action for approved finance requests.",
       "status": "PASS",
       "proof": [
-        "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx::AgentConnectionPlanPanel",
+        "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx::DomainRequestItem",
         "frontend build passed"
       ],
       "gaps": []
     },
     {
       "id": "AC4",
-      "text": "Agent metrics expose product billing categories for compile, preview, run, external actions, and operator chat.",
+      "text": "Explicit apply writes finance entries, records ledger, updates step output, and returns refreshed run state.",
       "status": "PASS",
       "proof": [
-        "src/services/agent_metrics.py::_build_billing_breakdown",
-        "tests/test_agent_blueprint_layer.py::test_agent_metrics_summary_reports_compiled_runtime_health"
+        "src/services/agent_blueprint_runner.py::apply_finance_requests",
+        "src/api/agent_blueprints_api.py::apply_agent_run_finance_requests",
+        "tests/test_agent_blueprint_layer.py::test_runner_applies_finance_requests_only_after_explicit_apply"
       ],
       "gaps": []
     },
@@ -47,7 +49,7 @@
       "text": "Regression suite for compiled agent layer passes.",
       "status": "PASS",
       "proof": [
-        "152 agent blueprint tests passed"
+        "153 agent blueprint tests passed"
       ],
       "gaps": []
     },
@@ -66,13 +68,14 @@
     ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.json",
     ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.md",
     ".agent/tasks/localos-compiled-ai-envelope-20260613/verdict.json",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase7-agent-blueprint-tests.txt",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase7-diff-check.txt",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase7-focused-tests.txt",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase7-frontend-build.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase8-agent-blueprint-tests.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase8-diff-check.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase8-finance-apply-focused-tests.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase8-frontend-build.txt",
     "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
     "src/api/agent_blueprints_api.py",
-    "src/services/agent_metrics.py",
+    "src/services/agent_blueprint_runner.py",
+    "src/services/agent_domain_request_executors.py",
     "tests/test_agent_blueprint_layer.py"
   ],
   "commands_for_fresh_verifier": [
@@ -82,6 +85,6 @@
   ],
   "known_gaps": [
     "Full LocalOS compiled AI envelope objective remains active.",
-    "Deeper finance apply approval UI, more production provider write handlers, and live visual QA on production remain later phases."
+    "More production provider write handlers, live visual QA on production, and broader billing ledger coverage for compile/preview/run remain later phases."
   ]
 }

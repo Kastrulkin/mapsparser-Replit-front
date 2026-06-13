@@ -953,6 +953,7 @@ class AgentBlueprintRunner:
             step=step,
             orchestrator_result=orchestrator_result,
             user_data=user_data,
+            apply_finance=capability != "finance.transaction.create",
         )
         self.cursor.execute(
             """
@@ -975,6 +976,61 @@ class AgentBlueprintRunner:
             ),
         )
         return True
+
+    def apply_finance_requests(self, run_id: str, user_data: Dict[str, Any]) -> Dict[str, Any]:
+        run = self._load_run_header(run_id)
+        if not run:
+            return {"success": False, "error": "run_not_found"}
+        if not self._has_required_approval(run_id, {"required_approval_type": "finance_transaction_import"}):
+            return {"success": False, "error": "finance_import_approval_required"}
+        self.cursor.execute(
+            """
+            SELECT *
+            FROM agent_run_steps
+            WHERE run_id = %s
+              AND status = 'completed'
+            ORDER BY step_index ASC
+            """,
+            (run_id,),
+        )
+        steps = [self._normalize_json_row(dict(row)) for row in (self.cursor.fetchall() or [])]
+        applied_items = []
+        for step_row in steps:
+            output = step_row.get("output_json") if isinstance(step_row.get("output_json"), dict) else {}
+            capability = str(output.get("capability") or "").strip()
+            orchestrator_result = output.get("orchestrator") if isinstance(output.get("orchestrator"), dict) else {}
+            if capability != "finance.transaction.create":
+                continue
+            result = orchestrator_result.get("result") if isinstance(orchestrator_result.get("result"), dict) else {}
+            if str(result.get("apply_state") or "") == "applied":
+                continue
+            approved_executor = execute_approved_domain_requests(
+                self.cursor,
+                run=run,
+                step={"key": str(step_row.get("step_key") or "request_localos_finance")},
+                orchestrator_result=orchestrator_result,
+                user_data=user_data,
+                apply_finance=True,
+            )
+            if approved_executor.get("executed"):
+                output["approved_executor"] = approved_executor
+                self.cursor.execute(
+                    """
+                    UPDATE agent_run_steps
+                    SET output_json = %s::jsonb
+                    WHERE id = %s
+                    """,
+                    (json.dumps(output, ensure_ascii=False, default=str), step_row.get("id")),
+                )
+                applied_items.extend(approved_executor.get("items") or [])
+        if not applied_items:
+            return {"success": False, "error": "no_finance_requests_to_apply", "run": self.load_run(run_id, user_data)}
+        return {
+            "success": True,
+            "applied": len(applied_items),
+            "items": applied_items,
+            "run": self.load_run(run_id, user_data),
+        }
 
     def _is_maton_delivery_step(self, run: Dict[str, Any], capability: str) -> bool:
         if capability not in {"communications.send", "communications.send_reminder", "communications.send_offer"}:
@@ -1482,7 +1538,7 @@ class AgentBlueprintRunner:
         cost_tokens = self._aggregate_cost_tokens(action_observations)
         billing_ledger = self._build_billing_ledger(action_observations)
         delivery_status = self._build_delivery_status(artifacts, action_observations)
-        domain_requests = self._load_domain_request_observability(run, steps, action_ids)
+        domain_requests = self._load_domain_request_observability(run, steps, approvals, action_ids)
         integration_preflight = self._build_run_integration_preflight(run)
         recovery_actions = self._build_recovery_actions(run, step_errors + action_errors, delivery_status, action_ids)
         preview_summary = self._build_preview_summary(run, steps, artifacts, approvals, domain_requests, integration_preflight)
@@ -1806,6 +1862,7 @@ class AgentBlueprintRunner:
         self,
         run: Dict[str, Any],
         steps: List[Dict[str, Any]],
+        approvals: List[Dict[str, Any]],
         action_ids: List[str],
     ) -> List[Dict[str, Any]]:
         refs = self._extract_domain_request_refs(steps, action_ids)
@@ -1817,8 +1874,72 @@ class AgentBlueprintRunner:
         items.extend(self._load_communication_requests(business_id, refs))
         items.extend(self._load_review_publish_requests(business_id, refs))
         items.extend(self._load_service_optimization_requests(business_id, refs))
-        items.extend(self._load_finance_import_requests(business_id, refs))
+        finance_imports = self._load_finance_import_requests(business_id, refs)
+        items.extend(finance_imports)
+        items.extend(self._load_pending_finance_requests_from_steps(run, steps, approvals, finance_imports))
         return items[:50]
+
+    def _load_pending_finance_requests_from_steps(
+        self,
+        run: Dict[str, Any],
+        steps: List[Dict[str, Any]],
+        approvals: List[Dict[str, Any]],
+        finance_imports: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        applied_request_ids = {
+            str(item.get("id") or "").strip()
+            for item in finance_imports
+            if isinstance(item, dict) and str(item.get("id") or "").strip()
+        }
+        approved = any(
+            str(item.get("approval_type") or "") == "finance_transaction_import"
+            and str(item.get("status") or "") == "approved"
+            for item in approvals
+            if isinstance(item, dict)
+        )
+        pending_items = []
+        run_id = str(run.get("id") or "")
+        for step in steps:
+            output = step.get("output_json") if isinstance(step.get("output_json"), dict) else {}
+            if str(output.get("capability") or "") != "finance.transaction.create":
+                continue
+            orchestrator = output.get("orchestrator") if isinstance(output.get("orchestrator"), dict) else {}
+            result = orchestrator.get("result") if isinstance(orchestrator.get("result"), dict) else {}
+            request_id = str(result.get("request_id") or orchestrator.get("action_id") or "").strip()
+            if not request_id or request_id in applied_request_ids:
+                continue
+            proposals = result.get("finance_entry_proposals") if isinstance(result.get("finance_entry_proposals"), list) else []
+            review_rows = result.get("rows_requiring_review") if isinstance(result.get("rows_requiring_review"), list) else []
+            errors = result.get("errors") if isinstance(result.get("errors"), list) else []
+            apply_state = "apply_ready" if approved else str(result.get("apply_state") or "not_applied")
+            pending_items.append(
+                {
+                    "kind": "finance_transaction_request",
+                    "id": request_id,
+                    "action_id": orchestrator.get("action_id") or "",
+                    "title": "Finance transaction import",
+                    "summary": f"{len(proposals)} finance rows prepared · {len(review_rows)} need review · {len(errors)} errors",
+                    "status": str(result.get("status") or "finance_transaction_request_created"),
+                    "approval_state": "approved" if approved else str(result.get("approval_state") or "pending_human"),
+                    "apply_state": apply_state,
+                    "why_waiting": (
+                        "Human approved. Apply will write prepared transactions to LocalOS Finance."
+                        if approved
+                        else "Finance import is prepared; approve it before applying to LocalOS Finance."
+                    ),
+                    "proposal_count": len(proposals),
+                    "review_count": len(review_rows),
+                    "error_count": len(errors),
+                    "rows_requiring_review": review_rows[:20],
+                    "errors": errors[:20],
+                    "can_apply": approved and apply_state == "apply_ready",
+                    "apply_endpoint": f"/api/agent-runs/{run_id}/finance-requests/apply",
+                    "localos_write_performed": False,
+                    "provider_write_performed": False,
+                    "created_at": step.get("completed_at"),
+                }
+            )
+        return pending_items
 
     def _extract_domain_request_refs(self, steps: List[Dict[str, Any]], action_ids: List[str]) -> Dict[str, List[str]]:
         refs = {

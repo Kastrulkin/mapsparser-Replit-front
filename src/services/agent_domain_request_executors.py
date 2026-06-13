@@ -17,11 +17,13 @@ def execute_approved_domain_requests(
     step: Dict[str, Any],
     orchestrator_result: Dict[str, Any],
     user_data: Dict[str, Any],
+    apply_finance: bool = True,
 ) -> Dict[str, Any]:
     """Move capability-created domain requests into their post-approval execution state.
 
     Handlers create request records only. This layer runs after the blueprint human
-    gate and records a controlled execution handoff without provider writes.
+    gate and records a controlled execution handoff. Finance can be deferred to a
+    second explicit apply action; provider writes stay disabled here.
     """
     refs = _extract_refs(orchestrator_result)
     business_id = str(run.get("business_id") or "").strip()
@@ -35,7 +37,8 @@ def execute_approved_domain_requests(
     items.extend(_approve_communication_requests(cursor, business_id, user_id, run_id, step_key, refs))
     items.extend(_approve_review_publish_requests(cursor, business_id, user_id, run_id, step_key, refs))
     items.extend(_approve_service_optimization_requests(cursor, business_id, user_id, run_id, step_key, refs))
-    items.extend(_apply_finance_transaction_requests(cursor, business_id, user_id, run_id, step_key, refs, orchestrator_result))
+    if apply_finance:
+        items.extend(_apply_finance_transaction_requests(cursor, business_id, user_id, run_id, step_key, refs, orchestrator_result))
     return {
         "executor": "agent_domain_request_executor_v1",
         "executed": len(items),

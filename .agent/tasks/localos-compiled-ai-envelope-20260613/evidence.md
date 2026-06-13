@@ -2,38 +2,39 @@
 
 ## Summary
 - Overall status: PASS for current phase scope.
-- Last updated: 2026-06-13T15:11:21+03:00
-- Current phase: Phase 7, real connector UX, preflight clarity, and billing breakdown.
+- Last updated: 2026-06-13T16:05:00+03:00
+- Current phase: Phase 8, finance apply UI after approval.
 
 ## Acceptance criteria evidence
 
 ### AC1
 - Status: PASS
 - Proof:
-  - Activation/preflight connection plans now include existing/attached integrations, `why_blocked`, and `setup_cta`.
-  - `tests/test_agent_blueprint_layer.py::test_activation_connection_blocker_keeps_binding_route_context`
+  - `finance.transaction.create` capability execution now creates the approved proposal/request without writing LocalOS Finance entries automatically.
+  - `tests/test_agent_blueprint_layer.py::test_runner_passes_compiled_step_rows_to_next_capability_without_runtime_ai`
 
 ### AC2
 - Status: PASS
 - Proof:
-  - `tests/test_agent_blueprint_layer.py::test_agent_connection_plan_turns_bindings_into_user_next_actions` asserts an existing Google Sheets connection becomes `choose_existing`.
+  - Agent run observability exposes a finance transaction request after approval with `apply_state = apply_ready`, `can_apply = true`, and an apply endpoint.
+  - `tests/test_agent_blueprint_layer.py::test_runner_applies_finance_requests_only_after_explicit_apply`
 
 ### AC3
 - Status: PASS
 - Proof:
-  - `/dashboard/agents` renders missing preflight reason text from `why_blocked` and CTA labels from `setup_cta`.
+  - `/dashboard/agents` advanced run detail renders “Применить в финансы” only for approved, apply-ready finance requests.
   - Frontend production build passed.
 
 ### AC4
 - Status: PASS
 - Proof:
-  - Agent metrics now expose `billing_breakdown` and `cost_tokens.breakdown` with categories for creation, preview, production run, external actions, and operator chat.
-  - `tests/test_agent_blueprint_layer.py::test_agent_metrics_summary_reports_compiled_runtime_health`
+  - Explicit apply writes LocalOS Finance entries, records `agent_action_ledger`, updates step output, and returns the refreshed run.
+  - `tests/test_agent_blueprint_layer.py::test_runner_applies_finance_requests_only_after_explicit_apply`
 
 ### AC5
 - Status: PASS
 - Proof:
-  - Full agent blueprint suite passed: 152 tests.
+  - Full agent blueprint suite passed: 153 tests.
   - Frontend production build passed.
 
 ### AC6
@@ -43,16 +44,16 @@
   - `git diff --check` passed.
 
 ## Commands run
-- `venv/bin/python -m pytest tests/test_agent_blueprint_layer.py::test_agent_preview_run_and_activation_endpoints_enforce_safe_gate tests/test_agent_blueprint_layer.py::test_activation_connection_blocker_keeps_binding_route_context tests/test_agent_blueprint_layer.py::test_agent_metrics_summary_reports_compiled_runtime_health tests/test_agent_blueprint_layer.py::test_agent_connection_plan_turns_bindings_into_user_next_actions -q`
+- `venv/bin/python -m pytest tests/test_agent_blueprint_layer.py::test_agent_blueprint_routes_are_owned_by_blueprint tests/test_agent_blueprint_layer.py::test_runner_passes_compiled_step_rows_to_next_capability_without_runtime_ai tests/test_agent_blueprint_layer.py::test_runner_applies_finance_requests_only_after_explicit_apply tests/test_agent_blueprint_layer.py::test_approved_domain_executor_applies_finance_transactions_after_human_gate -q`
 - `venv/bin/python -m pytest tests/test_agent_blueprint_layer.py -q`
 - `npm run build` from `frontend/`
 - `git diff --check`
 
 ## Raw artifacts
-- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase7-focused-tests.txt`
-- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase7-agent-blueprint-tests.txt`
-- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase7-frontend-build.txt`
-- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase7-diff-check.txt`
+- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase8-finance-apply-focused-tests.txt`
+- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase8-agent-blueprint-tests.txt`
+- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase8-frontend-build.txt`
+- `.agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase8-diff-check.txt`
 
 ## Known gaps
-- Full objective remains active: deeper finance apply approval UI, more production provider write handlers, and live visual QA on production remain later phases.
+- Full objective remains active: more production provider write handlers, live visual QA on production, and broader billing ledger coverage for compile/preview/run remain later phases.

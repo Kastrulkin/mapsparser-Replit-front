@@ -1,27 +1,27 @@
 {
   "task_id": "localos-compiled-ai-envelope-20260613",
   "overall_verdict": "PASS",
-  "phase": "phase_7_real_connector_ux_billing_breakdown",
+  "phase": "phase_8_finance_apply_after_approval",
   "criteria": [
     {
       "id": "AC1",
       "status": "PASS",
-      "reason": "Activation and preflight plans now preserve existing integration choices and user-facing blockers."
+      "reason": "Finance capability creates an approved proposal/request but does not write LocalOS Finance entries automatically."
     },
     {
       "id": "AC2",
       "status": "PASS",
-      "reason": "Connection plans distinguish choose-existing from connect-required."
+      "reason": "Approved finance proposal appears in observability as apply-ready with a concrete apply endpoint."
     },
     {
       "id": "AC3",
       "status": "PASS",
-      "reason": "Agents UI renders missing reason and setup CTA from canonical plan."
+      "reason": "Agents UI renders a dedicated apply button only for approved, apply-ready finance requests."
     },
     {
       "id": "AC4",
       "status": "PASS",
-      "reason": "Metrics expose a product billing breakdown for compile/preview/run/external actions/operator chat."
+      "reason": "Explicit apply writes finance entries, records ledger, updates step output, and returns refreshed run state."
     },
     {
       "id": "AC5",
@@ -35,7 +35,7 @@
     }
   ],
   "commands_run": [
-    "venv/bin/python -m pytest tests/test_agent_blueprint_layer.py::test_agent_preview_run_and_activation_endpoints_enforce_safe_gate tests/test_agent_blueprint_layer.py::test_activation_connection_blocker_keeps_binding_route_context tests/test_agent_blueprint_layer.py::test_agent_metrics_summary_reports_compiled_runtime_health tests/test_agent_blueprint_layer.py::test_agent_connection_plan_turns_bindings_into_user_next_actions -q",
+    "venv/bin/python -m pytest tests/test_agent_blueprint_layer.py::test_agent_blueprint_routes_are_owned_by_blueprint tests/test_agent_blueprint_layer.py::test_runner_passes_compiled_step_rows_to_next_capability_without_runtime_ai tests/test_agent_blueprint_layer.py::test_runner_applies_finance_requests_only_after_explicit_apply tests/test_agent_blueprint_layer.py::test_approved_domain_executor_applies_finance_transactions_after_human_gate -q",
     "venv/bin/python -m pytest tests/test_agent_blueprint_layer.py -q",
     "npm run build from frontend/",
     "git diff --check"
@@ -44,10 +44,10 @@
     ".agent/tasks/localos-compiled-ai-envelope-20260613/spec.md",
     ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.md",
     ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.json",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase7-focused-tests.txt",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase7-agent-blueprint-tests.txt",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase7-frontend-build.txt",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase7-diff-check.txt"
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase8-finance-apply-focused-tests.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase8-agent-blueprint-tests.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase8-frontend-build.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase8-diff-check.txt"
   ],
   "remaining_goal_status": "IN_PROGRESS"
 }

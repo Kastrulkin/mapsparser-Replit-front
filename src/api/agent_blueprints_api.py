@@ -3519,6 +3519,35 @@ def get_agent_run_support_export(run_id: str):
         db.close()
 
 
+@agent_blueprints_bp.route("/api/agent-runs/<run_id>/finance-requests/apply", methods=["POST"])
+def apply_agent_run_finance_requests(run_id: str):
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute("SELECT blueprint_id FROM agent_runs WHERE id = %s", (run_id,))
+        row = cursor.fetchone()
+        if not row:
+            return _json_error("Run not found", 404, "NOT_FOUND")
+        blueprint, access_error = _require_blueprint_access(cursor, str(row.get("blueprint_id") or ""), user_data)
+        if access_error:
+            return access_error
+        runner = AgentBlueprintRunner(cursor, build_agent_blueprint_orchestrator())
+        result = runner.apply_finance_requests(run_id, user_data)
+        if not result.get("success"):
+            db.conn.rollback()
+            return _json_error(str(result.get("error") or "finance apply failed"), 400, "FINANCE_APPLY_FAILED")
+        db.conn.commit()
+        return jsonify(result)
+    except Exception:
+        db.conn.rollback()
+        raise
+    finally:
+        db.close()
+
+
 @agent_blueprints_bp.route("/api/agent-runs/<run_id>/feedback", methods=["POST"])
 def create_agent_run_feedback(run_id: str):
     user_data, error_response = _require_auth()
