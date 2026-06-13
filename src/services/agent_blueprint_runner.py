@@ -179,6 +179,7 @@ class AgentBlueprintRunner:
                 user_id,
             ),
         )
+        self._create_openclaw_preview_observations(run_id, input_payload or {})
         self._advance_run(run_id, user_data)
         return {"success": True, "run": self.load_run(run_id)}
 
@@ -347,6 +348,96 @@ class AgentBlueprintRunner:
         if generic_payload is not None:
             return generic_payload
         return dict(base_payload)
+
+    def _create_openclaw_preview_observations(self, run_id: str, input_payload: Dict[str, Any]) -> None:
+        if not self._is_safe_preview_input(input_payload):
+            return
+        route_plan = input_payload.get("openclaw_preview_routes") if isinstance(input_payload.get("openclaw_preview_routes"), list) else []
+        action_plan = input_payload.get("openclaw_action_plan") if isinstance(input_payload.get("openclaw_action_plan"), list) else []
+        handler_contracts = input_payload.get("connector_action_handlers") if isinstance(input_payload.get("connector_action_handlers"), list) else []
+        openclaw_handlers = [
+            item
+            for item in handler_contracts
+            if isinstance(item, dict) and str(item.get("handler") or "") == "openclaw_policy_boundary"
+        ]
+        openclaw_actions = [
+            item
+            for item in action_plan
+            if isinstance(item, dict)
+            and (
+                str(item.get("provider") or "") == "openclaw"
+                or str(item.get("provider_action_ref") or "").startswith("openclaw.")
+            )
+        ]
+        if not route_plan and not openclaw_handlers and not openclaw_actions:
+            return
+        run = self._load_run_header(run_id)
+        if not run:
+            return
+        step = {
+            "key": "openclaw_preview_observations",
+            "type": "connector_preview",
+            "title": "OpenClaw preview observations",
+        }
+        step_id = self._insert_step(
+            run,
+            step,
+            -1,
+            "completed",
+            {
+                "preview_mode": True,
+                "external_side_effects_allowed": False,
+            },
+            {
+                "schema": "localos_openclaw_preview_observations_v1",
+                "status": "dry_run_ready",
+                "route_count": len(route_plan),
+                "action_count": len(openclaw_actions),
+                "external_actions_executed": False,
+            },
+        )
+        artifact_id = str(uuid.uuid4())
+        payload = {
+            "schema": "localos_openclaw_preview_observations_v1",
+            "status": "dry_run_ready",
+            "execution_boundary": "openclaw_inside_localos_policy",
+            "safe_preview": True,
+            "external_actions_executed": False,
+            "external_side_effects_allowed": False,
+            "approval_required_for_external_actions": True,
+            "route_plan": [item for item in route_plan if isinstance(item, dict)][:12],
+            "handler_contracts": openclaw_handlers[:12],
+            "action_plan": openclaw_actions[:12],
+            "observations": [
+                {
+                    "binding_key": str(item.get("binding_key") or item.get("step_key") or ""),
+                    "capability": str(item.get("capability") or ""),
+                    "provider_action_ref": str(item.get("provider_action_ref") or ""),
+                    "status": "preview_only",
+                    "external_action_executed": False,
+                    "next_step": "approval_required_before_execution",
+                }
+                for item in (route_plan or openclaw_actions)
+                if isinstance(item, dict)
+            ][:12],
+        }
+        self.cursor.execute(
+            """
+            INSERT INTO agent_artifacts (id, run_id, step_id, artifact_type, title, payload_json)
+            VALUES (%s, %s, %s, %s, %s, %s::jsonb)
+            """,
+            (
+                artifact_id,
+                run_id,
+                step_id,
+                "openclaw_preview_observations",
+                "OpenClaw preview observations",
+                json.dumps(payload, ensure_ascii=False, default=str),
+            ),
+        )
+
+    def _is_safe_preview_input(self, input_payload: Dict[str, Any]) -> bool:
+        return bool(input_payload.get("preview_mode")) and input_payload.get("external_side_effects_allowed") is False
 
     def _run_input(self, run: Dict[str, Any]) -> Dict[str, Any]:
         parsed = parse_json_field(run.get("input_json"), {})

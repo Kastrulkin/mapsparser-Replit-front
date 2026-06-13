@@ -334,6 +334,20 @@ def test_agent_preview_run_input_is_safe_and_compiled_workflow_aware():
         "telegram_target": "@riderra_updates",
         "target_type": "chat_or_channel",
     }
+    draft["metadata"]["connector_action_handlers"] = {
+        "google_sheets_read": {
+            "schema": "localos_connector_action_handler_v1",
+            "binding_key": "google_sheets_read",
+            "route_provider": "openclaw",
+            "handler": "openclaw_policy_boundary",
+            "credential_source": "openclaw_m2m",
+            "preflight_resolution": "provider_route_openclaw_boundary",
+            "execution_boundary": "localos_policy_envelope",
+            "approval_required": True,
+            "audit_required": True,
+            "external_side_effects_allowed_in_preview": False,
+        }
+    }
     version_payload = draft["version_payload"]
     blueprint = {
         "id": "bp1",
@@ -375,6 +389,9 @@ def test_agent_preview_run_input_is_safe_and_compiled_workflow_aware():
     assert [item["provider"] for item in preview_input["provider_bindings"]] == ["google_sheets", "telegram"]
     assert preview_input["policy_envelope"]["execution_boundary"] == "openclaw_action_orchestrator"
     assert preview_input["policy_envelope"]["external_side_effects_allowed_in_preview"] is False
+    assert preview_input["connector_action_handlers"][0]["handler"] == "openclaw_policy_boundary"
+    assert preview_input["openclaw_preview_routes"][0]["binding_key"] == "google_sheets_read"
+    assert preview_input["openclaw_preview_routes"][0]["external_side_effects_allowed_in_preview"] is False
     assert preview_input["openclaw_action_plan"][0]["provider_action_ref"] == "openclaw.google_sheets.read_rows"
     assert preview_input["openclaw_action_plan"][0]["provider_policy"] == "localos_envelope"
 
@@ -7088,6 +7105,103 @@ def test_runner_blocks_custom_agent_start_when_required_external_binding_missing
     assert result["preflight"]["missing"][0]["provider"] == "google_sheets"
     assert result["preflight"]["missing"][0]["missing_config"] == ["spreadsheet_id", "sheet_name"]
     assert cursor.tables["agent_runs"] == {}
+
+
+def test_runner_creates_openclaw_preview_observations_from_route_contract():
+    from services.agent_blueprint_runner import AgentBlueprintRunner
+
+    cursor = FakeCursor()
+    cursor.tables["agent_blueprints"]["bp1"] = {
+        "id": "bp1",
+        "business_id": "biz1",
+        "name": "Sheets preview",
+        "category": "custom",
+        "metadata_json": {
+            "required_integration_bindings": [
+                {
+                    "key": "google_sheets_read",
+                    "provider": "google_sheets",
+                    "capability": "google_sheets.read_rows",
+                    "required_config": ["spreadsheet_id", "sheet_name"],
+                }
+            ],
+            "agent_binding_provider_routes": {
+                "google_sheets_read": {
+                    "route_provider": "openclaw",
+                    "status": "active",
+                    "integration_id": "openclaw_boundary",
+                }
+            },
+            "agent_binding_integrations": {
+                "google_sheets_read": {
+                    "route_provider": "openclaw",
+                    "status": "active",
+                    "integration_id": "openclaw_boundary",
+                }
+            },
+        },
+    }
+    cursor.tables["agent_blueprint_versions"]["ver1"] = {
+        "id": "ver1",
+        "blueprint_id": "bp1",
+        "steps_json": [],
+        "capability_allowlist_json": ["google_sheets.read_rows"],
+    }
+    orchestrator = CountingOrchestrator()
+    result = AgentBlueprintRunner(cursor, orchestrator=orchestrator).start_run(
+        "ver1",
+        {
+            "schema": "localos_agent_preview_input_v1",
+            "preview_mode": True,
+            "external_side_effects_allowed": False,
+            "connector_action_handlers": [
+                {
+                    "binding_key": "google_sheets_read",
+                    "route_provider": "openclaw",
+                    "handler": "openclaw_policy_boundary",
+                    "credential_source": "openclaw_m2m",
+                    "preflight_resolution": "provider_route_openclaw_boundary",
+                    "execution_boundary": "localos_policy_envelope",
+                    "approval_required": True,
+                    "audit_required": True,
+                    "external_side_effects_allowed_in_preview": False,
+                }
+            ],
+            "openclaw_preview_routes": [
+                {
+                    "binding_key": "google_sheets_read",
+                    "capability": "google_sheets.read_rows",
+                    "provider": "openclaw",
+                    "provider_action_ref": "openclaw.google_sheets.read_rows",
+                    "external_side_effects_allowed_in_preview": False,
+                }
+            ],
+            "openclaw_action_plan": [
+                {
+                    "step_key": "google_sheets_read",
+                    "capability": "google_sheets.read_rows",
+                    "provider": "openclaw",
+                    "provider_action_ref": "openclaw.google_sheets.read_rows",
+                }
+            ],
+        },
+        {"user_id": "user1"},
+    )
+
+    artifact = next(
+        item
+        for item in cursor.tables["agent_artifacts"].values()
+        if item["artifact_type"] == "openclaw_preview_observations"
+    )
+
+    assert result["success"] is True
+    assert result["run"]["status"] == "completed"
+    assert orchestrator.calls == 0
+    assert artifact["payload_json"]["schema"] == "localos_openclaw_preview_observations_v1"
+    assert artifact["payload_json"]["external_actions_executed"] is False
+    assert artifact["payload_json"]["handler_contracts"][0]["handler"] == "openclaw_policy_boundary"
+    assert artifact["payload_json"]["observations"][0]["external_action_executed"] is False
+    assert result["run"]["observability"]["preview_summary"]["openclaw_action_count"] == 1
 
 
 def test_agent_integration_preflight_allows_inline_rows_and_native_finance():

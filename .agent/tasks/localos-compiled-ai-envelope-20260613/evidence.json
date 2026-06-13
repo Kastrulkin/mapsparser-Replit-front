@@ -1,48 +1,67 @@
 {
   "task_id": "localos-compiled-ai-envelope-20260613",
   "overall_status": "PASS",
-  "phase": "phase_3_real_connector_ux_action_handlers",
+  "phase": "phase_4_openclaw_preview_execution_artifact",
   "acceptance_criteria": [
     {
       "id": "AC1",
-      "text": "Selected provider routes are persisted as agent_binding_provider_routes and mirrored into agent_binding_integrations.",
+      "text": "Safe preview input includes connector_action_handlers for selected provider routes.",
       "status": "PASS",
-      "proof": ["src/api/agent_builder_api.py::_apply_selected_provider_routes", "tests/test_agent_blueprint_layer.py::test_agent_builder_provider_routes_create_action_handler_contracts"],
+      "proof": [
+        "src/api/agent_blueprints_api.py::_build_agent_preview_run_input",
+        "tests/test_agent_blueprint_layer.py::test_agent_preview_run_input_is_safe_and_compiled_workflow_aware"
+      ],
       "gaps": []
     },
     {
       "id": "AC2",
-      "text": "Selected routes create connector_action_handlers with typed handler contract.",
+      "text": "OpenClaw provider-route contracts are converted into explicit openclaw_preview_routes and merged into openclaw_action_plan.",
       "status": "PASS",
-      "proof": ["src/api/agent_builder_api.py::_connector_action_handler_payload"],
+      "proof": [
+        "src/api/agent_blueprints_api.py::_preview_openclaw_route_plan",
+        "src/api/agent_blueprints_api.py::_dedupe_preview_openclaw_action_plan"
+      ],
       "gaps": []
     },
     {
       "id": "AC3",
-      "text": "OpenClaw route can be selected without external user credentials and stays inside LocalOS policy envelope.",
+      "text": "Safe preview runs create an OpenClaw preview observations artifact.",
       "status": "PASS",
-      "proof": ["openclaw_policy_boundary handler", "provider_route_openclaw_boundary preflight resolution"],
+      "proof": [
+        "src/services/agent_blueprint_runner.py::_create_openclaw_preview_observations",
+        "tests/test_agent_blueprint_layer.py::test_runner_creates_openclaw_preview_observations_from_route_contract"
+      ],
       "gaps": []
     },
     {
       "id": "AC4",
-      "text": "Maton route requires a saved externalbusinessaccounts:maton key, with auto-bind for exactly one saved key.",
+      "text": "OpenClaw preview observations explicitly record that no external side effects or external actions were executed.",
       "status": "PASS",
-      "proof": ["tests/test_agent_blueprint_layer.py::test_agent_builder_selected_maton_route_requires_or_auto_binds_external_account"],
+      "proof": [
+        "localos_openclaw_preview_observations_v1 artifact schema",
+        "external_actions_executed false",
+        "external_side_effects_allowed false"
+      ],
       "gaps": []
     },
     {
       "id": "AC5",
-      "text": "The builder Что возможно panel can choose the recommended route directly.",
+      "text": "The runner does not call the ActionOrchestrator for dry-run OpenClaw route observation.",
       "status": "PASS",
-      "proof": ["frontend/src/pages/dashboard/AgentBlueprintsPage.tsx::BuilderServiceIntelligencePanel"],
+      "proof": [
+        "tests/test_agent_blueprint_layer.py::test_runner_creates_openclaw_preview_observations_from_route_contract asserts orchestrator.calls == 0"
+      ],
       "gaps": []
     },
     {
       "id": "AC6",
       "text": "Agent-related tests and frontend production build pass.",
       "status": "PASS",
-      "proof": ["5 focused connector route tests passed", "148 agent blueprint tests passed", "frontend build passed"],
+      "proof": [
+        "3 focused OpenClaw preview tests passed",
+        "149 agent blueprint tests passed",
+        "frontend build passed"
+      ],
       "gaps": []
     }
   ],
@@ -51,16 +70,20 @@
     ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.md",
     ".agent/tasks/localos-compiled-ai-envelope-20260613/spec.md",
     ".agent/tasks/localos-compiled-ai-envelope-20260613/verdict.json",
-    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
-    "src/api/agent_builder_api.py",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase4-agent-blueprint-tests.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase4-frontend-build.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase4-openclaw-preview-tests.txt",
+    "src/api/agent_blueprints_api.py",
+    "src/services/agent_blueprint_runner.py",
     "tests/test_agent_blueprint_layer.py"
   ],
   "commands_for_fresh_verifier": [
-    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'provider_routes or maton_route or action_handler or service_intelligence' -x",
+    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'preview_run_input_is_safe or openclaw_preview_observations or preview_run_and_activation' -x",
     "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -x",
     "npm --prefix frontend run build"
   ],
   "known_gaps": [
-    "Full LocalOS compiled AI envelope objective remains active for later phases."
+    "Full LocalOS compiled AI envelope objective remains active.",
+    "Later phases still need real OpenClaw execution beyond dry-run observations, Maton delivery draft/send with approval, Google Sheets read, LocalOS finance write, and billing ledger expansion."
   ]
 }

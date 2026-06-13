@@ -1068,7 +1068,10 @@ def _build_agent_preview_run_input(blueprint: dict, version: dict | None, payloa
     received_at = _utc_now_text()
     sample_rows = _preview_sample_rows(custom_process, user_input)
     provider_bindings = _preview_provider_bindings(required_bindings)
+    connector_action_handlers = _preview_connector_action_handlers(metadata)
     openclaw_action_plan = _preview_openclaw_action_plan(steps)
+    openclaw_route_plan = _preview_openclaw_route_plan(connector_action_handlers, required_bindings)
+    openclaw_action_plan = _dedupe_preview_openclaw_action_plan(openclaw_action_plan + openclaw_route_plan)
     google_sheets_config = custom_process.get("google_sheets") if isinstance(custom_process.get("google_sheets"), dict) else {}
     telegram_config = custom_process.get("telegram") if isinstance(custom_process.get("telegram"), dict) else {}
     preview_input = {
@@ -1087,6 +1090,8 @@ def _build_agent_preview_run_input(blueprint: dict, version: dict | None, payloa
         "capability_allowlist": [str(item) for item in capability_allowlist],
         "required_connectors": _preview_required_connectors(metadata, required_bindings),
         "provider_bindings": provider_bindings,
+        "connector_action_handlers": connector_action_handlers,
+        "openclaw_preview_routes": openclaw_route_plan,
         "openclaw_action_plan": openclaw_action_plan,
         "policy_envelope": {
             "runtime": "localos_compiled_workflow",
@@ -1175,6 +1180,93 @@ def _preview_provider_bindings(required_bindings: list) -> list[dict]:
                 "required_config": [str(value) for value in item.get("required_config", []) if str(value or "").strip()],
             }
         )
+    return result
+
+
+def _preview_connector_action_handlers(metadata: dict) -> list[dict]:
+    handlers = metadata.get("connector_action_handlers") if isinstance(metadata.get("connector_action_handlers"), dict) else {}
+    result = []
+    for binding_key, handler in handlers.items():
+        if not isinstance(handler, dict):
+            continue
+        result.append(
+            {
+                "binding_key": str(binding_key or handler.get("binding_key") or ""),
+                "route_provider": str(handler.get("route_provider") or ""),
+                "handler": str(handler.get("handler") or ""),
+                "credential_source": str(handler.get("credential_source") or ""),
+                "preflight_resolution": str(handler.get("preflight_resolution") or ""),
+                "execution_boundary": str(handler.get("execution_boundary") or ""),
+                "approval_required": bool(handler.get("approval_required", True)),
+                "audit_required": bool(handler.get("audit_required", True)),
+                "external_side_effects_allowed_in_preview": bool(handler.get("external_side_effects_allowed_in_preview")) is True,
+                "next_step": str(handler.get("next_step") or ""),
+            }
+        )
+    return result
+
+
+def _preview_openclaw_route_plan(connector_action_handlers: list, required_bindings: list) -> list[dict]:
+    binding_capabilities = {}
+    for binding in required_bindings:
+        if not isinstance(binding, dict):
+            continue
+        binding_key = str(binding.get("key") or "").strip()
+        capability = str(binding.get("capability") or "").strip()
+        provider = str(binding.get("provider") or "").strip()
+        if binding_key:
+            binding_capabilities[binding_key] = {"capability": capability, "provider": provider}
+    result = []
+    for handler in connector_action_handlers:
+        if not isinstance(handler, dict):
+            continue
+        if str(handler.get("handler") or "") != "openclaw_policy_boundary":
+            continue
+        binding_key = str(handler.get("binding_key") or "").strip()
+        binding = binding_capabilities.get(binding_key) or {}
+        capability = str(binding.get("capability") or "").strip()
+        result.append(
+            {
+                "step_key": binding_key,
+                "title": f"OpenClaw preview: {binding_key}",
+                "capability": capability,
+                "provider": "openclaw",
+                "provider_action_ref": _preview_openclaw_action_ref(capability),
+                "provider_policy": "localos_envelope",
+                "risk_class": "dry_run",
+                "approval_class": "preview_only",
+                "requires_approval": True,
+                "binding_key": binding_key,
+                "handler": "openclaw_policy_boundary",
+                "preflight_resolution": str(handler.get("preflight_resolution") or ""),
+                "external_side_effects_allowed_in_preview": False,
+            }
+        )
+    return result
+
+
+def _preview_openclaw_action_ref(capability: str) -> str:
+    capability_key = str(capability or "").strip()
+    if capability_key:
+        return f"openclaw.{capability_key}"
+    return "openclaw.preview.inspect_binding"
+
+
+def _dedupe_preview_openclaw_action_plan(items: list) -> list[dict]:
+    result = []
+    seen = set()
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        key = (
+            str(item.get("step_key") or item.get("key") or ""),
+            str(item.get("provider_action_ref") or ""),
+            str(item.get("capability") or ""),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(item)
     return result
 
 

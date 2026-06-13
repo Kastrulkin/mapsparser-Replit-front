@@ -15,20 +15,20 @@
 Сделать LocalOS product/policy envelope поверх OpenClaw: пользователь описывает агента обычным языком, система уточняет детали, понимает нужные сервисы, компилирует workflow в проверяемый executable plan, показывает подключения/стоимость/риски, требует approval и запускает safe preview перед активацией в рамках лимитов подписки.
 
 ## Current phase scope
-Phase 3 of the remaining implementation: real connector UX/action handler contract.
+Phase 4 of the remaining implementation: OpenClaw preview execution artifact.
 
-The builder must turn "можно подключить" into a concrete user action and persisted route contract:
-- OpenClaw can be selected as a policy/execution boundary without user credentials;
-- Maton can be selected only when a saved Maton key is bound;
-- manual fallback remains draft-only/human-operated;
-- selected routes produce typed action handler metadata that preflight/runtime can inspect.
+Selected OpenClaw route contracts must participate in safe preview runtime, not remain metadata-only. Preview run must expose an observation artifact that proves:
+- LocalOS recognized selected OpenClaw action handlers;
+- the action plan is dry-run / preview-only;
+- no external side effects were performed;
+- activation observability can show the OpenClaw boundary result.
 
 ## Acceptance criteria
-- AC1: Selected provider routes are persisted as `agent_binding_provider_routes` and mirrored into `agent_binding_integrations`.
-- AC2: Selected routes create `connector_action_handlers` with handler, credential source, preflight resolution, approval/audit and preview side-effect policy.
-- AC3: OpenClaw route can be selected without external user credentials and remains inside LocalOS policy envelope.
-- AC4: Maton route requires a saved `externalbusinessaccounts:maton` key; if exactly one is available, builder auto-binds it, otherwise API returns a route access error.
-- AC5: The builder "Что возможно" panel can choose the recommended route directly, so intelligence becomes an action surface.
+- AC1: Preview input includes `connector_action_handlers` and `openclaw_preview_routes` derived from selected route contracts.
+- AC2: OpenClaw preview routes are merged into `openclaw_action_plan` even when version steps do not yet carry provider action refs.
+- AC3: Safe preview run creates an `openclaw_preview_observations` artifact from selected OpenClaw route contracts.
+- AC4: The observation artifact explicitly records `external_actions_executed: false` and preview side effects disabled.
+- AC5: Runner does not call the orchestrator for this dry-run route observation; it remains a LocalOS preview artifact.
 - AC6: Agent-related tests and frontend production build pass.
 
 ## Constraints
@@ -45,6 +45,6 @@ The builder must turn "можно подключить" into a concrete user act
 - Production deploy, unless explicitly requested after this phase.
 
 ## Verification plan
-- Focused connector route tests: `PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'provider_routes or maton_route or action_handler or service_intelligence' -x`
+- Focused OpenClaw preview tests: `PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'preview_run_input_is_safe or openclaw_preview_observations or preview_run_and_activation' -x`
 - Unit/integration tests: `PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -x`
 - Frontend build: `npm --prefix frontend run build`

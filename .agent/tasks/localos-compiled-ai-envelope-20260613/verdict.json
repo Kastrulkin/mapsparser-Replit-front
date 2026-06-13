@@ -1,24 +1,51 @@
 {
   "task_id": "localos-compiled-ai-envelope-20260613",
   "overall_verdict": "PASS",
-  "phase": "phase_3_real_connector_ux_action_handlers",
+  "phase": "phase_4_openclaw_preview_execution_artifact",
   "criteria": [
-    {"id": "AC1", "status": "PASS", "reason": "Selected provider routes persist into agent_binding_provider_routes and agent_binding_integrations."},
-    {"id": "AC2", "status": "PASS", "reason": "Each selected route now creates a localos_connector_action_handler_v1 contract."},
-    {"id": "AC3", "status": "PASS", "reason": "OpenClaw route uses openclaw_policy_boundary without user credentials and stays under LocalOS policy."},
-    {"id": "AC4", "status": "PASS", "reason": "Maton route requires or auto-binds a saved externalbusinessaccounts Maton key."},
-    {"id": "AC5", "status": "PASS", "reason": "The Что возможно panel can choose recommended routes directly."},
-    {"id": "AC6", "status": "PASS", "reason": "Focused tests, full agent blueprint suite, and frontend build passed."}
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Preview input now carries connector_action_handlers from selected provider-route contracts."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "OpenClaw policy-bound routes are converted into openclaw_preview_routes and deduped into openclaw_action_plan."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Safe preview runs create localos_openclaw_preview_observations_v1 artifacts."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "The preview artifact records that external side effects are disallowed and no external action executed."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Dry-run OpenClaw route observation does not call the ActionOrchestrator."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "Focused tests, full agent blueprint suite, and frontend build passed."
+    }
   ],
   "commands_run": [
-    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'provider_routes or maton_route or action_handler or service_intelligence' -x",
+    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'preview_run_input_is_safe or openclaw_preview_observations or preview_run_and_activation' -x",
     "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -x",
     "npm --prefix frontend run build"
   ],
   "artifacts_used": [
     ".agent/tasks/localos-compiled-ai-envelope-20260613/spec.md",
     ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.md",
-    ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.json"
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.json",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase4-openclaw-preview-tests.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase4-agent-blueprint-tests.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase4-frontend-build.txt"
   ],
   "remaining_goal_status": "IN_PROGRESS"
 }
