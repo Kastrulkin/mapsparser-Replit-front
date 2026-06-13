@@ -1214,6 +1214,48 @@ def test_openclaw_planner_loop_uses_catalog_without_tool_execution():
     ]
 
 
+def test_openclaw_planner_loop_requires_workflow_details_before_draft():
+    from services.agent_openclaw_planner_loop import build_openclaw_planner_loop
+
+    result = build_openclaw_planner_loop(
+        {
+            "schema": "localos_openclaw_planner_context_v1",
+            "task": "Сделай агента: бери заказ из Google Sheets и делай пост в Telegram",
+            "allowed_capabilities": ["google_sheets.read_rows", "communications.draft"],
+            "required_bindings": [
+                {
+                    "key": "google_sheets_read",
+                    "provider": "google_sheets",
+                    "capability": "google_sheets.read_rows",
+                    "required_config": ["spreadsheet_id", "sheet_name"],
+                },
+                {
+                    "key": "telegram_delivery",
+                    "provider": "telegram",
+                    "capability": "communications.draft",
+                    "required_config": ["bot_mode"],
+                },
+            ],
+            "connection_state": {},
+            "connection_answer_bindings": {},
+            "output_contract": {
+                "format": "json_only",
+                "compiled_workflow_owner": "localos",
+            },
+        }
+    )
+
+    questions = {item["key"]: item for item in result["clarifying_questions"]}
+
+    assert result["status"] == "needs_clarification"
+    assert result["may_execute_tools"] is False
+    assert questions["google_sheets_target"]["reason"] == "openclaw_workflow_detail_missing"
+    assert questions["telegram_target"]["reason"] == "openclaw_workflow_detail_missing"
+    assert questions["schedule_frequency"]["reason"] == "openclaw_workflow_detail_missing"
+    assert questions["post_format"]["reason"] == "openclaw_workflow_detail_missing"
+    assert "blocking_workflow_details_before_draft" in result["planner_contract"]["must_return"]
+
+
 def test_agent_feasibility_resolver_reports_ready_missing_choice_and_forbidden():
     from services.agent_feasibility_resolver import resolve_agent_feasibility
 
@@ -1469,7 +1511,10 @@ def test_agent_builder_session_preview_includes_feasibility_for_required_connect
                 "role": "user",
                 "content": (
                     "Мне нужен агент, который из Google таблицы со списком заказов берёт один заказ "
-                    "за предыдущий день и создаёт пост в Telegram. Человек проверяет перед публикацией."
+                    "за предыдущий день и создаёт пост в Telegram. Человек проверяет перед публикацией. "
+                    "Формат: короткий текст в стиле довольных пассажиров. "
+                    "Таблица https://docs.google.com/spreadsheets/d/1s79gWCm7A8X1drwN6yAscetf0adpRkamHCJyHCKyIqY/edit?gid=0#gid=0, "
+                    "вкладка Sheet1. Telegram канал @riderra_updates."
                 ),
             }
         ],
@@ -1582,7 +1627,7 @@ def test_agent_builder_session_preview_includes_feasibility_for_required_connect
     assert preview["openclaw_planner_loop"]["may_execute_tools"] is False
     assert "openclaw.google_sheets.read_rows" in preview["openclaw_planner_loop"]["workflow_proposal"]["openclaw_action_refs"]
     assert any(item["key"] == "google_sheets_target" for item in state["missing_questions"])
-    assert any(item["reason"] == "connection_resolver" and item["provider"] == "google_sheets" for item in state["missing_questions"])
+    assert any(item["reason"] == "connection_resolver" and item["provider"] == "google_sheets" for item in state["preview"]["connection_resolver_questions"])
     assert state["preview"]["connection_resolver_questions"][0]["key"] == "google_sheets_target"
     assert any("таблиц" in item["question"].lower() for item in state["missing_questions"])
     assert "Google Sheets" in state["messages"][-1]["content"]
@@ -2364,6 +2409,30 @@ def test_agent_builder_setup_flow_blocks_draft_until_clarification_is_answered()
     assert setup_flow["steps"][1]["key"] == "clarify"
     assert setup_flow["steps"][1]["status"] == "active"
     assert any(item["type"] == "clarification" for item in setup_flow["activation_blockers"])
+
+
+def test_agent_builder_blocks_empty_google_sheets_to_telegram_workflow():
+    from services.agent_builder_session import build_agent_builder_state
+
+    state = build_agent_builder_state(
+        [
+            {
+                "role": "user",
+                "content": "Сделай агента: бери заказ из Google Sheets и делай пост в Telegram",
+            }
+        ]
+    )
+    setup_flow = state["preview"]["setup_flow"]
+    questions = {item["key"]: item for item in state["missing_questions"]}
+
+    assert setup_flow["status"] == "needs_clarification"
+    assert setup_flow["primary_action"] == "answer_question"
+    assert setup_flow["can_create_draft"] is False
+    assert setup_flow["steps"][1]["status"] == "active"
+    assert questions["google_sheets_target"]["reason"] == "openclaw_workflow_detail_missing"
+    assert questions["telegram_target"]["reason"] == "openclaw_workflow_detail_missing"
+    assert questions["schedule_frequency"]["reason"] == "openclaw_workflow_detail_missing"
+    assert questions["post_format"]["reason"] == "openclaw_workflow_detail_missing"
 
 
 def test_agent_builder_setup_flow_surfaces_compiler_clarifying_questions(monkeypatch):
@@ -6957,6 +7026,20 @@ def test_runner_creates_maton_delivery_preview_draft_without_dispatch(monkeypatc
     assert payload["delivery_state"] == "preview_draft_only"
     assert payload["external_dispatch_performed"] is False
     assert payload["external_account_id"] == "maton-account-1"
+    delivery_step = next(
+        step
+        for step in cursor.tables["agent_run_steps"].values()
+        if step["step_key"] == "send_offer"
+    )
+    runtime_contract = delivery_step["output_json"]["production_action_contract"]
+    assert runtime_contract["schema"] == "localos_production_action_contract_v1"
+    assert runtime_contract["capability"] == "communications.send_offer"
+    assert runtime_contract["preflight"]["status"] == "passed"
+    assert runtime_contract["approval_policy"]["required"] is True
+    assert runtime_contract["approval_policy"]["approval_type"] == "communications_send"
+    assert runtime_contract["ledger"]["required"] is True
+    assert runtime_contract["recovery"]["state"] == "ready"
+    assert runtime_contract["side_effects"]["external_dispatch_performed"] is False
 
 
 def test_runner_sends_maton_delivery_only_after_approval_and_explicit_dispatch(monkeypatch):
@@ -7191,6 +7274,16 @@ def test_runner_passes_compiled_step_rows_to_next_capability_without_runtime_ai(
         if step["step_key"] == "request_localos_finance"
     )
     assert finance_step["output_json"]["approved_executor"]["localos_writes_performed"] is False
+    runtime_contract = finance_step["output_json"]["production_action_contract"]
+    assert runtime_contract["schema"] == "localos_production_action_contract_v1"
+    assert runtime_contract["capability"] == "finance.transaction.create"
+    assert runtime_contract["preflight"]["status"] == "passed"
+    assert runtime_contract["approval_policy"]["required"] is True
+    assert runtime_contract["approval_policy"]["approval_type"] == "finance_transaction_import"
+    assert runtime_contract["ledger"]["required"] is True
+    assert runtime_contract["limits"]["subscription_checked"] is True
+    assert runtime_contract["recovery"]["idempotency_key"] == "agent-run:run1:request_localos_finance"
+    assert runtime_contract["side_effects"]["localos_write_performed"] is False
     assert cursor.tables["finance_entries"] == {}
 
 

@@ -18,8 +18,9 @@ def build_openclaw_planner_loop(
 
     questions = []
     questions.extend(_questions_for_connection_state(connection_state))
+    questions.extend(_questions_for_workflow_details(context, required_bindings))
     questions.extend(_questions_for_required_bindings(required_bindings, connection_state))
-    questions = _dedupe_questions(questions)[:5]
+    questions = _dedupe_questions(questions)[:8]
 
     capability_plan = [_capability_plan_item(capability, catalog) for capability in allowed_capabilities]
     forbidden = connection_state.get("forbidden") if isinstance(connection_state.get("forbidden"), list) else []
@@ -73,6 +74,7 @@ def _planner_contract(context: Dict[str, Any]) -> Dict[str, Any]:
         },
         "must_return": [
             "missing_details_or_empty_array",
+            "blocking_workflow_details_before_draft",
             "provider_requirements",
             "openclaw_action_refs_only_as_references",
             "localos_policy_risks",
@@ -146,6 +148,153 @@ def _questions_for_connection_state(connection_state: Dict[str, Any]) -> List[Di
                 }
             )
     return questions
+
+
+def _questions_for_workflow_details(context: Dict[str, Any], required_bindings: List[Any]) -> List[Dict[str, str]]:
+    task = str(context.get("task") or "").strip()
+    lowered = task.lower()
+    providers = _required_providers(required_bindings)
+    connection_state = context.get("connection_state") if isinstance(context.get("connection_state"), dict) else {}
+    ready_providers = _ready_providers(connection_state)
+    answer_bindings = context.get("connection_answer_bindings") if isinstance(context.get("connection_answer_bindings"), dict) else {}
+    questions: List[Dict[str, str]] = []
+    if "google_sheets" in providers and "google_sheets" not in ready_providers and not _has_google_sheets_target(task, required_bindings, answer_bindings):
+        questions.append(
+            {
+                "key": "google_sheets_target",
+                "question": "Какую Google Sheets таблицу и вкладку использовать? Укажите ссылку или название и лист.",
+                "reason": "openclaw_workflow_detail_missing",
+            }
+        )
+    if "telegram" in providers and "telegram" not in ready_providers and not _has_telegram_target(task, required_bindings, answer_bindings):
+        questions.append(
+            {
+                "key": "telegram_target",
+                "question": "В какой Telegram-канал, чат или бот готовить результат?",
+                "reason": "openclaw_workflow_detail_missing",
+            }
+        )
+    if providers.intersection({"google_sheets", "telegram", "maton", "localos_finance"}) and not _has_schedule_or_trigger(lowered):
+        questions.append(
+            {
+                "key": "schedule_frequency",
+                "question": "Когда запускать агента: по расписанию, по событию или вручную? Укажите частоту или trigger.",
+                "reason": "openclaw_workflow_detail_missing",
+            }
+        )
+    if "telegram" in providers and _looks_like_post_workflow(lowered) and not _has_post_format(lowered):
+        questions.append(
+            {
+                "key": "post_format",
+                "question": "Какой формат поста нужен: короткий текст, шаблон, тон, обязательные поля и запреты?",
+                "reason": "openclaw_workflow_detail_missing",
+            }
+        )
+    return questions
+
+
+def _required_providers(required_bindings: List[Any]) -> set[str]:
+    providers: set[str] = set()
+    for item in required_bindings:
+        if not isinstance(item, dict):
+            continue
+        provider = str(item.get("provider") or "").strip()
+        if provider:
+            providers.add(provider)
+    return providers
+
+
+def _ready_providers(connection_state: Dict[str, Any]) -> set[str]:
+    providers: set[str] = set()
+    ready_bindings = connection_state.get("ready_bindings") if isinstance(connection_state.get("ready_bindings"), list) else []
+    for item in ready_bindings:
+        if not isinstance(item, dict):
+            continue
+        provider = str(item.get("provider") or "").strip()
+        if provider:
+            providers.add(provider)
+    return providers
+
+
+def _has_google_sheets_target(task: str, required_bindings: List[Any], answer_bindings: Dict[str, Any]) -> bool:
+    if "docs.google.com/spreadsheets" in task or "spreadsheet_id" in task:
+        return True
+    for config in _binding_answer_configs(required_bindings, answer_bindings, "google_sheets"):
+        if str(config.get("spreadsheet_id") or "").strip() and str(config.get("sheet_name") or "").strip():
+            return True
+    return False
+
+
+def _has_telegram_target(task: str, required_bindings: List[Any], answer_bindings: Dict[str, Any]) -> bool:
+    lowered = task.lower()
+    if "t.me/" in lowered:
+        return True
+    if "@" in task and any(part.startswith("@") and len(part) >= 4 for part in task.replace(",", " ").split()):
+        return True
+    for config in _binding_answer_configs(required_bindings, answer_bindings, "telegram"):
+        if str(config.get("telegram_target") or config.get("chat_id") or config.get("channel") or "").strip():
+            return True
+    return False
+
+
+def _binding_answer_configs(required_bindings: List[Any], answer_bindings: Dict[str, Any], provider: str) -> List[Dict[str, Any]]:
+    configs: List[Dict[str, Any]] = []
+    for item in required_bindings:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("provider") or "").strip() != provider:
+            continue
+        default_config = item.get("default_config") if isinstance(item.get("default_config"), dict) else {}
+        if default_config:
+            configs.append(default_config)
+        binding_key = str(item.get("key") or "").strip()
+        answer_config = answer_bindings.get(binding_key) if binding_key and isinstance(answer_bindings.get(binding_key), dict) else {}
+        if answer_config:
+            configs.append(answer_config)
+    return configs
+
+
+def _has_schedule_or_trigger(lowered: str) -> bool:
+    markers = [
+        "каждый",
+        "ежеднев",
+        "еженед",
+        "каждую",
+        "каждое",
+        "раз в",
+        "по распис",
+        "schedule",
+        "daily",
+        "weekly",
+        "trigger",
+        "когда",
+        "после",
+        "перед",
+        "за предыдущ",
+        "за вчера",
+        "вручную",
+    ]
+    return any(marker in lowered for marker in markers)
+
+
+def _looks_like_post_workflow(lowered: str) -> bool:
+    return any(marker in lowered for marker in ["пост", "сообщен", "telegram", "телеграм"])
+
+
+def _has_post_format(lowered: str) -> bool:
+    markers = [
+        "в стиле",
+        "стиль",
+        "тон",
+        "формат",
+        "шаблон",
+        "коротк",
+        "черновик",
+        "текст",
+        "обязател",
+        "нельзя",
+    ]
+    return any(marker in lowered for marker in markers)
 
 
 def _questions_for_required_bindings(required_bindings: List[Any], connection_state: Dict[str, Any]) -> List[Dict[str, str]]:

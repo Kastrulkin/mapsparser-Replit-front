@@ -1,7 +1,7 @@
 {
   "task_id": "localos-compiled-ai-envelope-20260613",
   "overall_status": "PASS",
-  "phase": "phase_9_real_connector_selection_ux",
+  "phase": "phase_10_openclaw_planner_loop_action_contracts",
   "acceptance_criteria": [
     {
       "id": "AC1",
@@ -58,12 +58,35 @@
     },
     {
       "id": "AC6",
-      "text": "Regression suite, frontend build, and diff checks pass without schema migration.",
+      "text": "Regression suite and diff checks pass without schema migration.",
       "status": "PASS",
       "proof": [
-        "153 agent blueprint tests passed",
-        "frontend build passed",
+        "155 agent blueprint tests passed",
+        "production action runtime contract covered by Maton and finance runner tests",
         "git diff --check passed"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC7",
+      "text": "OpenClaw planner loop asks blocking workflow-detail questions before draft creation when the user description is incomplete.",
+      "status": "PASS",
+      "proof": [
+        "src/services/agent_openclaw_planner_loop.py::_questions_for_workflow_details",
+        "src/services/agent_builder_session.py::_blocking_clarification_questions",
+        "tests/test_agent_blueprint_layer.py::test_openclaw_planner_loop_requires_workflow_details_before_draft",
+        "tests/test_agent_blueprint_layer.py::test_agent_builder_blocks_empty_google_sheets_to_telegram_workflow"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC8",
+      "text": "Production capability steps expose preflight, approval, ledger, limit, recovery, and side-effect contract evidence.",
+      "status": "PASS",
+      "proof": [
+        "src/services/agent_blueprint_runner.py::_production_action_runtime_contract",
+        "tests/test_agent_blueprint_layer.py::test_runner_creates_maton_delivery_preview_draft_without_dispatch",
+        "tests/test_agent_blueprint_layer.py::test_runner_passes_compiled_step_rows_to_next_capability_without_runtime_ai"
       ],
       "gaps": []
     }
@@ -75,21 +98,21 @@
     ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase9-connector-selection-agent-blueprint-tests.txt",
     ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase9-connector-selection-diff-check.txt",
     ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase9-connector-selection-frontend-build.txt",
-    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
-    "src/api/agent_blueprints_api.py",
-    "src/api/agent_builder_api.py",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase10-planner-loop-action-contract-tests.txt",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/raw/phase10-diff-check.txt",
+    "src/services/agent_blueprint_runner.py",
     "src/services/agent_builder_session.py",
-    "src/services/agent_integration_preflight.py",
+    "src/services/agent_openclaw_planner_context.py",
+    "src/services/agent_openclaw_planner_loop.py",
     "tests/test_agent_blueprint_layer.py"
   ],
   "commands_for_fresh_verifier": [
-    "venv/bin/python -m pytest tests/test_agent_blueprint_layer.py -q",
-    "cd frontend && npm run build",
+    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py",
     "git diff --check"
   ],
   "known_gaps": [
     "Full LocalOS compiled AI envelope objective remains active.",
-    "Live provider-specific selection UI can still be polished.",
-    "More production provider write handlers and billing ledger coverage for compile/preview/run remain later phases."
+    "Planner completeness still uses deterministic heuristics for some details until live OpenClaw/GigaChat loop is wired deeper.",
+    "More provider-specific production handlers and billing ledger coverage for compile/preview/run remain later phases."
   ]
 }

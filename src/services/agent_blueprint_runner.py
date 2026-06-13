@@ -903,6 +903,14 @@ class AgentBlueprintRunner:
         orchestrator_result = self.orchestrator.execute(envelope, user_data, allow_execute_when_approved=True)
         if not orchestrator_result.get("success"):
             validation_error = str(orchestrator_result.get("error") or "orchestrator rejected capability")
+            runtime_contract = self._production_action_runtime_contract(
+                run,
+                step,
+                capability,
+                orchestrator_result,
+                preflight_status="failed",
+                recovery_state="error",
+            )
             self.cursor.execute(
                 """
                 UPDATE agent_run_steps
@@ -918,6 +926,7 @@ class AgentBlueprintRunner:
                             "capability": capability,
                             "orchestrator_status": orchestrator_result.get("status"),
                             "orchestrator_error": validation_error,
+                            "production_action_contract": runtime_contract,
                         },
                         ensure_ascii=False,
                     ),
@@ -930,6 +939,14 @@ class AgentBlueprintRunner:
         capability_result = orchestrator_result.get("result") if isinstance(orchestrator_result.get("result"), dict) else {}
         if capability_result.get("status") == "blocked":
             reason_code = str(capability_result.get("reason_code") or "CAPABILITY_BLOCKED")
+            runtime_contract = self._production_action_runtime_contract(
+                run,
+                step,
+                capability,
+                orchestrator_result,
+                preflight_status="passed",
+                recovery_state="blocked",
+            )
             self.cursor.execute(
                 """
                 UPDATE agent_run_steps
@@ -940,7 +957,14 @@ class AgentBlueprintRunner:
                 WHERE id = %s
                 """,
                 (
-                    json.dumps({"capability": capability, "orchestrator": orchestrator_result}, ensure_ascii=False),
+                    json.dumps(
+                        {
+                            "capability": capability,
+                            "orchestrator": orchestrator_result,
+                            "production_action_contract": runtime_contract,
+                        },
+                        ensure_ascii=False,
+                    ),
                     reason_code,
                     step_id,
                 ),
@@ -954,6 +978,15 @@ class AgentBlueprintRunner:
             orchestrator_result=orchestrator_result,
             user_data=user_data,
             apply_finance=capability != "finance.transaction.create",
+        )
+        runtime_contract = self._production_action_runtime_contract(
+            run,
+            step,
+            capability,
+            orchestrator_result,
+            approved_executor=approved_executor,
+            preflight_status="passed",
+            recovery_state="ready",
         )
         self.cursor.execute(
             """
@@ -969,6 +1002,7 @@ class AgentBlueprintRunner:
                         "capability": capability,
                         "orchestrator": orchestrator_result,
                         "approved_executor": approved_executor,
+                        "production_action_contract": runtime_contract,
                     },
                     ensure_ascii=False,
                 ),
@@ -976,6 +1010,64 @@ class AgentBlueprintRunner:
             ),
         )
         return True
+
+    def _production_action_runtime_contract(
+        self,
+        run: Dict[str, Any],
+        step: Dict[str, Any],
+        capability: str,
+        orchestrator_result: Dict[str, Any],
+        *,
+        approved_executor: Dict[str, Any] | None = None,
+        preflight_status: str = "passed",
+        recovery_state: str = "ready",
+    ) -> Dict[str, Any]:
+        result = orchestrator_result.get("result") if isinstance(orchestrator_result.get("result"), dict) else {}
+        approval_required = self._capability_requires_approval(capability, step)
+        required_approval_type = str(step.get("required_approval_type") or step.get("approval_type") or "").strip()
+        action_id = str(orchestrator_result.get("action_id") or result.get("action_id") or "").strip()
+        request_id = str(result.get("request_id") or result.get("draft_id") or result.get("review_id") or "").strip()
+        executor = approved_executor if isinstance(approved_executor, dict) else {}
+        return {
+            "schema": "localos_production_action_contract_v1",
+            "capability": capability,
+            "step_key": str(step.get("key") or ""),
+            "preflight": {
+                "required": True,
+                "status": preflight_status,
+                "source": "agent_integration_preflight",
+            },
+            "approval_policy": {
+                "required": approval_required,
+                "approval_type": required_approval_type,
+                "owner": "LocalOS",
+                "external_side_effects_without_approval": False,
+            },
+            "ledger": {
+                "required": True,
+                "action_id": action_id,
+                "billing_ledger": True,
+                "action_ledger": bool(action_id),
+                "domain_executor_ledger": bool(executor.get("executed")),
+            },
+            "limits": {
+                "owner": "LocalOS",
+                "billing_owner": "ActionOrchestrator",
+                "subscription_checked": True,
+            },
+            "recovery": {
+                "state": recovery_state,
+                "idempotency_key": f"agent-run:{run.get('id')}:{step.get('key')}",
+                "request_id": request_id,
+                "retry": "rerun_after_fix_or_resume_approved_request",
+                "error_state": str(orchestrator_result.get("error_code") or orchestrator_result.get("error") or result.get("error_code") or ""),
+            },
+            "side_effects": {
+                "external_dispatch_performed": bool(result.get("external_dispatch_performed")),
+                "provider_write_performed": bool(result.get("provider_write_performed")),
+                "localos_write_performed": bool(result.get("localos_write_performed")),
+            },
+        }
 
     def apply_finance_requests(self, run_id: str, user_data: Dict[str, Any]) -> Dict[str, Any]:
         run = self._load_run_header(run_id)
@@ -1192,6 +1284,18 @@ class AgentBlueprintRunner:
             "provider": "maton",
             "handler": "maton_external_account_bridge",
             "result": artifact_payload,
+            "production_action_contract": self._production_action_runtime_contract(
+                run,
+                step,
+                capability,
+                {
+                    "success": True,
+                    "status": str(result.get("status") or "request_created"),
+                    "result": artifact_payload,
+                },
+                preflight_status="passed",
+                recovery_state="ready" if not result.get("error") else "error",
+            ),
         }
         if result.get("error"):
             output_payload["error"] = str(result.get("error") or "")

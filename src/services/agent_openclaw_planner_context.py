@@ -47,6 +47,7 @@ def build_openclaw_planner_context(
         },
         "allowed_capabilities": _clean_list(preview.get("capability_allowlist")),
         "required_bindings": _bindings(preview),
+        "connection_answer_bindings": preview.get("connection_answer_bindings") if isinstance(preview.get("connection_answer_bindings"), dict) else {},
         "connection_state": _connection_state(feasibility),
         "forbidden_action_classes": list(FORBIDDEN_ACTION_CLASSES),
         "approval_required_action_classes": list(APPROVAL_REQUIRED_ACTION_CLASSES),

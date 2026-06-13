@@ -455,7 +455,22 @@ def _merge_questions(
     seen = set()
     seen_questions = set()
     resolver_questions = resolver_questions if isinstance(resolver_questions, list) else []
-    for item in compiler_questions + resolver_questions + local_questions:
+    planner_questions = planner_loop.get("clarifying_questions") if isinstance(planner_loop.get("clarifying_questions"), list) else []
+    normalized_planner_questions: List[Dict[str, str]] = []
+    for item in planner_questions:
+        if not isinstance(item, dict):
+            continue
+        reason = str(item.get("reason") or "").strip()
+        if reason in {"required_connection_missing", "required_connection_missing_config", "multiple_connections_available"}:
+            continue
+        normalized_planner_questions.append(
+            {
+                "key": str(item.get("key") or item.get("question") or "").strip(),
+                "question": str(item.get("question") or "").strip(),
+                "reason": reason,
+            }
+        )
+    for item in compiler_questions + normalized_planner_questions + resolver_questions + local_questions:
         key = str(item.get("key") or item.get("question") or "").strip()
         question = str(item.get("question") or "").strip()
         question_key = question.lower()
@@ -465,27 +480,6 @@ def _merge_questions(
         if question_key:
             seen_questions.add(question_key)
         result.append(item)
-    planner_questions = planner_loop.get("clarifying_questions") if isinstance(planner_loop.get("clarifying_questions"), list) else []
-    for item in planner_questions:
-        if not isinstance(item, dict):
-            continue
-        reason = str(item.get("reason") or "").strip()
-        if reason in {"required_connection_missing", "required_connection_missing_config", "multiple_connections_available"}:
-            continue
-        key = str(item.get("key") or item.get("question") or "").strip()
-        question = str(item.get("question") or "").strip()
-        question_key = question.lower()
-        if not key or not question or key in seen or question_key in seen_questions:
-            continue
-        seen.add(key)
-        seen_questions.add(question_key)
-        result.append(
-            {
-                "key": key,
-                "question": question,
-                "reason": reason,
-            }
-        )
     return result[:5]
 
 
@@ -636,6 +630,9 @@ def _blocking_clarification_questions(questions: List[Dict[str, str]]) -> List[D
             continue
         reason = str(item.get("reason") or "").strip()
         key = str(item.get("key") or "").strip()
+        if reason == "openclaw_workflow_detail_missing":
+            result.append(item)
+            continue
         if reason in {
             "connection_resolver",
             "binding_config_needed",
