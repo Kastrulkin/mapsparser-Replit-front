@@ -4320,7 +4320,11 @@ const DialogAgentBuilder = ({
               accepted={acceptedCompilerPlan}
               onAccept={onAcceptCompilerPlan}
             />
-            <BuilderServiceIntelligencePanel intelligence={preview?.service_intelligence} />
+            <BuilderServiceIntelligencePanel
+              intelligence={preview?.service_intelligence}
+              selectedProviderRoutes={selectedProviderRoutes}
+              onSelectProviderRoute={onSelectProviderRoute}
+            />
             <BuilderConnectionReadinessPanel
               readiness={preview?.connection_readiness}
               answerBindings={preview?.connection_answer_bindings}
@@ -4918,7 +4922,15 @@ const builderConnectionNextStepCopy = (service: AgentConnectionReadinessService,
   return service.route_summary || service.explanation || 'LocalOS проверит доступ перед safe preview.';
 };
 
-const BuilderServiceIntelligencePanel = ({ intelligence }: { intelligence?: AgentServiceIntelligence }) => {
+const BuilderServiceIntelligencePanel = ({
+  intelligence,
+  selectedProviderRoutes = {},
+  onSelectProviderRoute,
+}: {
+  intelligence?: AgentServiceIntelligence;
+  selectedProviderRoutes?: Record<string, string>;
+  onSelectProviderRoute?: (bindingKey: string, routeProvider: string) => void;
+}) => {
   const items = intelligence?.items || [];
   if (!intelligence || !items.length) {
     return null;
@@ -4946,6 +4958,18 @@ const BuilderServiceIntelligencePanel = ({ intelligence }: { intelligence?: Agen
         {items.slice(0, 8).map((item) => {
           const state = item.state || '';
           const provider = item.recommended_provider || item.provider || '';
+          const bindingKey = item.kind === 'binding' ? item.key || '' : '';
+          const route = item.recommended_route || null;
+          const selected = Boolean(bindingKey && provider && selectedProviderRoutes[bindingKey] === provider);
+          const canChooseRoute = Boolean(
+            bindingKey
+            && provider
+            && route
+            && ['connectable', 'multiple_routes'].includes(state)
+            && ['available', 'connected', 'manual'].includes(String(route.state || route.status || ''))
+            && route.provider_action?.available !== false
+            && onSelectProviderRoute,
+          );
           return (
             <div key={`${item.kind || 'item'}-${item.key || item.provider || item.capability}`} className="rounded-lg bg-white px-3 py-2 ring-1 ring-current/10">
               <div className="flex flex-wrap items-start justify-between gap-2">
@@ -4977,6 +5001,17 @@ const BuilderServiceIntelligencePanel = ({ intelligence }: { intelligence?: Agen
                   </span>
                 ) : null}
               </div>
+              {canChooseRoute ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={selected ? 'default' : 'outline'}
+                  className={cn('mt-2 h-7 px-2 text-[11px]', selected ? '' : 'bg-white')}
+                  onClick={() => onSelectProviderRoute?.(bindingKey, provider)}
+                >
+                  {selected ? 'Способ выбран' : `Использовать ${connectorLabel(provider)}`}
+                </Button>
+              ) : null}
             </div>
           );
         })}

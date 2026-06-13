@@ -15,22 +15,20 @@
 Сделать LocalOS product/policy envelope поверх OpenClaw: пользователь описывает агента обычным языком, система уточняет детали, понимает нужные сервисы, компилирует workflow в проверяемый executable plan, показывает подключения/стоимость/риски, требует approval и запускает safe preview перед активацией в рамках лимитов подписки.
 
 ## Current phase scope
-Phase 2 of the remaining implementation: service/capability intelligence for the builder loop.
+Phase 3 of the remaining implementation: real connector UX/action handler contract.
 
-The builder must explicitly distinguish provider states before the user creates or activates an agent:
-- already connected;
-- can be connected through an allowed provider route;
-- impossible or forbidden by LocalOS policy;
-- multiple existing routes/connections require user choice.
-
-This phase builds on Phase 1, where connector facts from the dialog became draft-safe and preflight-blocked until a real route/access is selected.
+The builder must turn "можно подключить" into a concrete user action and persisted route contract:
+- OpenClaw can be selected as a policy/execution boundary without user credentials;
+- Maton can be selected only when a saved Maton key is bound;
+- manual fallback remains draft-only/human-operated;
+- selected routes produce typed action handler metadata that preflight/runtime can inspect.
 
 ## Acceptance criteria
-- AC1: Builder preview exposes a normalized `service_intelligence` artifact from existing feasibility/provider registry data.
-- AC2: Google Sheets -> Telegram with one connected Telegram and no Google Sheets access reports Telegram as `already_connected` and Google Sheets as `connectable`.
-- AC3: Multiple existing Telegram connections report `multiple_routes` and require explicit choice.
-- AC4: Forbidden/impossible requests, for example unsafe Roscosmos computer access, report `impossible` and block draft creation.
-- AC5: The UI shows a compact "Что возможно" panel using the normalized states before detailed connector/preflight panels.
+- AC1: Selected provider routes are persisted as `agent_binding_provider_routes` and mirrored into `agent_binding_integrations`.
+- AC2: Selected routes create `connector_action_handlers` with handler, credential source, preflight resolution, approval/audit and preview side-effect policy.
+- AC3: OpenClaw route can be selected without external user credentials and remains inside LocalOS policy envelope.
+- AC4: Maton route requires a saved `externalbusinessaccounts:maton` key; if exactly one is available, builder auto-binds it, otherwise API returns a route access error.
+- AC5: The builder "Что возможно" panel can choose the recommended route directly, so intelligence becomes an action surface.
 - AC6: Agent-related tests and frontend production build pass.
 
 ## Constraints
@@ -47,6 +45,6 @@ This phase builds on Phase 1, where connector facts from the dialog became draft
 - Production deploy, unless explicitly requested after this phase.
 
 ## Verification plan
-- Focused service intelligence tests: `PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'service_intelligence or required_connectors or forbidden' -x`
+- Focused connector route tests: `PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'provider_routes or maton_route or action_handler or service_intelligence' -x`
 - Unit/integration tests: `PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -x`
 - Frontend build: `npm --prefix frontend run build`

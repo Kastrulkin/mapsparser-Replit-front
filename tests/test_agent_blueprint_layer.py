@@ -2597,6 +2597,96 @@ def test_agent_builder_api_requires_selected_provider_routes_for_required_bindin
     assert _missing_required_provider_routes(preview, {"google_sheets_read": {"provider": "openclaw"}}) == []
 
 
+def test_agent_builder_provider_routes_create_action_handler_contracts():
+    from api import agent_builder_api
+
+    metadata = {
+        "required_integration_bindings": [
+            {"key": "google_sheets_read", "provider": "google_sheets"},
+            {"key": "telegram_delivery", "provider": "telegram"},
+        ],
+        "custom_process": {},
+    }
+    selected = {
+        "google_sheets_read": {
+            "provider": "openclaw",
+            "route_provider": "openclaw",
+            "label": "OpenClaw",
+            "connect_mode": "openclaw_policy_boundary",
+        },
+        "telegram_delivery": {
+            "provider": "maton",
+            "route_provider": "maton",
+            "label": "Maton.ai",
+            "connect_mode": "external_account_key",
+            "external_account_id": "maton-account-1",
+            "display_name": "Main Maton key",
+        },
+    }
+
+    metadata = agent_builder_api._apply_selected_provider_routes(metadata, selected)
+
+    assert metadata["agent_binding_provider_routes"]["google_sheets_read"]["route_provider"] == "openclaw"
+    assert metadata["agent_binding_provider_routes"]["telegram_delivery"]["external_account_id"] == "maton-account-1"
+    assert metadata["connector_action_handlers"]["google_sheets_read"]["handler"] == "openclaw_policy_boundary"
+    assert metadata["connector_action_handlers"]["google_sheets_read"]["preflight_resolution"] == "provider_route_openclaw_boundary"
+    assert metadata["connector_action_handlers"]["telegram_delivery"]["handler"] == "maton_external_account_bridge"
+    assert metadata["connector_action_handlers"]["telegram_delivery"]["credential_source"] == "externalbusinessaccounts:maton"
+    assert metadata["connector_action_handlers"]["telegram_delivery"]["external_side_effects_allowed_in_preview"] is False
+
+
+def test_agent_builder_selected_maton_route_requires_or_auto_binds_external_account():
+    from api import agent_builder_api
+
+    preview = {
+        "connection_readiness": {
+            "services": [
+                {
+                    "key": "telegram_delivery",
+                    "recommended_route": {
+                        "provider": "maton",
+                        "state": "available",
+                        "label": "Maton.ai",
+                        "connect_mode": "external_account_key",
+                        "provider_action": {"available": True},
+                    },
+                    "provider_routes": [
+                        {
+                            "provider": "maton",
+                            "state": "available",
+                            "label": "Maton.ai",
+                            "connect_mode": "external_account_key",
+                            "provider_action": {"available": True},
+                        }
+                    ],
+                }
+            ]
+        }
+    }
+
+    selected_without_key = agent_builder_api._selected_provider_routes(
+        {"selected_provider_routes": {"telegram_delivery": "maton"}},
+        preview,
+        [],
+    )
+    selected_with_single_key = agent_builder_api._selected_provider_routes(
+        {"selected_provider_routes": {"telegram_delivery": "maton"}},
+        preview,
+        [
+            {
+                "id": "maton-account-1",
+                "provider": "maton",
+                "display_name": "Main Maton key",
+                "inventory_source": "external_business_account",
+            }
+        ],
+    )
+
+    assert agent_builder_api._provider_route_selection_errors(selected_without_key)[0]["code"] == "maton_key_required"
+    assert selected_with_single_key["telegram_delivery"]["external_account_id"] == "maton-account-1"
+    assert agent_builder_api._provider_route_selection_errors(selected_with_single_key) == []
+
+
 def test_agent_builder_connector_intelligence_blocks_forbidden_provider_path():
     from services.agent_builder_session import build_agent_builder_state
 

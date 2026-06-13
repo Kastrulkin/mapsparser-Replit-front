@@ -101,6 +101,7 @@ def _load_builder_connection_inventory(cursor, business_id: str) -> list[dict]:
                 "status": str(item.get("status") or "active"),
                 "display_name": str(item.get("display_name") or item.get("provider") or ""),
                 "config": config if isinstance(config, dict) else {},
+                "inventory_source": "agent_integration",
             }
         )
     cursor.execute(
@@ -133,6 +134,7 @@ def _load_builder_connection_inventory(cursor, business_id: str) -> list[dict]:
                 "status": "active",
                 "display_name": str(item.get("display_name") or source or provider),
                 "config": config,
+                "inventory_source": "external_business_account",
             }
         )
     cursor.execute(
@@ -265,13 +267,15 @@ def _apply_selected_connection_bindings(metadata: dict, selected_bindings: dict)
     return metadata
 
 
-def _selected_provider_routes(payload: dict, preview: dict) -> dict:
+def _selected_provider_routes(payload: dict, preview: dict, inventory: list[dict] | None = None) -> dict:
     raw = payload.get("selected_provider_routes")
     if not isinstance(raw, dict):
         raw = payload.get("selected_routes")
     if not isinstance(raw, dict):
         raw = {}
+    inventory = inventory if isinstance(inventory, list) else []
     allowed = _allowed_provider_routes_by_binding(preview)
+    external_accounts_by_provider = _external_accounts_by_provider(inventory)
     result = {}
     for key, value in raw.items():
         binding_key = str(key or "").strip()
@@ -299,11 +303,51 @@ def _selected_provider_routes(payload: dict, preview: dict) -> dict:
             "selection_source": str(route_payload.get("selection_source") or "agent_builder_user_choice"),
         }
         external_account_id = str(route_payload.get("external_account_id") or route_payload.get("auth_ref") or "").strip()
+        if route_provider == "maton" and not external_account_id:
+            maton_accounts = external_accounts_by_provider.get("maton") or []
+            if len(maton_accounts) == 1:
+                external_account_id = str(maton_accounts[0].get("id") or "").strip()
+                selected["display_name"] = str(maton_accounts[0].get("display_name") or "Maton.ai")
         if external_account_id:
             selected["external_account_id"] = external_account_id
             selected["auth_ref"] = external_account_id
         result[binding_key] = selected
     return result
+
+
+def _external_accounts_by_provider(inventory: list[dict]) -> dict:
+    result: dict[str, list[dict]] = {}
+    for item in inventory:
+        if not isinstance(item, dict):
+            continue
+        provider = str(item.get("provider") or "").strip()
+        integration_id = str(item.get("id") or "").strip()
+        if not provider or not integration_id:
+            continue
+        if provider == "maton" and str(item.get("inventory_source") or "") != "external_business_account":
+            continue
+        result.setdefault(provider, []).append(item)
+    return result
+
+
+def _provider_route_selection_errors(selected_provider_routes: dict) -> list[dict]:
+    errors = []
+    for binding_key, selected in selected_provider_routes.items():
+        if not isinstance(selected, dict):
+            continue
+        route_provider = str(selected.get("route_provider") or selected.get("provider") or "").strip()
+        if route_provider == "maton":
+            external_account_id = str(selected.get("external_account_id") or selected.get("auth_ref") or "").strip()
+            if not external_account_id:
+                errors.append(
+                    {
+                        "key": str(binding_key),
+                        "route_provider": "maton",
+                        "code": "maton_key_required",
+                        "message": "Выберите сохранённый Maton.ai key для этого route.",
+                    }
+                )
+    return errors
 
 
 def _allowed_provider_routes_by_binding(preview: dict) -> dict:
@@ -373,6 +417,7 @@ def _apply_selected_provider_routes(metadata: dict, selected_provider_routes: di
     routes = metadata.get("agent_binding_provider_routes") if isinstance(metadata.get("agent_binding_provider_routes"), dict) else {}
     binding_integrations = metadata.get("agent_binding_integrations") if isinstance(metadata.get("agent_binding_integrations"), dict) else {}
     custom_process = metadata.get("custom_process") if isinstance(metadata.get("custom_process"), dict) else {}
+    action_handlers = metadata.get("connector_action_handlers") if isinstance(metadata.get("connector_action_handlers"), dict) else {}
     provider_by_binding = _provider_by_binding_key(metadata)
     for binding_key, selected in selected_provider_routes.items():
         if not isinstance(selected, dict):
@@ -430,13 +475,76 @@ def _apply_selected_provider_routes(metadata: dict, selected_provider_routes: di
         routes[str(binding_key)] = route_payload
         binding_integrations[str(binding_key)] = dict(route_payload)
         custom_process[str(binding_key)] = dict(route_payload)
+        action_handlers[str(binding_key)] = _connector_action_handler_payload(str(binding_key), route_payload)
         binding_provider = provider_by_binding.get(str(binding_key)) or ""
         if binding_provider:
             custom_process[binding_provider] = dict(route_payload)
     metadata["agent_binding_provider_routes"] = routes
     metadata["agent_binding_integrations"] = binding_integrations
+    metadata["connector_action_handlers"] = action_handlers
     metadata["custom_process"] = custom_process
     return metadata
+
+
+def _connector_action_handler_payload(binding_key: str, route_payload: dict) -> dict:
+    route_provider = str(route_payload.get("route_provider") or "").strip()
+    base = {
+        "schema": "localos_connector_action_handler_v1",
+        "binding_key": binding_key,
+        "route_provider": route_provider,
+        "status": str(route_payload.get("status") or "active"),
+        "execution_boundary": str(route_payload.get("execution_boundary") or "localos_policy_envelope"),
+        "approval_required": True,
+        "audit_required": True,
+        "external_side_effects_allowed_in_preview": False,
+    }
+    if route_provider == "openclaw":
+        base.update(
+            {
+                "handler": "openclaw_policy_boundary",
+                "credential_source": "openclaw_m2m",
+                "preflight_resolution": "provider_route_openclaw_boundary",
+                "next_step": "safe_preview",
+            }
+        )
+    elif route_provider == "maton":
+        base.update(
+            {
+                "handler": "maton_external_account_bridge",
+                "credential_source": "externalbusinessaccounts:maton",
+                "external_account_id": str(route_payload.get("external_account_id") or route_payload.get("auth_ref") or ""),
+                "preflight_resolution": "provider_route_maton_external_account",
+                "next_step": "safe_preview",
+            }
+        )
+    elif route_provider == "manual":
+        base.update(
+            {
+                "handler": "manual_human_fallback",
+                "credential_source": "none",
+                "preflight_resolution": "provider_route_manual_fallback",
+                "next_step": "draft_only_human_action",
+            }
+        )
+    elif route_provider == "native_localos":
+        base.update(
+            {
+                "handler": "localos_native_domain",
+                "credential_source": "localos_domain_data",
+                "preflight_resolution": "native_localos",
+                "next_step": "safe_preview",
+            }
+        )
+    else:
+        base.update(
+            {
+                "handler": "provider_route_unresolved",
+                "credential_source": "",
+                "preflight_resolution": "",
+                "next_step": "resolve_connection",
+            }
+        )
+    return base
 
 
 def _apply_answer_connection_bindings(metadata: dict, answer_bindings: dict) -> dict:
@@ -768,8 +876,9 @@ def create_blueprint_from_agent_builder_session(session_id: str):
             ), 400
         connection_inventory = _load_builder_connection_inventory(cursor, business_id)
         selected_bindings = _selected_connection_bindings(payload, preview, connection_inventory)
-        selected_provider_routes = _selected_provider_routes(payload, preview)
+        selected_provider_routes = _selected_provider_routes(payload, preview, connection_inventory)
         missing_provider_routes = _missing_required_provider_routes(preview, selected_provider_routes)
+        provider_route_errors = _provider_route_selection_errors(selected_provider_routes)
         enforce_provider_routes = bool(payload.get("enforce_provider_routes"))
         if enforce_provider_routes and missing_provider_routes:
             return jsonify(
@@ -791,6 +900,18 @@ def create_blueprint_from_agent_builder_session(session_id: str):
                     "connection_readiness": preview.get("connection_readiness") if isinstance(preview.get("connection_readiness"), dict) else {},
                     "next_step": "accept_provider_routes",
                     "next_step_title": "Подтвердите routes агента",
+                }
+            ), 400
+        if provider_route_errors:
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "Для выбранного provider route не хватает доступа.",
+                    "code": "AGENT_PROVIDER_ROUTE_ACCESS_REQUIRED",
+                    "provider_route_errors": provider_route_errors,
+                    "connection_readiness": preview.get("connection_readiness") if isinstance(preview.get("connection_readiness"), dict) else {},
+                    "next_step": "connect_provider_account",
+                    "next_step_title": "Подключите доступ",
                 }
             ), 400
         missing_connection_choices = _missing_required_connection_choices(preview, selected_bindings)

@@ -1,39 +1,39 @@
 {
   "task_id": "localos-compiled-ai-envelope-20260613",
   "overall_status": "PASS",
-  "phase": "phase_2_service_capability_intelligence",
+  "phase": "phase_3_real_connector_ux_action_handlers",
   "acceptance_criteria": [
     {
       "id": "AC1",
-      "text": "Builder preview exposes a normalized service_intelligence artifact from existing feasibility/provider registry data.",
+      "text": "Selected provider routes are persisted as agent_binding_provider_routes and mirrored into agent_binding_integrations.",
       "status": "PASS",
-      "proof": ["src/services/agent_builder_session.py::_build_service_intelligence", "localos_agent_service_intelligence_v1"],
+      "proof": ["src/api/agent_builder_api.py::_apply_selected_provider_routes", "tests/test_agent_blueprint_layer.py::test_agent_builder_provider_routes_create_action_handler_contracts"],
       "gaps": []
     },
     {
       "id": "AC2",
-      "text": "Google Sheets -> Telegram reports Telegram as already_connected and Google Sheets as connectable.",
+      "text": "Selected routes create connector_action_handlers with typed handler contract.",
       "status": "PASS",
-      "proof": ["tests/test_agent_blueprint_layer.py::test_agent_builder_session_preview_includes_feasibility_for_required_connectors"],
+      "proof": ["src/api/agent_builder_api.py::_connector_action_handler_payload"],
       "gaps": []
     },
     {
       "id": "AC3",
-      "text": "Multiple existing Telegram connections report multiple_routes and require explicit choice.",
+      "text": "OpenClaw route can be selected without external user credentials and stays inside LocalOS policy envelope.",
       "status": "PASS",
-      "proof": ["tests/test_agent_blueprint_layer.py::test_agent_builder_service_intelligence_marks_multiple_existing_routes"],
+      "proof": ["openclaw_policy_boundary handler", "provider_route_openclaw_boundary preflight resolution"],
       "gaps": []
     },
     {
       "id": "AC4",
-      "text": "Forbidden/impossible requests report impossible and block draft creation.",
+      "text": "Maton route requires a saved externalbusinessaccounts:maton key, with auto-bind for exactly one saved key.",
       "status": "PASS",
-      "proof": ["tests/test_agent_blueprint_layer.py::test_agent_builder_service_intelligence_marks_forbidden_request_impossible"],
+      "proof": ["tests/test_agent_blueprint_layer.py::test_agent_builder_selected_maton_route_requires_or_auto_binds_external_account"],
       "gaps": []
     },
     {
       "id": "AC5",
-      "text": "The UI shows a compact Что возможно panel using normalized states.",
+      "text": "The builder Что возможно panel can choose the recommended route directly.",
       "status": "PASS",
       "proof": ["frontend/src/pages/dashboard/AgentBlueprintsPage.tsx::BuilderServiceIntelligencePanel"],
       "gaps": []
@@ -42,7 +42,7 @@
       "id": "AC6",
       "text": "Agent-related tests and frontend production build pass.",
       "status": "PASS",
-      "proof": ["6 focused service intelligence tests passed", "146 agent blueprint tests passed", "frontend build passed"],
+      "proof": ["5 focused connector route tests passed", "148 agent blueprint tests passed", "frontend build passed"],
       "gaps": []
     }
   ],
@@ -50,12 +50,13 @@
     ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.json",
     ".agent/tasks/localos-compiled-ai-envelope-20260613/evidence.md",
     ".agent/tasks/localos-compiled-ai-envelope-20260613/spec.md",
+    ".agent/tasks/localos-compiled-ai-envelope-20260613/verdict.json",
     "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
-    "src/services/agent_builder_session.py",
+    "src/api/agent_builder_api.py",
     "tests/test_agent_blueprint_layer.py"
   ],
   "commands_for_fresh_verifier": [
-    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'service_intelligence or required_connectors or forbidden' -x",
+    "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -k 'provider_routes or maton_route or action_handler or service_intelligence' -x",
     "PYTHONPATH=src python3 -m pytest -q tests/test_agent_blueprint_layer.py -x",
     "npm --prefix frontend run build"
   ],
