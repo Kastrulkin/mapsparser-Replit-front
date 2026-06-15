@@ -28,6 +28,9 @@ export type PartnershipDerivedDraft = {
   id: string;
   lead_id: string;
   status?: string;
+  lead_status?: string;
+  lead_pipeline_status?: string;
+  lead_partnership_stage?: string;
 };
 
 export type PartnershipDerivedBatch = {
@@ -88,6 +91,9 @@ const AUDITED_FLOW_STAGES = ['audited', 'matched', 'proposal_draft_ready', 'prop
 const MATCHED_FLOW_STAGES = ['matched', 'proposal_draft_ready', 'proposal_approved', 'queued_for_send', 'sent'];
 const DRAFT_READY_FLOW_STAGES = ['proposal_draft_ready', 'proposal_approved', 'queued_for_send', 'sent'];
 const ACTIVE_PIPELINE_STATUSES = ['in_progress', 'contacted', 'waiting_reply', 'second_message_sent', 'replied', 'converted'];
+const DRAFT_EXCLUDED_PIPELINE_STATUSES = ['not_relevant', 'disqualified', 'closed_lost'];
+const DRAFT_EXCLUDED_LEAD_STATUSES = ['not_relevant', 'disqualified', 'rejected', 'shortlist_rejected'];
+const DRAFT_EXCLUDED_PARTNERSHIP_STAGES = ['rejected', 'shortlist_rejected'];
 
 const getLeadPipelineStatus = (item: PartnershipDerivedLead) => {
   const explicit = String(item.pipeline_status || '').trim().toLowerCase();
@@ -270,11 +276,22 @@ export function usePartnershipWorkspaceDerivedData<TLead extends PartnershipDeri
   }, [selectedLead, drafts, allQueueItems, reactions]);
 
   const visibleDrafts = useMemo(() => drafts.filter((draft) => {
+    const lead = items.find((item) => String(item.id || '') === String(draft.lead_id || ''));
+    const leadPipelineStatus = String(draft.lead_pipeline_status || (lead ? getLeadPipelineStatus(lead) : '')).toLowerCase();
+    const leadStatus = String(draft.lead_status || '').toLowerCase();
+    const partnershipStage = String(draft.lead_partnership_stage || lead?.partnership_stage || '').toLowerCase();
+    if (
+      DRAFT_EXCLUDED_PIPELINE_STATUSES.includes(leadPipelineStatus) ||
+      DRAFT_EXCLUDED_LEAD_STATUSES.includes(leadStatus) ||
+      DRAFT_EXCLUDED_PARTNERSHIP_STAGES.includes(partnershipStage)
+    ) {
+      return false;
+    }
     const status = String(draft.status || '').toLowerCase();
     if (draftView === 'needs_approval') return !status || status === 'generated' || status === 'draft';
     if (draftView === 'approved') return status === 'approved';
     return true;
-  }), [drafts, draftView]);
+  }), [drafts, draftView, items]);
 
   const visibleBatches = useMemo(() => batches
     .map((batch) => {

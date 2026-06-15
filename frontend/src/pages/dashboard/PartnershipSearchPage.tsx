@@ -129,6 +129,9 @@ type PartnershipDraft = {
   lead_name?: string;
   channel?: string;
   status?: string;
+  lead_status?: string;
+  lead_pipeline_status?: string;
+  lead_partnership_stage?: string;
   generated_text?: string;
   edited_text?: string;
   approved_text?: string;
@@ -824,6 +827,21 @@ export const PartnershipSearchPage: React.FC = () => {
     whatsapp_url: '',
   });
 
+  const activePartnershipLeadIds = useMemo(() => new Set(
+    items
+      .filter((item) => {
+        const pipelineStatus = getLeadPipelineStatus(item);
+        const status = String(item.status || '').toLowerCase();
+        const partnershipStage = String(item.partnership_stage || '').toLowerCase();
+        return (
+          !['not_relevant', 'disqualified', 'closed_lost'].includes(pipelineStatus) &&
+          !['not_relevant', 'disqualified', 'rejected', 'shortlist_rejected'].includes(status) &&
+          !['rejected', 'shortlist_rejected'].includes(partnershipStage)
+        );
+      })
+      .map((item) => String(item.id || ''))
+  ), [items]);
+
   const {
     selectedLead,
     selectedLeadLogo,
@@ -887,6 +905,11 @@ export const PartnershipSearchPage: React.FC = () => {
       leads: buckets[id],
     }));
   }, [pipelineLeads]);
+
+  useEffect(() => {
+    const visibleDraftIds = new Set(visibleDrafts.map((draft) => draft.id));
+    setSelectedDraftIds((prev) => prev.filter((id) => visibleDraftIds.has(id)));
+  }, [visibleDrafts]);
 
   useEffect(() => {
     if (!selectedLead) {
@@ -1522,7 +1545,10 @@ export const PartnershipSearchPage: React.FC = () => {
     }
 
     const lastGeoLeadSet = new Set(lastGeoSearchLeadIds);
-    const targetDrafts = drafts.filter((draft) => lastGeoLeadSet.has(String(draft.lead_id || '')));
+    const targetDrafts = drafts.filter((draft) => {
+      const leadId = String(draft.lead_id || '');
+      return lastGeoLeadSet.has(leadId) && activePartnershipLeadIds.has(leadId);
+    });
     if (targetDrafts.length === 0) {
       setMessage('Для последнего поиска на картах ещё нет писем. Сначала запустите быстрый сценарий.');
       return;
@@ -1673,7 +1699,10 @@ export const PartnershipSearchPage: React.FC = () => {
       return;
     }
 
-    const relatedDrafts = drafts.filter((draft) => sourceLeadIds.has(draft.lead_id));
+    const relatedDrafts = drafts.filter((draft) => {
+      const leadId = String(draft.lead_id || '');
+      return sourceLeadIds.has(leadId) && activePartnershipLeadIds.has(leadId);
+    });
     if (relatedDrafts.length === 0) {
       setMessage('Для лучшего источника пока нет писем для очереди.');
       return;
@@ -2148,7 +2177,7 @@ export const PartnershipSearchPage: React.FC = () => {
                   </Badge>
                 </div>
 
-                <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <div className="mt-5 grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3">
                   {[
                     {
                       key: 'raw',
@@ -2185,13 +2214,13 @@ export const PartnershipSearchPage: React.FC = () => {
                       key={step.key}
                       type="button"
                       onClick={() => setWorkspaceView(toPartnershipWorkspaceView(step.key))}
-                      className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-left transition hover:border-primary/30 hover:bg-white hover:shadow-sm"
+                      className="min-h-[140px] rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-left transition hover:border-primary/30 hover:bg-white hover:shadow-sm"
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-sm font-semibold text-slate-950">{step.title}</div>
-                        <Badge variant="secondary">{step.count}</Badge>
+                      <div className="flex flex-wrap items-start gap-2">
+                        <div className="min-w-0 flex-1 text-base font-semibold leading-tight text-slate-950">{step.title}</div>
+                        <Badge className="shrink-0" variant="secondary">{step.count}</Badge>
                       </div>
-                      <div className="mt-2 text-xs leading-relaxed text-slate-500">{step.text}</div>
+                      <div className="mt-3 text-sm leading-relaxed text-slate-500">{step.text}</div>
                     </button>
                   ))}
                 </div>

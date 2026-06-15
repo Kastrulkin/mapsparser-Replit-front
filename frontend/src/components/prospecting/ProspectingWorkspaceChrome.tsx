@@ -36,8 +36,8 @@ export function ProspectingWorkspaceTabs({
 }: ProspectingWorkspaceTabsProps) {
   return (
     <div className="rounded-[28px] border border-border/70 bg-gradient-to-b from-background to-muted/20 p-3 shadow-sm">
-      <div className="flex flex-wrap items-end gap-2">
-        {workspaces.map((workspace, index) => {
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-2">
+        {workspaces.map((workspace) => {
           const isActive = activeWorkspace === workspace.value;
           return (
             <button
@@ -45,18 +45,17 @@ export function ProspectingWorkspaceTabs({
               type="button"
               onClick={() => onWorkspaceChange(workspace.value)}
               className={[
-                'relative min-w-[148px] rounded-t-2xl rounded-b-xl border px-5 py-3 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                'min-h-[56px] rounded-2xl border px-5 py-3 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
                 isActive
-                  ? 'border-primary/20 bg-primary text-primary-foreground shadow-md -mb-px z-10'
+                  ? 'border-primary/20 bg-primary text-primary-foreground shadow-md'
                   : 'border-border/60 bg-background text-foreground hover:border-border hover:bg-muted/40',
-                index > 0 ? '-ml-1' : '',
               ].join(' ')}
               aria-pressed={isActive}
             >
-              <div className="mt-1 flex items-baseline gap-2">
-                <span className="text-lg font-semibold leading-none">{workspace.label}</span>
+              <div className="flex min-w-0 flex-wrap items-baseline gap-2">
+                <span className="min-w-0 text-lg font-semibold leading-tight">{workspace.label}</span>
                 {workspace.count !== undefined ? (
-                  <span className={isActive ? 'text-primary-foreground/85 text-sm font-medium' : 'text-muted-foreground text-sm font-medium'}>
+                  <span className={isActive ? 'shrink-0 text-sm font-medium text-primary-foreground/85' : 'shrink-0 text-sm font-medium text-muted-foreground'}>
                     {workspace.count}
                   </span>
                 ) : null}

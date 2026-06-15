@@ -102,6 +102,11 @@ PIPELINE_SECOND_MESSAGE_SENT = "second_message_sent"
 PIPELINE_REPLIED = "replied"
 PIPELINE_CONVERTED = "converted"
 PIPELINE_CLOSED_LOST = "closed_lost"
+ACTIVE_PARTNERSHIP_LEAD_SQL = """
+  AND COALESCE(l.pipeline_status, '') NOT IN ('not_relevant', 'disqualified', 'closed_lost')
+  AND COALESCE(l.status, '') NOT IN ('not_relevant', 'disqualified', 'rejected', 'shortlist_rejected')
+  AND COALESCE(l.partnership_stage, '') NOT IN ('rejected', 'shortlist_rejected')
+"""
 ALLOWED_PIPELINE_STATUSES = {
     PIPELINE_UNPROCESSED,
     PIPELINE_IN_PROGRESS,
@@ -11390,12 +11395,15 @@ def partnership_list_drafts():
                     d.generated_text, d.edited_text, d.approved_text,
                     d.learning_note_json, d.created_at, d.updated_at,
                     l.name AS lead_name, l.category, l.city, l.email,
-                    l.selected_channel, l.status AS lead_status
+                    l.selected_channel, l.status AS lead_status,
+                    l.pipeline_status AS lead_pipeline_status,
+                    l.partnership_stage AS lead_partnership_stage
                 FROM outreachmessagedrafts d
                 JOIN prospectingleads l ON l.id = d.lead_id
                 WHERE l.business_id = %s
                   AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
             """
+            query += ACTIVE_PARTNERSHIP_LEAD_SQL
             params: list[Any] = [business_id]
             if status_filter:
                 query += " AND d.status = %s"
@@ -11580,12 +11588,17 @@ def _load_partnership_send_snapshot(*, business_id: str) -> dict[str, Any]:
                 d.generated_text, d.edited_text, d.approved_text,
                 d.created_at, d.updated_at,
                 l.name AS lead_name, l.category, l.city, l.email,
-                l.selected_channel, l.status AS lead_status
+                l.selected_channel, l.status AS lead_status,
+                l.pipeline_status AS lead_pipeline_status,
+                l.partnership_stage AS lead_partnership_stage
             FROM outreachmessagedrafts d
             JOIN prospectingleads l ON l.id = d.lead_id
             WHERE d.status = %s
               AND l.business_id = %s
               AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+              AND COALESCE(l.pipeline_status, '') NOT IN ('not_relevant', 'disqualified', 'closed_lost')
+              AND COALESCE(l.status, '') NOT IN ('not_relevant', 'disqualified', 'rejected', 'shortlist_rejected')
+              AND COALESCE(l.partnership_stage, '') NOT IN ('rejected', 'shortlist_rejected')
               AND NOT EXISTS (
                     SELECT 1
                     FROM outreachsendqueue q
@@ -11732,6 +11745,9 @@ def partnership_create_send_batch():
                 WHERE d.status = %s
                   AND l.business_id = %s
                   AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+                  AND COALESCE(l.pipeline_status, '') NOT IN ('not_relevant', 'disqualified', 'closed_lost')
+                  AND COALESCE(l.status, '') NOT IN ('not_relevant', 'disqualified', 'rejected', 'shortlist_rejected')
+                  AND COALESCE(l.partnership_stage, '') NOT IN ('rejected', 'shortlist_rejected')
                   AND NOT EXISTS (
                         SELECT 1
                         FROM outreachsendqueue q
