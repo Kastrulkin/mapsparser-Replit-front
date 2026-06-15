@@ -11390,25 +11390,47 @@ def partnership_list_drafts():
                 return jsonify({"error": "Business not found or access denied"}), 403
 
             query = """
-                SELECT
-                    d.id, d.lead_id, d.channel, d.angle_type, d.tone, d.status,
-                    d.generated_text, d.edited_text, d.approved_text,
-                    d.learning_note_json, d.created_at, d.updated_at,
-                    l.name AS lead_name, l.category, l.city, l.email,
-                    l.selected_channel, l.status AS lead_status,
-                    l.pipeline_status AS lead_pipeline_status,
-                    l.partnership_stage AS lead_partnership_stage
-                FROM outreachmessagedrafts d
-                JOIN prospectingleads l ON l.id = d.lead_id
-                WHERE l.business_id = %s
-                  AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+                WITH draft_scope AS (
+                    SELECT
+                        d.id, d.lead_id, d.channel, d.angle_type, d.tone, d.status,
+                        d.generated_text, d.edited_text, d.approved_text,
+                        d.learning_note_json, d.created_at, d.updated_at,
+                        l.name AS lead_name, l.category, l.city, l.email,
+                        l.selected_channel, l.status AS lead_status,
+                        l.pipeline_status AS lead_pipeline_status,
+                        l.partnership_stage AS lead_partnership_stage
+                    FROM outreachmessagedrafts d
+                    JOIN prospectingleads l ON l.id = d.lead_id
+                    WHERE l.business_id = %s
+                      AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
             """
             query += ACTIVE_PARTNERSHIP_LEAD_SQL
             params: list[Any] = [business_id]
             if status_filter:
                 query += " AND d.status = %s"
                 params.append(status_filter)
-            query += " ORDER BY d.updated_at DESC, d.created_at DESC LIMIT 200"
+            query += """
+                ),
+                ranked_drafts AS (
+                    SELECT *,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY lead_id
+                               ORDER BY COALESCE(updated_at, created_at) DESC, created_at DESC, id DESC
+                           ) AS draft_rank
+                    FROM draft_scope
+                )
+                SELECT
+                    id, lead_id, channel, angle_type, tone, status,
+                    generated_text, edited_text, approved_text,
+                    learning_note_json, created_at, updated_at,
+                    lead_name, category, city, email,
+                    selected_channel, lead_status,
+                    lead_pipeline_status, lead_partnership_stage
+                FROM ranked_drafts
+                WHERE draft_rank = 1
+                ORDER BY updated_at DESC, created_at DESC
+                LIMIT 200
+            """
             cur.execute(query, tuple(params))
             rows = [_serialize_draft(dict(row)) for row in cur.fetchall()]
         finally:
@@ -11583,28 +11605,47 @@ def _load_partnership_send_snapshot(*, business_id: str) -> dict[str, Any]:
         cur = conn.cursor()
         cur.execute(
             """
+            WITH draft_scope AS (
+                SELECT
+                    d.id, d.lead_id, d.channel, d.status,
+                    d.generated_text, d.edited_text, d.approved_text,
+                    d.created_at, d.updated_at,
+                    l.name AS lead_name, l.category, l.city, l.email,
+                    l.selected_channel, l.status AS lead_status,
+                    l.pipeline_status AS lead_pipeline_status,
+                    l.partnership_stage AS lead_partnership_stage
+                FROM outreachmessagedrafts d
+                JOIN prospectingleads l ON l.id = d.lead_id
+                WHERE d.status = %s
+                  AND l.business_id = %s
+                  AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+                  AND COALESCE(l.pipeline_status, '') NOT IN ('not_relevant', 'disqualified', 'closed_lost')
+                  AND COALESCE(l.status, '') NOT IN ('not_relevant', 'disqualified', 'rejected', 'shortlist_rejected')
+                  AND COALESCE(l.partnership_stage, '') NOT IN ('rejected', 'shortlist_rejected')
+                  AND NOT EXISTS (
+                        SELECT 1
+                        FROM outreachsendqueue q
+                        WHERE q.draft_id = d.id
+                  )
+            ),
+            ranked_drafts AS (
+                SELECT *,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY lead_id
+                           ORDER BY COALESCE(updated_at, created_at) DESC, created_at DESC, id DESC
+                       ) AS draft_rank
+                FROM draft_scope
+            )
             SELECT
-                d.id, d.lead_id, d.channel, d.status,
-                d.generated_text, d.edited_text, d.approved_text,
-                d.created_at, d.updated_at,
-                l.name AS lead_name, l.category, l.city, l.email,
-                l.selected_channel, l.status AS lead_status,
-                l.pipeline_status AS lead_pipeline_status,
-                l.partnership_stage AS lead_partnership_stage
-            FROM outreachmessagedrafts d
-            JOIN prospectingleads l ON l.id = d.lead_id
-            WHERE d.status = %s
-              AND l.business_id = %s
-              AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
-              AND COALESCE(l.pipeline_status, '') NOT IN ('not_relevant', 'disqualified', 'closed_lost')
-              AND COALESCE(l.status, '') NOT IN ('not_relevant', 'disqualified', 'rejected', 'shortlist_rejected')
-              AND COALESCE(l.partnership_stage, '') NOT IN ('rejected', 'shortlist_rejected')
-              AND NOT EXISTS (
-                    SELECT 1
-                    FROM outreachsendqueue q
-                    WHERE q.draft_id = d.id
-              )
-            ORDER BY d.updated_at DESC, d.created_at DESC
+                id, lead_id, channel, status,
+                generated_text, edited_text, approved_text,
+                created_at, updated_at,
+                lead_name, category, city, email,
+                selected_channel, lead_status,
+                lead_pipeline_status, lead_partnership_stage
+            FROM ranked_drafts
+            WHERE draft_rank = 1
+            ORDER BY updated_at DESC, created_at DESC
             """,
             (DRAFT_APPROVED, business_id),
         )
@@ -11739,26 +11780,39 @@ def partnership_create_send_batch():
                 return jsonify({"error": f"Daily outreach cap reached ({MAX_DAILY_OUTREACH_BATCH}/day)"}), 400
 
             query = """
-                SELECT d.id, d.lead_id, d.channel
-                FROM outreachmessagedrafts d
-                JOIN prospectingleads l ON l.id = d.lead_id
-                WHERE d.status = %s
-                  AND l.business_id = %s
-                  AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
-                  AND COALESCE(l.pipeline_status, '') NOT IN ('not_relevant', 'disqualified', 'closed_lost')
-                  AND COALESCE(l.status, '') NOT IN ('not_relevant', 'disqualified', 'rejected', 'shortlist_rejected')
-                  AND COALESCE(l.partnership_stage, '') NOT IN ('rejected', 'shortlist_rejected')
-                  AND NOT EXISTS (
-                        SELECT 1
-                        FROM outreachsendqueue q
-                        WHERE q.draft_id = d.id
-                  )
+                WITH draft_scope AS (
+                    SELECT d.id, d.lead_id, d.channel, d.created_at, d.updated_at
+                    FROM outreachmessagedrafts d
+                    JOIN prospectingleads l ON l.id = d.lead_id
+                    WHERE d.status = %s
+                      AND l.business_id = %s
+                      AND COALESCE(l.intent, 'client_outreach') = 'partnership_outreach'
+                      AND COALESCE(l.pipeline_status, '') NOT IN ('not_relevant', 'disqualified', 'closed_lost')
+                      AND COALESCE(l.status, '') NOT IN ('not_relevant', 'disqualified', 'rejected', 'shortlist_rejected')
+                      AND COALESCE(l.partnership_stage, '') NOT IN ('rejected', 'shortlist_rejected')
+                      AND NOT EXISTS (
+                            SELECT 1
+                            FROM outreachsendqueue q
+                            WHERE q.draft_id = d.id
+                      )
+                ),
+                ranked_drafts AS (
+                    SELECT *,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY lead_id
+                               ORDER BY COALESCE(updated_at, created_at) DESC, created_at DESC, id DESC
+                           ) AS draft_rank
+                    FROM draft_scope
+                )
+                SELECT id, lead_id, channel
+                FROM ranked_drafts
+                WHERE draft_rank = 1
             """
             params: list[Any] = [DRAFT_APPROVED, business_id]
             if draft_ids:
-                query += " AND d.id = ANY(%s)"
+                query += " AND id = ANY(%s)"
                 params.append(draft_ids)
-            query += " ORDER BY d.updated_at DESC, d.created_at DESC LIMIT %s"
+            query += " ORDER BY updated_at DESC, created_at DESC LIMIT %s"
             params.append(remaining_slots)
             cur.execute(query, tuple(params))
             rows = [dict(row) for row in cur.fetchall()]
