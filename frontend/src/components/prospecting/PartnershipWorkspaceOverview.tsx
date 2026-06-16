@@ -40,8 +40,8 @@ export function PartnershipWorkspaceOverview({
     <>
       <DashboardPageHeader
         eyebrow="LocalOS"
-        title="Партнёрская кампания"
-        description="Один рабочий объект для поиска партнёров: кандидаты, отбор, письма, ручная отправка, ответы и отчётность разделены по вкладкам."
+        title="Поиск партнёров"
+        description="Один экран для поиска партнёров: кандидаты, отбор, письма, ручная отправка, ответы и отчётность разделены по вкладкам."
       />
 
       <DashboardCompactMetricsRow

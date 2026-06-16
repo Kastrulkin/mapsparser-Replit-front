@@ -13591,7 +13591,7 @@ def block_business(business_id):
 
 @app.route('/api/admin/businesses/<business_id>/promo', methods=['POST'])
 def set_promo_tier(business_id):
-    """Установить/отключить промо тариф для бизнеса (только для суперадмина)"""
+    """Установить/отключить оплаченный тариф для бизнеса (только для суперадмина)."""
     try:
         # Проверяем авторизацию
         auth_header = request.headers.get('Authorization')
@@ -13611,6 +13611,10 @@ def set_promo_tier(business_id):
 
         data = request.get_json(silent=True) or {}
         is_promo = data.get('is_promo', True)
+        requested_tier = str(data.get('tier') or 'promo').strip().lower()
+        allowed_tiers = {'starter', 'professional', 'concierge', 'elite', 'promo', 'basic', 'pro', 'enterprise'}
+        next_tier = requested_tier if requested_tier in allowed_tiers else 'promo'
+        subscription_ends_at = data.get('subscription_ends_at') if is_promo else None
 
         cursor = db.conn.cursor()
 
@@ -13630,35 +13634,44 @@ def set_promo_tier(business_id):
             "ALTER TABLE businesses ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'active'"
         )
         cursor.execute(
+            "ALTER TABLE businesses ADD COLUMN IF NOT EXISTS subscription_ends_at TIMESTAMP"
+        )
+        cursor.execute(
             "ALTER TABLE businesses ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
         )
 
-        # Устанавливаем или отключаем промо тариф
+        # Устанавливаем или отключаем оплаченный тариф
         if is_promo:
-            # Устанавливаем промо тариф
             cursor.execute("""
                 UPDATE businesses
-                SET subscription_tier = 'promo',
+                SET subscription_tier = %s,
                     subscription_status = 'active',
+                    subscription_ends_at = %s,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = %s
-            """, (business_id,))
-            message = "Промо тариф установлен"
+            """, (next_tier, subscription_ends_at, business_id))
+            message = "Оплаченный тариф установлен"
         else:
-            # Отключаем промо тариф (возвращаем к trial или basic)
             cursor.execute("""
                 UPDATE businesses
                 SET subscription_tier = 'trial',
                     subscription_status = 'inactive',
+                    subscription_ends_at = NULL,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = %s
             """, (business_id,))
-            message = "Промо тариф отключен"
+            message = "Оплаченный тариф отключен"
 
         db.conn.commit()
         db.close()
 
-        return jsonify({"success": True, "message": message})
+        return jsonify({
+            "success": True,
+            "message": message,
+            "subscription_tier": next_tier if is_promo else 'trial',
+            "subscription_status": 'active' if is_promo else 'inactive',
+            "subscription_ends_at": subscription_ends_at,
+        })
 
     except Exception as e:
         print(f"❌ Ошибка установки промо тарифа: {e}")
@@ -13668,7 +13681,7 @@ def set_promo_tier(business_id):
 
 @app.route('/api/admin/networks/<network_id>/promo', methods=['POST'])
 def set_network_promo_tier(network_id):
-    """Установить/отключить промо тариф для всех бизнесов сети."""
+    """Установить/отключить оплаченный тариф для всех бизнесов сети."""
     try:
         auth_header = request.headers.get('Authorization')
         if not auth_header or not auth_header.startswith('Bearer '):
@@ -13686,6 +13699,10 @@ def set_network_promo_tier(network_id):
 
         data = request.get_json(silent=True) or {}
         is_promo = data.get('is_promo', True)
+        requested_tier = str(data.get('tier') or 'promo').strip().lower()
+        allowed_tiers = {'starter', 'professional', 'concierge', 'elite', 'promo', 'basic', 'pro', 'enterprise'}
+        next_tier = requested_tier if requested_tier in allowed_tiers else 'promo'
+        subscription_ends_at = data.get('subscription_ends_at') if is_promo else None
         cursor = db.conn.cursor()
 
         cursor.execute("SELECT id, name FROM networks WHERE id = %s", (network_id,))
@@ -13701,28 +13718,35 @@ def set_network_promo_tier(network_id):
             "ALTER TABLE businesses ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'active'"
         )
         cursor.execute(
+            "ALTER TABLE businesses ADD COLUMN IF NOT EXISTS subscription_ends_at TIMESTAMP"
+        )
+        cursor.execute(
             "ALTER TABLE businesses ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
         )
 
-        next_tier = 'promo' if is_promo else 'trial'
+        next_tier = next_tier if is_promo else 'trial'
         next_status = 'active' if is_promo else 'inactive'
         cursor.execute("""
             UPDATE businesses
             SET subscription_tier = %s,
                 subscription_status = %s,
+                subscription_ends_at = %s,
                 updated_at = CURRENT_TIMESTAMP
             WHERE network_id = %s OR id = %s
-        """, (next_tier, next_status, network_id, network_id))
+        """, (next_tier, next_status, subscription_ends_at, network_id, network_id))
         updated_count = cursor.rowcount
 
         db.conn.commit()
         db.close()
 
-        message = "Промо тариф установлен для сети" if is_promo else "Промо тариф отключен для сети"
+        message = "Оплаченный тариф установлен для сети" if is_promo else "Оплаченный тариф отключен для сети"
         return jsonify({
             "success": True,
             "message": message,
             "updated_count": updated_count,
+            "subscription_tier": next_tier,
+            "subscription_status": next_status,
+            "subscription_ends_at": subscription_ends_at,
         })
 
     except Exception as e:

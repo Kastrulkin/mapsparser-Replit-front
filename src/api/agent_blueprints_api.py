@@ -167,6 +167,57 @@ def _save_blueprint_metadata(cursor, blueprint_id: str, metadata: dict) -> None:
     )
 
 
+def _admin_review_text(value) -> str:
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False)
+    return str(value or "")
+
+
+def _build_admin_agent_review(row: dict) -> dict:
+    metadata = row.get("metadata_json") if isinstance(row.get("metadata_json"), dict) else {}
+    fragments = [
+        row.get("name"),
+        row.get("description"),
+        row.get("latest_goal"),
+        row.get("steps_json"),
+        row.get("approval_policy_json"),
+        row.get("capability_allowlist_json"),
+        metadata,
+        row.get("integration_providers"),
+    ]
+    text = " ".join(_admin_review_text(item).lower() for item in fragments)
+    reasons = []
+    level = "low"
+
+    high_keywords = [
+        ("оплата или деньги", ["payment", "платеж", "оплат", "списан", "финанс", "finance"]),
+        ("удаление или разрушительное действие", ["delete", "удал", "destroy", "wipe"]),
+        ("внешняя отправка", ["telegram", "whatsapp", "email", "почт", "сообщен", "send", "отправ"]),
+        ("публикация", ["publish", "публи", "пост", "post"]),
+        ("секреты или токены", ["api key", "token", "webhook", "secret", "ключ api"]),
+    ]
+    medium_keywords = [
+        ("подключены внешние данные", ["google sheets", "spreadsheet", "таблиц", "google", "интеграц"]),
+        ("есть ручное согласование", ["approval", "approve", "согласован", "подтвержд"]),
+        ("кастомный процесс", ["custom_process", "custom process", "кастом"]),
+    ]
+
+    for reason, keywords in high_keywords:
+        if any(keyword in text for keyword in keywords):
+            reasons.append(reason)
+            level = "high"
+    if level != "high":
+        for reason, keywords in medium_keywords:
+            if any(keyword in text for keyword in keywords):
+                reasons.append(reason)
+                level = "medium"
+
+    if not reasons:
+        reasons.append("явных внешних или опасных действий не найдено")
+
+    return {"risk_level": level, "risk_reasons": reasons[:4]}
+
+
 def _normalize_agent_integration(row: dict, *, attached: bool = True) -> dict:
     config = workspace_parse_json_field(row.get("config_json"), {})
     limits = workspace_parse_json_field(row.get("limits_json"), {})
@@ -1719,6 +1770,132 @@ def _insert_version(cursor, blueprint_id: str, payload: dict, user_data: dict):
     )
     cursor.execute("SELECT * FROM agent_blueprint_versions WHERE id = %s", (version_id,))
     return _normalize_json_row(dict(cursor.fetchone()))
+
+
+@agent_blueprints_bp.route("/api/admin/agent-blueprints/overview", methods=["GET"])
+def admin_agent_blueprints_overview():
+    user_data, error_response = _require_auth()
+    if error_response:
+        return error_response
+    if not user_data.get("is_superadmin"):
+        return _json_error("Forbidden", 403, "FORBIDDEN")
+
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT b.id,
+                   b.business_id,
+                   COALESCE(biz.name, '') business_name,
+                   COALESCE(owner.email, '') owner_email,
+                   COALESCE(creator.email, '') creator_email,
+                   b.name,
+                   b.category,
+                   b.description,
+                   b.status,
+                   b.metadata_json,
+                   b.created_at,
+                   b.updated_at,
+                   b.created_by_user_id,
+                   v.id latest_version_id,
+                   v.version_number latest_version_number,
+                   v.goal latest_goal,
+                   v.steps_json,
+                   v.approval_policy_json,
+                   v.capability_allowlist_json,
+                   COALESCE(rs.runs_count, 0) runs_count,
+                   COALESCE(ap.pending_approvals_count, 0) pending_approvals_count,
+                   COALESCE(src.sources_count, 0) sources_count,
+                   COALESCE(integ.integration_count, 0) integration_count,
+                   COALESCE(integ.providers, '') integration_providers
+            FROM agent_blueprints b
+            LEFT JOIN businesses biz ON biz.id = b.business_id
+            LEFT JOIN users owner ON owner.id = biz.owner_id
+            LEFT JOIN users creator ON creator.id = b.created_by_user_id
+            LEFT JOIN LATERAL (
+                SELECT id, version_number, goal, steps_json, approval_policy_json, capability_allowlist_json
+                FROM agent_blueprint_versions
+                WHERE blueprint_id = b.id
+                ORDER BY version_number DESC
+                LIMIT 1
+            ) v ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT COUNT(*) runs_count
+                FROM agent_runs
+                WHERE blueprint_id = b.id
+            ) rs ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT COUNT(*) pending_approvals_count
+                FROM agent_approvals a
+                JOIN agent_runs r ON r.id = a.run_id
+                WHERE r.blueprint_id = b.id
+                  AND a.status = 'pending'
+            ) ap ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT COALESCE(jsonb_array_length(CASE WHEN jsonb_typeof(b.metadata_json->'agent_sources') = 'array' THEN b.metadata_json->'agent_sources' ELSE '[]'::jsonb END), 0) sources_count
+            ) src ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT COUNT(*) integration_count,
+                       string_agg(DISTINCT provider, ', ' ORDER BY provider) providers
+                FROM agent_integrations
+                WHERE business_id = b.business_id
+                  AND status = 'active'
+            ) integ ON TRUE
+            ORDER BY b.created_at DESC
+            LIMIT 200
+            """
+        )
+        rows = [_normalize_json_row(dict(row)) for row in (cursor.fetchall() or [])]
+        agents = []
+        summary = {
+            "total": len(rows),
+            "draft": 0,
+            "active": 0,
+            "archived": 0,
+            "high_risk": 0,
+            "medium_risk": 0,
+            "low_risk": 0,
+        }
+        for row in rows:
+            review = _build_admin_agent_review(row)
+            status = str(row.get("status") or "draft")
+            risk_level = str(review.get("risk_level") or "low")
+            if status in summary:
+                summary[status] = int(summary[status]) + 1
+            if risk_level == "high":
+                summary["high_risk"] = int(summary["high_risk"]) + 1
+            elif risk_level == "medium":
+                summary["medium_risk"] = int(summary["medium_risk"]) + 1
+            else:
+                summary["low_risk"] = int(summary["low_risk"]) + 1
+            agents.append(
+                {
+                    "id": str(row.get("id") or ""),
+                    "business_id": str(row.get("business_id") or ""),
+                    "business_name": str(row.get("business_name") or "Без бизнеса"),
+                    "owner_email": str(row.get("owner_email") or ""),
+                    "creator_email": str(row.get("creator_email") or ""),
+                    "name": str(row.get("name") or "Без названия"),
+                    "category": str(row.get("category") or "custom"),
+                    "description": str(row.get("description") or ""),
+                    "status": status,
+                    "latest_goal": str(row.get("latest_goal") or ""),
+                    "latest_version_number": row.get("latest_version_number"),
+                    "runs_count": int(row.get("runs_count") or 0),
+                    "pending_approvals_count": int(row.get("pending_approvals_count") or 0),
+                    "sources_count": int(row.get("sources_count") or 0),
+                    "integration_count": int(row.get("integration_count") or 0),
+                    "integration_providers": str(row.get("integration_providers") or ""),
+                    "created_at": row.get("created_at").isoformat() if row.get("created_at") else None,
+                    "updated_at": row.get("updated_at").isoformat() if row.get("updated_at") else None,
+                    "risk_level": risk_level,
+                    "risk_reasons": review.get("risk_reasons") or [],
+                }
+            )
+        return jsonify({"success": True, "summary": summary, "agents": agents})
+    finally:
+        db.close()
 
 
 @agent_blueprints_bp.route("/api/agent-blueprints", methods=["GET"])

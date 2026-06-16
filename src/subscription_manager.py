@@ -48,11 +48,15 @@ def _safe_fromisoformat(value):
     if not value:
         return None
     if isinstance(value, datetime):
-        return value
-    try:
-        return datetime.fromisoformat(str(value))
-    except Exception:
-        return None
+        parsed_value = value
+    else:
+        try:
+            parsed_value = datetime.fromisoformat(str(value))
+        except Exception:
+            return None
+    if parsed_value.tzinfo:
+        return parsed_value.replace(tzinfo=None)
+    return parsed_value
 
 
 def _get_business_subscription_columns(cursor) -> set[str]:
@@ -135,7 +139,7 @@ def get_subscription_access(business_id: str) -> dict:
         now = datetime.now()
         trial_expired = bool(tier == 'trial' and trial_ends_at and now > trial_ends_at)
         subscription_expired = bool(
-            tier in PAID_TIERS and subscription_ends_at and now > subscription_ends_at and status not in {'active', 'trialing'}
+            tier in PAID_TIERS and subscription_ends_at and now > subscription_ends_at
         )
         is_paid = tier in PAID_TIERS and status in {'active', 'trialing'} and not subscription_expired
 

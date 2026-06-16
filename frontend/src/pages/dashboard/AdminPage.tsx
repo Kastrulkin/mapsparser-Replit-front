@@ -2,7 +2,7 @@ import React, { Suspense, lazy, useState, useEffect, useCallback, useMemo } from
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
-import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Gift, Settings, BarChart3, TrendingUp, FileText, X, Search, ShieldCheck, KeyRound } from 'lucide-react';
+import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Settings, BarChart3, TrendingUp, FileText, X, Search, ShieldCheck, KeyRound, CreditCard, CalendarDays } from 'lucide-react';
 import { newAuth } from '../../lib/auth_new';
 import { useToast } from '../../hooks/use-toast';
 import { CreateBusinessModal } from '../../components/CreateBusinessModal';
@@ -47,6 +47,8 @@ interface Business {
   created_at?: string;
   is_active?: number;
   subscription_tier?: string;
+  subscription_status?: string;
+  subscription_ends_at?: string;
   moderation_status?: string;
   is_lead_business?: boolean;
   entity_group?: 'lead' | 'company';
@@ -82,6 +84,55 @@ interface BusinessListItem {
   business: Business;
 }
 
+interface PaymentDialogState {
+  isOpen: boolean;
+  scope: 'business' | 'network';
+  targetId: string;
+  targetName: string;
+  isPaid: boolean;
+  paidCount: number;
+  totalCount: number;
+  endsAt: string;
+}
+
+interface AdminAgentBlueprint {
+  id: string;
+  business_id: string;
+  business_name: string;
+  owner_email: string;
+  creator_email: string;
+  name: string;
+  category: string;
+  description: string;
+  status: string;
+  latest_goal: string;
+  latest_version_number?: number;
+  runs_count: number;
+  pending_approvals_count: number;
+  sources_count: number;
+  integration_count: number;
+  integration_providers: string;
+  created_at?: string;
+  updated_at?: string;
+  risk_level: 'low' | 'medium' | 'high';
+  risk_reasons: string[];
+}
+
+interface AdminAgentBlueprintSummary {
+  total: number;
+  draft: number;
+  active: number;
+  archived: number;
+  high_risk: number;
+  medium_risk: number;
+  low_risk: number;
+}
+
+interface AdminAgentBlueprintOverview {
+  summary: AdminAgentBlueprintSummary;
+  agents: AdminAgentBlueprint[];
+}
+
 type AdminTabConfig = {
   id: AdminTabId;
   label: string;
@@ -90,7 +141,7 @@ type AdminTabConfig = {
 
 const adminTabs: AdminTabConfig[] = [
   { id: 'businesses', label: 'Пользователи и бизнесы', icon: User },
-  { id: 'agents', label: 'ИИ агенты', icon: Bot },
+  { id: 'agents', label: 'Агенты пользователей', icon: Bot },
   { id: 'agentApi', label: 'Agent API', icon: KeyRound },
   { id: 'prospecting', label: 'Поиск клиентов', icon: Search },
   { id: 'tokens', label: 'Статистика кредитов', icon: BarChart3 },
@@ -103,7 +154,7 @@ const adminTabs: AdminTabConfig[] = [
 
 const primaryAdminTabs: AdminTabConfig[] = [
   { id: 'businesses', label: 'Пользователи', icon: User },
-  { id: 'agents', label: 'ИИ агенты', icon: Bot },
+  { id: 'agents', label: 'Агенты', icon: Bot },
   { id: 'agentApi', label: 'Agent API', icon: KeyRound },
   { id: 'prospecting', label: 'Поиск клиентов', icon: Search },
 ];
@@ -118,6 +169,14 @@ const toolsAdminTabs: AdminTabConfig[] = [
 ];
 
 const LEAD_OUTREACH_STATUS = 'lead_outreach';
+const PAID_TIERS = new Set(['starter', 'professional', 'concierge', 'elite', 'promo', 'basic', 'pro', 'enterprise']);
+const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing']);
+const PAYMENT_PERIODS = [
+  { label: '1 месяц', months: 1 },
+  { label: '3 месяца', months: 3 },
+  { label: '6 месяцев', months: 6 },
+  { label: '12 месяцев', months: 12 },
+];
 
 const getErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message.trim()) {
@@ -160,6 +219,61 @@ const filterUsersBySearch = (users: UserWithBusinesses[], normalizedSearchQuery:
       ].join(' ').toLowerCase().includes(normalizedSearchQuery)
     );
   });
+
+const addMonthsForInput = (months: number) => {
+  const date = new Date();
+  date.setMonth(date.getMonth() + months);
+  return date.toISOString().slice(0, 10);
+};
+
+const toDateInputValue = (value?: string) => {
+  if (!value) {
+    return addMonthsForInput(1);
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return addMonthsForInput(1);
+  }
+  return date.toISOString().slice(0, 10);
+};
+
+const isPastDate = (value?: string) => {
+  if (!value) {
+    return false;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return false;
+  }
+  return date.getTime() < Date.now();
+};
+
+const isBusinessSubscriptionPaid = (business?: Business | null) => {
+  const tier = String(business?.subscription_tier || '').trim().toLowerCase();
+  const status = String(business?.subscription_status || '').trim().toLowerCase();
+  return PAID_TIERS.has(tier) && ACTIVE_SUBSCRIPTION_STATUSES.has(status) && !isPastDate(business?.subscription_ends_at);
+};
+
+const getSubscriptionEndLabel = (value?: string) => {
+  if (!value) {
+    return '';
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+  return date.toLocaleDateString('ru-RU');
+};
+
+const getNetworkPaymentState = (businesses: Business[]) => {
+  const totalCount = businesses.length;
+  const paidBusinesses = businesses.filter(isBusinessSubscriptionPaid);
+  return {
+    allPaid: totalCount > 0 && paidBusinesses.length === totalCount,
+    paidCount: paidBusinesses.length,
+    totalCount,
+  };
+};
 
 const closeConfirmDialog = (
   setConfirmDialog: React.Dispatch<React.SetStateAction<{
@@ -242,6 +356,8 @@ export const AdminPage: React.FC = () => {
   const [users, setUsers] = useState<UserWithBusinesses[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [agentBlueprintOverview, setAgentBlueprintOverview] = useState<AdminAgentBlueprintOverview | null>(null);
+  const [agentBlueprintLoading, setAgentBlueprintLoading] = useState(false);
   const [expandedNetworks, setExpandedNetworks] = useState<Set<string>>(new Set());
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [settingsModal, setSettingsModal] = useState<{
@@ -252,6 +368,16 @@ export const AdminPage: React.FC = () => {
     isOpen: false,
     businessId: null,
     businessName: '',
+  });
+  const [paymentDialog, setPaymentDialog] = useState<PaymentDialogState>({
+    isOpen: false,
+    scope: 'business',
+    targetId: '',
+    targetName: '',
+    isPaid: false,
+    paidCount: 0,
+    totalCount: 0,
+    endsAt: addMonthsForInput(1),
   });
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
@@ -301,6 +427,27 @@ export const AdminPage: React.FC = () => {
       setLoading(false);
     }
   }, [navigate, toast]);
+
+  const loadAgentBlueprintOverview = useCallback(async () => {
+    try {
+      setAgentBlueprintLoading(true);
+      const data = await newAuth.makeRequest('/admin/agent-blueprints/overview');
+      if (data.success) {
+        setAgentBlueprintOverview({
+          summary: data.summary,
+          agents: data.agents || [],
+        });
+      }
+    } catch (error: unknown) {
+      toast({
+        title: 'Ошибка',
+        description: getErrorMessage(error, 'Не удалось загрузить обзор агентов'),
+        variant: 'destructive',
+      });
+    } finally {
+      setAgentBlueprintLoading(false);
+    }
+  }, [toast]);
 
   const runReloadingMutation = useCallback(async (
     request: () => Promise<unknown>,
@@ -367,6 +514,12 @@ export const AdminPage: React.FC = () => {
     };
     checkAccess();
   }, [loadUsers, navigate, toast]);
+
+  useEffect(() => {
+    if (activeTab === 'agents') {
+      loadAgentBlueprintOverview();
+    }
+  }, [activeTab, loadAgentBlueprintOverview]);
 
   const toggleNetwork = (networkId: string) => {
     const newExpanded = new Set(expandedNetworks);
@@ -499,26 +652,68 @@ export const AdminPage: React.FC = () => {
     }
   };
 
-  const handlePromo = async (businessId: string, businessName: string, isPromo: boolean) => {
-    await runReloadingMutation(
-      () => newAuth.makeRequest(`/admin/businesses/${businessId}/promo`, {
-        method: 'POST',
-        body: JSON.stringify({ is_promo: !isPromo }),
-      }),
-      !isPromo ? `Промо тариф установлен для "${businessName}"` : `Промо тариф отключен для "${businessName}"`,
-      'Не удалось изменить промо тариф',
-    );
+  const openBusinessPaymentDialog = (business: Business) => {
+    setPaymentDialog({
+      isOpen: true,
+      scope: 'business',
+      targetId: business.id,
+      targetName: business.name,
+      isPaid: isBusinessSubscriptionPaid(business),
+      paidCount: isBusinessSubscriptionPaid(business) ? 1 : 0,
+      totalCount: 1,
+      endsAt: toDateInputValue(business.subscription_ends_at),
+    });
   };
 
-  const handleNetworkPromo = async (networkId: string, networkName: string, isPromo: boolean) => {
+  const openNetworkPaymentDialog = (networkId: string, networkName: string, businesses: Business[]) => {
+    const paymentState = getNetworkPaymentState(businesses);
+    const firstPaidBusiness = businesses.find(isBusinessSubscriptionPaid);
+    setPaymentDialog({
+      isOpen: true,
+      scope: 'network',
+      targetId: networkId,
+      targetName: networkName,
+      isPaid: paymentState.allPaid,
+      paidCount: paymentState.paidCount,
+      totalCount: paymentState.totalCount,
+      endsAt: toDateInputValue(firstPaidBusiness?.subscription_ends_at),
+    });
+  };
+
+  const closePaymentDialog = () => {
+    setPaymentDialog((previous) => ({ ...previous, isOpen: false }));
+  };
+
+  const applyPaymentPeriod = (months: number) => {
+    setPaymentDialog((previous) => ({ ...previous, endsAt: addMonthsForInput(months) }));
+  };
+
+  const updatePaymentEndDate = (endsAt: string) => {
+    setPaymentDialog((previous) => ({ ...previous, endsAt }));
+  };
+
+  const submitPaymentDialog = async (isPaid: boolean) => {
+    const endpoint = paymentDialog.scope === 'network'
+      ? `/admin/networks/${paymentDialog.targetId}/promo`
+      : `/admin/businesses/${paymentDialog.targetId}/promo`;
+    const subscriptionEndsAt = paymentDialog.endsAt ? `${paymentDialog.endsAt}T23:59:59` : null;
+    const successDescription = isPaid
+      ? `Оплата отмечена для ${paymentDialog.scope === 'network' ? 'сети' : 'точки'} "${paymentDialog.targetName}"`
+      : `Оплата отключена для ${paymentDialog.scope === 'network' ? 'сети' : 'точки'} "${paymentDialog.targetName}"`;
+
     await runReloadingMutation(
-      () => newAuth.makeRequest(`/admin/networks/${networkId}/promo`, {
+      () => newAuth.makeRequest(endpoint, {
         method: 'POST',
-        body: JSON.stringify({ is_promo: !isPromo }),
+        body: JSON.stringify({
+          is_promo: isPaid,
+          tier: 'promo',
+          subscription_ends_at: subscriptionEndsAt,
+        }),
       }),
-      !isPromo ? `Промо тариф установлен для сети "${networkName}"` : `Промо тариф отключен для сети "${networkName}"`,
-      `Не удалось изменить промо тариф для сети "${networkName}"`,
+      successDescription,
+      'Не удалось изменить оплату',
     );
+    closePaymentDialog();
   };
 
   const handleCreateSuccess = () => {
@@ -563,6 +758,33 @@ export const AdminPage: React.FC = () => {
     };
   }, [users]);
   const activeTabConfig = adminTabs.find((tab) => tab.id === activeTab) || adminTabs[0];
+  const agentSummary = agentBlueprintOverview?.summary;
+  const agentMetrics = [
+    { label: 'Всего агентов', value: String(agentSummary?.total || 0), tone: 'default' },
+    { label: 'Высокий риск', value: String(agentSummary?.high_risk || 0), tone: 'warning' },
+    { label: 'Средний риск', value: String(agentSummary?.medium_risk || 0), tone: 'warning' },
+    { label: 'Активные', value: String(agentSummary?.active || 0), tone: 'positive' },
+  ];
+  const formatAdminDate = (value?: string) => {
+    if (!value) return 'Дата не указана';
+    return new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(value));
+  };
+  const riskLabel = (level: AdminAgentBlueprint['risk_level']) => {
+    if (level === 'high') return 'Высокий риск';
+    if (level === 'medium') return 'Средний риск';
+    return 'Низкий риск';
+  };
+  const riskClassName = (level: AdminAgentBlueprint['risk_level']) => {
+    if (level === 'high') return 'border-red-200 bg-red-50 text-red-700';
+    if (level === 'medium') return 'border-amber-200 bg-amber-50 text-amber-800';
+    return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  };
+  const agentStatusLabel = (status: string) => {
+    if (status === 'active') return 'Активен';
+    if (status === 'archived') return 'Убран из списка';
+    if (status === 'paused') return 'На паузе';
+    return 'Черновик';
+  };
 
   if (loading) {
     return (
@@ -679,19 +901,99 @@ export const AdminPage: React.FC = () => {
         {activeTab === 'agents' ? (
           <DashboardSection
             title={activeTabConfig.label}
-            description="Legacy AIAgents больше не редактируются как отдельный runtime. Главный cockpit находится в Мои агенты."
+            description="Только просмотр: задача, бизнес, внешние действия, запуски и риск для модерации пользовательских агентов."
+            actions={(
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" onClick={loadAgentBlueprintOverview} disabled={agentBlueprintLoading}>
+                  Обновить
+                </Button>
+                <Button type="button" onClick={() => navigate('/dashboard/agents')}>
+                  Открыть Мои агенты
+                </Button>
+              </div>
+            )}
+            contentClassName="space-y-5"
           >
-            <div className="flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-              <div className="max-w-2xl">
-                <div className="text-sm font-semibold text-amber-950">Legacy entrypoint закрыт для workflow-редактирования</div>
-                <div className="mt-1 text-sm leading-6 text-amber-900">
-                  AIAgents используются как голос и стиль внутри blueprint-агента. Логика, версии, approvals, learning history и runtime-наблюдаемость живут в едином экране.
+            <DashboardCompactMetricsRow items={agentMetrics} />
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
+              Этот экран нужен LocalOS для модерации и развития продукта: видеть, какие задачи автоматизируют клиенты, где есть внешние отправки или потенциально чувствительные действия, и какие сценарии стоит превращать в готовые шаблоны.
+            </div>
+
+            {agentBlueprintLoading ? (
+              <div className="rounded-2xl border border-slate-200 bg-white px-5 py-8 text-center text-sm text-slate-500">
+                Загружаем агентов...
+              </div>
+            ) : (agentBlueprintOverview?.agents || []).length === 0 ? (
+              <DashboardEmptyState
+                title="Пользовательские агенты пока не созданы"
+                description="Когда пользователи начнут создавать кастомных агентов, здесь появятся их задачи, бизнесы, интеграции и оценка риска."
+              />
+            ) : (
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                <div className="grid grid-cols-[minmax(260px,1.4fr)_minmax(190px,0.9fr)_minmax(170px,0.8fr)_minmax(220px,1fr)_minmax(150px,0.6fr)] gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  <div>Агент</div>
+                  <div>Бизнес</div>
+                  <div>Риск</div>
+                  <div>Данные и действия</div>
+                  <div>Активность</div>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {(agentBlueprintOverview?.agents || []).map((agent) => (
+                    <div key={agent.id} className="grid grid-cols-[minmax(260px,1.4fr)_minmax(190px,0.9fr)_minmax(170px,0.8fr)_minmax(220px,1fr)_minmax(150px,0.6fr)] gap-3 px-4 py-4 text-sm">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="truncate font-semibold text-slate-950">{agent.name}</div>
+                          <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                            {agentStatusLabel(agent.status)}
+                          </span>
+                        </div>
+                        <div className="mt-1 line-clamp-2 text-slate-600">
+                          {agent.latest_goal || agent.description || 'Описание не заполнено'}
+                        </div>
+                        <div className="mt-2 text-xs text-slate-400">
+                          v{agent.latest_version_number || 1} · создан {formatAdminDate(agent.created_at)}
+                        </div>
+                      </div>
+
+                      <div className="min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => handleBusinessClick(agent.business_id)}
+                          className="truncate text-left font-semibold text-slate-900 underline-offset-4 hover:underline"
+                        >
+                          {agent.business_name}
+                        </button>
+                        <div className="mt-1 truncate text-xs text-slate-500">{agent.owner_email || agent.creator_email || 'Владелец не указан'}</div>
+                      </div>
+
+                      <div>
+                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${riskClassName(agent.risk_level)}`}>
+                          {riskLabel(agent.risk_level)}
+                        </span>
+                        <div className="mt-2 space-y-1 text-xs leading-5 text-slate-500">
+                          {agent.risk_reasons.slice(0, 2).map((reason) => (
+                            <div key={reason}>{reason}</div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="text-sm leading-6 text-slate-600">
+                        <div>{agent.sources_count} источн. · {agent.integration_count} интегр.</div>
+                        <div className="truncate text-xs text-slate-500">
+                          {agent.integration_providers || 'Внешние интеграции не найдены'}
+                        </div>
+                      </div>
+
+                      <div className="text-sm leading-6 text-slate-600">
+                        <div>{agent.runs_count} запусков</div>
+                        <div className="text-xs text-slate-500">{agent.pending_approvals_count} ожидают согласования</div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-              <Button type="button" onClick={() => navigate('/dashboard/agents')}>
-                Открыть Мои агенты
-              </Button>
-            </div>
+            )}
           </DashboardSection>
         ) : activeTab === 'agentApi' ? (
           <DashboardSection
@@ -868,7 +1170,7 @@ export const AdminPage: React.FC = () => {
                             const networkId = item.networkId || '';
                             const networkName = item.networkName || item.name;
                             const networkBusinesses = user.networks.find((network) => network.id === networkId)?.businesses || [];
-                            const allPromo = networkBusinesses.length > 0 && networkBusinesses.every((business) => business.subscription_tier === 'promo');
+                            const networkPaymentState = getNetworkPaymentState(networkBusinesses);
                             return (
                               <div
                                 className="flex cursor-pointer flex-col gap-4 rounded-3xl border border-slate-200 bg-slate-50/70 p-4 transition hover:border-slate-300 hover:bg-white sm:flex-row sm:items-center sm:justify-between"
@@ -886,13 +1188,17 @@ export const AdminPage: React.FC = () => {
                                         size="sm"
                                         onClick={(event) => {
                                           event.stopPropagation();
-                                          handleNetworkPromo(networkId, networkName, allPromo);
+                                          openNetworkPaymentDialog(networkId, networkName, networkBusinesses);
                                         }}
-                                        className={`h-7 rounded-full px-2.5 text-xs ${allPromo ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
-                                        title={allPromo ? 'Отключить Промо для сети' : 'Включить Промо для сети'}
+                                        className={`h-7 rounded-full px-2.5 text-xs ${networkPaymentState.allPaid ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
+                                        title="Управлять оплатой сети"
                                       >
-                                        <Gift className="mr-1.5 h-3.5 w-3.5" />
-                                        {allPromo ? 'Промо сеть' : 'Промо'}
+                                        <CreditCard className="mr-1.5 h-3.5 w-3.5" />
+                                        {networkPaymentState.allPaid
+                                          ? 'Оплачено сеть'
+                                          : networkPaymentState.paidCount > 0
+                                            ? `Оплачено ${networkPaymentState.paidCount}/${networkPaymentState.totalCount}`
+                                            : 'Отметить оплату'}
                                       </Button>
                                     </div>
                                     <p className="text-xs font-medium text-slate-500">
@@ -929,10 +1235,7 @@ export const AdminPage: React.FC = () => {
                                     businessId: business.id,
                                     businessName: business.name,
                                   })}
-                                  onPromoClick={() => {
-                                    const isPromo = business.subscription_tier === 'promo';
-                                    handlePromo(business.id, business.name, isPromo);
-                                  }}
+                                  onPaymentClick={() => openBusinessPaymentDialog(business)}
                                   onBlockClick={() => handleBlock(business.id, business.name, business.is_active === 1)}
                                   onDeleteClick={() => handleDelete(business.id, business.name)}
                                   onClick={() => handleBusinessClick(business.id)}
@@ -950,10 +1253,7 @@ export const AdminPage: React.FC = () => {
                             businessId: item.business.id,
                             businessName: item.name,
                           })}
-                          onPromoClick={() => {
-                            const isPromo = item.business.subscription_tier === 'promo';
-                            handlePromo(item.business.id, item.name, isPromo);
-                          }}
+                          onPaymentClick={() => openBusinessPaymentDialog(item.business)}
                           onBlockClick={() => handleBlock(item.business.id, item.name, item.business.is_active === 1)}
                           onDeleteClick={() => handleDelete(item.business.id, item.name)}
                           onClick={() => handleBusinessClick(item.business.id)}
@@ -1082,6 +1382,89 @@ export const AdminPage: React.FC = () => {
         variant={confirmDialog.variant}
       />
 
+      {paymentDialog.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <Card className="w-full max-w-lg border-0 shadow-2xl animate-in zoom-in-95 duration-200">
+            <CardHeader className="border-b border-slate-100">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <CardTitle className="text-xl">
+                    {paymentDialog.scope === 'network' ? 'Оплата сети' : 'Оплата точки'}
+                  </CardTitle>
+                  <p className="mt-1 text-sm text-slate-500">{paymentDialog.targetName}</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={closePaymentDialog}
+                  className="rounded-full"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-5 p-6">
+              {paymentDialog.scope === 'network' && (
+                <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                  Сейчас оплачено {paymentDialog.paidCount} из {paymentDialog.totalCount} точек сети.
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <label className="text-sm font-semibold text-slate-700">Период оплаты</label>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {PAYMENT_PERIODS.map((period) => (
+                    <Button
+                      key={period.months}
+                      type="button"
+                      variant="outline"
+                      className="h-10 rounded-xl"
+                      onClick={() => applyPaymentPeriod(period.months)}
+                    >
+                      {period.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700" htmlFor="subscription-end-date">
+                  Действует до
+                </label>
+                <div className="relative">
+                  <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    id="subscription-end-date"
+                    type="date"
+                    value={paymentDialog.endsAt}
+                    onChange={(event) => updatePaymentEndDate(event.target.value)}
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+                <Button
+                  variant="outline"
+                  onClick={() => submitPaymentDialog(false)}
+                  className="rounded-xl text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                >
+                  Отключить оплату
+                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={closePaymentDialog} className="rounded-xl">
+                    Отмена
+                  </Button>
+                  <Button onClick={() => submitPaymentDialog(true)} className="rounded-xl">
+                    Отметить оплату
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Модальное окно настроек внешних кабинетов */}
       {settingsModal.isOpen && settingsModal.businessId && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
@@ -1122,7 +1505,7 @@ interface BusinessCardProps {
   business: Business;
   isPinned?: boolean;
   onSettingsClick: () => void;
-  onPromoClick: () => void;
+  onPaymentClick: () => void;
   onBlockClick: () => void;
   onDeleteClick: () => void;
   onClick: () => void;
@@ -1132,13 +1515,14 @@ const BusinessCard: React.FC<BusinessCardProps> = ({
   business,
   isPinned = false,
   onSettingsClick,
-  onPromoClick,
+  onPaymentClick,
   onBlockClick,
   onDeleteClick,
   onClick,
 }) => {
   const isBlocked = business.is_active === 0;
-  const isPromo = business.subscription_tier === 'promo';
+  const isPaid = isBusinessSubscriptionPaid(business);
+  const subscriptionEndLabel = getSubscriptionEndLabel(business.subscription_ends_at);
 
   return (
     <div
@@ -1159,9 +1543,9 @@ const BusinessCard: React.FC<BusinessCardProps> = ({
                 Заблокирован
               </span>
             )}
-            {isPromo && (
+            {isPaid && (
               <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
-                Промо
+                {subscriptionEndLabel ? `Оплачено до ${subscriptionEndLabel}` : 'Оплачено'}
               </span>
             )}
             {isPinned && (
@@ -1193,11 +1577,11 @@ const BusinessCard: React.FC<BusinessCardProps> = ({
           <Button
             variant="ghost"
             size="sm"
-            onClick={onPromoClick}
-            className={`h-8 w-8 rounded-xl p-0 ${isPromo ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100' : 'text-slate-500 hover:bg-white hover:text-slate-950'}`}
-            title={isPromo ? 'Отключить Промо' : 'Включить Промо'}
+            onClick={onPaymentClick}
+            className={`h-8 w-8 rounded-xl p-0 ${isPaid ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100' : 'text-slate-500 hover:bg-white hover:text-slate-950'}`}
+            title="Управлять оплатой"
           >
-            <Gift className="h-4 w-4" />
+            <CreditCard className="h-4 w-4" />
           </Button>
           <Button
             variant="ghost"
