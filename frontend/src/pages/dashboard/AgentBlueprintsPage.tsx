@@ -1362,6 +1362,17 @@ const userFacingAgentTechText = (value?: string) => String(value || '')
   .replace(/schedule\.daily/gi, 'ежедневный запуск')
   .replace(/communications\.draft/g, 'черновик сообщения')
   .replace(/telegram\.message\.received/g, 'новое сообщение в Telegram')
+  .replace(/needs source upload/gi, 'нужно добавить источник')
+  .replace(/needs_source_upload/gi, 'нужно добавить источник')
+  .replace(/external_reviews/gi, 'отзывы')
+  .replace(/business_profile/gi, 'профиль бизнеса')
+  .replace(/\bservices\b/gi, 'услуги')
+  .replace(/collect inputs/gi, 'собрать входные данные')
+  .replace(/extract context/gi, 'понять данные')
+  .replace(/prepare output/gi, 'подготовить результат')
+  .replace(/final_output/gi, 'итоговый результат')
+  .replace(/agent_output_draft/gi, 'черновик результата')
+  .replace(/manual_review_reason/gi, 'причина ручной проверки')
   .replace(/\bsupervised\b/gi, 'под ручным контролем')
   .replace(/inside_localos_policy/gi, 'внутри правил LocalOS')
   .replace(/localos_managed_защищенный контур/gi, 'под управлением LocalOS')
@@ -1385,6 +1396,7 @@ const agentFlowStatusLabel = (status?: string) => ({
   needs_connection: 'нужно проверить подключения',
   needs_connections: 'нужно проверить подключения',
   needs_connection_choice: 'нужно выбрать подключение',
+  ready_for_draft: 'готов к черновику',
   ready_for_preview: 'готов к тесту',
   ready_for_activation: 'готов к включению',
 }[String(status || '')] || humanizeMeta(status || 'проверить'));
@@ -2449,6 +2461,11 @@ export const AgentBlueprintsPage = () => {
     [blueprintDetails?.approval_queue],
   );
 
+  const selectedPendingApproval = useMemo(
+    () => pendingApproval || pendingApprovals[0] || null,
+    [pendingApproval, pendingApprovals],
+  );
+
   const queuedButNotDispatched = useMemo(() => {
     const artifact = (activeRun?.artifacts || []).find((item) => {
       const payload = item.payload_json || {};
@@ -3127,13 +3144,16 @@ export const AgentBlueprintsPage = () => {
   };
 
   const decideApproval = async (decision: 'approve' | 'reject') => {
-    if (!activeRun || !pendingApproval) {
+    const approval = selectedPendingApproval;
+    const runId = activeRun?.id || approval?.run_id || selectedBlueprint?.last_run_id || '';
+    if (!approval || !runId) {
+      setError('Не удалось найти запуск для этого решения. Обновите страницу и попробуйте снова.');
       return;
     }
     setActionLoading(true);
     setError(null);
     try {
-      const response = await api.post(`/agent-runs/${activeRun.id}/approvals/${pendingApproval.id}/${decision}`, {
+      const response = await api.post(`/agent-runs/${runId}/approvals/${approval.id}/${decision}`, {
         reason: decision === 'approve' ? 'Approved from dashboard' : 'Rejected from dashboard',
       });
       setActiveRun(response.data?.run || null);
@@ -3878,7 +3898,7 @@ export const AgentBlueprintsPage = () => {
                 blueprintDetails={blueprintDetails}
                 activeRun={activeRun}
                 availablePersonaAgents={availablePersonaAgents}
-                pendingApproval={pendingApproval}
+                pendingApproval={selectedPendingApproval}
                 queuedButNotDispatched={queuedButNotDispatched}
                 agentReview={agentReview}
                 feedbackText={feedbackText}
@@ -6903,6 +6923,7 @@ const AgentDetailPanel = ({
             summary={activeRun.observability?.preview_summary}
             runInput={activeRun.input_json && typeof activeRun.input_json === 'object' ? activeRun.input_json : {}}
             activationGate={activationGate}
+            currentActiveVersionId={activeVersionId}
             actionLoading={actionLoading}
             onNextStepAction={handlePreviewNextStep}
             onActivateVersion={onActivateVersion}
@@ -6938,19 +6959,26 @@ const AgentDetailPanel = ({
             )}
           />
         ) : null}
-        <AgentRunReviewPanel
-          review={agentReview}
-          latestVersionNumber={latestVersionNumber}
-          feedbackText={feedbackText}
-          feedbackTrigger={feedbackTrigger}
-          feedbackVersionNotice={feedbackVersionNotice}
-          actionLoading={actionLoading}
-          onFeedbackTextChange={onFeedbackTextChange}
-          onFeedbackTriggerChange={onFeedbackTriggerChange}
-          onSubmitFeedback={onSubmitFeedback}
-          onActivateFeedbackVersion={onActivateFeedbackVersion}
-          onRollbackFeedbackVersion={onRollbackFeedbackVersion}
-        />
+        <details className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-700">
+            Журнал и подробности
+          </summary>
+          <div className="mt-4">
+            <AgentRunReviewPanel
+              review={agentReview}
+              latestVersionNumber={latestVersionNumber}
+              feedbackText={feedbackText}
+              feedbackTrigger={feedbackTrigger}
+              feedbackVersionNotice={feedbackVersionNotice}
+              actionLoading={actionLoading}
+              onFeedbackTextChange={onFeedbackTextChange}
+              onFeedbackTriggerChange={onFeedbackTriggerChange}
+              onSubmitFeedback={onSubmitFeedback}
+              onActivateFeedbackVersion={onActivateFeedbackVersion}
+              onRollbackFeedbackVersion={onRollbackFeedbackVersion}
+            />
+          </div>
+        </details>
         {activeRun ? null : (
           <DashboardEmptyState title="Нет активных запусков" description="Запустите агента из карточки, чтобы увидеть результат." />
         )}
@@ -7094,14 +7122,16 @@ const AgentOverviewPanel = ({
         compiledReady={!compiledKnown || compiledValid}
         previewReady={previewReady}
         activationVersionId={activationVersionId}
+        needsApproval={needsApproval}
         actionLoading={actionLoading}
         onOpenConnections={onOpenConnections}
         onOpenLogic={onOpenLogic}
+        onOpenResults={onOpenResults}
         onStartRun={onStartRun}
         onActivateVersion={onActivateVersion}
       />
 
-      {activationGate ? (
+      {activationGate && !needsApproval ? (
         <ActivationGateDecisionCard
           gate={activationGate}
         />
@@ -7154,9 +7184,11 @@ const AgentProductCockpit = ({
   compiledReady,
   previewReady,
   activationVersionId,
+  needsApproval,
   actionLoading,
   onOpenConnections,
   onOpenLogic,
+  onOpenResults,
   onStartRun,
   onActivateVersion,
 }: {
@@ -7167,9 +7199,11 @@ const AgentProductCockpit = ({
   compiledReady: boolean;
   previewReady: boolean;
   activationVersionId: string;
+  needsApproval: boolean;
   actionLoading: boolean;
   onOpenConnections: () => void;
   onOpenLogic: () => void;
+  onOpenResults: () => void;
   onStartRun: () => void;
   onActivateVersion: (versionId: string) => void;
 }) => {
@@ -7180,9 +7214,11 @@ const AgentProductCockpit = ({
   const nextStep = activationGate?.next_step || setupFlow?.post_create_next_step || setupFlow?.next_step || '';
   const needsConnections = !connectorsReady || missingItems.length > 0 || nextStep === 'connect_required_integrations';
   const needsLogic = !compiledReady || nextStep === 'fix_compiled_workflow';
-  const canActivate = activationGate?.can_activate === true && Boolean(activationVersionId);
+  const canActivate = !needsApproval && activationGate?.can_activate === true && Boolean(activationVersionId);
   const canPreview = connectorsReady && compiledReady && !previewReady;
-  const primaryLabel = canActivate
+  const primaryLabel = needsApproval
+    ? 'Открыть решение'
+    : canActivate
     ? 'Включить агента'
     : needsConnections
     ? 'Подключить сервисы'
@@ -7191,9 +7227,9 @@ const AgentProductCockpit = ({
       : needsLogic
         ? 'Открыть логику'
         : 'Открыть запуски';
-  const PrimaryIcon = canActivate ? CheckCircle2 : needsConnections ? Database : canPreview ? Play : needsLogic ? Workflow : Play;
-  const primaryAction = canActivate ? () => onActivateVersion(activationVersionId) : needsConnections ? onOpenConnections : canPreview ? onStartRun : needsLogic ? onOpenLogic : onStartRun;
-  const primaryVariant: 'default' | 'outline' = canActivate || needsConnections || canPreview || needsLogic ? 'default' : 'outline';
+  const PrimaryIcon = needsApproval ? ShieldCheck : canActivate ? CheckCircle2 : needsConnections ? Database : canPreview ? Play : needsLogic ? Workflow : Play;
+  const primaryAction = needsApproval ? onOpenResults : canActivate ? () => onActivateVersion(activationVersionId) : needsConnections ? onOpenConnections : canPreview ? onStartRun : needsLogic ? onOpenLogic : onStartRun;
+  const primaryVariant: 'default' | 'outline' = needsApproval || canActivate || needsConnections || canPreview || needsLogic ? 'default' : 'outline';
   const task = preview?.understood_task || blueprint.description || blueprint.active_goal || blueprint.latest_goal || 'Настройте задачу агента.';
   const uniqueReadyTitles = Array.from(new Set(readyItems.map((item) => item.title || connectorLabel(item.provider)).filter(Boolean)));
   const uniqueMissingTitles = Array.from(new Set(missingItems.map((item) => item.title || connectorLabel(item.provider)).filter(Boolean)));
@@ -9826,6 +9862,7 @@ const PreviewRunSummaryPanel = ({
   summary,
   runInput,
   activationGate,
+  currentActiveVersionId = '',
   actionLoading = false,
   onNextStepAction,
   onActivateVersion,
@@ -9833,6 +9870,7 @@ const PreviewRunSummaryPanel = ({
   summary?: Record<string, unknown>;
   runInput: Record<string, unknown>;
   activationGate?: AgentActivationGate;
+  currentActiveVersionId?: string;
   actionLoading?: boolean;
   onNextStepAction?: (nextStep: string) => void;
   onActivateVersion?: (versionId: string) => void;
@@ -9864,7 +9902,9 @@ const PreviewRunSummaryPanel = ({
   const nextStepLabel = String(summary?.next_step_label || 'Проверить preview');
   const nextStepDescription = String(summary?.next_step_description || summary?.activation_hint || 'Проверьте результат preview и следующий шаг агента.');
   const activationVersionId = String(activationGate?.active_version_id || runInput.blueprint_version_id || '');
+  const isCurrentVersionAlreadyActive = Boolean(activationVersionId && currentActiveVersionId && activationVersionId === currentActiveVersionId);
   const canActivateFromPreview = activationGate?.can_activate === true && Boolean(activationVersionId);
+  const needsHumanDecision = pendingApprovals.length > 0 || waitingActions.length > 0 || nextStep === 'review_approvals';
   const sourceEvent = toRecordOrNull(runInput.source_event) || {};
   const eventType = String(sourceEvent.event_type || runInput.trigger || 'manual.preview');
   const compiledSteps = Array.isArray(objectValue(inputPreviewContext, 'steps')) ? objectValue(inputPreviewContext, 'steps') : [];
@@ -9907,7 +9947,11 @@ const PreviewRunSummaryPanel = ({
     },
   ];
   const actionLabel = canActivateFromPreview
-    ? String(activationGate?.primary_action_label || 'Активировать версию')
+    ? needsHumanDecision
+      ? 'Проверить решение'
+      : isCurrentVersionAlreadyActive
+        ? 'Версия уже активна'
+        : String(activationGate?.primary_action_label || 'Активировать версию')
     : previewNextStepActionLabel(nextStep, nextStepLabel);
   return (
     <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-4 text-sm leading-6 text-sky-950">
@@ -9929,58 +9973,74 @@ const PreviewRunSummaryPanel = ({
         <PreviewRunFact label="Ручной контроль" value={userFacingAgentTechText(manualControl)} />
       </div>
 
-      <CompiledPreviewSimulationPanel steps={simulationSteps} safePreview={safePreview} externalActionsPerformed={Boolean(summary?.external_actions_performed)} />
+      <details className="mt-3 rounded-xl border border-sky-100 bg-white/70 px-3 py-2">
+        <summary className="cursor-pointer text-xs font-semibold text-sky-800">
+          Подробности теста
+        </summary>
+        <div className="mt-3 space-y-3">
+          <CompiledPreviewSimulationPanel steps={simulationSteps} safePreview={safePreview} externalActionsPerformed={Boolean(summary?.external_actions_performed)} />
 
-      <OpenClawPreviewActionPlanPanel
-        actions={openClawActionPlan}
-        policyEnvelope={policyEnvelope}
-        approvalGate={approvalGate}
-        safePreview={safePreview}
-      />
+          <OpenClawPreviewActionPlanPanel
+            actions={openClawActionPlan}
+            policyEnvelope={policyEnvelope}
+            approvalGate={approvalGate}
+            safePreview={safePreview}
+          />
 
-      <div className="mt-3 grid gap-2 lg:grid-cols-3">
-        <PreviewSummaryList
-          title="Шаги"
-          items={completedSteps.length ? completedSteps.slice(0, 5).map((item) => userFacingAgentTechText(humanizeMeta(item))) : ['Шаги будут видны после теста без отправки.']}
-        />
-        <PreviewSummaryList
-          title="Результаты"
-          items={artifacts.length ? artifacts.slice(0, 4).map((item) => {
-            const record = toRecordOrNull(item) || {};
-            return userFacingAgentTechText(`${String(record.title || humanizeMeta(String(record.type || 'artifact')))}: ${String(record.summary || 'сохранён для проверки')}`);
-          }) : ['Результат появится после подготовки.']}
-        />
-        <PreviewSummaryList
-          title="Approval"
-          items={
-            pendingApprovals.length
-              ? pendingApprovals.slice(0, 4).map((item) => {
+          <div className="grid gap-2 lg:grid-cols-3">
+            <PreviewSummaryList
+              title="Шаги"
+              items={completedSteps.length ? completedSteps.slice(0, 5).map((item) => userFacingAgentTechText(humanizeMeta(item))) : ['Шаги будут видны после теста без отправки.']}
+            />
+            <PreviewSummaryList
+              title="Результаты"
+              items={artifacts.length ? artifacts.slice(0, 4).map((item) => {
                 const record = toRecordOrNull(item) || {};
-                return userFacingAgentTechText(`${String(record.title || record.approval_type || 'Approval')}: ${humanizeMeta(String(record.status || 'pending'))}`);
-              })
-              : waitingActions.length
-                ? waitingActions.slice(0, 4).map((item) => {
-                  const record = toRecordOrNull(item) || {};
-                  return userFacingAgentTechText(`${humanizeMeta(String(record.kind || 'external_action'))}: ${String(record.why || record.state || 'ждёт approval')}`);
-                })
-                : ['Внешние действия останутся за ручным подтверждением.']
-          }
-        />
-      </div>
+                return userFacingAgentTechText(`${String(record.title || humanizeMeta(String(record.type || 'artifact')))}: ${String(record.summary || 'сохранён для проверки')}`);
+              }) : ['Результат появится после подготовки.']}
+            />
+            <PreviewSummaryList
+              title="Ручной контроль"
+              items={
+                pendingApprovals.length
+                  ? pendingApprovals.slice(0, 4).map((item) => {
+                    const record = toRecordOrNull(item) || {};
+                    return userFacingAgentTechText(`${String(record.title || record.approval_type || 'Решение')}: ${humanizeMeta(String(record.status || 'pending'))}`);
+                  })
+                  : waitingActions.length
+                    ? waitingActions.slice(0, 4).map((item) => {
+                      const record = toRecordOrNull(item) || {};
+                      return userFacingAgentTechText(`${humanizeMeta(String(record.kind || 'external_action'))}: ${String(record.why || record.state || 'ждёт approval')}`);
+                    })
+                    : ['Внешние действия останутся за ручным подтверждением.']
+              }
+            />
+          </div>
+        </div>
+      </details>
 
       <div className="mt-3 rounded-xl bg-white px-3 py-2 text-xs leading-5 text-sky-800 ring-1 ring-sky-100">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <div className="font-semibold text-sky-900">Следующий шаг: {userFacingAgentTechText(nextStepLabel)}</div>
-            <div className="mt-1">{userFacingAgentTechText(nextStepDescription)}</div>
-            {canActivateFromPreview ? (
+            <div className="font-semibold text-sky-900">
+              Следующий шаг: {needsHumanDecision ? 'проверить решение' : isCurrentVersionAlreadyActive ? 'версия уже активна' : userFacingAgentTechText(nextStepLabel)}
+            </div>
+            <div className="mt-1">
+              {needsHumanDecision
+                ? 'Агент подготовил результат и остановился. Решите, можно ли использовать его дальше.'
+                : isCurrentVersionAlreadyActive
+                  ? 'Эта версия уже активна. Следующее действие - принять или отклонить подготовленный результат, если он ждёт решения.'
+                  : userFacingAgentTechText(nextStepDescription)}
+            </div>
+            {canActivateFromPreview && !needsHumanDecision && !isCurrentVersionAlreadyActive ? (
               <div className="mt-1 font-medium text-emerald-700">Готовность подтверждена: тест без отправки, доступы и логика прошли проверку.</div>
             ) : null}
-            <div className="mt-1 text-sky-700">
-              {String(summary?.activation_hint || 'После теста LocalOS покажет, можно ли включить агента.')}
-            </div>
           </div>
-          {canActivateFromPreview && onActivateVersion ? (
+          {needsHumanDecision && onNextStepAction ? (
+            <Button type="button" size="sm" className="shrink-0" onClick={() => onNextStepAction('review_approvals')} disabled={actionLoading}>
+              {actionLabel}
+            </Button>
+          ) : canActivateFromPreview && onActivateVersion && !isCurrentVersionAlreadyActive ? (
             <Button type="button" size="sm" className="shrink-0" onClick={() => onActivateVersion(activationVersionId)} disabled={actionLoading}>
               {actionLabel}
             </Button>
