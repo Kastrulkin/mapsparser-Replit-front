@@ -9881,7 +9881,8 @@ def _classify_partnership_business_type(*parts: Any) -> str:
         ("dentistry", ("стомат", "зуб", "улыб", "ортодонт", "имплант")),
         ("cosmetology", ("косметолог", "косметик", "инъекц", "ботокс", "пилинг", "лицо")),
         ("hair_salon", ("парикмах", "стриж", "уклад", "волос", "причес", "причёс")),
-        ("beauty_salon", ("салон красот", "красот", "маник", "педик", "бров", "ресниц")),
+        ("nail_salon", ("маник", "педик", "ногт", "nail")),
+        ("beauty_salon", ("салон красот", "красот", "бров", "ресниц")),
         ("dance_school", ("танц", "хореограф", "балет")),
         ("theatre_studio", ("театр", "актер", "актёр", "сцен")),
         ("swimming_pool", ("аква", "бассейн", "плаван")),
@@ -9911,6 +9912,7 @@ def _business_type_label(business_type: str) -> str:
         "dentistry": "стоматология",
         "cosmetology": "косметология",
         "hair_salon": "салон стрижек",
+        "nail_salon": "маникюрный салон",
         "beauty_salon": "салон красоты",
         "dance_school": "школа танцев",
         "theatre_studio": "театральная студия",
@@ -9940,23 +9942,43 @@ def _build_pair_pattern_payload(
     client_segment: str,
 ) -> dict[str, Any]:
     pair = (our_business_type, partner_business_type)
+    adult_beauty_types = {"beauty_salon", "cosmetology", "hair_salon", "nail_salon"}
     shared_audience = client_segment
     partner_value = "ваши услуги"
     why = "оба бизнеса работают с клиентами, которым важны удобство и качественный локальный сервис"
     risks = "не обещать результат за партнёра и не звучать как медицинская или финансовая рекомендация"
 
-    if pair in {("hair_salon", "dentistry"), ("beauty_salon", "dentistry"), ("cosmetology", "dentistry")}:
-        shared_audience = "людей, которые внимательно относятся к внешности и уходу за собой"
-        partner_value = "стоматология, эстетика улыбки и профилактический уход"
-        why = "уход за лицом, волосами и улыбкой часто воспринимается клиентами как единый образ"
+    if our_business_type in adult_beauty_types and partner_business_type == "dentistry":
+        shared_audience = "жители района"
+        partner_value = "чистка зубов у партнёра и посещение косметолога у нас"
+        why = "клиентам удобно закрыть две задачи по внешнему виду рядом с домом"
+    elif our_business_type in adult_beauty_types and partner_business_type in adult_beauty_types:
+        shared_audience = "люди, которые регулярно занимаются собой"
+        if partner_business_type == "nail_salon":
+            partner_value = "маникюр у партнёра и посещение косметолога у нас"
+        elif partner_business_type == "hair_salon":
+            partner_value = "услуга в салоне стрижек у партнёра и посещение косметолога у нас"
+        else:
+            partner_value = "взаимодополняющие beauty-услуги рядом"
+        why = "уходовые и beauty-услуги часто покупают в связке перед отпуском, событием или началом сезона"
     elif partner_business_type in {"dance_school", "theatre_studio", "kids_center", "sports_section", "swimming_pool"}:
-        shared_audience = "семей с детьми, которым важен аккуратный внешний вид ребёнка перед занятиями и событиями"
-        partner_value = "быстрая подготовка образа ребёнка перед выступлением, фотоднём или новым сезоном занятий"
-        why = "детские занятия регулярно создают поводы, когда ребёнку нужно выглядеть аккуратно"
+        if our_business_type in adult_beauty_types:
+            shared_audience = "семьи из района"
+            partner_value = "занятия для ребёнка у партнёра и посещение косметолога у нас для родителей"
+            why = "родителям удобно совмещать детские занятия и свои регулярные услуги рядом"
+        else:
+            shared_audience = "семей с детьми, которым важен аккуратный внешний вид ребёнка перед занятиями и событиями"
+            partner_value = "быстрая подготовка образа ребёнка перед выступлением, фотоднём или новым сезоном занятий"
+            why = "детские занятия регулярно создают поводы, когда ребёнку нужно выглядеть аккуратно"
     elif partner_business_type in {"fitness", "sports_section"}:
-        shared_audience = "людей, которые следят за внешностью, здоровьем и регулярным уходом"
-        partner_value = "уход, стрижка или восстановление после тренировок и активного графика"
-        why = "после спорта клиенты часто думают о внешнем виде, восстановлении и регулярном уходе"
+        if our_business_type in adult_beauty_types:
+            shared_audience = "люди, которые занимаются собой"
+            partner_value = "тренировки у партнёра и посещение косметолога у нас"
+            why = "клиенты фитнеса часто покупают уход как часть общего режима заботы о себе"
+        else:
+            shared_audience = "людей, которые следят за внешностью, здоровьем и регулярным уходом"
+            partner_value = "уход, стрижка или восстановление после тренировок и активного графика"
+            why = "после спорта клиенты часто думают о внешнем виде, восстановлении и регулярном уходе"
     elif partner_business_type in {"cafe", "cultural_center", "activity_park", "rope_park"}:
         shared_audience = "жителей района и семей, которые выбирают локальные места для отдыха и повседневных дел"
         partner_value = "удобный сервис рядом до или после визита к вам"
@@ -9986,6 +10008,7 @@ def _build_package_idea_payload(
 ) -> dict[str, Any]:
     partner_label = _business_type_label(partner_business_type)
     our_label = _business_type_label(our_business_type)
+    adult_beauty_types = {"beauty_salon", "cosmetology", "hair_salon", "nail_salon"}
     idea = {
         "package_type": "joint_package",
         "name": "Удобный локальный пакет",
@@ -9995,7 +10018,47 @@ def _build_package_idea_payload(
         "occasion": "регулярный визит или подготовка к важному дню",
         "launch_mechanic": "тест на небольшой группе клиентов в течение 2-3 недель",
     }
-    if partner_business_type == "dentistry":
+    if our_business_type in adult_beauty_types and partner_business_type == "dentistry":
+        idea.update(
+            {
+                "name": "Улыбка и уход за лицом",
+                "our_part": "посещение косметолога",
+                "partner_part": "чистка зубов у партнёра",
+                "audience": "жители района, которым удобно закрыть несколько задач по внешнему виду рядом с домом",
+                "occasion": "праздник, фотосессия, отпуск, важная встреча или регулярный уход",
+            }
+        )
+    elif our_business_type in adult_beauty_types and partner_business_type == "nail_salon":
+        idea.update(
+            {
+                "name": "Комплексный уход рядом",
+                "our_part": "посещение косметолога",
+                "partner_part": "маникюр или педикюр у партнёра",
+                "audience": "люди, которые регулярно занимаются собой",
+                "occasion": "отпуск, праздник, фотосессия, свидание или начало сезона",
+            }
+        )
+    elif our_business_type in adult_beauty_types and partner_business_type in {"beauty_salon", "cosmetology", "hair_salon"}:
+        idea.update(
+            {
+                "name": "Комплексный beauty-маршрут",
+                "our_part": "посещение косметолога",
+                "partner_part": f"услуга партнёра из направления «{partner_label}»",
+                "audience": "люди, которые регулярно занимаются собой",
+                "occasion": "отпуск, праздник, фотосессия, важная встреча или регулярный уход",
+            }
+        )
+    elif our_business_type in adult_beauty_types and partner_business_type in {"fitness", "sports_section"}:
+        idea.update(
+            {
+                "name": "Форма и уход",
+                "our_part": "посещение косметолога",
+                "partner_part": "тренировка, абонемент или спортивное питание у партнёра",
+                "audience": "люди, которые занимаются собой",
+                "occasion": "начало сезона, подготовка к отпуску или регулярный уход после активного графика",
+            }
+        )
+    elif partner_business_type == "dentistry":
         idea.update(
             {
                 "name": "Образ к важному событию",
@@ -10003,6 +10066,18 @@ def _build_package_idea_payload(
                 "partner_part": "чистка зубов, профилактический уход или консультация по эстетике улыбки",
                 "audience": "клиенты, которые готовятся к событию и хотят выглядеть ухоженно",
                 "occasion": "свадьба, фотосессия, выпускной, отпуск или важная встреча",
+            }
+        )
+    elif our_business_type in adult_beauty_types and partner_business_type in {"dance_school", "theatre_studio", "kids_center", "sports_section", "swimming_pool"}:
+        idea.update(
+            {
+                "package_type": "family_local_package",
+                "name": "Пока ребёнок на занятии",
+                "our_part": "посещение косметолога для родителей",
+                "partner_part": f"занятие или визит в {str(lead.get('name') or partner_label).strip()}",
+                "audience": "семьи из района",
+                "occasion": "регулярные занятия ребёнка, выходной или семейный визит рядом",
+                "launch_mechanic": "тест на небольшой группе родителей с обменом сертификатами или специальным предложением",
             }
         )
     elif partner_business_type in {"dance_school", "theatre_studio", "kids_center", "sports_section", "swimming_pool"}:
@@ -10073,7 +10148,7 @@ def _pick_partnership_client_segment(
     if any(token in combined for token in ("авто", "машин", "шиномонтаж", "мойк", "детейл")):
         return "владельцев автомобилей и жителей района"
     if any(token in combined for token in ("салон", "красот", "космет", "парик", "маник", "барбер", "spa", "спа")):
-        return "людей, которые заботятся о внешности и регулярно выбирают локальные сервисы рядом"
+        return "людей, которые регулярно занимаются собой"
     if any(token in combined for token in ("спорт", "фитнес", "йог", "танц", "массаж", "здоров")):
         return "людей, которые следят за здоровьем, внешностью и удобством сервисов рядом"
     if any(token in combined for token in ("кафе", "ресторан", "кофе", "еда", "пекар")):
@@ -10086,19 +10161,48 @@ def _build_partnership_first_note(
     business_name: str,
     lead: dict[str, Any],
     client_segment: str,
+    our_business_type: str = "unknown_local_business",
+    partner_business_type: str = "unknown_local_business",
+    pair_pattern: dict[str, Any] | None = None,
+    package_idea: dict[str, Any] | None = None,
 ) -> str:
     partner_name = str(lead.get("name") or "").strip()
-    greeting = "Здравствуйте!"
-    if partner_name:
-        greeting = f"Здравствуйте! Пишу по поводу {partner_name}."
+    partner_text = partner_name or "вашей компании"
+    adult_beauty_types = {"beauty_salon", "cosmetology", "hair_salon", "nail_salon"}
+    pattern = pair_pattern if isinstance(pair_pattern, dict) else {}
+    package = package_idea if isinstance(package_idea, dict) else {}
+    shared_audience = str(pattern.get("shared_audience") or client_segment or "жители района").strip()
+    our_part = str(package.get("our_part") or "").strip()
+    partner_part = str(package.get("partner_part") or "").strip()
+    occasion = str(package.get("occasion") or "").strip()
+
+    concrete_offer = ""
+    if our_business_type in adult_beauty_types and partner_business_type == "dentistry":
+        concrete_offer = "Например, можно протестировать совместное предложение: чистка зубов у вас и посещение косметолога у нас."
+    elif our_business_type in adult_beauty_types and partner_business_type == "nail_salon":
+        concrete_offer = "Например, можно протестировать совместное предложение: маникюр у вас и посещение косметолога у нас."
+    elif our_business_type in adult_beauty_types and partner_business_type in {"beauty_salon", "cosmetology", "hair_salon"}:
+        concrete_offer = f"Например, можно протестировать совместное предложение: услуга в {partner_text} и посещение косметолога у нас."
+    elif our_business_type in adult_beauty_types and partner_business_type in {"fitness", "sports_section"}:
+        concrete_offer = f"Например, можно протестировать совместное предложение: занятие или покупка у вас и посещение косметолога у нас."
+    elif our_business_type in adult_beauty_types and partner_business_type in {"dance_school", "theatre_studio", "kids_center", "swimming_pool"}:
+        concrete_offer = "Например, можно протестировать совместное предложение для семей: занятие для ребёнка у вас и посещение косметолога у нас для родителей."
+    elif our_part and partner_part:
+        concrete_offer = f"Например, можно протестировать совместное предложение: {partner_part} и {our_part}."
+    else:
+        concrete_offer = "Например, можно протестировать совместное предложение для клиентов обеих компаний."
+
+    if not occasion:
+        occasion = "отпуском, праздником, фотосессией, важной встречей или регулярным уходом"
 
     lines = [
-        greeting,
-        f"Мы — {business_name}.",
-        "Пишем вам, потому что видим, что у нас есть общая аудитория клиентов.",
-        f"Среди наших клиентов много {client_segment}, которым потенциально могут быть полезны ваши услуги.",
-        "Предлагаю коротко обсудить простой тест обмена рекомендациями без сложных интеграций и затрат.",
-        "Если идея интересна, удобно созвониться на 10 минут?",
+        "Здравствуйте!",
+        f"Мы ваши соседи — {business_name}.",
+        f"У нас общая аудитория — {shared_audience}.",
+        concrete_offer,
+        f"Такой формат особенно актуален перед {occasion}.",
+        "Также можем обсудить обмен сертификатами или специальные предложения для клиентов обеих компаний.",
+        "Если идея кажется интересной, давайте созвонимся на 10 минут и обсудим детали.",
     ]
     return "\n\n".join(lines).strip()
 
@@ -11255,6 +11359,10 @@ def partnership_draft_offer(lead_id):
                         business_name=business_name,
                         lead=lead,
                         client_segment=client_segment,
+                        our_business_type=our_business_type,
+                        partner_business_type=partner_business_type,
+                        pair_pattern=pair_pattern,
+                        package_idea=package_idea,
                     )
                 prompt_meta = {
                     "prompt_key": "partners.draft_first_note_fallback" if letter_type == "first_note" else "partners.draft_commercial_offer_fallback",
