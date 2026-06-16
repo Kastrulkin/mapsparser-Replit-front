@@ -299,7 +299,7 @@ export const AverageTicketPage = () => {
       setOverview(data);
     } catch (error) {
       toast({
-        title: 'Не удалось загрузить Средний чек',
+        title: 'Не удалось загрузить Допродажи',
         description: error instanceof Error ? error.message : 'Проверьте соединение и попробуйте снова.',
         variant: 'destructive',
       });
@@ -476,8 +476,8 @@ export const AverageTicketPage = () => {
     <div className="mx-auto max-w-7xl space-y-6 pb-10">
       <DashboardPageHeader
         eyebrow="LocalOS"
-        title="Средний чек"
-        description="Допродажи, скрипты, пакеты и план предложений по реальным записям. Финансы остаются источником диагноза, здесь работает операционная команда."
+        title="Допродажи"
+        description="Допродажи, кросс-продажи скрипты, пакеты и план предложений по реальным записям. Финансы остаются источником диагноза, здесь работает операционная команда."
         icon={CircleDollarSign}
         actions={
           <>

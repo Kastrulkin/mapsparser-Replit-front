@@ -125,12 +125,12 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
     },
     {
       id: 'average-ticket',
-      label: language === 'ru' ? 'Средний чек' : 'Average Ticket',
+      label: language === 'ru' ? 'Допродажи' : 'Upsells',
       icon: BadgeDollarSign,
       path: '/dashboard/average-ticket',
       tooltip: language === 'ru'
-        ? 'Допродажи, скрипты и пакеты на основе услуг из раздела “Работа с картами”.'
-        : 'Upsells, scripts, and packages based on map services.',
+        ? 'Допродажи, кросс-продажи, скрипты и пакеты по реальным записям.'
+        : 'Upsells, cross-sells, scripts, and packages based on real bookings.',
     },
     {
       id: 'ai-chat-promotion',
