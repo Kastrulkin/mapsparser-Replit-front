@@ -3589,6 +3589,12 @@ export const AgentBlueprintsPage = () => {
     }
   };
 
+  const postCreateReadyForRun = recentPostCreateHandoff?.workspace_mode === 'run'
+    || recentPostCreateHandoff?.status === 'ready_for_preview';
+  const showPostCreateConnectionDetails = Boolean(recentPostCreateHandoff)
+    && !postCreateReadyForRun
+    && (recentPostCreateHandoff?.workspace_mode === 'connections' || recentPostCreateHandoff?.status === 'needs_connections');
+
   return (
     <div className="space-y-5">
       <DashboardPageHeader
@@ -3742,8 +3748,8 @@ export const AgentBlueprintsPage = () => {
                     Открыть подключения
                   </Button>
                 ) : null}
-                {recentPostCreateHandoff?.workspace_mode === 'run' ? (
-                  <Button type="button" size="sm" onClick={() => setWorkspaceMode('run')}>
+                {postCreateReadyForRun ? (
+                  <Button type="button" size="sm" onClick={() => (selectedBlueprint ? startRun(selectedBlueprint) : setWorkspaceMode('run'))}>
                     Запустить тест
                   </Button>
                 ) : null}
@@ -3761,7 +3767,7 @@ export const AgentBlueprintsPage = () => {
               </div>
             )}
 	          />
-	          {recentPostCreateHandoff?.next_binding ? (
+	          {showPostCreateConnectionDetails && recentPostCreateHandoff?.next_binding ? (
 	            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-950">
 	              <div className="font-semibold">
 	                Следующий доступ: {recentPostCreateHandoff.next_binding.title || connectorLabel(recentPostCreateHandoff.next_binding.provider)}
@@ -3783,14 +3789,16 @@ export const AgentBlueprintsPage = () => {
 	              ) : null}
 	            </div>
 	          ) : null}
-	          <AgentConnectionPlanPanel
-	            connectionPlan={recentPostCreateHandoff?.connection_plan || agentConnectionPlan}
-            availableIntegrations={availableAgentIntegrations}
-            actionLoading={actionLoading}
-            onAttachExistingIntegration={attachExistingAgentIntegration}
-            onConfigureBinding={setSelectedConnectionBindingKey}
-            onChooseProviderRoute={chooseProviderRoute}
-          />
+	          {showPostCreateConnectionDetails ? (
+	            <AgentConnectionPlanPanel
+	              connectionPlan={recentPostCreateHandoff?.connection_plan || agentConnectionPlan}
+              availableIntegrations={availableAgentIntegrations}
+              actionLoading={actionLoading}
+              onAttachExistingIntegration={attachExistingAgentIntegration}
+              onConfigureBinding={setSelectedConnectionBindingKey}
+              onChooseProviderRoute={chooseProviderRoute}
+            />
+	          ) : null}
         </div>
       ) : null}
 
@@ -4546,23 +4554,21 @@ const DialogAgentBuilder = ({
                   </details>
                 ) : null}
               </div>
-              <Button
-                type="button"
-                onClick={() => {
-                  if (builderDecision.action === 'answer') {
-                    onSendReply();
-                    return;
-                  }
-                  if (canCreateDraft || builderDecision.action === 'create') {
-                    onCreate();
-                  }
-                }}
-                disabled={actionLoading || !canUsePrimaryAction}
-                className="shrink-0"
-              >
-                {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : canCreateDraft ? <CheckCircle2 className="mr-2 h-4 w-4" /> : <MessageSquareText className="mr-2 h-4 w-4" />}
-                {primaryActionLabel}
-              </Button>
+              {builderDecision.action === 'answer' ? null : (
+                <Button
+                  type="button"
+                  onClick={() => {
+                    if (canCreateDraft || builderDecision.action === 'create') {
+                      onCreate();
+                    }
+                  }}
+                  disabled={actionLoading || !canUsePrimaryAction}
+                  className="shrink-0"
+                >
+                  {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : canCreateDraft ? <CheckCircle2 className="mr-2 h-4 w-4" /> : <MessageSquareText className="mr-2 h-4 w-4" />}
+                  {primaryActionLabel}
+                </Button>
+              )}
             </div>
             {firstQuestion ? (
               <div className="mt-4 grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
