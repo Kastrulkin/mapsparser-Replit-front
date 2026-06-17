@@ -20,6 +20,13 @@ interface ExternalAccount {
   updated_at?: string | null;
 }
 
+interface GoogleLocation {
+  name: string;
+  title?: string | null;
+  address?: string | null;
+  primary_category?: string | null;
+}
+
 interface ExternalIntegrationsProps {
   currentBusinessId: string | null;
 }
@@ -29,9 +36,13 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [matonApiKey, setMatonApiKey] = useState('');
+  const [googleLocations, setGoogleLocations] = useState<GoogleLocation[]>([]);
+  const [selectedGoogleLocation, setSelectedGoogleLocation] = useState('');
+  const [googleBusy, setGoogleBusy] = useState(false);
   const { toast } = useToast();
   const { t, language } = useLanguage();
   const matonAccount = accounts.find((acc) => acc.source === 'maton');
+  const googleAccount = accounts.find((acc) => acc.source === 'google_business');
 
   const loadAccounts = async () => {
     if (!currentBusinessId) return;
@@ -64,6 +75,135 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleConnect = async () => {
+    if (!currentBusinessId) {
+      toast({
+        title: t.error,
+        description: t.dashboard.settings.external.selectBusiness,
+        variant: "destructive",
+      });
+      return;
+    }
+    setGoogleBusy(true);
+    try {
+      const token = newAuth.getToken();
+      if (!token) return;
+      const res = await fetch(`/api/google/oauth/authorize?business_id=${encodeURIComponent(currentBusinessId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success || !data.auth_url) {
+        throw new Error(data.error || "Не удалось начать подключение Google");
+      }
+      window.location.href = data.auth_url;
+    } catch (e: any) {
+      toast({
+        title: t.error,
+        description: e.message || "Ошибка подключения Google",
+        variant: "destructive",
+      });
+      setGoogleBusy(false);
+    }
+  };
+
+  const handleLoadGoogleLocations = async () => {
+    if (!currentBusinessId) return;
+    setGoogleBusy(true);
+    try {
+      const token = newAuth.getToken();
+      if (!token) return;
+      const res = await fetch(`/api/business/${currentBusinessId}/google/locations`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Не удалось получить карточки Google");
+      }
+      const locations = data.locations || [];
+      setGoogleLocations(locations);
+      if (locations.length === 1) setSelectedGoogleLocation(locations[0].name);
+      toast({
+        title: t.success,
+        description: locations.length ? `Найдено карточек: ${locations.length}` : "Карточки Google не найдены",
+      });
+    } catch (e: any) {
+      toast({
+        title: t.error,
+        description: e.message || "Ошибка загрузки карточек Google",
+        variant: "destructive",
+      });
+    } finally {
+      setGoogleBusy(false);
+    }
+  };
+
+  const handleBindGoogleLocation = async () => {
+    if (!currentBusinessId || !selectedGoogleLocation) return;
+    const location = googleLocations.find((item) => item.name === selectedGoogleLocation);
+    setGoogleBusy(true);
+    try {
+      const token = newAuth.getToken();
+      if (!token) return;
+      const res = await fetch(`/api/business/${currentBusinessId}/google/bind-location`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          account_id: googleAccount?.id,
+          location_name: selectedGoogleLocation,
+          display_name: location?.title || "Google Business Profile",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Не удалось привязать карточку Google");
+      }
+      toast({ title: t.success, description: "Карточка Google привязана к бизнесу" });
+      await loadAccounts();
+    } catch (e: any) {
+      toast({
+        title: t.error,
+        description: e.message || "Ошибка привязки карточки Google",
+        variant: "destructive",
+      });
+    } finally {
+      setGoogleBusy(false);
+    }
+  };
+
+  const handleSyncGoogle = async () => {
+    if (!currentBusinessId) return;
+    setGoogleBusy(true);
+    try {
+      const token = newAuth.getToken();
+      if (!token) return;
+      const res = await fetch(`/api/business/${currentBusinessId}/google/sync`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ account_id: googleAccount?.id }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Не удалось синхронизировать Google");
+      }
+      toast({ title: t.success, description: "Отзывы и статистика Google синхронизированы" });
+      await loadAccounts();
+    } catch (e: any) {
+      toast({
+        title: t.error,
+        description: e.message || "Ошибка синхронизации Google",
+        variant: "destructive",
+      });
+    } finally {
+      setGoogleBusy(false);
     }
   };
 
@@ -180,6 +320,82 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({ curr
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Google Business Profile */}
+        <div className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h3 className="text-base font-semibold text-slate-950">Google Business Profile</h3>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
+                Подключите Google-карточку, выберите нужную локацию и синхронизируйте отзывы. Публикация ответов, новостей и изменений остаётся только после ручного подтверждения.
+              </p>
+            </div>
+            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${googleAccount ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'}`}>
+              {googleAccount ? (googleAccount.external_id ? 'Карточка выбрана' : 'Требуется выбор карточки') : 'Не подключён'}
+            </span>
+          </div>
+
+          {!googleAccount ? (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-slate-600">Войдите в Google аккаунт владельца или менеджера карточки.</p>
+              <Button
+                onClick={handleGoogleConnect}
+                disabled={googleBusy || !currentBusinessId}
+                className="bg-slate-900 text-white hover:bg-slate-800 sm:min-w-[190px]"
+              >
+                {googleBusy ? t.dashboard.subscription.processing : "Подключить Google"}
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+                <div>
+                  <label className="text-xs font-semibold uppercase text-slate-500">Карточка Google</label>
+                  {googleAccount.external_id ? (
+                    <div className="mt-1 rounded-xl border border-emerald-100 bg-white px-3 py-2 text-sm text-slate-800">
+                      <div className="font-medium">{googleAccount.display_name || "Google Business Profile"}</div>
+                      <div className="mt-0.5 break-all text-xs text-slate-500">{googleAccount.external_id}</div>
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedGoogleLocation}
+                      onChange={(event) => setSelectedGoogleLocation(event.target.value)}
+                      className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900"
+                      disabled={googleBusy || googleLocations.length === 0}
+                    >
+                      <option value="">Выберите карточку</option>
+                      {googleLocations.map((location) => (
+                        <option key={location.name} value={location.name}>
+                          {[location.title, location.address || location.primary_category].filter(Boolean).join(' · ')}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {!googleAccount.external_id && (
+                    <>
+                      <Button type="button" variant="outline" onClick={handleLoadGoogleLocations} disabled={googleBusy}>
+                        Найти карточки
+                      </Button>
+                      <Button type="button" onClick={handleBindGoogleLocation} disabled={googleBusy || !selectedGoogleLocation}>
+                        Выбрать
+                      </Button>
+                    </>
+                  )}
+                  {googleAccount.external_id && (
+                    <Button type="button" variant="outline" onClick={handleSyncGoogle} disabled={googleBusy}>
+                      {googleBusy ? t.dashboard.subscription.processing : "Синхронизировать"}
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <p className="text-xs leading-5 text-slate-500">
+                Google API работает в тестовом режиме до согласования. Для внешних действий LocalOS будет показывать черновик и ждать вашего подтверждения.
+              </p>
+            </div>
+          )}
+        </div>
+
         {/* Maton.ai */}
         <div className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">

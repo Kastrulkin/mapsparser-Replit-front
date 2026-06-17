@@ -1,0 +1,55 @@
+{
+  "task_id": "google-business-localos",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "OAuth app and web client created; GBP Basic API Access request submitted as Google support case 7-7493000041066."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "OAuth callback and sync worker support encrypted runtime credential storage."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Location list and bind endpoints implemented."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Manual Google sync endpoint implemented and review parser corrected."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Publish endpoints enforce explicit approved=true."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "External integrations UI now exposes Google connect, location selection, and sync flow."
+    },
+    {
+      "id": "AC7",
+      "status": "PASS",
+      "reason": "Google setup runbook and integrations docs updated without secrets."
+    }
+  ],
+  "commands_run": [
+    "python3 -m py_compile src/google_business_api.py src/google_business_sync_worker.py src/api/google_business_api.py",
+    "cd frontend && npm run build"
+  ],
+  "artifacts_used": [
+    "docs/GOOGLE_BUSINESS_PROFILE_LOCALOS_SETUP.md",
+    "docs/integrations.md",
+    ".agent/tasks/google-business-localos/evidence.md"
+  ],
+  "known_gaps": [
+    "Google must approve GBP Basic API Access support case 7-7493000041066.",
+    "Production OAuth env variables are not deployed yet.",
+    "Live OAuth and sync require approved/enabled Google Business Profile APIs."
+  ]
+}

@@ -4,16 +4,23 @@
 
 ### Google Business Profile
 
-Status: `beta`
+Status: `beta / Google approval pending`
+
+Setup runbook: [`docs/GOOGLE_BUSINESS_PROFILE_LOCALOS_SETUP.md`](./GOOGLE_BUSINESS_PROFILE_LOCALOS_SETUP.md)
 
 Confirmed endpoints:
 
 - `GET /api/google/oauth/authorize`
 - `GET /api/google/oauth/callback`
+- `GET /api/business/<business_id>/google/status`
+- `GET /api/business/<business_id>/google/locations`
+- `POST /api/business/<business_id>/google/bind-location`
+- `POST /api/business/<business_id>/google/sync`
 - `POST /api/business/<business_id>/google/publish-review-reply`
 - `POST /api/business/<business_id>/google/publish-post`
 
 Publishing must require explicit user approval in product flows.
+Direct publish endpoints reject requests without an explicit `approved: true` payload.
 
 ### Yandex Business
 

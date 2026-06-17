@@ -15,6 +15,49 @@ from core.helpers import get_business_owner_id
 
 google_business_bp = Blueprint('google_business', __name__)
 
+def _row_value(row, key: str, index: int = 0):
+    if row is None:
+        return None
+    if hasattr(row, "get"):
+        return row.get(key)
+    try:
+        return row[index]
+    except Exception:
+        return None
+
+def _auth_data_column(cursor) -> str:
+    cursor.execute(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'externalbusinessaccounts'
+          AND column_name IN ('auth_data_encrypted', 'auth_data')
+        """
+    )
+    columns = {_row_value(row, "column_name", 0) for row in cursor.fetchall()}
+    return "auth_data_encrypted" if "auth_data_encrypted" in columns else "auth_data"
+
+def _public_location(location: dict) -> dict:
+    address = location.get("storefrontAddress") if isinstance(location.get("storefrontAddress"), dict) else {}
+    lines = address.get("addressLines") if isinstance(address.get("addressLines"), list) else []
+    category = location.get("primaryCategory") if isinstance(location.get("primaryCategory"), dict) else {}
+    metadata = location.get("metadata") if isinstance(location.get("metadata"), dict) else {}
+    title = location.get("title") or location.get("locationName") or location.get("name")
+    return {
+        "name": location.get("name"),
+        "title": title,
+        "address": ", ".join([line for line in lines if line]),
+        "locality": address.get("locality"),
+        "region": address.get("administrativeArea"),
+        "postal_code": address.get("postalCode"),
+        "primary_category": category.get("displayName") or category.get("categoryId"),
+        "place_id": metadata.get("placeId"),
+        "maps_uri": metadata.get("mapsUri"),
+        "account_name": location.get("accountName"),
+        "account_display_name": location.get("accountDisplayName"),
+    }
+
 def _verify_auth_and_access(business_id: str) -> tuple[dict, DatabaseManager] | tuple[None, None]:
     """Проверить авторизацию и доступ к бизнесу. Возвращает (user_data, db) или (None, None)"""
     auth_header = request.headers.get('Authorization')
@@ -44,12 +87,12 @@ def _get_google_account(cursor, business_id: str, account_id: str = None) -> dic
     """Получить Google аккаунт для бизнеса"""
     if account_id:
         cursor.execute("""
-            SELECT * FROM ExternalBusinessAccounts
+            SELECT * FROM externalbusinessaccounts
             WHERE id = %s AND business_id = %s AND source = 'google_business' AND is_active = 1
         """, (account_id, business_id))
     else:
         cursor.execute("""
-            SELECT * FROM ExternalBusinessAccounts
+            SELECT * FROM externalbusinessaccounts
             WHERE business_id = %s AND source = 'google_business' AND is_active = 1
             LIMIT 1
         """, (business_id,))
@@ -162,25 +205,26 @@ def google_oauth_callback():
         
         # Проверяем, есть ли уже аккаунт для этого бизнеса
         cursor.execute("""
-            SELECT id FROM ExternalBusinessAccounts
+            SELECT id FROM externalbusinessaccounts
             WHERE business_id = %s AND source = 'google_business'
         """, (business_id,))
         existing = cursor.fetchone()
+        auth_column = _auth_data_column(cursor)
         
         if existing:
             # Обновляем существующий аккаунт
             cursor.execute("""
-                UPDATE ExternalBusinessAccounts
-                SET auth_data = %s, is_active = 1, last_sync_at = CURRENT_TIMESTAMP, last_error = NULL
+                UPDATE externalbusinessaccounts
+                SET """ + auth_column + """ = %s, is_active = TRUE, last_sync_at = CURRENT_TIMESTAMP, last_error = NULL, updated_at = CURRENT_TIMESTAMP
                 WHERE id = %s
-            """, (encrypted_creds, existing[0]))
+            """, (encrypted_creds, _row_value(existing, "id", 0)))
         else:
             # Создаем новый аккаунт
             account_id = str(uuid.uuid4())
             cursor.execute("""
-                INSERT INTO ExternalBusinessAccounts
-                (id, business_id, source, external_id, display_name, auth_data, is_active, created_at, updated_at)
-                VALUES (%s, %s, 'google_business', %s, %s, %s, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                INSERT INTO externalbusinessaccounts
+                (id, business_id, source, external_id, display_name, """ + auth_column + """, is_active, created_at, updated_at)
+                VALUES (%s, %s, 'google_business', %s, %s, %s, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             """, (account_id, business_id, None, 'Google Business', encrypted_creds))
         
         db.conn.commit()
@@ -194,6 +238,126 @@ def google_oauth_callback():
         import traceback
         traceback.print_exc()
         return redirect(f"{frontend_url}/dashboard/profile?google_auth=error")
+
+@google_business_bp.route('/api/business/<business_id>/google/status', methods=['GET', 'OPTIONS'])
+def google_status(business_id):
+    """Показать статус подключения Google Business Profile для бизнеса."""
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    user_data, db = _verify_auth_and_access(business_id)
+    if not user_data:
+        return jsonify({"error": "Требуется авторизация или нет доступа к бизнесу"}), 401
+
+    try:
+        cursor = db.conn.cursor()
+        account = _get_google_account(cursor, business_id)
+        if not account:
+            return jsonify({
+                "success": True,
+                "connected": False,
+                "needs_auth": True,
+                "approval_required_for_writes": True,
+            })
+        return jsonify({
+            "success": True,
+            "connected": True,
+            "account": {
+                "id": account.get("id"),
+                "external_id": account.get("external_id"),
+                "display_name": account.get("display_name"),
+                "last_sync_at": account.get("last_sync_at"),
+                "last_error": account.get("last_error"),
+            },
+            "needs_location_binding": not bool(account.get("external_id")),
+            "approval_required_for_writes": True,
+        })
+    finally:
+        db.close()
+
+@google_business_bp.route('/api/business/<business_id>/google/locations', methods=['GET', 'OPTIONS'])
+def google_locations(business_id):
+    """Получить доступные Google Business Profile локации после OAuth."""
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    user_data, db = _verify_auth_and_access(business_id)
+    if not user_data:
+        return jsonify({"error": "Требуется авторизация или нет доступа к бизнесу"}), 401
+
+    try:
+        cursor = db.conn.cursor()
+        account = _get_google_account(cursor, business_id, request.args.get("account_id"))
+        if not account:
+            return jsonify({"error": "Google аккаунт не найден или не активен"}), 404
+        worker = GoogleBusinessSyncWorker()
+        locations = [_public_location(item) for item in worker.list_locations(account)]
+        return jsonify({"success": True, "locations": locations})
+    finally:
+        db.close()
+
+@google_business_bp.route('/api/business/<business_id>/google/bind-location', methods=['POST', 'OPTIONS'])
+def google_bind_location(business_id):
+    """Привязать выбранную GBP локацию к бизнесу LocalOS."""
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    user_data, db = _verify_auth_and_access(business_id)
+    if not user_data:
+        return jsonify({"error": "Требуется авторизация или нет доступа к бизнесу"}), 401
+
+    try:
+        data = request.get_json() or {}
+        location_name = str(data.get("location_name") or "").strip()
+        display_name = str(data.get("display_name") or data.get("title") or "Google Business Profile").strip()
+        account_id = data.get("account_id")
+        if not location_name.startswith("accounts/") or "/locations/" not in location_name:
+            return jsonify({"error": "location_name должен быть GBP resource name"}), 400
+
+        cursor = db.conn.cursor()
+        account = _get_google_account(cursor, business_id, account_id)
+        if not account:
+            return jsonify({"error": "Google аккаунт не найден или не активен"}), 404
+        cursor.execute(
+            """
+            UPDATE externalbusinessaccounts
+            SET external_id = %s,
+                display_name = %s,
+                updated_at = CURRENT_TIMESTAMP,
+                last_error = NULL
+            WHERE id = %s AND business_id = %s AND source = 'google_business'
+            """,
+            (location_name, display_name, account.get("id"), business_id),
+        )
+        db.conn.commit()
+        return jsonify({"success": True, "account_id": account.get("id"), "external_id": location_name})
+    finally:
+        db.close()
+
+@google_business_bp.route('/api/business/<business_id>/google/sync', methods=['POST', 'OPTIONS'])
+def google_sync(business_id):
+    """Запустить ручную синхронизацию отзывов/статистики GBP."""
+    if request.method == 'OPTIONS':
+        return ('', 204)
+
+    user_data, db = _verify_auth_and_access(business_id)
+    if not user_data:
+        return jsonify({"error": "Требуется авторизация или нет доступа к бизнесу"}), 401
+
+    try:
+        cursor = db.conn.cursor()
+        account = _get_google_account(cursor, business_id, (request.get_json() or {}).get("account_id"))
+        if not account:
+            return jsonify({"error": "Google аккаунт не найден или не активен"}), 404
+        if not account.get("external_id"):
+            return jsonify({"error": "Сначала выберите Google локацию", "code": "location_binding_required"}), 400
+        account_id = account.get("id")
+    finally:
+        db.close()
+
+    worker = GoogleBusinessSyncWorker()
+    worker.sync_account(account_id)
+    return jsonify({"success": True, "account_id": account_id, "status": "sync_completed"})
 
 @google_business_bp.route('/api/business/<business_id>/google/publish-review-reply', methods=['POST', 'OPTIONS'])
 def publish_review_reply(business_id):
@@ -210,6 +374,13 @@ def publish_review_reply(business_id):
         cursor = db.conn.cursor()
         
         data = request.get_json()
+        if not data or data.get("approved") is not True:
+            db.close()
+            return jsonify({
+                "error": "Публикация ответа требует ручного подтверждения",
+                "code": "manual_approval_required",
+                "pending_human": True,
+            }), 409
         review_id = data.get('review_id')
         reply_text = data.get('reply_text')
         account_id = data.get('account_id')
@@ -250,14 +421,23 @@ def publish_post(business_id):
         cursor = db.conn.cursor()
         
         data = request.get_json()
+        if not data or data.get("approved") is not True:
+            db.close()
+            return jsonify({
+                "error": "Публикация новости требует ручного подтверждения",
+                "code": "manual_approval_required",
+                "pending_human": True,
+            }), 409
         post_data = {
-            'summary': data.get('title', ''),
+            'topicType': data.get('topic_type', 'STANDARD'),
+            'summary': data.get('summary') or data.get('title', ''),
             'callToAction': {
                 'actionType': data.get('action_type', 'CALL'),
                 'url': data.get('url', '')
-            },
-            'media': data.get('media', [])
+            }
         }
+        if data.get('media'):
+            post_data['media'] = data.get('media')
         
         account_id = data.get('account_id')
         
@@ -280,4 +460,3 @@ def publish_post(business_id):
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
-

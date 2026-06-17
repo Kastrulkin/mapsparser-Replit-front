@@ -41,7 +41,7 @@ class GoogleBusinessSyncWorker(BaseSyncWorker):
     def _get_api_client(self, account: dict) -> Optional[GoogleBusinessAPI]:
         """Получить API клиент для аккаунта"""
         try:
-            auth_data_encrypted = account.get('auth_data')
+            auth_data_encrypted = account.get('auth_data_encrypted') or account.get('auth_data')
             if not auth_data_encrypted:
                 print(f"⚠️ Нет auth_data для аккаунта {account['id']}")
                 return None
@@ -73,15 +73,35 @@ class GoogleBusinessSyncWorker(BaseSyncWorker):
             
             db = DatabaseManager()
             cursor = db.conn.cursor()
+            auth_column = self._auth_data_column(cursor)
             cursor.execute("""
-                UPDATE ExternalBusinessAccounts
-                SET auth_data = %s, updated_at = CURRENT_TIMESTAMP
+                UPDATE externalbusinessaccounts
+                SET """ + auth_column + """ = %s, updated_at = CURRENT_TIMESTAMP
                 WHERE id = %s
             """, (encrypted_creds, account_id))
             db.conn.commit()
             db.close()
         except Exception as e:
             print(f"⚠️ Ошибка сохранения credentials: {e}")
+
+    def _auth_data_column(self, cursor: Any) -> str:
+        cursor.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'externalbusinessaccounts'
+              AND column_name IN ('auth_data_encrypted', 'auth_data')
+            """
+        )
+        names = {str(row.get("column_name") if hasattr(row, "get") else row[0]) for row in cursor.fetchall()}
+        return "auth_data_encrypted" if "auth_data_encrypted" in names else "auth_data"
+
+    def list_locations(self, account: dict) -> List[Dict[str, Any]]:
+        api = self._get_api_client(account)
+        if not api:
+            return []
+        return api.list_accessible_locations()
     
     def _fetch_reviews(self, account: dict) -> List[ExternalReview]:
         """Получить отзывы через API"""
@@ -98,8 +118,8 @@ class GoogleBusinessSyncWorker(BaseSyncWorker):
         reviews = []
         
         for review_data in reviews_data:
-            review_id = review_data.get('reviewId')
-            review = review_data.get('review', {})
+            review = review_data.get('review') if isinstance(review_data.get('review'), dict) else review_data
+            review_id = review.get('reviewId') or str(review.get('name') or '').rsplit('/', 1)[-1]
             
             # Парсим дату
             published_at = None
@@ -113,7 +133,7 @@ class GoogleBusinessSyncWorker(BaseSyncWorker):
             # Парсим ответ организации
             response_text = None
             response_at = None
-            reply = review.get('reply')
+            reply = review.get('reviewReply') or review.get('reply')
             if reply:
                 response_text = reply.get('comment', '')
                 if 'updateTime' in reply:
@@ -127,7 +147,7 @@ class GoogleBusinessSyncWorker(BaseSyncWorker):
                 business_id=account['business_id'],
                 source=self.source,
                 external_review_id=review_id,
-                rating=review.get('starRating', {}).get('value') if review.get('starRating') else None,
+                rating=_parse_google_star_rating(review.get('starRating')),
                 author_name=review.get('reviewer', {}).get('displayName', 'Анонимный пользователь'),
                 text=review.get('comment', ''),
                 published_at=published_at,
@@ -137,6 +157,20 @@ class GoogleBusinessSyncWorker(BaseSyncWorker):
             ))
         
         return reviews
+
+    def _publish_review_reply(self, account: dict, review_id: str, reply_text: str) -> bool:
+        api = self._get_api_client(account)
+        location_name = account.get('external_id')
+        if not api or not location_name:
+            return False
+        return api.update_review_reply(location_name, review_id, reply_text)
+
+    def _publish_post(self, account: dict, post_data: Dict[str, Any]) -> Optional[str]:
+        api = self._get_api_client(account)
+        location_name = account.get('external_id')
+        if not api or not location_name:
+            return None
+        return api.create_local_post(location_name, post_data)
     
     def _fetch_stats(self, account: dict) -> List[ExternalStatsPoint]:
         """Получить статистику через API"""
@@ -254,6 +288,29 @@ class GoogleBusinessSyncWorker(BaseSyncWorker):
 def main() -> None:
     worker = GoogleBusinessSyncWorker()
     worker.run_once()
+
+
+def _parse_google_star_rating(value: Any) -> Optional[int]:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, dict):
+        value = value.get("value") or value.get("starRating")
+    normalized = str(value or "").strip().upper()
+    mapping = {
+        "ONE": 1,
+        "TWO": 2,
+        "THREE": 3,
+        "FOUR": 4,
+        "FIVE": 5,
+        "STAR_RATING_UNSPECIFIED": None,
+    }
+    if normalized in mapping:
+        return mapping[normalized]
+    try:
+        parsed = int(normalized)
+        return parsed if 1 <= parsed <= 5 else None
+    except Exception:
+        return None
 
 
 if __name__ == "__main__":

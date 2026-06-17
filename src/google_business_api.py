@@ -13,6 +13,10 @@ class GoogleBusinessAPI:
     def __init__(self, credentials: Credentials):
         self.service = build('mybusinessaccountmanagement', 'v1', credentials=credentials)
         self.locations_service = build('mybusiness', 'v4', credentials=credentials)
+        try:
+            self.business_info_service = build('mybusinessbusinessinformation', 'v1', credentials=credentials)
+        except Exception:
+            self.business_info_service = None
         self.accounts_service = self.service.accounts()
     
     def _handle_api_error(self, operation: str, error: HttpError) -> None:
@@ -31,13 +35,33 @@ class GoogleBusinessAPI:
     def list_locations(self, account_name: str) -> List[Dict[str, Any]]:
         """Получить список локаций для аккаунта"""
         try:
-            response = self.locations_service.accounts().locations().list(
-                parent=account_name
-            ).execute()
+            if self.business_info_service:
+                response = self.business_info_service.accounts().locations().list(
+                    parent=account_name,
+                    readMask="name,title,storefrontAddress,primaryCategory,metadata"
+                ).execute()
+            else:
+                response = self.locations_service.accounts().locations().list(
+                    parent=account_name
+                ).execute()
             return response.get('locations', [])
         except HttpError as e:
             self._handle_api_error("получения локаций", e)
             return []
+
+    def list_accessible_locations(self) -> List[Dict[str, Any]]:
+        """Получить все доступные локации во всех аккаунтах пользователя."""
+        locations = []
+        for account in self.list_accounts():
+            account_name = account.get('name')
+            if not account_name:
+                continue
+            for location in self.list_locations(account_name):
+                item = dict(location)
+                item['accountName'] = account_name
+                item['accountDisplayName'] = account.get('accountName') or account.get('name')
+                locations.append(item)
+        return locations
     
     def get_location(self, location_name: str) -> Optional[Dict[str, Any]]:
         """Получить информацию о локации"""
@@ -51,12 +75,21 @@ class GoogleBusinessAPI:
     
     def list_reviews(self, location_name: str, page_size: int = 50) -> List[Dict[str, Any]]:
         """Получить отзывы для локации"""
+        reviews = []
+        page_token = None
         try:
-            response = self.locations_service.accounts().locations().reviews().list(
-                parent=location_name,
-                pageSize=page_size
-            ).execute()
-            return response.get('reviews', [])
+            while True:
+                request = self.locations_service.accounts().locations().reviews().list(
+                    parent=location_name,
+                    pageSize=page_size,
+                    pageToken=page_token
+                )
+                response = request.execute()
+                reviews.extend(response.get('reviews', []))
+                page_token = response.get('nextPageToken')
+                if not page_token:
+                    break
+            return reviews
         except HttpError as e:
             self._handle_api_error("получения отзывов", e)
             return []
@@ -64,8 +97,9 @@ class GoogleBusinessAPI:
     def update_review_reply(self, location_name: str, review_id: str, reply_text: str) -> bool:
         """Опубликовать ответ на отзыв"""
         try:
+            review_name = review_id if review_id.startswith("accounts/") else f"{location_name}/reviews/{review_id}"
             self.locations_service.accounts().locations().reviews().updateReply(
-                name=f"{location_name}/reviews/{review_id}",
+                name=review_name,
                 body={
                     'reply': {
                         'comment': reply_text
@@ -131,4 +165,3 @@ class GoogleBusinessAPI:
         except HttpError as e:
             self._handle_api_error("получения статистики", e)
             return {}
-

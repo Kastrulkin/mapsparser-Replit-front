@@ -1,0 +1,106 @@
+{
+  "task_id": "google-business-localos",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Google Cloud OAuth app for LocalOS is created or documented as blocked.",
+      "status": "PASS",
+      "proof": [
+        "Google Auth Platform created for project totemic-union-440908-s8 / 510204060.",
+        "OAuth app LocalOS and web client LocalOS Web OAuth Client created.",
+        "Redirect URI set to https://localos.pro/api/google/oauth/callback.",
+        "GBP Basic API Access request submitted as support case 7-7493000041066."
+      ],
+      "gaps": [
+        "Waiting for Google review, approximately 7-10 business days."
+      ]
+    },
+    {
+      "id": "AC2",
+      "text": "LocalOS can start OAuth and store encrypted credentials.",
+      "status": "PASS",
+      "proof": [
+        "src/api/google_business_api.py writes auth_data_encrypted with legacy fallback.",
+        "src/google_business_sync_worker.py reads auth_data_encrypted or auth_data."
+      ],
+      "gaps": [
+        "Live callback requires production env variables."
+      ]
+    },
+    {
+      "id": "AC3",
+      "text": "LocalOS can list and bind GBP locations.",
+      "status": "PASS",
+      "proof": [
+        "GET /api/business/<business_id>/google/locations added.",
+        "POST /api/business/<business_id>/google/bind-location added."
+      ],
+      "gaps": [
+        "Live call requires Google API access."
+      ]
+    },
+    {
+      "id": "AC4",
+      "text": "LocalOS can manually sync Google reviews/statistics.",
+      "status": "PASS",
+      "proof": [
+        "POST /api/business/<business_id>/google/sync added.",
+        "GBP review parser handles top-level review fields and pagination."
+      ],
+      "gaps": [
+        "Live sync requires approved/enabled APIs."
+      ]
+    },
+    {
+      "id": "AC5",
+      "text": "Google writes require manual approval.",
+      "status": "PASS",
+      "proof": [
+        "Publish endpoints reject requests without approved=true."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC6",
+      "text": "Frontend exposes Google connection flow.",
+      "status": "PASS",
+      "proof": [
+        "ExternalIntegrations now includes Google connect, location selection, and sync controls.",
+        "Frontend build passed."
+      ],
+      "gaps": [
+        "Browser visual QA against local LocalOS route not completed."
+      ]
+    },
+    {
+      "id": "AC7",
+      "text": "Setup runbook documents env and approval steps.",
+      "status": "PASS",
+      "proof": [
+        "docs/GOOGLE_BUSINESS_PROFILE_LOCALOS_SETUP.md added.",
+        "docs/integrations.md updated."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/google_business_api.py",
+    "src/google_business_sync_worker.py",
+    "src/api/google_business_api.py",
+    "frontend/src/components/ExternalIntegrations.tsx",
+    "docs/GOOGLE_BUSINESS_PROFILE_LOCALOS_SETUP.md",
+    "docs/integrations.md"
+  ],
+  "commands_for_fresh_verifier": [
+    "python3 -m py_compile src/google_business_api.py src/google_business_sync_worker.py src/api/google_business_api.py",
+    "cd frontend && npm run build",
+    "Open http://127.0.0.1:3000/ in Browser and filter console errors for 127.0.0.1",
+    "scripts/proof_loop.sh validate google-business-localos"
+  ],
+  "known_gaps": [
+    "Google must approve GBP Basic API Access support case 7-7493000041066.",
+    "Production OAuth env variables are not deployed yet.",
+    "Live OAuth and sync require approved/enabled Google Business Profile APIs."
+  ]
+}
