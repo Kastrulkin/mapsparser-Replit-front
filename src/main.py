@@ -1536,6 +1536,28 @@ def robots():
     return send_from_directory(FRONTEND_DIST_DIR, 'robots.txt')
 
 
+# ===== YCLIENTS MARKETPLACE CALLBACKS =====
+
+@app.route("/api/yclients/marketplace/disconnect", methods=["POST", "GET"])
+def yclients_marketplace_disconnect():
+    """
+    Receive YCLIENTS marketplace integration disconnect callbacks.
+
+    The full YCLIENTS account binding table is added separately; this endpoint
+    intentionally returns 200 so marketplace disconnect events do not fail while
+    the first integration flow is being reviewed.
+    """
+    try:
+        payload = request.get_json(silent=True)
+        if payload is None:
+            payload = request.form.to_dict() or request.args.to_dict()
+        logger.info("YCLIENTS marketplace disconnect callback received: %s", payload)
+        return jsonify({"success": True, "status": "received"})
+    except Exception as e:
+        logger.exception("YCLIENTS marketplace disconnect callback failed")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 # ===== EXTERNAL SOURCES API (Яндекс.Бизнес / Google Business / 2ГИС) =====
 
 @app.route("/api/business/<business_id>/external-accounts", methods=["GET"])
