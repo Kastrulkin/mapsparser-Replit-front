@@ -1,0 +1,3 @@
+npm --prefix frontend run build
+vite build completed successfully.
+Warnings: Browserslist data is stale; Rollup removed unsupported PURE annotations from @pbe/react-yandex-maps comments.

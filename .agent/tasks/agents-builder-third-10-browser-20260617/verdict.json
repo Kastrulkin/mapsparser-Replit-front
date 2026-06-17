@@ -1,0 +1,36 @@
+{
+  "task_id": "agents-builder-third-10-browser-20260617",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "All 10 live browser scenarios returned domain-specific previews without the previously observed cross-domain errors."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "New internal source keys are translated into user-facing Russian labels in the agent builder UI."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Agent-builder regression tests, full agent blueprint layer tests, and frontend build passed."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Backend/static frontend changes were deployed; server returned 200 OK; browser-use verified live page."
+    }
+  ],
+  "commands_run": [
+    "venv/bin/python -m pytest tests/test_agent_blueprint_layer.py -q -k \"agent_builder\"",
+    "venv/bin/python -m pytest tests/test_agent_blueprint_layer.py -q",
+    "npm --prefix frontend run build",
+    "server deploy via scp + docker compose restart app worker + curl -I http://localhost:8000",
+    "browser-use live retest on https://localos.pro/dashboard/agents"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/agents-builder-third-10-browser-20260617/evidence.md"
+  ]
+}

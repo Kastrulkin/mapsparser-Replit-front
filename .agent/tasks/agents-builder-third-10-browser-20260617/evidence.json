@@ -1,0 +1,68 @@
+{
+  "task_id": "agents-builder-third-10-browser-20260617",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "All 10 supplied custom-agent scenarios are understood without cross-domain errors.",
+      "status": "PASS",
+      "proof": [
+        "Added deterministic intent/source/output handling for the third scenario pack.",
+        "Browser-use live retest reported issues: [] for all 10 prompts.",
+        "Regression tests cover the exact 10 prompts."
+      ],
+      "gaps": [
+        "Benign duplicate review source wording remains in some previews."
+      ]
+    },
+    {
+      "id": "AC2",
+      "text": "New source keys are translated into user-facing UI labels.",
+      "status": "PASS",
+      "proof": [
+        "Updated AgentBlueprintsPage userFacingAgentTechText and metaLabels.",
+        "Browser-use confirmed labels including фотографии, конкуренты, WhatsApp, задачи LocalOS, посты, расписание."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Automated checks pass.",
+      "status": "PASS",
+      "proof": [
+        "34 agent-builder tests passed.",
+        "163 agent blueprint layer tests passed.",
+        "Frontend build passed."
+      ],
+      "gaps": [
+        "Build emitted existing dependency warnings."
+      ]
+    },
+    {
+      "id": "AC4",
+      "text": "Changes deployed and live page verified.",
+      "status": "PASS",
+      "proof": [
+        "Copied backend files and frontend dist to server.",
+        "Restarted app and worker.",
+        "curl -I http://localhost:8000 returned HTTP/1.1 200 OK.",
+        "Browser-use verified live https://localos.pro/dashboard/agents."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/services/agent_blueprint_draft_builder.py",
+    "src/services/agent_builder_session.py",
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
+    "tests/test_agent_blueprint_layer.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "venv/bin/python -m pytest tests/test_agent_blueprint_layer.py -q -k \"agent_builder\"",
+    "venv/bin/python -m pytest tests/test_agent_blueprint_layer.py -q",
+    "npm --prefix frontend run build"
+  ],
+  "known_gaps": [
+    "Some browser previews still show duplicate review-related source labels such as отзывы компании, отзывы."
+  ]
+}

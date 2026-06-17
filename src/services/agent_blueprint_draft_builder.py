@@ -27,6 +27,26 @@ def infer_blueprint_category(description: str) -> str:
     text = description.lower()
     if _infer_integration_intent(text):
         return "custom"
+    if _is_competitor_price_request(text):
+        return "custom"
+    if _is_photo_quality_request(text):
+        return "custom"
+    if _is_new_service_control_request(text):
+        return "services"
+    if _is_customer_questions_request(text):
+        return "custom"
+    if _is_team_tasks_request(text):
+        return "custom"
+    if _is_no_discount_promo_request(text):
+        return "custom"
+    if _is_repeated_complaints_request(text):
+        return "custom"
+    if _is_manager_report_request(text):
+        return "custom"
+    if _is_holiday_readiness_request(text):
+        return "custom"
+    if _is_problem_digest_request(text):
+        return "custom"
     if _is_client_reactivation_request(text):
         return "communications"
     if _is_customer_data_quality_request(text):
@@ -112,7 +132,8 @@ def compile_agent_blueprint(
         return _communications_compilation(request_text)
     ai_result = {}
     content_analytics_request = _is_telegram_content_analytics_request(request_text)
-    if use_ai and not content_analytics_request:
+    rich_localos_workflow_request = _is_rich_localos_workflow_request(request_text)
+    if use_ai and not content_analytics_request and not rich_localos_workflow_request:
         ai_result = infer_agent_workflow_intent(
             request_text,
             business_id=business_id,
@@ -131,7 +152,7 @@ def compile_agent_blueprint(
             }
             draft["metadata"] = metadata
             return draft
-    integration_intent = {} if content_analytics_request else _infer_integration_intent(request_text)
+    integration_intent = {} if content_analytics_request or rich_localos_workflow_request else _infer_integration_intent(request_text)
     if integration_intent:
         draft = _source_destination_compilation(request_text, integration_intent)
         if ai_result:
@@ -266,6 +287,31 @@ def _sources_for_category(category: str) -> List[str]:
 def _sources_for_request(category: str, request_text: str) -> List[str]:
     sources = _sources_for_category(category)
     lowered = request_text.lower()
+    if _is_photo_quality_request(lowered):
+        return ["business_cards", "photos", "locations", "business_profile"]
+    if _is_competitor_price_request(lowered):
+        return ["services", "competitors", "business_profile"]
+    if _is_problem_digest_request(lowered):
+        result = ["localos_digest", "business_profile"]
+        if _contains_any(lowered, ["telegram", "телеграм", "присыла", "отправ", "шл", "уведом"]):
+            result.append("telegram")
+        return result
+    if _is_cancellation_risk_request(lowered):
+        return ["appointments", "clients", "business_profile"]
+    if _is_new_service_control_request(lowered):
+        return ["services", "business_profile"]
+    if _is_customer_questions_request(lowered):
+        return ["telegram", "whatsapp", "customer_questions", "business_profile"]
+    if _is_team_tasks_request(lowered):
+        return ["localos_tasks", "team", "business_profile"]
+    if _is_no_discount_promo_request(lowered):
+        return ["services", "external_reviews", "seasonality", "business_profile"]
+    if _is_repeated_complaints_request(lowered):
+        return ["external_reviews", "customer_messages", "services", "business_profile"]
+    if _is_manager_report_request(lowered):
+        return ["external_reviews", "appointments", "localos_finance", "locations", "business_profile"]
+    if _is_holiday_readiness_request(lowered):
+        return ["business_cards", "services", "posts", "schedule", "business_profile"]
     if _is_customer_data_quality_request(lowered):
         return ["clients", "business_profile"]
     if _is_localos_finance_monitoring_request(lowered):
@@ -657,6 +703,8 @@ def _is_client_reactivation_request(text: str) -> bool:
 
 
 def _is_localos_finance_monitoring_request(text: str) -> bool:
+    if _is_manager_report_request(text):
+        return False
     if _contains_any(text, ["счёт", "счет", "счета", "счёта", "неоплачен", "просрочен"]):
         return True
     if "предоплат" in text and not _contains_any(text, ["запис", "клиент"]):
@@ -680,6 +728,97 @@ def _is_review_based_content_request(text: str) -> bool:
     if not _contains_any(text, ["отзыв", "review"]):
         return False
     return _contains_any(text, ["идеи пост", "идея пост", "3 идеи", "три идеи", "постов", "контент"])
+
+
+def _is_photo_quality_request(text: str) -> bool:
+    if not _contains_any(text, ["фото", "фотограф"]):
+        return False
+    return _contains_any(text, ["карточ", "филиал", "точк", "устарев", "тёмн", "темн", "нерелевант", "замен"])
+
+
+def _is_competitor_price_request(text: str) -> bool:
+    if not _contains_any(text, ["конкурент"]):
+        return False
+    return _contains_any(text, ["цен", "рынок", "выше", "ниже", "поблизости"])
+
+
+def _is_cancellation_risk_request(text: str) -> bool:
+    if not _contains_any(text, ["запис", "визит"]):
+        return False
+    return _contains_any(text, ["отмен", "риск", "часто отмен"])
+
+
+def _is_new_service_control_request(text: str) -> bool:
+    if not _contains_any(text, ["услуг"]):
+        return False
+    return _contains_any(text, ["новая", "новую", "появляется", "название", "описание", "цен", "улучш"])
+
+
+def _is_customer_questions_request(text: str) -> bool:
+    if not _contains_any(text, ["вопрос"]):
+        return False
+    return _contains_any(text, ["клиент", "telegram", "телеграм", "whatsapp", "база знаний", "тем"])
+
+
+def _is_team_tasks_request(text: str) -> bool:
+    if not _contains_any(text, ["задач"]):
+        return False
+    return _contains_any(text, ["сотруд", "ответствен", "срок", "просроч"])
+
+
+def _is_no_discount_promo_request(text: str) -> bool:
+    if not _contains_any(text, ["без скид"]):
+        return False
+    return _contains_any(text, ["иде", "акц", "продвиж", "сезон", "услуг", "отзыв"])
+
+
+def _is_repeated_complaints_request(text: str) -> bool:
+    if not _contains_any(text, ["повтор"]):
+        return False
+    return _contains_any(text, ["жалоб", "проблем", "отзыв", "сообщен", "сервис"])
+
+
+def _is_manager_report_request(text: str) -> bool:
+    if not _contains_any(text, ["отчёт", "отчет"]):
+        return False
+    return _contains_any(text, ["управляющ", "филиал", "выруч", "расход", "запис", "рекомендац"])
+
+
+def _is_holiday_readiness_request(text: str) -> bool:
+    if not _contains_any(text, ["праздн"]):
+        return False
+    return _contains_any(text, ["готов", "чеклист", "карточ", "услуг", "пост", "распис"])
+
+
+def _is_problem_digest_request(text: str) -> bool:
+    if "дайджест" in text:
+        return True
+    markers = [
+        "негативные отзывы",
+        "отменённые записи",
+        "отмененные записи",
+        "просроченные задачи",
+        "необычные расходы",
+    ]
+    return sum(1 for marker in markers if marker in text) >= 2
+
+
+def _is_rich_localos_workflow_request(text: str) -> bool:
+    lowered = text.lower()
+    return any(
+        [
+            _is_photo_quality_request(lowered),
+            _is_competitor_price_request(lowered),
+            _is_new_service_control_request(lowered),
+            _is_customer_questions_request(lowered),
+            _is_team_tasks_request(lowered),
+            _is_no_discount_promo_request(lowered),
+            _is_repeated_complaints_request(lowered),
+            _is_manager_report_request(lowered),
+            _is_holiday_readiness_request(lowered),
+            _is_problem_digest_request(lowered),
+        ]
+    )
 
 
 def _source_binding(source: Dict[str, Any], trigger: str) -> Dict[str, Any]:

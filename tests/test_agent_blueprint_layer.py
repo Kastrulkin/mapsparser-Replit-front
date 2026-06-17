@@ -1575,6 +1575,117 @@ def test_agent_builder_understands_second_browser_scenario_pack_without_wrong_do
             assert term.lower() not in questions_text, key
 
 
+def test_agent_builder_understands_third_browser_scenario_pack_without_generic_outputs():
+    from services.agent_builder_session import build_agent_builder_state
+
+    scenarios = [
+        (
+            "photo_quality",
+            "Раз в неделю проверяй фотографии в карточках филиалов, находи устаревшие, тёмные или нерелевантные фото и предлагай, что заменить.",
+            "custom",
+            ["business_cards", "photos", "locations"],
+            ["фото", "замен"],
+            ["лид", "prospectingleads", "подозрительных расходов", "черновики ответов"],
+        ),
+        (
+            "competitor_prices",
+            "Каждый понедельник сравнивай цены на ключевые услуги с конкурентами поблизости и присылай краткий список, где мы выше или ниже рынка.",
+            "custom",
+            ["services", "competitors"],
+            ["конкурент", "выше или ниже"],
+            ["проверка услуг", "черновики ответов", "где искать клиентов"],
+        ),
+        (
+            "cancellation_risk",
+            "Каждое утро находи записи клиентов, которые часто отменяют визиты, и готовь администратору список для ручного подтверждения.",
+            "communications",
+            ["appointments"],
+            ["риском отмены", "администратор"],
+            ["доставка", "статусы реакции", "prospectingleads"],
+        ),
+        (
+            "new_services_control",
+            "Когда в LocalOS появляется новая услуга, проверяй название, описание, цену и готовь улучшенную версию для карточек.",
+            "services",
+            ["services"],
+            ["улучшенная версия", "новой услуги"],
+            ["какой результат", "отзывы"],
+        ),
+        (
+            "customer_questions_monitoring",
+            "Каждый день собирай новые вопросы клиентов из Telegram/WhatsApp, группируй по темам и предлагай ответы для базы знаний.",
+            "custom",
+            ["telegram", "whatsapp", "customer_questions"],
+            ["вопросов клиентов", "базы знаний"],
+            ["какие темы вопросов", "prospectingleads", "финансы"],
+        ),
+        (
+            "team_tasks_check",
+            "Каждое утро находи просроченные задачи сотрудников и присылай владельцу короткий список: задача, ответственный, срок, следующий шаг.",
+            "custom",
+            ["localos_tasks", "team"],
+            ["просроченных задач", "ответственный"],
+            ["какие данные", "финансы localos", "prospectingleads"],
+        ),
+        (
+            "no_discount_promos",
+            "Раз в неделю предлагай 3 идеи продвижения без скидок на основе сезонности, услуг и отзывов клиентов.",
+            "custom",
+            ["services", "external_reviews", "seasonality"],
+            ["без скидок", "3 идеи"],
+            ["черновики ответов", "проверка услуг", "prospectingleads"],
+        ),
+        (
+            "repeated_complaints",
+            "Если в отзывах или сообщениях повторяется одна и та же проблема, собери примеры и предложи, что изменить в сервисе.",
+            "custom",
+            ["external_reviews", "customer_messages", "services"],
+            ["повторяющиеся жалобы", "изменить в сервисе"],
+            ["где человек должен проверить", "черновики ответов", "prospectingleads"],
+        ),
+        (
+            "manager_report",
+            "Каждую пятницу собирай отчёт по филиалам: отзывы, записи, выручка, расходы, проблемы и рекомендации на следующую неделю.",
+            "custom",
+            ["external_reviews", "appointments", "localos_finance", "locations"],
+            ["отчёт по филиалам", "рекомендации"],
+            ["подозрительных расходов", "проверка услуг", "prospectingleads"],
+        ),
+        (
+            "holiday_readiness",
+            "За две недели до праздников проверяй карточки, услуги, посты и расписание, находи пробелы и готовь чеклист подготовки.",
+            "custom",
+            ["business_cards", "services", "posts", "schedule"],
+            ["чеклист подготовки", "праздникам"],
+            ["проверка услуг", "черновики ответов", "prospectingleads"],
+        ),
+    ]
+
+    for key, prompt, expected_category, expected_sources, output_terms, forbidden_terms in scenarios:
+        state = build_agent_builder_state([{"role": "user", "content": prompt}], use_ai=True)
+        preview = state["preview"]
+        questions_text = " ".join(str(item.get("question") or "") for item in state["missing_questions"]).lower()
+        surface_text = " ".join(
+            [
+                state["category"],
+                preview["category_label"],
+                ", ".join(preview["data_sources"]),
+                preview["extraction_rules"],
+                preview["output_format"],
+                questions_text,
+            ]
+        ).lower()
+        sources = set(preview["data_sources"])
+
+        assert state["category"] == expected_category, key
+        for source in expected_sources:
+            assert source in sources, key
+        for term in output_terms:
+            assert term.lower() in surface_text, key
+        for term in forbidden_terms:
+            assert term.lower() not in surface_text, key
+
+
 def test_agent_builder_keeps_real_user_scenarios_on_the_obvious_next_step():
     from services.agent_builder_session import build_agent_builder_state
 

@@ -1,0 +1,2 @@
+No separate lint command was required for this task.
+Proof-loop validate: valid=true, missing_files=[], errors=[].

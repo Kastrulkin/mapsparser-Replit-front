@@ -1400,6 +1400,17 @@ const userFacingAgentTechText = (value?: string) => String(value || '')
   .replace(/needs_source_upload/gi, 'нужно добавить источник')
   .replace(/external_reviews/gi, 'отзывы')
   .replace(/business_profile/gi, 'профиль бизнеса')
+  .replace(/business_cards/gi, 'карточки')
+  .replace(/\bphotos\b/gi, 'фотографии')
+  .replace(/\bcompetitors\b/gi, 'конкуренты')
+  .replace(/customer_questions/gi, 'вопросы клиентов')
+  .replace(/customer_messages/gi, 'сообщения клиентов')
+  .replace(/localos_tasks/gi, 'задачи LocalOS')
+  .replace(/\bteam\b/gi, 'команда')
+  .replace(/\bwhatsapp\b/gi, 'WhatsApp')
+  .replace(/\bseasonality\b/gi, 'сезонность')
+  .replace(/\bposts\b/gi, 'посты')
+  .replace(/\bschedule\b/gi, 'расписание')
   .replace(/localos_digest/gi, 'дайджест LocalOS')
   .replace(/outreach_drafts/gi, 'черновики сообщений партнёрам')
   .replace(/\bclients\b/gi, 'клиенты')
@@ -2144,8 +2155,19 @@ const metaLabels: Record<string, string> = {
   services: 'услуги',
   reviews: 'отзывы',
   external_reviews: 'отзывы',
+  business_cards: 'карточки',
+  photos: 'фотографии',
+  competitors: 'конкуренты',
   clients: 'клиенты',
   locations: 'точки сети',
+  customer_questions: 'вопросы клиентов',
+  customer_messages: 'сообщения клиентов',
+  localos_tasks: 'задачи LocalOS',
+  team: 'команда',
+  whatsapp: 'WhatsApp',
+  seasonality: 'сезонность',
+  posts: 'посты',
+  schedule: 'расписание',
   localos_digest: 'дайджест LocalOS',
   prospectingleads: 'кандидаты',
   outreach_drafts: 'черновики сообщений партнёрам',
