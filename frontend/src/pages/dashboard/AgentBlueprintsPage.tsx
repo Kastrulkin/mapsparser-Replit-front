@@ -1411,6 +1411,16 @@ const userFacingAgentTechText = (value?: string) => String(value || '')
   .replace(/\bseasonality\b/gi, 'сезонность')
   .replace(/\bposts\b/gi, 'посты')
   .replace(/\bschedule\b/gi, 'расписание')
+  .replace(/\binventory\b/gi, 'остатки')
+  .replace(/\bproducts\b/gi, 'товары')
+  .replace(/\bsupplies\b/gi, 'расходники')
+  .replace(/staff_schedule/gi, 'расписание смен')
+  .replace(/customer_chats/gi, 'чаты с клиентами')
+  .replace(/staff_profiles/gi, 'профили сотрудников')
+  .replace(/price_list/gi, 'прайс')
+  .replace(/\brevenue\b/gi, 'выручка')
+  .replace(/map_questions/gi, 'вопросы в карточках')
+  .replace(/location_descriptions/gi, 'описания филиалов')
   .replace(/localos_digest/gi, 'дайджест LocalOS')
   .replace(/outreach_drafts/gi, 'черновики сообщений партнёрам')
   .replace(/\bclients\b/gi, 'клиенты')
@@ -2168,6 +2178,16 @@ const metaLabels: Record<string, string> = {
   seasonality: 'сезонность',
   posts: 'посты',
   schedule: 'расписание',
+  inventory: 'остатки',
+  products: 'товары',
+  supplies: 'расходники',
+  staff_schedule: 'расписание смен',
+  customer_chats: 'чаты с клиентами',
+  staff_profiles: 'профили сотрудников',
+  price_list: 'прайс',
+  revenue: 'выручка',
+  map_questions: 'вопросы в карточках',
+  location_descriptions: 'описания филиалов',
   localos_digest: 'дайджест LocalOS',
   prospectingleads: 'кандидаты',
   outreach_drafts: 'черновики сообщений партнёрам',

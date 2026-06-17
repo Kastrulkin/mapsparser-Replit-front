@@ -1686,6 +1686,117 @@ def test_agent_builder_understands_third_browser_scenario_pack_without_generic_o
             assert term.lower() not in surface_text, key
 
 
+def test_agent_builder_understands_fourth_browser_scenario_pack_without_generic_outputs():
+    from services.agent_builder_session import build_agent_builder_state
+
+    scenarios = [
+        (
+            "inventory_control",
+            "Каждый вечер проверяй остатки расходников и товаров, находи позиции ниже минимума и готовь список, что заказать.",
+            "custom",
+            ["inventory", "products", "supplies"],
+            ["список для закупки", "сколько заказать"],
+            ["подозрительных расходов", "финансы localos", "prospectingleads", "какой результат"],
+        ),
+        (
+            "staff_schedule_check",
+            "Раз в неделю проверяй расписание смен, находи пересечения, пустые окна и перегрузки по сотрудникам.",
+            "custom",
+            ["staff_schedule", "team"],
+            ["расписании смен", "перегруз"],
+            ["готовый результат по задаче", "prospectingleads", "какой результат"],
+        ),
+        (
+            "cancellation_reasons",
+            "Каждую неделю собирай отменённые записи, группируй причины и предлагай, что изменить в процессе записи.",
+            "custom",
+            ["appointments", "clients"],
+            ["причин отмен", "процессе записи"],
+            ["риск отмены", "черновики сообщений", "статусы реакции"],
+        ),
+        (
+            "admin_response_control",
+            "Каждый день проверяй чаты с клиентами и находи диалоги, где администратор долго не ответил или ответил неполно.",
+            "custom",
+            ["customer_chats", "team"],
+            ["администратор", "долго не ответил"],
+            ["готовый результат по задаче", "prospectingleads"],
+        ),
+        (
+            "faq_from_chats",
+            "Раз в неделю бери повторяющиеся вопросы из клиентских переписок и предлагай новые пункты для FAQ на сайте или в карточке.",
+            "custom",
+            ["customer_chats", "customer_questions", "business_cards"],
+            ["пункты faq", "клиентских переписок"],
+            ["какой результат", "telegram", "whatsapp", "prospectingleads"],
+        ),
+        (
+            "new_employee_check",
+            "Когда добавляется новый сотрудник, проверяй, заполнены ли фото, описание, услуги, график и привязка к филиалу.",
+            "custom",
+            ["team", "staff_profiles", "services", "schedule", "locations"],
+            ["нового сотрудника", "график"],
+            ["проблемных фото", "какой результат", "prospectingleads"],
+        ),
+        (
+            "seasonal_services",
+            "Раз в месяц проверяй, какие сезонные услуги пора добавить, скрыть или обновить в карточках и прайсе.",
+            "services",
+            ["services", "seasonality", "business_cards", "price_list"],
+            ["сезонных услуг", "добавить, скрыть или обновить"],
+            ["что агент должен понять", "проверка услуг", "prospectingleads"],
+        ),
+        (
+            "revenue_anomalies",
+            "Каждое утро сравнивай вчерашнюю выручку с обычным уровнем по дню недели и присылай владельцу резкие отклонения.",
+            "custom",
+            ["localos_finance", "revenue"],
+            ["отклонений выручки", "обычный уровень"],
+            ["готовый результат по задаче", "подозрительных расходов", "какой результат", "prospectingleads"],
+        ),
+        (
+            "map_questions_answers",
+            "Каждый день проверяй новые вопросы пользователей в Яндекс/Google-карточках и готовь ответы для ручного подтверждения.",
+            "custom",
+            ["business_cards", "map_questions"],
+            ["ответов на вопросы", "яндекс/google-карточках"],
+            ["готовый результат по задаче", "черновики ответов и причины ручной проверки", "prospectingleads"],
+        ),
+        (
+            "location_description_quality",
+            "Раз в неделю проверяй описания всех филиалов, находи устаревшую информацию, одинаковые тексты и слабые формулировки.",
+            "custom",
+            ["locations", "business_cards", "location_descriptions"],
+            ["описаниях филиалов", "слабые формулировки"],
+            ["готовый результат по задаче", "prospectingleads", "какой результат"],
+        ),
+    ]
+
+    for key, prompt, expected_category, expected_sources, output_terms, forbidden_terms in scenarios:
+        state = build_agent_builder_state([{"role": "user", "content": prompt}], use_ai=True)
+        preview = state["preview"]
+        questions_text = " ".join(str(item.get("question") or "") for item in state["missing_questions"]).lower()
+        surface_text = " ".join(
+            [
+                state["category"],
+                preview["category_label"],
+                ", ".join(preview["data_sources"]),
+                preview["extraction_rules"],
+                preview["output_format"],
+                questions_text,
+            ]
+        ).lower()
+        sources = set(preview["data_sources"])
+
+        assert state["category"] == expected_category, key
+        for source in expected_sources:
+            assert source in sources, key
+        for term in output_terms:
+            assert term.lower() in surface_text, key
+        for term in forbidden_terms:
+            assert term.lower() not in surface_text, key
+
+
 def test_agent_builder_keeps_real_user_scenarios_on_the_obvious_next_step():
     from services.agent_builder_session import build_agent_builder_state
 

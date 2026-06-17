@@ -1,0 +1,72 @@
+{
+  "task_id": "agents-builder-fourth-10-browser-20260617",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "All 10 new user prompts are exercised through the browser flow on /dashboard/agents.",
+      "status": "PASS",
+      "proof": [
+        "Browser-use exercised all 10 prompts on production /dashboard/agents.",
+        "See raw/browser-retest-summary.json."
+      ],
+      "gaps": [
+        "No real agents were created; checks stopped at preview/understanding."
+      ]
+    },
+    {
+      "id": "AC2",
+      "text": "Prompts do not map to unrelated older domains.",
+      "status": "PASS",
+      "proof": [
+        "Inventory, staff schedule, cancellation reasons, admin chats, FAQ, new employee, seasonal services, revenue anomalies, map questions, and location descriptions mapped to their expected domains."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Visible builder summary uses user-facing source/result labels.",
+      "status": "PASS",
+      "proof": [
+        "Frontend source-label mappings added for the new keys.",
+        "Browser summary shows Russian user-facing data/result lines."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Existing behavior remains covered and frontend build succeeds.",
+      "status": "PASS",
+      "proof": [
+        "164 tests passed in tests/test_agent_blueprint_layer.py.",
+        "npm --prefix frontend run build succeeded."
+      ],
+      "gaps": [
+        "Existing Browserslist/Yandex maps build warnings remain."
+      ]
+    },
+    {
+      "id": "AC5",
+      "text": "Production is updated and responds after restart.",
+      "status": "PASS",
+      "proof": [
+        "Partial deploy copied backend service files and frontend dist.",
+        "docker compose ps showed app and worker up.",
+        "curl -I http://localhost:8000 returned HTTP 200."
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "src/services/agent_blueprint_draft_builder.py",
+    "src/services/agent_builder_session.py",
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
+    "tests/test_agent_blueprint_layer.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "venv/bin/python -m pytest tests/test_agent_blueprint_layer.py -q",
+    "npm --prefix frontend run build",
+    "ssh -i ~/.ssh/localos_prod root@80.78.242.105 'cd /opt/seo-app && docker compose ps && curl -I --max-time 15 http://localhost:8000'"
+  ],
+  "known_gaps": []
+}

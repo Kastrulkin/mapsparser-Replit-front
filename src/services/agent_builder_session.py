@@ -2124,12 +2124,24 @@ def _has_data_hint(text: str) -> bool:
             "праздн",
             "распис",
             "пост",
+            "остат",
+            "расходник",
+            "товар",
+            "смен",
+            "график",
+            "чат",
+            "диалог",
+            "переписк",
+            "faq",
+            "прайс",
+            "отклон",
+            "яндекс",
         ]
     )
 
 
 def _has_extraction_hint(text: str) -> bool:
-    return any(marker in text for marker in ["извлеч", "найд", "наход", "собира", "новые строк", "продаж", "реакц", "комментар", "вывод", "бер", "возьми", "риск", "сумм", "срок", "пол", "исключ", "ответ", "подготов", "проверь", "напом", "клиент", "нормализ", "категор", "пуст", "описан", "назван", "цен", "тем", "партн", "статус", "ответствен", "сравни", "группир", "повтор", "замен", "пробел", "устарев", "тёмн", "темн", "нерелевант", "чеклист"])
+    return any(marker in text for marker in ["извлеч", "найд", "наход", "собира", "новые строк", "продаж", "реакц", "комментар", "вывод", "бер", "возьми", "риск", "сумм", "срок", "пол", "исключ", "ответ", "подготов", "провер", "напом", "клиент", "нормализ", "категор", "пуст", "описан", "назван", "цен", "тем", "партн", "статус", "ответствен", "сравни", "группир", "повтор", "замен", "пробел", "устарев", "тёмн", "темн", "нерелевант", "чеклист", "ниже минимума", "пересеч", "пустые окна", "перегруз", "долго не ответ", "ответил неполно", "отклон"])
 
 
 def _has_output_hint(text: str) -> bool:
@@ -2164,6 +2176,16 @@ def _has_output_hint(text: str) -> bool:
             "улучш",
             "база знаний",
             "рекомендац",
+            "заказать",
+            "пункты",
+            "faq",
+            "отклонения",
+            "присыл",
+            "исправить",
+            "добавить",
+            "скрыть",
+            "обновить",
+            "заполн",
         ]
     )
 
@@ -2223,6 +2245,26 @@ def _is_telegram_content_analytics_request(text: str) -> bool:
 
 def _default_extraction_rules(category: str, description: str) -> str:
     lowered = description.lower()
+    if _is_inventory_control_request(lowered):
+        return "Найти остатки расходников и товаров ниже минимума, текущий остаток, минимальный порог и что нужно заказать."
+    if _is_staff_schedule_request(lowered):
+        return "Проверить расписание смен сотрудников: пересечения, пустые окна и перегрузки по людям."
+    if _is_cancellation_reasons_request(lowered):
+        return "Собрать отменённые записи, сгруппировать причины отмен и найти, что мешает процессу записи."
+    if _is_admin_response_control_request(lowered):
+        return "Найти клиентские чаты, где администратор долго не ответил, ответил неполно или диалог требует внимания."
+    if _is_faq_from_chats_request(lowered):
+        return "Выбрать повторяющиеся вопросы из клиентских переписок и сгруппировать их в будущие пункты FAQ."
+    if _is_new_employee_check_request(lowered):
+        return "Проверить карточку нового сотрудника: фото, описание, услуги, график и привязку к филиалу."
+    if _is_seasonal_services_request(lowered):
+        return "Проверить сезонные услуги: что пора добавить, скрыть или обновить в карточках и прайсе."
+    if _is_revenue_anomaly_request(lowered):
+        return "Сравнить вчерашнюю выручку с обычным уровнем по этому дню недели и найти резкие отклонения."
+    if _is_map_questions_request(lowered):
+        return "Найти новые вопросы пользователей в Яндекс/Google-карточках и подготовить безопасные ответы."
+    if _is_location_description_quality_request(lowered):
+        return "Проверить описания филиалов: устаревшая информация, одинаковые тексты и слабые формулировки."
     if _is_problem_digest_request(lowered):
         return "Собрать новые негативные отзывы, отменённые записи, просроченные задачи и необычные расходы в один список проблем."
     if _is_photo_quality_request(lowered):
@@ -2282,6 +2324,26 @@ def _default_processing_rules(category: str) -> str:
 
 def _default_output_format(category: str, description: str = "") -> str:
     lowered = description.lower()
+    if _is_inventory_control_request(lowered):
+        return "Список для закупки: позиция, текущий остаток, минимум, сколько заказать и приоритет."
+    if _is_staff_schedule_request(lowered):
+        return "Список проблем в расписании смен: пересечение, пустое окно или перегрузка, сотрудник и что исправить."
+    if _is_cancellation_reasons_request(lowered):
+        return "Разбор причин отмен: группы причин, примеры записей и предложения, что изменить в процессе записи."
+    if _is_admin_response_control_request(lowered):
+        return "Список диалогов, где администратор долго не ответил или ответил неполно, плюс следующий шаг."
+    if _is_faq_from_chats_request(lowered):
+        return "Новые пункты FAQ из клиентских переписок: вопрос, короткий ответ и куда добавить."
+    if _is_new_employee_check_request(lowered):
+        return "Чеклист готовности нового сотрудника: фото, описание, услуги, график, филиал и что заполнить."
+    if _is_seasonal_services_request(lowered):
+        return "Список сезонных услуг: добавить, скрыть или обновить, где именно и почему."
+    if _is_revenue_anomaly_request(lowered):
+        return "Список резких отклонений выручки: дата, факт, обычный уровень, разница и возможная причина."
+    if _is_map_questions_request(lowered):
+        return "Черновики ответов на вопросы в Яндекс/Google-карточках для ручного подтверждения."
+    if _is_location_description_quality_request(lowered):
+        return "Список проблем в описаниях филиалов: устаревшее, дубли, слабые формулировки и варианты правок."
     if _is_problem_digest_request(lowered):
         return "Короткий ежедневный дайджест проблем: отзывы, отменённые записи, просроченные задачи и необычные расходы."
     if _is_photo_quality_request(lowered):
@@ -2360,7 +2422,7 @@ def _is_customer_data_quality_request(text: str) -> bool:
 
 
 def _is_localos_finance_monitoring_request(text: str) -> bool:
-    if _is_manager_report_request(text):
+    if _is_manager_report_request(text) or _is_inventory_control_request(text) or _is_revenue_anomaly_request(text):
         return False
     if any(marker in text for marker in ["счёт", "счет", "счета", "счёта", "неоплачен", "просрочен"]):
         return True
@@ -2393,6 +2455,8 @@ def _is_problem_digest_request(text: str) -> bool:
 
 
 def _is_photo_quality_request(text: str) -> bool:
+    if _is_new_employee_check_request(text):
+        return False
     if not any(marker in text for marker in ["фото", "фотограф"]):
         return False
     return any(marker in text for marker in ["карточ", "филиал", "точк", "устарев", "тёмн", "темн", "нерелевант", "замен"])
@@ -2405,6 +2469,8 @@ def _is_competitor_price_request(text: str) -> bool:
 
 
 def _is_cancellation_risk_request(text: str) -> bool:
+    if _is_cancellation_reasons_request(text):
+        return False
     if not any(marker in text for marker in ["запис", "визит"]):
         return False
     return any(marker in text for marker in ["отмен", "риск", "часто отмен"])
@@ -2450,6 +2516,66 @@ def _is_holiday_readiness_request(text: str) -> bool:
     if "праздн" not in text:
         return False
     return any(marker in text for marker in ["готов", "чеклист", "карточ", "услуг", "пост", "распис"])
+
+
+def _is_inventory_control_request(text: str) -> bool:
+    return any(marker in text for marker in ["остатк", "расходник", "товар"]) and any(marker in text for marker in ["ниже минимума", "минимум", "заказ", "заказать"])
+
+
+def _is_staff_schedule_request(text: str) -> bool:
+    if _is_new_employee_check_request(text):
+        return False
+    if not any(marker in text for marker in ["расписан", "смен", "график"]):
+        return False
+    return any(marker in text for marker in ["сотруд", "пересеч", "пустые окна", "перегруз"])
+
+
+def _is_cancellation_reasons_request(text: str) -> bool:
+    if "отмен" not in text:
+        return False
+    return any(marker in text for marker in ["причин", "группир", "процесс записи", "что изменить"])
+
+
+def _is_admin_response_control_request(text: str) -> bool:
+    if not any(marker in text for marker in ["чат", "диалог", "переписк"]):
+        return False
+    return any(marker in text for marker in ["администратор", "долго не ответ", "ответил неполно"])
+
+
+def _is_faq_from_chats_request(text: str) -> bool:
+    if not any(marker in text for marker in ["faq", "база знаний", "пункты"]):
+        return False
+    return any(marker in text for marker in ["чат", "переписк", "вопрос", "клиент"])
+
+
+def _is_new_employee_check_request(text: str) -> bool:
+    if "сотруд" not in text:
+        return False
+    return any(marker in text for marker in ["добавляется", "новый", "фото", "описание", "график", "привязка к филиалу"])
+
+
+def _is_seasonal_services_request(text: str) -> bool:
+    if "сезон" not in text:
+        return False
+    return any(marker in text for marker in ["добавить", "скрыть", "обновить", "прайс"])
+
+
+def _is_revenue_anomaly_request(text: str) -> bool:
+    if "выруч" not in text:
+        return False
+    return any(marker in text for marker in ["аномал", "обычным уровнем", "отклон", "сравни"])
+
+
+def _is_map_questions_request(text: str) -> bool:
+    if "вопрос" not in text:
+        return False
+    return any(marker in text for marker in ["яндекс", "google-карточ", "google карточ", "карточк", "карт"])
+
+
+def _is_location_description_quality_request(text: str) -> bool:
+    if "описан" not in text:
+        return False
+    return any(marker in text for marker in ["филиал", "устарев", "одинаковые тексты", "слабые формулировки"])
 
 
 def _clean_text(value: Any) -> str:

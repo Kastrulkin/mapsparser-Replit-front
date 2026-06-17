@@ -27,6 +27,26 @@ def infer_blueprint_category(description: str) -> str:
     text = description.lower()
     if _infer_integration_intent(text):
         return "custom"
+    if _is_inventory_control_request(text):
+        return "custom"
+    if _is_staff_schedule_request(text):
+        return "custom"
+    if _is_cancellation_reasons_request(text):
+        return "custom"
+    if _is_admin_response_control_request(text):
+        return "custom"
+    if _is_faq_from_chats_request(text):
+        return "custom"
+    if _is_new_employee_check_request(text):
+        return "custom"
+    if _is_seasonal_services_request(text):
+        return "services"
+    if _is_revenue_anomaly_request(text):
+        return "custom"
+    if _is_map_questions_request(text):
+        return "custom"
+    if _is_location_description_quality_request(text):
+        return "custom"
     if _is_competitor_price_request(text):
         return "custom"
     if _is_photo_quality_request(text):
@@ -287,6 +307,29 @@ def _sources_for_category(category: str) -> List[str]:
 def _sources_for_request(category: str, request_text: str) -> List[str]:
     sources = _sources_for_category(category)
     lowered = request_text.lower()
+    if _is_inventory_control_request(lowered):
+        return ["inventory", "products", "supplies", "business_profile"]
+    if _is_staff_schedule_request(lowered):
+        return ["staff_schedule", "team", "business_profile"]
+    if _is_cancellation_reasons_request(lowered):
+        return ["appointments", "clients", "business_profile"]
+    if _is_admin_response_control_request(lowered):
+        return ["customer_chats", "team", "business_profile"]
+    if _is_faq_from_chats_request(lowered):
+        return ["customer_chats", "customer_questions", "business_cards", "business_profile"]
+    if _is_new_employee_check_request(lowered):
+        return ["team", "staff_profiles", "services", "schedule", "locations", "business_profile"]
+    if _is_seasonal_services_request(lowered):
+        return ["services", "seasonality", "business_cards", "price_list", "business_profile"]
+    if _is_revenue_anomaly_request(lowered):
+        result = ["localos_finance", "revenue", "business_profile"]
+        if _contains_any(lowered, ["telegram", "телеграм", "присыла", "отправ", "шл", "уведом"]):
+            result.append("telegram")
+        return result
+    if _is_map_questions_request(lowered):
+        return ["business_cards", "map_questions", "business_profile"]
+    if _is_location_description_quality_request(lowered):
+        return ["locations", "business_cards", "location_descriptions", "business_profile"]
     if _is_photo_quality_request(lowered):
         return ["business_cards", "photos", "locations", "business_profile"]
     if _is_competitor_price_request(lowered):
@@ -703,7 +746,7 @@ def _is_client_reactivation_request(text: str) -> bool:
 
 
 def _is_localos_finance_monitoring_request(text: str) -> bool:
-    if _is_manager_report_request(text):
+    if _is_manager_report_request(text) or _is_inventory_control_request(text) or _is_revenue_anomaly_request(text):
         return False
     if _contains_any(text, ["счёт", "счет", "счета", "счёта", "неоплачен", "просрочен"]):
         return True
@@ -731,6 +774,8 @@ def _is_review_based_content_request(text: str) -> bool:
 
 
 def _is_photo_quality_request(text: str) -> bool:
+    if _is_new_employee_check_request(text):
+        return False
     if not _contains_any(text, ["фото", "фотограф"]):
         return False
     return _contains_any(text, ["карточ", "филиал", "точк", "устарев", "тёмн", "темн", "нерелевант", "замен"])
@@ -743,6 +788,8 @@ def _is_competitor_price_request(text: str) -> bool:
 
 
 def _is_cancellation_risk_request(text: str) -> bool:
+    if _is_cancellation_reasons_request(text):
+        return False
     if not _contains_any(text, ["запис", "визит"]):
         return False
     return _contains_any(text, ["отмен", "риск", "часто отмен"])
@@ -790,6 +837,66 @@ def _is_holiday_readiness_request(text: str) -> bool:
     return _contains_any(text, ["готов", "чеклист", "карточ", "услуг", "пост", "распис"])
 
 
+def _is_inventory_control_request(text: str) -> bool:
+    return _contains_any(text, ["остатк", "расходник", "товар"]) and _contains_any(text, ["ниже минимума", "минимум", "заказ", "заказать"])
+
+
+def _is_staff_schedule_request(text: str) -> bool:
+    if _is_new_employee_check_request(text):
+        return False
+    if not _contains_any(text, ["расписан", "смен", "график"]):
+        return False
+    return _contains_any(text, ["сотруд", "пересеч", "пустые окна", "перегруз"])
+
+
+def _is_cancellation_reasons_request(text: str) -> bool:
+    if not _contains_any(text, ["отмен"]):
+        return False
+    return _contains_any(text, ["причин", "группир", "процесс записи", "что изменить"])
+
+
+def _is_admin_response_control_request(text: str) -> bool:
+    if not _contains_any(text, ["чат", "диалог", "переписк"]):
+        return False
+    return _contains_any(text, ["администратор", "долго не ответ", "ответил неполно"])
+
+
+def _is_faq_from_chats_request(text: str) -> bool:
+    if not _contains_any(text, ["faq", "база знаний", "пункты"]):
+        return False
+    return _contains_any(text, ["чат", "переписк", "вопрос", "клиент"])
+
+
+def _is_new_employee_check_request(text: str) -> bool:
+    if not _contains_any(text, ["сотруд"]):
+        return False
+    return _contains_any(text, ["добавляется", "новый", "фото", "описание", "график", "привязка к филиалу"])
+
+
+def _is_seasonal_services_request(text: str) -> bool:
+    if not _contains_any(text, ["сезон"]):
+        return False
+    return _contains_any(text, ["добавить", "скрыть", "обновить", "прайс"])
+
+
+def _is_revenue_anomaly_request(text: str) -> bool:
+    if not _contains_any(text, ["выруч"]):
+        return False
+    return _contains_any(text, ["аномал", "обычным уровнем", "отклон", "сравни"])
+
+
+def _is_map_questions_request(text: str) -> bool:
+    if not _contains_any(text, ["вопрос"]):
+        return False
+    return _contains_any(text, ["яндекс", "google-карточ", "google карточ", "карточк", "карт"])
+
+
+def _is_location_description_quality_request(text: str) -> bool:
+    if not _contains_any(text, ["описан"]):
+        return False
+    return _contains_any(text, ["филиал", "устарев", "одинаковые тексты", "слабые формулировки"])
+
+
 def _is_problem_digest_request(text: str) -> bool:
     if "дайджест" in text:
         return True
@@ -809,6 +916,16 @@ def _is_rich_localos_workflow_request(text: str) -> bool:
         [
             _is_photo_quality_request(lowered),
             _is_competitor_price_request(lowered),
+            _is_inventory_control_request(lowered),
+            _is_staff_schedule_request(lowered),
+            _is_cancellation_reasons_request(lowered),
+            _is_admin_response_control_request(lowered),
+            _is_faq_from_chats_request(lowered),
+            _is_new_employee_check_request(lowered),
+            _is_seasonal_services_request(lowered),
+            _is_revenue_anomaly_request(lowered),
+            _is_map_questions_request(lowered),
+            _is_location_description_quality_request(lowered),
             _is_new_service_control_request(lowered),
             _is_customer_questions_request(lowered),
             _is_team_tasks_request(lowered),

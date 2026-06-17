@@ -1,0 +1,5 @@
+No separate lint command was run for this task.
+
+Coverage used instead:
+- venv/bin/python -m pytest tests/test_agent_blueprint_layer.py -q
+- npm --prefix frontend run build

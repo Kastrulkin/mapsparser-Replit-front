@@ -1,0 +1,43 @@
+{
+  "task_id": "agents-builder-fourth-10-browser-20260617",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "All browser-use scenarios passed after fixes."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Misclassification regressions from the first pass were corrected."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "New source keys are rendered with user-facing Russian labels."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Full agent blueprint layer test suite and frontend build passed."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Production partial deploy completed and HTTP 200 was verified."
+    }
+  ],
+  "commands_run": [
+    "venv/bin/python -m pytest tests/test_agent_blueprint_layer.py -q",
+    "npm --prefix frontend run build",
+    "browser-use production retest for 10 scenarios",
+    "production partial deploy and curl check"
+  ],
+  "artifacts_used": [
+    "raw/browser-retest-summary.json",
+    "raw/test-unit.txt",
+    "raw/build.txt",
+    "raw/deploy.txt"
+  ]
+}

@@ -1,0 +1,10 @@
+Production partial deploy completed on 2026-06-17.
+
+Server command shape:
+cd /opt/seo-app && install backend service files, copy frontend dist into seo-app-app-1:/app/frontend/dist/, restart app worker, check docker compose ps, curl -I http://localhost:8000, tail app logs.
+
+Result:
+- app and worker restarted successfully.
+- docker compose ps showed seo-app-app-1 and seo-app-worker-1 Up.
+- curl -I http://localhost:8000 returned HTTP/1.1 200 OK.
+- app logs after restart showed migrations completed and no traceback.
