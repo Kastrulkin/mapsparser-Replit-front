@@ -1,0 +1,4 @@
+venv/bin/python -m pytest tests/test_agent_blueprint_layer.py -q -k "agent_builder or openclaw_planner_loop"
+
+Result:
+35 passed, 126 deselected

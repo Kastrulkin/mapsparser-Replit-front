@@ -1387,7 +1387,9 @@ const userFacingAgentTechText = (value?: string) => String(value || '')
   .replace(/last run/gi, 'последний запуск')
   .replace(/OpenClaw boundary/gi, 'защищенный способ LocalOS')
   .replace(/OpenClaw/gi, 'защищенный способ LocalOS')
+  .replace(/execution route/gi, 'способ выполнения')
   .replace(/provider route/gi, 'способ подключения')
+  .replace(/\broute\b/gi, 'способ')
   .replace(/preflight/gi, 'проверка перед запуском')
   .replace(/Draft/g, 'Черновик')
   .replace(/schedule\.daily_at\(([^)]*)\)/gi, 'ежедневно в $1')
@@ -2138,7 +2140,7 @@ const metaLabels: Record<string, string> = {
   services: 'услуги',
   reviews: 'отзывы',
   external_reviews: 'отзывы',
-  prospectingleads: 'лиды',
+  prospectingleads: 'кандидаты',
   outreach_drafts: 'черновики outreach',
   uploaded_documents: 'документы',
   uploaded_tables: 'таблицы',

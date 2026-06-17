@@ -103,7 +103,8 @@ def compile_agent_blueprint(
     if category == "communications":
         return _communications_compilation(request_text)
     ai_result = {}
-    if use_ai:
+    content_analytics_request = _is_telegram_content_analytics_request(request_text)
+    if use_ai and not content_analytics_request:
         ai_result = infer_agent_workflow_intent(
             request_text,
             business_id=business_id,
@@ -122,7 +123,7 @@ def compile_agent_blueprint(
             }
             draft["metadata"] = metadata
             return draft
-    integration_intent = _infer_integration_intent(request_text)
+    integration_intent = {} if content_analytics_request else _infer_integration_intent(request_text)
     if integration_intent:
         draft = _source_destination_compilation(request_text, integration_intent)
         if ai_result:
@@ -149,7 +150,7 @@ def compile_agent_blueprint(
             "summary": _summary(category, ["prospectingleads", "business_profile"], version_payload["steps"]),
         }
 
-    sources = _sources_for_category(category)
+    sources = _sources_for_request(category, request_text)
     version_payload = {
         "goal": request_text,
         "inputs_schema": {
@@ -252,6 +253,27 @@ def _sources_for_category(category: str) -> List[str]:
     if category == "services":
         return ["services", "business_profile", "reviews"]
     return ["manual_context", "business_profile"]
+
+
+def _sources_for_request(category: str, request_text: str) -> List[str]:
+    sources = _sources_for_category(category)
+    lowered = request_text.lower()
+    if category == "custom" and _is_telegram_content_analytics_request(request_text):
+        return ["telegram", "business_profile", "services", "external_reviews", "manual_context"]
+    if category == "custom" and _contains_any(lowered, ["контент-план", "темы постов", "темы публикац", "постов для карточ", "карточек на картах"]):
+        return ["services", "external_reviews", "business_profile", "manual_context"]
+    if category == "custom" and _contains_any(lowered, ["еженедельный отч", "отчёт владельцу", "отчет владельцу", "каждую пятниц"]):
+        return ["external_reviews", "localos_finance", "appointments", "services", "business_profile"]
+    return sources
+
+
+def _is_telegram_content_analytics_request(text: str) -> bool:
+    lowered = text.lower()
+    if not _contains_any(lowered, ["telegram", "телеграм"]):
+        return False
+    if not _contains_any(lowered, ["реакц", "комментар", "через api"]):
+        return False
+    return _contains_any(lowered, ["контент-план", "собирай вывод", "что изменить", "изменения"])
 
 
 def _metadata(description: str, category: str, sources: List[str]) -> Dict[str, Any]:

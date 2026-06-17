@@ -1,0 +1,37 @@
+{
+  "task_id": "agents-builder-10-browser-20260617",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Use Browser use to step through the 10 requested custom-agent scenarios, fix confusing or broken behavior, deploy, and verify from the user's point of view.",
+      "status": "PASS",
+      "proof": [
+        "Browser use exercised the 10 scenarios on /dashboard/agents with clicks, typed prompts, and next-step inspection.",
+        "Local tests passed: 32 agent_builder tests and 35 agent_builder/openclaw_planner tests.",
+        "Frontend clean build from HEAD plus the AgentBlueprintsPage patch passed.",
+        "Server app and worker are running; curl -I http://localhost:8000 returned HTTP 200.",
+        "Final Telegram analytics scenario passed with create/test CTA and no clarification or unavailable state."
+      ],
+      "gaps": [
+        "After the last narrow Telegram analytics fix, only the previously failing scenario was retested in browser; the full 10-scenario browser run was not repeated again."
+      ]
+    }
+  ],
+  "changed_files": [
+    "frontend/src/pages/dashboard/AgentBlueprintsPage.tsx",
+    "src/services/agent_blueprint_draft_builder.py",
+    "src/services/agent_builder_session.py",
+    "src/services/agent_openclaw_planner_loop.py",
+    "tests/test_agent_blueprint_layer.py"
+  ],
+  "commands_for_fresh_verifier": [
+    "venv/bin/python -m pytest tests/test_agent_blueprint_layer.py -q -k \"agent_builder\"",
+    "venv/bin/python -m pytest tests/test_agent_blueprint_layer.py -q -k \"agent_builder or openclaw_planner_loop\"",
+    "npm --prefix frontend run build"
+  ],
+  "known_gaps": [
+    "No destructive data changes were made.",
+    "The proof used the currently authenticated in-app browser session."
+  ]
+}

@@ -1409,7 +1409,7 @@ def test_agent_builder_understands_core_user_scenarios_without_cross_domain_ques
             "map_content_plan",
             "Раз в неделю предлагать 3 темы постов для карточек на картах на основе услуг, сезона и отзывов.",
             "custom",
-            ["manual_context", "business_profile"],
+            ["services", "external_reviews", "business_profile"],
             [],
             ["где искать клиентов", "какие лиды"],
         ),
@@ -1462,6 +1462,71 @@ def test_agent_builder_understands_core_user_scenarios_without_cross_domain_ques
             assert question_key in question_keys, key
         for term in forbidden_question_terms:
             assert term not in questions_text, key
+
+
+def test_agent_builder_keeps_real_user_scenarios_on_the_obvious_next_step():
+    from services.agent_builder_session import build_agent_builder_state
+
+    scenarios = [
+        (
+            "sales_to_finance",
+            "Каждый вечер проверяй Google-таблицу с продажами, находи новые строки и готовь их к добавлению во вкладку Финансы. Перед внесением показывай мне список на подтверждение.",
+            ["что агент должен понять", "что нужно извлечь"],
+            ["google_sheets_target"],
+        ),
+        (
+            "telegram_content_reactions",
+            "После публикации поста в Telegram проверяй реакции и комментарии через API, собирай выводы и предлагай, что изменить в следующем контент-плане.",
+            ["кто будет принимать решение", "где человек должен проверить"],
+            [],
+        ),
+        (
+            "negative_review_event",
+            "Если появляется отзыв с оценкой 1-3, сразу присылай мне уведомление в Telegram, кратко объясняй проблему клиента и предлагай аккуратный ответ без обещаний скидок.",
+            ["когда запускать агента"],
+            [],
+        ),
+        (
+            "weekly_owner_report",
+            "Каждую пятницу собирай краткий отчёт: новые отзывы, продажи, расходы, записи, проблемы в карточке и что нужно сделать на следующей неделе. Присылай в Telegram.",
+            ["в какой telegram", "когда запускать агента", "какой формат поста"],
+            [],
+        ),
+        (
+            "answered_review_drafts",
+            "Агент должен парсить отзывы каждую среду в 9 утра. Все отображать в аккаунте ЛокалОС. Если появляются новые, то генерировать ответ и оповещать меня в телеграмме + присылать отзыв и ответ\nОтдельные черновики человек проверяет в телегираме - по оповещению",
+            ["нужны отдельные черновики ответов или общий план реакции"],
+            [],
+        ),
+    ]
+
+    for key, prompt, forbidden_fragments, expected_question_keys in scenarios:
+        state = build_agent_builder_state([{"role": "user", "content": prompt}])
+        questions = state["missing_questions"]
+        question_keys = {str(item.get("key") or "") for item in questions}
+        questions_text = " ".join(str(item.get("question") or "") for item in questions).lower()
+
+        for fragment in forbidden_fragments:
+            assert fragment not in questions_text, key
+        for question_key in expected_question_keys:
+            assert question_key in question_keys, key
+
+    ai_state = build_agent_builder_state(
+        [
+            {
+                "role": "user",
+                "content": "После публикации поста в Telegram проверяй реакции и комментарии через API, собирай выводы и предлагай, что изменить в следующем контент-плане.",
+            }
+        ],
+        use_ai=True,
+    )
+    ai_questions_text = " ".join(str(item.get("question") or "") for item in ai_state["missing_questions"]).lower()
+
+    assert ai_state["category"] == "custom"
+    assert "telegram" in set(ai_state["preview"]["data_sources"])
+    assert ai_state["preview"]["feasibility"]["status"] != "forbidden"
+    assert "какие данные агент должен использовать" not in ai_questions_text
+    assert "в какой telegram" not in ai_questions_text
 
 
 def test_agent_feasibility_resolver_reports_ready_missing_choice_and_forbidden():

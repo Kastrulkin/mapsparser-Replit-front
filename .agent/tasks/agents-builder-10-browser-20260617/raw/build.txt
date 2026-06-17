@@ -1,0 +1,6 @@
+npm --prefix frontend run build
+
+Result:
+Vite production build passed.
+
+Also performed a clean temporary build from HEAD plus only frontend/src/pages/dashboard/AgentBlueprintsPage.tsx before deploying frontend/dist.

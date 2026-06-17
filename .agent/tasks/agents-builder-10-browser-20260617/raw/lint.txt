@@ -1,0 +1,5 @@
+No separate lint command was run.
+
+Syntax/build coverage:
+- Python files imported through pytest.
+- Frontend TypeScript/Vite production build passed.

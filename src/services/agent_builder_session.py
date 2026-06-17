@@ -115,11 +115,17 @@ def build_agent_builder_state(
     planner_loop = build_openclaw_planner_loop(planner_context)
     preview["openclaw_planner_context"] = planner_context
     preview["openclaw_planner_loop"] = planner_loop
-    compiler_questions = _compiler_questions(draft)
+    compiler_questions = _compiler_questions(draft, description)
     preview["compiler_questions"] = compiler_questions
     resolver_questions = _connection_resolver_questions(preview)
     preview["connection_resolver_questions"] = resolver_questions
-    questions = _merge_questions(_missing_questions(description, category), compiler_questions, planner_loop, resolver_questions)
+    questions = _merge_questions(
+        _missing_questions(description, category),
+        compiler_questions,
+        planner_loop,
+        resolver_questions,
+        description,
+    )
     preview["setup_flow"] = _build_setup_flow(preview, questions)
     assistant_message = _assistant_message(preview, questions)
     return {
@@ -216,7 +222,7 @@ def _build_preview(
         "audience": summary.get("audience") or "",
         "extraction_rules": _default_extraction_rules(category, description),
         "processing_rules": _default_processing_rules(category),
-        "output_format": _default_output_format(category),
+        "output_format": _default_output_format(category, description),
         "manual_control": "Ручное подтверждение перед финальным использованием и любым внешним действием.",
         "capability_allowlist": capability_allowlist,
         "required_integration_bindings": required_bindings,
@@ -274,7 +280,7 @@ def _is_self_contained_telegram_delivery(text: str) -> bool:
     return any(marker in text for marker in ["сообщ", "текст", "привет", "напомин"])
 
 
-def _compiler_questions(draft: Dict[str, Any]) -> List[Dict[str, str]]:
+def _compiler_questions(draft: Dict[str, Any], description: str = "") -> List[Dict[str, str]]:
     metadata = draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}
     llm_intent = metadata.get("llm_intent") if isinstance(metadata.get("llm_intent"), dict) else {}
     intent = llm_intent.get("intent") if isinstance(llm_intent.get("intent"), dict) else {}
@@ -282,7 +288,7 @@ def _compiler_questions(draft: Dict[str, Any]) -> List[Dict[str, str]]:
     result: List[Dict[str, str]] = []
     for index, question in enumerate(raw_questions):
         clean = _clean_text(question)
-        if clean:
+        if clean and not _question_is_answered(description, clean):
             result.append(
                 {
                     "key": f"compiler_question_{index + 1}",
@@ -467,6 +473,7 @@ def _merge_questions(
     compiler_questions: List[Dict[str, str]],
     planner_loop: Dict[str, Any],
     resolver_questions: List[Dict[str, str]] | None = None,
+    description: str = "",
 ) -> List[Dict[str, str]]:
     result: List[Dict[str, str]] = []
     seen = set()
@@ -480,10 +487,13 @@ def _merge_questions(
         reason = str(item.get("reason") or "").strip()
         if reason in {"required_connection_missing", "required_connection_missing_config", "multiple_connections_available"}:
             continue
+        question = str(item.get("question") or "").strip()
+        if _question_is_answered(description, question):
+            continue
         normalized_planner_questions.append(
             {
                 "key": str(item.get("key") or item.get("question") or "").strip(),
-                "question": str(item.get("question") or "").strip(),
+                "question": question,
                 "reason": reason,
             }
         )
@@ -682,10 +692,10 @@ def _route_choice_bindings(feasibility: Dict[str, Any]) -> List[Dict[str, Any]]:
 def _setup_next_step_title(next_step: str) -> str:
     labels = {
         "answer_clarification": "Ответьте на уточнение",
-        "create_draft_then_connect": "Создайте draft, затем подключите сервисы",
-        "create_draft_then_choose_connection": "Создайте draft, затем выберите доступ",
-        "create_draft_then_choose_route": "Создайте draft, затем выберите маршрут",
-        "create_draft_then_preview": "Создайте draft и проверьте preview run",
+        "create_draft_then_connect": "Создайте черновик, затем подключите сервисы",
+        "create_draft_then_choose_connection": "Создайте черновик, затем выберите доступ",
+        "create_draft_then_choose_route": "Создайте черновик, затем выберите способ выполнения",
+        "create_draft_then_preview": "Создайте черновик и проверьте тест без отправки",
         "top_up_balance": "Пополните баланс",
         "cannot_create": "Такой агент недоступен",
     }
@@ -698,22 +708,22 @@ def _setup_next_step_description(
     connection_choices: List[Dict[str, Any]],
 ) -> str:
     if next_step == "answer_clarification":
-        return "LocalOS ещё не знает достаточно деталей, чтобы собрать проверяемый workflow."
+        return "LocalOS ещё не знает достаточно деталей, чтобы собрать проверяемую логику."
     if next_step == "create_draft_then_connect":
         names = ", ".join([str(item.get("provider_title") or item.get("provider") or "") for item in missing_connections[:3]])
-        return f"Draft можно создать сейчас. После создания откроем подключения: {names or 'обязательные сервисы'}."
+        return f"Черновик можно создать сейчас. После создания откроем подключения: {names or 'обязательные сервисы'}."
     if next_step == "create_draft_then_choose_connection":
         names = ", ".join([str(item.get("provider_title") or item.get("provider") or "") for item in connection_choices[:3]])
-        return f"Draft можно создать сейчас. После создания выберите, какой доступ использовать: {names or 'подключение'}."
+        return f"Черновик можно создать сейчас. После создания выберите, какой доступ использовать: {names or 'подключение'}."
     if next_step == "create_draft_then_choose_route":
-        return "Draft можно создать сейчас. После создания выберите execution route: OpenClaw, Maton, LocalOS или ручной fallback."
+        return "Черновик можно создать сейчас. После создания выберите способ выполнения: защищённый способ LocalOS, Maton.ai, встроенный способ LocalOS или ручной режим."
     if next_step == "create_draft_then_preview":
-        return "Подключения выглядят готовыми. После создания откроем preview run: он проверит workflow без внешних действий."
+        return "Подключения выглядят готовыми. После создания откроем тест без отправки: он проверит логику без внешних действий."
     if next_step == "top_up_balance":
         return "Создание или первый запуск упирается в лимиты подписки или кредиты."
     if next_step == "cannot_create":
-        return "Запрос выходит за LocalOS policy envelope или не имеет разрешённого provider path."
-    return "Проверьте задачу, подключения и policy."
+        return "Запрос выходит за правила безопасности LocalOS или для него пока нет разрешённого способа выполнения."
+    return "Проверьте задачу, подключения и правила безопасности."
 
 
 def _post_create_status(
@@ -2068,9 +2078,13 @@ def _has_data_hint(text: str) -> bool:
             "xlsx",
             "csv",
             "google",
+            "telegram",
+            "телеграм",
             "sheet",
             "таблиц",
             "отзыв",
+            "реакц",
+            "комментар",
             "профиль",
             "карточ",
             "услуг",
@@ -2090,7 +2104,7 @@ def _has_data_hint(text: str) -> bool:
 
 
 def _has_extraction_hint(text: str) -> bool:
-    return any(marker in text for marker in ["извлеч", "найд", "бер", "возьми", "риск", "сумм", "срок", "пол", "исключ", "ответ", "подготов", "проверь", "напом", "клиент", "нормализ", "категор", "пуст", "описан", "назван", "цен", "тем", "партн", "статус", "ответствен"])
+    return any(marker in text for marker in ["извлеч", "найд", "наход", "новые строк", "продаж", "реакц", "комментар", "вывод", "бер", "возьми", "риск", "сумм", "срок", "пол", "исключ", "ответ", "подготов", "проверь", "напом", "клиент", "нормализ", "категор", "пуст", "описан", "назван", "цен", "тем", "партн", "статус", "ответствен"])
 
 
 def _has_output_hint(text: str) -> bool:
@@ -2121,7 +2135,56 @@ def _has_output_hint(text: str) -> bool:
 
 
 def _has_control_hint(text: str) -> bool:
-    return any(marker in text for marker in ["руч", "провер", "подтверж", "approval", "перед отправ", "не отправ", "черновик", "предлаг", "наход"])
+    return any(marker in text for marker in ["руч", "провер", "подтверж", "approval", "перед отправ", "не отправ", "черновик", "предлаг", "наход", "присыла", "отправ", "шл", "уведом"])
+
+
+def _question_is_answered(description: str, question: str) -> bool:
+    text = description.lower()
+    q = question.lower()
+    if not q:
+        return False
+    if _is_telegram_content_analytics_request(text):
+        return True
+    if "telegram" in q or "телеграм" in q or "канал" in q or "чат" in q or "бот" in q:
+        if ("telegram" in text or "телеграм" in text) and any(marker in text for marker in ["мне", "владельцу", "менеджеру", "через бота", "бот", "присыла", "отправ", "шл", "уведом"]):
+            return True
+    if "когда запускать" in q or "распис" in q or "частот" in q or "trigger" in q:
+        if any(marker in text for marker in ["каждый", "каждое", "каждую", "ежеднев", "еженед", "раз в", "понедельник", "вторник", "сред", "четверг", "пятниц", "если появ", "при появ", "появляется", "появляются", "вручную"]):
+            return True
+    if "периодич" in q:
+        if any(marker in text for marker in ["после публикац", "после пост", "после выхода пост", "после размещ"]):
+            return True
+    if "как часто" in q and ("публиков" in q or "пост" in q):
+        if any(marker in text for marker in ["после публикац", "после пост", "после выхода пост", "после размещ"]):
+            return True
+    if "отдельные черновики" in q or "общий план" in q:
+        if any(marker in text for marker in ["отдельн", "каждый отзыв", "на каждый отзыв", "черновик", "ответ"]) and any(marker in text for marker in ["telegram", "телеграм", "localos", "локалос", "провер"]):
+            return True
+    if "кто будет принимать решение" in q or "где человек должен проверить" in q:
+        if any(marker in text for marker in ["подтверж", "провер", "не отправ", "только после", "предлаг", "черновик"]):
+            return True
+        if ("telegram" in text or "телеграм" in text) and any(marker in text for marker in ["присыла", "отправ", "шл", "уведом"]):
+            return True
+    if "формат" in q or "шаблон" in q or "тон" in q:
+        if any(marker in text for marker in ["кратк", "аккурат", "без обещ", "3 тем", "три тем", "отзыв + ответ", "сообщение", "отчёт", "отчет"]):
+            return True
+        if ("пост" in q or "публикац" in q) and any(marker in text for marker in ["после публикац", "после пост", "реакц", "комментар"]):
+            return True
+    if any(marker in q for marker in ["metrics", "insights", "метрик", "вывод", "kpi", "показател"]):
+        if any(marker in text for marker in ["реакц", "комментар", "вывод", "контент-план"]):
+            return True
+    if "что агент должен понять" in q or "что нужно извлечь" in q:
+        if _has_extraction_hint(text):
+            return True
+    return False
+
+
+def _is_telegram_content_analytics_request(text: str) -> bool:
+    if not ("telegram" in text or "телеграм" in text):
+        return False
+    if not any(marker in text for marker in ["реакц", "комментар", "через api"]):
+        return False
+    return any(marker in text for marker in ["контент-план", "собирай вывод", "что изменить", "изменения"])
 
 
 def _default_extraction_rules(category: str, description: str) -> str:
@@ -2148,9 +2211,14 @@ def _default_processing_rules(category: str) -> str:
     return "Не придумывать факты; показывать, где данных не хватает; внешние действия не выполнять."
 
 
-def _default_output_format(category: str) -> str:
+def _default_output_format(category: str, description: str = "") -> str:
+    lowered = description.lower()
+    if category == "custom" and any(marker in lowered for marker in ["контент-план", "темы постов", "темы публикац", "постов для карточ"]):
+        return "3 темы постов для карточек на картах с причиной и рекомендацией."
+    if category == "custom" and any(marker in lowered for marker in ["еженедельный отч", "отчёт владельцу", "отчет владельцу", "каждую пятниц"]):
+        return "Еженедельный отчёт владельцу: отзывы, продажи, расходы, записи, проблемы и план следующей недели."
     formats = {
-        "communications": "Черновики сообщений, отчёт доставки и outcomes.",
+        "communications": "Черновики сообщений, отчёт доставки и статусы реакции клиентов.",
         "documents": "Краткий разбор: summary, facts, fields, risks, next_questions.",
         "email": "Черновик письма: subject, body, checklist.",
         "tables": "Отчёт по таблице: summary, exceptions, rows_to_review.",

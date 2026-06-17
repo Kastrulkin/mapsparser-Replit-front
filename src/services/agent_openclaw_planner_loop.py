@@ -227,6 +227,8 @@ def _has_google_sheets_target(task: str, required_bindings: List[Any], answer_bi
 
 def _has_telegram_target(task: str, required_bindings: List[Any], answer_bindings: Dict[str, Any]) -> bool:
     lowered = task.lower()
+    if _uses_telegram_as_source(lowered):
+        return True
     if "t.me/" in lowered:
         return True
     if "@" in task and any(part.startswith("@") and len(part) >= 4 for part in task.replace(",", " ").split()):
@@ -237,6 +239,13 @@ def _has_telegram_target(task: str, required_bindings: List[Any], answer_binding
         if str(config.get("telegram_target") or config.get("chat_id") or config.get("channel") or "").strip():
             return True
     return False
+
+
+def _uses_telegram_as_source(lowered: str) -> bool:
+    if not ("telegram" in lowered or "телеграм" in lowered):
+        return False
+    source_markers = ["реакц", "комментар", "через api", "после публикац", "после пост", "аналитик", "собирай вывод"]
+    return any(marker in lowered for marker in source_markers)
 
 
 def _uses_default_localos_telegram(lowered: str) -> bool:
@@ -261,7 +270,10 @@ def _uses_default_localos_telegram(lowered: str) -> bool:
         "менеджеру в telegram",
         "менеджеру в телеграм",
     ]
+    send_markers = ["шл", "отправ", "присыла", "сообщен", "уведом", "напиши"]
     if any(owner in lowered for owner in ["мне", "владельцу", "менеджеру"]) and ("телеграм" in lowered or "telegram" in lowered) and any(marker in lowered for marker in ["шл", "отправ", "присыла", "сообщен", "уведом"]):
+        return True
+    if ("телеграм" in lowered or "telegram" in lowered) and any(marker in lowered for marker in send_markers):
         return True
     return any(marker in lowered for marker in bot_markers) or any(marker in lowered for marker in direct_markers)
 
@@ -305,6 +317,10 @@ def _has_schedule_or_trigger(lowered: str) -> bool:
         "weekly",
         "trigger",
         "когда",
+        "если появ",
+        "появляется",
+        "появляются",
+        "при появ",
         "после",
         "перед",
         "за предыдущ",

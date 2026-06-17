@@ -1,0 +1,22 @@
+{
+  "task_id": "agents-builder-10-browser-20260617",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Browser-use testing found and drove fixes for confusing next steps across the requested agent scenarios; targeted final browser verification passed for the last failing scenario."
+    }
+  ],
+  "commands_run": [
+    "venv/bin/python -m pytest tests/test_agent_blueprint_layer.py -q -k \"agent_builder\"",
+    "venv/bin/python -m pytest tests/test_agent_blueprint_layer.py -q -k \"agent_builder or openclaw_planner_loop\"",
+    "npm --prefix frontend run build",
+    "docker compose ps",
+    "curl -I http://localhost:8000"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/agents-builder-10-browser-20260617/evidence.md",
+    ".agent/tasks/agents-builder-10-browser-20260617/evidence.json"
+  ]
+}
