@@ -7,6 +7,8 @@ import json
 import sqlite3
 import uuid
 import base64
+import hashlib
+import hmac
 import html
 import random
 import re
@@ -1555,6 +1557,518 @@ def yclients_marketplace_disconnect():
         return jsonify({"success": True, "status": "received"})
     except Exception as e:
         logger.exception("YCLIENTS marketplace disconnect callback failed")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+def _yclients_partner_token() -> str:
+    return str(os.getenv("YCLIENTS_PARTNER_TOKEN") or "").strip()
+
+
+def _yclients_user_token() -> str:
+    return str(os.getenv("YCLIENTS_USER_TOKEN") or "").strip()
+
+
+def _yclients_application_id() -> str:
+    return str(os.getenv("YCLIENTS_APPLICATION_ID") or "45102").strip()
+
+
+def _yclients_api_base_url() -> str:
+    return str(os.getenv("YCLIENTS_API_BASE_URL") or "https://api.yclients.com/api/v1").rstrip("/")
+
+
+def _yclients_auth_headers() -> Dict[str, str]:
+    partner_token = _yclients_partner_token()
+    user_token = _yclients_user_token()
+    headers = {
+        "Accept": "application/vnd.yclients.v2+json",
+        "Content-Type": "application/json",
+        "User-Agent": "LocalOS-YCLIENTS-Marketplace/1.0",
+    }
+    if partner_token and user_token:
+        headers["Authorization"] = f"Bearer {partner_token}, User {user_token}"
+    elif partner_token:
+        headers["Authorization"] = f"Bearer {partner_token}"
+    return headers
+
+
+def _extract_yclients_salon_ids(args_source: Any, payload: Optional[Dict[str, Any]] = None) -> List[str]:
+    ids: List[str] = []
+    if hasattr(args_source, "getlist"):
+        for key in ("salon_ids[]", "salon_ids", "salon_id", "company_id"):
+            for value in args_source.getlist(key):
+                if isinstance(value, list):
+                    ids.extend(str(item).strip() for item in value)
+                else:
+                    ids.append(str(value).strip())
+    payload = payload or {}
+    for key in ("salon_ids", "salon_ids[]", "salon_id", "company_id"):
+        value = payload.get(key)
+        if isinstance(value, list):
+            ids.extend(str(item).strip() for item in value)
+        elif value not in (None, ""):
+            ids.append(str(value).strip())
+    seen = set()
+    clean_ids = []
+    for item in ids:
+        if item and item not in seen:
+            seen.add(item)
+            clean_ids.append(item)
+    return clean_ids
+
+
+def _decode_yclients_user_data(user_data: str, user_data_sign: str) -> Dict[str, Any]:
+    raw_user_data = str(user_data or "").strip()
+    if not raw_user_data:
+        return {"data": {}, "signature_valid": None, "signature_checked": False}
+    decoded_bytes = base64.b64decode(raw_user_data + "=" * (-len(raw_user_data) % 4))
+    decoded_text = decoded_bytes.decode("utf-8")
+    parsed = json.loads(decoded_text)
+    partner_token = _yclients_partner_token()
+    signature_valid = None
+    signature_checked = False
+    if partner_token and user_data_sign:
+        expected = hmac.new(partner_token.encode("utf-8"), decoded_text.encode("utf-8"), hashlib.sha256).hexdigest()
+        signature_valid = hmac.compare_digest(expected, str(user_data_sign).strip())
+        signature_checked = True
+    return {
+        "data": parsed if isinstance(parsed, dict) else {},
+        "signature_valid": signature_valid,
+        "signature_checked": signature_checked,
+    }
+
+
+def _require_yclients_business_access() -> tuple[Optional[DatabaseManager], Optional[Any], Optional[Dict[str, Any]], Optional[str], Optional[Any]]:
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return None, None, None, None, (jsonify({"error": "Требуется авторизация"}), 401)
+    token = auth_header.split(" ", 1)[1]
+    user_data = verify_session(token)
+    if not user_data:
+        return None, None, None, None, (jsonify({"error": "Недействительный токен"}), 401)
+    payload = request.get_json(silent=True) or {}
+    business_id = str(payload.get("business_id") or request.args.get("business_id") or "").strip()
+    if not business_id:
+        return None, None, user_data, None, (jsonify({"error": "business_id обязателен"}), 400)
+    db = DatabaseManager()
+    cursor = db.conn.cursor()
+    owner_id = get_business_owner_id(cursor, business_id, include_active_check=True)
+    if not owner_id:
+        db.close()
+        return None, None, user_data, business_id, (jsonify({"error": "Бизнес не найден"}), 404)
+    if owner_id != user_data["user_id"] and not db.is_superadmin(user_data["user_id"]):
+        db.close()
+        return None, None, user_data, business_id, (jsonify({"error": "Нет доступа к бизнесу"}), 403)
+    return db, cursor, user_data, business_id, None
+
+
+def _public_yclients_account(row_dict: Dict[str, Any]) -> Dict[str, Any]:
+    auth_data = {}
+    encrypted = row_dict.get("auth_data_encrypted")
+    if encrypted:
+        try:
+            auth_data = decrypt_auth_data(encrypted) or {}
+        except Exception:
+            auth_data = {}
+    return {
+        "id": row_dict.get("id"),
+        "business_id": row_dict.get("business_id"),
+        "salon_id": row_dict.get("external_id") or auth_data.get("salon_id"),
+        "display_name": row_dict.get("display_name"),
+        "is_active": bool(row_dict.get("is_active")),
+        "status": auth_data.get("status") or "connected",
+        "activation_status": auth_data.get("activation_status") or "not_requested",
+        "activation_error": auth_data.get("activation_error"),
+        "last_import_at": auth_data.get("last_import_at"),
+        "last_import_count": auth_data.get("last_import_count"),
+        "user_data": auth_data.get("user_data") or {},
+        "created_at": str(row_dict.get("created_at") or "") or None,
+        "updated_at": str(row_dict.get("updated_at") or "") or None,
+    }
+
+
+def _load_yclients_accounts(cursor: Any, business_id: str, salon_ids: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+    params: list[Any] = [business_id]
+    where = "business_id = %s AND source = 'yclients' AND is_active = TRUE"
+    if salon_ids:
+        where += " AND external_id = ANY(%s)"
+        params.append(salon_ids)
+    cursor.execute(
+        f"""
+        SELECT id, business_id, external_id, display_name, auth_data_encrypted, is_active, created_at, updated_at
+        FROM externalbusinessaccounts
+        WHERE {where}
+        ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+        """,
+        tuple(params),
+    )
+    rows = cursor.fetchall() or []
+    return [_row_to_dict(cursor, row) for row in rows]
+
+
+def _upsert_yclients_account(
+    cursor: Any,
+    *,
+    business_id: str,
+    salon_id: str,
+    user_id: str,
+    user_payload: Dict[str, Any],
+    activation: Dict[str, Any],
+) -> Dict[str, Any]:
+    account_id = str(uuid.uuid4())
+    display_name = str(user_payload.get("salon_name") or user_payload.get("company_title") or f"YCLIENTS {salon_id}")
+    auth_payload = {
+        "salon_id": salon_id,
+        "status": "connected",
+        "user_data": user_payload,
+        "connected_by": user_id,
+        "connected_at": datetime.utcnow().isoformat(),
+        **activation,
+    }
+    encrypted = encrypt_auth_data(auth_payload)
+    cursor.execute(
+        """
+        SELECT id FROM externalbusinessaccounts
+        WHERE business_id = %s AND source = 'yclients' AND external_id = %s
+        LIMIT 1
+        """,
+        (business_id, salon_id),
+    )
+    existing = cursor.fetchone()
+    if existing:
+        existing_id = _row_to_dict(cursor, existing).get("id")
+        cursor.execute(
+            """
+            UPDATE externalbusinessaccounts
+            SET display_name = %s,
+                auth_data_encrypted = %s,
+                is_active = TRUE,
+                last_error = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+            """,
+            (display_name, encrypted, existing_id),
+        )
+        account_id = str(existing_id)
+    else:
+        cursor.execute(
+            """
+            INSERT INTO externalbusinessaccounts
+                (id, business_id, source, external_id, display_name, auth_data_encrypted, is_active, created_at, updated_at)
+            VALUES (%s, %s, 'yclients', %s, %s, %s, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            """,
+            (account_id, business_id, salon_id, display_name, encrypted),
+        )
+    cursor.execute(
+        """
+        SELECT id, business_id, external_id, display_name, auth_data_encrypted, is_active, created_at, updated_at
+        FROM externalbusinessaccounts
+        WHERE id = %s
+        """,
+        (account_id,),
+    )
+    return _row_to_dict(cursor, cursor.fetchone())
+
+
+def _activate_yclients_integration(salon_ids: List[str]) -> Dict[str, Any]:
+    if not salon_ids:
+        return {"activation_status": "skipped", "activation_error": "no_salon_ids"}
+    activation_url = str(os.getenv("YCLIENTS_ACTIVATION_URL") or "").strip()
+    partner_token = _yclients_partner_token()
+    if not activation_url or not partner_token:
+        return {
+            "activation_status": "pending_configuration",
+            "activation_error": "YCLIENTS_ACTIVATION_URL or YCLIENTS_PARTNER_TOKEN is not configured",
+        }
+    payload = {
+        "application_id": _yclients_application_id(),
+        "salon_ids": salon_ids,
+    }
+    try:
+        response = requests.post(
+            activation_url,
+            headers=_yclients_auth_headers(),
+            json=payload,
+            timeout=20,
+        )
+        if 200 <= response.status_code < 300:
+            return {"activation_status": "activated", "activated_at": datetime.utcnow().isoformat()}
+        return {"activation_status": "failed", "activation_error": f"{response.status_code}: {response.text[:500]}"}
+    except Exception as e:
+        return {"activation_status": "failed", "activation_error": str(e)}
+
+
+def _yclients_request_json(path: str, salon_id: str) -> Any:
+    partner_token = _yclients_partner_token()
+    user_token = _yclients_user_token()
+    if not partner_token or not user_token:
+        raise RuntimeError("YCLIENTS_PARTNER_TOKEN and YCLIENTS_USER_TOKEN must be configured on server")
+    clean_path = path if path.startswith("/") else f"/{path}"
+    response = requests.get(
+        f"{_yclients_api_base_url()}{clean_path}",
+        headers=_yclients_auth_headers(),
+        timeout=25,
+    )
+    if not (200 <= response.status_code < 300):
+        raise RuntimeError(f"YCLIENTS API error for salon {salon_id}: {response.status_code} {response.text[:500]}")
+    return response.json() if response.text else {}
+
+
+def _extract_yclients_items(payload: Any) -> List[Dict[str, Any]]:
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    if not isinstance(payload, dict):
+        return []
+    for key in ("data", "items", "services"):
+        value = payload.get(key)
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, dict)]
+    data = payload.get("data")
+    if isinstance(data, dict):
+        for key in ("items", "services"):
+            value = data.get(key)
+            if isinstance(value, list):
+                return [item for item in value if isinstance(item, dict)]
+    return []
+
+
+def _first_item_value(item: Dict[str, Any], keys: List[str], default: Any = "") -> Any:
+    for key in keys:
+        value = item.get(key)
+        if value not in (None, ""):
+            return value
+    return default
+
+
+def _service_price_value(item: Dict[str, Any]) -> str:
+    value = _first_item_value(item, ["price", "cost", "price_min", "price_max"], "")
+    if isinstance(value, dict):
+        value = _first_item_value(value, ["amount", "value", "from"], "")
+    return str(value or "")
+
+
+def _service_duration_minutes(item: Dict[str, Any]) -> Optional[int]:
+    value = _first_item_value(item, ["duration", "duration_minutes", "seance_length"], "")
+    try:
+        number = int(float(str(value).replace(",", ".")))
+        return int(number / 60) if number > 600 else number
+    except Exception:
+        return None
+
+
+def _normalize_yclients_service(item: Dict[str, Any], salon_id: str) -> Dict[str, Any]:
+    category = item.get("category")
+    category_name = ""
+    if isinstance(category, dict):
+        category_name = str(_first_item_value(category, ["title", "name"], ""))
+    elif category not in (None, ""):
+        category_name = str(category)
+    external_id = str(_first_item_value(item, ["id", "service_id"], "") or "").strip()
+    title = str(_first_item_value(item, ["title", "name", "service_name"], "") or "").strip()
+    return {
+        "external_id": external_id or f"{salon_id}:{title}",
+        "name": title,
+        "description": str(_first_item_value(item, ["description", "comment"], "") or ""),
+        "category": category_name or "YCLIENTS",
+        "price": _service_price_value(item),
+        "duration_minutes": _service_duration_minutes(item),
+        "raw": item,
+    }
+
+
+@app.route("/api/yclients/marketplace/status", methods=["GET"])
+def yclients_marketplace_status():
+    db, cursor, user_data, business_id, error_response = _require_yclients_business_access()
+    if error_response:
+        return error_response
+    try:
+        salon_ids = _extract_yclients_salon_ids(request.args)
+        accounts = _load_yclients_accounts(cursor, business_id, salon_ids or None)
+        db.close()
+        return jsonify({
+            "success": True,
+            "business_id": business_id,
+            "salon_ids": salon_ids,
+            "accounts": [_public_yclients_account(item) for item in accounts],
+            "server": {
+                "has_partner_token": bool(_yclients_partner_token()),
+                "has_user_token": bool(_yclients_user_token()),
+                "has_activation_url": bool(str(os.getenv("YCLIENTS_ACTIVATION_URL") or "").strip()),
+            },
+        })
+    except Exception as e:
+        db.close()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/yclients/marketplace/connect", methods=["POST", "OPTIONS"])
+def yclients_marketplace_connect():
+    if request.method == "OPTIONS":
+        return ("", 204)
+    db, cursor, user_data, business_id, error_response = _require_yclients_business_access()
+    if error_response:
+        return error_response
+    try:
+        payload = request.get_json(silent=True) or {}
+        salon_ids = _extract_yclients_salon_ids(request.args, payload)
+        if not salon_ids:
+            db.close()
+            return jsonify({"success": False, "error": "salon_id или salon_ids[] обязательны"}), 400
+        user_data_result = _decode_yclients_user_data(
+            str(payload.get("user_data") or request.args.get("user_data") or ""),
+            str(payload.get("user_data_sign") or request.args.get("user_data_sign") or ""),
+        )
+        if user_data_result.get("signature_checked") and not user_data_result.get("signature_valid"):
+            db.close()
+            return jsonify({"success": False, "error": "Некорректная подпись user_data"}), 400
+        activation = _activate_yclients_integration(salon_ids)
+        accounts = []
+        for salon_id in salon_ids:
+            account_row = _upsert_yclients_account(
+                cursor,
+                business_id=business_id,
+                salon_id=salon_id,
+                user_id=user_data["user_id"],
+                user_payload=user_data_result.get("data") or {},
+                activation=activation,
+            )
+            accounts.append(_public_yclients_account(account_row))
+        db.conn.commit()
+        db.close()
+        return jsonify({
+            "success": True,
+            "business_id": business_id,
+            "salon_ids": salon_ids,
+            "accounts": accounts,
+            "activation": activation,
+            "server": {
+                "has_partner_token": bool(_yclients_partner_token()),
+                "has_user_token": bool(_yclients_user_token()),
+                "has_activation_url": bool(str(os.getenv("YCLIENTS_ACTIVATION_URL") or "").strip()),
+            },
+            "user_data_signature": {
+                "checked": user_data_result.get("signature_checked"),
+                "valid": user_data_result.get("signature_valid"),
+            },
+        })
+    except Exception as e:
+        db.conn.rollback()
+        db.close()
+        logger.exception("YCLIENTS marketplace connect failed")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/yclients/marketplace/import-services", methods=["POST", "OPTIONS"])
+def yclients_marketplace_import_services():
+    if request.method == "OPTIONS":
+        return ("", 204)
+    db, cursor, user_data, business_id, error_response = _require_yclients_business_access()
+    if error_response:
+        return error_response
+    try:
+        payload = request.get_json(silent=True) or {}
+        requested_salon_ids = _extract_yclients_salon_ids(request.args, payload)
+        accounts = _load_yclients_accounts(cursor, business_id, requested_salon_ids or None)
+        if not accounts:
+            db.close()
+            return jsonify({"success": False, "error": "Сначала подключите филиал YCLIENTS к бизнесу LocalOS"}), 404
+        columns = _table_columns(cursor, "userservices")
+        imported = []
+        for account in accounts:
+            salon_id = str(account.get("external_id") or "").strip()
+            payload_json = _yclients_request_json(f"/company/{salon_id}/services", salon_id)
+            services = [_normalize_yclients_service(item, salon_id) for item in _extract_yclients_items(payload_json)]
+            for service in services:
+                if not service["name"]:
+                    continue
+                service_id = str(uuid.uuid4())
+                external_id = str(service["external_id"])
+                raw_json = json.dumps(service.get("raw") or {}, ensure_ascii=False)
+                keywords_json = json.dumps([], ensure_ascii=False)
+                if {"source", "external_id", "raw"}.issubset(columns):
+                    cursor.execute(
+                        """
+                        INSERT INTO userservices
+                            (id, user_id, business_id, category, name, description, keywords, price, source, external_id, duration_minutes, raw, created_at, updated_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, 'yclients', %s, %s, %s::jsonb, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        ON CONFLICT (business_id, source, external_id)
+                        WHERE external_id IS NOT NULL
+                        DO UPDATE SET
+                            category = EXCLUDED.category,
+                            name = EXCLUDED.name,
+                            description = EXCLUDED.description,
+                            price = EXCLUDED.price,
+                            duration_minutes = EXCLUDED.duration_minutes,
+                            raw = EXCLUDED.raw,
+                            updated_at = CURRENT_TIMESTAMP
+                        """,
+                        (
+                            service_id,
+                            user_data["user_id"],
+                            business_id,
+                            service["category"],
+                            service["name"],
+                            service["description"],
+                            keywords_json,
+                            service["price"],
+                            external_id,
+                            service["duration_minutes"],
+                            raw_json,
+                        ),
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        INSERT INTO userservices
+                            (id, user_id, business_id, category, name, description, keywords, price, created_at, updated_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        """,
+                        (
+                            service_id,
+                            user_data["user_id"],
+                            business_id,
+                            service["category"],
+                            service["name"],
+                            service["description"],
+                            keywords_json,
+                            service["price"],
+                        ),
+                    )
+                imported.append({
+                    "salon_id": salon_id,
+                    "external_id": external_id,
+                    "name": service["name"],
+                    "price": service["price"],
+                    "category": service["category"],
+                })
+            auth_data = {}
+            try:
+                auth_data = decrypt_auth_data(account.get("auth_data_encrypted")) or {}
+            except Exception:
+                auth_data = {}
+            auth_data["last_import_at"] = datetime.utcnow().isoformat()
+            auth_data["last_import_count"] = len([item for item in imported if item.get("salon_id") == salon_id])
+            cursor.execute(
+                """
+                UPDATE externalbusinessaccounts
+                SET auth_data_encrypted = %s,
+                    last_error = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                """,
+                (encrypt_auth_data(auth_data), account.get("id")),
+            )
+        db.conn.commit()
+        db.close()
+        return jsonify({
+            "success": True,
+            "business_id": business_id,
+            "imported_count": len(imported),
+            "services": imported[:50],
+        })
+    except Exception as e:
+        db.conn.rollback()
+        db.close()
+        logger.exception("YCLIENTS services import failed")
         return jsonify({"success": False, "error": str(e)}), 500
 
 
