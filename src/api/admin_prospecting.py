@@ -7011,12 +7011,14 @@ def get_leads():
         with DatabaseManager() as db:
             leads = db.get_all_leads_compact() if compact_mode else db.get_all_leads()
         offer_by_lead_id = {}
+        sales_room_by_lead_id: dict[str, dict[str, Any]] = {}
         group_summary_by_lead_id: dict[str, list[dict[str, Any]]] = {}
         timeline_preview_by_lead_id: dict[str, dict[str, Any]] = {}
         conn = get_db_connection()
         try:
             _ensure_admin_prospecting_public_offers_table(conn)
             _ensure_manual_crm_tables(conn)
+            _ensure_sales_room_tables(conn)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             cur.execute(
                 """
@@ -7029,6 +7031,26 @@ def get_leads():
                 if lead_id:
                     offer_by_lead_id[lead_id] = row
             lead_ids = [str((lead or {}).get("id") or "").strip() for lead in leads if str((lead or {}).get("id") or "").strip()]
+            if lead_ids:
+                cur.execute(
+                    """
+                    SELECT DISTINCT ON (lead_id::text)
+                        lead_id::text AS lead_id,
+                        status,
+                        data_mode,
+                        slug,
+                        updated_at
+                    FROM sales_rooms
+                    WHERE lead_id::text = ANY(%s)
+                      AND mode = %s
+                    ORDER BY lead_id::text, updated_at DESC
+                    """,
+                    (lead_ids, SALES_ROOM_MODE_CLIENT),
+                )
+                for row in cur.fetchall() or []:
+                    lead_id = str(row.get("lead_id") or "").strip()
+                    if lead_id:
+                        sales_room_by_lead_id[lead_id] = row
             if include_groups:
                 group_summary_by_lead_id = _group_summary_for_lead_ids(cur, lead_ids)
             if include_timeline:
@@ -7042,6 +7064,7 @@ def get_leads():
                 continue
             lead_id = str(display_lead.get("id") or "").strip()
             offer = offer_by_lead_id.get(str(display_lead.get("id") or "").strip())
+            sales_room = sales_room_by_lead_id.get(lead_id)
             slug = str((offer or {}).get("slug") or "").strip()
             if offer and bool(offer.get("is_active")) and slug:
                 page_json = offer.get("page_json") if isinstance(offer.get("page_json"), dict) else {}
@@ -7055,6 +7078,13 @@ def get_leads():
                 display_lead["public_audit_updated_at"] = offer.get("updated_at")
                 display_lead["preferred_language"] = primary_language
                 display_lead["enabled_languages"] = enabled_languages
+            if sales_room:
+                sales_room_slug = str(sales_room.get("slug") or "").strip()
+                display_lead["sales_room_status"] = sales_room.get("status")
+                display_lead["sales_room_data_mode"] = sales_room.get("data_mode")
+                display_lead["sales_room_updated_at"] = sales_room.get("updated_at")
+                if sales_room_slug:
+                    display_lead["sales_room_url"] = _make_sales_room_url(sales_room_slug)
             if include_groups:
                 display_lead["groups"] = group_summary_by_lead_id.get(lead_id, [])
                 display_lead["group_count"] = len(display_lead["groups"])

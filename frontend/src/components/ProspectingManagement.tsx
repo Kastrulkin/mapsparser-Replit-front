@@ -170,6 +170,9 @@ type Lead = {
     parse_retry_after?: string | null;
     parse_error?: string | null;
     parse_task_id?: string | null;
+    sales_room_status?: string | null;
+    sales_room_data_mode?: string | null;
+    sales_room_url?: string | null;
     preferred_language?: string | null;
     enabled_languages?: string[] | null;
     groups?: Array<{
@@ -1732,6 +1735,7 @@ export const ProspectingManagement: React.FC = () => {
     const [previewError, setPreviewError] = useState<string | null>(null);
     const [previewAuditPageBusy, setPreviewAuditPageBusy] = useState(false);
     const [previewSalesRoomBusy, setPreviewSalesRoomBusy] = useState(false);
+    const [salesRoomBusy, setSalesRoomBusy] = useState<Record<string, string>>({});
     const [previewAuditPageUrl, setPreviewAuditPageUrl] = useState<string | null>(null);
     const [previewAuditPageLanguage, setPreviewAuditPageLanguage] = useState('en');
     const [previewAuditPageEnabledLanguages, setPreviewAuditPageEnabledLanguages] = useState<string[]>(['en']);
@@ -3934,6 +3938,39 @@ export const ProspectingManagement: React.FC = () => {
         }
     };
 
+    const prepareSalesRoomForLead = async (lead: Lead, dataMode: 'audited' | 'template') => {
+        if (!lead.id) {
+            toast.error('Не удалось найти лида для цифровой комнаты');
+            return;
+        }
+        setSalesRoomBusy((prev) => ({ ...prev, [lead.id as string]: dataMode }));
+        try {
+            const response = await api.post(`/admin/prospecting/lead/${lead.id}/prepare-room`, {
+                data_mode: dataMode,
+                channel: lead.selected_channel || bestAvailableOutreachChannel(lead) || 'manual',
+            });
+            const roomUrl = String(response.data?.room?.public_url || '');
+            const chargedCredits = Number(response.data?.billing?.charged_credits || 0);
+            await refreshProspectingData('all');
+            if (roomUrl) {
+                window.open(roomUrl, '_blank', 'noopener,noreferrer');
+            }
+            toast.success(
+                dataMode === 'audited'
+                    ? `Цифровая комната готова. Списано кредитов: ${chargedCredits}.`
+                    : 'Цифровая комната готова по шаблону без списания кредитов.',
+            );
+        } catch (error: unknown) {
+            toast.error(getRequestErrorMessage(error, 'Не удалось подготовить цифровую комнату'));
+        } finally {
+            setSalesRoomBusy((prev) => {
+                const next = { ...prev };
+                delete next[lead.id as string];
+                return next;
+            });
+        }
+    };
+
     const saveLeadContactsFromPreview = async (payload: { telegram_url: string; whatsapp_url: string; email: string }) => {
         if (!previewLead?.id) {
             return;
@@ -4050,6 +4087,14 @@ export const ProspectingManagement: React.FC = () => {
         const pipelineLabel = pipelineStatusLabel(getLeadPipelineStatus(lead));
         const auditReady = hasLeadAudit(lead);
         const contactReady = Boolean(lead.phone || lead.email || lead.telegram_url || lead.whatsapp_url || extractHasMessengers(lead));
+        const roomBusyState = leadId ? salesRoomBusy[leadId] : '';
+        const roomUrl = String(lead.sales_room_url || '').trim();
+        const roomReady = Boolean(roomUrl || lead.sales_room_status);
+        const roomLabel = roomReady
+            ? lead.sales_room_status === 'invitation_ready'
+                ? 'Письмо готово'
+                : 'Комната готова'
+            : 'Нет комнаты';
 
         return (
             <Card
@@ -4107,6 +4152,9 @@ export const ProspectingManagement: React.FC = () => {
                         <Badge variant={auditReady ? 'secondary' : 'outline'} className="text-[11px] font-normal">
                             {auditReady ? 'Аудит готов' : 'Без аудита'}
                         </Badge>
+                        <Badge variant={roomReady ? 'secondary' : 'outline'} className="text-[11px] font-normal">
+                            {roomLabel}
+                        </Badge>
                         <Badge variant="outline" className="text-[11px] font-normal">
                             {formatLeadChannel(lead.selected_channel || bestAvailableOutreachChannel(lead))}
                         </Badge>
@@ -4123,7 +4171,66 @@ export const ProspectingManagement: React.FC = () => {
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent className="pt-0" />
+                <CardContent className="space-y-3 pt-0">
+                    <div
+                        className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 p-3"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Цифровая комната</div>
+                                <div className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                                    Перед первым письмом: страница с предложением, аудитом или шаблонной идеей.
+                                </div>
+                            </div>
+                            <div className="flex flex-wrap gap-2 sm:justify-end">
+                                {roomUrl ? (
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-8 text-xs"
+                                        onClick={(event) => {
+                                            event.stopPropagation();
+                                            window.open(roomUrl, '_blank', 'noopener,noreferrer');
+                                        }}
+                                    >
+                                        <ExternalLink className="mr-1 h-3 w-3" />
+                                        Открыть комнату
+                                    </Button>
+                                ) : null}
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 text-xs"
+                                    disabled={!leadId || Boolean(roomBusyState)}
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        void prepareSalesRoomForLead(lead, 'audited');
+                                    }}
+                                >
+                                    {roomBusyState === 'audited' && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                                    С аудитом
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-8 text-xs"
+                                    disabled={!leadId || Boolean(roomBusyState)}
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        void prepareSalesRoomForLead(lead, 'template');
+                                    }}
+                                >
+                                    {roomBusyState === 'template' && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                                    По шаблону
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </CardContent>
             </Card>
         );
     };
