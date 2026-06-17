@@ -1,0 +1,72 @@
+{
+  "task_id": "client-leads-simplification-20260617",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "Lead cards show only essentials plus one status, one CTA, and a secondary menu.",
+      "status": "PASS",
+      "proof": [
+        "ProspectingManagement renderKanbanCard was reduced to essentials and computed primaryAction."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Room mode choice moved into modal.",
+      "status": "PASS",
+      "proof": [
+        "Added roomPreparationLead Dialog with two create actions and credit warning."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Header simplified to search, quick filters, drawer, add action, and view switch.",
+      "status": "PASS",
+      "proof": [
+        "ProspectingPipelineHeader no longer renders source/channel/audit controls."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Kanban reduced to four working columns.",
+      "status": "PASS",
+      "proof": [
+        "Kanban maps simplifiedPipelineBoardColumns."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Bulk controls are list-view first layer only.",
+      "status": "PASS",
+      "proof": [
+        "Bulk row and StickyBulkActionBar are conditional on pipelineView === 'list'."
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC6",
+      "text": "Frontend checks pass.",
+      "status": "PASS",
+      "proof": [
+        "npm --prefix frontend run build",
+        "git diff --check"
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "frontend/src/components/ProspectingManagement.tsx",
+    "frontend/src/components/prospecting/ProspectingWorkspaceChrome.tsx"
+  ],
+  "commands_for_fresh_verifier": [
+    "npm --prefix frontend run build",
+    "git diff --check -- frontend/src/components/ProspectingManagement.tsx frontend/src/components/prospecting/ProspectingWorkspaceChrome.tsx"
+  ],
+  "known_gaps": [
+    "Browser screenshot artifact not captured before deploy."
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "task_id": "client-leads-simplification-20260617",
+  "overall_verdict": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Card first layer is reduced to essentials, one human status, one primary CTA, and menu."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Room data mode choice is in the dialog."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Header first layer is simplified and advanced filters remain in drawer."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Kanban uses four simplified columns."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Bulk controls are list view only."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "Build and diff whitespace checks pass."
+    }
+  ],
+  "commands_run": [
+    "npm --prefix frontend run build",
+    "git diff --check -- frontend/src/components/ProspectingManagement.tsx frontend/src/components/prospecting/ProspectingWorkspaceChrome.tsx"
+  ],
+  "artifacts_used": [
+    ".agent/tasks/client-leads-simplification-20260617/raw/build.txt"
+  ]
+}

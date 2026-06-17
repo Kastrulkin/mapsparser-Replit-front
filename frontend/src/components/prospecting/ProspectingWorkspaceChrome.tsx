@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Check, LayoutGrid, List, Plus, Search, SlidersHorizontal } from 'lucide-react';
+import { LayoutGrid, List, Plus, Search, SlidersHorizontal } from 'lucide-react';
 
 type WorkspaceTab = {
   value: string;
@@ -92,38 +92,15 @@ export function ProspectingWorkspaceTabs({
 
 type ProspectingPipelineHeaderProps = {
   totalLeads: number;
-  summary: {
-    withoutAudit: number;
-    withAudit: number;
-    readyToContact: number;
-  };
   search: string;
   onSearchChange: (value: string) => void;
-  filters: {
-    source: string;
-    hasTelegram: string;
-    hasWhatsApp: string;
-    hasMax: string;
-    hasEmail: string;
-    hasWebsite: string;
-    hasVk: string;
-  };
-  onSourceChange: (value: string) => void;
-  onHasTelegramChange: (value: string) => void;
-  onHasWhatsAppChange: (value: string) => void;
-  onHasMaxChange: (value: string) => void;
-  onHasEmailChange: (value: string) => void;
-  onHasWebsiteChange: (value: string) => void;
-  onHasVkChange: (value: string) => void;
   onOpenFilters: () => void;
   onOpenIntake: () => void;
   pipelineView: 'kanban' | 'list';
   onPipelineViewChange: (value: 'kanban' | 'list') => void;
-  quickFilter: 'all' | 'without_audit' | 'with_audit' | 'priority';
-  onQuickFilterChange: (value: 'all' | 'without_audit' | 'with_audit' | 'priority') => void;
+  quickFilter: 'all' | 'needs_contact' | 'ready_room' | 'room_ready' | 'contacted' | 'replied';
+  onQuickFilterChange: (value: 'all' | 'needs_contact' | 'ready_room' | 'room_ready' | 'contacted' | 'replied') => void;
   onResetFilters: () => void;
-  onApplyBestPreset: () => void;
-  onApplyManyReviewsPreset: () => void;
 };
 
 type ProspectingIntakePanelProps = {
@@ -132,36 +109,6 @@ type ProspectingIntakePanelProps = {
   badges?: Array<{ label: string; value: string | number }>;
   children: ReactNode;
 };
-
-function InlinePresenceToggle({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  const checked = value === 'yes';
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(checked ? '' : 'yes')}
-      className={[
-        'inline-flex h-10 items-center gap-2 rounded-md border px-3 text-sm transition-colors',
-        checked
-          ? 'border-primary/30 bg-primary/10 text-foreground'
-          : 'border-input bg-background text-muted-foreground hover:border-border hover:text-foreground',
-      ].join(' ')}
-      aria-pressed={checked}
-    >
-      <span className="flex h-4 w-4 items-center justify-center rounded-sm border border-current/40 bg-background">
-        {checked ? <Check className="h-3 w-3" /> : null}
-      </span>
-      <span>{label}</span>
-    </button>
-  );
-}
 
 export function ProspectingIntakePanel({
   title,
@@ -195,17 +142,8 @@ export function ProspectingIntakePanel({
 
 export function ProspectingPipelineHeader({
   totalLeads,
-  summary,
   search,
   onSearchChange,
-  filters,
-  onSourceChange,
-  onHasTelegramChange,
-  onHasWhatsAppChange,
-  onHasMaxChange,
-  onHasEmailChange,
-  onHasWebsiteChange,
-  onHasVkChange,
   onOpenFilters,
   onOpenIntake,
   pipelineView,
@@ -213,25 +151,18 @@ export function ProspectingPipelineHeader({
   quickFilter,
   onQuickFilterChange,
   onResetFilters,
-  onApplyBestPreset,
-  onApplyManyReviewsPreset,
 }: ProspectingPipelineHeaderProps) {
   return (
     <Card className="border-border/70 shadow-sm">
-      <CardHeader className="space-y-4">
+      <CardHeader className="space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <CardTitle>Воронка</CardTitle>
+            <CardTitle>Лиды</CardTitle>
             <CardDescription>
-              Один рабочий экран для лидов: поиск живёт отдельно, а здесь только движение по воронке.
+              Кто требует действия сейчас и что сделать следующим.
             </CardDescription>
           </div>
           <Badge variant="outline">Всего лидов: {totalLeads}</Badge>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Badge variant="secondary">Без аудита: {summary.withoutAudit}</Badge>
-          <Badge variant="secondary">С аудитом: {summary.withAudit}</Badge>
-          <Badge variant="secondary">Готово к контакту: {summary.readyToContact}</Badge>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -245,20 +176,6 @@ export function ProspectingPipelineHeader({
               onChange={(event) => onSearchChange(event.target.value)}
             />
           </div>
-          <select
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-            value={filters.source}
-            onChange={(event) => onSourceChange(event.target.value)}
-          >
-            <option value="">Источник: любой</option>
-            <option value="apify_yandex">Яндекс Карты</option>
-            <option value="apify_2gis">2ГИС</option>
-            <option value="apify_google">Google Maps</option>
-            <option value="apify_apple">Apple Maps</option>
-            <option value="manual">Ручной ввод</option>
-            <option value="external_import">Внешний импорт</option>
-            <option value="openclaw">Автоматический поиск</option>
-          </select>
           <Button variant="outline" onClick={onOpenFilters}>
             <SlidersHorizontal className="mr-2 h-4 w-4" />
             Фильтры
@@ -278,23 +195,14 @@ export function ProspectingPipelineHeader({
             </Button>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Каналы</span>
-          <InlinePresenceToggle label="Telegram" value={filters.hasTelegram} onChange={onHasTelegramChange} />
-          <InlinePresenceToggle label="WhatsApp" value={filters.hasWhatsApp} onChange={onHasWhatsAppChange} />
-          <InlinePresenceToggle label="Max" value={filters.hasMax} onChange={onHasMaxChange} />
-          <InlinePresenceToggle label="Email" value={filters.hasEmail} onChange={onHasEmailChange} />
-          <InlinePresenceToggle label="Сайт" value={filters.hasWebsite} onChange={onHasWebsiteChange} />
-          <InlinePresenceToggle label="VK" value={filters.hasVk} onChange={onHasVkChange} />
-        </div>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant={quickFilter === 'all' ? 'secondary' : 'outline'} onClick={() => onQuickFilterChange('all')}>Все</Button>
-          <Button size="sm" variant={quickFilter === 'without_audit' ? 'secondary' : 'outline'} onClick={() => onQuickFilterChange('without_audit')}>Без аудита</Button>
-          <Button size="sm" variant={quickFilter === 'with_audit' ? 'secondary' : 'outline'} onClick={() => onQuickFilterChange('with_audit')}>С аудитом</Button>
-          <Button size="sm" variant={quickFilter === 'priority' ? 'secondary' : 'outline'} onClick={() => onQuickFilterChange('priority')}>Приоритетные</Button>
+          <Button size="sm" variant={quickFilter === 'needs_contact' ? 'secondary' : 'outline'} onClick={() => onQuickFilterChange('needs_contact')}>Нужен контакт</Button>
+          <Button size="sm" variant={quickFilter === 'ready_room' ? 'secondary' : 'outline'} onClick={() => onQuickFilterChange('ready_room')}>Готовы к комнате</Button>
+          <Button size="sm" variant={quickFilter === 'room_ready' ? 'secondary' : 'outline'} onClick={() => onQuickFilterChange('room_ready')}>Комната готова</Button>
+          <Button size="sm" variant={quickFilter === 'contacted' ? 'secondary' : 'outline'} onClick={() => onQuickFilterChange('contacted')}>Письмо отправлено</Button>
+          <Button size="sm" variant={quickFilter === 'replied' ? 'secondary' : 'outline'} onClick={() => onQuickFilterChange('replied')}>Ответили</Button>
           <Button size="sm" variant="ghost" onClick={onResetFilters}>Сбросить фильтры</Button>
-          <Button size="sm" variant="ghost" onClick={onApplyBestPreset}>Лучшие лиды</Button>
-          <Button size="sm" variant="ghost" onClick={onApplyManyReviewsPreset}>Много отзывов</Button>
         </div>
       </CardContent>
     </Card>

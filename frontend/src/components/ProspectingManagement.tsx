@@ -6,7 +6,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Badge } from "./ui/badge";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "./ui/sheet";
-import { Loader2, MapPin, Phone, Globe, Star, Mail, MessageCircle, Save, Search, SlidersHorizontal, Plus, LayoutGrid, List, ExternalLink, TriangleAlert, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "./ui/dropdown-menu";
+import { Loader2, MapPin, Phone, Globe, Star, Mail, MessageCircle, Save, Search, SlidersHorizontal, Plus, LayoutGrid, List, ExternalLink, TriangleAlert, X, ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
 import { api } from "@/services/api";
 import { ContactPresenceBadges, StatusSummaryCard, WorkflowActionRow } from "./prospecting/LeadWorkflowBlocks";
 import { AnalyticsMetricGrid, AnalyticsSection, AnalyticsSummaryGrid, AnalyticsWindowGrid } from "./prospecting/ProspectingAnalyticsBlocks";
@@ -482,8 +484,9 @@ const toOutreachTab = (value: string): OutreachTab => {
 };
 type OutreachTab = 'drafts' | 'queue' | 'sent';
 type PipelineViewMode = 'kanban' | 'list';
-type PipelineQuickFilter = 'all' | 'without_audit' | 'with_audit' | 'priority';
+type PipelineQuickFilter = 'all' | 'needs_contact' | 'ready_room' | 'room_ready' | 'contacted' | 'replied';
 type PipelineBoardColumnId = 'in_progress' | 'postponed' | 'not_relevant' | 'contacted' | 'second_message_sent' | 'replied' | 'converted';
+type SimplifiedPipelineBoardColumnId = 'needs_action' | 'preparing_offer' | 'contacted' | 'replied';
 
 const inferLeadAuditLanguage = (lead: Lead | null): string => {
     const preferred = String(lead?.preferred_language || '').trim().toLowerCase();
@@ -1010,6 +1013,31 @@ const pipelineBoardColumnMeta: Record<PipelineBoardColumnId, { label: string; de
     },
 };
 
+const simplifiedPipelineBoardColumnOrder: SimplifiedPipelineBoardColumnId[] = ['needs_action', 'preparing_offer', 'contacted', 'replied'];
+
+const simplifiedPipelineBoardColumnMeta: Record<SimplifiedPipelineBoardColumnId, { label: string; description: string; statusToSet: string }> = {
+    needs_action: {
+        label: 'Нужно обработать',
+        description: 'Лиды без контакта или с незавершённой первичной обработкой.',
+        statusToSet: PIPELINE_IN_PROGRESS,
+    },
+    preparing_offer: {
+        label: 'Готовим предложение',
+        description: 'Есть контакт или данные для предметного предложения.',
+        statusToSet: PIPELINE_IN_PROGRESS,
+    },
+    contacted: {
+        label: 'Письмо отправлено',
+        description: 'Первое касание уже сделано, ждём реакцию.',
+        statusToSet: PIPELINE_CONTACTED,
+    },
+    replied: {
+        label: 'Ответили',
+        description: 'Есть ответ, нужно продолжить диалог.',
+        statusToSet: PIPELINE_REPLIED,
+    },
+};
+
 const leadToPipelineBoardColumn = (lead: Lead): PipelineBoardColumnId => {
     const status = getLeadPipelineStatus(lead);
     if (status === PIPELINE_IN_PROGRESS || status === PIPELINE_UNPROCESSED) {
@@ -1037,6 +1065,60 @@ const leadToPipelineBoardColumn = (lead: Lead): PipelineBoardColumnId => {
         return 'converted';
     }
     return 'in_progress';
+};
+
+const leadHasContact = (lead: Lead): boolean =>
+    Boolean(lead.phone || lead.email || lead.telegram_url || lead.whatsapp_url || extractHasMessengers(lead));
+
+const leadHasRoom = (lead: Lead): boolean =>
+    Boolean(String(lead.sales_room_url || '').trim() || lead.sales_room_status);
+
+const leadHumanStatus = (lead: Lead): {
+    label: string;
+    variant: 'default' | 'secondary' | 'outline' | 'destructive';
+    helper: string;
+} => {
+    const stage = leadToPipelineBoardColumn(lead);
+    const hasContact = leadHasContact(lead);
+    const roomReady = leadHasRoom(lead);
+    const roomStatus = String(lead.sales_room_status || '').trim().toLowerCase();
+
+    if (stage === 'not_relevant') {
+        return { label: 'Неактуален', variant: 'destructive', helper: 'Снят с рабочего потока' };
+    }
+    if (stage === 'postponed') {
+        return { label: 'Отложен', variant: 'outline', helper: 'Вернуться позже' };
+    }
+    if (stage === 'replied' || stage === 'converted') {
+        return { label: 'Есть ответ', variant: 'secondary', helper: 'Нужно продолжить диалог' };
+    }
+    if (stage === 'contacted' || stage === 'second_message_sent') {
+        return { label: 'Письмо отправлено', variant: 'secondary', helper: 'Ждём реакцию или ответ' };
+    }
+    if (roomStatus === 'invitation_ready') {
+        return { label: 'Письмо готово', variant: 'secondary', helper: 'Осталось проверить приглашение' };
+    }
+    if (roomReady) {
+        return { label: 'Комната готова', variant: 'secondary', helper: 'Можно отправлять приглашение' };
+    }
+    if (hasContact) {
+        return { label: 'Готов к предложению', variant: 'default', helper: 'Можно подготовить комнату' };
+    }
+    return { label: 'Нужен контакт', variant: 'outline', helper: 'Сначала найдите канал связи' };
+};
+
+const simplifiedLeadColumn = (lead: Lead): SimplifiedPipelineBoardColumnId => {
+    const stage = leadToPipelineBoardColumn(lead);
+    if (stage === 'replied' || stage === 'converted') {
+        return 'replied';
+    }
+    if (stage === 'contacted' || stage === 'second_message_sent') {
+        return 'contacted';
+    }
+    if (leadHasContact(lead) || leadHasRoom(lead) || hasLeadAudit(lead)) {
+        return 'preparing_offer';
+    }
+    return 'needs_action';
 };
 
 const nextPipelineBoardColumn = (columnId: PipelineBoardColumnId): PipelineBoardColumnId | null => {
@@ -1749,7 +1831,8 @@ export const ProspectingManagement: React.FC = () => {
     const [groupBusy, setGroupBusy] = useState<Record<string, boolean>>({});
     const [parseActionBusy, setParseActionBusy] = useState<Record<string, boolean>>({});
     const [draggingLeadId, setDraggingLeadId] = useState<string | null>(null);
-    const [dropColumnId, setDropColumnId] = useState<PipelineBoardColumnId | null>(null);
+    const [dropColumnId, setDropColumnId] = useState<string | null>(null);
+    const [roomPreparationLead, setRoomPreparationLead] = useState<Lead | null>(null);
     const [statusUpdateBusy, setStatusUpdateBusy] = useState<Record<string, boolean>>({});
     const [statusUpdateError, setStatusUpdateError] = useState<Record<string, string>>({});
     const [stageDecision, setStageDecision] = useState<StageDecisionState | null>(null);
@@ -2656,14 +2739,14 @@ export const ProspectingManagement: React.FC = () => {
         setDropColumnId(null);
     };
 
-    const handleColumnDragOver = (columnId: PipelineBoardColumnId) => (event: React.DragEvent<HTMLDivElement>) => {
+    const handleColumnDragOver = (columnId: string) => (event: React.DragEvent<HTMLDivElement>) => {
         event.preventDefault();
         if (dropColumnId !== columnId) {
             setDropColumnId(columnId);
         }
     };
 
-    const handleColumnDrop = (columnId: PipelineBoardColumnId) => async (event: React.DragEvent<HTMLDivElement>) => {
+    const handleColumnDrop = (nextStatus: string) => async (event: React.DragEvent<HTMLDivElement>) => {
         event.preventDefault();
         const leadId = event.dataTransfer.getData('text/plain');
         setDropColumnId(null);
@@ -2675,7 +2758,6 @@ export const ProspectingManagement: React.FC = () => {
         if (!lead) {
             return;
         }
-        const nextStatus = pipelineBoardColumnMeta[columnId].statusToSet;
         if (lead.status === nextStatus) {
             return;
         }
@@ -3093,13 +3175,20 @@ export const ProspectingManagement: React.FC = () => {
     const visiblePipelineLeads = useMemo(() => {
         const normalizedSearch = pipelineSearch.trim().toLowerCase();
         return sourceFilteredLeads.filter((lead) => {
-            if (quickFilter === 'without_audit' && hasLeadAudit(lead)) {
+            const humanStatus = leadHumanStatus(lead).label;
+            if (quickFilter === 'needs_contact' && humanStatus !== 'Нужен контакт') {
                 return false;
             }
-            if (quickFilter === 'with_audit' && !hasLeadAudit(lead)) {
+            if (quickFilter === 'ready_room' && humanStatus !== 'Готов к предложению') {
                 return false;
             }
-            if (quickFilter === 'priority' && String(lead.status || '').trim().toLowerCase() !== shortlistApproved) {
+            if (quickFilter === 'room_ready' && humanStatus !== 'Комната готова' && humanStatus !== 'Письмо готово') {
+                return false;
+            }
+            if (quickFilter === 'contacted' && humanStatus !== 'Письмо отправлено') {
+                return false;
+            }
+            if (quickFilter === 'replied' && humanStatus !== 'Есть ответ') {
                 return false;
             }
             if (!normalizedSearch) {
@@ -3183,6 +3272,26 @@ export const ProspectingManagement: React.FC = () => {
             leads: buckets[columnId],
         }));
     }, [visiblePipelineLeads]);
+    const simplifiedPipelineBoardColumns = useMemo(() => {
+        const buckets: Record<SimplifiedPipelineBoardColumnId, Lead[]> = {
+            needs_action: [],
+            preparing_offer: [],
+            contacted: [],
+            replied: [],
+        };
+        for (const lead of visiblePipelineLeads) {
+            const stage = leadToPipelineBoardColumn(lead);
+            if (!filters.pipelineStatus && (stage === 'postponed' || stage === 'not_relevant' || stage === 'converted')) {
+                continue;
+            }
+            buckets[simplifiedLeadColumn(lead)].push(lead);
+        }
+        return simplifiedPipelineBoardColumnOrder.map((columnId) => ({
+            id: columnId,
+            ...simplifiedPipelineBoardColumnMeta[columnId],
+            leads: buckets[columnId],
+        }));
+    }, [filters.pipelineStatus, visiblePipelineLeads]);
     const selectAllVisiblePipelineLeads = useCallback(() => {
         if (visiblePipelineLeadIds.length === 0) {
             return;
@@ -3199,13 +3308,6 @@ export const ProspectingManagement: React.FC = () => {
         }
         setSelectedPipelineLeadIds((prev) => Array.from(new Set([...prev, ...visiblePipelineLeadIds])));
     }, [allVisiblePipelineSelected, visiblePipelineLeadIds]);
-    const selectPipelineStageLeads = useCallback((leadIds: string[]) => {
-        const normalizedIds = leadIds.filter(Boolean);
-        if (normalizedIds.length === 0) {
-            return;
-        }
-        setSelectedPipelineLeadIds((prev) => Array.from(new Set([...prev, ...normalizedIds])));
-    }, []);
     const pipelineBoardTotals = useMemo(() => {
         const totals: Record<PipelineBoardColumnId, number> = {
             in_progress: 0,
@@ -3290,27 +3392,6 @@ export const ProspectingManagement: React.FC = () => {
             replyRate: formatConversion(replyLeadIds.size, firstTouch),
         };
     }, [analyticsTotalLeadCount, leadIdsWithRecordedReplies, sourceFilteredLeads]);
-    const pipelineHeaderSummary = useMemo(() => {
-        let withoutAudit = 0;
-        let withAudit = 0;
-        let readyToContact = 0;
-        let priority = 0;
-        sourceFilteredLeads.forEach((lead) => {
-            if (hasLeadAudit(lead)) {
-                withAudit += 1;
-            } else {
-                withoutAudit += 1;
-            }
-            const stage = leadToPipelineBoardColumn(lead);
-            if (stage === 'contacted') {
-                readyToContact += 1;
-            }
-            if (stage === 'in_progress') {
-                priority += 1;
-            }
-        });
-        return { withoutAudit, withAudit, readyToContact, priority };
-    }, [sourceFilteredLeads]);
     const pipelineStageMetrics = useMemo(() => {
         const stages = [
             {
@@ -4081,21 +4162,30 @@ export const ProspectingManagement: React.FC = () => {
 
     const renderKanbanCard = (lead: Lead) => {
         const leadId = lead.id || '';
-        const columnId = leadToPipelineBoardColumn(lead);
         const isDragging = leadId && draggingLeadId === leadId;
-        const isSelected = Boolean(leadId && selectedPipelineLeadIds.includes(leadId));
-        const pipelineLabel = pipelineStatusLabel(getLeadPipelineStatus(lead));
-        const auditReady = hasLeadAudit(lead);
-        const contactReady = Boolean(lead.phone || lead.email || lead.telegram_url || lead.whatsapp_url || extractHasMessengers(lead));
+        const contactReady = leadHasContact(lead);
         const roomBusyState = leadId ? salesRoomBusy[leadId] : '';
         const roomUrl = String(lead.sales_room_url || '').trim();
-        const roomReady = Boolean(roomUrl || lead.sales_room_status);
-        const roomLabel = roomReady
-            ? lead.sales_room_status === 'invitation_ready'
-                ? 'Письмо готово'
-                : 'Комната готова'
-            : 'Нет комнаты';
-        const selectedChannelLabel = formatLeadChannel(lead.selected_channel || bestAvailableOutreachChannel(lead));
+        const humanStatus = leadHumanStatus(lead);
+        const primaryAction = (() => {
+            if (roomUrl) {
+                return {
+                    label: 'Открыть комнату',
+                    onClick: () => window.open(roomUrl, '_blank', 'noopener,noreferrer'),
+                    icon: <ExternalLink className="h-3 w-3" />,
+                };
+            }
+            if (humanStatus.label === 'Письмо готово') {
+                return { label: 'Проверить письмо', onClick: () => openLeadPreview(lead) };
+            }
+            if (humanStatus.label === 'Письмо отправлено' || humanStatus.label === 'Есть ответ') {
+                return { label: humanStatus.label === 'Есть ответ' ? 'Продолжить диалог' : 'Отметить ответ', onClick: () => openLeadPreview(lead) };
+            }
+            if (!contactReady) {
+                return { label: 'Найти контакт', onClick: () => openLeadPreview(lead) };
+            }
+            return { label: 'Подготовить комнату', onClick: () => setRoomPreparationLead(lead) };
+        })();
 
         return (
             <div
@@ -4152,77 +4242,53 @@ export const ProspectingManagement: React.FC = () => {
                         </Badge>
                     </div>
                 </div>
-                <ContactPresenceBadges
-                    website={lead.website}
-                    phone={lead.phone}
-                    email={lead.email}
-                    telegramUrl={lead.telegram_url}
-                    whatsappUrl={lead.whatsapp_url}
-                    hasMessenger={extractHasMessengers(lead)}
-                    className="mt-3"
-                />
-                <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
-                    <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2">
-                        <div className="flex items-center justify-between gap-2">
-                            <span className="font-medium uppercase text-slate-400">Статус</span>
-                            <Badge variant={columnId === 'not_relevant' ? 'destructive' : columnId === 'contacted' || columnId === 'replied' || columnId === 'converted' ? 'secondary' : 'outline'} className="max-w-[55%] truncate">
-                                {pipelineLabel}
-                            </Badge>
-                        </div>
-                        <div className="mt-1 line-clamp-2 font-medium text-slate-900">
-                            {contactReady ? 'Контакт можно обработать' : 'Нужно найти контакт'}
-                        </div>
-                        <div className="mt-1 truncate text-[11px] text-slate-400">
-                            Канал: {selectedChannelLabel}
-                        </div>
+                <div className="mt-4 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                        <Badge variant={humanStatus.variant}>{humanStatus.label}</Badge>
+                        <div className="mt-1 line-clamp-1 text-xs text-slate-500">{humanStatus.helper}</div>
                     </div>
-                    <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2">
-                        <div className="flex items-center justify-between gap-2">
-                            <span className="font-medium uppercase text-slate-400">Комната</span>
-                            <Badge variant={roomReady ? 'secondary' : 'outline'} className="max-w-[55%] truncate">
-                                {roomLabel}
-                            </Badge>
-                        </div>
-                        <div className="mt-1 line-clamp-2 font-medium text-slate-900">
-                            {auditReady ? 'Данные готовы для предметного оффера' : 'Можно подготовить данные'}
-                        </div>
-                        <div className="mt-1 truncate text-[11px] text-slate-400">
-                            {auditReady ? 'Аудит готов' : 'Без аудита'}
-                        </div>
+                    <div className="flex shrink-0 items-center gap-2" onClick={(event) => event.stopPropagation()}>
+                        <Button
+                            type="button"
+                            size="sm"
+                            onClick={primaryAction.onClick}
+                            disabled={Boolean(roomBusyState)}
+                        >
+                            {roomBusyState ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : primaryAction.icon ? <span className="mr-2 inline-flex">{primaryAction.icon}</span> : null}
+                            {roomBusyState ? 'Готовим...' : primaryAction.label}
+                        </Button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button type="button" size="icon" variant="outline" className="h-8 w-8">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                    <span className="sr-only">Ещё действия</span>
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56">
+                                <DropdownMenuItem onClick={() => openLeadPreview(lead)}>
+                                    Открыть карточку
+                                </DropdownMenuItem>
+                                <DropdownMenuItem disabled={!leadId || Boolean(roomBusyState)} onClick={() => setRoomPreparationLead(lead)}>
+                                    Подготовить комнату
+                                </DropdownMenuItem>
+                                <DropdownMenuItem disabled={!leadId || Boolean(roomBusyState)} onClick={() => prepareSalesRoomForLead(lead, 'template')}>
+                                    Создать без подготовки данных
+                                </DropdownMenuItem>
+                                {roomUrl ? (
+                                    <DropdownMenuItem onClick={() => window.open(roomUrl, '_blank', 'noopener,noreferrer')}>
+                                        Открыть комнату
+                                    </DropdownMenuItem>
+                                ) : null}
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem disabled={!leadId} onClick={() => leadId && moveLeadToPostponed(leadId)}>
+                                    Отложить
+                                </DropdownMenuItem>
+                                <DropdownMenuItem disabled={!leadId} onClick={() => leadId && moveLeadToNotRelevant(leadId)}>
+                                    Неактуален
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
-                </div>
-                <div onClick={(event) => event.stopPropagation()}>
-                    <WorkflowActionRow
-                        className="mt-3"
-                        primary={{ label: 'Карточка', variant: 'outline', onClick: () => openLeadPreview(lead) }}
-                        secondary={[
-                            ...(roomUrl ? [{ label: 'Открыть комнату', href: roomUrl, icon: <ExternalLink className="h-3 w-3" /> }] : []),
-                            {
-                                label: roomBusyState === 'audited' ? 'Готовим...' : 'Создать комнату',
-                                onClick: () => prepareSalesRoomForLead(lead, 'audited'),
-                                disabled: !leadId || Boolean(roomBusyState),
-                                icon: roomBusyState === 'audited' ? <Loader2 className="h-3 w-3 animate-spin" /> : undefined,
-                            },
-                            {
-                                label: roomBusyState === 'template' ? 'Создаём...' : 'Без подготовки данных',
-                                variant: 'ghost',
-                                onClick: () => prepareSalesRoomForLead(lead, 'template'),
-                                disabled: !leadId || Boolean(roomBusyState),
-                                icon: roomBusyState === 'template' ? <Loader2 className="h-3 w-3 animate-spin" /> : undefined,
-                            },
-                        ]}
-                    />
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1">
-                        {contactReady ? 'контакты есть' : 'контактов мало'}
-                    </span>
-                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1">
-                        {auditReady ? 'аудит готов' : 'без аудита'}
-                    </span>
-                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1">
-                        {roomLabel.toLowerCase()}
-                    </span>
                 </div>
             </div>
         );
@@ -5335,6 +5401,61 @@ export const ProspectingManagement: React.FC = () => {
                 onSubmit={submitLeadStageDecision}
             />
 
+            <Dialog open={Boolean(roomPreparationLead)} onOpenChange={(open) => {
+                if (!open) {
+                    setRoomPreparationLead(null);
+                }
+            }}>
+                <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Подготовить цифровую комнату</DialogTitle>
+                        <DialogDescription>
+                            Комната нужна для предложения, чата и файлов. Подготовка данных помогает сметчить услуги и сделать оффер предметным.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {roomPreparationLead ? (
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                            <div className="text-sm font-semibold text-slate-950">{roomPreparationLead.name || 'Лид без названия'}</div>
+                            <div className="mt-1 text-sm text-slate-500">
+                                {roomPreparationLead.category || 'Без категории'} · {roomPreparationLead.city || roomPreparationLead.address || 'Адрес не указан'}
+                            </div>
+                            <div className="mt-3 text-xs leading-relaxed text-slate-500">
+                                Подготовка данных расходует кредиты.
+                            </div>
+                        </div>
+                    ) : null}
+                    <DialogFooter className="gap-2 sm:justify-between sm:space-x-0">
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                const lead = roomPreparationLead;
+                                if (!lead) {
+                                    return;
+                                }
+                                setRoomPreparationLead(null);
+                                void prepareSalesRoomForLead(lead, 'template');
+                            }}
+                            disabled={Boolean(roomPreparationLead?.id && salesRoomBusy[roomPreparationLead.id])}
+                        >
+                            Создать комнату без подготовки
+                        </Button>
+                        <Button
+                            onClick={() => {
+                                const lead = roomPreparationLead;
+                                if (!lead) {
+                                    return;
+                                }
+                                setRoomPreparationLead(null);
+                                void prepareSalesRoomForLead(lead, 'audited');
+                            }}
+                            disabled={Boolean(roomPreparationLead?.id && salesRoomBusy[roomPreparationLead.id])}
+                        >
+                            Подготовить данные и создать комнату
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             <Sheet open={Boolean(previewLead)} onOpenChange={(open) => {
                 if (!open) {
                     closeLeadPreview();
@@ -5701,25 +5822,8 @@ export const ProspectingManagement: React.FC = () => {
                 <TabsContent value="inbox" className="space-y-6">
                     <ProspectingPipelineHeader
                         totalLeads={sourceFilteredLeads.length}
-                        summary={pipelineHeaderSummary}
                         search={pipelineSearch}
                         onSearchChange={setPipelineSearch}
-                        filters={{
-                            source: filters.source,
-                            hasTelegram: filters.hasTelegram,
-                            hasWhatsApp: filters.hasWhatsApp,
-                            hasMax: filters.hasMax,
-                            hasEmail: filters.hasEmail,
-                            hasWebsite: filters.hasWebsite,
-                            hasVk: filters.hasVk,
-                        }}
-                        onSourceChange={(value) => setFilters(prev => ({ ...prev, source: value }))}
-                        onHasTelegramChange={(value) => setFilters(prev => ({ ...prev, hasTelegram: value }))}
-                        onHasWhatsAppChange={(value) => setFilters(prev => ({ ...prev, hasWhatsApp: value }))}
-                        onHasMaxChange={(value) => setFilters(prev => ({ ...prev, hasMax: value }))}
-                        onHasEmailChange={(value) => setFilters(prev => ({ ...prev, hasEmail: value }))}
-                        onHasWebsiteChange={(value) => setFilters(prev => ({ ...prev, hasWebsite: value }))}
-                        onHasVkChange={(value) => setFilters(prev => ({ ...prev, hasVk: value }))}
                         onOpenFilters={openFiltersPanel}
                         onOpenIntake={() => setIntakeOpen(true)}
                         pipelineView={pipelineView}
@@ -5727,33 +5831,37 @@ export const ProspectingManagement: React.FC = () => {
                         quickFilter={quickFilter}
                         onQuickFilterChange={setQuickFilter}
                         onResetFilters={resetFilters}
-                        onApplyBestPreset={() => applyPreset('best')}
-                        onApplyManyReviewsPreset={() => applyPreset('many_reviews')}
                     />
 
-                    <div className="flex flex-wrap items-center gap-2">
-                        <Button size="sm" variant={allVisiblePipelineSelected ? 'secondary' : 'outline'} onClick={toggleAllVisiblePipelineLeads} disabled={visiblePipelineLeadIds.length === 0}>
-                            {allVisiblePipelineSelected ? 'Снять выбор с отображаемых' : 'Выбрать все по фильтру'}
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={selectAllVisiblePipelineLeads} disabled={visiblePipelineLeadIds.length === 0 || allVisiblePipelineSelected}>
-                            Добавить все отображаемые в выбор
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={clearPipelineSelection} disabled={selectedPipelineLeadIds.length === 0}>
-                            Снять весь выбор
-                        </Button>
-                        <div className="text-sm text-muted-foreground">
-                            Отображается {visiblePipelineLeadIds.length} · выбрано {selectedPipelineLeadIds.length}
+                    {pipelineView === 'list' ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Button size="sm" variant={allVisiblePipelineSelected ? 'secondary' : 'outline'} onClick={toggleAllVisiblePipelineLeads} disabled={visiblePipelineLeadIds.length === 0}>
+                                {allVisiblePipelineSelected ? 'Снять выбор с отображаемых' : 'Выбрать все по фильтру'}
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={selectAllVisiblePipelineLeads} disabled={visiblePipelineLeadIds.length === 0 || allVisiblePipelineSelected}>
+                                Добавить все отображаемые в выбор
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={clearPipelineSelection} disabled={selectedPipelineLeadIds.length === 0}>
+                                Снять весь выбор
+                            </Button>
+                            <div className="text-sm text-muted-foreground">
+                                Отображается {visiblePipelineLeadIds.length} · выбрано {selectedPipelineLeadIds.length}
+                            </div>
                         </div>
-                    </div>
+                    ) : (
+                        <div className="text-sm text-muted-foreground">
+                            Отображается {visiblePipelineLeadIds.length}. Для массовых действий переключитесь в список.
+                        </div>
+                    )}
 
                     {pipelineView === 'kanban' ? (
                         <div className="flex gap-3 overflow-x-auto pb-6 xl:gap-4">
-                            {pipelineBoardColumns.map((column) => (
+                            {simplifiedPipelineBoardColumns.map((column) => (
                                 <div
                                     key={column.id}
                                     onDragOver={handleColumnDragOver(column.id)}
                                     onDragLeave={() => setDropColumnId(null)}
-                                    onDrop={handleColumnDrop(column.id)}
+                                    onDrop={handleColumnDrop(column.statusToSet)}
                                     className={`min-w-[252px] flex-1 rounded-2xl border border-slate-200/80 bg-white/70 p-3 shadow-sm transition xl:min-w-[264px] ${dropColumnId === column.id ? 'ring-2 ring-primary/40' : ''}`}
                                 >
                                     <div className="flex items-start justify-between gap-2 border-b border-border pb-2">
@@ -5763,15 +5871,6 @@ export const ProspectingManagement: React.FC = () => {
                                         </div>
                                         <div className="flex flex-col items-end gap-2">
                                             <Badge variant="secondary">{column.leads.length}</Badge>
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                className="h-7 px-2 text-xs"
-                                                onClick={() => selectPipelineStageLeads(column.leads.map((lead) => String(lead.id || '')).filter(Boolean))}
-                                                disabled={column.leads.length === 0}
-                                            >
-                                                Выбрать этап
-                                            </Button>
                                         </div>
                                     </div>
                                     <div className="mt-3 space-y-3">
@@ -5810,14 +5909,16 @@ export const ProspectingManagement: React.FC = () => {
                         </div>
                     )}
 
-                    <StickyBulkActionBar count={selectedPipelineLeadIds.length} label="Выбранные лиды можно собрать в группу, отложить, убрать в неактуальные или отметить как отправленные вручную.">
-                        <Button size="sm" onClick={() => createLeadGroupFromIds(selectedPipelineLeadIds)} disabled={selectedPipelineLeadIds.length === 0}>
-                            Собрать в группу
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => Promise.all(selectedPipelineLeadIds.map((leadId) => markLeadManualContact(leadId))).catch(() => undefined)} disabled={selectedPipelineLeadIds.length === 0}>
-                            Отправлено вручную
-                        </Button>
-                    </StickyBulkActionBar>
+                    {pipelineView === 'list' ? (
+                        <StickyBulkActionBar count={selectedPipelineLeadIds.length} label="Выбранные лиды можно собрать в группу, отложить, убрать в неактуальные или отметить как отправленные вручную.">
+                            <Button size="sm" onClick={() => createLeadGroupFromIds(selectedPipelineLeadIds)} disabled={selectedPipelineLeadIds.length === 0}>
+                                Собрать в группу
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => Promise.all(selectedPipelineLeadIds.map((leadId) => markLeadManualContact(leadId))).catch(() => undefined)} disabled={selectedPipelineLeadIds.length === 0}>
+                                Отправлено вручную
+                            </Button>
+                        </StickyBulkActionBar>
+                    ) : null}
                 </TabsContent>
 
                 <TabsContent value="analytics" className="space-y-6">
